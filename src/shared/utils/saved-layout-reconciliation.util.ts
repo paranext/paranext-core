@@ -88,18 +88,163 @@ function emptiedBox(value: unknown): LayoutNode {
 }
 
 /**
- * Returns a copy of a saved layout with phantom content removed: duplicate tab ids (the first
- * occurrence wins, walking `dockbox` before the floating/maximized/windowed boxes so a duplicate
- * resolves in favor of the docked copy), tabs with no usable id, tabs not reachable through a
- * panel, and panels or boxes left empty by those removals. An emptied `dockbox` is kept (a layout
- * must have one); the other root boxes are removed entirely when emptied. A panel whose `activeId`
- * named one of the removed tabs is re-pointed at its first surviving tab, so no saved layout
- * carries an active-tab reference to a tab that is no longer in it.
+ * The root boxes that never show a box among their children as the tabs it holds: `FloatBox` and
+ * `WindowBox` draw only the children that are tab groups, and `MaxBox` draws only its first child,
+ * and draws it as a tab group. A box among their children (and every tab inside it) is therefore
+ * never shown
+ */
+const TAB_GROUP_ONLY_ROOT_BOX_KEYS = ['floatbox', 'windowbox', 'maxbox'] as const;
+
+/** Position fields a tab group uses only while it floats or sits in its own window */
+const FLOATING_POSITION_KEYS = ['x', 'y', 'z', 'w', 'h'] as const;
+
+/**
+ * The weights rc-dock gives a dock box laid out other than left to right, and the tab group it
+ * docks at that box's left or right edge, when it puts the two side by side in a new horizontal
+ * dock box (`dockPanelToBox`): 70% and 30%
+ */
+const EDGE_SPLIT_DOCK_BOX_SIZE = 280;
+const EDGE_SPLIT_MOVED_SIZE = 120;
+
+/**
+ * The size rc-dock gives a box or tab group whose saved `size` is not a number of at least 0
+ * (`fixPanelOrBox`). This mirrors rc-dock's default, so a sibling with no usable size counts for
+ * what rc-dock will lay it out at.
+ */
+const RC_DOCK_DEFAULT_SIZE = 200;
+
+/** The size rc-dock lays a saved box or tab group out at: its own if it is usable, else the default */
+function getEffectiveSize(value: unknown): number {
+  const size = asLayoutNode(value)?.size;
+  return typeof size === 'number' && size >= 0 ? size : RC_DOCK_DEFAULT_SIZE;
+}
+
+/**
+ * An id no box or tab group in `layout` has, which rc-dock will not give to another node either.
+ * rc-dock gives ids `+1`, `+2`, … from a counter that it raises past every `+<number>` id it loads,
+ * but it hands them out while it walks the layout, so a box loaded without an id can be given a
+ * number a node further on already has. One past the highest such id in the layout avoids both.
+ *
+ * @param layout The saved layout the new box goes into
+ * @returns The id for the new box
+ */
+function getUnusedRcDockId(layout: LayoutInfo): string {
+  let highestIdNumber = 0;
+  const visit = (value: unknown): void => {
+    const node = asLayoutNode(value);
+    if (!node) return;
+    if (typeof node.id === 'string' && node.id.startsWith('+')) {
+      const idNumber = Number(node.id);
+      if (Number.isFinite(idNumber) && idNumber > highestIdNumber) highestIdNumber = idNumber;
+    }
+    if (Array.isArray(node.children)) node.children.forEach(visit);
+  };
+  ROOT_BOX_KEYS.forEach((key) => visit(layout[key]));
+  return `+${highestIdNumber + 1}`;
+}
+
+/** Whether a node is a box (it has `children`) rather than a tab group (it has `tabs`) */
+function isBoxNode(value: unknown): boolean {
+  const node = asLayoutNode(value);
+  return !!node && !Array.isArray(node.tabs) && Array.isArray(node.children);
+}
+
+/**
+ * Every tab group inside a node, at any depth and in layout order, each copied without the position
+ * fields it would use only while floating
+ */
+function collectTabGroups(value: unknown): LayoutNode[] {
+  const node = asLayoutNode(value);
+  if (!node) return [];
+  if (Array.isArray(node.tabs)) {
+    const tabGroup: LayoutNode = { ...node };
+    FLOATING_POSITION_KEYS.forEach((key) => delete tabGroup[key]);
+    return [tabGroup];
+  }
+  return Array.isArray(node.children)
+    ? node.children.flatMap((child) => collectTabGroups(child))
+    : [];
+}
+
+/**
+ * Returns a shallow copy of a saved layout in which every tab group rc-dock would never draw (any
+ * inside a box among the children of `floatbox`, `windowbox` or `maxbox`) has been moved into
+ * `dockbox` as a tab group of its own at its end (right) edge, so the tabs in it can be reached
+ * again. The emptied boxes are removed from those root boxes. A `dockbox` laid out other than
+ * `horizontal` is placed beside the moved tab groups in a new horizontal `dockbox`, at 70% to their
+ * 30% as rc-dock itself sizes a tab group docked at the edge of a vertical dock box; the new
+ * `dockbox` gets an id no other node in the layout has (see {@link getUnusedRcDockId}). In a
+ * `horizontal` `dockbox`, the moved tab groups each get the average size of the nodes already
+ * there, so every group ends up with an equal share. The input is never mutated.
+ */
+function moveHiddenTabGroupsIntoDockbox(layout: LayoutInfo): LayoutInfo {
+  const result: LayoutInfo = { ...layout };
+  const movedTabGroups: LayoutNode[] = [];
+  TAB_GROUP_ONLY_ROOT_BOX_KEYS.forEach((key) => {
+    const rootBox = asLayoutNode(result[key]);
+    if (!rootBox || !Array.isArray(rootBox.children) || !rootBox.children.some(isBoxNode)) return;
+    const keptChildren: unknown[] = [];
+    rootBox.children.forEach((child) => {
+      if (isBoxNode(child)) movedTabGroups.push(...collectTabGroups(child));
+      else keptChildren.push(child);
+    });
+    result[key] = { ...rootBox, children: keptChildren };
+  });
+  if (movedTabGroups.length === 0) return result;
+
+  const dockbox = asLayoutNode(result.dockbox);
+  if (dockbox?.mode === 'horizontal' && Array.isArray(dockbox.children)) {
+    const existingSizes = dockbox.children.map(getEffectiveSize);
+    const averageSize =
+      existingSizes.length > 0
+        ? existingSizes.reduce((sum, size) => sum + size, 0) / existingSizes.length
+        : undefined;
+    result.dockbox = {
+      ...dockbox,
+      children: [
+        ...dockbox.children,
+        ...movedTabGroups.map((tabGroup) =>
+          averageSize === undefined ? tabGroup : { ...tabGroup, size: averageSize },
+        ),
+      ],
+    };
+  } else {
+    result.dockbox = {
+      id: getUnusedRcDockId(layout),
+      mode: 'horizontal',
+      children: dockbox
+        ? [
+            { ...dockbox, size: EDGE_SPLIT_DOCK_BOX_SIZE },
+            ...movedTabGroups.map((tabGroup) => ({
+              ...tabGroup,
+              size: EDGE_SPLIT_MOVED_SIZE / movedTabGroups.length,
+            })),
+          ]
+        : movedTabGroups,
+    };
+  }
+  return result;
+}
+
+/**
+ * Returns a copy of a saved layout with phantom content removed, and with content rc-dock would
+ * never draw moved to where it is drawn.
+ *
+ * First, every tab group inside a box nested in `floatbox`, `windowbox` or `maxbox` (`floatbox` and
+ * `windowbox` draw only the children that are tab groups; `maxbox` draws only its first child, as a
+ * tab group) is moved into `dockbox` as a tab group of its own at its right edge, without its
+ * floating position. Then duplicate tab ids are removed (the first occurrence wins, walking
+ * `dockbox` before the floating/maximized/windowed boxes so a duplicate resolves in favor of the
+ * docked copy), along with tabs with no usable id, tabs not reachable through a panel, and panels
+ * or boxes left empty by those removals. An emptied `dockbox` is kept (a layout must have one); the
+ * other root boxes are removed entirely when emptied. A panel whose `activeId` named one of the
+ * removed tabs is re-pointed at its first surviving tab, so no saved layout carries an active-tab
+ * reference to a tab that is no longer in it.
  *
  * A layout with none of those problems round-trips unchanged. The input is never mutated.
  */
 export function reconcileSavedLayout(layout: LayoutInfo): LayoutInfo {
-  const result: LayoutInfo = { ...layout };
+  const result = moveHiddenTabGroupsIntoDockbox(layout);
   const seenTabIds = new Set<string>();
   ROOT_BOX_KEYS.forEach((key) => {
     if (!(key in result)) return;

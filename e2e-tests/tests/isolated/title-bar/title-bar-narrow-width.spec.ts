@@ -11,9 +11,9 @@
  * `navigator.windowControlsOverlay`), this runs everywhere: it compares against the toolbar's own
  * client rect rather than any OS-specific overlay.
  */
-import { ElectronApplication, Page } from '@playwright/test';
+import { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { waitForAppReady } from '../../../fixtures/helpers';
+import { setWindowWidth, waitForAppReady } from '../../../fixtures/helpers';
 
 /**
  * A width no window can honor, so Electron clamps to the `minWidth` enforced in `main.ts`. Asking
@@ -30,66 +30,38 @@ const ROUNDING_TOLERANCE_PX = 1;
 // Seeded through the fixture's own options — a hand-rolled preConfigureSettings in a beforeEach
 // would be silently overwritten by the fixture's later seeding pass (Playwright resolves a test's
 // fixtures AFTER its beforeEach hooks run), flipping the spec to the fixture's Power-mode default.
-test.use({ interfaceMode: 'simple', seedSettings: { 'platform.firstRunComplete': true } });
+test.use({
+  interfaceMode: 'simple',
+  seedSettings: { 'platform.firstRunComplete': true },
+});
 
 /**
- * Closes the docked DevTools the dev-mode launch opens.
+ * Waits until the title bar's localized strings have resolved.
  *
- * Not cosmetic — this test is entirely geometric. Docked DevTools takes its width out of the
- * renderer's layout viewport (measured: a constant 555px), so an 800px window lays the title bar
- * out in 245px. Every control then genuinely overflows, and the test reports "clipped" for a bar
- * that is fine at the width a user would actually see.
- */
-async function closeDevTools(electronApp: ElectronApplication): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().forEach((win) => {
-      if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
-    });
-  });
-}
-
-/**
- * Resizes the window and waits until the renderer has actually laid out at the new width.
+ * Every assertion in this file is geometric, and an unresolved string is WIDER than the string it
+ * stands for: the bar renders the raw key (`%product_shortName%`, `%mainMenu_help%`) until the
+ * localization data provider answers. Measuring before then reports a bar that overflows by tens of
+ * pixels and blames the layout for it.
  *
- * Returns nothing useful to assert on by design — the point is the wait. Electron clamps the
- * request to `minWidth`, so the settled width is read back from the window rather than assumed, and
- * the poll compares against THAT. An earlier version polled for "content row narrower than the
- * roomy width", which was already true before the resize and so waited for nothing: the test then
- * sampled the row's box and the controls' boxes from two different layout passes and reported
- * phantom clipping.
+ * `waitForAppReady` does not cover this — it waits for the app's own readiness signal, which fires
+ * before the strings arrive. The placeholder syntax is the honest thing to poll on, because it is
+ * exactly what makes the measurement wrong.
  */
-async function setWindowWidth(
-  electronApp: ElectronApplication,
-  mainPage: Page,
-  width: number,
-): Promise<void> {
-  await closeDevTools(electronApp);
-
-  const settledWidth = await electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
-    // 20-second timeout and then fail with a width mismatch, hiding the actual cause.
-    if (!win) throw new Error('No Electron window to resize');
-    if (win.isMaximized()) win.unmaximize();
-
-    const [outerWidth, height] = win.getSize();
-    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
-    // reading the size back immediately after it returns the width the window still has, not the
-    // one it is moving to. The target is derived instead — the request clamped by the window's own
-    // `minWidth` (main.ts), converted from outer to content width by the frame delta, since the
-    // renderer's `innerWidth` measures the content box.
-    const frameDelta = outerWidth - win.getContentSize()[0];
-    const target = Math.max(requestedWidth, win.getMinimumSize()[0]) - frameDelta;
-
-    win.setSize(requestedWidth, height);
-    return target;
-  }, width);
-
+async function waitForLocalizedTitleBar(mainPage: Page): Promise<void> {
   await expect
-    .poll(async () => Math.abs((await mainPage.evaluate(() => window.innerWidth)) - settledWidth), {
-      timeout: 20_000,
-    })
-    .toBeLessThanOrEqual(ROUNDING_TOLERANCE_PX);
+    .poll(
+      async () =>
+        mainPage.locator('[data-testid="toolbar-content-row"]').evaluate((el) => {
+          const text = el.textContent ?? '';
+          return /%[A-Za-z0-9_]+%/.test(text);
+        }),
+      {
+        timeout: 30_000,
+        message:
+          'Title bar still shows raw %localization_key% placeholders, so any width measured here is wrong',
+      },
+    )
+    .toBe(false);
 }
 
 /**
@@ -104,7 +76,9 @@ async function expectControlWithinRow(
   selector: string,
 ): Promise<void> {
   const control = mainPage.locator(selector);
-  await expect(control, `${name} disappeared at the minimum window width`).toBeVisible();
+  await expect(control, `${name} disappeared at the minimum window width`).toBeVisible({
+    timeout: 1_000,
+  });
 
   const box = await control.boundingBox();
   expect(box, `${name} has no layout box`).not.toBeNull();
@@ -124,6 +98,7 @@ test.describe('Title bar at narrow window widths', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
+    await waitForLocalizedTitleBar(mainPage);
     await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
 
     const contentRow = mainPage.locator('[data-testid="toolbar-content-row"]');
@@ -143,7 +118,7 @@ test.describe('Title bar at narrow window widths', () => {
     // about why rather than leaving a green test that proves less than it looks like it does.
     // Reproducing the reported clipping needs a CROWDED bar, and two of the controls that crowd it
     // — the marketing version badge and the sync button — do not render here: the badge is driven
-    // by `marketingVersion`, which is empty in paranext-core (it is set in Paratext 10 Studio,
+    // by `marketingVersion`, which is empty in paranext-core (it is set in Paratext 10,
     // where this was reported), and send/receive is unavailable in the test environment. Without
     // them the content area is never squeezed at any width the window can actually reach, and at
     // widths narrow enough to squeeze it the bar overflows with or without the fix.
@@ -174,28 +149,35 @@ test.describe('Title bar at narrow window widths', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
+    await waitForLocalizedTitleBar(mainPage);
     await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
 
     const contentRow = mainPage.locator('[data-testid="toolbar-content-row"]');
     await expect(contentRow).toBeVisible();
 
-    const rowBox = await contentRow.boundingBox();
-    expect(rowBox).not.toBeNull();
-    if (!rowBox) return;
+    // The title bar's flex re-layout can still land a frame or two after `setWindowWidth` resolves
+    // (that wait only confirms `window.innerWidth`, not that the row has finished reflowing), so a
+    // measurement taken immediately can catch a control mid-shift. Retry the whole
+    // measure-and-assert pass, re-reading the boxes fresh each time, until layout has settled.
+    await expect(async () => {
+      const rowBox = await contentRow.boundingBox();
+      expect(rowBox).not.toBeNull();
+      if (!rowBox) return;
 
-    // Guards against "fixing" the overflow by hiding the controls the ticket is about. Both are
-    // named in the report as things the user could no longer reach.
-    await expectControlWithinRow(
-      mainPage,
-      rowBox,
-      'BCV control',
-      '[aria-label="book-chapter-trigger"]',
-    );
-    await expectControlWithinRow(
-      mainPage,
-      rowBox,
-      'profile button',
-      '[data-testid="user-profile-popover-trigger"]',
-    );
+      // Guards against "fixing" the overflow by hiding the controls the ticket is about. Both are
+      // named in the report as things the user could no longer reach.
+      await expectControlWithinRow(
+        mainPage,
+        rowBox,
+        'BCV control',
+        '[aria-label="book-chapter-trigger"]',
+      );
+      await expectControlWithinRow(
+        mainPage,
+        rowBox,
+        'profile button',
+        '[data-testid="user-profile-popover-trigger"]',
+      );
+    }).toPass({ timeout: 10_000 });
   });
 });

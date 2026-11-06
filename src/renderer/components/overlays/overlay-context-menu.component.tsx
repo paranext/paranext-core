@@ -8,6 +8,8 @@
  */
 
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
+import { markOverlayFocusReturnIfFocusInside } from '@renderer/services/overlays/overlay-focus-return.util';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import {
@@ -23,6 +25,7 @@ import {
   DropdownMenuTrigger,
   Z_INDEX_OVERLAY,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import {
   type CSSProperties,
   type ReactNode,
@@ -32,7 +35,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { LocalizeKey } from 'platform-bible-utils';
+import {
+  collectContextMenuKeys,
+  localizeContextMenuItems,
+} from '@renderer/components/overlays/overlay-context-menu-localization.util';
 
 // ── Public Types ──
 
@@ -58,6 +65,14 @@ export type OverlayContextMenuItem =
   | { type: 'separator' }
   | {
       type: 'submenu';
+      /**
+       * Id of the contributed menu item this submenu was built from, when it came from a
+       * contribution. Lets a consumer recognize a particular submenu — for one whose contents are
+       * only known at the moment the menu opens, for instance — without matching on its label.
+       *
+       * @experimental This field is unstable and may change or disappear without notice
+       */
+      id?: string;
       label: string | LocalizeKey;
       icon?: PlatformIconName;
       items: OverlayContextMenuItem[];
@@ -78,6 +93,20 @@ export type OverlayContextMenuPresentationalProps = {
   onSelect: (result: OverlayContextMenuResult) => void;
   /** Called when the menu is dismissed without a selection */
   onDismiss: () => void;
+  /**
+   * Called when the user presses Escape in the menu or one of its submenus, just before
+   * {@link onDismiss}. Lets the owner tell an Escape close apart from a click away.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  onEscape?: () => void;
+  /**
+   * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+   * service can tell whether focus is inside this overlay's own content rather than another's.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  overlayId?: string;
 };
 
 // ── Constants ──
@@ -110,10 +139,14 @@ function HoverableSubmenu({
   label,
   items,
   onSelect,
+  onEscape,
+  overlayId,
 }: {
   label: string;
   items: OverlayContextMenuItem[];
   onSelect: (result: OverlayContextMenuResult) => void;
+  onEscape?: () => void;
+  overlayId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const openTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -153,13 +186,16 @@ function HoverableSubmenu({
       <DropdownMenuPortal>
         <DropdownMenuSubContent
           className="overlay-context-menu-content"
+          data-overlay-id={overlayId}
           style={{ zIndex: Z_INDEX_OVERLAY }}
           onPointerEnter={cancelClose}
           onPointerLeave={scheduleClose}
+          // Escape in a submenu closes the whole menu through the root's open state
+          onEscapeKeyDown={() => onEscape?.()}
         >
           {/* renderMenuItems and HoverableSubmenu call each other; forward reference is unavoidable */}
           {/* eslint-disable-next-line no-use-before-define */}
-          {renderMenuItems(items, onSelect)}
+          {renderMenuItems(items, onSelect, onEscape, overlayId)}
         </DropdownMenuSubContent>
       </DropdownMenuPortal>
     </DropdownMenuSub>
@@ -173,6 +209,8 @@ function HoverableSubmenu({
 function renderMenuItems(
   items: OverlayContextMenuItem[],
   onSelect: (result: OverlayContextMenuResult) => void,
+  onEscape?: () => void,
+  overlayId?: string,
 ): ReactNode[] {
   const result: ReactNode[] = [];
   let i = 0;
@@ -197,7 +235,11 @@ function renderMenuItems(
           onSelect={() => onSelect({ itemId: item.id })}
         >
           {item.label}
-          {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
+          {item.shortcut && (
+            <DropdownMenuShortcut>
+              <ShortcutKeys hint={item.shortcut} />
+            </DropdownMenuShortcut>
+          )}
         </DropdownMenuItem>,
       );
       i += 1;
@@ -211,6 +253,8 @@ function renderMenuItems(
           label={typeof item.label === 'string' ? item.label : String(item.label)}
           items={item.items}
           onSelect={onSelect}
+          onEscape={onEscape}
+          overlayId={overlayId}
         />,
       );
       i += 1;
@@ -237,6 +281,8 @@ export function OverlayContextMenuPresentational({
   position,
   onSelect,
   onDismiss,
+  onEscape,
+  overlayId,
 }: OverlayContextMenuPresentationalProps) {
   // React refs passed to DOM elements must be initialized with null, not undefined
   // eslint-disable-next-line no-null/no-null
@@ -273,43 +319,23 @@ export function OverlayContextMenuPresentational({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         className="overlay-context-menu-content"
+        data-overlay-id={overlayId}
         style={{ zIndex: Z_INDEX_OVERLAY }}
         align="start"
         side="bottom"
         sideOffset={0}
+        onEscapeKeyDown={() => onEscape?.()}
+        // The shared wrappers turn a window blur into an outside press. The overlay
+        // service owns blur dismissal for this surface (creation grace period,
+        // `dismissOnClickOutside`), so that press is ignored here.
+        onPointerDownOutside={(event) => {
+          if (isWindowBlurPress(event.detail.originalEvent)) event.preventDefault();
+        }}
       >
-        {renderMenuItems(items, onSelect)}
+        {renderMenuItems(items, onSelect, onEscape, overlayId)}
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-// ── Localization Helpers ──
-
-/** Recursively collects all LocalizeKey values from context menu items */
-function collectContextMenuKeys(items: OverlayContextMenuItem[]): LocalizeKey[] {
-  return items.reduce<LocalizeKey[]>((keys, item) => {
-    if (item.type === 'separator') return keys;
-    if (isLocalizeKey(item.label)) keys.push(item.label);
-    if (item.type === 'submenu') keys.push(...collectContextMenuKeys(item.items));
-    return keys;
-  }, []);
-}
-
-/** Recursively resolves LocalizeKey labels in context menu items using localized strings */
-function localizeContextMenuItems(
-  items: OverlayContextMenuItem[],
-  localizedStrings: LanguageStrings,
-): OverlayContextMenuItem[] {
-  return items.map((item) => {
-    if (item.type === 'separator') return item;
-    const label = isLocalizeKey(item.label)
-      ? (localizedStrings[item.label] ?? item.label)
-      : item.label;
-    if (item.type === 'submenu')
-      return { ...item, label, items: localizeContextMenuItems(item.items, localizedStrings) };
-    return { ...item, label };
-  });
 }
 
 // ── Store-Connected Component ──
@@ -353,12 +379,21 @@ export function OverlayContextMenu({ overlay }: OverlayContextMenuProps) {
     resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
   }, [overlay]);
 
+  const handleEscape = useCallback(() => {
+    // Radix reports Escape first and the dismissal settles the overlay; a later report from the
+    // key handler must not leave a mark behind
+    if (hasResolved.current) return;
+    markOverlayFocusReturnIfFocusInside(overlay.id);
+  }, [overlay]);
+
   return (
     <OverlayContextMenuPresentational
       items={localizedItems}
       position={overlay.position}
       onSelect={handleSelect}
       onDismiss={handleDismiss}
+      onEscape={handleEscape}
+      overlayId={overlay.id}
     />
   );
 }

@@ -22,18 +22,16 @@ import {
   getAllObjectFunctionNames,
   getErrorMessage,
   groupBy,
-  isErrorMessageAboutParatextBlockingInternetAccess,
-  isErrorMessageAboutRegistryAuthFailure,
   isString,
   newPlatformError,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
+import { constructParatextErrorNotification } from '@shared/utils/paratext-error-notification.util';
 import { LocalObjectToProxyCreator } from '@shared/models/network-object.model';
 import { networkObjectService, overrideDispose } from '@shared/services/network-object.service';
 import { logger } from '@shared/services/logger.service';
 import {
-  CommandHandlers,
   DataProviderNames,
   DataProviderTypes,
   DataProviders,
@@ -42,7 +40,6 @@ import {
 } from 'papi-shared-types';
 import { IDataProvider, IDisposableDataProvider } from '@shared/models/data-provider.interface';
 import { notificationService } from '@shared/services/notification.service';
-import { PlatformNotification } from '@shared/models/notification.service-model';
 import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
@@ -110,30 +107,6 @@ function hasKnown(providerName: string): boolean {
   return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
 }
 
-function constructErrorNotification(exception: unknown): PlatformNotification | undefined {
-  const retVal: PlatformNotification = {
-    severity: 'error',
-    message: '',
-    clickCommandLabel: '%general_open%',
-    // TS doesn't realize this is a valid command handler key since it is defined in an extension
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    clickCommand: 'paratextRegistration.showParatextRegistration' as keyof CommandHandlers,
-  };
-
-  if (isErrorMessageAboutParatextBlockingInternetAccess(exception)) {
-    retVal.message = '%data_loading_error_internetAccess_disabled_2%';
-    // TS doesn't realize this is a valid command handler key since it is defined in an extension
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    retVal.clickCommand = 'paratextRegistration.showInternetSettings' as keyof CommandHandlers;
-  } else if (isErrorMessageAboutRegistryAuthFailure(exception)) {
-    retVal.message = '%data_loading_error_paratextData_auth_failure%';
-  } else {
-    return undefined;
-  }
-
-  return retVal;
-}
-
 /**
  * Handles errors encountered during data provider subscription in createDataProviderSubscriber.
  * Used for both data retrieval failures and callback execution failures.
@@ -176,7 +149,7 @@ function handleDataProviderSubscriptionError(
       `handleDataProviderSubscriptionError: callback threw while reporting error for ${dataType}. ${getErrorMessage(callbackError)}`,
     );
   }
-  const notification = constructErrorNotification(error);
+  const notification = constructParatextErrorNotification(error);
   if (notification) notificationService.send(notification);
 }
 

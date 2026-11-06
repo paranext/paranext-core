@@ -1,4 +1,5 @@
 import { LocalizationData } from '@shared/services/localization.service-model';
+import type { DblResourceCatalog } from 'platform-get-resources';
 import { DblResourceData, LocalizeKey } from 'platform-bible-utils';
 
 /**
@@ -7,8 +8,8 @@ import { DblResourceData, LocalizeKey } from 'platform-bible-utils';
  * job, not the component's.
  */
 export const RESOURCE_PICKER_NOTICE_STRING_KEYS: readonly LocalizeKey[] = Object.freeze([
-  '%resourcePicker_notice_allResourcesUnavailable%',
   '%resourcePicker_notice_dblCatalogUnavailable%',
+  '%resourcePicker_notice_downloadsUnavailable%',
   '%resourcePicker_notice_localResourcesUnavailable%',
 ]);
 
@@ -16,20 +17,40 @@ export const RESOURCE_PICKER_NOTICE_STRING_KEYS: readonly LocalizeKey[] = Object
  * Outcome of one of the resource picker's two independent resource fetches. A failed fetch and a
  * fetch that legitimately found nothing must stay distinguishable so the dialog can explain a short
  * list instead of presenting it as the whole catalog.
+ *
+ * `isPermanent` separates the two ways a fetch can come back empty-handed. An installation with no
+ * DBL credentials will never have a catalog, so it earns a different sentence and no retry; every
+ * other failure might succeed on the next attempt.
  */
 export type ResourceFetchResult =
   | { didFetchSucceed: true; resources: DblResourceData[] }
-  | { didFetchSucceed: false };
+  | { didFetchSucceed: false; isPermanent?: boolean };
 
 /**
- * Classifies what a resource fetch resolved with. `platformGetResources.getCachedResources` reports
- * an unreachable Digital Bible Library by resolving `undefined` rather than by rejecting, so a
- * nullish value is a failed fetch, not an empty catalog. The value crosses a JSON-RPC boundary, so
- * only an actual array becomes a successful fetch — keeping the resource list safe to spread.
+ * Classifies what the DBL catalog command answered with.
+ *
+ * The command distinguishes its own three outcomes (see `DblResourceCatalog`), so this is a
+ * translation and not a guess: `notConfigured` is a permanent answer, `notReady` is transient, and
+ * a genuine failure rejects and never reaches here.
+ *
+ * @param catalog What `platformGetResources.getCachedResources` resolved with.
+ * @returns The fetch outcome in the shape the notice builder reads.
  */
-export function toResourceFetchResult(
-  resources: DblResourceData[] | undefined,
-): ResourceFetchResult {
+export function toDblFetchResult(catalog: DblResourceCatalog): ResourceFetchResult {
+  if (catalog.status === 'available')
+    return { didFetchSucceed: true, resources: catalog.resources };
+  return { didFetchSucceed: false, isPermanent: catalog.reason === 'notConfigured' };
+}
+
+/**
+ * Classifies what the locally-installed non-DBL resource command answered with. It resolves an
+ * array or rejects, so only an actual array is a successful fetch — which also keeps the resource
+ * list safe to spread after it crosses a JSON-RPC boundary.
+ *
+ * @param resources What `platformGetResources.getLocalNonDblResources` resolved with.
+ * @returns The fetch outcome in the shape the notice builder reads.
+ */
+export function toLocalFetchResult(resources: DblResourceData[] | undefined): ResourceFetchResult {
   return Array.isArray(resources)
     ? { didFetchSucceed: true, resources }
     : { didFetchSucceed: false };
@@ -58,9 +79,9 @@ function localizeString(strings: LocalizationData, key: LocalizeKey): string | u
 /**
  * Picks the key describing what is limiting the resource list, or `undefined` when nothing is.
  *
- * A failed catalog fetch only means "just the local resources are shown" when there are local
- * resources to show. With none, the list is empty however it got that way, so the message has to
- * say nothing loaded rather than point at a list that isn't there.
+ * Only ever describes a list that is INCOMPLETE but still worth reading. When a failure left
+ * nothing at all to show, the picker's own body state says so and offers the retry, and a notice
+ * above it would be a second voice explaining the same emptiness.
  */
 function resolveFetchNoticeKey(
   dblCatalogFetch: ResourceFetchResult,
@@ -73,9 +94,13 @@ function resolveFetchNoticeKey(
 
   const hasLocalResources =
     localResourceFetch.didFetchSucceed && localResourceFetch.resources.length > 0;
-  return hasLocalResources
-    ? '%resourcePicker_notice_dblCatalogUnavailable%'
-    : '%resourcePicker_notice_allResourcesUnavailable%';
+  if (!hasLocalResources) return undefined;
+
+  // An installation with no DBL credentials is not having a bad day — saying "right now" would
+  // promise a recovery that is never coming.
+  return dblCatalogFetch.isPermanent
+    ? '%resourcePicker_notice_downloadsUnavailable%'
+    : '%resourcePicker_notice_dblCatalogUnavailable%';
 }
 
 /**

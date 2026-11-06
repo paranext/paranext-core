@@ -18,12 +18,14 @@ class ThemeDataDataProviderEngine
   extends DataProviderEngine<ThemeDataDataTypes>
   implements IDataProviderEngine<ThemeDataDataTypes>
 {
-  private unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
+  #unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
 
   /** @param allThemeFamiliesById All Theme Data available to the application. */
   constructor(public allThemeFamiliesById: ThemeFamiliesByIdExpanded) {
     super();
-    onDidResyncContributions(() => this.rebuildThemes());
+    this.#unsubscribeOnDidResyncContributions = onDidResyncContributions(() =>
+      this.rebuildThemes(),
+    );
   }
 
   async rebuildThemes(): Promise<void> {
@@ -45,9 +47,9 @@ class ThemeDataDataProviderEngine
   }
 
   async dispose(): Promise<boolean> {
-    if (this.unsubscribeOnDidResyncContributions) {
-      const success = this.unsubscribeOnDidResyncContributions();
-      this.unsubscribeOnDidResyncContributions = undefined;
+    if (this.#unsubscribeOnDidResyncContributions) {
+      const success = this.#unsubscribeOnDidResyncContributions();
+      this.#unsubscribeOnDidResyncContributions = undefined;
       return success;
     }
     return true;

@@ -1,8 +1,8 @@
 /**
  * Usersnap service shard — the Usersnap feedback widget for THIS window. Registered as a network
- * object under a window-scoped name (e.g. "UsersnapService-1") so several windows can coexist; the
- * main process's `usersnap.service-router.ts` publishes the `platform.usersnap*` commands and
- * forwards each to the window the user is working in.
+ * object under a window-scoped name (e.g. "UsersnapService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6")
+ * so several windows can coexist; the main process's `usersnap.service-router.ts` publishes the
+ * `platform.usersnap*` commands and forwards each to the window the user is working in.
  *
  * The widget's state (the loaded space API, whether a form is open, the DOM observer) is module
  * state in `usersnap.service.ts` and stays there — this is only the entry point that lets the main
@@ -16,9 +16,11 @@ import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
   openUsersnapForm,
+} from '@renderer/services/usersnap.service';
+import {
   USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
   USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
-} from '@renderer/services/usersnap.service';
+} from '@shared/data/platform.data';
 import {
   getServiceShardAttributes,
   USERSNAP_SERVICE_SHARD_OBJECT_TYPE,
@@ -45,7 +47,8 @@ const usersnapServiceShard: IUsersnapServiceShard = {
  * to route to, turning an unavailable feedback form into a routing error on a menu item.
  */
 export async function startUsersnapServiceShard(): Promise<void> {
-  if (!globalThis.windowId) throw new Error('Cannot start UsersnapService: windowId is not set');
+  if (globalThis.windowId === undefined)
+    throw new Error('Cannot start UsersnapService: windowId is not set');
 
   await networkObjectService.set<IUsersnapServiceShard>(
     `${USERSNAP_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`,

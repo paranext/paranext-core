@@ -32,12 +32,12 @@
   max-width: 100%;
 }
 
-/* Slim "editing paused during Send/Receive" notice shown once above a project's settings groups
-   while that project's automatic sync is blocking edits. Non-covering; the individual setting
-   editors below are disabled instead (see ProjectOrOtherSettingsList / Setting `disabled` wiring).
+/* Slim notice shown once above a project's settings groups when none of them can be changed: while
+   that project's automatic sync is blocking edits, or when the project is published. Non-covering;
+   the individual setting editors below are disabled or read-only instead.
    Sized to match the 600px settings cards (.card) it sits above so it lines up with them in both
    the single-project tab and the sidebar-selected-project view. */
-.sync-blocked-notice {
+.project-settings-notice {
   width: 600px;
   max-width: 100%;
   margin-bottom: 1rem;

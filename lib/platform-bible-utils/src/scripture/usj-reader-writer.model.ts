@@ -1,7 +1,11 @@
 import {
   Usj,
+  type ContentJsonPath,
   type MarkerContent,
   type MarkerObject,
+  type UsjDocumentLocation,
+  type UsjMarkerLocation,
+  type UsjTextContentLocation,
 } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { MarkersMap } from './markers-maps/markers-map-3.0.model';
@@ -300,219 +304,20 @@ export type UsjFlatTextChapterLocation = {
 
 // #region Serializable USJ locations relative to a specific USJ document (chapter or book)
 
-/**
- * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
- * document.
- *
- * This could actually have more content clauses at the end, but TS types are limited
- */
-export type ContentJsonPath =
-  | ''
-  | `$`
-  | `$.content[${number}]`
-  | `$.content[${number}].content[${number}]`
-  | `$.content[${number}].content[${number}].content[${number}]`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}]`;
-
-/**
- * JSON path to the `marker` or an attribute on a {@link MarkerObject} or {@link Usj} in the current
- * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
- * if there are symbols other than underscore in the property name
- *
- * This could actually have more content clauses at the end, but TS types are limited
- */
-export type PropertyJsonPath =
-  | ''
-  | `$.${string}`
-  | `$['${string}']`
-  | `$.content[${number}].${string}`
-  | `$.content[${number}]['${string}']`
-  | `$.content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}]['${string}']`
-  | `$.content[${number}].content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}].content[${number}]['${string}']`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
-
-/**
- * A JSONPath query to a {@link MarkerContent}, {@link Usj}, or property within a USJ document and
- * additional information that point to a specific location in that USJ document.
- *
- * This type does not include a verse reference because the JSONPath is relative to a specific USJ
- * document; that USJ document may have a book, a chapter, or something else in it. Use
- * {@link UsjLocation} to specify which USJ document this location is relative to, making the
- * location an absolute verse reference location. The closest equivalent concept in USFM to this
- * relative document location is a string character index in a USFM document; such an index is
- * relative to a specific USFM document rather than indicating an absolute position in a Scripture
- * text.
- *
- * This type intends to represent USFM positions ({@link UsfmVerseLocation}) in USJ space. However,
- * there are some USFM positions that are not currently representable with these types:
- *
- * - The second slash in `optbreak`'s USFM representation `//` (literally not representable)
- * - Nested marker prefix on opening markers like `+` for character markers (literally not
- *   representable)
- * - The bar `|` that indicates the start of closing marker attributes (no official representation)
- * - The equals sign for closing marker attributes (no official representation)
- * - The quotes around closing marker attribute values (no official representation)
- * - The space between closing marker attributes (no official representation)
- *
- * Also note that the following types do not specify a concrete location that is actually in the USJ
- * document but represent a USFM location relative to the most similar thing in USJ that there is:
- *
- * - {@link UsjClosingMarkerLocation} - there are no distinct closing objects in JSON; there is a
- *   common syntax for closing every object, but it is only one character and is on every single
- *   object as opposed to USFM closing markers which are multiple characters long and are only
- *   sometimes present.
- * - {@link UsjAttributeKeyLocation} - when the attribute whose key is being pointed to is an attribute
- *   marker in USFM, the `keyOffset` does not apply to the USJ attribute name (e.g. `altnumber`) but
- *   to the USFM attribute marker name (e.g. `ca`).
- * - {@link UsjAttributeMarkerLocation} - attribute markers are just properties in JSON; they do not
- *   have their own object such that they would have an opening that can be pointed to in the JSON
- *   like they have their own opening in USFM.
- * - {@link UsjClosingAttributeMarkerLocation} - attribute markers are just properties in JSON, plus
- *   they are in the same situation as {@link UsjClosingMarkerLocation} as detailed above.
- *
- * To see many examples of the same point represented by both USFM and USJ locations, go to
- * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
- */
-export type UsjDocumentLocation =
-  | UsjMarkerLocation
-  | UsjClosingMarkerLocation
-  | UsjTextContentLocation
-  | UsjPropertyValueLocation
-  | UsjAttributeKeyLocation
-  | UsjAttributeMarkerLocation
-  | UsjClosingAttributeMarkerLocation;
-
-/**
- * A JSONPath query to a {@link MarkerObject} or {@link Usj} node. Indicates the very beginning of
- * that marker (at the backslash in USFM).
- */
-export type UsjMarkerLocation = {
-  /** JSON path to the marker object the location is pointing to. */
-  jsonPath: ContentJsonPath;
-};
-
-/**
- * A JSONPath query to a specific point in the closing marker representation of a
- * {@link MarkerObject} or {@link Usj} node.
- */
-export type UsjClosingMarkerLocation = {
-  /**
-   * JSON path to the marker object whose closing marker the location is pointing to. The offset
-   * applies to the closing marker representation of that marker (for example, `\nd*` in USFM).
-   */
-  jsonPath: ContentJsonPath;
-  /**
-   * The character index in the closing marker representation where this location is pointing. The
-   * location is at this offset within the closing marker representation.
-   */
-  closingMarkerOffset: number;
-};
-
-/**
- * A JSONPath query to a specific point in a text content string in a {@link MarkerObject.content}
- * array.
- */
-export type UsjTextContentLocation = {
-  /**
-   * JSON path to the text content string the location is pointing to. The offset applies to this
-   * text string.
-   */
-  jsonPath: ContentJsonPath;
-  /**
-   * The character index in the text content string where this location is pointing. The location is
-   * at this offset within the text content string.
-   */
-  offset: number;
-};
-
-/**
- * A JSONPath query to a specific point in a property (`marker` or an attribute) value string in a
- * {@link MarkerObject} or {@link Usj}. The property cannot be `type` because `type`'s value has no
- * representation in USFM.
- *
- * To represent a location in an attribute's key, use {@link UsjAttributeKeyLocation}.
- */
-export type UsjPropertyValueLocation = {
-  /**
-   * JSON path to the property the location is pointing to. The offset applies to this property's
-   * value string.
-   */
-  jsonPath: PropertyJsonPath;
-  /**
-   * The character index in the property's value string where this location is pointing. The
-   * location is at this offset within the property's value string.
-   */
-  propertyOffset: number;
-};
-
-/**
- * A JSONPath query to a specific point in an attribute key string in a {@link MarkerObject} or
- * {@link Usj}. The property cannot be `type` or `marker` because these properties' keys have no
- * representation in USFM. The property also cannot be any special attribute whose key doesn't have
- * a text representation in USFM like default attribute, leading attribute, text content attribute
- *
- * To represent a location in an attribute's value, use {@link UsjPropertyValueLocation}.
- */
-export type UsjAttributeKeyLocation = {
-  /**
-   * JSON path to the marker whose attribute key the location is pointing to. The offset applies to
-   * this attribute's key string unless the attribute is an attribute marker in USFM.
-   */
-  jsonPath: ContentJsonPath;
-  /** Attribute name on the marker object whose key this location is pointing to. */
-  keyName: string;
-  /**
-   * The character index in the attribute's key string where this location is pointing.
-   *
-   * If the attribute is an attribute marker in USFM, the location is at this offset within the
-   * marker name for this attribute marker (for example, `c`'s `altnumber` attribute has attribute
-   * marker `ca`, so its `keyOffset` applies to `ca`).
-   *
-   * If the attribute is not an attribute marker in USFM, the location is at this offset within the
-   * attribute's key string.
-   */
-  keyOffset: number;
-};
-
-/**
- * A JSONPath query to an attribute marker derived from an attribute on a {@link MarkerObject} or
- * {@link Usj}. Indicates the very beginning of that marker (at the backslash in USFM).
- */
-export type UsjAttributeMarkerLocation = {
-  /** JSON path to the marker whose attribute marker the location is pointing to. */
-  jsonPath: ContentJsonPath;
-  /**
-   * Attribute name on the marker object whose key this location is pointing to. This attribute is
-   * an attribute marker in USFM.
-   */
-  keyName: string;
-};
-
-/**
- * A JSONPath query to a specific point in the closing marker representation of an attribute marker
- * derived from an attribute on a {@link MarkerObject} or {@link Usj}.
- */
-export type UsjClosingAttributeMarkerLocation = {
-  /**
-   * JSON path to the marker whose attribute marker's closing marker the location is pointing to.
-   * The offset applies to the closing marker representation of that attribute marker (for example,
-   * `\ca*` in USFM).
-   */
-  jsonPath: ContentJsonPath;
-  /**
-   * Attribute name on the marker object whose key this location is pointing to. This attribute is
-   * an attribute marker in USFM.
-   */
-  keyName: string;
-  /**
-   * The character index in the closing marker representation where this location is pointing. The
-   * location is at this offset within the closing marker representation of the attribute marker.
-   */
-  keyClosingMarkerOffset: number;
-};
+// `@eten-tech-foundation/scripture-utilities` owns these declarations; they are re-exported so
+// consumers can keep importing them from this package.
+export type {
+  ContentJsonPath,
+  PropertyJsonPath,
+  UsjAttributeKeyLocation,
+  UsjAttributeMarkerLocation,
+  UsjClosingAttributeMarkerLocation,
+  UsjClosingMarkerLocation,
+  UsjDocumentLocation,
+  UsjMarkerLocation,
+  UsjPropertyValueLocation,
+  UsjTextContentLocation,
+} from '@eten-tech-foundation/scripture-utilities';
 
 // #endregion Serializable USJ locations relative to a specific USJ document (chapter or book)
 
@@ -532,8 +337,27 @@ export type UsjNodeAndDocumentLocation<
   documentLocation: TDocumentLocation;
 };
 
+/**
+ * Prefix identifying the capture groups that
+ * {@link UsjSearchOptions.flexibleWhitespaceAtBlockBoundaries} applies to. A regex built for such a
+ * search names each whitespace run `${SEARCH_WHITESPACE_GROUP_PREFIX}${n}` — names must be unique,
+ * because a duplicate capture group name is a `SyntaxError`.
+ */
+export const SEARCH_WHITESPACE_GROUP_PREFIX = 'ws';
+
 /** Options controlling how {@link IUsjReaderWriter.search} performs its search */
 export type UsjSearchOptions = {
+  /**
+   * Zero-width tests that a match's start and end must each pass, unless that end sits where the
+   * block changes: an offset in the concatenated text where the adjacent text nodes belong to
+   * different block-level markers. A match failing one is discarded.
+   *
+   * This is how a word restriction reaches a word at a block's edge. The regex itself sees
+   * neighboring blocks joined with nothing between them, so a lookaround in it reads `Isaac` at the
+   * end of a paragraph and `And` at the start of the next as `IsaacAnd`, which is no word boundary.
+   * Unlike a lookaround, a test here cannot make the regex try a different length of match.
+   */
+  wordEdges?: { start?: RegExp; end?: RegExp };
   /**
    * Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include in the search. When provided,
    * only text within markers whose style is in this set will be searched. Text inside markers not
@@ -546,9 +370,42 @@ export type UsjSearchOptions = {
    * positions are mapped back to the original string. This is required for correct
    * `ignoreDiacritics` behaviour on NFC source text: a pre-composed character such as `é` (U+00E9)
    * will not match `e[combining]*` unless the text is first decomposed. Returned `text` values are
-   * always slices of the original (non-NFD) string.
+   * always slices of the original (non-NFD) string. A match that starts or ends inside an original
+   * character (for example part of a Hangul syllable, stored precomposed or decomposed) is not
+   * returned.
    */
   normalizationForm?: 'NFD';
+  /**
+   * When `true`, a capture group named `${SEARCH_WHITESPACE_GROUP_PREFIX}${n}` — the prefix
+   * followed by one or more digits, and nothing else — may match zero characters, but only at a
+   * block boundary: an offset in the concatenated text where the adjacent text nodes belong to
+   * different block-level markers, which is where the editor renders a block break. A match whose
+   * whitespace group matched zero characters anywhere else is discarded.
+   *
+   * The name is matched exactly, so a caller's own group keeps its ordinary meaning even when its
+   * name begins with the same letters (`(?<wsGap>…)` is left alone).
+   *
+   * This lets a phrase copied out of an editor match across a rendered block break: the clipboard
+   * supplies a space where the concatenated text has nothing between the two words. Most such
+   * breaks render as a line break; adjacent cells in one table row are the exception, rendering
+   * side by side.
+   *
+   * A chapter transition never counts as a boundary — the gap there is not something the editor
+   * renders as a break, and a match spanning one would put a `\c` marker inside a replacement's
+   * removed span.
+   *
+   * When `markerStylesToInclude` drops text, what was dropped decides whether a boundary survives
+   * it. Dropped text that belongs to one of the two adjacent blocks — a note at the end of the
+   * first paragraph or the start of the next — leaves the boundary in place. Dropped text that is a
+   * block of its own — a section heading, a list, a table standing between the two — removes it,
+   * because that block is on screen between them and the two are not adjacent lines.
+   *
+   * The filter needs capture-group offsets, so when the pattern carries such a group and lacks the
+   * `d` flag, `search` runs a **rebuilt copy** of it. Either way the caller's own `RegExp` object
+   * is left as they compiled it, `lastIndex` included — note that this means a search never
+   * advances a global regex's cursor for the caller.
+   */
+  flexibleWhitespaceAtBlockBoundaries?: boolean;
 };
 
 /** Result of a search for text within a USJ object */
@@ -587,8 +444,31 @@ export type UsjReaderWriterOptions = {
    */
   markersMap?: MarkersMap;
   /**
-   * Whether the transformations should preserve invisible characters as in Paratext 9
-   * (`ScrText.Settings.AllowInvisibleChars`).
+   * The Paratext project setting "Allow invisible characters" (`AllowInvisibleChars` in
+   * `Settings.xml`, `ScrText.Settings.AllowInvisibleChars` in ParatextData) of the project this USJ
+   * belongs to. Pass the value of the project setting `platformScripture.allowInvisibleCharacters`
+   * for that project — `useProjectSetting(projectId, 'platformScripture.allowInvisibleCharacters',
+   * false)` in a web view, `getSetting('platformScripture.allowInvisibleCharacters')` on the
+   * project's `platform.base` PDP elsewhere. It can be left unset for USJ that belongs to no
+   * Paratext project, or when nothing reads USFM text from this instance.
+   *
+   * It decides how a no-break space (U+00A0) in the USJ text is spelled in the USFM this class
+   * writes ({@link IUsjReaderWriter.toUsfm}), matching what Paratext reads and writes for that
+   * project. It covers text content and the values of attribute markers such as `\ca`, `\va` and
+   * `\cat`; a value in a marker's `|` attribute list (`lemma`, a milestone's `who`, a figure's
+   * `src`) is written exactly as the USJ holds it, as ParatextData writes one:
+   *
+   * - `false`: the project's USFM spells a no-break space `~`, so U+00A0 in text is written as `~`.
+   *   The USJ text Platform.Bible gets for such a project never contains `~` (an attribute value
+   *   can: ParatextData keeps a `~` in most attribute values as written); a `~` that is in the text
+   *   anyway is written as `~` too, so Paratext saves it as a no-break space. A literal tilde
+   *   cannot be represented in text.
+   * - `true`: `~` is an ordinary character (a literal tilde) and U+00A0 is written as itself, so the
+   *   two stay distinct. Writing this project's USJ with `false` would turn every no-break space
+   *   into a literal tilde when the USFM is saved.
+   *
+   * Nothing else depends on it: searching and every location and index conversion read the USJ, and
+   * `~` and U+00A0 are each one UTF-16 code unit, so USFM indices are the same either way.
    *
    * Defaults to `false`
    */

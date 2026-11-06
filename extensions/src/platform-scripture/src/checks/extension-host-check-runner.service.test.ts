@@ -1,0 +1,230 @@
+import { describe, expect, it, vi } from 'vitest';
+import { logger } from '@papi/backend';
+import type {
+  Check,
+  CheckDetails,
+  CheckCreatorFunction,
+  CheckJobScope,
+  ICheckRunner,
+} from 'platform-scripture';
+import { checkHostingService } from './extension-host-check-runner.service';
+
+type RegisterCheckHandler = (
+  details: CheckDetails,
+  create: CheckCreatorFunction,
+) => Promise<unknown>;
+
+// The runner registers itself and its registerCheck command through PAPI; capture both so the test
+// can drive the engine directly.
+const registered: { engine?: ICheckRunner; registerCheck?: RegisterCheckHandler } = {};
+
+vi.mock('@papi/backend', () => {
+  class DataProviderEngine {
+    notifyUpdate = vi.fn();
+  }
+  return {
+    default: {
+      commands: {
+        registerCommand: vi.fn(async (_name: string, handler: RegisterCheckHandler) => {
+          registered.registerCheck = handler;
+          return async () => true;
+        }),
+      },
+      projectDataProviders: {
+        get: vi.fn(async () => ({
+          getExtensionData: vi.fn(async () => undefined),
+          setExtensionData: vi.fn(async () => true),
+        })),
+      },
+    },
+    DataProviderEngine,
+    dataProviders: {
+      registerEngine: vi.fn(async (_name: string, engine: ICheckRunner) => {
+        registered.engine = engine;
+        return Object.assign(engine, { dispose: async () => true });
+      }),
+    },
+    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  };
+});
+
+const RANGE = {
+  projectId: 'P1',
+  start: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+};
+
+function makeCheck(name: string, getCheckResults: Check['getCheckResults']): CheckCreatorFunction {
+  return async () => ({
+    initialize: async () => [],
+    dispose: async () => true,
+    getCheckDetails: () => ({ checkName: name, checkDescription: name }),
+    getCheckResults,
+  });
+}
+
+async function register(name: string, create: CheckCreatorFunction): Promise<string> {
+  const details: CheckDetails = { checkName: name, checkDescription: name };
+  await registered.registerCheck?.(details, create);
+  return `registered-${name}-${name}`;
+}
+
+async function runToEnd(
+  runner: ICheckRunner,
+  checkIds: string[],
+  inputRanges: CheckJobScope['inputRanges'] = [RANGE],
+) {
+  const jobId = await runner.beginCheckJob({ checkIds, inputRanges });
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    // Each poll depends on the previous one not being finished yet
+    // eslint-disable-next-line no-await-in-loop
+    const report = await runner.retrieveCheckJobUpdate(jobId, 1000);
+    if (report.status !== 'queued' && report.status !== 'running') return report;
+    // Wait between polls
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => {
+      setTimeout(resolve, 5);
+    });
+  }
+  throw new Error('job did not finish');
+}
+
+describe('extension-host check runner', () => {
+  it('keeps the other checks’ results when one check throws', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+    const failing = await register(
+      'fails',
+      makeCheck('fails', async () => {
+        throw new Error('boom');
+      }),
+    );
+    const healthy = await register(
+      'works',
+      makeCheck('works', async () => [
+        {
+          projectId: 'P1',
+          checkResultType: 't',
+          verseText: '',
+          itemText: 'x',
+          messageFormatString: 'found',
+          isDenied: false,
+          verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+          start: { book: 'GEN', chapterNum: 1, verseNum: 1, offset: 0 },
+          end: { book: 'GEN', chapterNum: 1, verseNum: 1, offset: 1 },
+        },
+      ]),
+    );
+
+    vi.mocked(logger.warn).mockClear();
+
+    const report = await runToEnd(runner, [failing, healthy]);
+
+    expect(report.status).toBe('completed');
+    expect(report.totalResultsCount).toBe(1);
+    expect(report.checkErrors).toEqual([{ checkId: failing, message: 'boom' }]);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    const [warning] = vi.mocked(logger.warn).mock.calls[0];
+    expect(warning).toContain(failing);
+    expect(warning).toContain('P1');
+    expect(warning).toContain('boom');
+  });
+
+  it('logs a check that fails in several ranges of one job once', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+    const failingEverywhere = await register(
+      'fails-everywhere',
+      makeCheck('fails-everywhere', async () => {
+        throw new Error('boom everywhere');
+      }),
+    );
+    vi.mocked(logger.warn).mockClear();
+
+    const report = await runToEnd(
+      runner,
+      [failingEverywhere],
+      [RANGE, { ...RANGE, projectId: 'P2' }],
+    );
+
+    expect(report.checkErrors).toEqual([
+      { checkId: failingEverywhere, message: 'boom everywhere' },
+    ]);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs a check that fails with different messages once per message', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+    const failsPerBook = await register(
+      'fails-per-book',
+      makeCheck('fails-per-book', async (range) => {
+        throw new Error(`boom in ${range.start.book}`);
+      }),
+    );
+    vi.mocked(logger.warn).mockClear();
+
+    const exodusRange = { ...RANGE, start: { ...RANGE.start, book: 'EXO' } };
+    const report = await runToEnd(runner, [failsPerBook], [RANGE, exodusRange, exodusRange]);
+
+    expect(report.checkErrors).toEqual([
+      { checkId: failsPerBook, message: 'boom in GEN' },
+      { checkId: failsPerBook, message: 'boom in EXO' },
+    ]);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    const warnings = vi.mocked(logger.warn).mock.calls.map(([warning]) => warning);
+    expect(warnings[0]).toContain('boom in GEN');
+    expect(warnings[1]).toContain('boom in EXO');
+  });
+
+  it('reports every check as ready because extension-hosted checks have no setup', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+
+    await expect(runner.lookUpCheckSetupStatus('registered-any-any', 'P1')).resolves.toEqual({
+      status: 'ready',
+    });
+  });
+
+  it('answers that every check is set up because extension-hosted checks have no setup', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+
+    await expect(runner.isCheckSetupForProject('registered-any-any', 'P1')).resolves.toBe(true);
+  });
+
+  it('completes the job and keeps results when a check’s dispose rejects', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+    const result = {
+      projectId: 'P1',
+      checkResultType: 't',
+      verseText: '',
+      itemText: 'x',
+      messageFormatString: 'found',
+      isDenied: false,
+      verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      start: { book: 'GEN', chapterNum: 1, verseNum: 1, offset: 0 },
+      end: { book: 'GEN', chapterNum: 1, verseNum: 1, offset: 1 },
+    };
+    const badDispose = await register('bad-dispose', async () => ({
+      initialize: async () => [],
+      dispose: async () => {
+        throw new Error('dispose failed');
+      },
+      getCheckDetails: () => ({ checkName: 'bad-dispose', checkDescription: 'bad-dispose' }),
+      getCheckResults: async () => [result],
+    }));
+    const healthy = await register(
+      'after-bad-dispose',
+      makeCheck('after-bad-dispose', async () => [result]),
+    );
+
+    const report = await runToEnd(runner, [badDispose, healthy]);
+
+    expect(report.status).toBe('completed');
+    expect(report.checkErrors).toBeUndefined();
+    expect(report.totalResultsCount).toBe(2);
+  });
+
+  it('records an unregistered check as a check error and completes', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+    const report = await runToEnd(runner, ['registered-gone-gone']);
+
+    expect(report.status).toBe('completed');
+    expect(report.checkErrors?.[0].checkId).toBe('registered-gone-gone');
+  });
+});

@@ -1,8 +1,16 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Entry, Occurrence, Sense } from 'platform-lexical-tools';
+import { LocalizeKey } from 'platform-bible-utils';
 
 // Regex to remove any parenthetical statements (including nested)
 const REMOVE_PARENTHETICAL_STATEMENTS_REGEX = /\([^()]*\)/g;
+
+/**
+ * The Dictionary tab's title key, shared between the web view provider (which sets the tab's raw
+ * title and initial tooltip) and the web view itself (which keeps the tooltip's resolved value
+ * current as the interface language changes) so the two can't resolve different keys.
+ */
+export const DICTIONARY_TITLE_KEY: LocalizeKey = '%platformLexicalTools_dictionary_title_sdbhSdbg%';
 
 /** Type for the dictionary scope */
 export type DictionaryScope = 'chapter' | 'section' | 'verse';

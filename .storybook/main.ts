@@ -170,8 +170,11 @@ const config: StorybookConfig = {
     // Storybook, rejecting unhandled after ~10s ("Timeout reached when waiting for websocket
     // connected to settle") and crashing every startup-wizard story.
     //
-    // The mock re-exports all real hooks and overrides only the three the first-run language step
-    // needs; stories opt in to drive data via `setFirstRunLanguageMock(...)`.
+    // The mock re-exports all real hooks and overrides only the four the first-run steps need;
+    // stories opt in to drive data with a decorator per step (`withFirstRunLanguage(...)`, and
+    // `InternetSettingsMockContext` for the internet-settings provider). Overriding here rather
+    // than spying per story is not a preference: the barrel is an ES module, so `spyOn` on one of
+    // its exports throws and the story renders Storybook's error overlay instead.
     //
     // This MUST use NormalModuleReplacementPlugin, not `resolve.alias`: the base renderer webpack
     // config resolves `@renderer/*` via `TsconfigPathsPlugin` (webpack.config.base.ts), which wins
@@ -203,9 +206,16 @@ const config: StorybookConfig = {
         /^@renderer\/hooks\/use-sync-status\.hook$/,
         join(__dirname, 'mocks/use-sync-status.hook.ts'),
       ),
-      // Delegates every command to the real service (which answers "no backend" through the inert
-      // rpc handler) except the two Send/Receive commands whose rejection would otherwise make the
-      // sync button's accepted-cancel state unreachable in Storybook. See the stub for details.
+      // One replacement stands in for the command service in EVERY story. It delegates to the real
+      // service, whose default is to reject — Storybook has no PAPI backend, so
+      // `papi-stubs/rpc-handler.factory.ts` answers with a JSON-RPC error. Two exceptions are
+      // global: the Send/Receive commands whose rejection would make the sync button's
+      // accepted-cancel state unreachable. A story can claim any command for itself by setting a
+      // responder via `mocks/command-service-mock-channel.ts`, which the stub reads at call time;
+      // that channel exists because `spyOn(commandService, 'sendCommand')` cannot work in Storybook
+      // 9 — webpack builds the module namespace with non-configurable getters and tags it
+      // `Symbol.toStringTag = 'Module'`, which is exactly what makes spying throw "Module namespace
+      // is not configurable in ESM". See the stub for details.
       new NormalModuleReplacementPlugin(
         /^@shared\/services\/command\.service$/,
         join(__dirname, 'papi-stubs/command.service.ts'),

@@ -111,6 +111,7 @@ export function convertContributionToContextMenuItems(
           // This is a submenu host item - build its children
           result.push({
             type: 'submenu',
+            id: item.id,
             label: item.label,
             items: buildSubmenuItems(item.id),
           });
@@ -119,6 +120,7 @@ export function convertContributionToContextMenuItems(
             type: 'item',
             id: item.command,
             label: item.label,
+            ...(item.shortcut ? { shortcut: item.shortcut } : {}),
           });
         }
       });

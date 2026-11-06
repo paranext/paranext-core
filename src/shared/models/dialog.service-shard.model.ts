@@ -10,7 +10,7 @@ import { DialogService } from '@shared/services/dialog.service-model';
 
 /**
  * Base name a window's dialog service shard registers its network object under, suffixed with the
- * window id (e.g. `DialogService-1`).
+ * window id (e.g. `DialogService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`).
  *
  * Nothing claims this name unsuffixed: the router publishes the `dialog:*` request names consumers
  * call, not a network object.

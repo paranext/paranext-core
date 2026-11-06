@@ -12,8 +12,8 @@ const STRINGS = {
   '%webView_platformScriptureEditor_bookNotAvailable_manageBooksButton%': 'Manage books',
   '%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%':
     'This project is read-only. Books cannot be added.',
-  '%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%':
-    'Books cannot be added during Send/Receive.',
+  '%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%':
+    'Books cannot be added during sync.',
 };
 
 afterEach(() => {
@@ -120,7 +120,7 @@ describe('BookNotAvailableView', () => {
 
   it.each([
     ['readOnly', 'This project is read-only. Books cannot be added.'],
-    ['syncInProgress', 'Books cannot be added during Send/Receive.'],
+    ['syncInProgress', 'Books cannot be added during sync.'],
   ] as const)(
     'disables the button with the %s reason explained on the wrapper',
     (reason, explanation) => {
@@ -156,9 +156,7 @@ describe('BookNotAvailableView', () => {
     // of wiring, so such a test passes no matter where the handler sits. The reachable target is
     // `DisabledTooltipWrapper`, which becomes a focusable `role="group"` element precisely so the
     // tooltip stays available while disabled — a handler hoisted onto it would fire for real.
-    fireEvent.click(
-      screen.getByRole('group', { name: 'Books cannot be added during Send/Receive.' }),
-    );
+    fireEvent.click(screen.getByRole('group', { name: 'Books cannot be added during sync.' }));
 
     expect(onOpenManageBooks).not.toHaveBeenCalled();
   });

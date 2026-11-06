@@ -36,6 +36,32 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+/**
+ * Register `engine` under `dataProviderName`, then call `methodName` on the object that actually
+ * reached the network — which is what proves the method survived registration as a plain callable
+ * rather than being absorbed into the get/set data-type machinery.
+ *
+ * Reached via `Reflect.get`/`Reflect.apply` rather than behind an `instanceof` guard, so a method
+ * that is not on the registered object at all fails here instead of skipping the assertion.
+ */
+async function callMethodAsRegistered(
+  dataProviderName: string,
+  engine: object,
+  methodName: string,
+): Promise<unknown> {
+  await dataProviderService.registerEngine(
+    // The name/engine are generic in this test context; cast to satisfy the typed signature.
+    /* eslint-disable no-type-assertion/no-type-assertion */
+    dataProviderName as never,
+    engine as never,
+    /* eslint-enable no-type-assertion/no-type-assertion */
+  );
+
+  const registeredObject = vi.mocked(networkObjectService.set).mock.calls[0][1];
+  const exposedMethod: unknown = Reflect.get(registeredObject, methodName);
+  return Reflect.apply(Function.prototype.call, exposedMethod, [undefined]);
+}
+
 // ---------------------------------------------------------------------------
 // Type-level tests
 // ---------------------------------------------------------------------------
@@ -123,24 +149,27 @@ describe('dataProviderService.registerEngine — documentation forwarding', () =
     };
     dataProviderService.decorators.ignore(engine.getSomethingThatIsNotADataType);
 
-    await dataProviderService.registerEngine(
-      // The name/engine are generic in this test context; cast to satisfy the typed signature.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      'test.ignoredGetter' as never,
-      // The name/engine are generic in this test context; cast to satisfy the typed signature.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      engine as never,
-    );
-
-    const registeredObject = vi.mocked(networkObjectService.set).mock.calls[0][1];
-    // Called through `Reflect.apply` rather than behind an `instanceof` guard, so a method that is
-    // not on the registered object at all fails here instead of skipping the assertion
-    const exposedMethod: unknown = Reflect.get(registeredObject, 'getSomethingThatIsNotADataType');
-
     // Reachable over the network, which is the whole point of putting it on the engine
-    await expect(Reflect.apply(Function.prototype.call, exposedMethod, [undefined])).resolves.toBe(
-      'answer',
-    );
+    await expect(
+      callMethodAsRegistered('test.ignoredGetter', engine, 'getSomethingThatIsNotADataType'),
+    ).resolves.toBe('answer');
+  });
+
+  it('exposes a list___ method with neither a matching setter nor an ignore decorator', async () => {
+    // This is why the PDP method that enumerates extension data is called
+    // `listExtensionDataQualifiers` and not `getExtensionDataQualifiers`: `get`/`set`/`subscribe`
+    // are magic prefixes here, so a getter-shaped name would demand a setter with nothing to set
+    // and imply a subscriber with nothing to notify. Renaming it to `get___` lands in
+    // "refuses to register an unignored get___ method with no matching setter".
+    const engine = {
+      getData: async () => 1,
+      setData: async () => true,
+      listExtensionDataQualifiers: async () => ['byMachine/ledger/abc.json', 'top.json'],
+    };
+
+    await expect(
+      callMethodAsRegistered('test.listMethod', engine, 'listExtensionDataQualifiers'),
+    ).resolves.toEqual(['byMachine/ledger/abc.json', 'top.json']);
   });
 
   it('refuses to register an unignored get___ method with no matching setter', async () => {

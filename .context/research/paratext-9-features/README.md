@@ -30,7 +30,7 @@ references, and which sources corroborate each finding. Used by the `feature-map
 
 ## Licensing
 
-**PT9-derived excerpts are not covered by this repo's MIT license.** The `file:line`
+**PT9-derived excerpts are not covered by this repo's AGPL-3.0-or-later license.** The `file:line`
 citations, class/method names, and short C# excerpts throughout this inventory describe the
 closed-source Paratext 9 codebase and are included for reference only.
 

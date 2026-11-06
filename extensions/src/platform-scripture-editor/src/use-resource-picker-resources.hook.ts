@@ -15,7 +15,8 @@ import {
  * Composes the picker's resource list: the effective (admin+user) referenced list, optionally
  * unioned with all locally-downloaded scripture projects, deduped and ordered.
  *
- * @param projectId The container project whose reference list is shown
+ * @param projectId The container project whose reference list is shown. With none, the rows are the
+ *   downloaded resources alone (with `includeDownloaded`)
  * @param options.includeDownloaded Union in locally-downloaded projects that are not referenced yet
  * @param options.adminLockedFirst Sort admin-locked rows to the top
  * @param dblResources The resource catalog rows to resolve references against
@@ -40,8 +41,14 @@ export function useResourcePickerResources(
     projectId,
     'platformScripture.referencedProjectsAndResources',
   );
-  const effectiveResources =
-    effectiveResourcesState.status === 'ready' ? effectiveResourcesState.list : undefined;
+  // With no project there are no referenced lists — team or personal — to wait for: the rows are
+  // the downloaded resources alone.
+  const effectiveItems = useMemo(() => {
+    if (projectId === undefined) return [];
+    return effectiveResourcesState.status === 'ready'
+      ? effectiveResourcesState.list.items
+      : undefined;
+  }, [projectId, effectiveResourcesState]);
 
   // undefined = fetch in flight; [] = not fetching (includeDownloaded is false or fetch completed)
   const [downloaded, setDownloaded] = useState<DownloadedResource[] | undefined>(undefined);
@@ -89,18 +96,18 @@ export function useResourcePickerResources(
   );
 
   const rows = useMemo(() => {
-    if (!effectiveResources) return undefined;
+    if (!effectiveItems) return undefined;
     if (!isCatalogSettled) return undefined;
     if (includeDownloaded && downloaded === undefined) return undefined;
     const built = buildPickerResources(
-      effectiveResources.items,
+      effectiveItems,
       includeDownloaded ? (downloaded ?? []) : [],
       dblResources,
     );
     if (!adminLockedFirst) return built;
     return [...built].sort((a, b) => Number(b.isAdminLocked) - Number(a.isAdminLocked));
   }, [
-    effectiveResources,
+    effectiveItems,
     downloaded,
     dblResources,
     adminLockedFirst,
@@ -108,5 +115,8 @@ export function useResourcePickerResources(
     isCatalogSettled,
   ]);
 
-  return [rows, effectiveResourcesState.status === 'loading' || rows === undefined];
+  return [
+    rows,
+    (projectId !== undefined && effectiveResourcesState.status === 'loading') || rows === undefined,
+  ];
 }

@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => {
     getAbandonedWindowIds: vi.fn(),
     wasWindowEverReady: vi.fn(),
     isWindowClosing: vi.fn(),
+    isWindowTracked: vi.fn<(windowId: string) => boolean>(() => true),
+    getWindowCreationRank: vi.fn<(windowId: string) => number | undefined>(() => undefined),
     isApplicationFocused: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -67,6 +69,8 @@ vi.mock('@main/services/window-state.service', () => ({
   getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   wasWindowEverReady: mocks.wasWindowEverReady,
   isWindowClosing: mocks.isWindowClosing,
+  isWindowTracked: mocks.isWindowTracked,
+  getWindowCreationRank: mocks.getWindowCreationRank,
   isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
 }));
@@ -104,9 +108,9 @@ describe('web-view window creator wiring', () => {
     // The window the creator will report as created, already announced as ready so the router does
     // not need to wait on anything but the creator wiring this test is exercising.
     withWindows({ 7: emptyWindowShard() });
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
 
-    const freshWindowPromise = createFreshWindow('someType');
+    const freshWindowPromise = createFreshWindow('someType', false);
 
     // Let pending microtasks run: with nothing wired yet, the call should still be waiting on the
     // wiring latch rather than having thrown or otherwise settled.
@@ -128,7 +132,7 @@ describe('web-view window creator wiring', () => {
     vi.useFakeTimers();
     resetWindowCreatorForTesting();
 
-    const opening = createFreshWindow('someType');
+    const opening = createFreshWindow('someType', false);
     // Take hold of the rejection before advancing the clock, the same way the router suite's own
     // "shard never appears" timeout test does: an unattached rejection during the timer run is
     // reported as an unhandled rejection against the whole file.
@@ -149,7 +153,7 @@ describe('web-view window creator wiring', () => {
     resetWindowCreatorForTesting();
     withWindows({ 7: emptyWindowShard() });
 
-    const spentTheBound = createFreshWindow('someType');
+    const spentTheBound = createFreshWindow('someType', false);
     // Attached before the clock runs, as the test above does and for the same reason.
     spentTheBound.catch(() => undefined);
     await vi.advanceTimersByTimeAsync(WINDOW_CREATOR_WIRING_TIMEOUT_MS);
@@ -159,17 +163,48 @@ describe('web-view window creator wiring', () => {
     // wiring lands immediately after it starts waiting.
     vi.useRealTimers();
 
-    const waitingAgain = createFreshWindow('someType');
+    const waitingAgain = createFreshWindow('someType', false);
     waitingAgain.catch(() => undefined);
     await Promise.resolve();
     await Promise.resolve();
 
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
 
     const freshWindow = await waitingAgain;
 
     expect(creator.createPendingContentWindow).toHaveBeenCalledTimes(1);
     expect(freshWindow.discard).toBeTypeOf('function');
+  });
+
+  test('a rollback closes the window while it is still waiting for content, never after that mark is cleared', async () => {
+    // What keeps this close safe is an exclusion two modules away: the window answering for the
+    // application is never one still waiting for content, so this close can never be read as the
+    // primary's and can never raise the close-all question. Here that stays true only because of
+    // the ordering — the content-arrived branch clears the mark and returns, so the path that
+    // reaches `closeWindow` is the one where the mark is still set.
+    //
+    // Clearing before closing would strand a window rather than merely mis-ask: the router does not
+    // await this close, so a close that is refused still reports the rollback as having succeeded,
+    // leaving a blank window with nothing to heal it.
+    resetWindowCreatorForTesting();
+    withWindows({ 7: emptyWindowShard() });
+
+    // Read at the moment of the close rather than after it, which is the only time that answers
+    // the ordering question
+    let clearCallsWhenClosed: number | undefined;
+    const creator = {
+      createPendingContentWindow: vi.fn(async () => '7'),
+      closeWindow: vi.fn(() => {
+        clearCallsWhenClosed = mocks.clearWindowPendingContent.mock.calls.length;
+      }),
+    };
+    setWebViewWindowCreator(creator);
+
+    const freshWindow = await createFreshWindow('someType', false);
+    await freshWindow.discard();
+
+    expect(creator.closeWindow).toHaveBeenCalledWith('7');
+    expect(clearCallsWhenClosed).toBe(0);
   });
 });

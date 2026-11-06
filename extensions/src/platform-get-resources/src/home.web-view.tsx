@@ -1,3 +1,4 @@
+import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { CardTitle, useEvent, usePromise } from 'platform-bible-react';
@@ -5,25 +6,53 @@ import { Home as HomeIcon } from 'lucide-react';
 
 import {
   getErrorMessage,
-  isErrorMessageAboutParatextBlockingInternetAccess,
   isErrorMessageAboutRegistryAuthFailure,
   isPlatformError,
   newGuid,
+  normalizeProjectId,
   retryUntil,
 } from 'platform-bible-utils';
+import { isSyncRequestRemovedError, REQUEST_SYNC_COMMAND } from 'platform-bible-utils/experimental';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Home, HOME_STRING_KEYS } from './home.component';
+import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
+import { parseUnsyncedProjectIds } from './home-unsynced.util';
+import { getInternetBlockedNotification } from './internet-block-notification.utils';
+import { isProjectResourceFilterValue } from './project-resource-filter.component';
+import { useUnsupportedReasonStrings } from './use-unsupported-reason-strings.hook';
 import { useLocalProjects } from './use-local-projects.hook';
+import { useSyncActivity } from './use-sync-activity.hook';
+import { useSyncQueue } from './use-sync-queue.hook';
+import { openHomeItem } from './open-home-item';
 
 const defaultInterfaceLanguages: string[] = ['en'];
 
 // Bounded retries for the two send/receive-dependent calls below, sized to outlast the remaining
-// extension activations (~1.5s in a Paratext 10 Studio build).
+// extension activations (~1.5s in a Paratext 10 build).
 const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
-globalThis.webViewComponent = function HomeWebView() {
+/**
+ * The reports that name projects in a sync: the backend's activity, and the queue's waiting,
+ * sending and running sets.
+ */
+type SyncReportSource = 'activity' | 'waiting' | 'sending' | 'running';
+
+globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
+  // Set by the web view provider from an opener's preset, and otherwise kept as the user left it.
+  // The user's changes are written back so it survives window moves and reloads, and so `openHome`
+  // can tell whether the filter on screen matches what a later caller asks for. See
+  // `buildHomeWebViewState`.
+  const [savedProjectResourceFilter, setProjectResourceFilter] = useWebViewState<string>(
+    'projectResourceFilter',
+    'all',
+  );
+  // Saved state is untyped at rest, and a layout from another build may carry a value this one does
+  // not know. Filtering on it would hide items behind a trigger that reads "All".
+  const projectResourceFilter = isProjectResourceFilterValue(savedProjectResourceFilter)
+    ? savedProjectResourceFilter
+    : 'all';
+
   const isMounted = useRef(false);
   useEffect(() => {
     isMounted.current = true;
@@ -71,26 +100,32 @@ globalThis.webViewComponent = function HomeWebView() {
     papi.commands.sendCommand('platformGetResources.openGetResources');
   }, []);
 
-  const openProject = (projectId: string, isPublished: boolean) =>
-    papi.commands.sendCommand(
-      isPublished
-        ? 'platformScriptureEditor.openResourceViewer'
-        : 'platformScriptureEditor.openScriptureEditor',
-      projectId,
-    );
-
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
   );
+  /**
+   * Whether the availability check ran out of attempts without an answer, as opposed to not having
+   * answered yet. Separate from `isSendReceiveAvailable` because `undefined` there is both states
+   * at once, and only the settled one should reach the user.
+   */
+  const [didAvailabilityCheckGiveUp, setDidAvailabilityCheckGiveUp] = useState<boolean>(false);
+  /**
+   * Identifies the newest availability check. Mount and `onDidReloadExtensions` can both start one,
+   * and each runs for several seconds, so two can be in flight at once — without this, an older run
+   * exhausting its attempts would overwrite a newer run's answer.
+   */
+  const availabilityCheckRunRef = useRef(0);
 
   const getStarted = useCallback(() => {
     papi.commands.sendCommand(
       'platform.openWindow',
-      'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio',
+      'https://paratext.org/tutorial-article/paratext-10/',
     );
   }, []);
 
   const checkIfSendReceiveAvailable = useCallback(async () => {
+    availabilityCheckRunRef.current += 1;
+    const thisRun = availabilityCheckRunRef.current;
     // A throw means the extension host couldn't answer yet, not that send/receive is missing, so
     // retry: without one the answer stays unknown for the session, since
     // `platform.onDidReloadExtensions` — the only other thing that re-checks — does not fire on a
@@ -110,7 +145,17 @@ globalThis.webViewComponent = function HomeWebView() {
       { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
     );
 
-    if (isAvailable !== undefined && isMounted.current) setIsSendReceiveAvailable(isAvailable);
+    if (!isMounted.current || thisRun !== availabilityCheckRunRef.current) return;
+    if (isAvailable === undefined) {
+      // Still unknown after every attempt. This is a third state, distinct from both "send/receive
+      // is absent from this build" (a definite `false`, where a local-only list is the whole truth)
+      // and "the server was reached" — and without saying so it renders exactly like the latter.
+      logger.warn('Home web view gave up determining send/receive availability');
+      setDidAvailabilityCheckGiveUp(true);
+      return;
+    }
+    setDidAvailabilityCheckGiveUp(false);
+    setIsSendReceiveAvailable(isAvailable);
   }, []);
 
   useEffect(() => {
@@ -122,8 +167,122 @@ globalThis.webViewComponent = function HomeWebView() {
     checkIfSendReceiveAvailable,
   );
 
-  const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<boolean>(false);
-  const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
+  const [unsyncedProjectIds, setUnsyncedProjectIds] = useState<readonly string[]>([]);
+  /** Whether a change event has arrived, which is newer than anything the seed command returns. */
+  const didReceiveUnsyncedEventRef = useRef(false);
+
+  // The backend raises its baseline event once per start with no replay, so the set is seeded from
+  // the command. A failure leaves the set empty; later change events still fill it in.
+  useEffect(() => {
+    (async () => {
+      const seededIds = await retryUntil(
+        async () => {
+          try {
+            const snapshot = await papi.commands.sendCommand(
+              'paratextBibleSendReceive.getUnsyncedChanges',
+            );
+            const ids = parseUnsyncedProjectIds(snapshot);
+            if (!ids)
+              logger.warn('getUnsyncedChanges answered in an unexpected shape; ignoring it');
+            return ids;
+          } catch (e) {
+            logger.warn(
+              `Home web view could not read the projects with unsynced changes: ${getErrorMessage(e)}`,
+            );
+            return undefined;
+          }
+        },
+        (result) => result !== undefined || !isMounted.current,
+        { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
+      );
+      if (!isMounted.current || didReceiveUnsyncedEventRef.current || !seededIds) return;
+      setUnsyncedProjectIds(seededIds);
+    })();
+  }, []);
+
+  useEvent(
+    papi.network.getNetworkEvent('paratextBibleSendReceive.onUnsyncedChangesChanged'),
+    useCallback((snapshot: unknown) => {
+      const ids = parseUnsyncedProjectIds(snapshot);
+      if (!ids) {
+        // Neither clear the marks nor stop a still-pending valid seed from landing.
+        logger.warn('onUnsyncedChangesChanged carried an unexpected shape; ignoring it');
+        return;
+      }
+      didReceiveUnsyncedEventRef.current = true;
+      setUnsyncedProjectIds(ids);
+    }, []),
+  );
+
+  // One entry per request Home has made that has not settled yet, so a project asked for again
+  // while its first request is open appears twice and stays listed until both settle. A request
+  // stays open while it waits in the sync queue as well as while it runs.
+  const [ownActiveSendReceiveProjects, setOwnActiveSendReceiveProjects] = useState<string[]>([]);
+  const isOwnSendReceiveInProgress = ownActiveSendReceiveProjects.length > 0;
+  // Hidden case: keeps following while the tab is inactive; data-only and cheap, so the rows are
+  // current when shown.
+  const syncActivity = useSyncActivity();
+  const syncQueue = useSyncQueue(isSendReceiveAvailable);
+
+  // Two flags because any sync pauses the server-list fetch, which queues behind it, while only a
+  // run that includes one of Home's own requests pauses the local list: a request that only waits
+  // in the queue behind another surface's run leaves the local list loading. A project waiting in
+  // the queue pauses the server-list fetch as well: its run starts as soon as the current one ends,
+  // and the fetch would queue behind that run too.
+  const isAnySendReceiveInProgress =
+    isOwnSendReceiveInProgress ||
+    syncActivity.isSyncing ||
+    syncQueue.waitingProjectIds.length > 0 ||
+    syncQueue.sendingProjectIds.length > 0 ||
+    syncQueue.runningProjectIds.length > 0;
+  // Normalized ids of Home's own requests that were sent to an idle queue, which is expected to
+  // start them right away: they show the spinner at once instead of waiting for the queue's
+  // report. An id leaves as soon as the queue or the sync activity names it (waiting, sending or
+  // running), or its request ends. A request sent while the queue already has a run, a run being
+  // sent or a waiting project gets no optimistic spinner, since it will probably wait.
+  const [optimisticRunningProjectIds, setOptimisticRunningProjectIds] = useState<string[]>([]);
+  // The backend says which projects are running: the sync queue names the ones in the run it
+  // accepted, and the sync activity names every run, including those started elsewhere. A run the
+  // queue is sending shows as running too: to the user it is starting, and if the backend refuses
+  // it as busy the queue reports its projects waiting again, which the row then shows.
+  const activeSendReceiveProjects = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [
+            ...syncQueue.sendingProjectIds,
+            ...syncQueue.runningProjectIds,
+            ...(syncActivity.isSyncing ? syncActivity.projectIds : []),
+          ]
+            .map(normalizeProjectId)
+            .concat(optimisticRunningProjectIds),
+        ),
+      ),
+    [
+      syncQueue.sendingProjectIds,
+      syncQueue.runningProjectIds,
+      syncActivity.isSyncing,
+      syncActivity.projectIds,
+      optimisticRunningProjectIds,
+    ],
+  );
+  // A run the backend has opened but whose projects nobody names yet could be Home's own, so it
+  // does not count as reported until the activity or the queue names them.
+  const isRunNamed =
+    syncQueue.sendingProjectIds.length > 0 ||
+    syncQueue.runningProjectIds.length > 0 ||
+    (syncActivity.isSyncing && syncActivity.projectIds.length > 0);
+  const isOwnRequestRunning = useMemo(() => {
+    // Until a reported run names its projects, any open request of Home's own pauses the local list.
+    if (!isRunNamed) return isOwnSendReceiveInProgress;
+    const runningIds = new Set(activeSendReceiveProjects);
+    return ownActiveSendReceiveProjects.some((id) => runningIds.has(normalizeProjectId(id)));
+  }, [
+    isRunNamed,
+    activeSendReceiveProjects,
+    ownActiveSendReceiveProjects,
+    isOwnSendReceiveInProgress,
+  ]);
   const [syncsCompletedCount, setSyncsCompletedCount] = useState<number>(0);
 
   useEvent(
@@ -133,10 +292,79 @@ globalThis.webViewComponent = function HomeWebView() {
     }, []),
   );
 
-  // Declared before the first use below: the send/receive failure paths all report through the same
-  // notification id so a repeat failure replaces the previous toast instead of stacking.
+  // Declared before the first use below: the send/receive failures that are not internet blocks
+  // report through this id, so a repeat failure replaces the previous toast instead of stacking.
+  // Internet blocks carry their own id, shared with everywhere else that notices the same block.
   const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
+  const syncQueueRemoveErrorNotificationId = useMemo(() => newGuid(), []);
 
+  /** Ends one of Home's own open requests for the project, leaving any other still listed. */
+  const endOwnRequest = (projectId: string) => {
+    if (!isMounted.current) return;
+    setOwnActiveSendReceiveProjects((prev) => {
+      const index = prev.indexOf(projectId);
+      return index < 0 ? prev : [...prev.slice(0, index), ...prev.slice(index + 1)];
+    });
+  };
+
+  /**
+   * The projects Home has asked the queue to sync that the queue has not yet reported as waiting,
+   * sending or running, by normalized id. Each maps to the reports that already named the project
+   * when it was requested, or have named it without a break since: those describe something else (a
+   * run started elsewhere, an earlier run), so only a report naming the project afresh counts as
+   * the answer to this request. Kept in a ref so a second click in the same tick sees the first.
+   */
+  const unreportedRequestsRef = useRef<Map<string, Set<SyncReportSource>>>(new Map());
+  const reportedIdsBySource = useMemo(
+    () =>
+      new Map<SyncReportSource, Set<string>>([
+        ['activity', new Set(syncActivity.projectIds.map(normalizeProjectId))],
+        ['waiting', new Set(syncQueue.waitingProjectIds.map(normalizeProjectId))],
+        ['sending', new Set(syncQueue.sendingProjectIds.map(normalizeProjectId))],
+        ['running', new Set(syncQueue.runningProjectIds.map(normalizeProjectId))],
+      ]),
+    [
+      syncActivity.projectIds,
+      syncQueue.waitingProjectIds,
+      syncQueue.sendingProjectIds,
+      syncQueue.runningProjectIds,
+    ],
+  );
+  useEffect(() => {
+    unreportedRequestsRef.current.forEach((namedAtRequest, projectId) => {
+      reportedIdsBySource.forEach((reportedIds, source) => {
+        if (!reportedIds.has(projectId)) namedAtRequest.delete(source);
+        else if (!namedAtRequest.has(source)) unreportedRequestsRef.current.delete(projectId);
+      });
+    });
+  }, [reportedIdsBySource]);
+
+  // Once the backend names a project, the optimistic spinner has done its job: a project the queue
+  // is sending or running keeps the spinner through `activeSendReceiveProjects`, and one it reports
+  // waiting (refused as busy, or behind another run) shows as waiting.
+  useEffect(() => {
+    const reportedIds = new Set(
+      [
+        ...syncActivity.projectIds,
+        ...syncQueue.waitingProjectIds,
+        ...syncQueue.sendingProjectIds,
+        ...syncQueue.runningProjectIds,
+      ].map(normalizeProjectId),
+    );
+    setOptimisticRunningProjectIds((ids) =>
+      ids.some((id) => reportedIds.has(id)) ? ids.filter((id) => !reportedIds.has(id)) : ids,
+    );
+  }, [
+    syncActivity.projectIds,
+    syncQueue.waitingProjectIds,
+    syncQueue.sendingProjectIds,
+    syncQueue.runningProjectIds,
+  ]);
+
+  // Every click is handed to the sync queue, which starts it right away or keeps it waiting for the
+  // next run. A sync that is already running does not refuse a click: it queues the project's next
+  // run. Only a repeat click on a project whose own request the queue has not yet reported as
+  // waiting, sending or running is ignored, so a double-click asks once.
   const sendReceiveProject = async (projectId: string) => {
     if (!isSendReceiveAvailable) {
       // Say so rather than doing nothing. Availability can still be unknown when a row's Sync
@@ -150,35 +378,44 @@ globalThis.webViewComponent = function HomeWebView() {
       return;
     }
 
+    const normalizedProjectId = normalizeProjectId(projectId);
+    if (unreportedRequestsRef.current.has(normalizedProjectId)) {
+      logger.info(`Home web view ignored a repeat sync click for project ${projectId}`);
+      return;
+    }
+    const namedAtRequest = new Set<SyncReportSource>();
+    reportedIdsBySource.forEach((reportedIds, source) => {
+      if (reportedIds.has(normalizedProjectId)) namedAtRequest.add(source);
+    });
+    unreportedRequestsRef.current.set(normalizedProjectId, namedAtRequest);
+
+    setOwnActiveSendReceiveProjects((prev) => [...prev, projectId]);
+    const isQueueIdle =
+      !syncActivity.isSyncing &&
+      syncQueue.waitingProjectIds.length === 0 &&
+      syncQueue.sendingProjectIds.length === 0 &&
+      syncQueue.runningProjectIds.length === 0;
+    if (isQueueIdle) setOptimisticRunningProjectIds((ids) => [...ids, normalizedProjectId]);
     try {
-      setIsSendReceiveInProgress(true);
-      setActiveSendReceiveProjects((prev) => [...prev, projectId]);
-
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
-
-      if (isMounted.current) {
-        setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
-        setIsSendReceiveInProgress(false);
-      }
+      // Get of a project not on this computer yet downloads it through the same request.
+      await papi.commands.sendCommand(REQUEST_SYNC_COMMAND, [projectId], 'home', {
+        includeConnected: false,
+      });
     } catch (e) {
       const errorMessage = getErrorMessage(e);
-      logger.warn(`Home web view failed to send/receive project ${projectId}: ${errorMessage}`);
-      if (isMounted.current) {
-        setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
-        setIsSendReceiveInProgress(false);
+      // Taken out of the queue before it ran, by the user or at quit: nothing failed.
+      if (isSyncRequestRemovedError(e)) {
+        logger.info(`Home web view's sync request for project ${projectId} left the queue unrun`);
+        return;
       }
+      logger.warn(`Home web view failed to send/receive project ${projectId}: ${errorMessage}`);
 
-      // The two failures we can recognize get their own notification with a link to the setting
-      // that fixes them, the same way the shared-projects fetch reports them — their raw messages
-      // are ParatextData internals and say nothing a user can act on.
-      if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
-        papi.notifications.send({
-          severity: 'error',
-          message: '%data_loading_error_internetAccess_disabled_2%',
-          clickCommandLabel: '%general_open%',
-          clickCommand: 'paratextRegistration.showInternetSettings',
-          notificationId: sharedProjectErrorNotificationId,
-        });
+      // The failures we can recognize report through a notification instead of Home's "Sync failed"
+      // alert: their raw messages are ParatextData internals, and only the notification carries the
+      // link to the setting that fixes them.
+      const internetBlockedNotification = getInternetBlockedNotification(errorMessage);
+      if (internetBlockedNotification) {
+        papi.notifications.send(internetBlockedNotification);
         return;
       }
       if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
@@ -196,17 +433,48 @@ globalThis.webViewComponent = function HomeWebView() {
       // what made a failed send/receive look like nothing happened: Home already catches this
       // callback's rejection and renders the message, but only ever saw a resolved promise.
       throw e;
+    } finally {
+      unreportedRequestsRef.current.delete(normalizedProjectId);
+      if (isMounted.current)
+        setOptimisticRunningProjectIds((ids) => ids.filter((id) => id !== normalizedProjectId));
+      endOwnRequest(projectId);
     }
   };
 
+  const removeFromSyncQueue = useCallback(
+    async (projectId: string) => {
+      try {
+        await papi.commands.sendCommand('paratextBibleSendReceive.removeFromSyncQueue', [
+          projectId,
+        ]);
+      } catch (e) {
+        // The row keeps showing what the queue reports, so a failed removal leaves it waiting; the
+        // notification says the click did not take.
+        logger.warn(
+          `Home web view could not take project ${projectId} out of the sync queue: ${getErrorMessage(e)}`,
+        );
+        papi.notifications.send({
+          severity: 'warning',
+          message: '%resources_syncQueueRemoveFailed%',
+          notificationId: syncQueueRemoveErrorNotificationId,
+        });
+      }
+    },
+    [syncQueueRemoveErrorNotificationId],
+  );
+
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
-  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+  /**
+   * How the last fetch of the server's project list ended. Only meaningful once
+   * `isSendReceiveAvailable` is `true` — what Home is told is derived from both below, so that the
+   * combinations that describe no real situation cannot be reached.
+   */
+  const [sharedProjectsFetchState, setSharedProjectsFetchState] = useState<
+    'loading' | 'loaded' | 'unreachable' | 'unavailable'
+  >('loading');
 
   useEffect(() => {
-    if (!isSendReceiveAvailable) {
-      setIsLoadingRemoteProjects(false);
-      return;
-    }
+    if (!isSendReceiveAvailable) return;
 
     let promiseIsCurrent = true;
     let retryTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -220,20 +488,22 @@ globalThis.webViewComponent = function HomeWebView() {
         );
 
         if (promiseIsCurrent && isMounted.current) {
-          setIsLoadingRemoteProjects(false);
+          setSharedProjectsFetchState('loaded');
           setSharedProjectsInfo(projectsInfo);
         }
       } catch (e) {
         const errorMessage = getErrorMessage(e);
-        if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
-          papi.notifications.send({
-            severity: 'error',
-            message: '%data_loading_error_internetAccess_disabled_2%',
-            clickCommandLabel: '%general_open%',
-            clickCommand: 'paratextRegistration.showInternetSettings',
-            notificationId: sharedProjectErrorNotificationId,
-          });
+        // The server was reached and refused for a reason the user can act on, as opposed to not
+        // answering at all — the banner says so differently, because the notification sent here
+        // already names the cause and the fix. An internet block does not retry: it comes from the
+        // user's internet setting, so retrying cannot succeed until they change it.
+        let failureState: 'unreachable' | 'unavailable' = 'unreachable';
+        const internetBlockedNotification = getInternetBlockedNotification(errorMessage);
+        if (internetBlockedNotification) {
+          failureState = 'unavailable';
+          papi.notifications.send(internetBlockedNotification);
         } else if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
+          failureState = 'unavailable';
           papi.notifications.send({
             severity: 'error',
             message: '%data_loading_error_paratextData_auth_failure%',
@@ -254,19 +524,31 @@ globalThis.webViewComponent = function HomeWebView() {
           logger.warn(`Home web view failed to get shared projects: ${errorMessage}`);
         }
 
+        // Every branch that reaches here has given up on the server for this run — the two
+        // notified ones as well as the retries-exhausted one. The notifications name a cause and
+        // offer a fix, but they are dismissible and live outside the list, so Home still has to say
+        // for itself that what it is showing is only the local half.
         if (promiseIsCurrent && isMounted.current) {
-          setIsLoadingRemoteProjects(false);
+          setSharedProjectsFetchState(failureState);
+          // Dropped rather than left on screen: a re-fetch after a completed sync can fail with a
+          // previous run's rows still listed, and the banner's claim that this is only the local
+          // half has to be true of what is actually rendered. Those rows are also unusable — their
+          // Get and Sync buttons reach the same server that just refused.
+          setSharedProjectsInfo(undefined);
         }
       }
     };
 
-    if (isSendReceiveInProgress) {
+    // The request queues behind a running sync and the default request timeout would turn the wait
+    // into a failure, so nothing is requested while one runs. The effect runs again when the sync
+    // ends, whichever path started it.
+    if (isAnySendReceiveInProgress) {
       return;
     }
-    if (!isSendReceiveAvailable) {
-      setIsLoadingRemoteProjects(false);
-      return;
-    }
+    // Each run starts over: without this the gate stays down through a re-fetch, and on the first
+    // run it was never raised at all — a user whose projects are all on the server would be told
+    // "Nothing here" for the seconds the fetch takes.
+    setSharedProjectsFetchState('loading');
     getSharedProjects();
 
     return () => {
@@ -276,15 +558,15 @@ globalThis.webViewComponent = function HomeWebView() {
     };
   }, [
     isSendReceiveAvailable,
-    isSendReceiveInProgress,
+    isAnySendReceiveInProgress,
     sharedProjectErrorNotificationId,
     syncsCompletedCount, // triggers a re-fetch each time a sync completes
   ]);
 
   const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects({
     logLabel: 'Home',
-    // Pause fetching while a Send/Receive runs and resume when it finishes.
-    enabled: !isSendReceiveInProgress,
+    // Pause fetching while a run that includes Home's own request runs, and resume when it ends.
+    enabled: !isOwnRequestRunning,
     // Re-fetch when the cached resource list changes or a sync completes.
     refetchTriggers: [resourcesList, syncsCompletedCount],
   });
@@ -300,23 +582,50 @@ globalThis.webViewComponent = function HomeWebView() {
     return interfaceLanguages;
   }, [interfaceLanguages]);
 
+  /**
+   * The one place the server half's status is decided. Availability outranks the fetch state,
+   * because a fetch state only means anything once there is known to be a server to fetch from —
+   * which is what keeps a give-up on a re-check from raising a banner over rows that loaded fine.
+   */
+  const remoteProjectsState: RemoteProjectsState = useMemo(() => {
+    if (isSendReceiveAvailable === false) return 'absent';
+    if (isSendReceiveAvailable === undefined)
+      return didAvailabilityCheckGiveUp ? 'unknown' : 'loading';
+    return sharedProjectsFetchState;
+  }, [isSendReceiveAvailable, didAvailabilityCheckGiveUp, sharedProjectsFetchState]);
+
   const dialogTitleText: string = localizedStringsWithLoadingState[0]['%home_dialog_title%'];
+
+  const localizedUnsupportedReasons = useUnsupportedReasonStrings(
+    localProjectsInfo,
+    sharedProjectsInfo,
+  );
 
   return (
     <Home
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       uiLocales={uiLocales}
       onOpenGetResources={openGetResources}
-      onOpenProject={openProject}
+      onOpenProject={openHomeItem}
       onSendReceiveProject={sendReceiveProject}
+      onRemoveFromQueue={removeFromSyncQueue}
       onGetStarted={getStarted}
       showGetResourcesButton={showGetResourcesButton}
-      isSendReceiveInProgress={isSendReceiveInProgress}
+      isSendReceiveInProgress={isAnySendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
-      isLoadingRemoteProjects={isLoadingRemoteProjects}
+      unsyncedProjectIds={unsyncedProjectIds}
+      remoteProjectsState={remoteProjectsState}
+      isServerListExpectedAfterSync={
+        isSendReceiveAvailable === true && sharedProjectsFetchState === 'loading'
+      }
+      initialProjectResourceFilter={projectResourceFilter}
+      onProjectResourceFilterChange={setProjectResourceFilter}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}
+      waitingProjectIds={syncQueue.waitingProjectIds}
+      isSyncQueueKnown={syncQueue.isKnown}
+      localizedUnsupportedReasons={localizedUnsupportedReasons}
       headerContent={
         <>
           <HomeIcon size={36} />

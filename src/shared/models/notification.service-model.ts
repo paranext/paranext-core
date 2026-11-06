@@ -1,6 +1,7 @@
 import { CommandHandlers } from 'papi-shared-types';
 import { LocalizeKey } from 'platform-bible-utils';
 import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
+import type { WebViewId } from '@shared/models/web-view.model';
 
 export type Severity = 'info' | 'warning' | 'error';
 
@@ -81,18 +82,18 @@ export interface PlatformNotification {
   secondaryClickCommand?: keyof CommandHandlers;
   /**
    * Optional command to run if the user dismisses the notification themselves - by swiping/dragging
-   * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
-   * other than the notification id, like {@link clickCommand}:
+   * it away, or by clicking the close button that a notification with no time limit shows. Sent no
+   * arguments other than the notification id, like {@link clickCommand}:
    *
    * - NotificationId: The ID of the notification that was dismissed
    *
    * The command handler should have the type signature {@link NotificationClickCommandHandler}.
    *
    * IMPORTANT: this fires when the user dismisses the notification themselves (swiping/dragging it
-   * away, or clicking a close button if the host ever enables one) AND when the notification
-   * auto-closes because its `duration` elapsed - a timeout is treated as an implicit dismissal, so
-   * a must-answer toast that times out still runs this command instead of vanishing silently. It
-   * does NOT fire when the notification is dismissed programmatically via
+   * away, or clicking the close button of a notification with no time limit) AND when the
+   * notification auto-closes because its `duration` elapsed - a timeout is treated as an implicit
+   * dismissal, so a must-answer toast that times out still runs this command instead of vanishing
+   * silently. It does NOT fire when the notification is dismissed programmatically via
    * {@link INotificationService.dismiss}, nor when the user clicks {@link clickCommand} /
    * {@link secondaryClickCommand}. Use this to treat a swipe-away (or timeout) as an explicit
    * decision - e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
@@ -139,16 +140,43 @@ export interface PlatformNotification {
    * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
    * the value it had on the previous `send` for that id - omitting a field never clears it. Pass
    * the field explicitly to change it.
+   *
+   * The one exception is {@link webViewId}: which window a `send` runs in is decided in the main
+   * process before the renderer ever sees the notification to merge it, so omitting `webViewId` on
+   * an update does NOT keep routing to the window the original send resolved to - it always routes
+   * by the rules {@link webViewId} documents, using only what this call passed. An update that lands
+   * in a different window updates nothing: that window has never seen the id, so it opens a second
+   * notification with no merge applied, and the original stays up in the window it was routed to.
+   * Pass the same `webViewId` on every `send` that shares an id.
    */
   notificationId?: string | number;
   /**
    * Optional duration in milliseconds for how long the notification is displayed. To make the
-   * notification show indefinitely, specify a `duration` of `0` or less.
+   * notification show indefinitely, specify a `duration` of `0` or less. Such a notification gets a
+   * close button, so it can be closed without a mouse, unless it is not user-dismissible (see
+   * {@link dismissible}, which also says when `false` is ignored).
    *
    * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
    * seconds).
    */
   duration?: number;
+  /**
+   * Optional id of a web view this notification is about. When provided, the notification is routed
+   * to the window that owns that web view instead of the focused window — for a notification or
+   * prompt raised about a specific project or editor that may not be the one the user is currently
+   * looking at. Falls back to the focused window whenever the web view's window cannot be
+   * determined — it is open nowhere, a window that might have it could not be asked, or it is
+   * moving between windows.
+   *
+   * Omit for a generic notice, which should keep routing to the focused window — where the user is
+   * looking is the right place for something that is not about anything in particular.
+   *
+   * The narrowest key available: a notification about a project with no web view currently open has
+   * no `webViewId` to name, and routes to the focused window like a generic notice would.
+   *
+   * @experimental
+   */
+  webViewId?: WebViewId;
 }
 
 /**
@@ -185,9 +213,10 @@ export const NotificationServiceNetworkObjectName = 'NotificationService';
  * OpenRPC documentation for the notification service network object.
  *
  * Attached in two places: each window's renderer registers its window-scoped name (e.g.
- * `NotificationService-1`) with these docs, and the main process attaches the same docs when it
- * registers its service router under the generic {@link NotificationServiceNetworkObjectName} — the
- * name consumers actually call — so the public name does not show undocumented in `rpc.discover`.
+ * `NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) with these docs, and the main process
+ * attaches the same docs when it registers its service router under the generic
+ * {@link NotificationServiceNetworkObjectName} — the name consumers actually call — so the public
+ * name does not show undocumented in `rpc.discover`.
  *
  * @experimental
  */
@@ -221,6 +250,7 @@ export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentatio
               dismissible: { type: 'boolean' },
               notificationId: { type: ['string', 'number'] },
               duration: { type: 'number' },
+              webViewId: { type: 'string' },
             },
             required: ['message', 'severity'],
           },

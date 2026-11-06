@@ -1,6 +1,9 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, expect, test } from 'vitest';
 import { LanguageInfo } from 'platform-bible-react';
 import { LanguageStrings } from 'platform-bible-utils';
+import { filterToOffered } from '@shared/data/interface-languages.data';
 import { computeSetupDialogLanguages } from './setup-dialog-languages.util';
 
 const loadedLocales: Record<string, LanguageInfo> = {
@@ -20,7 +23,7 @@ const REAL_KEYS = [
   '%firstRun_button_finish%',
   '%firstRun_button_next%',
   '%firstRun_button_back%',
-  '%firstRun_button_skipSync%',
+  '%firstRun_button_dontSyncYet%',
   '%firstRun_button_retry%',
   '%firstRun_stepIndicator%',
   '%firstRun_loading%',
@@ -72,5 +75,33 @@ describe('computeSetupDialogLanguages', () => {
     expect(computeSetupDialogLanguages({}, () => ({}), loadedLocales)).toEqual({
       en: { autonym: 'English' },
     });
+  });
+  test('leaves out an offered language below the threshold, and every language not offered', () => {
+    // es is offered but has 50% of the keys; fr and de clear the threshold but are not offered.
+    const offered = computeSetupDialogLanguages(
+      englishData,
+      (tag) => langData[tag],
+      filterToOffered(loadedLocales),
+    );
+    expect(Object.keys(offered)).toEqual(['en']);
+  });
+});
+
+describe('the shipped localizations', () => {
+  const readLocale = (tag: string): LanguageStrings =>
+    JSON.parse(
+      fs.readFileSync(path.join(__dirname, '../../../assets/localization', `${tag}.json`), 'utf8'),
+    );
+
+  // A new `%firstRun_*` key added to en.json without translations can push a language below the
+  // threshold, which silently drops it from the first-run language picker. Spanish must keep up;
+  // other languages may drop out until they are translated.
+  test('keep Spanish in the first-run language picker', () => {
+    const qualifying = computeSetupDialogLanguages(readLocale('en'), readLocale, {
+      en: { autonym: 'English' },
+      es: { autonym: 'Español' },
+    });
+
+    expect(Object.keys(qualifying)).toContain('es');
   });
 });

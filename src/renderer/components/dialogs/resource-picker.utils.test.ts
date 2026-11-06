@@ -4,7 +4,8 @@ import {
   buildResourcePickerNotice,
   collectFetchedResources,
   ResourceFetchResult,
-  toResourceFetchResult,
+  toDblFetchResult,
+  toLocalFetchResult,
 } from './resource-picker.utils';
 
 const RESOURCE: DblResourceData = {
@@ -26,7 +27,7 @@ const FOUND_NOTHING: ResourceFetchResult = { didFetchSucceed: true, resources: [
 const FOUND_ONE: ResourceFetchResult = { didFetchSucceed: true, resources: [LOCAL_RESOURCE] };
 
 const STRINGS = {
-  '%resourcePicker_notice_allResourcesUnavailable%': 'Nothing loaded',
+  '%resourcePicker_notice_downloadsUnavailable%': 'Downloads unavailable here',
   '%resourcePicker_notice_dblCatalogUnavailable%': 'Library unreachable',
   '%resourcePicker_notice_localResourcesUnavailable%': 'Local scan failed',
 };
@@ -48,14 +49,24 @@ describe('buildResourcePickerNotice', () => {
   });
 
   // Saying "only resources already on this computer are shown" above an empty list describes a
-  // partial list the user cannot see. With nothing to show, the honest message is that nothing
-  // loaded.
-  it('does not promise local resources when the catalog failed and none were found', () => {
-    expect(buildResourcePickerNotice(FAILED, FOUND_NOTHING, STRINGS)).toBe('Nothing loaded');
+  // partial list the user cannot see. With nothing to show at all, the picker's own body state says
+  // so and offers the retry, and a notice here would be a second voice on the same emptiness.
+  it('leaves an entirely empty list to the body state rather than adding a notice', () => {
+    expect(buildResourcePickerNotice(FAILED, FOUND_NOTHING, STRINGS)).toBeUndefined();
   });
 
-  it('reports nothing loaded when both fetches failed', () => {
-    expect(buildResourcePickerNotice(FAILED, FAILED, STRINGS)).toBe('Nothing loaded');
+  it('adds no notice when both fetches failed', () => {
+    expect(buildResourcePickerNotice(FAILED, FAILED, STRINGS)).toBeUndefined();
+  });
+
+  // An installation with no DBL credentials is not having a bad day. "Right now" would promise a
+  // recovery that is never coming.
+  it('says downloads are unavailable, not that the library is unreachable, for a permanent answer', () => {
+    const notConfigured = toDblFetchResult({ status: 'unavailable', reason: 'notConfigured' });
+
+    expect(buildResourcePickerNotice(notConfigured, FOUND_ONE, STRINGS)).toBe(
+      'Downloads unavailable here',
+    );
   });
 
   it('explains the local resources are missing when only the local fetch failed', () => {
@@ -93,19 +104,44 @@ describe('buildResourcePickerNotice', () => {
   });
 });
 
-describe('toResourceFetchResult', () => {
+describe('toDblFetchResult', () => {
+  it('keeps the resources of an available catalog', () => {
+    expect(toDblFetchResult({ status: 'available', resources: [RESOURCE] })).toEqual({
+      didFetchSucceed: true,
+      resources: [RESOURCE],
+    });
+  });
+
+  // The provider registers in the background, so trying again genuinely works.
+  it('treats a not-yet-registered provider as a recoverable failure', () => {
+    expect(toDblFetchResult({ status: 'unavailable', reason: 'notReady' })).toEqual({
+      didFetchSucceed: false,
+      isPermanent: false,
+    });
+  });
+
+  // No amount of retrying produces DBL credentials, so the caller must not offer one.
+  it('marks an installation with no DBL credentials as a permanent answer', () => {
+    expect(toDblFetchResult({ status: 'unavailable', reason: 'notConfigured' })).toEqual({
+      didFetchSucceed: false,
+      isPermanent: true,
+    });
+  });
+});
+
+describe('toLocalFetchResult', () => {
   it('treats a resolved undefined as a failed fetch', () => {
     // `platformGetResources.getCachedResources` reports an unreachable Digital Bible Library by
     // resolving undefined rather than by rejecting, so this is the ordinary outage path.
-    expect(toResourceFetchResult(undefined)).toEqual({ didFetchSucceed: false });
+    expect(toLocalFetchResult(undefined)).toEqual({ didFetchSucceed: false });
   });
 
   it('treats an empty array as a successful fetch that found nothing', () => {
-    expect(toResourceFetchResult([])).toEqual({ didFetchSucceed: true, resources: [] });
+    expect(toLocalFetchResult([])).toEqual({ didFetchSucceed: true, resources: [] });
   });
 
   it('keeps the resources of a successful fetch', () => {
-    expect(toResourceFetchResult([RESOURCE])).toEqual({
+    expect(toLocalFetchResult([RESOURCE])).toEqual({
       didFetchSucceed: true,
       resources: [RESOURCE],
     });
@@ -115,13 +151,13 @@ describe('toResourceFetchResult', () => {
     // The command crosses a JSON-RPC boundary, so its declared return type is a claim, not a
     // guarantee. Only an actual array may become a successful fetch, or the list spread throws.
     const notAnArray: DblResourceData[] | undefined = JSON.parse('{"unexpected":true}');
-    expect(toResourceFetchResult(notAnArray)).toEqual({ didFetchSucceed: false });
+    expect(toLocalFetchResult(notAnArray)).toEqual({ didFetchSucceed: false });
   });
 });
 
 describe('collectFetchedResources', () => {
   it('stays a usable empty array when the catalog fetch resolved undefined', () => {
-    expect(collectFetchedResources(toResourceFetchResult(undefined), FOUND_NOTHING)).toEqual([]);
+    expect(collectFetchedResources(toLocalFetchResult(undefined), FOUND_NOTHING)).toEqual([]);
   });
 
   it('is empty while both fetches are still pending', () => {
@@ -133,7 +169,7 @@ describe('collectFetchedResources', () => {
   });
 
   it('lists catalog resources ahead of local ones when both fetches succeeded', () => {
-    expect(collectFetchedResources(toResourceFetchResult([RESOURCE]), FOUND_ONE)).toEqual([
+    expect(collectFetchedResources(toLocalFetchResult([RESOURCE]), FOUND_ONE)).toEqual([
       RESOURCE,
       LOCAL_RESOURCE,
     ]);
@@ -143,12 +179,12 @@ describe('collectFetchedResources', () => {
 // The picker's whole reason for existing offline is that locally-installed resources stay
 // reachable, so the message it shows has to match the list it actually renders.
 describe('a Digital Bible Library outage', () => {
-  // The catalog fetch gives up with `undefined`; `getLocalNonDblResources` still answers with
-  // whatever is on disk.
-  const dblCatalogFetch = toResourceFetchResult(undefined);
+  // The provider has not registered yet; `getLocalNonDblResources` still answers with whatever is
+  // on disk.
+  const dblCatalogFetch = toDblFetchResult({ status: 'unavailable', reason: 'notReady' });
 
   it('lists the local resources and says the catalog is what is missing', () => {
-    const localResourceFetch = toResourceFetchResult([LOCAL_RESOURCE]);
+    const localResourceFetch = toLocalFetchResult([LOCAL_RESOURCE]);
 
     expect(collectFetchedResources(dblCatalogFetch, localResourceFetch)).toEqual([LOCAL_RESOURCE]);
     expect(buildResourcePickerNotice(dblCatalogFetch, localResourceFetch, STRINGS)).toBe(
@@ -157,11 +193,10 @@ describe('a Digital Bible Library outage', () => {
   });
 
   it('does not claim local resources are shown when the computer has none', () => {
-    const localResourceFetch = toResourceFetchResult([]);
+    const localResourceFetch = toLocalFetchResult([]);
 
     expect(collectFetchedResources(dblCatalogFetch, localResourceFetch)).toEqual([]);
-    expect(buildResourcePickerNotice(dblCatalogFetch, localResourceFetch, STRINGS)).toBe(
-      'Nothing loaded',
-    );
+    // Nothing to show at all, so the picker's body state carries the message and the retry.
+    expect(buildResourcePickerNotice(dblCatalogFetch, localResourceFetch, STRINGS)).toBeUndefined();
   });
 });

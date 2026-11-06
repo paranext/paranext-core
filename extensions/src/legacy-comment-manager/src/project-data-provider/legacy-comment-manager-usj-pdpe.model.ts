@@ -17,9 +17,14 @@ export const LEGACY_COMMENT_USJ_PROJECT_INTERFACES = [
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
 // needs to be used in ProjectMetadata as not readonly :p
 export const LEGACY_COMMENT_USJ_OVERLAY_PROJECT_INTERFACES = [
+  'platform.base',
   'platformScripture.USJ_Chapter',
   'legacyCommentManager.comments',
-] as const satisfies ['platformScripture.USJ_Chapter', 'legacyCommentManager.comments'];
+] as const satisfies [
+  'platform.base',
+  'platformScripture.USJ_Chapter',
+  'legacyCommentManager.comments',
+];
 
 export type LegacyCommentUsjOverlayPDPs = {
   [ProjectInterface in (typeof LEGACY_COMMENT_USJ_OVERLAY_PROJECT_INTERFACES)[number]]: ProjectDataProviderInterfaces[ProjectInterface];
@@ -47,9 +52,12 @@ export class LegacyCommentUsjProjectDataProviderEngine
       let selectedText: string | undefined;
       let startPosition: number | undefined;
 
-      const usjChapter = verseRef
-        ? await this.pdps['platformScripture.USJ_Chapter'].getChapterUSJ(verseRef)
-        : undefined;
+      const [usjChapter, allowInvisibleCharacters] = verseRef
+        ? await Promise.all([
+            this.pdps['platformScripture.USJ_Chapter'].getChapterUSJ(verseRef),
+            this.#getAllowInvisibleCharacters(),
+          ])
+        : [undefined, undefined];
 
       // Proceed with comment creation even if scripture context extraction fails. Comments
       // without scripture context won't have the selected text highlighting and positioning
@@ -61,12 +69,20 @@ export class LegacyCommentUsjProjectDataProviderEngine
             verseRef ? ` at ${formatScrRef(verseRef)}` : ''
           }: USJ not available. Comment will be created without scripture context.`,
         );
+      } else if (allowInvisibleCharacters === undefined) {
+        // The selected text is USFM, and its spelling of a no-break space depends on this setting
+        logger.warn(
+          `Cannot extract scripture text in Legacy Comment USJ PDP ${this.projectId} for comment ${JSON.stringify(comment)} at ${formatScrRef(
+            verseRef,
+          )}: 'platformScripture.allowInvisibleCharacters' setting not available. Comment will be created without scripture context.`,
+        );
       } else {
         const extraction = await extractCommentScriptureText(
           selectedTextStart,
           selectedTextEnd,
           usjChapter,
           verseRef.book,
+          allowInvisibleCharacters,
         );
 
         if (!extraction) {
@@ -94,6 +110,21 @@ export class LegacyCommentUsjProjectDataProviderEngine
         `Error in Legacy Comment USJ PDP ${this.projectId} createComment: ${getErrorMessage(error)}`,
       );
       throw error;
+    }
+  }
+
+  /** The project's `platformScripture.allowInvisibleCharacters`, or `undefined` if it can't be read */
+  async #getAllowInvisibleCharacters(): Promise<boolean | undefined> {
+    try {
+      const allowInvisibleCharacters = await this.pdps['platform.base'].getSetting(
+        'platformScripture.allowInvisibleCharacters',
+      );
+      return typeof allowInvisibleCharacters === 'boolean' ? allowInvisibleCharacters : undefined;
+    } catch (error) {
+      logger.warn(
+        `Legacy Comment USJ PDP ${this.projectId} could not read 'platformScripture.allowInvisibleCharacters': ${getErrorMessage(error)}`,
+      );
+      return undefined;
     }
   }
 }

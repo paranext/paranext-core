@@ -6,6 +6,7 @@ using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Checks;
+using Paratext.Data;
 using PtxUtils;
 
 namespace Paranext.DataProvider.Checks;
@@ -67,20 +68,32 @@ internal sealed class InventoryDataProvider(
     protected override Task StartDataProviderAsync()
     {
         // Inventory options require a real Settings.xml file to be enumerated
-        // We aren't looking for any settings values here, so we don't care about the project data
-        var anyProjectDetails = _paratextProjects.GetAllProjectDetails().FirstOrDefault();
+        // We aren't looking for any settings values here, so we don't care about the project data.
+        // Skip projects Platform.Bible can't open: their inventories are refused anyway, and for a
+        // Study Bible Additions project ChecksDataSource builds a merged Study Bible, which throws
+        // when the base project is missing and would leave no inventories for the session.
+        var anyProjectDetails = _paratextProjects
+            .GetAllProjectDetails()
+            .FirstOrDefault(details => string.IsNullOrEmpty(details.Metadata.UnsupportedReason));
         if (anyProjectDetails == null)
         {
-            Console.WriteLine("No Paratext projects found; InventoryDataProvider not started.");
+            Console.WriteLine(
+                "No Paratext projects that can be opened found; InventoryDataProvider not started."
+            );
             return Task.CompletedTask;
         }
 
         var scrText = LocalParatextProjects.GetParatextProject(anyProjectDetails.Metadata.Id);
+        // open-block: exempt — anyProjectDetails has no unsupported reason; only lists inventory options
         var dataSource = new ChecksDataSource(scrText);
         foreach (var inventoryId in InventoryFactory.GetAvailableInventoryIds())
         {
+            // Nobody asked for anything to be written to this project, so the inventories are
+            // only described here, never initialized against it where that can be avoided. The
+            // one exception is the paragraph-final punctuation inventory (see
+            // InventoryFactory.CreateInventoryToDescribe), which can leave one default in memory.
             _inventoryDetailsByInventoryId[inventoryId] = new InventoryDetails(
-                InventoryFactory.CreateInventory(inventoryId, dataSource)
+                InventoryFactory.CreateInventoryToDescribe(inventoryId, dataSource)
             );
         }
 
@@ -100,12 +113,13 @@ internal sealed class InventoryDataProvider(
 
     private List<InventoryItemStatus> GetInventoryItemStatus(InventoryItemStatusSelector selector)
     {
-        ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
+        ScrText scrText = GetOpenableProject(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        var inventory = InventoryFactory.CreateInventory(
+        var inventory = InventoryFactory.CreateInventoryInItsOwnWriteScope(
+            selector.ProjectId,
             selector.InventoryId,
-            new ChecksDataSource(LocalParatextProjects.GetParatextProject(selector.ProjectId))
+            new ChecksDataSource(scrText)
         );
 
         var allItemsStatus = new List<InventoryItemStatus>();
@@ -144,12 +158,12 @@ internal sealed class InventoryDataProvider(
         // mutation) and EnterWrite already rejects a null project id.
         using var _ = SendReceiveWriteLock.EnterWrite(selector.ProjectId);
 
-        ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
+        ScrText scrText = GetOpenableProject(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
         var inventory = InventoryFactory.CreateInventory(
             selector.InventoryId,
-            new ChecksDataSource(LocalParatextProjects.GetParatextProject(selector.ProjectId))
+            new ChecksDataSource(scrText)
         );
 
         // No key was provided, so we were given an array of all items with their statuses
@@ -255,15 +269,15 @@ internal sealed class InventoryDataProvider(
 
     private List<InventoryOptionValue> GetInventoryOptionValues(InventoryOptionsSelector selector)
     {
-        ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
+        ScrText scrText = GetOpenableProject(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        var inventory = InventoryFactory.CreateInventory(
+        var inventory = InventoryFactory.CreateInventoryInItsOwnWriteScope(
+            selector.ProjectId,
             selector.InventoryId,
-            new ChecksDataSource(LocalParatextProjects.GetParatextProject(selector.ProjectId))
+            new ChecksDataSource(scrText)
         );
         var inventoryOptions = inventory.InventoryOptions ?? [];
-        var scrText = LocalParatextProjects.GetParatextProject(selector.ProjectId);
         var inventoryDetails = _inventoryDetailsByInventoryId[selector.InventoryId];
         var retVal = new List<InventoryOptionValue>();
 
@@ -323,15 +337,14 @@ internal sealed class InventoryDataProvider(
         // already rejects a null project id.
         using var _ = SendReceiveWriteLock.EnterWrite(selector.ProjectId);
 
-        ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
+        ScrText scrText = GetOpenableProject(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
         var inventory = InventoryFactory.CreateInventory(
             selector.InventoryId,
-            new ChecksDataSource(LocalParatextProjects.GetParatextProject(selector.ProjectId))
+            new ChecksDataSource(scrText)
         );
         var inventoryOptions = inventory.InventoryOptions ?? [];
-        var scrText = LocalParatextProjects.GetParatextProject(selector.ProjectId);
         var inventoryDetails = _inventoryDetailsByInventoryId[selector.InventoryId];
 
         if (!string.IsNullOrEmpty(selector.OptionName))
@@ -473,6 +486,18 @@ internal sealed class InventoryDataProvider(
     #endregion
 
     #region Private Helper methods
+
+    /// <summary>
+    /// Looks up the project a selector names, refusing one Platform.Bible can't open (see
+    /// <see cref="ScrTextExtensions.ThrowIfOpenBlocked"/>).
+    /// </summary>
+    private static ScrText GetOpenableProject(string projectId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(projectId);
+        var scrText = LocalParatextProjects.GetParatextProject(projectId);
+        scrText.ThrowIfOpenBlocked();
+        return scrText;
+    }
 
     private ItemizedInventoryJobStatus GetItemizedInventoryJobById(string jobId)
     {

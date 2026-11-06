@@ -19,7 +19,7 @@
   },
   "keywords": ["eslint", "eslintplugin", "paranext"],
   "author": "Paranext",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "devDependencies": {
     "@typescript-eslint/parser": ">=5.0.0",
     "@typescript-eslint/utils": "^5.62.0",

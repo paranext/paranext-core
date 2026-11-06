@@ -1,10 +1,23 @@
 import { ArrowRight, Copy, Minus, Plus, X } from 'lucide-react';
-import { Button, DisabledActionTooltip, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
+import {
+  Button,
+  ContentZoomRoot,
+  DisabledActionTooltip,
+  DropdownMenuItem,
+  ResultsCard,
+} from 'platform-bible-react';
 import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
-import { applyPreserveCase, preserveTrailingSpaces, renderWithInvisibleChars } from './find.utils';
+import {
+  formatResultReference,
+  getResultBookName,
+  getUsfmToInsert,
+  preserveTrailingSpaces,
+  renderWithInvisibleChars,
+} from './find.utils';
+import { MatchedUsfmText } from './matched-usfm-text.component';
 import {
   getFindHighlightClasses,
   getGoldFindHighlightClasses,
@@ -12,11 +25,18 @@ import {
   getReplaceTextColorClasses,
 } from './replace-preview-styles';
 import { DEFAULT_FIND_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
+import { collapseUsfmMarkersForDisplay } from './usfm-tokens.util';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
 
 /** How many words to show around the search result */
 const WORDS_AROUND_SEARCH_RESULT = 15;
+
+/**
+ * How much of a match with markers the one-line card header renders. Far more than the widest line
+ * can show, so cutting there changes nothing on screen.
+ */
+const HEADER_MAX_CHARACTERS = 1000;
 
 export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%general_cancel%',
@@ -101,6 +121,8 @@ interface SearchResultProps {
    * through to {@link renderWithInvisibleChars} when `previewOptions.showInvisible` is true.
    */
   allowInvisibleCharacters?: boolean;
+  /** Whether to show the markers the match includes. Off where they would mean nothing. */
+  shouldShowMarkers?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -155,6 +177,7 @@ export default function SearchResult({
   replaceConfig,
   previewOptions = DEFAULT_FIND_PREVIEW_OPTIONS,
   allowInvisibleCharacters = false,
+  shouldShowMarkers = false,
   logger,
 }: SearchResultProps) {
   // useRef requires null as the initial value for DOM refs
@@ -222,11 +245,14 @@ export default function SearchResult({
 
       const usfm = cachedUsfm ?? usjReaderWriter.toUsfm();
 
-      let beforeText = usfm.substring(0, startIndexInUsfm);
+      // The raw USFM carries markers the reader never sees. Collapse them so the highlighted span
+      // (and the clipboard copy built from it) reads as the searched phrase does, and so the
+      // context on either side reads the same way rather than showing markers the match doesn't.
+      let beforeText = collapseUsfmMarkersForDisplay(usfm.substring(0, startIndexInUsfm));
 
-      const text = usfm.substring(startIndexInUsfm, endIndexInUsfm);
+      const text = collapseUsfmMarkersForDisplay(usfm.substring(startIndexInUsfm, endIndexInUsfm));
 
-      let afterText = usfm.substring(endIndexInUsfm);
+      let afterText = collapseUsfmMarkersForDisplay(usfm.substring(endIndexInUsfm));
 
       if (countWords(beforeText) > WORDS_AROUND_SEARCH_RESULT) {
         beforeText = truncateText(beforeText, WORDS_AROUND_SEARCH_RESULT, true);
@@ -249,8 +275,21 @@ export default function SearchResult({
   }, [usjReaderWriter, cachedUsfm, searchResult, isVisible, logger]);
 
   /** Applies the showInvisible option to a string. */
-  const displayText = (text: string) =>
-    previewOptions.showInvisible ? renderWithInvisibleChars(text, allowInvisibleCharacters) : text;
+  const displayText = useCallback(
+    (text: string) =>
+      previewOptions.showInvisible
+        ? renderWithInvisibleChars(text, allowInvisibleCharacters)
+        : text,
+    [previewOptions.showInvisible, allowInvisibleCharacters],
+  );
+
+  // The match with its markers showing, when it includes any, so the user can see what Replace
+  // would delete. Stands in only where the match is displayed: `textParts` stays marker-free, since
+  // the clipboard copies are built from it.
+  const hasMarkersToShow = shouldShowMarkers && !!searchResult.removedMarkers?.length;
+  const matchWithMarkers = hasMarkersToShow ? (
+    <MatchedUsfmText matchedUsfm={searchResult.matchedUsfm} renderText={displayText} />
+  ) : undefined;
 
   const fontClass = previewOptions.monospace ? 'tw:font-mono' : 'scripture-font';
 
@@ -275,19 +314,18 @@ export default function SearchResult({
 
     const { beforeText, text, afterText } = textParts;
 
+    // Only the verse text zooms with the pane; the loading message above stays at interface size.
     return (
-      <>
+      <ContentZoomRoot as="span">
         {displayText(beforeText)}
         {/* <mark> exposes the match as highlighted text to assistive tech; findHighlightClass sets
             its own bg + text color, overriding the UA default mark styling. */}
-        <mark className={findHighlightClass}>{displayText(preserveTrailingSpaces(text))}</mark>
+        <mark className={findHighlightClass}>
+          {matchWithMarkers ?? displayText(preserveTrailingSpaces(text))}
+        </mark>
         {displayText(afterText)}
-      </>
+      </ContentZoomRoot>
     );
-  };
-
-  const getReference = () => {
-    return `${searchResult.start.verseRef.book} ${searchResult.start.verseRef.chapterNum}:${searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}`;
   };
 
   const getVerseText = () => {
@@ -296,7 +334,7 @@ export default function SearchResult({
   };
 
   const handleCopyReference = () => {
-    navigator.clipboard.writeText(getReference());
+    navigator.clipboard.writeText(formatResultReference(searchResult));
   };
 
   const handleCopyVerseText = () => {
@@ -304,7 +342,7 @@ export default function SearchResult({
   };
 
   const handleCopyReferenceAndVerseText = () => {
-    navigator.clipboard.writeText(`${getReference()} - ${getVerseText()}`);
+    navigator.clipboard.writeText(`${formatResultReference(searchResult)} - ${getVerseText()}`);
   };
 
   const handleDismiss = () => {
@@ -358,9 +396,11 @@ export default function SearchResult({
 
   let previewReplacement: string | undefined;
   if (isReplaceMode && !searchResult.isReplaced && replaceConfig) {
-    previewReplacement = replaceConfig.preserveCase
-      ? applyPreserveCase(searchResult.text ?? '', replaceConfig.term)
-      : replaceConfig.term;
+    previewReplacement = getUsfmToInsert(
+      searchResult,
+      replaceConfig.term,
+      replaceConfig.preserveCase,
+    );
   }
 
   /**
@@ -378,9 +418,12 @@ export default function SearchResult({
     // When showInvisible is on, let renderWithInvisibleChars turn trailing spaces into · directly
     // (same as replace text). preserveTrailingSpaces is only needed when showInvisible is off so
     // that trailing spaces aren't collapsed inside the CSS-highlighted span.
-    const findText = previewOptions.showInvisible
-      ? displayText(rawFindText)
-      : preserveTrailingSpaces(rawFindText);
+    let findText: ReactNode = matchWithMarkers;
+    if (!findText) {
+      findText = previewOptions.showInvisible
+        ? displayText(rawFindText)
+        : preserveTrailingSpaces(rawFindText);
+    }
     const replaceText = displayText(previewReplacement);
 
     // When replacing with nothing, show a thin vertical bar using the replace color so the user
@@ -394,32 +437,39 @@ export default function SearchResult({
       />
     );
 
+    // Only the preview text is marked for content zoom; the arrow, minus and plus icons keep
+    // interface size.
     if (previewOptions.layout === 'inline') {
       // Falls back to arrow if context not yet loaded
       if (!textParts) {
         return (
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
-            <span className={`${findClass} tw:min-w-0 ${breakClass}`}>{findText}</span>
+            <ContentZoomRoot as="span" className={`${findClass} tw:min-w-0 ${breakClass}`}>
+              {findText}
+            </ContentZoomRoot>
             <ArrowRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:rtl:rotate-180" />
             {isEmptyReplace ? (
               deletionBar
             ) : (
-              <span className={`${replaceClass} tw:min-w-0 ${breakClass}`}>{replaceText}</span>
+              <ContentZoomRoot as="span" className={`${replaceClass} tw:min-w-0 ${breakClass}`}>
+                {replaceText}
+              </ContentZoomRoot>
             )}
           </div>
         );
       }
       return (
-        <div className={`tw:text-muted-foreground ${fontClass} ${breakClass}`}>
+        <ContentZoomRoot as="div" className={`tw:text-muted-foreground ${fontClass} ${breakClass}`}>
           {displayText(textParts.beforeText)}
           <span className={findClassInline}>
-            {previewOptions.showInvisible
-              ? displayText(textParts.text)
-              : preserveTrailingSpaces(textParts.text)}
+            {matchWithMarkers ??
+              (previewOptions.showInvisible
+                ? displayText(textParts.text)
+                : preserveTrailingSpaces(textParts.text))}
           </span>
           {isEmptyReplace ? deletionBar : <span className={replaceClassInline}>{replaceText}</span>}
           {displayText(textParts.afterText)}
-        </div>
+        </ContentZoomRoot>
       );
     }
 
@@ -431,19 +481,25 @@ export default function SearchResult({
         <div className="tw:space-y-0.5">
           <div className="tw:flex tw:items-baseline tw:gap-1">
             <Minus className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
-            <span className={`tw:text-muted-foreground tw:min-w-0 ${breakClass} ${fontClass}`}>
+            <ContentZoomRoot
+              as="span"
+              className={`tw:text-muted-foreground tw:min-w-0 ${breakClass} ${fontClass}`}
+            >
               {before}
               <span className={findClass}>{findText}</span>
               {after}
-            </span>
+            </ContentZoomRoot>
           </div>
           <div className="tw:flex tw:items-baseline tw:gap-1">
             <Plus className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-foreground" />
-            <span className={`tw:text-foreground tw:min-w-0 ${breakClass} ${fontClass}`}>
+            <ContentZoomRoot
+              as="span"
+              className={`tw:text-foreground tw:min-w-0 ${breakClass} ${fontClass}`}
+            >
               {before}
               {isEmptyReplace ? deletionBar : <span className={replaceClass}>{replaceText}</span>}
               {after}
-            </span>
+            </ContentZoomRoot>
           </div>
         </div>
       );
@@ -452,18 +508,21 @@ export default function SearchResult({
     // Default: arrow layout
     return (
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
-        <span className={`${findClass} tw:min-w-0 ${breakClass}`}>{findText}</span>
+        <ContentZoomRoot as="span" className={`${findClass} tw:min-w-0 ${breakClass}`}>
+          {findText}
+        </ContentZoomRoot>
         <ArrowRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:rtl:rotate-180" />
         {isEmptyReplace ? (
           deletionBar
         ) : (
-          <span className={`${replaceClass} tw:min-w-0 ${breakClass}`}>{replaceText}</span>
+          <ContentZoomRoot as="span" className={`${replaceClass} tw:min-w-0 ${breakClass}`}>
+            {replaceText}
+          </ContentZoomRoot>
         )}
       </div>
     );
   };
 
-  const bookData = localizedBookData.get(searchResult.start.verseRef.book);
   const cardContent = (
     <div className="tw:text-sm tw:font-medium tw:flex tw:items-center tw:gap-2 tw:min-h-8">
       <button
@@ -475,14 +534,23 @@ export default function SearchResult({
         }}
         onDoubleClick={(e) => e.stopPropagation()}
       >
-        {bookData?.localizedName ?? bookData?.localizedId ?? searchResult.start.verseRef.book}{' '}
-        {searchResult.start.verseRef.chapterNum}:
-        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
+        {formatResultReference(searchResult, getResultBookName(searchResult, localizedBookData))}
       </button>
       {!searchResult.isReplaced && (
-        <span className="scripture-font tw:min-w-0 tw:truncate tw:font-normal tw:text-muted-foreground">
-          {searchResult.text ?? ''}
-        </span>
+        <ContentZoomRoot
+          as="span"
+          className="scripture-font tw:min-w-0 tw:truncate tw:font-normal tw:text-muted-foreground"
+        >
+          {hasMarkersToShow ? (
+            <MatchedUsfmText
+              matchedUsfm={searchResult.matchedUsfm}
+              renderText={displayText}
+              maxCharacters={HEADER_MAX_CHARACTERS}
+            />
+          ) : (
+            (searchResult.text ?? '')
+          )}
+        </ContentZoomRoot>
       )}
       {searchResult.isReplaced && (
         <>

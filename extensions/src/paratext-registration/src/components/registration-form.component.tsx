@@ -71,7 +71,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_warning_invalid_registration_format%',
   '%paratextRegistration_webView_title_2%',
   '%paratextRegistration_webView_tooltip%',
-  '%paratextRegistrationProfile_webView_title%',
+  '%paratextRegistrationProfile_webView_title_2%',
   '%paratextRegistrationProfile_webView_tooltip%',
 ];
 
@@ -125,7 +125,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     updateWebViewDefinition({
       title: isInitialRegistration
         ? localizedStrings['%paratextRegistration_webView_title_2%']
-        : localizedStrings['%paratextRegistrationProfile_webView_title%'],
+        : localizedStrings['%paratextRegistrationProfile_webView_title_2%'],
       tooltip: isInitialRegistration
         ? localizedStrings['%paratextRegistration_webView_tooltip%']
         : localizedStrings['%paratextRegistrationProfile_webView_tooltip%'],

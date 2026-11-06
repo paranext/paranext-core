@@ -693,10 +693,12 @@ declare module 'papi-shared-types' {
 declare module 'papi-shared-types' {
   export interface CommandHandlers {
     /**
-     * Opens the dictionary web view
+     * In Simple mode, brings the one pinned (column 3) Dictionary tab to the front. In Power mode,
+     * opens a new Dictionary tab, so multiple Dictionary tabs can each independently track a
+     * different scroll group.
      *
      * @param editorWebViewId - The id of the editor web view the user opened the dictionary from
-     * @returns WebView id for new Dictionary WebView or `undefined` if not created
+     * @returns WebView id for the Dictionary WebView, or `undefined` if it couldn't be shown
      */
     'platformLexicalTools.openDictionary': (
       editorWebViewId: string | undefined,

@@ -64,6 +64,38 @@ describe('WizardStepper', () => {
     expect(all[0]).toHaveAttribute('data-state', 'complete');
   });
 
+  it('marks exactly the completedSteps complete when given, including steps after the active one', () => {
+    // Stepped back from step 4 to step 1: steps 2 and 3 are done, step 4 is not.
+    const { container } = render(
+      <WizardStepper currentStep={1} totalSteps={4} completedSteps={[2, 3]} />,
+    );
+    expect(circles(container).map((circle) => circle.getAttribute('data-state'))).toEqual([
+      'active',
+      'complete',
+      'complete',
+      'upcoming',
+    ]);
+  });
+
+  it('does not treat earlier steps as complete when completedSteps omits them', () => {
+    const { container } = render(
+      <WizardStepper currentStep={3} totalSteps={4} completedSteps={[]} />,
+    );
+    expect(circles(container).map((circle) => circle.getAttribute('data-state'))).toEqual([
+      'upcoming',
+      'upcoming',
+      'active',
+      'upcoming',
+    ]);
+  });
+
+  it('shows the active step as active even when it is listed as complete', () => {
+    const { container } = render(
+      <WizardStepper currentStep={2} totalSteps={4} completedSteps={[1, 2, 3]} />,
+    );
+    expect(circles(container)[1]).toHaveAttribute('data-state', 'active');
+  });
+
   it('falls back to English numerals when locale is empty string', () => {
     render(<WizardStepper currentStep={1} totalSteps={2} locale="" />);
     expect(screen.getByText('1')).toBeInTheDocument();

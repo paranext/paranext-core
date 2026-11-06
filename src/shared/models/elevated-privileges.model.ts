@@ -1,6 +1,7 @@
 import type { CreateProcess } from '@shared/models/create-process-privilege.model';
 import type { ManageExtensions } from '@shared/models/manage-extensions-privilege.model';
 import type { HandleUri } from '@shared/models/handle-uri-privilege.model';
+import type { RequestRegistryTokens } from '@shared/models/request-registry-tokens-privilege.model';
 
 /** Object that contains properties with special capabilities for extensions that required them */
 export type ElevatedPrivileges = {
@@ -13,4 +14,9 @@ export type ElevatedPrivileges = {
    * this extension
    */
   handleUri: HandleUri | undefined;
+  /**
+   * Functions for getting Paratext Registry access tokens for the services listed in the manifest's
+   * `paratextRegistryTokenResources`
+   */
+  requestRegistryTokens: RequestRegistryTokens | undefined;
 };

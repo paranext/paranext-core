@@ -9,7 +9,7 @@
 
 /**
  * Base name a window's Usersnap service shard registers its network object under, suffixed with the
- * window id (e.g. `UsersnapService-1`).
+ * window id (e.g. `UsersnapService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`).
  *
  * Nothing claims this name unsuffixed: the router publishes the `platform.usersnap*` commands
  * consumers call, not a network object.

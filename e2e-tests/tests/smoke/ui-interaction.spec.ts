@@ -1,54 +1,32 @@
 // SMOKE TEST ONLY — uses papi.fixture for CI smoke testing.
-// Per-feature E2E tests MUST use cdp.fixture instead. See e2e-tests/tests/_example/.
+// Per-feature E2E tests belong in tests/isolated/ with isolated.fixture; the ones that must attach
+// to an app you started live in tests/attached/ with cdp.fixture.
 import { test, expect } from '../../fixtures/papi.fixture';
 import {
-  PROCESS_READY_TIMEOUT,
-  sendPapiRequestOnce,
+  isLocalizedAboutMenuItem,
   waitForAppReady,
-  waitForPapiMethodRegistered,
+  waitForMainMenuItem,
 } from '../../fixtures/helpers';
 
 test.describe('UI Interaction', () => {
-  // The settings service is exposed as a data-provider network object — data providers
-  // append a `-data` suffix to the provider name, so the JSON-RPC method is
-  // `object:<providerName>-data.set`.
-  const SETTINGS_SET_METHOD = 'object:platform.settingsServiceDataProvider-data.set';
-  // The settings `set` handler internally awaits `waitForResyncContributions()`,
-  // which blocks until `extensionService.initialize()` finishes in the extension
-  // host. On slow CI that can exceed the default 10s PAPI request timeout.
-  const SLOW_CI_PAPI_TIMEOUT_MS = 30_000;
-  // On slow macOS CI runners the settings data provider can take longer than the
-  // default 60 s to appear in rpc.discover. Use PROCESS_READY_TIMEOUT (120 s) as
-  // the upper bound; the beforeAll timeout is extended below to fit both this wait
-  // and the subsequent sendPapiRequestOnce call.
-  const SETTINGS_REGISTRATION_TIMEOUT_MS = PROCESS_READY_TIMEOUT;
-
   test.beforeAll(async ({ electronApp }) => {
-    // Extend the beforeAll timeout to fit SETTINGS_REGISTRATION_TIMEOUT_MS (120 s)
-    // + SLOW_CI_PAPI_TIMEOUT_MS (30 s) + slack (30 s) on the slowest CI runners.
-    test.setTimeout(180_000);
-    // Maximize the window once so everything is visible and clickable for all tests
-    // Wait for the first window to exist before maximizing
+    // Maximize the window once so everything is visible and clickable for all tests.
+    // Wait for the first window to exist before maximizing. app.fixture (via papi.fixture) pins
+    // platform.interfaceLanguage to English before launch and asserts it took, so menu-item text
+    // matchers (e.g. /Help/i) are deterministic without this suite forcing it again here.
     await electronApp.firstWindow({ timeout: 10_000 });
     await electronApp.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].maximize();
     });
 
-    // Force the interface language to English so menu-item text matchers
-    // (e.g. /Help/i) are deterministic regardless of the developer's saved
-    // platform.interfaceLanguage setting in dev-appdata.
-    // Fast-fail guard: on slow CI the settings data provider can register
-    // after this beforeAll starts; this throws a clear error if it never does.
-    await waitForPapiMethodRegistered(
-      SETTINGS_SET_METHOD,
-      undefined,
-      SETTINGS_REGISTRATION_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      SETTINGS_SET_METHOD,
-      ['platform.interfaceLanguage', ['en']],
-      undefined,
-      SLOW_CI_PAPI_TIMEOUT_MS,
+    // The menubar's items arrive from the extension host, not the renderer, so none of
+    // waitForAppReady's renderer-only signals (dock layout, window-scoped shards, first-run gate,
+    // overlay) observe them being ready — see waitForMainMenuItem's docs. Wait here, once, for the
+    // specific item this suite drives by name, so the Help dropdown a test opens below is never
+    // mid-replacement underneath the click.
+    await waitForMainMenuItem(
+      isLocalizedAboutMenuItem,
+      'the localized "About Platform.Bible" Help menu item',
     );
   });
 

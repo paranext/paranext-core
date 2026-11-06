@@ -1,9 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import {
-  KeyboardShortcutsCatalog,
-  KeyboardShortcutEntry,
-} from './keyboard-shortcuts-catalog.component';
+import type { KeyboardShortcutEntry } from '@shared/data/keyboard-shortcuts.model';
+import { KeyboardShortcutsCatalog } from './keyboard-shortcuts-catalog.component';
 
 const ENTRIES: KeyboardShortcutEntry[] = [
   {
@@ -31,10 +29,46 @@ describe('KeyboardShortcutsCatalog', () => {
     expect(screen.getByRole('heading', { name: 'Editing' })).toBeInTheDocument();
   });
 
-  it('renders each per-OS key combination', () => {
+  it('renders each key of a combination in its own keycap', () => {
     render(<KeyboardShortcutsCatalog entries={ENTRIES} />);
-    expect(screen.getByText('Ctrl+Tab')).toBeInTheDocument();
-    expect(screen.getByText('⌘Z')).toBeInTheDocument();
+    ['Ctrl', 'Tab', '⌘', 'Z', '⇧', ']'].forEach((keycap) => {
+      expect(screen.getAllByText(keycap)[0].tagName).toBe('KBD');
+    });
+    expect(screen.queryByText('Ctrl+Tab')).not.toBeInTheDocument();
+    expect(screen.queryByText('⌘Z')).not.toBeInTheDocument();
+  });
+
+  it('renders the Windows joining plus as plain text outside the keycaps', () => {
+    render(<KeyboardShortcutsCatalog entries={ENTRIES} />);
+    expect(screen.getAllByText('+')[0].tagName).toBe('SPAN');
+  });
+
+  it('renders a single-key shortcut as a lone keycap with no group', () => {
+    const singleKeyEntry: KeyboardShortcutEntry = {
+      id: 'dev-tools',
+      purpose: 'Open developer tools',
+      category: 'Developer',
+      context: 'Main process (global)',
+      keys: { macOS: 'F12', windows: 'F12', linux: 'F12' },
+      locations: ['src/main/main.ts'],
+    };
+    render(<KeyboardShortcutsCatalog entries={[singleKeyEntry]} />);
+    const keycap = screen.getByText('F12');
+    expect(keycap.tagName).toBe('KBD');
+    expect(keycap.closest('[data-slot="kbd-group"]')).toBeNull();
+  });
+
+  it('renders a no-equivalent marker as plain text rather than a keycap', () => {
+    const macOsOnlyEntry: KeyboardShortcutEntry = {
+      id: 'toggle-menu',
+      purpose: 'Focus the application menu',
+      category: 'Navigation',
+      context: 'Main process (global)',
+      keys: { macOS: '— (no equivalent)', windows: 'Alt', linux: 'Alt' },
+      locations: ['src/main/main.ts'],
+    };
+    render(<KeyboardShortcutsCatalog entries={[macOsOnlyEntry]} />);
+    expect(screen.getByText('— (no equivalent)').tagName).toBe('SPAN');
   });
 
   it('links each location to the repo and shows the location count', () => {

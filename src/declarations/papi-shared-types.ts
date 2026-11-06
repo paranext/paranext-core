@@ -7,9 +7,12 @@ declare module 'papi-shared-types' {
     DataProviderUpdateInstructions,
   } from '@shared/models/data-provider.model';
   import type {
+    ExtensionDataEnumerationProjectDataTypes,
     ExtensionDataScope,
     MandatoryProjectDataTypes,
     PROJECT_INTERFACE_PLATFORM_BASE,
+    PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION,
+    WithProjectDataProviderEngineExtensionDataEnumerationMethods,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from '@shared/models/project-data-provider.model';
   import type {
@@ -25,21 +28,51 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from '@shared/services/scroll-group.service-model';
+  import type { ExtensionHostStoppedEvent } from '@shared/models/extension-host-lifecycle.model';
+  import type {
+    AppWindowInputEvent,
+    FocusedWindowIdEvent,
+    WindowSummary,
+  } from '@shared/services/window.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from '@shared/services/web-view.service-model';
-  import type { AppWindowInputEvent } from '@shared/services/window.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
-  import { WebViewId } from '@shared/models/web-view.model';
+  import { ContentZoomAreaId, WebViewId } from '@shared/models/web-view.model';
 
   // #region Commands
+
+  /**
+   * What `platform.resetFirstRun` does with the Paratext registration in Platform.Bible's own
+   * ParatextData folder. Paratext 9's registration is never changed.
+   *
+   * - `keep`: leave the registration as it is
+   * - `copyFromParatext9`: on the restart, replace Platform.Bible's registration and internet
+   *   settings with fresh copies of Paratext 9's, the way a Paratext 9 user's first launch does.
+   *   With no registered Paratext 8 or 9 on the machine, this leaves Platform.Bible unregistered
+   *   and on default internet settings.
+   * - `clear`: remove the registration, like a Paratext 9 user who never registered
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ResetFirstRunRegistration = 'keep' | 'copyFromParatext9' | 'clear';
+
+  /**
+   * Options for `platform.resetFirstRun`
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ResetFirstRunOptions = {
+    /** What to do with the registration. Defaults to `keep`. */
+    registration?: ResetFirstRunRegistration;
+  };
 
   // TODO: Adding an index type removes type checking on the key :( How do we make sure extensions provide only functions?
   /**
@@ -69,7 +102,27 @@ declare module 'papi-shared-types' {
     'test.echo': (message: string) => string;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
+    /**
+     * Restart the extension host, which reloads and reinitializes TS/JS extensions. Resolves once
+     * the new process is forked, before it has started; `platform.onDidStartExtensionHost` says
+     * when it has.
+     *
+     * A call while a restart is already in flight (from its start until the new extension host
+     * announces its start) joins that restart and resolves with it, at once if the new process is
+     * already forked, rather than stopping the host that is still starting.
+     */
     'platform.restartExtensionHost': () => Promise<void>;
+    /**
+     * Whether the extension host is currently stopped without main having asked it to, and why. A
+     * window asks this once at startup, in case the stop happened before it was listening for
+     * `platform.onDidStopExtensionHost`.
+     *
+     * @returns The stop, or nothing while the extension host is running (or has been restarted
+     *   since). Over JSON-RPC that "nothing" arrives as `null`, not `undefined`, so test the result
+     *   for truthiness rather than comparing it with `undefined`.
+     * @experimental
+     */
+    'platform.getExtensionHostStoppedState': () => Promise<ExtensionHostStoppedEvent | undefined>;
     /** Shut down the application */
     'platform.quit': () => Promise<void>;
     /** Restart the application */
@@ -81,7 +134,32 @@ declare module 'papi-shared-types' {
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
     /**
-     * Create a new application window
+     * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
+     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered; `unreadable`
+     * when its completion flag or the first-sync state could not be read; `deferred` when the user
+     * chose "Don't sync yet" earlier in this app session; or `notYetSynced` when the first
+     * Send/Receive (`platform.firstSyncState` is `pending`) has not succeeded yet. Only meaningful
+     * in Simple mode: the completion flag is never written in Power mode, so a Power-mode sync must
+     * not consult this.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getAutomaticSyncConsent': () => Promise<
+      'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | 'notYetSynced'
+    >;
+    /**
+     * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
+     * user chooses "Don't sync yet" in the first-run wizard; the next launch syncs as usual.
+     * One-way on purpose: nothing lifts the deferral before a restart.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.deferAutomaticSyncForSession': () => Promise<void>;
+    /**
+     * Create a new application window.
+     *
+     * Rejects in simple interface mode, which is single-window and has no chrome that could reach a
+     * second window. The first window of a launch is never refused.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -91,11 +169,64 @@ declare module 'papi-shared-types' {
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'platform.getFocusedWindowId': () => Promise<number | undefined>;
-    /** Increase the zoom level of the entire UI */
+    'platform.getFocusedWindowId': () => Promise<string | undefined>;
+    /**
+     * List every open window with the title it is currently showing, for offering the user a choice
+     * of window. Titles follow each window's own content, so two windows showing the same thing
+     * carry the same label and nothing distinguishes them.
+     *
+     * Only windows that can still take the work are listed: a window whose close has begun, and one
+     * whose renderer has been given up on, are both left out. Either can be the window holding the
+     * primary role, so the list can carry no `isMain` at all — absence is not evidence that some
+     * other window holds it.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getWindows': () => Promise<WindowSummary[]>;
+    /**
+     * Increase the app-wide interface scaling — menus, toolbars and content — to the next 10 % mark
+     * in that direction. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomIn`.
+     */
     'platform.zoomIn': () => Promise<void>;
-    /** Decrease the zoom level of the entire UI */
+    /**
+     * Decrease the app-wide interface scaling — menus, toolbars and content — to the next 10 % mark
+     * in that direction. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomOut`.
+     */
     'platform.zoomOut': () => Promise<void>;
+    /**
+     * Zoom one area of a web view's content in by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area (the one
+     * last clicked or focused). Only web views that mark at least one zoom area respond.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomIn': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Zoom one area of a web view's content out by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomOut': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Return one area of a web view's content to the default zoom set in Settings. Without an id,
+     * the focused window's last focused tab is the target; without an area, the pane's active
+     * area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomReset': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -113,6 +244,21 @@ declare module 'papi-shared-types' {
      * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
+    /**
+     * Open the Terms of Service document that ships beside the application - the terms the
+     * distributed application is licensed to the user under, rather than this repository's AGPL
+     * source (see LICENSING.md).
+     *
+     * The document is a self-contained HTML file, shown in a window the application owns rather
+     * than handed to the operating system. One window at a time: a second request focuses the one
+     * already open. Every link in the document leaves through the browser, so the window only ever
+     * shows the document.
+     *
+     * @throws If the document could not be loaded. A caller that offers this as a link needs to be
+     *   able to tell the user the document did not open, so the failure is reported rather than
+     *   only logged.
+     */
+    'platform.openTermsOfService': () => Promise<void>;
 
     // These commands are provided in `web-view.service-shard.ts`
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
@@ -120,6 +266,16 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /**
+     * Open a Settings tab limited to the project shown in the given web view — the same as
+     * `platform.openSettings`, under a name of its own so a web view's Project settings menu item
+     * can show its keyboard shortcut without the main menu's Settings item, which runs
+     * `platform.openSettings`, showing it too.
+     *
+     * @param webViewId Web view whose project the Settings tab should be limited to, if any
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openProjectSettingsForWebView': (webViewId?: WebViewId) => Promise<void>;
 
     // These commands are provided in `web-view.service-router.ts` (main)
     /**
@@ -129,31 +285,45 @@ declare module 'papi-shared-types' {
      * `useWebViewState` state — in the target window. Consumers see a close event in the source and
      * an open event in the target, and the web view controller is disposed and re-created: a held
      * controller reference must be re-acquired after a move. The returned id is the authoritative
-     * id of the web view after the move, and it can differ from the id passed in: a web view
-     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
-     * scope along — so use the returned id for anything after the move. In Simple mode —
-     * single-window by design — there is no other window to move to, and this does nothing.
+     * id of the web view after the move — the same id as `webViewId`, since a web view keeps the id
+     * it was minted with for its whole life, across any number of moves — so use the returned id
+     * for anything after the move. In Simple mode — single-window by design — there is no other
+     * window to move to, and this does nothing.
      *
-     * A move that fails once it has taken the web view out of its window says where it left it, as
-     * a machine-readable marker at the front of the error message: `[webViewMoveFailure:<where>]`,
-     * where `<where>` is `reopened-in-source-window` (nothing about where it lives changed),
+     * A failed move says where it left the web view, as a machine-readable marker at the front of
+     * the error message: `[webViewMoveFailure:<where>]`, where `<where>` is
+     * `reopened-in-source-window` (nothing about where it lives changed),
      * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
-     * `not-reopened` (it is open in no window, and only the log holds what it was), or
-     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be
-     * told). The marker rides in the message because a rejection that crosses processes reaches its
-     * caller as a code and a message and nothing else. A failure decided before the move touches
-     * the web view carries no marker. Strip the marker before showing the message to a user — it is
-     * there to be classified on, not read.
+     * `not-reopened` (it is open in no window, and only the log holds what it was),
+     * `reached-new-window-unconfirmed` (the window created for the move is holding it, but the move
+     * could not get that confirmed), `possibly-closed` (taking it out of its window is what failed,
+     * so where it is cannot be told), or `already-moving` (this call was refused before it started,
+     * because another move of the same web view was already running — the web view is wherever that
+     * other move leaves it). The marker rides in the message because a rejection that crosses
+     * processes reaches its caller as a code and a message and nothing else. A failure decided
+     * before the move touches the web view for any other reason — an unknown target window, a
+     * target on its way out, an interface mode that could not be read — carries no marker. Strip
+     * the marker before showing the message to a user — it is there to be classified on, not read.
      *
      * @param webViewId Web view to move
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see above
-     * @experimental
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   above
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
-    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
     /**
-     * Move a web view to an existing window, named by its runtime window id (see
-     * `platform.getFocusedWindowId`; window ids are reused across sessions — never persist one).
+     * Move a web view to an existing window, named by its window id (see
+     * `papi.window.getWindowId()` for the id of the window the caller is in, or
+     * `platform.getFocusedWindowId` for whichever window the user is looking at). Ids are
+     * platform-assigned and never reused within a profile.
      *
      * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
      * carries to say where it left the web view — and: moving a web view to the window it is
@@ -162,13 +332,20 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId Web view to move
      * @param targetWindowId Window to move it to
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see `platform.moveWebViewToNewWindow`
-     * @experimental
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own. A target window the platform opened without activation and the user has not yet
+     *   been in stays backgrounded unless this is `true`: naming it is the user asking to go there,
+     *   which is what raises it. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   `platform.moveWebViewToNewWindow`
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
     'platform.moveWebViewToWindow': (
       webViewId: WebViewId,
-      targetWindowId: number,
+      targetWindowId: string,
+      isUserRequested?: boolean,
     ) => Promise<WebViewId>;
 
     /** Open a dialog that displays essential information about the application */
@@ -181,6 +358,37 @@ declare module 'papi-shared-types' {
     'platform.isUsersnapFormCurrentlyOpen': () => Promise<boolean>;
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
+
+    // This command is provided in `onboarding-tour.service-router.ts` (main)
+    /**
+     * Show the orientation tour again from its first stop, in the window the user is working in.
+     * Available in both interface modes: in Power mode the tour reduces to the stops whose anchors
+     * exist there, which today is the toolbar's profile button.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.showOnboardingTour': () => Promise<void>;
+
+    // This command is provided in `first-run.service-router.ts` (main)
+    /**
+     * Developer and tester tool, not for extensions to call: it can delete the user's registration.
+     *
+     * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
+     * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
+     * clears the orientation tour's completion and whether the user was asked for an internet-use
+     * choice (`platform.internetUseChoiceAsked`), sets `platform.firstSyncState` to `pending` so
+     * the wizard's Sync step returns and automatic syncs wait until a sync succeeds again (a later
+     * successful Send/Receive sets it back to `synced`), and turns `platform.syncOnStartup` and
+     * `platform.showRegistrationReminderOnStartup` back on. It writes `pending` even in a build
+     * without Send/Receive, where no sync can clear it, so afterwards
+     * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
+     * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
+     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     *
+     * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.resetFirstRun': (options?: ResetFirstRunOptions) => Promise<void>;
 
     // These commands are provided in `scroll-group-navigation.commands.ts` (main)
     /**
@@ -280,6 +488,9 @@ declare module 'papi-shared-types' {
 
   // #region User Settings
 
+  /** Whether the user's first Send/Receive has succeeded. See `platform.firstSyncState`. */
+  export type FirstSyncState = 'unknown' | 'pending' | 'synced';
+
   /**
    * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
    * and values are setting data types. Extensions can add more user setting types with
@@ -328,8 +539,37 @@ declare module 'papi-shared-types' {
      */
     'platform.requestTimeout': number;
     /**
-     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
-     * 0.5 to 3.0.
+     * Default content zoom applied to every zoom area of a web view pane that has no level of its
+     * own (shown in Settings as "Tab content default zoom"). A factor: 1.0 = 100 %. Allowed range
+     * is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area its own level; Ctrl+`0` returns that area to
+     * this default. This factor multiplies with any font size a view sets for itself (for example a
+     * project's font size) and never replaces it; resetting a pane returns it to this default, not
+     * to that font size.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoom': number;
+    /**
+     * Per-project memory of content zoom levels, keyed `<kind>:<identity>:<area>` (kind is
+     * `editor`, `resource` or `notes`; identity is the project id, or the resource id for views
+     * without a project; area is the zoom area id, `main` for a view with one area). Written by the
+     * platform when an area's own level changes; read when a pane for that project opens. Local to
+     * this machine.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.ptxUtilsMementoData`: settings already give cross-window persistence and change
+     * notification for free. Writes are best-effort last-write-wins across windows, and a direct
+     * `papi.settings.set` on this key is tolerated rather than guarded against.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomMemory': { [key: string]: number };
+    /**
+     * The zoom factor that applies to the entire application, including menus and toolbars (shown
+     * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
+     * from Settings and by the `platform.zoomIn` and `platform.zoomOut` commands; no keyboard
+     * shortcut changes it — the zoom chords drive per-pane content zoom, which is
+     * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
@@ -350,10 +590,26 @@ declare module 'papi-shared-types' {
      */
     'platform.firstRunComplete': boolean;
     /**
-     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
-     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
-     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
-     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     * Whether the user's first Send/Receive has succeeded, so the first-run wizard knows whether to
+     * keep reopening its Sync step. Hidden; managed by the first-run flow and the Send/Receive
+     * backend, not user-configurable.
+     *
+     * - `'unknown'` (default): never written. This setup predates the state or no wizard has run.
+     * - `'pending'`: a first run started and no sync has succeeded yet.
+     * - `'synced'`: a sync has succeeded at least once.
+     *
+     * Treat anything other than `'pending'` as "has synced".
+     */
+    'platform.firstSyncState': FirstSyncState;
+    /**
+     * Whether to perform automatic startup sync. Hidden; not exposed in the settings UI. Read on
+     * each launch by the Simple-mode startup sync only — Power mode never reads it. Absent or
+     * `true` means sync, `false` means skip. Only the automatic startup sync is affected; manual
+     * Send/Receive is unaffected. The first-run wizard does not write it: declining there ("Don't
+     * sync yet") withholds automatic sync for that session only. A `false` can be left over from an
+     * earlier first-run wizard, which wrote it on decline, and nothing in core resets it.
+     *
+     * TODO(PT-4607): give profiles left with that `false` a way back to automatic startup sync.
      */
     'platform.syncOnStartup': boolean;
     /**
@@ -363,6 +619,14 @@ declare module 'papi-shared-types' {
      * checkbox). Only consulted for completed users; the fresh-user onboarding flow ignores it.
      */
     'platform.showRegistrationReminderOnStartup': boolean;
+    /**
+     * Whether the user has been asked to choose how Paratext accesses the internet, or did not need
+     * to be. Hidden; set by the first-run wizard when it saves the user's internet-use choice, and
+     * by Power-mode startup once it has checked the saved value (opening the Internet &
+     * connectivity settings if that value turns off sync and the Digital Bible Library). `false`
+     * (default) means the next Power-mode startup checks.
+     */
+    'platform.internetUseChoiceAsked': boolean;
   }
 
   /**
@@ -501,6 +765,27 @@ declare module 'papi-shared-types' {
      * Defaults to `false`.
      */
     'platform.isPublished': boolean;
+    /**
+     * Whether this project is registered with the Paratext Registry. A registered project's
+     * {@link ProjectSettingTypes['platform.name'] | `platform.name`} and
+     * {@link ProjectSettingTypes['platform.fullName'] | `platform.fullName`} can be changed only
+     * through the registry. A project can be shared through Send/Receive without being registered.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `false`.
+     */
+    'platform.isRegistered': boolean;
+    /**
+     * Whether the current user has the administrator role on this project. Unlike most project
+     * settings, the answer depends on who is asking. A project with no notion of roles counts its
+     * user as its administrator.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `true`.
+     */
+    'platform.isCurrentUserAdministrator': boolean;
     /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is
@@ -664,6 +949,27 @@ declare module 'papi-shared-types' {
         ): Promise<UnsubscriberAsync>;
       };
 
+  /**
+   * A Project Data Provider that can list the `dataQualifier`s an extension has data for in its
+   * project. Returned from `papi.projectDataProviders.get('platform.extensionDataEnumeration',
+   * projectId)`.
+   *
+   * This is its own `projectInterface` rather than a member of `platform.base`, because not every
+   * PDP can enumerate its extension data (one over a remote store may not be able to) and a PDP
+   * method is never optional. A project whose PDP can enumerate lists
+   * `'platform.extensionDataEnumeration'` in its metadata `projectInterfaces`
+   * (`papi.projectLookup.getMetadataForProject`), so check there first:
+   * `papi.projectDataProviders.get` throws for a project that does not advertise the interface, and
+   * on a platform that predates the interface no project advertises it. Treat "not advertised" as
+   * "cannot enumerate", never as "no data".
+   *
+   * The qualifiers it lists are exactly the ones `getExtensionData` on the same project's
+   * `platform.base` PDP reads.
+   */
+  export type IExtensionDataEnumerationProjectDataProvider =
+    IProjectDataProvider<ExtensionDataEnumerationProjectDataTypes> &
+      WithProjectDataProviderEngineExtensionDataEnumerationMethods;
+
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   export type NotesOnlyProjectDataTypes = MandatoryProjectDataTypes & {
     Notes: DataProviderDataType<string, string | undefined, string>;
@@ -738,6 +1044,13 @@ declare module 'papi-shared-types' {
      * There should be a PDP that provides `platform.base` for all available project ids.
      */
     [PROJECT_INTERFACE_PLATFORM_BASE]: IBaseProjectDataProvider<MandatoryProjectDataTypes>;
+    /**
+     * `projectInterface` a PDP serves when it can list the `dataQualifier`s an extension has data
+     * for. Its one method is `listExtensionDataQualifiers`. Separate from `platform.base` because
+     * not every PDP can enumerate its extension data and a PDP method is never optional; see
+     * {@link IExtensionDataEnumerationProjectDataProvider} for how a consumer discovers it.
+     */
+    [PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION]: IExtensionDataEnumerationProjectDataProvider;
     'platform.notesOnly': IProjectDataProvider<NotesOnlyProjectDataTypes>;
     'platform.placeholder': IProjectDataProvider<PlaceholderDataTypes>;
   }
@@ -1027,6 +1340,40 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidAppWindowInput': AppWindowInputEvent;
+    /**
+     * Emitted by the main process when the window it considers focused changes. Survives the whole
+     * application losing OS focus (alt-tabbing to another application) — the payload keeps naming
+     * the window the user was last working in.
+     *
+     * @experimental
+     */
+    'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
+    /**
+     * Emitted by the main process when the extension host stops without being asked to: it lost its
+     * connection to main (`'lost-connection'`) or exited for any other reason (`'crashed'`). Not
+     * emitted for a requested restart or during app shutdown.
+     *
+     * @experimental
+     */
+    'platform.onDidStopExtensionHost': ExtensionHostStoppedEvent;
+    /**
+     * Emitted by the extension host once its extensions have initialized, including on the first
+     * start. No payload. The readiness signal after `platform.restartExtensionHost`.
+     *
+     * @experimental
+     */
+    'platform.onDidStartExtensionHost': undefined;
+    /**
+     * Emitted by the main process when the app quits. On an explicit quit (Cmd+Q, the Quit menu
+     * item, `platform.quit` or `platform.restart`) it comes before any window is destroyed. When
+     * closing windows shuts the app down (close-all from the primary window, or the last window on
+     * Windows and Linux) it comes only after every window is gone, so no window sees it; those
+     * windows' connections were closed cleanly, as a normal close rather than a failure, before
+     * they were destroyed. No payload. Best effort: a window may be gone before it arrives.
+     *
+     * @experimental
+     */
+    'platform.onWillShutDown': undefined;
   }
 
   /** Union of all known network event names (keys of {@link NetworkEvents}). */

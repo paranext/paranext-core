@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import papi, { logger } from '@papi/frontend';
 import { WebViewProps } from '@papi/core';
@@ -7,7 +7,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { Dictionary } from './dictionary.component';
 import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../utils/dictionary-ui.utils';
-import { DictionaryScope } from '../utils/dictionary.utils';
+import { DICTIONARY_TITLE_KEY, DictionaryScope } from '../utils/dictionary.utils';
 
 /**
  * Thin data-loader for the dictionary. It wires PAPI to the props of `Dictionary`, which owns the
@@ -15,12 +15,27 @@ import { DictionaryScope } from '../utils/dictionary.utils';
  * entry-dependent reads are passed as imperative callbacks.
  */
 globalThis.webViewComponent = function DictionaryWebView({
+  updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => DICTIONARY_LOCALIZED_STRING_KEYS, []),
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  // `main.ts` resolves the tooltip once, when the tab opens/reloads; this effect keeps it current
+  // afterward too, since a locale change doesn't reload the tab. Set unconditionally (no Power/Simple
+  // gate), matching main.ts's own tooltip field: `PlatformTabTitle` already suppresses a tooltip
+  // that merely repeats the visible title unless the tab is icon-only.
+  //
+  // `useLocalizedStrings` seeds every key to itself both while loading and on a provider error
+  // (use-localized-strings-hook.ts) — so the guard compares against the key itself, not a truthy
+  // check, to tell "really resolved" apart from either sentinel case.
+  useEffect(() => {
+    const resolvedTooltip = localizedStrings[DICTIONARY_TITLE_KEY];
+    if (resolvedTooltip === DICTIONARY_TITLE_KEY) return;
+    updateWebViewDefinition({ tooltip: resolvedTooltip });
+  }, [localizedStrings, updateWebViewDefinition]);
 
   const onSelectOccurrence = useCallback(
     (scrRefOfOccurrence: SerializedVerseRef) => {

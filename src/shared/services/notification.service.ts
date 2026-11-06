@@ -3,8 +3,7 @@ import {
   type INotificationService,
 } from '@shared/models/notification.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let networkObject: INotificationService;
 const initialize = createCachedInitializer(async () => {

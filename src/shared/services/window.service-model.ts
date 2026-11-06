@@ -13,13 +13,43 @@ export const windowServiceObjectToProxy = Object.freeze({
   /**
    * JSDOC SOURCE windowServiceProviderName
    *
-   * This name is used to register the window data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
+   * This name identifies the window data provider on the papi. Every window registers a provider of
+   * its own under a window-scoped name — this name with the window's id appended — and what you get
+   * from this property depends on where you read it.
+   *
+   * From a renderer or a web view, it is that window's own scoped name, so the provider found by it
+   * — with the useData hook, for instance — both reports and changes the focus of the window you
+   * are in. Read it from `papi.window` and use it as it comes.
+   *
+   * From the extension host, which runs in no window, it is the bare unscoped name. That name
+   * resolves to whichever window the router is currently targeting, so two reads can answer for
+   * different windows. The bare {@link windowServiceProviderName} constant behaves the same way
+   * wherever it is imported. To act on one particular window from there,
+   * `platform.getFocusedWindowId` reports which window has focus.
    */
   dataProviderName: windowServiceProviderName,
+  /**
+   * Get the id of the window this code is currently running in.
+   *
+   * Works from the renderer and from inside a web view. A web view's iframe has no window id of its
+   * own; it reaches this through the `papi` object it shares with the renderer hosting it, and this
+   * code runs as part of that renderer — so it answers with the id of the window the web view is
+   * in. Returns `undefined` in the extension host, which has no window of its own.
+   *
+   * This answers a different question than `platform.getFocusedWindowId`, which reports which
+   * window the user is currently looking at — that call returns a _different_ window's id whenever
+   * this one is not the focused window.
+   *
+   * @returns The id of the current window, or `undefined` if there is no current window (e.g. in
+   *   the extension host)
+   * @experimental This method is unstable and may change or disappear without notice
+   */
+  getWindowId(): string | undefined {
+    return globalThis.windowId;
+  },
 });
 
-/** Focus of the window is on a WebView iframe with the specified id */
+/** A window's focus is on a WebView iframe with the specified id */
 export type FocusSubjectWebView = {
   focusType: 'webView';
   /** ID of the WebView in focus (its tab ID is the same) */
@@ -27,7 +57,7 @@ export type FocusSubjectWebView = {
 };
 
 /**
- * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
+ * A window's focus is somewhere in a tab (header, toolbar, menu, content, etc.)
  *
  * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
  * focused in the WebView's iframe
@@ -40,12 +70,12 @@ export type FocusSubjectTab = {
   id: string;
 };
 
-/** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
+/** A window's focus is somewhere not in a tab (app menu, app toolbar, etc.) */
 export type FocusSubjectOther = {
   focusType: 'other';
 };
 
-/** Current item that is the subject of top-level focus in the window */
+/** Current item that is the subject of top-level focus in a window */
 export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
 
 /**
@@ -56,7 +86,9 @@ export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectO
  *
  * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
  * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
- * focus subject shapes change.
+ * focus subject shapes change. Extensions cannot import this at runtime, so the Scripture editor
+ * keeps its own copy (`getEditorFocusLocation` in `platform-scripture-editor.web-view.utils.ts`):
+ * update it too.
  */
 export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined {
   if (focusSubject.focusType === 'webView') return focusSubject.id;
@@ -111,15 +143,47 @@ export type AppWindowInputEvent = {
  */
 export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
 
+/**
+ * Payload of the {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID} network event.
+ *
+ * @experimental
+ */
+export type FocusedWindowIdEvent = {
+  /**
+   * The window the main process considers focused, or `undefined` if no window of this application
+   * currently does. Survives the whole application losing OS focus (e.g. the user alt-tabbing to
+   * another application) — it names the window the user was last working in, not whether any window
+   * currently holds OS focus. See `getFocusedWindowId`.
+   */
+  focusedWindowId: string | undefined;
+};
+
+/**
+ * Name of the network event the main process emits when the window it considers focused changes.
+ *
+ * Fires when a window takes focus (including the first window at startup) and when the focused
+ * window closes, leaving none. Deliberately does NOT fire when the application loses OS focus
+ * without a new window taking it (e.g. alt-tabbing away) — the payload keeps naming the window the
+ * user was last in, matching `getFocusedWindowId`'s survive-blur semantic, so a renderer that shows
+ * per-window UI (e.g. an active-tab focus ring) based on this event keeps showing it on the window
+ * the user will land back in rather than clearing it everywhere the moment the app is
+ * backgrounded.
+ *
+ * @experimental
+ */
+export const EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID = 'platform.onDidChangeFocusedWindowId';
+
 /** Specific item that is intended to be focused in the top-level app window */
 export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
 
-/** Instructions that indicate how to change the focus within the window */
+/** Instructions that indicate how to change the focus within a window */
 export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
 
 // Data Type to initialize data provider engine with
 export type WindowDataTypes = {
   Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  /** JSDOC DESTINATION getActiveEditorProjectId; read-only */
+  ActiveEditorProjectId: DataProviderDataType<undefined, string | undefined, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -131,7 +195,18 @@ declare module 'papi-shared-types' {
 /**
  * JSDOC SOURCE windowService
  *
- * Service that allows to interact with the current application window
+ * Service for interacting with an application window. Every window hosts its own, so a call from a
+ * renderer acts on the window it runs in.
+ *
+ * The extension host is in no window, so a call made there acts on the window that most recently
+ * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+ * background. Two calls can answer for different windows, and a subscription binds to the window
+ * focused when it was made rather than following focus afterwards. If there is no focused window,
+ * or the focused window has not registered its window service — either because it is still starting
+ * or because it has just gone away — the call throws rather than falling back to another window.
+ *
+ * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+ * unscoped name goes through the router; `papi.window` does not.
  */
 export type IWindowService = {
   /**
@@ -149,7 +224,7 @@ export type IWindowService = {
    * Sets the subject of focus in the current window.
    *
    * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-   *   the window to update the current focus based on what is actually focused in the window (only
+   *   that window to update its current focus based on what is actually focused in it (only
    *   necessary when an action happens that changes the focus but the window service does not
    *   detect already). In most cases, you will not need to set `'detect'` manually.
    * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
@@ -163,7 +238,7 @@ export type IWindowService = {
    *
    * @param selector `undefined`. Does not have to be provided
    * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-   *   the window to update the current focus based on what is actually focused in the window (only
+   *   that window to update its current focus based on what is actually focused in it (only
    *   necessary when an action happens that changes the focus but the window service does not
    *   detect already). In most cases, you will not need to set `'detect'` manually.
    *
@@ -181,10 +256,10 @@ export type IWindowService = {
    * Subscribe to run a callback function when the current window's subject of focus is changed
    *
    * @param selector `undefined`. Does not have to be provided
-   * @param callback Function to run with the updated localized menuContent for this selector. If
-   *   there is an error while retrieving the updated data, the function will run with a
-   *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-   *   to check if it is an error.
+   * @param callback Function to run with the window's updated subject of focus. If there is an
+   *   error while retrieving the updated data, the function will run with a {@link PlatformError}
+   *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
+   *   error.
    * @param options Various options to adjust how the subscriber emits updates
    * @returns Unsubscriber function (run to unsubscribe from listening for updates)
    */
@@ -193,6 +268,89 @@ export type IWindowService = {
     callback: (focusSubject: FocusSubject | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
+  /**
+   * JSDOC SOURCE getActiveEditorProjectId
+   *
+   * Get the `projectId` of the web view that BCV navigation (the top toolbar's book/chapter/verse
+   * controls and the `platform.goTo*` commands) currently drives in this window, or `undefined`
+   * when there is nothing to navigate.
+   *
+   * Which web view that is depends on the interface mode:
+   *
+   * - Simple mode: always the main Scripture editor, so this is the project the user is working in.
+   * - Power mode: the Scripture-navigable web view the user most recently focused — which may be a
+   *   resource or other reference panel rather than an editor, and whose `projectId` may be
+   *   `undefined` — falling back to the first open Scripture editor that has a project. So it
+   *   changes as focus moves between tabs, and is not necessarily an editor's project.
+   *
+   * Use this to learn which project is active, not to interpret a Scripture reference's
+   * versification frame (that is what a scroll group's own source project is for).
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @returns The project id, or `undefined`
+   * @experimental
+   */
+  getActiveEditorProjectId(selector: undefined): Promise<string | undefined>;
+  /** JSDOC DESTINATION getActiveEditorProjectId */
+  getActiveEditorProjectId(): Promise<string | undefined>;
+  /**
+   * This data cannot be changed. Trying to use this setter will always throw. The project follows
+   * whichever web view BCV navigation drives; see `getActiveEditorProjectId`.
+   *
+   * @throws Always
+   * @experimental
+   */
+  setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+  /**
+   * Subscribe to run a callback function when the project `getActiveEditorProjectId` reports
+   * changes.
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @param callback Function to run with the new active project id. If there is an error while
+   *   retrieving the updated data, the function will run with a {@link PlatformError} instead of the
+   *   data. You can call {@link isPlatformError} on this value to check if it is an error.
+   * @param options Various options to adjust how the subscriber emits updates
+   * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+   * @experimental
+   */
+  subscribeActiveEditorProjectId(
+    selector: undefined,
+    callback: (projectId: string | undefined | PlatformError) => void,
+    options?: DataProviderSubscriberOptions,
+  ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &
   typeof windowServiceObjectToProxy &
   IDataProvider<WindowDataTypes>;
+
+/**
+ * One open application window, as a caller choosing a window to act on needs to see it.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type WindowSummary = {
+  /**
+   * The window's durable id: persisted in its layout entry and handed back to whichever window
+   * restores that entry, so it is stable across restarts.
+   */
+  windowId: string;
+  /**
+   * The window's title, which follows its own content. Two windows showing the same thing carry the
+   * same label, and nothing disambiguates them.
+   */
+  label: string;
+  /**
+   * Whether this window is the one answering for the application's lifetime right now — the window
+   * whose close asks about closing everything, and which docks Home rather than closing when it is
+   * emptied.
+   *
+   * This is the live answer, not the persisted flag of the same name. Usually they agree, but when
+   * no open window holds the marked entry the role falls to one of the windows that are open while
+   * the flag stays where it is, and this reports the window that actually answers.
+   *
+   * At most one window carries it, and possibly none — the window holding the role may be absent
+   * from the list it appears in, because a window whose close has begun and one whose renderer has
+   * been given up on are both left out. So a caller must not read "no window is flagged" as "then
+   * it must be me".
+   */
+  isMain: boolean;
+};

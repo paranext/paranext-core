@@ -30,23 +30,40 @@ export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
  */
 export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
 /**
- * The tabType for the project picker dialog in `project-picker.dialog.tsx`
+ * The tabType for the project picker dialog in `project-picker.dialog.tsx`. Lists the user's
+ * projects only — editable and read-only — never published resources.
  *
  * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
  *   It is not yet a stable contract.
  */
 export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
-/** The tabType for the share layout dialog in `share-layout.dialog.tsx` */
+/**
+ * The tabType for the Team layout dialog in `team-layout.dialog.tsx`.
+ *
+ * The `shareLayout` spelling here, in `SHARE_LAYOUT_DIALOG_TYPE` and in the `%shareLayoutDialog_*%`
+ * localization keys is deliberately frozen: these are published contracts, and renaming them would
+ * break saved layouts and translator catalogs for a cosmetic gain.
+ */
 export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
-/** Options to provide when showing the Select Project dialog */
+/**
+ * Options to provide when showing the Select Project dialog. Projects that cannot be opened (see
+ * `ProjectMetadata.unsupportedReason`) are never listed, even when named in `includeProjectIds`.
+ */
 export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
 
-/** Options to provide when showing the Select Multiple Project dialog */
+/**
+ * Options to provide when showing the Select Multiple Project dialog. Projects that cannot be
+ * opened (see `ProjectMetadata.unsupportedReason`) are never listed, even when named in
+ * `includeProjectIds`.
+ */
 export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
-  /** Project IDs that should start selected in the dialog */
+  /**
+   * Project IDs that should start selected in the dialog. The id of a project that cannot be opened
+   * has no row to unselect, so it is returned unchanged on submit.
+   */
   selectedProjectIds?: string[];
 };
 
@@ -82,6 +99,19 @@ export type ResourcePickerDialogOptions = DialogOptions & {
   /** IDs of resources already selected in the calling panel */
   selectedResourceIds?: string[];
   /**
+   * IDs among `selectedResourceIds` that belong to the team: the resources a project administrator
+   * shared, which the user cannot remove. When provided, the selected resources are listed as "Team
+   * resources", locked, and "User resources"; when omitted, they are all listed as "Included". An
+   * ID that is not also in `selectedResourceIds` is ignored.
+   */
+  teamResourceIds?: string[];
+  /**
+   * When true, and `teamResourceIds` is provided, each row under "User resources" gets a remove
+   * button, and pressing it returns that resource with the action `'remove'`. Defaults to false:
+   * selected resources cannot be picked or removed.
+   */
+  allowRemove?: boolean;
+  /**
    * Already-localized sentence shown above the resource list explaining something the caller knows
    * that limits what picking a resource will do. Shown ahead of any explanation the dialog itself
    * has for an incomplete list.
@@ -93,17 +123,36 @@ export type ResourcePickerDialogOptions = DialogOptions & {
    * one that is already on disk. Defaults to true.
    */
   allowSelectingInstalled?: boolean;
+  /**
+   * When true, texts whose licensing terms prohibit their use as a model or base for a new
+   * translation are shown greyed out, with the reason, and cannot be picked. Set it when picking a
+   * model text, not a reference text. Defaults to false.
+   */
+  disableRestrictedModelTexts?: boolean;
 };
 
 /**
- * Options to provide when showing the Project Picker dialog (no extra options needed)
+ * What the Resource Picker dialog returns: the resource the user chose, and whether they chose to
+ * add it or to remove it from their list (see `allowRemove`)
+ *
+ * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+ *   It is not yet a stable contract.
+ */
+export type ResourcePickerDialogResult = {
+  resource: DblResourceData;
+  action: 'add' | 'remove';
+};
+
+/**
+ * Options to provide when showing the Project Picker dialog (no extra options needed). The dialog
+ * lists the user's projects only — editable and read-only — never published resources.
  *
  * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
  *   It is not yet a stable contract.
  */
 export type ProjectPickerOptions = DialogOptions;
 
-/** Options to provide when showing the Share Layout dialog */
+/** Options to provide when showing the Team layout dialog */
 export type ShareLayoutDialogOptions = DialogOptions & {
   /** The project whose layout is being shared */
   projectId: string;
@@ -145,7 +194,10 @@ export interface DialogTypes {
    * @experimental This dialog was recently added, and its shape may change as we learn how it is
    *   used. It is not yet a stable contract.
    */
-  [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
+  [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<
+    ResourcePickerDialogOptions,
+    ResourcePickerDialogResult
+  >;
   /**
    * @experimental This dialog was recently added, and its shape may change as we learn how it is
    *   used. It is not yet a stable contract.

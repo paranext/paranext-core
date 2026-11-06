@@ -9,10 +9,18 @@ import {
   IRegisteredWebViewProvider,
 } from '@shared/models/web-view-provider.model';
 import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
+import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import { networkObjectService, overrideDispose } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
-import { isSerializable } from 'platform-bible-utils';
+import {
+  DEADLINE_EXCEEDED,
+  isPlatformError,
+  isSerializable,
+  // Linked in TSDoc
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  type PlatformError,
+} from 'platform-bible-utils';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
 import { DisposableNetworkObject } from '@shared/models/network-object.model';
@@ -155,25 +163,90 @@ async function registerWebViewProvider(
   return disposableWebViewProvider;
 }
 
+/** How long a single arm of {@link networkObjectStatusService.waitForNetworkObject} waits. */
+const PROVIDER_WAIT_ARM_MS = 20000;
+
+/**
+ * Total time {@link waitForWebViewProviderPatiently} spends re-arming the wait for THIS webview
+ * provider's own extension to register before giving up — greater than the ~28s worst-case
+ * cold-start activation time observed in practice, with extra allowance for more extensions.
+ *
+ * Similar in magnitude and rationale to `STARTUP_SYNC_RETRY_BUDGET_MS` (`startup-tasks.ts`) and
+ * `STARTUP_SYNC_READINESS_BUDGET_MS` (`startup-readiness.util.ts`) — to give cold-boot activation
+ * time to finish. Deliberately not aliased to each other, allowing them to be tuned independently.
+ */
+const PATIENT_PROVIDER_WAIT_TOTAL_MS = 2 * 60 * 1000;
+
+/**
+ * Re-arms the bounded wait on timeout, up to {@link PATIENT_PROVIDER_WAIT_TOTAL_MS} total, for a
+ * webview provider whose owning extension may still be activating. Only a genuine per-arm timeout
+ * (a {@link PlatformError} with `code` {@link DEADLINE_EXCEEDED}) is re-armed; any other rejection
+ * (e.g. a failed network-object snapshot read) propagates immediately, since retrying it won't
+ * help.
+ *
+ * Used by `retrieveWebViewContent`'s callers — a tab-restore request (a saved or
+ * baked-into-the-default-layout tab materializing) and the `platform.onDidReloadExtensions`
+ * re-fetch for every open tab — since in both cases the tab already visually exists, so waiting
+ * quietly longer while its provider catches up is exactly right. A fresh `openWebView()` request
+ * keeps the single, shorter {@link PROVIDER_WAIT_ARM_MS} wait instead — silently resolving minutes
+ * later would be bad UX for an action the user is actively waiting on.
+ */
+async function waitForWebViewProviderPatiently(
+  webViewProviderObjectId: string,
+): Promise<NetworkObjectDetails> {
+  // Use a timer that won't jump if the system clock changes. This code can run during startup,
+  // when the system clock may be adjusted (e.g., after booting, dual-booting, or resuming a VM).
+  // This matches the approach in `startup-readiness.util.ts`.
+  const deadline = performance.now() + PATIENT_PROVIDER_WAIT_TOTAL_MS;
+  // Re-arming is the point: each arm is the same bounded wait, retried until it resolves or the
+  // total budget above is spent.
+  for (;;) {
+    try {
+      // Sequential by construction — each arm starts only once the previous one has timed out.
+      // eslint-disable-next-line no-await-in-loop
+      return await networkObjectStatusService.waitForNetworkObject(
+        { id: webViewProviderObjectId },
+        PROVIDER_WAIT_ARM_MS,
+      );
+    } catch (e) {
+      // Only a genuine per-arm timeout is worth re-arming for. Any other rejection (e.g. a failed
+      // getAllNetworkObjectDetails() snapshot read) won't be fixed by waiting longer, so let it
+      // propagate immediately instead of silently spending the rest of the patient budget on it.
+      if (!isPlatformError(e) || e.code !== DEADLINE_EXCEEDED) throw e;
+      // Budget spent: let this arm's rejection propagate exactly as the one-shot wait's would,
+      // just later — same error shape, same caller-side handling.
+      if (performance.now() >= deadline) throw e;
+    }
+  }
+}
+
 /**
  * Get a web view provider that has previously been set up
  *
  * @param webViewType Type of webview provider to get
+ * @param shouldWaitPatiently Whether to keep re-arming the wait, allowing much longer overall for
+ *   the provider's extension to finish activating, instead of failing after the default timeout.
+ *   Set this for `retrieveWebViewContent`'s callers — a tab-restore request and the
+ *   extension-reload re-fetch; leave it `false` (the default) for a fresh `openWebView()` request.
+ *   Defaults to `false`
  * @returns Web view provider with the given name if one exists, undefined otherwise
  */
 async function getWebViewProvider(
   webViewType: string,
+  shouldWaitPatiently = false,
 ): Promise<IRegisteredWebViewProvider | undefined> {
   await initialize();
 
   // Get the object id for this web view provider name
   const webViewProviderObjectId = getWebViewProviderObjectId(webViewType);
 
-  await networkObjectStatusService.waitForNetworkObject(
-    { id: webViewProviderObjectId },
-    // Wait up to 20 seconds for the web view provider to appear
-    20000,
-  );
+  if (shouldWaitPatiently) await waitForWebViewProviderPatiently(webViewProviderObjectId);
+  else
+    await networkObjectStatusService.waitForNetworkObject(
+      { id: webViewProviderObjectId },
+      // Wait up to 20 seconds for the web view provider to appear
+      PROVIDER_WAIT_ARM_MS,
+    );
 
   const webViewProvider =
     await networkObjectService.get<IRegisteredWebViewProvider>(webViewProviderObjectId);

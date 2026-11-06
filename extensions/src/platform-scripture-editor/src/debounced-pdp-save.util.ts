@@ -26,8 +26,9 @@
  * call and surface errors. This pipeline exists because scripture typing hits all three at once.
  */
 
-import { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { MarkerContent, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
+import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 /**
  * Inputs to a single fire of the debounced keystroke-driven PDP save. Everything the fire needs is
@@ -65,9 +66,43 @@ export interface DebouncedPdpSaveParams {
   getEditorUsj: () => Usj | undefined;
 }
 
+const ZERO_WIDTH_NO_BREAK_SPACE = '\uFEFF';
+
+function contentWithoutZeroWidthNoBreakSpaces(content: MarkerContent[]): MarkerContent[] {
+  return content.flatMap((item): MarkerContent[] => {
+    if (typeof item === 'string') {
+      const text = item.replaceAll(ZERO_WIDTH_NO_BREAK_SPACE, '');
+      return text === '' && item !== '' ? [] : [text];
+    }
+    return item.content
+      ? [{ ...item, content: contentWithoutZeroWidthNoBreakSpaces(item.content) }]
+      : [item];
+  });
+}
+
+/**
+ * `usj` with every zero-width no-break space (U+FEFF) taken out of its text. Paratext 9's editor
+ * uses the character only to position its caret and removes every one from the text it saves,
+ * whatever `AllowInvisibleChars` says; marker attributes are left as they are.
+ *
+ * The editor goes on holding a stored one until the chapter is next loaded: taking it out there
+ * would move the offsets the caret and the pending-marker settle work in under the user's typing.
+ * So what the editor reports and what the file holds differ by this character after a save, and
+ * every comparison between the two goes through this function.
+ */
+export function withoutZeroWidthNoBreakSpaces(usj: Usj): Usj {
+  return { ...usj, content: contentWithoutZeroWidthNoBreakSpaces(usj.content) };
+}
+
 /**
  * Decides what an imperative "save the editor's USJ if it changed" should write to the PDP: returns
  * the USJ to save, or `undefined` when there is nothing new to write.
+ *
+ * A stored zero-width no-break space is dropped from what is written and never counts as a change
+ * ({@link withoutZeroWidthNoBreakSpaces}), which gives this Paratext 9's scope: a save the user's
+ * edit caused drops every one in the chapter it rewrites, and a chapter nobody edited is not
+ * written. Other writers of the chapter (Find & Replace, the USFM and USX setters) do not come
+ * through here and keep them, as Paratext 9's do.
  *
  * No literal stripping is needed here: an in-editor command surface with input in flight declares
  * it to the editor (`EditorRef.setTransientInput`), which excludes those bytes from the settled USJ
@@ -78,7 +113,48 @@ export function resolveUsjToSaveToPdp(
   usjFromEditor: Usj,
   usjFromPdp: Usj | undefined,
 ): Usj | undefined {
-  return areUsjContentsEqualExceptWhitespace(usjFromPdp, usjFromEditor) ? undefined : usjFromEditor;
+  const usjToSave = withoutZeroWidthNoBreakSpaces(usjFromEditor);
+  return areUsjContentsEqualExceptWhitespace(
+    usjFromPdp && withoutZeroWidthNoBreakSpaces(usjFromPdp),
+    usjToSave,
+    { ignoreDirectionMarks: true },
+  )
+    ? undefined
+    : usjToSave;
+}
+
+/**
+ * Whether the editor holds more than `savedUsj`, the document a save just sent. The editor's own
+ * document can still hold a zero-width no-break space that save dropped, which is not a change, and
+ * a retry on it would send the same document again for as long as the backend declines it.
+ */
+export function editorHoldsUnsavedChanges(editorUsj: Usj | undefined, savedUsj: Usj): boolean {
+  return !editorUsj || !deepEqualAcrossIframes(withoutZeroWidthNoBreakSpaces(editorUsj), savedUsj);
+}
+
+/**
+ * Whether content read from the editor may be written through a save bound to the chapter
+ * `saveChapterKey`.
+ *
+ * The editor does not always hold the chapter that is selected. After navigation it goes on showing
+ * the chapter it is leaving, still editable, until the new chapter's content arrives — and every
+ * save scheduled in that window is bound to the NEW chapter. Writing the editor's content through
+ * such a save puts one chapter's text over another, and nothing downstream stops it: the
+ * chapter-marker repair renumbers the marker to the chapter being written, so Paratext's own
+ * chapter-number check passes too. So the save is dropped. Its keystrokes are not written to the
+ * chapter being left either: they were typed after the user had already asked to move on, and the
+ * editor replaces them with the new chapter as soon as it arrives.
+ *
+ * @param editorDocumentKey Chapter key (`getChapterKey`) of the document the editor holds, or
+ *   `undefined` when no document has been applied to it yet — nothing then contradicts the save's
+ *   own chapter.
+ * @param saveChapterKey Chapter key of the chapter the save writes to.
+ */
+export function isEditorContentForChapter(
+  editorDocumentKey: string | undefined,
+  saveChapterKey: string,
+): boolean {
+  return editorDocumentKey === undefined || editorDocumentKey === saveChapterKey;
 }
 
 /**
@@ -109,7 +185,9 @@ export function resolveUsjToSaveToPdp(
  * which is re-pointed to the new chapter's setter from a `useEffect` BODY, not during render. A
  * cross-chapter flush (itself running in an effect CLEANUP) still relies on React's
  * cleanup-before-body ordering to observe the OLD chapter's setter there before that `useEffect`
- * body reassigns it.
+ * body reassigns it. Were that ordering to change, the flush would be dropped rather than written
+ * to the wrong chapter: the ref carries the chapter its setter writes to, and a save bound to
+ * another chapter refuses it.
  */
 export function performDebouncedPdpSave({
   usj,

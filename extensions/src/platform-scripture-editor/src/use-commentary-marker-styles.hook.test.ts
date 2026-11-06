@@ -95,6 +95,7 @@ describe('useCommentaryMarkerStyles', () => {
     ['undefined', undefined],
     ['empty string', ''],
     ['unrelated project id', 'some-other-project-id-1234567890abcdef'],
+    ["North Tanna's UID (a Scripture text, not a commentary)", '72dd0b9b0f2b4024_local-suffix'],
   ])('applies no stylesheet (and no override) when projectId is %s', (_label, projectId) => {
     renderHook(() => useCommentaryMarkerStyles(projectId));
     // No commentary matched, so nothing is injected — not even the override.

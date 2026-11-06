@@ -5,6 +5,7 @@ import {
   isJSONRPCResponses,
   JSONRPCClient,
   JSONRPCErrorCode,
+  JSONRPCErrorResponse,
   JSONRPCRequest,
   JSONRPCResponse,
   JSONRPCServer,
@@ -32,6 +33,7 @@ import {
   RequestParams,
   requestWithRetry,
   sendPayloadToWebSocket,
+  ServerSocketLike,
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
 } from '@shared/data/rpc.model';
@@ -41,6 +43,26 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
+
+/**
+ * Narrows a handler's error to what requesters need: its `code` and `message`, plus the platform
+ * error code the .NET data provider sends in `error.data.data.platformErrorCode` (read by
+ * `doRequest` in the network service). The rest of `error.data` (exception type names, stack, inner
+ * exceptions) can hold absolute paths and is never relayed, because browser pages connect to this
+ * server too.
+ */
+function relayableError(error: JSONRPCErrorResponse['error']): JSONRPCErrorResponse['error'] {
+  const { code, message } = error;
+  const outer: unknown = error.data;
+  const inner: unknown =
+    outer && typeof outer === 'object' && 'data' in outer ? outer.data : undefined;
+  const platformErrorCode: unknown =
+    inner && typeof inner === 'object' && 'platformErrorCode' in inner
+      ? inner.platformErrorCode
+      : undefined;
+  if (typeof platformErrorCode !== 'string') return { code, message };
+  return { code, message, data: { data: { platformErrorCode } } };
+}
 
 /**
  * Whether the app is on its way down, as {@link RpcServer.onWebSocketClose} needs to know to
@@ -64,6 +86,17 @@ let isAppShuttingDown: () => boolean = () => false;
 export function setAppShutdownSignal(signal: () => boolean): void {
   isAppShuttingDown = signal;
 }
+
+/**
+ * Request types main refuses from connections that could be a browser page, an extension web view
+ * or a renderer. See the TODO(PT-2893) in {@link RpcServer.processMessage}.
+ */
+const REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS: ReadonlySet<string> = new Set([
+  // REGISTRY_TOKEN_REQUEST_TYPE from `src/node/services/request-registry-tokens.service-model.ts`,
+  // spelled out because importing it would publish that module in `papi.d.ts`. The real-socket
+  // tests send the constant itself, so they fail if the two drift apart.
+  'requestRegistryTokens:getAccessToken',
+]);
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
 
@@ -90,7 +123,7 @@ export class RpcServer implements IRpcHandler {
    * permanently leak everything the socket had registered.
    */
   private hasCompletedTeardown = false;
-  private ws: WebSocket | undefined;
+  private ws: ServerSocketLike | undefined;
   private requestId: number = 1;
   /** Only used for logging to differentiate from other RpcServer objects */
   private readonly name: string;
@@ -110,20 +143,30 @@ export class RpcServer implements IRpcHandler {
   private readonly propagateEventMethod: PropagateEventMethod;
   /** Called by an RpcServer once its client's methods have been removed from the registry */
   private readonly announceClientDisconnectMethod: AnnounceClientDisconnectMethod;
+  /** See the constructor's `isWebSocketWithoutOrigin` */
+  private readonly isWebSocketWithoutOrigin: boolean;
 
+  /**
+   * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
+   *   carried no `Origin` header. Only such a client may send the request types main refuses to
+   *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
+   *   them.
+   */
   constructor(
     name: string,
-    webSocket: WebSocket,
+    webSocket: ServerSocketLike,
     propagateEventMethod: PropagateEventMethod,
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
     rpcEventDetailsByEventName: IRpcEventRegistry,
     announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
+    isWebSocketWithoutOrigin = false,
   ) {
     bindClassMethods.call(this);
     this.name = name;
     this.ws = webSocket;
     this.propagateEventMethod = propagateEventMethod;
     this.announceClientDisconnectMethod = announceClientDisconnectMethod;
+    this.isWebSocketWithoutOrigin = isWebSocketWithoutOrigin;
 
     // Uncomment the following to log every message sent
     /*
@@ -150,6 +193,9 @@ export class RpcServer implements IRpcHandler {
   }
 
   async connect(): Promise<boolean> {
+    // TODO(PT-4495): `false` here means "already connected", while `RpcClient` returns `true` for
+    // the same condition. The `true` below carries no readiness meaning either — this connect binds
+    // nothing, it attaches listeners to a socket the listener already accepted.
     if (this.connectionStatus === ConnectionStatus.Connected) return false;
     this.hasCompletedTeardown = false;
     this.addEventListenersToWebSocket();
@@ -157,12 +203,13 @@ export class RpcServer implements IRpcHandler {
     return true;
   }
 
-  // TODO(PT-4435): Nothing calls this. `RpcWebSocketListener.disconnect()` closes the WebSocket
-  // server without iterating its `RpcServer`s, so live client sockets are never closed and
-  // `IRpcHandler.disconnect`'s documented "on servers: disconnects from all clients" is unmet —
-  // which is also why `INTENTIONAL_CLOSE_CODE` never leaves main. Fixing it means changing what
-  // shutdown does to live sockets, so it belongs with the reconnect/teardown work rather than in a
-  // diagnosis-only change.
+  // TODO(PT-4495): Nothing calls this. `RpcWebSocketListener.disconnect()` closes the WebSocket
+  // server without iterating its `RpcServer`s, so `networkService.shutdown()` leaves live client
+  // sockets open and `IRpcHandler.disconnect`'s documented "on servers: disconnects from all
+  // clients" is unmet. The quit sequence closes the websocket clients itself beforehand, through
+  // `RpcWebSocketListener.closeWebSocketClients`, so the data provider can shut down; the network
+  // teardown still does not. Fixing it means changing what shutdown does to live sockets, so it
+  // belongs with the reconnect/teardown work rather than in a diagnosis-only change.
   async disconnect(): Promise<void> {
     if (this.connectionStatus === ConnectionStatus.Disconnected) return;
     if (!this.ws) {
@@ -320,8 +367,9 @@ export class RpcServer implements IRpcHandler {
     // A close with no completed handshake is the fingerprint this ticket exists to make greppable —
     // but on the way down it is also the ordinary case, not a fault. Main's server is still
     // listening while the extension host calls `process.exit()` and each renderer process is torn
-    // down, so every peer's socket dies with 1006 on a normal quit. Reporting those at `warn` would
-    // fire on every shutdown and bury the signal under the routine.
+    // down, so every peer's socket dies with 1006 on a normal quit — except the data provider's,
+    // which main closes with the intentional code first. Reporting those at `warn` would fire on
+    // every shutdown and bury the signal under the routine.
     const diedDuringShutdown = !isClean && isAppShuttingDown();
     const shutdownNote = diedDuringShutdown ? ', expected during app shutdown' : '';
     // No method count here on purpose: the number that belongs on a close line is what this socket
@@ -388,6 +436,29 @@ export class RpcServer implements IRpcHandler {
       const requests: JSONRPCRequest[] = isJSONRPCRequest(message) ? [message] : message;
       const promises = requests.map(async (request) => {
         try {
+          // TODO(PT-2893): An insecure temporary stopgap, not a security boundary; replace it with
+          // PT-2893's caller identification. Browsers always send `Origin` on a WebSocket handshake
+          // and page script can't remove it, and web views can drive their renderer's MessagePort,
+          // so this keeps browser pages and extension web views from minting Registry tokens. It
+          // trusts a header instead of identifying the caller, so any local process that leaves
+          // `Origin` out still gets through. Checked before the event branch too, so the request
+          // type can't be sent on as an event either.
+          if (
+            !this.isWebSocketWithoutOrigin &&
+            REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS.has(request.method)
+          ) {
+            logger.warn(`Refused '${request.method}' from ${this.describePeer()}`);
+            if (request.id)
+              sendPayloadToWebSocket(
+                this.ws,
+                createErrorResponse(
+                  `'${request.method}' is not available on this connection`,
+                  JSONRPCErrorCode.MethodNotFound,
+                  request.id,
+                ),
+              );
+            return;
+          }
           // Repeat events to the whole network
           if (!request.id) {
             this.propagateEventMethod(this, request.method, request.params);
@@ -402,7 +473,11 @@ export class RpcServer implements IRpcHandler {
           const payload =
             'result' in response
               ? createSuccessResponse(response.result, request.id)
-              : createErrorResponse(response.error.message, response.error.code, request.id);
+              : {
+                  jsonrpc: response.jsonrpc,
+                  id: request.id,
+                  error: relayableError(response.error),
+                };
           sendPayloadToWebSocket(this.ws, payload);
         } catch (error) {
           this.handleError(`Error handling request: ${getErrorMessage(error)}`, request);

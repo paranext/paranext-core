@@ -12,6 +12,7 @@ import {
   getJsonRpcRequestErrorMessagePrefix,
   InternalRequestHandler,
   JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+  ServerSocketLike,
 } from '@shared/data/rpc.model';
 import {
   AsyncVariable,
@@ -33,7 +34,13 @@ import {
 } from '@shared/services/shared-store.service';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
-import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
+import {
+  IRpcLocalClientAcceptor,
+  IRpcMethodRegistrar,
+  IRpcWebSocketClientCloser,
+  RpcClientDisconnectEvent,
+} from '@shared/models/rpc.interface';
+import { isServer } from '@shared/utils/internal-util';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -120,6 +127,9 @@ let jsonRpc: IRpcMethodRegistrar | undefined;
 const clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
 /** Stops relaying the RPC handler's client disconnects, once there is a handler to stop relaying */
 let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
+const connectionLostEmitter = new PlatformEventEmitter<void>();
+/** Stops relaying the RPC handler's lost connections, once there is a handler to stop relaying */
+let unsubscribeFromConnectionLost: Unsubscriber | undefined;
 
 /**
  * Event that fires when a process disconnects from the network, carrying the names of the methods
@@ -140,10 +150,64 @@ let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
  */
 export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent> =
   clientDisconnectEmitter.event;
+
+/**
+ * Fires when this process's own connection to the network is lost unexpectedly — the websocket
+ * closed without the app having asked it to.
+ *
+ * This is platform-internal core plumbing between the process that holds a client connection and
+ * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+ * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+ *
+ * This is a local, in-process event. Only a process that holds a client connection can lose one, so
+ * it fires exclusively on clients; in the process that owns the websocket server it is a real event
+ * that simply never fires. A deliberate disconnect does not fire it: intent travels in the close
+ * code, and a close the app asked for is not a loss. Neither does a connection that never opened —
+ * only an established connection can be lost, so a failed startup attempt is silent here.
+ *
+ * Relayed through this service's own emitter so subscribers can subscribe before there is an RPC
+ * handler to subscribe to. Carries no payload; the close detail is logged where it is observed.
+ *
+ * @experimental
+ */
+export const onDidLoseConnection: PlatformEvent<void> = connectionLostEmitter.event;
 // Set once {@link shutdown} has begun so {@link initialize} refuses to re-open a torn-down
 // connection. `jsonRpc` alone can't distinguish "not initialized yet" from "already shut down" —
 // both leave it `undefined` — so a late request after shutdown would otherwise re-connect.
 let hasShutDown = false;
+
+/**
+ * Subscribes to one of the RPC handler's events and re-emits it through this service's own emitter,
+ * but only while this process still considers itself up.
+ *
+ * Both guards it applies are easy to forget on the next event added to `IRpcMethodRegistrar`, and
+ * both matter:
+ *
+ * - The `hasShutDown` check: every socket closes at quit, and the emitters a subscriber would act
+ *   through are already being torn down by {@link shutdown}. Relaying then would report routine
+ *   teardown as the app breaking on its way out, through emitters that throw 'Emitter is disposed'
+ *   as they go.
+ * - `emitIsolated` rather than `emit`: one subscriber that throws must not cost the others the news,
+ *   because this is the only time they are told.
+ *
+ * @param subscribe The handler event to relay from.
+ * @param emitter This service's emitter to relay through.
+ * @param describeError Builds the log line for a throwing subscriber, given the event and the
+ *   error's message.
+ * @returns Unsubscriber for the relay.
+ */
+function relayWhileUp<T>(
+  subscribe: PlatformEvent<T>,
+  emitter: PlatformEventEmitter<T>,
+  describeError: (event: T, error: string) => string,
+): Unsubscriber {
+  return subscribe((event) => {
+    if (hasShutDown) return;
+    emitter.emitIsolated(event, (error) => {
+      logger.error(describeError(event, getErrorMessage(error)));
+    });
+  });
+}
 
 export async function initialize(): Promise<void> {
   if (jsonRpc) return;
@@ -164,21 +228,24 @@ export async function initialize(): Promise<void> {
       throw new Error(`ConnectionService: Failed to create NetworkConnector object: ${e}`);
     }
 
-    // Relayed through this service's own emitter so subscribers can subscribe before there is an
-    // RPC handler to subscribe to
-    unsubscribeFromClientDisconnects = jsonRpc.onDidDisconnectClient((clientDisconnect) => {
-      // Every socket closes at quit, and the emitters a subscriber would act through are already
-      // being torn down by `shutdown`. Relaying then would report routine teardown as processes
-      // dying, through emitters that throw 'Emitter is disposed' as they go.
-      if (hasShutDown) return;
-      // One subscriber that throws must not cost the others the news: this is the only time they are
-      // told, and what they do with it is drop registrations that are already unreachable.
-      clientDisconnectEmitter.emitIsolated(clientDisconnect, (error) => {
-        logger.error(
-          `A subscriber threw while being told a process disconnected, taking ${clientDisconnect.removedMethodNames.length} methods with it; the rest were still told: ${getErrorMessage(error)}`,
-        );
-      });
-    });
+    // Relayed through this service's own emitters so subscribers can subscribe before there is an
+    // RPC handler to subscribe to.
+    unsubscribeFromClientDisconnects = relayWhileUp(
+      jsonRpc.onDidDisconnectClient,
+      clientDisconnectEmitter,
+      (clientDisconnect, error) =>
+        `A subscriber threw while being told a process disconnected, taking ${clientDisconnect.removedMethodNames.length} methods with it; the rest were still told: ${error}`,
+    );
+
+    // `onDidDisconnectClient` above fires only in main. A renderer learns that the extension host
+    // went away from main's `platform.onDidStopExtensionHost` network event instead (see
+    // `extension-host-lifecycle.model.ts`); `onDidLoseConnection` below is deliberately local.
+    unsubscribeFromConnectionLost = relayWhileUp(
+      jsonRpc.onDidLoseConnection,
+      connectionLostEmitter,
+      (_event, error) =>
+        `A subscriber threw while being told this process lost its connection; the rest were still told: ${error}`,
+    );
 
     const connected = await jsonRpc.connect(handleEventFromNetwork);
     if (!connected) throw new Error(`Unable to connect protocol handler`);
@@ -199,6 +266,8 @@ export const shutdown = async () => {
     // dying while the emitters that carry the news are themselves being disposed.
     unsubscribeFromClientDisconnects?.();
     unsubscribeFromClientDisconnects = undefined;
+    unsubscribeFromConnectionLost?.();
+    unsubscribeFromConnectionLost = undefined;
     await jsonRpc.disconnect();
     // Tear down the handler reference before disposing emitters so their disposers skip the
     // now-pointless per-event unregister call — the whole connection is already going away.
@@ -211,6 +280,67 @@ export const shutdown = async () => {
     eventEmittersByEventType.clear();
   });
 };
+
+/**
+ * Whether an RPC handler can serve a caller-created socket. Only main's `RpcWebSocketListener` can;
+ * the client handlers do not implement the method.
+ */
+function isRpcLocalClientAcceptor(
+  handler: IRpcMethodRegistrar,
+): handler is IRpcMethodRegistrar & IRpcLocalClientAcceptor {
+  return 'acceptLocalClient' in handler && typeof handler.acceptLocalClient === 'function';
+}
+
+/**
+ * Serve `socket` as a client of this process's RPC server, under `name`. Main-process only: it is
+ * how a renderer's MessagePort-backed connection joins the same method and event registries as the
+ * websocket clients on port 8876. Throws rather than returning `false` so the caller can put the
+ * reason in front of the client immediately instead of letting its connect attempt time out.
+ *
+ * @param socket The server end of the client's connection
+ * @param name Label for this client in log lines
+ * @throws If this is not the main process, the network service is not initialized, or its handler
+ *   cannot accept local clients
+ * @experimental
+ */
+export function acceptLocalClient(socket: ServerSocketLike, name: string): void {
+  if (!isServer()) throw new Error('Only the main process can accept a local PAPI client');
+  if (!jsonRpc) throw new Error('The PAPI network service is not initialized');
+  if (!isRpcLocalClientAcceptor(jsonRpc))
+    throw new Error('The PAPI network handler in this process cannot accept local clients');
+  jsonRpc.acceptLocalClient(socket, name);
+}
+
+/**
+ * Whether an RPC handler can close its websocket clients. Only main's `RpcWebSocketListener` can;
+ * the client handlers do not implement the method.
+ */
+function isRpcWebSocketClientCloser(
+  handler: IRpcMethodRegistrar,
+): handler is IRpcMethodRegistrar & IRpcWebSocketClientCloser {
+  return 'closeWebSocketClients' in handler && typeof handler.closeWebSocketClients === 'function';
+}
+
+/**
+ * Close every client connected to this process's PAPI websocket server on port 8876, telling each
+ * why. Main-process only. A client such as the .NET data provider runs until its connection drops,
+ * so this is how main asks it to finish up and exit. Renderers' local connections are left open;
+ * see {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+ *
+ * Does nothing when the network service is not initialized, since then no client is connected.
+ *
+ * @param code WebSocket close code to send to each client
+ * @param reason Human-readable reason to send to each client
+ * @throws If this is not the main process, or its handler cannot close websocket clients
+ * @experimental
+ */
+export function closeWebSocketClients(code: number, reason: string): void {
+  if (!isServer()) throw new Error('Only the main process has PAPI websocket clients to close');
+  if (!jsonRpc) return;
+  if (!isRpcWebSocketClientCloser(jsonRpc))
+    throw new Error('The PAPI network handler in this process cannot close websocket clients');
+  jsonRpc.closeWebSocketClients(code, reason);
+}
 
 // #endregion
 
@@ -327,20 +457,17 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
   // (see c-sharp/PlatformErrorCodes.cs), the code is serialized into
   // `error.data.data.platformErrorCode`. Extract it here so it survives the
   // rethrow as a PlatformError with a machine-readable `code` property.
-  // FN-002, Theme 7 — manage-books feature.
   //
-  // The double `.data?.data?` indirection mirrors StreamJsonRpc's wire shape
-  // (Theme 12, 2026-04-30):
+  // The double `.data?.data?` indirection mirrors the data provider's wire shape:
   //   - The OUTER `error.data` is the standard JSON-RPC 2.0 error envelope's
-  //     `data` field (where StreamJsonRpc places its serialized error payload
-  //     for thrown C# exceptions).
-  //   - The INNER `.data` is StreamJsonRpc's serialized representation of
-  //     the C# `Exception.Data` IDictionary, where
-  //     `PlatformErrorCodes.WithCode` writes
-  //     `ex.Data["platformErrorCode"] = code` (decision-registry.json
-  //     `patterns.errorHandling.platformErrorCodes`).
-  // Do NOT flatten this access unless StreamJsonRpc's serialization changes —
-  // both levels are intentional.
+  //     `data` field, where StreamJsonRpc places its `CommonErrorData` (type,
+  //     message, stack) for a thrown C# exception.
+  //   - The INNER `.data` is the `{ platformErrorCode }` object `PapiJsonRpc`
+  //     (c-sharp/PapiJsonRpc.cs) adds to that `CommonErrorData` when the
+  //     exception carries a code.
+  // Main relays only the error's code, message and this platform error code between clients
+  // (`RpcServer.processMessage`), so the code arrives the same in every process. Do NOT flatten
+  // this access without changing `PlatformCodedErrorData` to match — both levels are intentional.
   let platformErrorCode: PlatformErrorCode | undefined;
   if (isJsonRpcResponse(response)) {
     if (!response.error) return response.result;
@@ -378,9 +505,10 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
  * WARNING: the no-retry flag only holds in the main process (whose `RpcServer` /
  * `RpcWebSocketListener` honor it). From any other process the flag does not cross the wire:
  * `RpcClient.request` drops it, and main re-dispatches the incoming request through its
- * registration-race retry loop (up to 10 attempts, 1 s apart) before failing. So a renderer-side
- * `requestNoRetry` to an unregistered handler still costs ~9 s and 10 warning logs in main before
- * it rejects.
+ * registration-race retry loop (`requestWithRetry` in `shared/data/rpc.model.ts` —
+ * `MAX_REQUEST_ATTEMPTS` attempts, `REQUEST_ATTEMPT_WAIT_TIME_MS` apart) before failing. So a
+ * renderer-side `requestNoRetry` to an unregistered handler still costs ~9 s and one `debug` log
+ * per attempt in main before it rejects.
  *
  * @param requestType The type of request
  * @param args Arguments to send in the request (put in request.contents)

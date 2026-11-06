@@ -22,6 +22,12 @@ export const BOOK_CHAPTER_CONTROL_STRING_KEYS = Object.freeze([
   '%webView_bookChapterControl_selectVerse%',
   '%webView_bookChapterControl_showMoreBooks%',
   '%webView_bookChapterControl_showProjectBooksOnly%',
+  '%webView_bookChapterControl_previousChapter%',
+  '%webView_bookChapterControl_nextChapter%',
+  '%webView_bookChapterControl_previousVerse%',
+  '%webView_bookChapterControl_nextVerse%',
+  '%webView_bookChapterControl_backToBooks%',
+  '%webView_bookChapterControl_backToChapters%',
 ] as const);
 
 /** Type definition for the localized strings used in the BookChapterControl component */
@@ -147,7 +153,9 @@ export type BookChapterControlProps = {
    * or DropdownMenu) — the transient focus blip that happens when the picker transitions between
    * book/chapter/verse views would otherwise collide with the outer scope's focus trap and dismiss
    * the popover. Modal mode gives the popover its own FocusScope that pauses the outer scope while
-   * it's open, avoiding the collision.
+   * it's open, avoiding the collision. A modal picker makes everything outside inert, its trigger
+   * included, so it does not use the compact stay-open behavior after a quick-nav step: it closes
+   * on an outside press and on Escape like any other modal popover.
    */
   modal?: boolean;
   /**
@@ -169,13 +177,4 @@ export type BookChapterControlProps = {
    * {@link BookChapterControlHandle.open} is a no-op
    */
   disabled?: boolean;
-  /**
-   * Overrides the shrink step this control would otherwise read from the enclosing toolbar. Higher
-   * means narrower: at step 1 the trigger shows the abbreviated book id instead of the spelled-out
-   * book name, and at step 3 it drops the chapter:verse entirely.
-   *
-   * Intended for stories and tests — in the app the step comes from the toolbar's own measured
-   * width via `ShrinkStepContext`, and this control reads it automatically.
-   */
-  shrinkStep?: number;
 };

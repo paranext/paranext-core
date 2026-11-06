@@ -1,27 +1,63 @@
+import * as commandService from '@shared/services/command.service';
 import { settingsService } from '@shared/services/settings.service';
+import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { localizationService } from '@shared/services/localization.service';
-import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { dataProviderService } from '@shared/services/data-provider.service';
+import type { InternetSettings } from 'paratext-registration';
+import type { FirstSyncState } from 'papi-shared-types';
+import {
+  deepEqual,
+  getCurrentLocale,
+  getErrorMessage,
+  isPlatformError,
+} from 'platform-bible-utils';
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { INTERNET_SETTINGS_DATA_PROVIDER } from '@renderer/components/internet-settings.constants';
+import { clearBooleanFlag, readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
-import { resolveRegistrationValidity } from './resolve-registration-validity';
+import {
+  publishRegistrationValidity,
+  refreshRegistrationValidity,
+} from './registration-validity-store';
 import { pickBestSetupLanguage } from './pick-best-setup-language';
+import { askForInternetUseChoiceIfNeeded } from './internet-use-choice-store';
+import { askSendReceiveAvailable } from './send-receive-availability.util';
 
 /** What the app should currently render for first-run gating. */
 export type FirstRunStatus =
   | { kind: 'loading' }
   | { kind: 'app' }
-  | { kind: 'wizard'; step: FirstRunStep; allowContinueWithoutRegistration?: boolean }
+  | {
+      kind: 'wizard';
+      step: FirstRunStep;
+      allowContinueWithoutRegistration?: boolean;
+      /**
+       * The registration was valid when this wizard run started. Language, internet settings and
+       * identify then count as already completed (check marks, reachable with Next).
+       */
+      registrationValidAtStart?: boolean;
+      /**
+       * The registration is the one Platform.Bible copied from Paratext 9 when it first set up its
+       * own folder, and nothing has replaced it since (the data provider forgets the copy whenever
+       * the registration changes). Shows the "copied from Paratext 9" banner.
+       */
+      registrationPreexisting?: boolean;
+      /**
+       * Send/Receive is available and `platform.firstSyncState` is saved as `'pending'`, so the
+       * Sync step comes back on later launches when a sync can run, until a sync succeeds.
+       */
+      firstSyncRequired?: boolean;
+    }
   | { kind: 'error' };
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
-// Written when the user skips sync consent and cleared once the durable setting is confirmed.
-// The actual auto-sync gate lives in startup-tasks.ts (main process) and reads
-// platform.syncOnStartup — see completeFirstRun and the self-heal block in resolveInternal.
-// This localStorage cache is renderer-only; it is a one-time recovery hint, not the gate signal.
-const SYNC_ON_STARTUP_DISABLED_CACHE_KEY = 'platform-bible.syncOnStartupDisabled';
+// Mirrors a `platform.firstSyncState` of 'pending' with Send/Receive available, as last seen by
+// resolveInternal. A completed setup with this set will reopen the wizard, so startup seeds the
+// loading gate instead of the app (see computeInitialStatus).
+const FIRST_SYNC_PENDING_CACHE_KEY = 'platform-bible.firstSyncPending';
 // Demo/UX enablement only (PT-4219). When set, the wizard launches from the top without touching
 // the real registration backend or triggering a relaunch, and completion is NOT persisted so the
 // click-through re-runs on every launch. Toggle from devtools:
@@ -32,27 +68,24 @@ const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
 // resolveInternal reads and consumes it to guard against transient 'invalid' responses from the
 // registration backend: the user just registered, so 'invalid' is almost certainly a server fluke.
 const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
+// Written by the Identify step immediately before it restarts the app to apply changed internet
+// settings for an already-registered user; consumed on the next startup, which then resumes at sync
+// consent — with the same 'invalid' allowance — the way a restart after registering does.
+const WIZARD_RESTARTED_KEY = 'platform-bible.firstRunWizardRestarted';
 
 // Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
 // startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
 let backgroundRecheckStarted = false;
 
-function readBooleanFlag(key: string): boolean {
-  try {
-    return localStorage.getItem(key) === 'true';
-  } catch {
-    // localStorage may be unavailable (sandboxed/test envs); treat as false.
-    return false;
-  }
-}
+// The one-launch flags (JUST_REGISTERED_KEY, WIZARD_RESTARTED_KEY) that were set when this startup
+// began. See consumeOneLaunchFlag.
+const oneLaunchFlagsSetThisStartup = new Set<string>();
 
-function writeBooleanFlag(key: string, value: boolean): void {
-  try {
-    localStorage.setItem(key, value ? 'true' : 'false');
-  } catch {
-    // Best-effort cache; a failed write just means the next startup re-resolves from scratch.
-  }
-}
+// Internet settings only take effect after a restart. The wizard's Internet settings step reports
+// the values it first loaded and every value it saves; the Identify step restarts the app when the
+// saved values differ from the first ones. In memory only: the restart is what applies the change.
+let internetSettingsAtStart: InternetSettings | undefined;
+let internetSettingsChangedThisRun = false;
 
 /** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
 export function isDemoMode(): boolean {
@@ -69,14 +102,49 @@ export function markJustRegistered(): void {
   writeBooleanFlag(JUST_REGISTERED_KEY, true);
 }
 
+/**
+ * Records that the wizard is about to restart the app to apply changed internet settings, so the
+ * next startup resumes at sync consent instead of the first step.
+ */
+export function markWizardRestarting(): void {
+  writeBooleanFlag(WIZARD_RESTARTED_KEY, true);
+}
+
+/**
+ * Records the internet settings the wizard's Internet settings step first loaded this run, as the
+ * baseline {@link noteInternetSettingsSaved} compares against. Later calls are ignored.
+ */
+export function noteInternetSettingsLoaded(settings: InternetSettings): void {
+  internetSettingsAtStart ??= settings;
+}
+
+/**
+ * Records internet settings the wizard just saved. They need a restart to take effect unless they
+ * are back to what the step first loaded.
+ */
+export function noteInternetSettingsSaved(settings: InternetSettings): void {
+  internetSettingsChangedThisRun =
+    internetSettingsAtStart === undefined || !deepEqual(settings, internetSettingsAtStart);
+}
+
+/** Whether the internet settings saved in the wizard differ from the ones it started with. */
+export function haveInternetSettingsChanged(): boolean {
+  return internetSettingsChangedThisRun;
+}
+
 function computeInitialStatus(): FirstRunStatus {
   // Demo mode always resolves into the wizard, so don't seed 'app' from a stale completion cache
   // (which would flash the app before resolveInternal routes back to the wizard).
   if (isDemoMode()) return { kind: 'loading' };
   // Power mode is never gated, and already-onboarded simple users are done — seed 'app' for both so
-  // neither flashes the gate before the async settings read resolves. Fresh/unknown → loading gate.
+  // neither flashes the gate before the async settings read resolves. Fresh/unknown → loading gate,
+  // as is an onboarded user still waiting for a first sync, whom resolution will route back into
+  // the wizard.
   if (readCachedInterfaceMode() === 'power') return { kind: 'app' };
-  return readBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY) ? { kind: 'app' } : { kind: 'loading' };
+  return readBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY) &&
+    !readBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY)
+    ? { kind: 'app' }
+    : { kind: 'loading' };
 }
 
 let status: FirstRunStatus = computeInitialStatus();
@@ -128,24 +196,72 @@ async function markFirstRunComplete(): Promise<void> {
 }
 
 /**
- * On a fresh wizard start, default the interface language to the OS language when it has enough
- * setup-dialog localization (i.e. it qualifies for the picker). Best-effort: any failure leaves the
- * wizard in English. The caller guarantees this only runs on the fresh-start path, so it never
- * overrides a language the user has already chosen. Skips the write when the OS match already
- * equals the current primary language (e.g. an English OS), to avoid a redundant set + re-render.
+ * Whether `value` is what `platform.interfaceLanguage` holds before anyone has chosen a language:
+ * unset, empty, or the default `['en']`. Anything else was set on purpose and must not be
+ * replaced.
+ */
+function isDefaultInterfaceLanguage(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value)) return false;
+  return value.length === 0 || (value.length === 1 && value[0] === 'en');
+}
+
+/**
+ * On a fresh wizard start, default the interface language to the OS language when it qualifies for
+ * the setup-dialog picker (offered, with enough setup-dialog localization). Writes only while the
+ * setting is still at its default (see {@link isDefaultInterfaceLanguage}), so a language set before
+ * setup is kept. Skips the write when the best match is English, which is already the default.
+ * Best-effort: any failure leaves the wizard in English.
  */
 async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
   try {
+    const current = await settingsService.get('platform.interfaceLanguage');
+    if (!isDefaultInterfaceLanguage(current)) return;
     const qualifying = await localizationService.getSetupDialogLanguages();
     const best = pickBestSetupLanguage(getCurrentLocale(), Object.keys(qualifying));
-    if (!best) return;
-    const current = await settingsService.get('platform.interfaceLanguage');
-    const currentPrimary =
-      !isPlatformError(current) && Array.isArray(current) && current.length > 0 ? current[0] : 'en';
-    if (best === currentPrimary) return;
+    if (!best || best === 'en') return;
     await settingsService.set('platform.interfaceLanguage', [best]);
   } catch (e) {
     logger.warn(`Could not default interface language to the OS locale: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Reads `platform.firstSyncState`. A failed read answers `undefined`, which the caller routes like
+ * `'unknown'` (counts as synced), so a transient failure never reopens the wizard for a user who
+ * finished setup.
+ */
+async function readFirstSyncState(): Promise<FirstSyncState | undefined> {
+  try {
+    const value = await settingsService.get('platform.firstSyncState');
+    if (!isPlatformError(value)) return value;
+    logger.warn(`Could not read platform.firstSyncState: ${getErrorMessage(value)}`);
+  } catch (e) {
+    logger.warn(`Could not read platform.firstSyncState: ${getErrorMessage(e)}`);
+  }
+  return undefined;
+}
+
+/**
+ * Whether a first sync could run right now as far as the user's own choices go: they saved an
+ * internet-use choice in this app and internet access is enabled. The caller adds the registration
+ * check. Any failed read answers false.
+ *
+ * The internet settings the provider reports are the saved ones, which take effect only after a
+ * restart. The wizard always restarts after saving changed settings, so by the launch that reads
+ * them here the saved and effective values agree.
+ */
+async function canUseInternetForFirstSync(): Promise<boolean> {
+  try {
+    const asked = await settingsService.get('platform.internetUseChoiceAsked');
+    if (isPlatformError(asked) || asked !== true) return false;
+    const provider = await dataProviderService.get(INTERNET_SETTINGS_DATA_PROVIDER);
+    if (!provider) return false;
+    const { permittedInternetUse } = await provider.getInternetSettings(undefined);
+    return permittedInternetUse === 'Enabled';
+  } catch (e) {
+    logger.warn(`Could not tell whether a first sync can run now: ${getErrorMessage(e)}`);
+    return false;
   }
 }
 
@@ -184,6 +300,8 @@ async function resolveInternal(generation: number): Promise<void> {
     }
     if (interfaceMode !== undefined && interfaceMode !== 'simple') {
       applyStatus({ kind: 'app' });
+      // Power mode never shows the wizard, so its internet-use question is asked here instead.
+      askForInternetUseChoiceIfNeeded();
       return;
     }
 
@@ -213,22 +331,34 @@ async function resolveInternal(generation: number): Promise<void> {
         writeBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY, firstRunComplete);
       }
     }
-    if (firstRunComplete) {
-      // Self-heal: if the settings write for syncOnStartup failed at wizard completion,
-      // re-attempt it so the next startup correctly skips auto-sync. Clear the hint once the
-      // durable setting is confirmed (written or already there) so we don't pay a settings round-trip
-      // on every subsequent startup. Don't clear on failure — retry next launch.
-      if (readBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY)) {
-        try {
-          const syncOnStartup = await settingsService.get('platform.syncOnStartup');
-          if (isPlatformError(syncOnStartup) || syncOnStartup !== false) {
-            await settingsService.set('platform.syncOnStartup', false);
-          }
-          writeBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY, false);
-        } catch (e) {
-          logger.warn(`Self-heal write of platform.syncOnStartup failed: ${getErrorMessage(e)}`);
-        }
-      }
+    const firstSyncState = await readFirstSyncState();
+    // Availability can change the outcome only for an unfinished setup or a finished one whose
+    // first sync is pending; everyone else goes to the app without waiting for the backend to
+    // register the question. `undefined` here means either not asked or the request rejected.
+    const earlySendReceiveAnswer =
+      !firstRunComplete || firstSyncState === 'pending'
+        ? await askSendReceiveAvailable()
+        : undefined;
+    let sendReceiveAvailable = earlySendReceiveAnswer === true;
+    // A user who finished setup is held in the wizard only while a first sync is recorded as
+    // pending. 'unknown' means setup finished before the first-sync state existed: that counts as
+    // synced, so those users are left alone.
+    const isFirstSyncRequired = (available: boolean): boolean =>
+      available && (firstRunComplete ? firstSyncState === 'pending' : firstSyncState !== 'synced');
+    // Unguarded by isSuperseded, unlike the durable writes below: this cache only mirrors the
+    // durable state just read, so writing it after a bail is still correct. A failed read, or a
+    // pending state with no availability answer, leaves the cache as it was, so neither can seed
+    // the app for the next launch of a user still waiting for a first sync.
+    const rememberFirstSyncPending = (available: boolean | undefined): void => {
+      if (firstSyncState === undefined) return;
+      if (firstSyncState !== 'pending') writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, false);
+      else if (available !== undefined) writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, available);
+    };
+    rememberFirstSyncPending(earlySendReceiveAnswer);
+    // A finished setup whose first sync is pending but whose availability question rejected falls
+    // through to the registration probe and asks again below, rather than being let into the app
+    // where the tour could be shown and spent before the first sync.
+    if (firstRunComplete && (firstSyncState !== 'pending' || earlySendReceiveAnswer === false)) {
       applyStatus({ kind: 'app' });
       // Completed Simple-mode user: re-check registration in the background (not awaited) so a
       // registration that has since become invalid can re-raise the wizard without regressing
@@ -238,60 +368,162 @@ async function resolveInternal(generation: number): Promise<void> {
     }
 
     const wizardActive = readBooleanFlag(WIZARD_ACTIVE_KEY);
-    // Consume the just-registered flag before resolving validity: the user set it just before
-    // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
-    const justRegistered = consumeJustRegisteredFlag();
-    const registrationValidity = await resolveRegistrationValidity();
+    // Consume the one-launch flags before resolving validity: the wizard set one just before calling
+    // platform.restart() with a registration that was valid (just entered, or already there), so
+    // 'invalid' here is almost certainly a transient backend fluke.
+    const justRegistered = consumeOneLaunchFlag(JUST_REGISTERED_KEY);
+    const wizardRestarted = consumeOneLaunchFlag(WIZARD_RESTARTED_KEY);
+    const wizardJustRestarted = justRegistered || wizardRestarted;
+    const registrationValidity = await refreshRegistrationValidity();
     const effectiveValidity =
-      justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
+      wizardJustRestarted && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
+    // Record the answer the gate acted on, not the raw probe, so the reminder dot starts the session
+    // agreeing with the suppression decided here. A later forced re-check (opening the profile
+    // popover) can still re-probe past it.
+    // See `adr-registration-validity-once-per-session`.
+    //
+    // Deliberately ahead of the supersession check below, unlike every other side effect here. That
+    // guard exists to keep a superseded run from making *durable* writes; this is in-memory session
+    // state. The flag was already consumed above, so a run that bails out after consuming it and
+    // before publishing would spend the suppression without anyone acting on it, and the dot would
+    // then contradict a registration the user really did just complete.
+    if (effectiveValidity !== registrationValidity) publishRegistrationValidity(effectiveValidity);
+    // A cold start can reject the early question before the backend registers it. A registration
+    // probe that resolved has just proven the backend is up, so ask again. Treating the rejection as
+    // final would leave an unfinished setup unmarked, and finishing it would then look like a setup
+    // from before the first-sync state existed — exempt for good. When the probe could not resolve
+    // either, the backend is not answering: an unfinished setup waits for the registration whatever
+    // the answer, and a finished one goes to the app as it would without Send/Receive.
+    if (earlySendReceiveAnswer === undefined && effectiveValidity !== 'unknown') {
+      const laterSendReceiveAnswer = await askSendReceiveAvailable();
+      sendReceiveAvailable = laterSendReceiveAnswer === true;
+      rememberFirstSyncPending(laterSendReceiveAnswer);
+    }
+    const firstSyncRequired = isFirstSyncRequired(sendReceiveAvailable);
+    const canSyncNow =
+      sendReceiveAvailable && effectiveValidity === 'valid' && (await canUseInternetForFirstSync());
     const decision = decideFirstRun({
-      firstRunComplete: false,
+      firstRunComplete,
       wizardActive,
       registrationValidity: effectiveValidity,
+      wizardJustRestarted,
+      firstSyncRequired,
+      sendReceiveAvailable,
+      canSyncNow,
     });
 
     // The registration probe above is the long await where the watchdog reveals the escape hatch, so
     // it's where a "continue without setup" bail most likely lands. If that superseded us, the user
     // is already in the app — skip the switch entirely so none of its persisted writes run. (Every
-    // durable write below sits in this switch; the reads/writes before the probe complete before the
-    // watchdog's reveal threshold, so they aren't reachable after a bail.)
+    // durable write below sits in this switch. The writes before the probe either complete before
+    // the watchdog's reveal threshold or, like the first-sync cache, only mirror state just read.)
     if (isSuperseded()) return;
 
     switch (decision.action) {
-      case 'completeThenShowApp':
-        await markFirstRunComplete();
-        applyStatus({ kind: 'app' });
-        break;
       case 'waitForRegistration':
         applyStatus({ kind: 'error' });
         break;
-      case 'startWizard':
+      case 'startWizard': {
+        const registrationValidAtStart = effectiveValidity === 'valid';
+        const registrationPreexisting =
+          registrationValidAtStart && (await isRegistrationCopiedFromParatext9());
+        // A newer resolution may have superseded this one while that answer was on its way.
+        if (isSuperseded()) return;
         // Fresh start at the language step: default to the OS language if it has enough setup-dialog
-        // localization. `wizardActive` here is the pre-transition value, so this runs once and never
-        // overrides a choice a returning user already made. Seeding the setting *before* setStatus
-        // means the wizard's localized strings resolve straight to the OS language — the live-render
-        // bridge never has to fire a change. (The very first synchronous render still shows the
-        // English defaults that useLocalizedStrings/useSetting return before their async fetch
-        // resolves; that brief default-then-resolve is the same for the English case, so seeding
-        // introduces no new flash.)
+        // localization. `wizardActive` here is the pre-transition value, so this runs once per
+        // wizard run, and the seed itself never replaces a language already chosen. Seeding the
+        // setting *before* setStatus means the wizard's localized strings resolve straight to the
+        // OS language — the live-render bridge never has to fire a change. (The very first
+        // synchronous render still shows the English defaults that useLocalizedStrings/useSetting
+        // return before their async fetch resolves; that brief default-then-resolve is the same
+        // for the English case, so seeding introduces no new flash.)
         if (!wizardActive && decision.step === 'language') {
           await seedInterfaceLanguageFromOsLocale();
           // seedInterfaceLanguageFromOsLocale is another await a bail could land across; re-check so
           // WIZARD_ACTIVE_KEY isn't persisted for a run the user already superseded.
           if (isSuperseded()) return;
         }
+        // Whether `'pending'` is actually saved, which is what brings the Sync step back on later
+        // launches; the step tells the user it will return only when it will.
+        let isFirstSyncPending = false;
+        if (firstSyncRequired) {
+          isFirstSyncPending =
+            firstSyncState === 'pending' || (await markFirstSyncPending(isSuperseded));
+          if (isSuperseded()) return;
+          if (isFirstSyncPending) writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, true);
+        }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
-        applyStatus({ kind: 'wizard', step: decision.step });
+        applyStatus({
+          kind: 'wizard',
+          step: decision.step,
+          registrationValidAtStart,
+          registrationPreexisting,
+          ...(isFirstSyncPending && { firstSyncRequired: true }),
+        });
         break;
+      }
       default:
-        // 'showApp' is unreachable here: we pass firstRunComplete: false above (the real flag was
-        // checked and returned early). Defensive fallback.
+        // 'showApp' (only ever for a finished setup): its first sync is pending but cannot start
+        // now, or availability could not be read. It gets the background re-check the early return
+        // starts.
         applyStatus({ kind: 'app' });
+        startBackgroundRegistrationRecheck();
         break;
     }
   } catch (e) {
     logger.warn(`resolveFirstRunState failed: ${getErrorMessage(e)}`);
     applyStatus({ kind: 'error' });
+  }
+}
+
+/**
+ * Records that the wizard is waiting for the user's first successful sync, unless that sync has
+ * already succeeded. Best-effort: a failed read or write is logged and the wizard still opens.
+ *
+ * The state is re-read right before the write to keep the window short, and nothing is written
+ * unless that read returns a real value: a read failure must not turn into overwriting 'synced'.
+ * This is still a read-then-write: if the backend records `'synced'` for a sync that finishes in
+ * between, this can overwrite it with `'pending'`, and the wizard reopens at the Sync step until
+ * the next successful sync. A sync finishing while the wizard is starting is rare, and the cost is
+ * one extra sync.
+ *
+ * @param isSuperseded Whether the resolution that called this was superseded; checked right before
+ *   the write
+ * @returns Whether the state is now `'pending'`
+ */
+async function markFirstSyncPending(isSuperseded: () => boolean): Promise<boolean> {
+  try {
+    const current = await settingsService.get('platform.firstSyncState');
+    if (isPlatformError(current)) {
+      logger.warn(`Could not read platform.firstSyncState: ${getErrorMessage(current)}`);
+      return false;
+    }
+    if (current === 'synced') return false;
+    if (current === 'pending') return true;
+    if (isSuperseded()) return false;
+    await settingsService.set('platform.firstSyncState', 'pending');
+    return true;
+  } catch (e) {
+    logger.warn(`Could not save platform.firstSyncState: ${getErrorMessage(e)}`);
+    return false;
+  }
+}
+
+/**
+ * Asks the data provider whether the registration was copied from Paratext 9 when Platform.Bible
+ * first set up its own ParatextData folder. Best-effort: only the banner depends on it, so any
+ * failure answers false.
+ */
+async function isRegistrationCopiedFromParatext9(): Promise<boolean> {
+  try {
+    return await commandService.sendCommand(
+      'paratextRegistration.isRegistrationCopiedFromParatext9',
+    );
+  } catch (e) {
+    logger.warn(
+      `Could not tell whether the registration came from Paratext 9: ${getErrorMessage(e)}`,
+    );
+    return false;
   }
 }
 
@@ -317,14 +549,23 @@ export async function resolveFirstRunState(): Promise<void> {
 }
 
 /**
- * Reads and clears the just-registered flag, returning whether it was set. The fresh-user startup
- * path and the completed-user background re-check each consume it once per startup — a transient
- * 'invalid' on the launch right after a re-register is treated as a backend fluke, not a re-nag.
+ * Reads and clears a one-launch flag the wizard sets just before restarting the app, returning
+ * whether it was set at any point during this startup. A transient 'invalid' on that launch is
+ * treated as a backend fluke, not a re-nag.
+ *
+ * Clearing the durable flag and remembering the answer are deliberately separate. The flag grants
+ * exactly one launch of trust and must not survive into the next one, so it is cleared on the first
+ * read. But within that launch the answer has to outlive the read: an `'unknown'` probe routes the
+ * user to the "couldn't verify" screen without ever using the flag, and the transient `'invalid'`
+ * it was meant to absorb then arrives on the Retry — which, unguarded, mis-routes a user with a
+ * valid registration back to the language step instead of resuming at sync consent.
  */
-function consumeJustRegisteredFlag(): boolean {
-  const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
-  if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
-  return justRegistered;
+function consumeOneLaunchFlag(key: string): boolean {
+  if (readBooleanFlag(key)) {
+    writeBooleanFlag(key, false);
+    oneLaunchFlagsSetThisStartup.add(key);
+  }
+  return oneLaunchFlagsSetThisStartup.has(key);
 }
 
 /**
@@ -342,7 +583,7 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
   try {
     // Consume the just-registered flag once per startup, before any early return, so a suppressed
     // launch can't leave it stale (which could later swallow a legitimate wizard raise).
-    const justRegistered = consumeJustRegisteredFlag();
+    const justRegistered = consumeOneLaunchFlag(JUST_REGISTERED_KEY);
     let reminderSuppressed = false;
     try {
       const value = await settingsService.get('platform.showRegistrationReminderOnStartup');
@@ -353,12 +594,25 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
         `Could not read platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
       );
     }
-    if (reminderSuppressed) return;
-    const validity = await resolveRegistrationValidity();
+    if (reminderSuppressed) {
+      // This path consumed the one-shot just-registered flag above but returns before probing, so
+      // without this the flag is spent for nothing: the toolbar's own probe would publish the
+      // transient 'invalid' and nag all session about a registration the user just fixed. Matches
+      // what resolveInternal and IdentifyStep already do.
+      // See `adr-registration-validity-once-per-session`.
+      if (justRegistered) publishRegistrationValidity('valid');
+      return;
+    }
+    const validity = await refreshRegistrationValidity();
     // Only a definitive 'invalid' raises the wizard; 'valid'/'unknown' leave the user in the app.
     if (validity !== 'invalid') return;
     // Suppress a single post-re-register transient 'invalid'; a still-invalid next launch re-raises.
-    if (justRegistered) return;
+    if (justRegistered) {
+      // Match the suppression above so the reminder dot doesn't nag on the one launch right after
+      // re-registering. See `adr-registration-validity-once-per-session`.
+      publishRegistrationValidity('valid');
+      return;
+    }
     setStatus({ kind: 'wizard', step: 'identify', allowContinueWithoutRegistration: true });
   } catch (e) {
     logger.warn(`Background registration re-check failed: ${getErrorMessage(e)}`);
@@ -366,14 +620,11 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
 }
 
 /**
- * Finish the wizard: persist completion, clear the active marker, reveal the app.
- *
- * @param options.skippedStep - The step that was skipped to end the wizard early (e.g.
- *   `'syncConsent'`). The store persists any step-specific preference: for `syncConsent`, writes
- *   `platform.syncOnStartup=false` so startup-tasks skips auto-sync on subsequent launches. Write
- *   is best-effort: a failure is logged but does not block wizard completion.
+ * Finish the wizard: persist completion, clear the active marker, reveal the app. Persists no sync
+ * preference. Persisted completion opens the automatic sync gates, so declining the wizard's sync
+ * goes through {@link declineFirstRunSync} instead.
  */
-export async function completeFirstRun(options?: { skippedStep?: FirstRunStep }): Promise<void> {
+export async function completeFirstRun(): Promise<void> {
   // Unlike continueWithoutRegistration, this doesn't bump resolutionGeneration: completeFirstRun is
   // only reachable from the wizard UI, which renders after resolveInternal already set 'wizard' and
   // returned — so no resolution is in flight whose late result could clobber this status.
@@ -382,23 +633,22 @@ export async function completeFirstRun(options?: { skippedStep?: FirstRunStep })
     setStatus({ kind: 'app' });
     return;
   }
-  // Write firstRunComplete FIRST so a crash between the two writes leaves the wizard closed and
-  // sync enabled (safe fail) rather than sync permanently disabled from an aborted session.
   await markFirstRunComplete();
-  if (options?.skippedStep === 'syncConsent') {
-    writeBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY, true);
-    // Persist durably as a platform setting so the main-process startup-tasks can read it.
-    try {
-      await settingsService.set('platform.syncOnStartup', false);
-      writeBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY, false); // clear once confirmed
-    } catch (e) {
-      logger.warn(`Failed to persist platform.syncOnStartup: ${getErrorMessage(e)}`);
-    }
-  } else {
-    // Clear any stale hint so a future startup's self-heal can't incorrectly disable sync.
-    writeBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY, false);
-  }
   setStatus({ kind: 'app' });
+}
+
+/**
+ * Finish the wizard by declining its sync ("Don't sync yet"): withhold automatic sync for the rest
+ * of this app session, then complete as {@link completeFirstRun} does. Persists no sync preference,
+ * so the next launch syncs as usual.
+ *
+ * The deferral is recorded before completion is persisted, because persisted completion is what
+ * opens the automatic sync gates. If the deferral cannot be recorded this throws and completes
+ * nothing, so the wizard stays open rather than finishing with every gate open.
+ */
+export async function declineFirstRunSync(): Promise<void> {
+  await sendCommand('platform.deferAutomaticSyncForSession');
+  await completeFirstRun();
 }
 
 /**
@@ -412,6 +662,21 @@ export function continueWithoutRegistration(): void {
   // slow probe is still awaiting) so its late result can't override this choice.
   resolutionGeneration += 1;
   setStatus({ kind: 'app' });
+}
+
+/**
+ * Clears every first-run flag this store keeps in `localStorage`, for the developer reset
+ * (`platform.resetFirstRun`), which restarts the app right after. Leaves demo mode alone: that is a
+ * deliberate developer toggle, not first-run progress.
+ */
+export function clearFirstRunLocalState(): void {
+  [
+    FIRST_RUN_COMPLETE_CACHE_KEY,
+    FIRST_SYNC_PENDING_CACHE_KEY,
+    WIZARD_ACTIVE_KEY,
+    JUST_REGISTERED_KEY,
+    WIZARD_RESTARTED_KEY,
+  ].forEach(clearBooleanFlag);
 }
 
 /** Re-run resolution after an error (e.g. the Retry button on the "couldn't verify" screen). */
@@ -433,5 +698,8 @@ export function resetFirstRunStore(): void {
   resolvePromise = undefined;
   resolving = false;
   backgroundRecheckStarted = false;
+  oneLaunchFlagsSetThisStartup.clear();
+  internetSettingsAtStart = undefined;
+  internetSettingsChangedThisRun = false;
   listeners.clear();
 }

@@ -1,3 +1,4 @@
+import { toUsfmNbspSpelling, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import papi, { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEffect } from 'react';
@@ -6,9 +7,10 @@ import { getOpenFindTriggerArgs } from './find-trigger.util';
 /**
  * Binds Ctrl+F to open Find for the scripture a tab is showing. Shared by every scripture tab type
  * so there is one Ctrl+F→`openFind` implementation: the Scripture editor passes its own project,
- * and the read-only reference panels (model text, Bible text, commentary) pass the displayed
- * resource's project — never the panel's own container project. macOS uses Ctrl (not Cmd) to match
- * the rest of the app; see the `scripture-find` entry in `src/stories/keyboard-shortcuts.data.ts`.
+ * the read-only reference panels (model text, Bible text, commentary) pass the displayed resource's
+ * project — never the panel's own container project — and the Text Collection passes the project of
+ * the resource under the caret. macOS uses Ctrl (not Cmd) to match the rest of the app; see the
+ * `scripture-find` entry in `src/shared/data/keyboard-shortcuts.data.ts`.
  *
  * While no scripture is resolved (a panel still loading its resource, or an editor with no project)
  * Ctrl+F is left alone: the key is not consumed and the reason is logged, so the keystroke is never
@@ -17,8 +19,15 @@ import { getOpenFindTriggerArgs } from './find-trigger.util';
  * @param webViewId The tab's own web view id, forwarded to the Find command.
  * @param sourceProjectId Project id of the scripture to search, or `undefined` while none is
  *   resolved.
+ * @param viewOptions The view options of the editor the selection is in, when the tab shows one, so
+ *   a no-break space the editor holds as its internal stand-in is searched for as the project
+ *   spells it (see `toUsfmNbspSpelling`).
  */
-export function useOpenFindShortcut(webViewId: string, sourceProjectId: string | undefined): void {
+export function useOpenFindShortcut(
+  webViewId: string,
+  sourceProjectId: string | undefined,
+  viewOptions?: ViewOptions,
+): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ctrl+F and nothing more: Ctrl+Shift+F / Ctrl+Alt+F (and macOS Ctrl+Cmd+F) belong to whoever
@@ -30,7 +39,7 @@ export function useOpenFindShortcut(webViewId: string, sourceProjectId: string |
       const args = getOpenFindTriggerArgs(
         webViewId,
         sourceProjectId,
-        window.getSelection()?.toString(),
+        toUsfmNbspSpelling(window.getSelection()?.toString() ?? '', viewOptions),
       );
       if (!args) {
         logger.debug(
@@ -51,5 +60,5 @@ export function useOpenFindShortcut(webViewId: string, sourceProjectId: string |
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [webViewId, sourceProjectId]);
+  }, [webViewId, sourceProjectId, viewOptions]);
 }

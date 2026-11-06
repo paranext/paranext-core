@@ -30,8 +30,15 @@ import {
   ICheckHostingService,
   ICheckRunner,
   CheckConfigurationProvider,
+  CheckJobError,
+  CheckSetupState,
 } from 'platform-scripture';
-import { CHECK_RUNNER_NETWORK_OBJECT_TYPE, CHECK_STOP_DEFAULT_TIMEOUT_MS } from './check.model';
+import { addCheckError } from './check-aggregator.utils';
+import {
+  CHECK_RUNNER_NETWORK_OBJECT_TYPE,
+  CHECK_STOP_DEFAULT_TIMEOUT_MS,
+  LOOK_UP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION,
+} from './check.model';
 import { PersistedCheckRunResults } from './persisted-check-run-result.model';
 
 /** Details about a check that include a way to create the check */
@@ -61,6 +68,7 @@ type CheckJob = Omit<CheckJobStatusReport, 'nextResults' | 'totalExecutionTimeMs
   startTime: number;
   endTime?: number;
   stopRequested: boolean;
+  checkErrors: CheckJobError[];
 };
 
 class CheckRunnerEngine
@@ -163,19 +171,34 @@ class CheckRunnerEngine
 
   // #region Check Configuration Provider
 
-  // isCheckSetupForProject doesn't use instance state but cannot be static because it implements
-  // the CheckConfigurationProvider interface
+  // Checks hosted in the extension host have no setup concept, so every one counts as set up. This
+  // doesn't use instance state but cannot be static because it implements the
+  // CheckConfigurationProvider interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async isCheckSetupForProject(
-    // Parameters are required by the interface but unused since the method always throws.
+    // Parameters are required by the interface but unused since every check is set up.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _checkId: string,
-    // Second parameter also required by the interface but unused since the method always throws.
+    // Second parameter also required by the interface but unused since every check is set up.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _projectId: string,
   ): Promise<boolean> {
-    throw new Error(`isCheckSetupForProject is not implemented for the extensionHostCheckRunner.
-        Did you mean to call the checkAggregator?`);
+    return true;
+  }
+
+  // Checks hosted in the extension host have no setup concept, so every one is ready. This doesn't
+  // use instance state but cannot be static because it implements the CheckConfigurationProvider
+  // interface
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async lookUpCheckSetupStatus(
+    // Parameters are required by the interface but unused since every check is ready.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _checkId: string,
+    // Second parameter also required by the interface but unused since every check is ready.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _projectId: string,
+  ): Promise<CheckSetupState> {
+    return { status: 'ready' };
   }
 
   // #endregion
@@ -195,6 +218,7 @@ class CheckRunnerEngine
       results: [],
       totalResultsCount: 0,
       stopRequested: false,
+      checkErrors: [],
       startTime: performance.now(),
       promise: Promise.resolve(),
     };
@@ -249,6 +273,7 @@ class CheckRunnerEngine
       totalResultsCount: job.totalResultsCount,
       nextResults: job.results.splice(0, maxResultsToInclude),
       error: job.error,
+      checkErrors: job.checkErrors.length > 0 ? [...job.checkErrors] : undefined,
       totalExecutionTimeMs: (job.endTime ?? performance.now()) - job.startTime,
     };
   }
@@ -274,10 +299,14 @@ class CheckRunnerEngine
 
         const checkDetails = registeredChecksById.get(checkId);
         if (!checkDetails) {
-          job.error = `Check with ID ${checkId} is not registered and cannot be run`;
-          job.status = 'errored';
-          job.endTime = performance.now();
-          return;
+          addCheckError(job.checkErrors, {
+            checkId,
+            message: `Check with ID ${checkId} is not registered and cannot be run`,
+          });
+          stepsCompleted += job.jobScope.inputRanges.length;
+          // Skipping to the next check keeps the loop flat; wrapping the rest in an else would nest it
+          // eslint-disable-next-line no-continue
+          continue;
         }
 
         // Get mutex for this check so that only one job can run it at a time
@@ -290,7 +319,8 @@ class CheckRunnerEngine
           for (let onRange = 0; onRange < job.jobScope.inputRanges.length; onRange++) {
             const range = job.jobScope.inputRanges[onRange];
 
-            // Ensure we have the pdps we need for the project
+            // Ensure we have the pdps we need for the project. A project whose data cannot be read
+            // fails the whole job on purpose: every check on it would fail the same way.
             if (!this.#subscribedProjects.has(range.projectId)) {
               const usfmBookPdp = await papi.projectDataProviders.get(
                 'platformScripture.USFM_Book',
@@ -327,8 +357,25 @@ class CheckRunnerEngine
               job.results.push(...results);
               job.totalResultsCount += results.length;
               incrementStepsCompleted();
+            } catch (error) {
+              // Logged once per check and message in a job, like the job's own list of check errors
+              if (addCheckError(job.checkErrors, { checkId, message: getErrorMessage(error) }))
+                logger.warn(
+                  `Check ${checkId} could not run on project ${range.projectId}: ${
+                    error instanceof Error && error.stack ? error.stack : getErrorMessage(error)
+                  }`,
+                );
+              incrementStepsCompleted();
             } finally {
-              if (check) await check.dispose();
+              // A check that fails to clean up has still produced its results, so the failure is
+              // logged rather than recorded as a check error or allowed to fail the job
+              try {
+                if (check) await check.dispose();
+              } catch (disposeError) {
+                logger.warn(
+                  `Check ${checkId} failed to dispose after running: ${getErrorMessage(disposeError)}`,
+                );
+              }
             }
           }
         });
@@ -420,6 +467,8 @@ async function initialize(): Promise<void> {
             'platformScripture.extensionHostCheckRunner',
             checkRunnerEngine,
             CHECK_RUNNER_NETWORK_OBJECT_TYPE,
+            undefined,
+            { methods: [LOOK_UP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION] },
           );
           unsubscribers.add(dataProvider.dispose);
           unsubscribers.add(

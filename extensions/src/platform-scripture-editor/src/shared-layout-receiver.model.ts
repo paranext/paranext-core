@@ -12,15 +12,23 @@ const COMMENTS_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
 // `%webView_scriptureTextGrid_title_multiple%` = "Text Collection").
 const TEXT_COLLECTION_PANEL_WEBVIEW_TYPE = SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE;
 
-/** Reads the three admin layout settings for a project and serializes them into a signature. */
+/**
+ * Reads the four admin layout settings for a project and serializes them into a signature.
+ *
+ * Every setting the Team layout dialog saves must be fingerprinted here, or an admin who changes
+ * only that setting produces a byte-identical signature and the team is never told. The team
+ * structure lock is the case that makes this load-bearing rather than tidy: it is the one change in
+ * that dialog that REMOVES a capability from the team, so a silent apply is the worst outcome.
+ */
 async function readLayoutSignature(papi: typeof PapiBackend, projectId: string): Promise<string> {
   const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const [modelTexts, resources, tab] = await Promise.all([
+  const [modelTexts, resources, tab, structureProtected] = await Promise.all([
     pdp.getSetting('platformScripture.modelTexts'),
     pdp.getSetting('platformScripture.referencedProjectsAndResources'),
     pdp.getSetting('platformScripture.sharedLayoutDefaultTab'),
+    pdp.getSetting('platformScripture.structureProtected'),
   ]);
-  return serialize({ modelTexts, resources, tab });
+  return serialize({ modelTexts, resources, tab, structureProtected });
 }
 
 /** Maps a `sharedLayoutDefaultTab` value to the col-3 panel web view type, or `undefined`. */
@@ -158,18 +166,29 @@ export class SharedLayoutReceiver {
     }
   }
 
-  private async getOpenSimpleModeProjectId(): Promise<string | undefined> {
+  /**
+   * The Simple-mode editor a completed sync's "Apply now" prompt should be about — its project, to
+   * decide whether the layout changed, and its web view id, so the router can send the prompt to
+   * the window that actually has it open instead of the focused window.
+   */
+  private async getOpenSimpleModeEditor(): Promise<
+    { projectId: string; webViewId: string } | undefined
+  > {
     if ((await this.papi.settings.get('platform.interfaceMode')) !== 'simple') return undefined;
     const defs = await this.papi.webViews.getAllOpenWebViewDefinitions();
     const editor = defs.find(
       (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.state?.isReadOnly,
     );
-    return editor?.projectId;
+    if (!editor?.projectId) return undefined;
+
+    return { projectId: editor.projectId, webViewId: editor.id };
   }
 
   private async handleSyncCompleted(): Promise<void> {
-    const projectId = await this.getOpenSimpleModeProjectId();
-    if (!projectId) return;
+    const editor = await this.getOpenSimpleModeEditor();
+    if (!editor) return;
+
+    const { projectId, webViewId } = editor;
 
     // Only manual Send/Receives reach here (`onSyncStateChanged` does not fire for the programmatic
     // project-switch sync), so always take the notify path when the layout changed. Project-switch
@@ -193,6 +212,9 @@ export class SharedLayoutReceiver {
       message: '%platformScriptureEditor_sharedLayout_newLayoutAvailable%',
       clickCommand: 'platformScriptureEditor.applySharedLayout',
       clickCommandLabel: '%platformScriptureEditor_sharedLayout_applyNow%',
+      // Routes the prompt to the window that has this editor open, rather than the focused window —
+      // the project it is about may not be the one the user is currently looking at.
+      webViewId,
     });
     this.projectIdByNotificationId.set(notificationId, projectId);
     this.notificationIdByProjectId.set(projectId, notificationId);

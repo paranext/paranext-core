@@ -1,11 +1,11 @@
 #!/bin/bash
 # @raycast.schemaVersion 1
-# @raycast.title Run most recently downloaded Paratext 10 Studio or Platform.Bible package
+# @raycast.title Run most recently downloaded Paratext 10 or Platform.Bible package
 # @raycast.mode fullOutput
 
 # Script to install and run universal app from app-macos*.zip file
 # Extract, install, codesign, and run the application
-# Supports both Paratext 10 Studio and Platform.Bible apps
+# Supports both Paratext 10 and Platform.Bible apps
 #
 # Usage:
 #   ./run-unsigned-build.macos.sh                    # Use ~/Downloads (default)
@@ -173,7 +173,10 @@ CLEAR_LOGS=${CLEAR_LOGS:-1}
 
 # Clear logs before installing/running the app
 if [[ "$CLEAR_LOGS" == "1" ]]; then
-    if [[ "$APP_NAME" == "Paratext 10 Studio.app" ]]; then
+    # Both bundle names are accepted: the product's display name is "Paratext 10", but builds
+    # predating the rename produce "Paratext 10 Studio.app". LOG_DIR keys off the programmatic
+    # name, which is unchanged.
+    if [[ "$APP_NAME" == "Paratext 10.app" || "$APP_NAME" == "Paratext 10 Studio.app" ]]; then
         LOG_DIR="$HOME/Library/Logs/paratext-10-studio"
         echo "Clearing logs in $LOG_DIR..."
         mkdir -p "$LOG_DIR"
@@ -311,7 +314,8 @@ echo "🎉 Installation and launch completed successfully!"
 
 # Show relevant logs in Finder
 if [[ "$SHOW_LOGS_IN_FINDER" == "1" ]]; then
-    if [[ "$APP_NAME" == "Paratext 10 Studio.app" ]]; then
+    # Both bundle names, as above.
+    if [[ "$APP_NAME" == "Paratext 10.app" || "$APP_NAME" == "Paratext 10 Studio.app" ]]; then
         LOG_DIR="$HOME/Library/Logs/paratext-10-studio"
         echo "Opening $LOG_DIR in Finder..."
         open "$LOG_DIR"

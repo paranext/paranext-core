@@ -1,5 +1,9 @@
 /** Base webpack config used across other specific configs */
 
+// webpack-cli resolves `.ts` config files through `interpret`, whose `.ts` list is
+// `['ts-node/register', ...]` and does not include tsx. Every `webpack --config *.ts` script
+// therefore still boots ts-node, so ts-node stays a devDependency until that changes.
+
 import webpack from 'webpack';
 import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
 import webpackPaths from './webpack.paths';

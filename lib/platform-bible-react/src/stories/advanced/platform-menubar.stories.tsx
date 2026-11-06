@@ -319,6 +319,60 @@ export const WithSubmenus: Story = {
   },
 };
 
+export const WithShortcutHints: Story = {
+  tags: ['test'],
+  render: () => {
+    const [lastCommand, setLastCommand] = useState<string>('');
+
+    const sampleMenuData = createSampleMenuData();
+    const menuDataWithShortcutHints: Localized<MultiColumnMenu> = {
+      ...sampleMenuData,
+      items: [
+        ...sampleMenuData.items,
+        {
+          label: 'Find',
+          tooltip: 'Find text in the project',
+          localizeNotes: 'Application main menu > Project > Find',
+          group: 'platform.projectSettings',
+          order: 2,
+          command: 'platform.find',
+          shortcut: 'Ctrl+F',
+        },
+      ],
+    };
+
+    const handleSelectMenuItem = (item: MenuItemContainingCommand) => {
+      setLastCommand(item.command);
+    };
+
+    return (
+      <div className="tw:space-y-4">
+        <PlatformMenubar
+          menuData={menuDataWithShortcutHints}
+          onSelectMenuItem={handleSelectMenuItem}
+        />
+
+        <div className="tw:rounded tw:border tw:bg-muted tw:p-4">
+          <div className="tw:text-sm">
+            <strong>Last Command:</strong> {lastCommand || 'None'}
+          </div>
+          <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
+            Open the &quot;Project&quot; menu: &quot;Find&quot; shows its shortcut at the end of the
+            row.
+          </p>
+        </div>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Menubar with a command item that shows its keyboard shortcut hint.',
+      },
+    },
+  },
+};
+
 export const MinimalMenu: Story = {
   render: () => {
     const [lastCommand, setLastCommand] = useState<string>('');

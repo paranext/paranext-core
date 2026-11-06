@@ -1037,6 +1037,24 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        [Test]
+        public void ResetForTests_ClearsWriteScopeExitedSubscribers()
+        {
+            // The event is static; ResetForTests must drop subscribers so a subscription can never
+            // leak into a later test (and be invoked by ITS scope exits).
+            var exits = new List<string>();
+            SendReceiveWriteLock.WriteScopeExited += exits.Add;
+
+            SendReceiveWriteLock.ResetForTests();
+
+            SendReceiveWriteLock.EnterWrite("projectA").Dispose();
+            Assert.That(
+                exits,
+                Is.Empty,
+                "ResetForTests must unsubscribe WriteScopeExited handlers"
+            );
+        }
+
         // ---- Concurrency stress: the core safety invariant ----
 
         /// <summary>

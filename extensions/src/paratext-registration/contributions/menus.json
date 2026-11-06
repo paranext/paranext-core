@@ -4,10 +4,11 @@
     "groups": {},
     "items": [
       {
-        "label": "%mainMenu_openParatextRegistration%",
-        "localizeNotes": "Application main menu > Help > Paratext Registration Information...",
-        "group": "platform.helpRegistration",
-        "order": 1006,
+        "label": "%mainMenu_openParatextRegistration_2%",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Help > Registration information",
+        "group": "platform.helpMisc",
+        "order": 999999000,
         "command": "paratextRegistration.showParatextRegistration"
       }
     ]

@@ -18,6 +18,8 @@ import papi, { logger } from '@papi/frontend';
 // rule cannot model this Vitest-specific hoisting requirement.
 // eslint-disable-next-line import/first
 import {
+  getPickerDialogSelection,
+  indexDblResourcesByUid,
   matchesDownloaded,
   buildPickerResources,
   fetchDownloadedResources,
@@ -33,43 +35,101 @@ const downloaded = (over: Partial<DownloadedResource> = {}): DownloadedResource 
 });
 
 describe('matchesDownloaded', () => {
+  /** A catalog row for `uid`, reconciled against disk to `projectId`. */
+  const catalogRow = (uid: string, projectId: string): DblResourceData => ({
+    dblEntryUid: uid,
+    displayName: uid,
+    fullName: uid,
+    bestLanguageName: '',
+    type: 'ScriptureResource',
+    size: 0,
+    installed: true,
+    updateAvailable: false,
+    projectId,
+  });
+
   it('matches a ProjectReference by exact project id', () => {
     expect(
-      matchesDownloaded(downloaded({ projectId: 'proj-web' }), {
-        type: 'project',
-        name: 'WEB',
-        id: 'proj-web',
-      }),
+      matchesDownloaded(
+        downloaded({ projectId: 'proj-web' }),
+        { type: 'project', name: 'WEB', id: 'proj-web' },
+        indexDblResourcesByUid([]),
+      ),
     ).toBe(true);
   });
 
-  it('matches a DblResourceReference when the project id starts with the dblEntryUid', () => {
+  it('matches a DblResourceReference whose catalog row names this project', () => {
     expect(
-      matchesDownloaded(downloaded({ projectId: 'abc123def-extra' }), {
-        type: 'dblResource',
-        name: 'X',
-        id: 'abc123def',
-      }),
+      matchesDownloaded(
+        downloaded({ projectId: 'abc123def-extra' }),
+        { type: 'dblResource', name: 'X', id: 'abc123def' },
+        indexDblResourcesByUid([catalogRow('abc123def', 'abc123def-extra')]),
+      ),
     ).toBe(true);
+  });
+
+  // The case the prefix comparison could not see: a resource project's id is unrelated to the DBL
+  // entry it was installed from, so nothing about `9D60FD8F…` suggests `07ff1d5c…`. Listing it as
+  // unmatched put the same resource in the picker twice, under one id.
+  it('matches a DblResourceReference whose project id shares nothing with its uid', () => {
+    expect(
+      matchesDownloaded(
+        downloaded({ projectId: '9D60FD8F4A6E03BE' }),
+        { type: 'dblResource', name: 'TNCV', id: '07ff1d5c6a53cb05' },
+        indexDblResourcesByUid([catalogRow('07ff1d5c6a53cb05', '9D60FD8F4A6E03BE')]),
+      ),
+    ).toBe(true);
+  });
+
+  // Uid casing differs by source — the C# catalog whitelist stores them upper-case, the commentary
+  // whitelist lower-case — so the lookup cannot be an exact comparison.
+  it('matches a DblResourceReference whose uid casing differs from the catalog row', () => {
+    expect(
+      matchesDownloaded(
+        downloaded({ projectId: '9D60FD8F4A6E03BE' }),
+        { type: 'dblResource', name: 'TNCV', id: '07FF1D5C6A53CB05' },
+        indexDblResourcesByUid([catalogRow('07ff1d5c6a53cb05', '9D60FD8F4A6E03BE')]),
+      ),
+    ).toBe(true);
+  });
+
+  it('matches when the catalog row carries the upper-cased uid and the reference does not', () => {
+    expect(
+      matchesDownloaded(
+        downloaded({ projectId: '9D60FD8F4A6E03BE' }),
+        { type: 'dblResource', name: 'TNCV', id: '07ff1d5c6a53cb05' },
+        indexDblResourcesByUid([catalogRow('07FF1D5C6A53CB05', '9D60FD8F4A6E03BE')]),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not match a DblResourceReference with no catalog row', () => {
+    expect(
+      matchesDownloaded(
+        downloaded({ projectId: 'abc123def-extra' }),
+        { type: 'dblResource', name: 'X', id: 'abc123def' },
+        indexDblResourcesByUid([]),
+      ),
+    ).toBe(false);
   });
 
   it('does not match unrelated ids', () => {
     expect(
-      matchesDownloaded(downloaded({ projectId: 'proj-web' }), {
-        type: 'project',
-        name: 'KJN',
-        id: 'proj-kjn',
-      }),
+      matchesDownloaded(
+        downloaded({ projectId: 'proj-web' }),
+        { type: 'project', name: 'KJN', id: 'proj-kjn' },
+        indexDblResourcesByUid([]),
+      ),
     ).toBe(false);
   });
 
   it('does not match any project when the DblResourceReference id is empty', () => {
     expect(
-      matchesDownloaded(downloaded({ projectId: 'proj-web' }), {
-        type: 'dblResource',
-        name: 'X',
-        id: '',
-      }),
+      matchesDownloaded(
+        downloaded({ projectId: 'proj-web' }),
+        { type: 'dblResource', name: 'X', id: '' },
+        indexDblResourcesByUid([]),
+      ),
     ).toBe(false);
   });
 });
@@ -98,6 +158,36 @@ describe('buildPickerResources', () => {
     updateAvailable: false,
     projectId: 'proj-web',
   };
+
+  // The two halves of this function resolve a uid independently. When they disagreed on casing the
+  // resource vanished outright: dropped from `referenced` for want of an exact match, and filtered
+  // out of `extras` because the case-insensitive lookup there did match.
+  it('keeps a DblResourceReference whose uid casing differs from its catalog row', () => {
+    const referenceWithUpperUid: EffectiveResourceReference[] = [
+      { type: 'dblResource', name: 'TNCV', id: '07FF1D5C6A53CB05', source: 'admin' },
+    ];
+    const catalogRowWithLowerUid: DblResourceData = {
+      ...webDblResource,
+      dblEntryUid: '07ff1d5c6a53cb05',
+      displayName: 'TNCV',
+      projectId: '9D60FD8F4A6E03BE',
+    };
+    const downloadedProject = {
+      projectId: '9D60FD8F4A6E03BE',
+      name: 'TNCV',
+      fullName: 'Thai New Contemporary Version',
+      language: 'Thai',
+    };
+
+    const rows = buildPickerResources(
+      referenceWithUpperUid,
+      [downloadedProject],
+      [catalogRowWithLowerUid],
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].projectId).toBe('9D60FD8F4A6E03BE');
+  });
 
   it('maps referenced items and preserves admin lock + source', () => {
     const rows = buildPickerResources(effective, [], [webDblResource]);
@@ -288,13 +378,31 @@ describe('fetchDownloadedResources', () => {
     expect(papi.projectDataProviders.get).not.toHaveBeenCalled();
   });
 
+  it('excludes a read-only project that cannot be opened', async () => {
+    vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'proj-kjn', projectInterfaces: [], pdpFactoryInfo: {}, isEditable: false, name: 'KJN' },
+      {
+        id: 'proj-sba',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        isEditable: false,
+        name: 'SBA',
+        unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+      },
+    ]);
+
+    const result = await fetchDownloadedResources();
+
+    expect(result.map((r) => r.projectId)).toEqual(['proj-kjn']);
+  });
+
   it('returns [] and warns when enumeration throws', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockRejectedValue(new Error('boom'));
     await expect(fetchDownloadedResources()).resolves.toEqual([]);
     expect(vi.mocked(logger.warn)).toHaveBeenCalled();
   });
 
-  it('falls back to project id when name and fullName are absent from metadata', async () => {
+  it('falls back the short name to the project id, and leaves the full name absent', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
       // `as never` is required: mockResolvedValue expects the full ProjectMetadata shape but a
       // minimal stub suffices for this test.
@@ -303,8 +411,89 @@ describe('fetchDownloadedResources', () => {
     ]);
 
     const result = await fetchDownloadedResources();
+    // `fullName` is absent rather than mirrored from the id: claiming a full name the resource does
+    // not have makes every consumer downstream un-claim it.
     expect(result).toEqual([
-      { projectId: 'proj-unnamed', name: 'proj-unnamed', fullName: 'proj-unnamed', language: '' },
+      { projectId: 'proj-unnamed', name: 'proj-unnamed', fullName: undefined, language: '' },
     ]);
+  });
+});
+
+describe('getPickerDialogSelection', () => {
+  const row = (dblEntryUid: string, projectId: string): DblResourceData => ({
+    dblEntryUid,
+    displayName: dblEntryUid,
+    fullName: dblEntryUid,
+    bestLanguageName: 'English',
+    type: 'ScriptureResource',
+    size: 1,
+    installed: true,
+    updateAvailable: false,
+    projectId,
+  });
+  const WEB = row('uid-web', 'proj-web');
+  const KJV = row('uid-kjv', 'proj-kjv');
+  // A locally-installed non-DBL resource: its project id stands in for a uid.
+  const LOCAL = row('VULGP83', 'VULGP83');
+  const CATALOG = [WEB, KJV, LOCAL];
+  const dbl = (id: string) => ({ type: 'dblResource' as const, name: id, id });
+  const project = (id: string) => ({ type: 'project' as const, name: id, id });
+
+  it('spells a DBL reference the way the catalog spells its entry', () => {
+    expect(getPickerDialogSelection([], [dbl('UID-WEB')], CATALOG).selectedResourceIds).toEqual([
+      'uid-web',
+    ]);
+  });
+
+  it('names a DBL resource referenced by its project by its DBL entry', () => {
+    expect(
+      getPickerDialogSelection([], [project('proj-web')], CATALOG).selectedResourceIds,
+    ).toEqual(['uid-web']);
+  });
+
+  it('names a locally-installed non-DBL resource by its project id', () => {
+    expect(getPickerDialogSelection([], [project('VULGP83')], CATALOG).selectedResourceIds).toEqual(
+      ['VULGP83'],
+    );
+  });
+
+  // `uid-web` is a prefix of `uid-web-2`'s project, so it also "covers" it; the row that IS that
+  // project must win.
+  it('resolves a project by the row that is that project before one that only covers it', () => {
+    const catalog = [WEB, row('uid-web-2', 'uid-web-2-proj')];
+    expect(
+      getPickerDialogSelection([], [project('uid-web-2-proj')], catalog).selectedResourceIds,
+    ).toEqual(['uid-web-2']);
+  });
+
+  it('keeps the reference id when the catalog has no row for it', () => {
+    expect(
+      getPickerDialogSelection([], [dbl('uid-missing'), project('some-project')], CATALOG)
+        .selectedResourceIds,
+    ).toEqual(['uid-missing', 'some-project']);
+  });
+
+  it('skips references that name no DBL entry or project', () => {
+    expect(
+      getPickerDialogSelection([{ type: 'xmlResource', name: 'X' }], [], CATALOG)
+        .selectedResourceIds,
+    ).toEqual([]);
+  });
+
+  it('lists the locked ids first, and locks a resource that is in both lists', () => {
+    const selection = getPickerDialogSelection(
+      [dbl('uid-web')],
+      [dbl('uid-kjv'), dbl('uid-web')],
+      CATALOG,
+    );
+    expect(selection.selectedResourceIds).toEqual(['uid-web', 'uid-kjv']);
+    expect(selection.teamResourceIds).toEqual(['uid-web']);
+    expect([...selection.listIdsByRemovableId.keys()]).toEqual(['uid-kjv']);
+  });
+
+  it('maps a removable id to every id the user list stores it under', () => {
+    const selection = getPickerDialogSelection([], [dbl('UID-WEB'), project('proj-web')], CATALOG);
+    expect(selection.selectedResourceIds).toEqual(['uid-web']);
+    expect(selection.listIdsByRemovableId.get('uid-web')).toEqual(['UID-WEB', 'proj-web']);
   });
 });

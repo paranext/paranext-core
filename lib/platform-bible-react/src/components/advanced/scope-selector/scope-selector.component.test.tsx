@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { ScopeSelector } from '@/components/advanced/scope-selector/scope-selector.component';
@@ -55,6 +55,9 @@ interface RenderArgs {
   rangeStart?: SerializedVerseRef;
   rangeEnd?: SerializedVerseRef;
   selectedBookIds?: string[];
+  disabledScopeExplanations?: Partial<Record<ScopeWithRange, string>>;
+  /** Renders the dropdown's "Navigate" footer row, which hosts a nested book chapter picker */
+  withNavigateRow?: boolean;
 }
 
 function renderDropdown(args: RenderArgs = {}) {
@@ -79,6 +82,9 @@ function renderDropdown(args: RenderArgs = {}) {
       rangeEnd={args.rangeEnd ?? REF_GEN_5_30}
       onRangeStartChange={onRangeStartChange}
       onRangeEndChange={onRangeEndChange}
+      disabledScopeExplanations={args.disabledScopeExplanations}
+      currentScrRef={args.withNavigateRow ? REF_GEN_1_1 : undefined}
+      onCurrentScrRefChange={args.withNavigateRow ? vi.fn() : undefined}
       hideLabel
     />,
   );
@@ -111,6 +117,7 @@ function renderRadio(args: RenderArgs = {}) {
       rangeEnd={args.rangeEnd ?? REF_GEN_5_30}
       onRangeStartChange={onRangeStartChange}
       onRangeEndChange={onRangeEndChange}
+      disabledScopeExplanations={args.disabledScopeExplanations}
       hideLabel
     />,
   );
@@ -294,5 +301,156 @@ describe('ScopeSelector — range mode', () => {
     await user.click(closeBtn);
     expect(onScopeChange).not.toHaveBeenCalled();
     expect(onSelectedBookIdsChange).not.toHaveBeenCalled();
+  });
+});
+
+// Disabling an option is only an affordance — a consumer still has to reject the operation itself,
+// because a scope already selected when the state changed never passes through a disabled control.
+describe('ScopeSelector — disabled scope explanations', () => {
+  const BOOK_UNAVAILABLE = 'Current book cannot be searched right now';
+
+  /** The option control a scope's label points at, via the label's `for`. */
+  function getScopeOption(labelPattern: RegExp): HTMLElement {
+    const optionId = screen.getByText(labelPattern).getAttribute('for');
+    if (!optionId) throw new Error(`Scope label ${labelPattern} has no 'for'`);
+    const option = document.getElementById(optionId);
+    if (!option) throw new Error(`Scope label ${labelPattern} points at missing id '${optionId}'`);
+    return option;
+  }
+
+  it('radio variant: disables only the scopes that have an explanation', () => {
+    renderRadio({ scope: 'chapter', disabledScopeExplanations: { book: BOOK_UNAVAILABLE } });
+
+    expect(getScopeOption(/scope_selector_book/i)).toBeDisabled();
+    expect(getScopeOption(/scope_selector_chapter/i)).toBeEnabled();
+  });
+
+  it('radio variant: surfaces the explanation to assistive technology on the disabled option', () => {
+    renderRadio({ scope: 'chapter', disabledScopeExplanations: { book: BOOK_UNAVAILABLE } });
+
+    // Rendered inline and pointed at by the radio's `aria-describedby`, rather than through a
+    // focusable tooltip wrapper: a disabled radio is out of the tab order, and a tabbable wrapper
+    // around it would put a non-owned role inside the radiogroup.
+    const explanation = screen.getByText(BOOK_UNAVAILABLE);
+    expect(getScopeOption(/scope_selector_book/i)).toHaveAttribute(
+      'aria-describedby',
+      explanation.id,
+    );
+  });
+
+  it('radio variant: does not put a tabbable wrapper inside the radiogroup', () => {
+    renderRadio({ scope: 'chapter', disabledScopeExplanations: { book: BOOK_UNAVAILABLE } });
+
+    // `radiogroup` owns `radio` children and runs a roving focus with exactly one tab stop; an
+    // intervening focusable group breaks both.
+    const radioGroup = screen.getByRole('radiogroup');
+    expect(radioGroup.querySelector('[role="group"]')).toBeNull();
+    expect(radioGroup.querySelector('[tabindex="0"]')).toBeNull();
+  });
+
+  it('radio variant: does not render an explanation on an enabled scope', () => {
+    renderRadio({ scope: 'chapter', disabledScopeExplanations: { book: BOOK_UNAVAILABLE } });
+
+    expect(getScopeOption(/scope_selector_chapter/i)).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('radio variant: leaves every scope enabled when no explanations are supplied', () => {
+    renderRadio({ scope: 'chapter' });
+
+    expect(getScopeOption(/scope_selector_book/i)).toBeEnabled();
+    expect(getScopeOption(/scope_selector_chapter/i)).toBeEnabled();
+  });
+
+  it('dropdown variant: disables the explained option and refuses to select it', async () => {
+    const { user, onScopeChange, getByRole } = renderDropdown({
+      scope: 'chapter',
+      disabledScopeExplanations: { book: BOOK_UNAVAILABLE },
+    });
+    await user.click(getByRole('combobox'));
+
+    // The dropdown variant labels these options with the `current_*` keys, not the radio variant's.
+    const bookItem = await screen.findByText(/scope_selector_current_book/i);
+    expect(bookItem.closest('[role="menuitem"]')).toHaveAttribute('aria-disabled', 'true');
+
+    await user.click(bookItem);
+
+    expect(onScopeChange).not.toHaveBeenCalled();
+  });
+
+  // Radix drops a disabled item out of the menu's roving focus, so the explanation has to be
+  // rendered rather than revealed on hover or focus — a `title` or a tooltip here reaches nobody
+  // navigating the menu by keyboard.
+  it('dropdown variant: renders the explanation inline in the disabled option', async () => {
+    const { user, getByRole } = renderDropdown({
+      scope: 'chapter',
+      disabledScopeExplanations: { book: BOOK_UNAVAILABLE },
+    });
+    await user.click(getByRole('combobox'));
+
+    const bookItem = (await screen.findByText(/scope_selector_current_book/i)).closest(
+      '[role="menuitem"]',
+    );
+    expect(bookItem).toHaveTextContent(BOOK_UNAVAILABLE);
+  });
+
+  it('dropdown variant: adds no explanation text to options that are still available', async () => {
+    const { user, getByRole } = renderDropdown({
+      scope: 'chapter',
+      disabledScopeExplanations: { book: BOOK_UNAVAILABLE },
+    });
+    await user.click(getByRole('combobox'));
+
+    const chapterItem = (await screen.findByText(/scope_selector_current_chapter/i)).closest(
+      '[role="menuitem"]',
+    );
+    expect(chapterItem).not.toHaveTextContent(BOOK_UNAVAILABLE);
+  });
+});
+
+describe('ScopeSelector — focus after the nested book chapter picker closes', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // Remove the instance override so later tests read the prototype getter again
+    Reflect.deleteProperty(document, 'activeElement');
+    document.querySelectorAll('iframe').forEach((frame) => frame.remove());
+  });
+
+  async function openNestedPicker() {
+    const { user, getByRole } = renderDropdown({ withNavigateRow: true });
+    await user.click(getByRole('combobox'));
+    const trigger = await screen.findByLabelText('book-chapter-trigger');
+    const menuItem = trigger.closest('[role="menuitem"]');
+    if (!(menuItem instanceof HTMLElement)) throw new Error('expected the navigate menu item');
+    await user.click(trigger);
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
+    return { user, trigger, menuItem };
+  }
+
+  it('closing the picker with Escape in a focused document focuses the navigate menu item', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const { user, trigger, menuItem } = await openNestedPicker();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    await waitFor(() => expect(menuItem).toHaveFocus());
+  });
+
+  it('closing the picker while an iframe is the active element leaves focus on the iframe', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const { trigger, menuItem } = await openNestedPicker();
+    // The overridden `activeElement` below hides any real focus move, so watch the call itself
+    const focusSpy = vi.spyOn(menuItem, 'focus');
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    // Report the frame as focused without moving real focus: a real focus move also drives
+    // Radix's focus-outside dismissal, which a cross-origin frame never triggers.
+    Object.defineProperty(document, 'activeElement', { configurable: true, get: () => iframe });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    // Radix runs its close-auto-focus handler from a timer after the unmount
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    expect(document.activeElement).toBe(iframe);
+    expect(focusSpy).not.toHaveBeenCalled();
   });
 });

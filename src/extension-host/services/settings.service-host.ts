@@ -113,18 +113,18 @@ class SettingDataProviderEngine
   implements IDataProviderEngine<SettingDataTypes>
 {
   private settingsData: Partial<AllSettingsData>;
-  private unsubscribeOnDidRebuildSettings: Unsubscriber | undefined;
+  #unsubscribeOnDidRebuildSettings: Unsubscriber | undefined;
 
   constructor(settingsData: Partial<AllSettingsData>) {
     super();
     this.settingsData = deserialize(serialize(settingsData));
 
-    this.unsubscribeOnDidRebuildSettings = settingsDocumentCombiner.onDidRebuild(
+    this.#unsubscribeOnDidRebuildSettings = settingsDocumentCombiner.onDidRebuild(
       debounce(() => {
         // Make sure we haven't been disposed since being called and the debounce ended, then
         // announce that settings have updated so anyone who has the default value gets an updated
         // default
-        if (this.unsubscribeOnDidRebuildSettings) this.notifyUpdate('');
+        if (this.#unsubscribeOnDidRebuildSettings) this.notifyUpdate('');
       }, 100),
     );
   }
@@ -211,9 +211,9 @@ class SettingDataProviderEngine
   }
 
   async dispose(): Promise<boolean> {
-    if (this.unsubscribeOnDidRebuildSettings) {
-      const success = this.unsubscribeOnDidRebuildSettings();
-      this.unsubscribeOnDidRebuildSettings = undefined;
+    if (this.#unsubscribeOnDidRebuildSettings) {
+      const success = this.#unsubscribeOnDidRebuildSettings();
+      this.#unsubscribeOnDidRebuildSettings = undefined;
       return success;
     }
     return true;

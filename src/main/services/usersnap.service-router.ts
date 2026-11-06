@@ -58,14 +58,16 @@ type UsersnapCommandName =
 const USERSNAP_COMMAND_DOCS: Record<UsersnapCommandName, SingleMethodDocumentation> = {
   'platform.usersnapSubmitIdea': {
     method: {
-      summary: 'Open Usersnap feedback form to submit an idea',
+      summary:
+        'Open Usersnap feedback form to submit an idea. In a build without Usersnap keys, notifies the user that feedback forms are not available instead',
       params: [],
       result: { name: 'return value', schema: { type: 'null' } },
     },
   },
   'platform.usersnapReportIssue': {
     method: {
-      summary: 'Open Usersnap feedback form to report an issue',
+      summary:
+        'Open Usersnap feedback form to report an issue. In a build without Usersnap keys, notifies the user that feedback forms are not available instead',
       params: [],
       result: { name: 'return value', schema: { type: 'null' } },
     },

@@ -1,9 +1,22 @@
+const fs = require('fs');
 const path = require('path');
 
 const rootPath = path.join(__dirname, '../..');
 const rootNodeModulesPath = path.join(rootPath, 'node_modules');
 
 const dllPath = path.join(__dirname, '../dll');
+
+// The dev webpack caches list these as `buildDependencies`, because webpack's default
+// `snapshot.managedPaths` validates everything under `node_modules` by package `name@version`
+// rather than content — so a patch-package edit would otherwise restore the patched module with no
+// rebuild. Filtered to `.patch` on purpose: every entry becomes a build dependency, and webpack
+// responds to one it cannot resolve by writing no pack at all, so a stray subdirectory here would
+// silently switch dev caching off.
+const patchesPath = path.join(rootPath, 'patches');
+const patchFiles = fs
+  .readdirSync(patchesPath)
+  .filter((file: string) => file.endsWith('.patch'))
+  .map((file: string) => path.join(patchesPath, file));
 
 const srcPath = path.join(rootPath, 'src');
 const srcMainPath = path.join(srcPath, 'main');
@@ -50,5 +63,7 @@ const webpackPaths = {
   extensionsPath,
   extensionsDistPath,
   extensionsLibPath,
+  patchesPath,
+  patchFiles,
 };
 export default webpackPaths;

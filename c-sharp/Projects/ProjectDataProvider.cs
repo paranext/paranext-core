@@ -41,12 +41,12 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     }
 
     /// <summary>
-    /// Get an extension's data in a project identified by <param name="scope"></param>.
+    /// Get an extension's data in a project identified by <paramref name="scope"/>.
     /// </summary>
     public abstract object? GetExtensionData(ProjectDataScope scope);
 
     /// <summary>
-    /// Set an extension's data in a project identified by <param name="scope"></param>.
+    /// Set an extension's data in a project identified by <paramref name="scope"/>.
     /// </summary>
     public abstract bool SetExtensionData(ProjectDataScope scope, string data);
 }

@@ -24,7 +24,7 @@ function dispatch(type: string, ev: unknown) {
   listeners.get(type)?.(ev);
 }
 
-describe('RpcClient reconnect gaps (deferred — see TODO(PT-4435) in rpc-client.ts)', () => {
+describe('RpcClient reconnect gaps (owned by PT-4495; see TODO(PT-4495) in rpc-client.ts)', () => {
   beforeEach(() => {
     listeners.clear();
     fakeSocket.readyState = 1;
@@ -37,10 +37,10 @@ describe('RpcClient reconnect gaps (deferred — see TODO(PT-4435) in rpc-client
     vi.useRealTimers();
   });
 
-  // TODO(PT-4435): Pins a premature `Connected` status on reconnect — `connectionComplete` is a
+  // TODO(PT-4495): Pins a premature `Connected` status on reconnect — `connectionComplete` is a
   // single-shot `AsyncVariable` frozen by the first connect, so a later attempt resolves instantly.
   // `test.fails` inverts the result, so this case turns red the moment the defect is fixed; when
-  // PT-4435 lands, drop the `.fails` rather than deleting the case.
+  // reconnect lands, drop the `.fails` rather than deleting the case.
   test.fails(
     'a reconnect does not report Connected while the socket is still CONNECTING',
     async () => {
@@ -60,9 +60,9 @@ describe('RpcClient reconnect gaps (deferred — see TODO(PT-4435) in rpc-client
 
   // Field-confirmed: an extension host that loses its single startup connect attempt cannot
   // recover in place, which is why that failure needs an app restart to clear.
-  // TODO(PT-4435): Pins a first-connect timeout being permanently fatal — the settled
+  // TODO(PT-4495): Pins a first-connect timeout being permanently fatal — the settled
   // `connectionComplete` rejection cannot be retried. `test.fails` inverts the result, so this case
-  // turns red once the defect is fixed; when PT-4435 lands, drop the `.fails` rather than deleting
+  // turns red once the defect is fixed; when reconnect lands, drop the `.fails` rather than deleting
   // the case.
   test.fails('a connect after a timed-out first attempt is not permanently fatal', async () => {
     vi.useFakeTimers();
@@ -80,9 +80,9 @@ describe('RpcClient reconnect gaps (deferred — see TODO(PT-4435) in rpc-client
     expect(second).toBe(true);
   });
 
-  // TODO(PT-4435): Pins `applyMiddleware` stacking once per `connect()` call, duplicating event
+  // TODO(PT-4495): Pins `applyMiddleware` stacking once per `connect()` call, duplicating event
   // delivery after a reconnect. `test.fails` inverts the result, so this case turns red once the
-  // defect is fixed; when PT-4435 lands, drop the `.fails` rather than deleting the case.
+  // defect is fixed; when reconnect lands, drop the `.fails` rather than deleting the case.
   test.fails('reconnecting does not stack local event middleware', async () => {
     const handler = vi.fn();
     const client = new RpcClient('renderer-1');

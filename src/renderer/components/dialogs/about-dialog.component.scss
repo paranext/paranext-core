@@ -58,6 +58,11 @@
   overflow-wrap: anywhere; // Let long version numbers wrap
 }
 
+.about-license-error {
+  color: var(--destructive); // Only rendered when the Terms of Service could not be opened
+  font-size: 0.875em;
+}
+
 .about-panel .test-panel {
   color: white;
 }

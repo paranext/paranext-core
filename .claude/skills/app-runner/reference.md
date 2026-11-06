@@ -78,7 +78,7 @@ Starts the .NET data provider with `dotnet watch`. Use when:
 | `PORT` | 1212 | Webpack dev server port |
 | `MAIN_ARGS` | - | Extra args for Electron main |
 | `IN_VSCODE` | - | Set when debugging from VS Code |
-| `DEV_NOISY` | false | Enable verbose dev logging |
+| `DEV_NOISY` | false | Load the test extensions (helloRock3 etc.) and their default layout — not logging |
 | `DEBUG_PROD` | false | Debug packaged builds |
 
 ## Debugging with VS Code

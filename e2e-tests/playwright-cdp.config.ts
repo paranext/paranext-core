@@ -14,24 +14,48 @@ const config = defineConfig({
   // both here — run the isolated suite (which includes the find tests under isolated/find) via
   // `npm run test:e2e:isolated`.
   // _example/ contains reference templates, not runnable tests.
-  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**'],
+  // manage-books is excluded because a bare `npm run test:e2e-cdp` would otherwise run it against
+  // whatever app is live, and all four of its specs can mutate real projects with no restore.
+  // Cited by symbol rather than line, per .claude/rules/docs-durability.md:
+  // - manage-books-journey.spec.ts bulk-selects every visible book and clicks "Replace entire
+  //   books" in its "Journey 4: Copy from source project" test, against the rotation pool in
+  //   `switchToProjectMissingBook` — zzz7, wgPIDGIN, zzz6, MP1, RH2, ROT.
+  // - manage-books-functional-WP-001.spec.ts deletes GEN in its "should fire onDeleteBooks when
+  //   destructive-confirm Delete is accepted" test.
+  // - manage-books-functional-WP-002.spec.ts creates books through `manageBooks.createBooks`,
+  //   writing USFM stubs that survive a restart; see `ROTATION_FIXTURES_REQUIRING_MISSING_BOOK`
+  //   for the manual cleanup it requires.
+  // - manage-books-commands.spec.ts is safe only by environment. Its `BOGUS_PROJECT_ID` half
+  //   cannot mutate, but `copyCustomVersification` takes whatever real project is not the source as
+  //   its destination, `createBooks` runs against real ESVUS16 relying on the book already being
+  //   present, and `copyBooks` relies on the user not being an administrator on the destination.
+  // Those projects exist on developer machines under ~/.platform.bible/projects, so this is data
+  // loss, not test noise.
+  // Re-enable per-spec once the suite owns a throwaway project root (isolatedProjectRoot), the way
+  // find.fixture does.
+  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**', '**/manage-books/**'],
   fullyParallel: false,
   workers: 1,
-  reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
+  reporter: [
+    // FIRST on purpose. Fails the run when a test is reported skipped that nobody asked to skip —
+    // i.e. it never ran. The multiplexer applies a reporter's status override only after its
+    // `onEnd` returns, so listing this after `html`/`list` would let them write a green report for
+    // a run this one then fails. See the reporter for why that distinction matters.
+    ['./reporters/no-silent-skips.reporter.ts'],
+    ['html', { outputFolder: 'playwright-report' }],
+    ['list'],
+  ],
   timeout: 120_000,
   expect: { timeout: 10_000 },
   use: {
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    // NOTE: a `viewport: { width: 1920, height: 1080 }` setting was previously here. Playwright's
-    // `use.viewport` is applied to pages CREATED by the test framework inside a browser context.
-    // For pages obtained via `connectOverCDP` (already-running Electron renderer), the config
-    // viewport is NOT retroactively applied — Playwright never gets to call `setViewportSize`
-    // during page creation because the page already exists. Viewport enforcement therefore happens
-    // exclusively in `cdp.fixture.ts` via an explicit `setViewportSize` + an `evaluate()`
-    // verification that reads the renderer's actual `window.innerWidth` / `innerHeight`. See
-    // `cdp.fixture.ts` module docblock for the full enforcement chain.
+    // No `viewport` setting here. Playwright's `use.viewport` applies to pages it CREATES inside a
+    // browser context; a page obtained through `connectOverCDP` already exists, so it is never
+    // applied. The fixture does not call `setViewportSize` either; window size is ASSERTED rather
+    // than applied, against the size the spec declared with `test.use({ requiredWindowSize })`, and
+    // the app must be started at that size. See `assertDeclaredWindowSize` in `fixtures/helpers.ts`.
   },
   outputDir: './test-results',
   // NO globalSetup/globalTeardown — app is already running

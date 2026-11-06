@@ -2,10 +2,11 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useIsFocusedWindow } from '@renderer/hooks/use-is-focused-window.hook';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
-import { PlatformTabTitle } from './platform-tab-title.component';
+import { __resetTabMenuCacheForTesting, PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
 
@@ -19,13 +20,34 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%tab_aria_tab%': 'tab',
-      '%tab_contextMenu_floatTab%': 'Float Tab',
+      '%window_label_empty%': 'Empty window',
     },
   ]),
   useData: vi.fn(() => ({
     Focus: () => [mockFocusSubject, vi.fn()],
   })),
   useDataProvider: vi.fn(() => undefined),
+}));
+
+vi.mock('@shared/services/menu-data.service', () => ({
+  menuDataService: {
+    dataProviderName: 'platform.menuDataServiceDataProvider',
+    // Each tab reads its contributed menu once at mount rather than subscribing to it
+    getWebViewMenu: vi.fn(async () => ({
+      includeDefaults: true,
+      tabMenu: {
+        groups: { 'platform.tabWindow': { order: 100, isExtensible: true } },
+        items: [
+          {
+            label: 'Float Tab',
+            group: 'platform.tabWindow',
+            order: 100,
+            command: 'platform.floatTab',
+          },
+        ],
+      },
+    })),
+  },
 }));
 
 vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook', () => ({
@@ -36,6 +58,12 @@ vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
   useLastFocusedTabId: vi.fn(() => undefined),
 }));
 
+// Default to focused so the existing window-focus tests (written before this window-focus gating
+// existed) keep exercising the effect; the gating tests below override this to false.
+vi.mock('@renderer/hooks/use-is-focused-window.hook', () => ({
+  useIsFocusedWindow: vi.fn(() => true),
+}));
+
 // Mock heavy transitive deps that run side-effects at module init in jsdom.
 vi.mock('../../../shared/services/logger.service');
 vi.mock('@renderer/services/theme.service', () => ({
@@ -43,15 +71,18 @@ vi.mock('@renderer/services/theme.service', () => ({
   localThemeService: {},
 }));
 
-// Default to power mode so the existing tint tests exercise the tint; the Simple-mode suppression
-// test overrides this to false.
-vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
-  useIsPowerMode: vi.fn(() => true),
+// Default to a settled power mode so the existing tint tests exercise the tint, and Simple-mode
+// tests see their menu decision resolve immediately; individual tests override this to exercise
+// Simple mode.
+vi.mock('@renderer/hooks/use-interface-mode.hook', () => ({
+  useInterfaceMode: vi.fn(() => ['power', undefined, true]),
 }));
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
+  // Two tabs open, so a tab is never the only one in its window unless a test says otherwise
+  getOpenTabCountSync: vi.fn(() => 2),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -105,6 +136,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  __resetTabMenuCacheForTesting();
 });
 
 /**
@@ -132,6 +164,11 @@ const cssClassTabHeaderLastSelected = 'platform-dock-tab-last-selected';
  */
 const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 
+/** CSS class applied to the active tab header while it is this window's focused tab */
+const cssClassTabHeaderWindowFocus = 'platform-dock-tab-window-focus';
+/** CSS class applied to the active tab content pane while it is this window's focused tab */
+const cssClassTabContentWindowFocus = 'platform-dock-tabpane-window-focus';
+
 /**
  * The tab title mounted inside a stand-in for rc-dock's DOM structure: a `.dock-panel` ancestor
  * containing `.dock-nav-wrap` > `.dock-nav-list` > the active tab header (where `PlatformTabTitle`
@@ -139,7 +176,7 @@ const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
  * tab content pane (mirroring the last-selected-tint effect's walk: header → `.dock-panel` →
  * `.dock-tabpane-active`). Factored out (not just called from `renderTabTitle`) so a test can also
  * pass it to `rerender` to re-render the identical tree after changing a mock, e.g.
- * `useIsPowerMode`.
+ * `useInterfaceMode`.
  */
 function tabTitleTree(id: string, tooltip?: string) {
   return (
@@ -193,12 +230,12 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     cleanup();
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue(undefined);
     vi.mocked(useLastFocusedTabId).mockReturnValue(undefined);
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     mockFocusSubject = undefined;
   });
 
   it('does not add the last-selected class in Simple mode, even when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (the tint is Power-only)', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-1');
     mockFocusSubject = undefined;
@@ -213,12 +250,14 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (undefined focus subject)', () => {
+  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (undefined focus subject)', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-1');
     mockFocusSubject = undefined;
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).toHaveClass(cssClassTabHeaderLastSelected);
     expect(container.querySelector('.dock-tabpane-active')).toHaveClass(
@@ -226,12 +265,14 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (focusType "other")', () => {
+  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (focusType "other")', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'other' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).toHaveClass(cssClassTabHeaderLastSelected);
     expect(container.querySelector('.dock-tabpane-active')).toHaveClass(
@@ -239,7 +280,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('does not add the last-selected class when the user focused a different (e.g. non-navigable) tab after this one, even though this tab is still the navigation target', () => {
+  it('does not add the last-selected class when the user focused a different (e.g. non-navigable) tab after this one, even though this tab is still the navigation target', async () => {
     // Reproduces: click scripture-navigable web view 1, click non-navigable web view 2 (tracker
     // retains web view 1), click the top toolbar (focus outside all tabs). Web view 1 still drives
     // BCV navigation but must not be tinted because it was not the tab the user was last in.
@@ -248,6 +289,8 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     mockFocusSubject = { focusType: 'other' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -257,11 +300,13 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('removes the last-selected class from the header and content pane when this tab becomes focused', () => {
+  it('removes the last-selected class from the header and content pane when this tab becomes focused', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'webView', id: 'web-view-1' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -271,11 +316,13 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('removes the last-selected class from the header and content pane when a DIFFERENT tab is focused (PT9 parity: no dual highlight)', () => {
+  it('removes the last-selected class from the header and content pane when a DIFFERENT tab is focused (PT9 parity: no dual highlight)', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'tab', tabType: 'webView', id: 'some-other-tab' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -285,11 +332,13 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('removes the last-selected class from the header and content pane when a DIFFERENT web view is focused (PT9 parity: no dual highlight)', () => {
+  it('removes the last-selected class from the header and content pane when a DIFFERENT web view is focused (PT9 parity: no dual highlight)', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'webView', id: 'some-other-web-view' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -299,11 +348,13 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('does not add the last-selected class to the header or content pane when this tab is not the last-selected web view', () => {
+  it('does not add the last-selected class to the header or content pane when this tab is not the last-selected web view', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('some-other-web-view');
     mockFocusSubject = undefined;
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -313,7 +364,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('does not tint a sibling tab header or pane when the last-selected tab is not the front tab in its panel', () => {
+  it('does not tint a sibling tab header or pane when the last-selected tab is not the front tab in its panel', async () => {
     // The last-selected web view's tab is NOT the active tab in its panel: a sibling tab (e.g.
     // Settings) is active instead, so the sibling's header and pane carry
     // .dock-tab-active/.dock-tabpane-active and this tab's header does not
@@ -329,6 +380,8 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
         <div className="dock-tabpane-active" />
       </div>,
     );
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -339,21 +392,77 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
   });
 });
 
+describe('PlatformTabTitle window-focus highlighting', () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(useIsFocusedWindow).mockReturnValue(true);
+    mockFocusSubject = undefined;
+  });
+
+  it('adds the window-focus class to the header and content pane when this tab is the focus subject and this window is the focused one', () => {
+    vi.mocked(useIsFocusedWindow).mockReturnValue(true);
+    mockFocusSubject = { focusType: 'tab', id: 'web-view-1' };
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).toHaveClass(cssClassTabHeaderWindowFocus);
+    expect(container.querySelector('.dock-tabpane-active')).toHaveClass(
+      cssClassTabContentWindowFocus,
+    );
+  });
+
+  it('does not add the window-focus class when this tab is the focus subject but this window is not the focused one', () => {
+    // This is the "ring in every window" bug: without this gate, every window with the same focus
+    // subject state would show the ring, not just the one the user is actually in.
+    vi.mocked(useIsFocusedWindow).mockReturnValue(false);
+    mockFocusSubject = { focusType: 'tab', id: 'web-view-1' };
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
+      cssClassTabHeaderWindowFocus,
+    );
+    expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
+      cssClassTabContentWindowFocus,
+    );
+  });
+
+  it('does not add the window-focus class when this window is focused but this tab is not the focus subject', () => {
+    vi.mocked(useIsFocusedWindow).mockReturnValue(true);
+    mockFocusSubject = { focusType: 'tab', id: 'some-other-web-view' };
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
+      cssClassTabHeaderWindowFocus,
+    );
+    expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
+      cssClassTabContentWindowFocus,
+    );
+  });
+});
+
 describe('PlatformTabTitle context-menu gating', () => {
   afterEach(() => {
     cleanup();
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
   });
 
-  it('power mode: wraps the title in a ContextMenu', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+  it('power mode: wraps the title in a ContextMenu', async () => {
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     render(<PlatformTabTitle text="Tab" id="tab-1" />);
+    // The tab reads its contributed menu when it mounts, and renders no menu until that lands
+    await act(async () => {});
     expect(screen.queryByTestId('context-menu')).toBeInTheDocument();
   });
 
-  it('simple mode: does not wrap the title in a ContextMenu', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+  it('simple mode: no tab menu when the contributed menu has no zoom group', async () => {
+    // This fixture's contributed menu holds only `platform.tabWindow`, which Simple mode narrows
+    // away entirely, so the Simple-mode expectation (no menu at all) holds even though both modes
+    // perform the same mount-time read.
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle text="Tab" id="tab-1" />);
+    await act(async () => {});
     expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument();
   });
 });
@@ -361,11 +470,11 @@ describe('PlatformTabTitle context-menu gating', () => {
 describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   afterEach(() => {
     cleanup();
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
   });
 
   it('hides the title text once the tab bar’s real full content no longer fits the available space', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 500);
@@ -376,7 +485,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('keeps the title text visible when the available space exceeds the tab bar’s real full content width', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 900);
     setMeasureCloneWidth(container, 500);
@@ -393,7 +502,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     // loading) — and, since the cache only ever updated while NOT collapsed, a bad value taken
     // right before collapsing could never self-correct, leaving the tab stuck icon-only forever
     // regardless of how wide the column later became (confirmed via CDP up to a 3000px window).
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
 
     setPanelWidth(container, 300);
@@ -409,15 +518,17 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
   });
 
-  it('never observes for resize in Power mode', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+  it('never observes for resize in Power mode', async () => {
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(mockResizeObserve).not.toHaveBeenCalled();
   });
 
   it('recomputes icon-only state when tab content mutates without a panel resize (e.g. a sibling tab’s title resolving from a loading placeholder), via the MutationObserver fallback', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 200);
@@ -440,7 +551,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('reflects the resolved title into aria-label once collapsed to icon-only, so a screen reader can distinguish tabs whose visible title text is hidden', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 500);
@@ -454,7 +565,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('keeps the generic aria-label while the title text is still visible (not icon-only)', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 900);
     setMeasureCloneWidth(container, 500);
@@ -465,7 +576,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('suppresses a tooltip that only repeats the already-visible title once there is room to show the title text', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1', 'Tab title');
     setPanelWidth(container, 900);
     setMeasureCloneWidth(container, 500);
@@ -477,7 +588,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('still shows a tooltip that mirrors the title once collapsed to icon-only, since the title text is hidden there', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1', 'Tab title');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 500);
@@ -489,7 +600,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('shows a tooltip that conveys more than the title even while the title text is already visible', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1', 'Extra detail beyond the title');
     setPanelWidth(container, 900);
     setMeasureCloneWidth(container, 500);
@@ -502,22 +613,109 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     ).toBeInTheDocument();
   });
 
-  it('resets icon-only state on a Simple->Power mode switch at runtime, so a tab that was collapsed in Simple mode does not stay stuck icon-only-styled in Power mode', () => {
+  it('resets icon-only state on a Simple->Power mode switch at runtime, so a tab that was collapsed in Simple mode does not stay stuck icon-only-styled in Power mode', async () => {
     // Regression test for a real bug: the icon-only effect's early return for Power mode never
     // reset `isIconOnly`, and both modes render the tab title through the same code path that
     // applies the icon-only class — so a tab collapsed to icon-only in Simple mode stayed stuck
-    // that way after switching to Power mode at runtime (`useIsPowerMode` is a live subscription,
+    // that way after switching to Power mode at runtime (`useInterfaceMode` is a live subscription,
     // so the effect does re-run on the switch — it just didn't clear the stale state).
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container, rerender } = renderTabTitle('web-view-1');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 500);
     simulateColumnResize();
     expect(container.querySelector('.platform-tab-title')).toHaveClass('icon-only');
 
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     rerender(tabTitleTree('web-view-1'));
+    // The switch to Power mode makes this tab read its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
+  });
+});
+
+describe('PlatformTabTitle header id attribute', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('marks its root with data-tab-header-id, leaving data-tab-id to the tab’s panel', () => {
+    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" />);
+
+    const header = container.querySelector('.platform-tab-title');
+    expect(header).toHaveAttribute('data-tab-header-id', 'tab-1');
+    expect(header).not.toHaveAttribute('data-tab-id');
+  });
+});
+
+describe('PlatformTabTitle icon', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  function renderWithIcon(props: { iconName?: string; iconUrl?: string }) {
+    const { container } = render(
+      <div className="dock-panel">
+        <div className="dock-nav-wrap">
+          <div className="dock-nav-list">
+            <div className="dock-tab-active">
+              <PlatformTabTitle id="icon-tab" text="Tab title" {...props} />
+            </div>
+          </div>
+        </div>
+        <div className="dock-tabpane-active" />
+      </div>,
+    );
+    // The measure clone is an invisible duplicate used for sizing; the visible title is the first
+    return container.querySelector('.platform-tab-title');
+  }
+
+  it('renders the lucide icon when iconName is set', () => {
+    const title = renderWithIcon({ iconName: 'refresh-cw', iconUrl: 'icon.svg' });
+
+    expect(title?.querySelector('svg')).not.toBeNull();
+    // The lucide icon replaces the background-image icon box, so neither the url nor the default
+    // logo paints
+    expect(title?.querySelector('.tab-menu-icon')).toBeNull();
+  });
+
+  it('strokes the lucide icon with currentColor so it follows the text colour', () => {
+    const title = renderWithIcon({ iconName: 'refresh-cw' });
+
+    expect(title?.querySelector('svg')?.getAttribute('stroke')).toBe('currentColor');
+  });
+
+  it('falls back to iconUrl when only iconUrl is set', () => {
+    const title = renderWithIcon({ iconUrl: 'icon.svg' });
+
+    const iconBox = title?.querySelector<HTMLElement>('.tab-menu-icon');
+    expect(iconBox?.style.backgroundImage).toContain('icon.svg');
+    expect(title?.querySelector('svg')).toBeNull();
+  });
+
+  it('shows the default logo when neither is set', () => {
+    const title = renderWithIcon({});
+
+    const iconBox = title?.querySelector<HTMLElement>('.tab-menu-icon');
+    expect(iconBox).not.toBeNull();
+    expect(iconBox?.style.backgroundImage).toBe('');
+    expect(title?.querySelector('svg')).toBeNull();
+  });
+
+  it('falls back to iconUrl when iconName is unknown', () => {
+    const title = renderWithIcon({ iconName: 'not-a-real-icon', iconUrl: 'icon.svg' });
+
+    const iconBox = title?.querySelector<HTMLElement>('.tab-menu-icon');
+    expect(iconBox?.style.backgroundImage).toContain('icon.svg');
+    expect(title?.querySelector('svg')).toBeNull();
+  });
+
+  it('falls back to the default logo when iconName is unknown and there is no iconUrl', () => {
+    const title = renderWithIcon({ iconName: 'not-a-real-icon' });
+
+    const iconBox = title?.querySelector<HTMLElement>('.tab-menu-icon');
+    expect(iconBox).not.toBeNull();
+    expect(iconBox?.style.backgroundImage).toBe('');
   });
 });

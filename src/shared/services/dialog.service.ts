@@ -1,8 +1,8 @@
 import * as networkService from '@shared/services/network.service';
 import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { serializeRequestType } from '@shared/utils/util';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+import { createCachedInitializer } from 'platform-bible-utils';
 
 // networkService.initialize() is already idempotent and retry-safe on its own, so this wrapper adds
 // no retry behavior; it exists only to keep this service structurally uniform with the other shared

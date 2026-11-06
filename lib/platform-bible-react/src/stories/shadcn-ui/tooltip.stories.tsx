@@ -10,6 +10,7 @@ import {
   ClipboardPaste,
   Home,
   Inbox,
+  Info,
   Search,
   Settings,
   X,
@@ -969,6 +970,37 @@ export const TableTextContent: Story = {
       description: {
         story:
           'A tooltip attached to the text content inside table cells — a common pattern for revealing text that is truncated to fit the column.',
+      },
+    },
+  },
+};
+
+export const InfoIconButton: Story = {
+  name: 'Info (i) icon button',
+  render: ({ side, align }) => (
+    <div className="tw:flex tw:items-center tw:gap-2">
+      <Label htmlFor="tooltip-info-api-key">API key</Label>
+      <Input id="tooltip-info-api-key" className="tw:w-64" placeholder="sk-..." />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label="About the API key">
+            <Info />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side={side} align={align}>
+          <p className="tw:max-w-xs">
+            Used to authenticate requests to your organization&apos;s server. Rotate it if you think
+            it has been shared.
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'An info (`Info` from `lucide-react`) icon button that reveals a 1–2-sentence clarification on hover or keyboard focus. The button carries an `aria-label` and a tooltip, as required for every icon button. See the Providing Help guideline for when to use this pattern.',
       },
     },
   },

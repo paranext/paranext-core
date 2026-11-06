@@ -5,6 +5,7 @@ import { defaultScrRef, LanguageStrings } from 'platform-bible-utils';
 import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { BookChapterControlHandle } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
+import { GRID_COLUMNS } from '@/components/advanced/book-chapter-control/book-chapter-control.utils';
 import { useRecentSearches } from '@/components/advanced/recent-searches.component';
 
 type BookChapterControlWrapperProps = {
@@ -83,12 +84,92 @@ async function expectPopoverToBeClosed() {
   if (popoverContent) {
     await waitFor(() => expect(popoverContent).toHaveAttribute('data-state', 'closed'));
   } else {
-    expect(popoverContent).not.toBeInTheDocument();
+    await expect(popoverContent).not.toBeInTheDocument();
   }
 }
 
 function getDropdown() {
   return screen.getByRole('dialog');
+}
+
+/**
+ * Waits for a chapter cell to carry the `data-selected` highlight.
+ *
+ * Asserting on the highlight itself matters because checking only that the popover is still visible
+ * after a keypress would pass even if the arrow keys moved nothing at all.
+ */
+async function expectChapterHighlighted(chapter: string) {
+  await waitFor(async () => {
+    await expect(
+      within(getDropdown()).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter }),
+    ).toHaveAttribute('data-selected', 'true');
+  });
+}
+
+/**
+ * How far (px) a chapter digit's center may sit from the center of the cell that paints its
+ * highlight. Subpixel text metrics move the measured center a fraction of a pixel either way, so
+ * this is not zero; it is far below the shift a laid-out phantom child in `CommandItem` produces.
+ */
+const MAX_DIGIT_CENTER_OFFSET_PX = 1;
+
+/**
+ * Measures a grid cell's own box against the box of the digit rendered inside it.
+ *
+ * The cell is the element that paints the highlight, so a non-zero horizontal offset means the
+ * highlight and the number it belongs to disagree, and the number reads as belonging to the
+ * neighboring chapter. Uses a `Range` because the digit is a bare text node with no element of its
+ * own to measure.
+ *
+ * Walks the cell's whole subtree rather than its direct children, so wrapping the digit — a shadcn
+ * baseline that wraps `CommandItem`'s children, or a `dir`/numeral-shaping span for a non-Latin
+ * locale — keeps being measured instead of throwing "no digit" at a layout change.
+ *
+ * Only meaningful in a real browser: jsdom performs no layout and reports every rect as zero.
+ */
+function measureDigitAgainstCell(cell: HTMLElement) {
+  const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+  let digitNode: Node | undefined;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (node.textContent?.trim()) {
+      digitNode = node;
+      break;
+    }
+  }
+  if (!digitNode) throw new Error(`No digit text node in cell "${cell.textContent}"`);
+
+  const range = document.createRange();
+  range.selectNodeContents(digitNode);
+  const digit = range.getBoundingClientRect();
+  const box = cell.getBoundingClientRect();
+
+  return {
+    digit,
+    box,
+    horizontalOffset: digit.left + digit.width / 2 - (box.left + box.width / 2),
+  };
+}
+
+/**
+ * Asserts the digit sits centered inside the box that highlights it, and reports the measured
+ * offset on failure so a regression says how far off it is rather than only that it is off.
+ *
+ * The chapter and verse grids are both rendered by `NumberedItemGrid`, so measuring the chapter
+ * grid pins the layout both share; verse cells are not separately measured.
+ */
+async function expectDigitAlignedWithCell(cell: HTMLElement, label: string) {
+  const { digit, box, horizontalOffset } = measureDigitAgainstCell(cell);
+  const offBy = `${horizontalOffset.toFixed(1)}px`;
+
+  await expect(
+    Math.abs(horizontalOffset),
+    `chapter ${label}: digit center is ${offBy} from the center of its highlight box`,
+  ).toBeLessThanOrEqual(MAX_DIGIT_CENTER_OFFSET_PX);
+
+  await expect(
+    digit.left >= box.left && digit.right <= box.right,
+    `chapter ${label}: digit falls outside its own highlight box (off center by ${offBy})`,
+  ).toBe(true);
 }
 
 const meta: Meta<typeof BookChapterControl> = {
@@ -432,9 +513,9 @@ This test verifies:
 1. Opens the component and activates the search input
 2. Tests complete reference parsing by typing "John 3:16" and verifying "John 3:16" appears as top match
 3. Confirms selection submits correct reference (JHN 3:16)
-4. Tests partial book name parsing by typing "Roma 8" and verifying "ROM 8:1" appears as top match
+4. Tests partial book name parsing by typing "Roma 8" and verifying "Romans 8:1" appears as top match
 5. Confirms selection submits correct reference (ROM 8:1)
-6. Tests book ID parsing by typing "1 co 13:4" and verifying "1CO 13:4" appears as top match
+6. Tests book ID parsing by typing "1 co 13:4" and verifying "1 Corinthians 13:4" appears as top match
 7. Confirms selection submits correct reference (1CO 13:4)
 8. Validates that all selections properly call handleSubmit with the expected SerializedVerseRef objects
         `,
@@ -645,7 +726,7 @@ export const KeyboardNavigation: Story = {
       verseNum: 1,
     },
   },
-  play: async ({ canvas, userEvent, step }) => {
+  play: async ({ canvas, userEvent, step, args }) => {
     await step('Open component with Matthew reference', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
@@ -664,40 +745,38 @@ export const KeyboardNavigation: Story = {
       await userEvent.click(matthewItem);
     });
 
-    await step('Verify chapter 15 button exists in chapter grid', async () => {
-      const dropdownContent = getDropdown();
-      const chapter15 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
-        name: '15',
-      });
-      await expect(chapter15).toBeInTheDocument();
+    await step('Verify the grid opens with the current chapter highlighted', async () => {
+      await expectChapterHighlighted('15');
     });
 
-    await step('Test right arrow key navigation', async () => {
+    // Matthew has 28 chapters in a 6-column grid, so from 15: right 16, down 22, left 21, up 15.
+    await step('Right arrow moves the highlight to the next chapter', async () => {
       await userEvent.keyboard('{ArrowRight}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('16');
     });
 
-    await step('Test down arrow key navigation', async () => {
+    await step('Down arrow moves the highlight one full row', async () => {
       await userEvent.keyboard('{ArrowDown}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('22');
     });
 
-    await step('Test left arrow key navigation', async () => {
+    await step('Left arrow moves the highlight to the previous chapter', async () => {
       await userEvent.keyboard('{ArrowLeft}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('21');
     });
 
-    await step('Test up arrow key navigation', async () => {
+    await step('Up arrow moves the highlight back one full row', async () => {
       await userEvent.keyboard('{ArrowUp}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('15');
     });
 
-    await step('Test Enter key to select focused chapter', async () => {
+    await step('Enter submits the highlighted chapter', async () => {
       await userEvent.keyboard('{Enter}');
+      await expect(args.handleSubmit).toHaveBeenCalledWith({
+        book: 'MAT',
+        chapterNum: 15,
+        verseNum: 1,
+      });
     });
 
     await step('Verify component closes after Enter key selection', async () => {
@@ -716,13 +795,112 @@ This interactive test demonstrates:
 1. Opening the component with a multi-chapter book (Matthew)
 2. Verifying the book appears in the dropdown
 3. Clicking the book to enter chapter view
-4. Confirming the current chapter button exists in the grid
-5. Testing right arrow key navigation
-6. Testing down arrow key navigation
-7. Testing left arrow key navigation
-8. Testing up arrow key navigation
-9. Using Enter key to select the focused chapter
+4. Confirming the grid opens with the current chapter (15) already highlighted
+5. Right arrow moving the highlight to chapter 16
+6. Down arrow moving the highlight one full row, to chapter 22
+7. Left arrow moving the highlight back to chapter 21
+8. Up arrow moving the highlight one full row back, to chapter 15
+9. Enter submitting the highlighted chapter
 10. Verifying the component closes after keyboard selection
+
+Each arrow step asserts which cell carries the \`data-selected\` highlight, so the grid arithmetic
+is actually exercised rather than only checking that the popover stayed open.
+        `,
+      },
+    },
+  },
+};
+
+export const ChapterHighlightAlignment: Story = {
+  args: {
+    scrRef: {
+      book: 'MAT',
+      chapterNum: 15,
+      verseNum: 1,
+    },
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the chapter grid for Matthew', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+
+      const dropdownContent = getDropdown();
+      await userEvent.click(within(dropdownContent).getByText('Matthew'));
+      await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, { name: '1' });
+    });
+
+    // Matthew's 28 chapters cover every grid condition that can move a digit: first column, last
+    // column, a row wrap, two-digit labels, and the current chapter (15), which renders with the
+    // filled `bg-primary` treatment rather than the default one. The column positions are derived
+    // from `GRID_COLUMNS` so they keep covering what they claim to if the grid is ever rewidened.
+    // The popover is a fixed 280px, so there is no width axis to sweep — what varies here is digit
+    // width and the cell's position in the grid.
+    const SAMPLED_CHAPTERS = [
+      '1', // first column, first row
+      `${GRID_COLUMNS}`, // last column
+      `${GRID_COLUMNS + 1}`, // first column again, one row down
+      '15', // two digits, and the current chapter's filled treatment
+      '28', // two digits, last chapter in the book
+    ];
+
+    // Hover repaints the cell's background; it does not lay the cell out again. So the alignment
+    // hover makes visible is the resting alignment measured here, which is also how the defect
+    // presents: the digit sits outside a box that only becomes visible under the pointer.
+    await step('Every sampled chapter digit is centered in its own highlight box', async () => {
+      const dropdownContent = getDropdown();
+      for (let i = 0; i < SAMPLED_CHAPTERS.length; i++) {
+        const chapter = SAMPLED_CHAPTERS[i];
+        const cell = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter });
+        // Sequential on purpose: awaiting these together would report whichever cell settled first
+        // rather than the first misaligned one, and each message names the chapter it measured.
+        // eslint-disable-next-line no-await-in-loop
+        await expectDigitAlignedWithCell(cell, chapter);
+      }
+    });
+
+    // Keyboard focus is styled differently from pointer hover (a ring rather than a muted
+    // background), so what the two are asserted to agree on is where the digit sits, not how the
+    // cell looks.
+    await step('Keyboard focus lands on a cell whose digit is aligned the same way', async () => {
+      await userEvent.keyboard('{ArrowRight}');
+      await expectChapterHighlighted('16');
+
+      const focusedCell = within(getDropdown()).getByRole(CHAPTER_BUTTON_ROLE, { name: '16' });
+      await expectDigitAlignedWithCell(focusedCell, '16');
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Chapter Highlight Alignment** - Pins the geometry of the chapter grid: each digit's center must
+sit within ${MAX_DIGIT_CENTER_OFFSET_PX}px of the center of the cell that highlights it, and the
+digit must lie inside that cell.
+
+Guards a defect where \`CommandItem\` laid out a trailing element the grid never shows — an
+invisible \`opacity-0\` check icon, 16px wide plus an 8px flex gap — inside a 16px content box.
+\`justify-center\` split the overflow, putting every digit 12px left of its own highlight and
+outside its left edge, so the highlight read as belonging to the neighboring chapter. Hiding that
+child from layout is a single utility class, which is why this needs a test that measures rather
+than one that names a class: the class can be dropped, or a new laid-out child added upstream, with
+nothing else failing.
+
+It measures rather than asserts a class name because the cause was upstream — a shadcn baseline
+re-apply, a script that will run again — so the next regression may arrive by a different route and
+still have to be caught here.
+
+The geometry is measured at rest and under keyboard focus. Hover is not measured separately: it
+repaints the cell's background rather than laying the cell out again, so the alignment hover reveals
+is the resting alignment already asserted here. Keyboard focus is deliberately styled differently
+from pointer hover (a ring versus a muted background), so what the two are asserted to agree on is
+where the digit sits, not how the cell looks.
+
+Only the chapter grid is measured. The verse grid renders through the same \`NumberedItemGrid\`, so
+it shares the layout pinned here rather than being separately asserted.
+
+Runs in Storybook's browser mode. It cannot run under jsdom, which performs no layout and reports
+every rect as zero.
         `,
       },
     },
@@ -768,7 +946,7 @@ export const ComprehensiveInteractionTest: Story = {
     await step('Test first Escape key press in chapter view', async () => {
       await userEvent.keyboard('{Escape}');
       const dropdownContent = getDropdown();
-      expect(dropdownContent).toBeVisible();
+      await expect(dropdownContent).toBeVisible();
     });
 
     await step('Test second Escape key press to close component', async () => {

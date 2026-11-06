@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { parseStartupMarks, formatWaterfall, selectLatestRun } from './startup-waterfall.util';
 
 const SAMPLE = [

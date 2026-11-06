@@ -1,7 +1,7 @@
 /**
  * Service router for the window service. Publishes a data provider under the generic
  * "platform.windowServiceDataProvider" name that forwards to the focused window's shard (e.g.
- * "platform.windowServiceDataProvider-1").
+ * "platform.windowServiceDataProvider-f81d4fae-7dec-11d0-a765-00a0c91e6bf6").
  *
  * Each renderer registers its window service shard under a window-scoped name so several windows
  * can coexist, which would otherwise leave the generic name — the one declared in `papi.d.ts` and
@@ -28,6 +28,7 @@ import {
   dataProviderService,
   getByType as getDataProviderByType,
 } from '@shared/services/data-provider.service';
+import { shouldContentAvoidDocumentFocus } from '@main/window-activation.util';
 import { logger } from '@shared/services/logger.service';
 import {
   FocusSubject,
@@ -43,7 +44,7 @@ import { getErrorMessage, Mutex, Unsubscriber, UnsubscriberAsync } from 'platfor
  * Resolve the window service shard for a given window. Injected so the engine can be tested without
  * the Electron window plumbing that owns the real lookup.
  */
-export type GetWindowService = (windowId: number) => Promise<IWindowService | undefined>;
+export type GetWindowService = (windowId: string) => Promise<WindowServiceShard | undefined>;
 
 /**
  * The window service shard each window registers, found by network object type and window attribute
@@ -65,15 +66,14 @@ const windowServiceShards = createServiceShardIndex<WindowServiceShard>({
  *
  * Deliberately a plain lookup rather than a caching layer, even though the main process's input
  * handlers call it on every keystroke and mouse press: the network object service already keeps
- * what it resolves, serializes concurrent lookups of the same ID behind one lock, and drops what it
+ * what it resolves, serializes concurrent lookups of the same id behind one lock, and drops what it
  * holds when the object is disposed or its window closes. A second cache of resolved providers
- * could only go stale — and because Electron reuses `BrowserWindow.id`, a stale entry would be
- * handed to the next window opened with that ID rather than merely being useless.
+ * could only go stale, and a stale entry here answers for a window that has gone.
  *
- * @param windowId The Electron BrowserWindow ID
+ * @param windowId Platform id of the window whose shard to get
  */
 export async function getWindowServiceShard(
-  windowId: number,
+  windowId: string,
 ): Promise<WindowServiceShard | undefined> {
   return windowServiceShards.getShard(windowId);
 }
@@ -107,7 +107,7 @@ export const onDidRegisterWindowServiceShard = windowServiceShards.onDidAddShard
  * that registered before the subscription is never marked ready and stays unroutable for the rest
  * of the session.
  */
-export function getWindowIdsWithServiceShard(): number[] {
+export function getWindowIdsWithServiceShard(): string[] {
   return windowServiceShards.getShardWindowIds();
 }
 
@@ -158,8 +158,9 @@ class FocusedWindowDataProviderEngine
     super();
     this.#resolveWindowService = resolveWindowService;
 
-    // The routing target moving to another window changes what `getFocus` answers even though no
-    // window's own focus changed, so it has to reach subscribers as an update in its own right.
+    // The routing target moving to another window changes what `getFocus`/`getActiveEditorProjectId`
+    // answer even though no window's own data changed, so it has to reach subscribers of both data
+    // types as an update in its own right.
     this.#unsubscribeFromRoutingTargetChanges = onDidChangeRoutingTarget(() => {
       this.#relayUpdatesFromTargetWindow().catch((e) =>
         logger.warn(`Window routing could not follow the routing target: ${getErrorMessage(e)}`),
@@ -169,6 +170,7 @@ class FocusedWindowDataProviderEngine
       // window's teardown, so a routing fault stays a routing fault
       try {
         this.notifyUpdate('Focus');
+        this.notifyUpdate('ActiveEditorProjectId');
       } catch (e) {
         logger.warn(
           `Window routing could not notify subscribers of a routing target change: ${getErrorMessage(e)}`,
@@ -186,18 +188,40 @@ class FocusedWindowDataProviderEngine
     selectorOrSpecifier: SetFocusSpecifier | undefined,
     specifierIfSelectorProvided?: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
-    const windowService = await this.#getTargetWindowService();
+    const { windowService, targetWindowId } = await this.#getTargetWindowServiceAndId();
     const focusSpecifier = selectorOrSpecifier ?? specifierIfSelectorProvided;
+    // A window created without activation must not have its caret claimed by its own content:
+    // every mounted panel and every loaded web view asks to be focused, and routing can land here
+    // while that window is the only one ready to take work — whichever call lands last would
+    // otherwise own the caret the moment the window is raised. Self-clearing on its first `focus`
+    // event, so a window the user has been in never takes this branch.
+    const activateWithoutDocumentFocus = shouldContentAvoidDocumentFocus(targetWindowId);
     // Deselecting goes over as the one-argument form. Arguments cross the process boundary as JSON,
     // where an `undefined` in a non-trailing position becomes `null`, and the window service reads
     // "deselect" as a specifier that is strictly `undefined` — so the two-argument form would reach
     // it as a `null` it then tries to read a tab id off of.
     if (focusSpecifier === undefined) return windowService.setFocus(undefined);
-    return windowService.setFocus(undefined, focusSpecifier);
+    return windowService.setFocus(undefined, focusSpecifier, activateWithoutDocumentFocus);
   }
 
   async getFocus(): Promise<FocusSubject | undefined> {
     return (await this.#getTargetWindowService()).getFocus();
+  }
+
+  async getActiveEditorProjectId(): Promise<string | undefined> {
+    return (await this.#getTargetWindowService()).getActiveEditorProjectId();
+  }
+
+  /**
+   * Always throws, like each window's own setter. Unlike {@link setFocus}, this does not route
+   * through a target window: the answer is the same regardless of window availability, so routing
+   * it would only swap in a "no windows available" error for the one every caller should see.
+   */
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
+    throw new Error(
+      'Cannot set the active editor project id. It follows the web view BCV navigation drives',
+    );
   }
 
   /** Drop both subscriptions. Called when the router's provider itself is disposed */
@@ -247,19 +271,52 @@ class FocusedWindowDataProviderEngine
     // Attach before detaching, so an update arriving in the newly targeted window during the
     // handover still reaches subscribers. A brief overlap costs at most one redundant notify, where
     // the reverse order drops the update entirely.
-    const unsubscribeFromNewWindow = windowService
-      ? await windowService.subscribeFocus(undefined, () => this.notifyUpdate('Focus'), {
-          // The relay exists to forward later changes; a subscriber gets its initial value from its
-          // own retrieval, so replaying it here would just emit a duplicate
-          retrieveDataImmediately: false,
-          // Forward every update the window reports, including one whose focus value matches what
-          // this subscription saw last. Whether an update is worth passing on is each subscriber of
-          // the generic name's judgment to make against its own last value — one that re-pointed
-          // from another window holds a different one — and the default comparison here would make
-          // it for them.
-          whichUpdates: '*',
-        })
-      : undefined;
+    //
+    // Both data types subscribe together, and the combined unsubscriber below releases both — every
+    // other invariant in this class (mutex-serialized re-points, disposed-mid-flight undo, etc.)
+    // operates on that combined value as an opaque `UnsubscriberAsync`.
+    const subscriberOptions = {
+      // The relay exists to forward later changes; a subscriber gets its initial value from its
+      // own retrieval, so replaying it here would just emit a duplicate
+      retrieveDataImmediately: false,
+      // Forward every update the window reports, including one whose value matches what this
+      // subscription saw last. Whether an update is worth passing on is each subscriber of the
+      // generic name's judgment to make against its own last value — one that re-pointed from
+      // another window holds a different one — and the default comparison here would make it for
+      // them.
+      whichUpdates: '*' as const,
+    };
+    let unsubscribeFromNewWindow: UnsubscriberAsync | undefined;
+    if (windowService) {
+      const subscriptions = await Promise.allSettled([
+        windowService.subscribeFocus(
+          undefined,
+          () => this.notifyUpdate('Focus'),
+          subscriberOptions,
+        ),
+        windowService.subscribeActiveEditorProjectId(
+          undefined,
+          () => this.notifyUpdate('ActiveEditorProjectId'),
+          subscriberOptions,
+        ),
+      ]);
+      const unsubscribers = subscriptions.flatMap((subscription) =>
+        subscription.status === 'fulfilled' ? [subscription.value] : [],
+      );
+      const failedSubscription = subscriptions.find(
+        (subscription): subscription is PromiseRejectedResult => subscription.status === 'rejected',
+      );
+      // A half-attached relay would leave the subscription that did succeed notifying this engine
+      // with nothing holding its unsubscriber, so release it before failing the re-point.
+      if (failedSubscription) {
+        await Promise.allSettled(unsubscribers.map((unsubscribe) => unsubscribe()));
+        throw failedSubscription.reason;
+      }
+      unsubscribeFromNewWindow = async () => {
+        await Promise.all(unsubscribers.map((unsubscribe) => unsubscribe()));
+        return true;
+      };
+    }
 
     const unsubscribeFromPreviousWindow = this.#unsubscribeFromWindowUpdates;
     // Committed only now that the new subscription exists. If the subscribe above threw, the
@@ -288,7 +345,21 @@ class FocusedWindowDataProviderEngine
   }
 
   /** Resolve the target window's service, or explain why there isn't one */
-  async #getTargetWindowService(): Promise<IWindowService> {
+  async #getTargetWindowService(): Promise<WindowServiceShard> {
+    return (await this.#getTargetWindowServiceAndId()).windowService;
+  }
+
+  /**
+   * The target window's service together with the window it belongs to.
+   *
+   * A caller that needs both must read the target once: the routing target can move across the
+   * `await` below, and an answer about one window paired with a call to another is worse than
+   * either alone.
+   */
+  async #getTargetWindowServiceAndId(): Promise<{
+    windowService: WindowServiceShard;
+    targetWindowId: string;
+  }> {
     const targetWindowId = getTargetWindowId();
     if (targetWindowId === undefined)
       throw new Error('No windows available to route window service call');
@@ -305,7 +376,7 @@ class FocusedWindowDataProviderEngine
     // self-heal — `#repointRelay` commits its bookkeeping only after a subscribe succeeds, so that
     // re-point genuinely retries instead of short-circuiting on a relay it does not hold.
     await this.#relayUpdatesFromTargetWindow();
-    return windowService;
+    return { windowService, targetWindowId };
   }
 }
 

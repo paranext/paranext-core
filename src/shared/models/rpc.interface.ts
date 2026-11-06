@@ -3,6 +3,7 @@ import {
   EventHandler,
   InternalRequestHandler,
   RequestParams,
+  ServerSocketLike,
 } from '@shared/data/rpc.model';
 import {
   SingleMethodDocumentation,
@@ -48,9 +49,21 @@ export interface IRpcHandler {
    * - On clients: connecting to the server
    * - On servers: opening an endpoint for clients to connect
    *
+   * An implementation that opens an endpoint MUST NOT resolve `true` until that endpoint is
+   * actually accepting connections. Callers treat this resolving as permission to start processes
+   * that immediately connect, and those clients may get a single attempt with no retry — so
+   * reporting ready optimistically surfaces as a client that was refused, whose symptoms appear in
+   * a different process entirely. See `adr-papi-websocket-hostname-bind`.
+   *
    * @param localEventHandler Function that handles events from the server by accepting an eventType
    *   and an event and emitting the event locally. Used when receiving an event over the network.
-   * @returns Promise that resolves when finished connecting
+   * @returns `true` once the connection is established and usable — for a server, once its endpoint
+   *   is accepting connections. `false` if the connection could not be established.
+   *
+   *   TODO(PT-4495): implementations disagree on what they return when this handler was already
+   *   connected or connecting, so a caller can neither rely on that case nor tell a benign
+   *   double-connect from a real failure. PT-4495 replaces the boolean with a result type that
+   *   distinguishes the three outcomes; until then, only the two states above are contractual.
    */
   connect: (localEventHandler: EventHandler) => Promise<boolean>;
   /**
@@ -131,6 +144,30 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
    * @experimental
    */
   onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Event that fires when this process's own connection to the network is lost unexpectedly — the
+   * websocket closed without the app having asked it to.
+   *
+   * This is platform-internal core plumbing between the process that holds a client connection and
+   * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+   * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+   *
+   * This is a local, in-process event. Only a process that holds a client connection can lose one,
+   * so it fires exclusively on clients; in the process that owns the websocket server it is a real
+   * event that simply never fires. A deliberate disconnect does not fire it: intent travels in the
+   * close code, and a close the app asked for is not a loss.
+   *
+   * Nor does a connection that was never established. A socket that dies during the opening
+   * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
+   * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
+   * event is only for losing a connection that was up.
+   *
+   * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
+   * to react to the loss rather than to classify it.
+   *
+   * @experimental
+   */
+  onDidLoseConnection: PlatformEvent<void>;
 }
 
 export type RegisteredRpcMethodDetails = {
@@ -154,4 +191,43 @@ export interface IRpcEventRegistry {
   tryUnregister(handler: unknown, eventName: string): boolean;
   /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
   unregisterAll(handler: unknown): void;
+}
+
+/**
+ * An RPC handler that can serve a client whose socket was created by the caller rather than
+ * accepted from the websocket server. Only the process that owns the server (main) implements this;
+ * it is how a renderer's MessagePort-backed connection joins the same registry as the websocket
+ * clients.
+ *
+ * @experimental
+ */
+export interface IRpcLocalClientAcceptor {
+  /**
+   * Start serving `socket` as a client of this process's RPC server.
+   *
+   * @param socket The server end of the client's connection
+   * @param name Label for this client in log lines, in place of the incrementing websocket number
+   * @throws If this handler is not currently accepting clients
+   * @experimental
+   */
+  acceptLocalClient(socket: ServerSocketLike, name: string): void;
+}
+
+/**
+ * An RPC handler that can close the connections of the clients its websocket server accepted. Only
+ * the process that owns the server (main) implements this.
+ *
+ * @experimental
+ */
+export interface IRpcWebSocketClientCloser {
+  /**
+   * Close every client connection accepted from the websocket server, telling each why. Clients
+   * served through {@link IRpcLocalClientAcceptor.acceptLocalClient} are left open: whoever handed
+   * their sockets over owns closing them.
+   *
+   * @param code WebSocket close code to send to each client
+   * @param reason Human-readable reason to send to each client
+   * @experimental
+   */
+  closeWebSocketClients(code: number, reason: string): void;
 }

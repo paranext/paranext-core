@@ -1,8 +1,9 @@
 /**
  * Notification service shard — the notification service implementation for THIS window. Registered
- * under a window-scoped network object id (e.g. "NotificationService-1") so every window can serve
- * its own notification UI; the main process's `notification.service-router.ts` publishes the
- * generic name and forwards to the window that should show (or stop showing) a notification.
+ * under a window-scoped network object id (e.g.
+ * "NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so every window can serve its own
+ * notification UI; the main process's `notification.service-router.ts` publishes the generic name
+ * and forwards to the window that should show (or stop showing) a notification.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
@@ -167,8 +168,12 @@ async function send(notification: PlatformNotification): Promise<string | number
     // Per-toast placement override; undefined leaves the Toaster's default placement in effect.
     position,
     dismissible: effectiveDismissible,
-    // Fires when the USER dismisses the toast (swipe/drag past Sonner's threshold, or a close button
-    // if one is ever enabled). Also forgets the notification so its map entries don't leak.
+    // A notification that never times out would otherwise stay until the user swipes it away, which
+    // a keyboard cannot do. The close button fires `onDismiss` like a swipe. A caller who made the
+    // notification non-dismissible gets none, since it must stay until answered.
+    closeButton: duration === Infinity && effectiveDismissible !== false,
+    // Fires when the USER dismisses the toast (swipe/drag past Sonner's threshold, or the close
+    // button of a notification with no time limit). Also forgets the notification so its map entries don't leak.
     onDismiss: runRemovalCommand(dismissClickCommand, 'dismiss'),
     // Fires when the toast auto-closes because `duration` elapsed. Runs the same dismiss command as a
     // user dismissal (a timeout counts as an implicit dismissal, so a must-answer toast can't vanish
@@ -217,12 +222,14 @@ const notificationService: INotificationService = {
 /**
  * Register the network object that backs the notification service.
  *
- * Registered under this window's scoped name (e.g. `NotificationService-1`) so every window can
- * serve its own notification UI. The main process publishes the generic name and forwards to the
- * focused window, so a notification raised by a background task lands where the user is looking.
+ * Registered under this window's scoped name (e.g.
+ * `NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) so every window can serve its own
+ * notification UI. The main process publishes the generic name and forwards to the window that owns
+ * the web view a notification names, or to the focused window when it names none, so a notification
+ * raised by a background task lands where the user is looking.
  */
 export async function startNotificationServiceShard(): Promise<void> {
-  if (!globalThis.windowId)
+  if (globalThis.windowId === undefined)
     throw new Error('Cannot start NotificationService: windowId is not set');
 
   await networkObjectService.set(

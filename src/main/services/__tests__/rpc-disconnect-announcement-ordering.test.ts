@@ -3,12 +3,26 @@ import { REGISTER_METHOD } from '@shared/data/rpc.model';
 import { ProcessType } from '@shared/global-this.model';
 import { deserialize } from 'platform-bible-utils';
 import { createFakeWebSocket } from './fake-web-socket-test.util';
+import type { FakeWebSocketServer } from './fake-web-socket-test.util';
 
 // Mock heavy dependencies so main's network stack can run outside the Electron main process.
 vi.mock('electron', () => ({ app: { getVersion: () => '0.0.0' } }));
-vi.mock('ws', () => ({
-  WebSocketServer: vi.fn(() => ({ addListener: vi.fn(), removeListener: vi.fn(), close: vi.fn() })),
-}));
+// Collected in hoisted state, which survives the `vi.resetModules()` this suite calls between
+// tests — module-level state in the util would leave the mocked factory and the test body holding
+// different copies.
+const servers = vi.hoisted<FakeWebSocketServer[]>(() => []);
+// connect() waits for the server's `listening` event before reporting success, so the fake has to
+// finish the handshake or connect() would never resolve.
+vi.mock('ws', async () => {
+  const { createFakeWebSocketServer } = await import('./fake-web-socket-test.util');
+  return {
+    WebSocketServer: vi.fn(() => {
+      const server = createFakeWebSocketServer();
+      servers.push(server);
+      return server;
+    }),
+  };
+});
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
@@ -82,14 +96,10 @@ async function drainMicrotasks(): Promise<void> {
  * `WebSocketServer` would run when a client connects.
  */
 async function startMainNetworkStack(): Promise<(webSocket: WebSocket) => void> {
-  const { WebSocketServer } = await import('ws');
   const { networkObjectService } = await import('@shared/services/network-object.service');
   await networkObjectService.initialize();
 
-  const webSocketServer = vi.mocked(WebSocketServer).mock.results.at(-1)?.value;
-  const connectClient = webSocketServer?.addListener.mock.calls.find(
-    ([eventName]: [string]) => eventName === 'connection',
-  )?.[1];
+  const connectClient = servers.at(-1)?.getHandler('connection');
   if (!connectClient) throw new Error('Main never started listening for websocket connections');
   return connectClient;
 }
@@ -119,6 +129,7 @@ describe('a disconnect announcement reaches surviving sockets before anything ca
     // copy of them rather than inheriting the previous test's network stack.
     vi.resetModules();
     vi.clearAllMocks();
+    servers.length = 0;
     // Only the process that owns the connections announces these disposals
     globalThis.processType = ProcessType.Main;
 

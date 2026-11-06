@@ -47,15 +47,6 @@ export type TabToolbarProps = TabToolbarCommonProps & {
    * side in ltr, left side in rtl). Recommended for secondary tools and view options.
    */
   endAreaChildren?: ReactNode;
-
-  /**
-   * Overrides the shrink step this toolbar would otherwise measure from its own width, and
-   * publishes it to descendants. Higher means narrower.
-   *
-   * For stories and tests: measuring needs a layout engine, which jsdom does not have. In the app,
-   * leave it unset and let the toolbar measure itself.
-   */
-  shrinkStep?: number;
 };
 
 /**
@@ -74,14 +65,9 @@ export function TabToolbar({
   centerAreaChildren,
   endAreaChildren,
   menuButtonIcon,
-  shrinkStep,
 }: TabToolbarProps) {
   return (
-    <TabToolbarContainer
-      className={`tw:w-full tw:border-b ${className}`}
-      id={id}
-      shrinkStep={shrinkStep}
-    >
+    <TabToolbarContainer className={`tw:w-full tw:border-b ${className}`} id={id}>
       {projectMenuData && (
         <TabDropdownMenu
           onSelectMenuItem={onSelectProjectMenuItem}
@@ -89,6 +75,7 @@ export function TabToolbar({
           tabLabel="Project"
           icon={menuButtonIcon ?? <Menu />}
           buttonVariant="ghost"
+          showSectionHeadings
         />
       )}
       {/* Absorbing zone. `tw:min-w-0` is what lets the flex algorithm shrink this below its content
@@ -126,6 +113,7 @@ export function TabToolbar({
             tabLabel="View Info"
             icon={<EllipsisVertical />}
             className="tw:h-full"
+            showSectionHeadings
           />
         )}
         {endAreaChildren}

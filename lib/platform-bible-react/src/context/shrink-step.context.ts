@@ -41,3 +41,29 @@ export const ShrinkStepContext = createContext<number>(SHRINK_STEP.WIDE);
 export function useShrinkStepValue(): number {
   return useContext(ShrinkStepContext);
 }
+
+/**
+ * A shrink step forced from outside, overriding what a toolbar would measure from its own width.
+ *
+ * Separate from {@link ShrinkStepContext} because the two answer different questions. A toolbar
+ * _publishes_ to `ShrinkStepContext` and cannot read its own value back, and that context defaults
+ * to `SHRINK_STEP.WIDE` rather than being unset — so a publisher reading it could never tell "no
+ * one is overriding me" from "someone is overriding me with the widest step". This context is
+ * `undefined` until something sets it, which is the distinction a publisher needs.
+ *
+ * Set it with {@link ShrinkStepOverride} rather than reaching for the provider directly.
+ */
+export const ShrinkStepOverrideContext = createContext<number | undefined>(undefined);
+
+/**
+ * Reads a shrink step forced from outside, if any.
+ *
+ * Toolbars that measure their own width call this and prefer its value over their measurement, so
+ * stories and tests can pin a step in an environment with no layout engine. Components that only
+ * _read_ a step have no use for this — they call {@link useShrinkStepValue} instead.
+ *
+ * @returns The overriding step, or `undefined` when nothing is overriding.
+ */
+export function useShrinkStepOverride(): number | undefined {
+  return useContext(ShrinkStepOverrideContext);
+}

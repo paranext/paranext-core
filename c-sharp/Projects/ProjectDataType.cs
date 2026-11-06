@@ -24,4 +24,7 @@ public static class ProjectDataType
     public const string FINAL_VERSE_NUMBER = "FinalVerseNumber";
     public const string FINAL_CHAPTER = "FinalChapter";
     public const string FINAL_VERSE_NUMBERS_IN_BOOK = "FinalVerseNumbersInBook";
+
+    // platformScripture.CopyLimit projectInterface
+    public const string BOOK_COPY_LIMITS = "BookCopyLimits";
 }

@@ -1,17 +1,18 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ColumnDef,
+  ContentZoomTextProvider,
   Inventory,
   InventorySummaryItem,
   InventoryTableData,
   Scope,
   getInventoryHeader,
   inventoryCountColumn,
-  inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useMemo } from 'react';
+import { zoomableInventoryItemColumn } from './inventory-item-column';
 import { getUnicodeValue } from './inventory-utils';
 
 /**
@@ -48,7 +49,7 @@ const createColumns = (
   unapprovedItems: string[],
   onUnapprovedItemsChange: (items: string[]) => void,
 ): ColumnDef<InventoryTableData>[] => [
-  inventoryItemColumn(itemLabel),
+  zoomableInventoryItemColumn(itemLabel),
   {
     accessorKey: 'unicodeValue',
     accessorFn: (row) => getUnicodeValue(row.items[0]),
@@ -142,20 +143,23 @@ export function CharacterInventory({
     ],
   );
 
+  // Opts the shared occurrence table into content zoom: its snippet text zooms with the pane.
   return (
-    <Inventory
-      inventoryItems={inventoryItems}
-      setVerseRef={setVerseRef}
-      localizedStrings={localizedStrings}
-      approvedItems={approvedItems}
-      unapprovedItems={unapprovedItems}
-      scope={scope}
-      onScopeChange={onScopeChange}
-      columns={columns}
-      areInventoryItemsLoading={areInventoryItemsLoading}
-      classNameForVerseText="scripture-font"
-      onItemSelected={onItemSelected}
-    />
+    <ContentZoomTextProvider>
+      <Inventory
+        inventoryItems={inventoryItems}
+        setVerseRef={setVerseRef}
+        localizedStrings={localizedStrings}
+        approvedItems={approvedItems}
+        unapprovedItems={unapprovedItems}
+        scope={scope}
+        onScopeChange={onScopeChange}
+        columns={columns}
+        areInventoryItemsLoading={areInventoryItemsLoading}
+        classNameForVerseText="scripture-font"
+        onItemSelected={onItemSelected}
+      />
+    </ContentZoomTextProvider>
   );
 }
 

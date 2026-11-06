@@ -49,6 +49,10 @@ Derive contextual inputs from state — do not add them as open parameters:
 
 A structured request object / discriminated-union result that diverges from the sibling shape is over-engineering unless you can name a behavior the bare signature genuinely can't express. Internal behavior (e.g. dedup — reuse an existing web view instead of opening a duplicate) can still be preserved behind the conforming signature by passing the existing id to the web-view open helper, so conforming the public shape does not force you to drop it.
 
+## Project Lists
+
+A list for picking or opening a project must leave out, or show disabled with the reason, projects whose metadata has `unsupportedReason`: see "Projects that cannot be opened" in [Paranext-Core-Patterns.md](../../../.context/standards/Paranext-Core-Patterns.md).
+
 ## Service Lifecycle
 
 - Create service → Register with PAPI → Add to `context.registrations`

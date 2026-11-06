@@ -89,6 +89,20 @@ export function Dictionary({
   const [entriesById, setEntriesById] = useState<LexicalEntriesById | undefined>(undefined);
   const [entriesError, setEntriesError] = useState<string | undefined>(undefined);
 
+  // `getEntries`'s selector always reads book+chapterNum but only reads verseNum in `'verse'` scope
+  // (see dictionary.web-view.tsx), so verseNum is frozen to a sentinel (0) outside that scope —
+  // mirroring legacy-comment-manager's comment-list.web-view.tsx — rather than depending on the
+  // whole `scrRef` object, which also changes on every in-chapter verse move and would otherwise
+  // needlessly reload the list (and reset the selected entry) on every one of those.
+  //
+  // Hidden pane: this reacts to scrRef the same whether or not the tab is visible (rc-dock keeps a
+  // hidden pane's iframe mounted and running). That is deliberate, not deferred — the reaction is
+  // data-driven (a PDP query, not a layout measurement), so it stays correct while hidden and shows
+  // the right result the moment the tab is activated. The accepted cost is one query per actual
+  // scope/book/chapter change for a tab nobody can currently see; per
+  // .claude/rules/cross-view-sync-hidden-views.md this is a documented decision, not an oversight.
+  const scopeVerseNum = scope === 'verse' ? scrRef.verseNum : 0;
+
   useEffect(() => {
     let isActive = true;
     setEntriesById(undefined);
@@ -110,7 +124,9 @@ export function Dictionary({
     return () => {
       isActive = false;
     };
-  }, [getEntries, scope, scrRef]);
+    // `scrRef` itself is intentionally not a dependency — see the comment above `scopeVerseNum`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getEntries, scope, scrRef.book, scrRef.chapterNum, scopeVerseNum]);
 
   // `undefined` means "not yet fetched" so we can show the loading state, matching the original.
   const isLoadingEntriesById = !entriesError && entriesById === undefined;

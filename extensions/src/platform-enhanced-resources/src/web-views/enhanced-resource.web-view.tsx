@@ -5,6 +5,8 @@ import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import type { UseWebViewStateHook, WebViewProps } from '@papi/core';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import {
+  ContentZoomRoot,
+  ContentZoomTextProvider,
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
@@ -45,6 +47,7 @@ import { EnhancedResourceFootnotesPane } from '../components/footnotes-pane/foot
 import {
   EnhancedResourceTabBar,
   EnhancedResourceTopToolbar,
+  RESEARCH_TAB_LABEL_KEYS,
   TOOLBAR_STRING_KEYS,
   type HighlightMode,
   type MarbleScope,
@@ -126,6 +129,7 @@ export const ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object.freeze([
   '%enhancedResources_shell_title%',
   '%enhancedResources_shell_emptyTitle%',
   '%enhancedResources_shell_emptyDescription%',
+  '%enhancedResources_footnotesPane_zoomAreaLabel%',
 ] as const);
 
 /**
@@ -163,7 +167,6 @@ export type EnhancedResourceWebViewProps = {
   hebrewDisplayMode?: ScriptDisplayMode;
   greekDisplayMode?: ScriptDisplayMode;
   showFootnotes?: boolean;
-  scripturePaneZoom?: number;
   scripturePaneError?: string;
   onTokenClick?: (tokenId: string, annotation: MarbleAnnotation, textContent: string) => void;
   onTokenContextMenu?: (
@@ -432,7 +435,6 @@ export function EnhancedResourceWebView({
   hebrewDisplayMode = 'both',
   greekDisplayMode = 'both',
   showFootnotes = false,
-  scripturePaneZoom = 1,
   scripturePaneError,
   onTokenClick = () => {},
   onTokenContextMenu = () => {},
@@ -646,30 +648,38 @@ export function EnhancedResourceWebView({
                 useWebViewState={useWebViewStateProp ?? NOOP_USE_WEB_VIEW_STATE}
                 selectedFootnote={selectedFootnote}
                 onFootnoteSelected={onFootnoteSelected}
+                zoomAreaLabel={String(
+                  stringsBag['%enhancedResources_footnotesPane_zoomAreaLabel%'] ?? '',
+                )}
               >
-                <EnhancedScripturePane
-                  usj={usj}
-                  annotations={annotations}
-                  filteredTokenId={filteredTokenId}
-                  filteredTokenSurface={filteredTokenSurface}
-                  scripturePaneZoom={scripturePaneZoom}
-                  errorMessage={scripturePaneError}
-                  highlightAllResearchTerms={highlightMode === 'all-research-terms'}
-                  scrRef={scrRef}
-                  onTokenClick={onTokenClick}
-                  onTokenContextMenu={onTokenContextMenu}
-                  localizedStringsWithLoadingState={childStrings}
-                  erProxy={erProxy}
-                  resourceId={resourceId}
-                  glossLanguage={glossLanguage}
-                />
+                <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+                  <EnhancedScripturePane
+                    usj={usj}
+                    annotations={annotations}
+                    filteredTokenId={filteredTokenId}
+                    filteredTokenSurface={filteredTokenSurface}
+                    errorMessage={scripturePaneError}
+                    highlightAllResearchTerms={highlightMode === 'all-research-terms'}
+                    scrRef={scrRef}
+                    onTokenClick={onTokenClick}
+                    onTokenContextMenu={onTokenContextMenu}
+                    localizedStringsWithLoadingState={childStrings}
+                    erProxy={erProxy}
+                    resourceId={resourceId}
+                    glossLanguage={glossLanguage}
+                  />
+                </ContentZoomRoot>
               </EnhancedResourceFootnotesPane>
             </ResizablePanel>
             <ResizableHandle withHandle />
+            {/* The zoom scope ties the whole lower panel to the `entries` area: only the entry text
+                inside is marked, so a Ctrl/⌘+wheel, click or focus over the tab bar, a card's
+                padding or the gap between entries would otherwise go to the area used last. */}
             <ResizablePanel
               defaultSize={100 - splitterPercentage}
               minSize={20}
               className="tw:flex tw:flex-col"
+              data-platform-content-zoom-scope="entries"
             >
               {/* Theme 8 — tab/filter/scope row sits at the top of the lower split panel. */}
               <EnhancedResourceTabBar
@@ -683,94 +693,105 @@ export function EnhancedResourceWebView({
                 hasMatches={hasMatches}
                 localizedStringsWithLoadingState={childStrings}
               />
-              <Tabs value={activeTab} className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
-                <TabsContent
-                  value="dictionary"
-                  data-testid="er-dictionary-tab-panel"
-                  className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
-                >
-                  <DictionaryTab
-                    items={dictionaryItems}
-                    selectedTokenId={dictionarySelectedTokenId}
-                    isLoading={dictionaryIsLoading}
-                    emptyState={dictionaryEmptyState}
-                    filterWord={dictionaryFilterWord}
-                    scopeLabel={dictionaryScopeLabel}
-                    activeDictionary={dictionaryActiveDictionary}
-                    hideLessRelevantSenses={dictionaryHideLessRelevantSenses}
-                    onSelectionChange={onDictionarySelectionChange}
-                    onSourceTextClick={onDictionarySourceTextClick}
-                    onAllOccurrencesClick={onDictionaryAllOccurrencesClick}
-                    onSenseOccurrencesClick={onDictionarySenseOccurrencesClick}
-                    onSenseDomainClick={onDictionarySenseDomainClick}
-                    onBrowseSemanticDomainsClick={onBrowseSemanticDomainsClick}
-                    onToggleHideLessRelevantSenses={onDictionaryToggleHideLessRelevantSenses}
-                    onHelpfulnessAnswer={onDictionaryHelpfulnessAnswer}
-                    onGiveFeedback={onDictionaryGiveFeedback}
-                    onCopySurfaceForm={onDictionaryCopySurfaceForm}
-                    onCopyLemma={onDictionaryCopyLemma}
-                    onFindSense={onDictionaryFindSense}
-                    onFindLemma={onDictionaryFindLemma}
-                    onFindText={onDictionaryFindText}
-                    localizedStringsWithLoadingState={childStrings}
-                  />
-                </TabsContent>
-                <TabsContent
-                  value="encyclopedia"
-                  data-testid="er-encyclopedia-tab-panel"
-                  className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
-                >
-                  <EncyclopediaTab
-                    items={encyclopediaItems}
-                    selectedTokenId={encyclopediaSelectedTokenId}
-                    isLoading={encyclopediaIsLoading}
-                    emptyState={encyclopediaEmptyState}
-                    filterWord={encyclopediaFilterWord}
-                    scopeLabel={encyclopediaScopeLabel}
-                    articleDataMap={encyclopediaArticleDataMap}
-                    onSelectionChange={onEncyclopediaSelectionChange}
-                    onSourceTextClick={onEncyclopediaSourceTextClick}
-                    onCopySurfaceForm={onEncyclopediaCopySurfaceForm}
-                    onCopyLemma={onEncyclopediaCopyLemma}
-                    onArticleLinkClick={onEncyclopediaArticleLinkClick}
-                    localizedStringsWithLoadingState={childStrings}
-                  />
-                </TabsContent>
-                <TabsContent
-                  value="media"
-                  data-testid="er-media-tab-panel"
-                  className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
-                >
-                  <MediaImagesTab
-                    items={mediaImagesItems}
-                    selectedItemId={mediaImagesSelectedItemId}
-                    isLoading={mediaImagesIsLoading}
-                    loaded={mediaImagesLoaded}
-                    scopeLabel={mediaImagesScopeLabel}
-                    thumbnailUrlResolver={mediaImagesThumbnailUrlResolver}
-                    onSelectionChange={onMediaImagesSelectionChange}
-                    onMaximize={onMediaImagesMaximize}
-                    localizedStringsWithLoadingState={childStrings}
-                  />
-                </TabsContent>
-                <TabsContent
-                  value="maps"
-                  data-testid="er-maps-tab-panel"
-                  className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
-                >
-                  <MediaMapsTab
-                    items={mediaMapsItems}
-                    selectedItemId={mediaMapsSelectedItemId}
-                    isLoading={mediaMapsIsLoading}
-                    loaded={mediaMapsLoaded}
-                    scopeLabel={mediaMapsScopeLabel}
-                    thumbnailUrlResolver={mediaMapsThumbnailUrlResolver}
-                    onSelectionChange={onMediaMapsSelectionChange}
-                    onMaximize={onMediaMapsMaximize}
-                    localizedStringsWithLoadingState={childStrings}
-                  />
-                </TabsContent>
-              </Tabs>
+              {/* The `entries` zoom area is the lemma, gloss, definition and article text the tabs
+                  render, marked by each component inside this provider; the tab buttons, switches,
+                  copy, find and feedback controls and the media thumbnails keep interface scale.
+                  The zoom indicator names the area after the tab on screen. */}
+              <ContentZoomTextProvider
+                area="entries"
+                label={String(stringsBag[RESEARCH_TAB_LABEL_KEYS[activeTab]] ?? '')}
+              >
+                <div className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
+                  <Tabs value={activeTab} className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
+                    <TabsContent
+                      value="dictionary"
+                      data-testid="er-dictionary-tab-panel"
+                      className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
+                    >
+                      <DictionaryTab
+                        items={dictionaryItems}
+                        selectedTokenId={dictionarySelectedTokenId}
+                        isLoading={dictionaryIsLoading}
+                        emptyState={dictionaryEmptyState}
+                        filterWord={dictionaryFilterWord}
+                        scopeLabel={dictionaryScopeLabel}
+                        activeDictionary={dictionaryActiveDictionary}
+                        hideLessRelevantSenses={dictionaryHideLessRelevantSenses}
+                        onSelectionChange={onDictionarySelectionChange}
+                        onSourceTextClick={onDictionarySourceTextClick}
+                        onAllOccurrencesClick={onDictionaryAllOccurrencesClick}
+                        onSenseOccurrencesClick={onDictionarySenseOccurrencesClick}
+                        onSenseDomainClick={onDictionarySenseDomainClick}
+                        onBrowseSemanticDomainsClick={onBrowseSemanticDomainsClick}
+                        onToggleHideLessRelevantSenses={onDictionaryToggleHideLessRelevantSenses}
+                        onHelpfulnessAnswer={onDictionaryHelpfulnessAnswer}
+                        onGiveFeedback={onDictionaryGiveFeedback}
+                        onCopySurfaceForm={onDictionaryCopySurfaceForm}
+                        onCopyLemma={onDictionaryCopyLemma}
+                        onFindSense={onDictionaryFindSense}
+                        onFindLemma={onDictionaryFindLemma}
+                        onFindText={onDictionaryFindText}
+                        localizedStringsWithLoadingState={childStrings}
+                      />
+                    </TabsContent>
+                    <TabsContent
+                      value="encyclopedia"
+                      data-testid="er-encyclopedia-tab-panel"
+                      className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
+                    >
+                      <EncyclopediaTab
+                        items={encyclopediaItems}
+                        selectedTokenId={encyclopediaSelectedTokenId}
+                        isLoading={encyclopediaIsLoading}
+                        emptyState={encyclopediaEmptyState}
+                        filterWord={encyclopediaFilterWord}
+                        scopeLabel={encyclopediaScopeLabel}
+                        articleDataMap={encyclopediaArticleDataMap}
+                        onSelectionChange={onEncyclopediaSelectionChange}
+                        onSourceTextClick={onEncyclopediaSourceTextClick}
+                        onCopySurfaceForm={onEncyclopediaCopySurfaceForm}
+                        onCopyLemma={onEncyclopediaCopyLemma}
+                        onArticleLinkClick={onEncyclopediaArticleLinkClick}
+                        localizedStringsWithLoadingState={childStrings}
+                      />
+                    </TabsContent>
+                    <TabsContent
+                      value="media"
+                      data-testid="er-media-tab-panel"
+                      className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
+                    >
+                      <MediaImagesTab
+                        items={mediaImagesItems}
+                        selectedItemId={mediaImagesSelectedItemId}
+                        isLoading={mediaImagesIsLoading}
+                        loaded={mediaImagesLoaded}
+                        scopeLabel={mediaImagesScopeLabel}
+                        thumbnailUrlResolver={mediaImagesThumbnailUrlResolver}
+                        onSelectionChange={onMediaImagesSelectionChange}
+                        onMaximize={onMediaImagesMaximize}
+                        localizedStringsWithLoadingState={childStrings}
+                      />
+                    </TabsContent>
+                    <TabsContent
+                      value="maps"
+                      data-testid="er-maps-tab-panel"
+                      className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
+                    >
+                      <MediaMapsTab
+                        items={mediaMapsItems}
+                        selectedItemId={mediaMapsSelectedItemId}
+                        isLoading={mediaMapsIsLoading}
+                        loaded={mediaMapsLoaded}
+                        scopeLabel={mediaMapsScopeLabel}
+                        thumbnailUrlResolver={mediaMapsThumbnailUrlResolver}
+                        onSelectionChange={onMediaMapsSelectionChange}
+                        onMaximize={onMediaMapsMaximize}
+                        localizedStringsWithLoadingState={childStrings}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </ContentZoomTextProvider>
             </ResizablePanel>
           </ResizablePanelGroup>
         )}
@@ -1161,9 +1182,8 @@ function formatMediaReferenceLabel(
  * reload).
  *
  * Memento fields (BHV-319) persisted via `useWebViewState`: activeTab, scope, highlightMode,
- * showFootnotes, hebrewDisplayMode, greekDisplayMode, splitterPercentage, scripturePaneZoom,
- * filteredTokenId. The shell's empty state still renders gracefully when PAPI returns no data
- * (TS-043).
+ * showFootnotes, hebrewDisplayMode, greekDisplayMode, splitterPercentage, filteredTokenId. The
+ * shell's empty state still renders gracefully when PAPI returns no data (TS-043).
  */
 globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   useWebViewScrollGroupScrRef,
@@ -1204,7 +1224,6 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   // ResizablePanel onResize callback will plug into the setter once we surface the splitter
   // change to the wiring layer (BHV-319 keeps the value across reopens regardless).
   const [splitterPercentage] = useWebViewState<number>('splitterPercentage', 60);
-  const [scripturePaneZoom, setScripturePaneZoom] = useWebViewState<number>('scripturePaneZoom', 1);
   const [filteredTokenId, setFilteredTokenId] = useWebViewState<string | undefined>(
     'filteredTokenId',
     undefined,
@@ -2892,23 +2911,17 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     );
   }, []);
 
-  // GAP-012: Keyboard shortcuts. F7 toggles footnotes; Ctrl+Plus / Ctrl+Minus / Ctrl+0 adjust
-  // the scripture pane zoom. Listener is attached to window so it works regardless of focus
-  // within the iframe. Cleanup on unmount per BHV-451.
-  // useWebViewState setters take a plain value (not React's functional updater), so we read
-  // the latest state via refs to avoid stale closures inside the keydown handler.
+  // F7 toggles the footnotes pane. The zoom chords belong to the platform's per-pane content zoom,
+  // which reaches this view through the areas it marks.
+  // `useWebViewState` setters take a plain value rather than React's functional updater, so the
+  // latest value is read from a ref to avoid a stale closure inside the handler.
   const showFootnotesRef = useRef(showFootnotes);
-  const scripturePaneZoomRef = useRef(scripturePaneZoom);
   useEffect(() => {
     showFootnotesRef.current = showFootnotes;
   }, [showFootnotes]);
-  useEffect(() => {
-    scripturePaneZoomRef.current = scripturePaneZoom;
-  }, [scripturePaneZoom]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // F7: toggle showFootnotes (no modifiers).
       if (
         event.key === 'F7' &&
         !event.ctrlKey &&
@@ -2918,21 +2931,6 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       ) {
         event.preventDefault();
         setShowFootnotes(!showFootnotesRef.current);
-        return;
-      }
-
-      // Ctrl/Cmd + Plus / Equals (zoom in), Minus (zoom out), 0 (reset).
-      if (event.ctrlKey || event.metaKey) {
-        if (event.key === '+' || event.key === '=') {
-          event.preventDefault();
-          setScripturePaneZoom(Math.min(scripturePaneZoomRef.current + 0.1, 3));
-        } else if (event.key === '-' || event.key === '_') {
-          event.preventDefault();
-          setScripturePaneZoom(Math.max(scripturePaneZoomRef.current - 0.1, 0.5));
-        } else if (event.key === '0') {
-          event.preventDefault();
-          setScripturePaneZoom(1);
-        }
       }
     };
 
@@ -2940,7 +2938,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [setShowFootnotes, setScripturePaneZoom]);
+  }, [setShowFootnotes]);
 
   // FN-020(c) / G6: the filter input shows the actual word text (sourceText) of the clicked
   // token, not the opaque numeric token id. The scripture-pane click now forwards the surface
@@ -2976,9 +2974,6 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     // GAP-013: hamburger "Copyright info" menu item also opens the overlay, alongside the
     // ribbon "More info..." action.
     onShowCopyrightInfo: handleCopyrightMoreInfo,
-    onZoomIn: () => setScripturePaneZoom(Math.min(scripturePaneZoom + 0.1, 3)),
-    onZoomOut: () => setScripturePaneZoom(Math.max(scripturePaneZoom - 0.1, 0.5)),
-    onZoomReset: () => setScripturePaneZoom(1),
   };
 
   return (
@@ -2997,7 +2992,6 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       hebrewDisplayMode={hebrewDisplayMode}
       greekDisplayMode={greekDisplayMode}
       showFootnotes={showFootnotes}
-      scripturePaneZoom={scripturePaneZoom}
       scripturePaneError={scripturePaneError}
       onTokenClick={handleTokenClick}
       onTokenContextMenu={handleTokenContextMenu}

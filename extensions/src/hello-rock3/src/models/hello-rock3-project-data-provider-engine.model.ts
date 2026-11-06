@@ -1,8 +1,10 @@
 import papi, { BaseProjectDataProviderEngine } from '@papi/backend';
 import {
   DataProviderUpdateInstructions,
+  ExtensionDataListScope,
   ExtensionDataScope,
   IBaseProjectDataProviderEngine,
+  WithProjectDataProviderEngineExtensionDataEnumerationMethods,
 } from '@papi/core';
 import type {
   ProjectInterfaceDataTypes,
@@ -13,10 +15,11 @@ import type {
 /** The `projectInterface`s the hello rock3 pdpf serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
 // needs to be used in ProjectMetadata as not readonly :p
-export const HELLO_ROCK3_PROJECT_INTERFACES = ['platform.base', 'helloRock3'] as const satisfies [
+export const HELLO_ROCK3_PROJECT_INTERFACES = [
   'platform.base',
+  'platform.extensionDataEnumeration',
   'helloRock3',
-];
+] as const satisfies ['platform.base', 'platform.extensionDataEnumeration', 'helloRock3'];
 
 export type HelloRock3ProjectData = {
   projectName: string;
@@ -28,13 +31,55 @@ export type HelloRock3ProjectData = {
   extensionData: { [key: string]: string | undefined };
 };
 
+// The checks below refuse exactly what the Paratext PDP refuses, so an extension tested against this
+// sample behaves the same on a real project. Keys here are flat strings, so none of them closes any
+// access in this store. Their string methods are native, like the Paratext PDP's, so the two agree
+// on what a ".." or a segment is.
+
+/**
+ * What every one of an extension's extension-data keys starts with. Rejects, for get, set and list
+ * alike, a missing or blank extension name, or one containing ".." anywhere.
+ */
+function getExtensionKeyPrefix(extensionName: string): string {
+  // Checked at runtime because the scope arrives over the network, whatever its declared type
+  const name: unknown = extensionName;
+  if (typeof name !== 'string' || name.trim() === '')
+    throw new Error('Must provide an extension name');
+  if (name.includes('..')) throw new Error(`Extension name '${name}' must not contain '..'`);
+  return `${name}/`;
+}
+
+/**
+ * Rejects an extension name that is "." alone (or "./"), which would list every extension's data
+ * rather than its own. A ".." is refused for every operation by `getExtensionKeyPrefix`.
+ */
+function assertListableExtensionName(extensionName: string): void {
+  const segments = extensionName
+    .split(/[/\\]/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment !== '');
+  if (segments.every((segment) => segment === '.'))
+    throw new Error(
+      `Extension name '${extensionName}' must stay within its own extension-data directory`,
+    );
+}
+
+/** Rejects an empty data qualifier, or one containing ".." anywhere. */
 function getExtensionDataKey(scope: ExtensionDataScope): string {
-  return `${scope.extensionName}/${scope.dataQualifier}`;
+  const prefix = getExtensionKeyPrefix(scope.extensionName);
+  const qualifier: unknown = scope.dataQualifier;
+  if (typeof qualifier !== 'string' || qualifier === '')
+    throw new Error('Must provide a data qualifier');
+  if (qualifier.includes('..'))
+    throw new Error(`Data qualifier '${qualifier}' must not contain '..'`);
+  return `${prefix}${qualifier}`;
 }
 
 export class HelloRock3ProjectDataProviderEngine
   extends BaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES>
-  implements IBaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES>
+  implements
+    IBaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES>,
+    WithProjectDataProviderEngineExtensionDataEnumerationMethods
 {
   private saveProjectData: () => Promise<void>;
 
@@ -106,6 +151,25 @@ export class HelloRock3ProjectDataProviderEngine
     this.projectData.extensionData[getExtensionDataKey(scope)] = data;
     await this.saveProjectData();
     return true;
+  }
+
+  async listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]> {
+    // Native `String` methods, not the grapheme-aware ones from `platform-bible-utils`, and the
+    // whole expression stays native so the prefix length and the slice index share an index space.
+    // Extension names are author-chosen and need not be ASCII, but nothing here is a search through
+    // text: `getExtensionDataKey` composes these keys with a native template literal and
+    // `getExtensionData` looks one up by exact string equality, so the listing has to split them on
+    // exactly the same terms. Grapheme-aware matching does not agree with exact-string storage: a
+    // `dataQualifier` beginning with a combining mark fuses it onto the `/` into one cluster, so a
+    // grapheme `startsWith` rejects a key `getExtensionData` reads back fine, and the qualifier
+    // vanishes from the listing. The repo's string rule records this carve-out and names this
+    // method as its example: .claude/rules/code-quality/native-string-vs-grapheme-helpers.md
+    const keyPrefix = getExtensionKeyPrefix(scope.extensionName);
+    assertListableExtensionName(scope.extensionName);
+    return Object.keys(this.projectData.extensionData)
+      .filter((key) => key.startsWith(keyPrefix))
+      .map((key) => key.slice(keyPrefix.length))
+      .sort();
   }
 
   async setRandomNumber(max: number, newNum: number) {

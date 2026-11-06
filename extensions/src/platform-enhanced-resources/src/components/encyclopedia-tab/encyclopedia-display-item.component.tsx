@@ -4,6 +4,7 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
+  useContentZoomTextProps,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 
@@ -105,6 +106,7 @@ export function EncyclopediaDisplayItem({
 
   localizedStringsWithLoadingState = [{}, false],
 }: EncyclopediaDisplayItemProps) {
+  const contentZoomTextProps = useContentZoomTextProps();
   const getLocalizedString = (key: EncyclopediaDisplayItemLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
@@ -146,19 +148,36 @@ export function EncyclopediaDisplayItem({
               onSourceTextClick(item.tokenId);
             }}
           >
-            <span className="tw:truncate tw:font-semibold">{item.translit}</span>
+            <span
+              className="tw:truncate tw:font-semibold"
+              // The hook returns only the content-zoom marker attribute, or nothing.
+              // eslint-disable-next-line react/jsx-props-no-spreading
+              {...contentZoomTextProps}
+            >
+              {item.translit}
+            </span>
           </Button>
           {showSourceScript && (
             <span
               data-source-language-text
               aria-label={sourceTextTooltip}
               className="tw:truncate tw:text-xs tw:text-muted-foreground"
+              // The hook returns only the content-zoom marker attribute, or nothing.
+              // eslint-disable-next-line react/jsx-props-no-spreading
+              {...contentZoomTextProps}
             >
               {item.lemma}
             </span>
           )}
           {teaserPreview && (
-            <p className="tw:line-clamp-1 tw:text-xs tw:text-muted-foreground">{teaserPreview}</p>
+            <p
+              className="tw:line-clamp-1 tw:text-xs tw:text-muted-foreground"
+              // The hook returns only the content-zoom marker attribute, or nothing.
+              // eslint-disable-next-line react/jsx-props-no-spreading
+              {...contentZoomTextProps}
+            >
+              {teaserPreview}
+            </p>
           )}
         </div>
       </ContextMenuTrigger>

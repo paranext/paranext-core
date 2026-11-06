@@ -21,10 +21,28 @@ type CharacterMarkerCoverageState = Exclude<CharacterMarkerSelectionState, 'none
  * it.
  */
 export type CharacterMarkerSelection = {
-  /** Where the selection starts. `offset` is absent for locations that are not text content. */
-  start: { jsonPath: string; offset?: number };
+  /** Where the selection starts. */
+  start: CharacterMarkerSelectionLocation;
   /** Where the selection ends. Absent means a collapsed caret at `start`. */
-  end?: { jsonPath: string; offset?: number };
+  end?: CharacterMarkerSelectionLocation;
+};
+
+/**
+ * One end of a {@link CharacterMarkerSelection}: any `UsjDocumentLocation` shape, declared
+ * structurally. Which optional field is present says what the location points at — `offset` for a
+ * text content string; `propertyOffset` for a property value such as a marker's name (the
+ * `jsonPath` then ends in a bracketed property name); `closingMarkerOffset`, `keyName`, `keyOffset`
+ * or `keyClosingMarkerOffset` for a closing marker or attribute; none of them for the start of a
+ * marker object.
+ */
+export type CharacterMarkerSelectionLocation = {
+  jsonPath: string;
+  offset?: number;
+  propertyOffset?: number;
+  closingMarkerOffset?: number;
+  keyName?: string;
+  keyOffset?: number;
+  keyClosingMarkerOffset?: number;
 };
 
 /** Per-marker coverage of a selection, plus whether any of it carries no character marker. */
@@ -110,6 +128,58 @@ function getAncestorCharacterMarkers(
   return markers;
 }
 
+/** Properties whose value is written in the owning marker's opener (`\nd`, `\v 1`, `\f +`). */
+const OPENER_SIDE_PROPERTIES = ['marker', 'number', 'caller', 'code'];
+
+/** Matches the bracketed property name a property location's `jsonPath` ends in. */
+const TRAILING_PROPERTY_REGEX = /\[(?:'([^']*)'|"([^"]*)")\]$/;
+
+/**
+ * Where a selection end sits relative to the USJ node its `jsonPath` names:
+ *
+ * - `'node'`: at the node itself — inside a text string at `offset`, or at the start of a marker
+ *   object.
+ * - `'after-content'`: after the owning marker object's content — its closing marker or an attribute.
+ */
+type NormalizedPosition = {
+  jsonPath: string;
+  offset?: number;
+  kind: 'node' | 'after-content';
+};
+
+/**
+ * Maps any location shape to a node position the document walk can use. A location in the owner's
+ * opener (its marker name, verse number, note caller) is the owner's start; a closing-marker,
+ * attribute or other property location is after the owner's content.
+ */
+function normalizeLocation(location: CharacterMarkerSelectionLocation): NormalizedPosition {
+  const { jsonPath, offset } = location;
+  if (typeof offset === 'number') return { jsonPath, offset, kind: 'node' };
+
+  const propertyMatch = TRAILING_PROPERTY_REGEX.exec(jsonPath);
+  if (propertyMatch) {
+    const ownerJsonPath = jsonPath.slice(0, propertyMatch.index);
+    const propertyName = propertyMatch[1] ?? propertyMatch[2];
+    return {
+      jsonPath: ownerJsonPath,
+      kind: OPENER_SIDE_PROPERTIES.includes(propertyName) ? 'node' : 'after-content',
+    };
+  }
+
+  const isAfterContent =
+    location.closingMarkerOffset !== undefined ||
+    location.keyName !== undefined ||
+    location.keyOffset !== undefined ||
+    location.keyClosingMarkerOffset !== undefined ||
+    location.propertyOffset !== undefined;
+  return { jsonPath, kind: isAfterContent ? 'after-content' : 'node' };
+}
+
+/** Whether `jsonPath` is `ancestorJsonPath` itself or anything beneath it. */
+function isSelfOrDescendant(jsonPath: string, ancestorJsonPath: string): boolean {
+  return jsonPath === ancestorJsonPath || jsonPath.startsWith(`${ancestorJsonPath}.`);
+}
+
 /**
  * Resolves a selection against a chapter's USJ into per-marker coverage.
  *
@@ -122,8 +192,9 @@ function getAncestorCharacterMarkers(
  * @param usj The chapter USJ the selection's json paths refer to.
  * @param selection The selection to analyze. `undefined` yields an empty coverage.
  * @returns Per-marker coverage. Empty (no markers, nothing uncovered) when there is nothing to
- *   measure — an unresolvable path, or a selection inside a note — which is treated as "no
- *   information", never as a throw and never as "the selection is unmarked".
+ *   measure — a selection inside a note, or a path that does not resolve against `usj` (a selection
+ *   taken from a different document than `usj`) — which is treated as "no information", never as a
+ *   throw and never as "the selection is unmarked".
  */
 export function computeCharacterMarkerCoverage(
   usj: Usj,
@@ -133,44 +204,50 @@ export function computeCharacterMarkerCoverage(
 
   const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
 
+  // Property, closing-marker and attribute locations are normalized to the marker object that owns
+  // them; none of them resolve to a node of their own.
+  const startPosition = normalizeLocation(selection.start);
+  const endPosition = normalizeLocation(selection.end ?? selection.start);
+
   let startLocation;
-  let endJsonPath: string;
   try {
-    startLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.start.jsonPath);
-    endJsonPath = selection.end?.jsonPath ?? selection.start.jsonPath;
+    startLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(startPosition.jsonPath);
     // Resolve the end too, so an unresolvable end path fails here rather than silently walking to
     // the end of the chapter.
-    usjRW.jsonPathToUsjNodeAndDocumentLocation(endJsonPath);
+    usjRW.jsonPathToUsjNodeAndDocumentLocation(endPosition.jsonPath);
   } catch {
     return EMPTY_COVERAGE;
   }
   if (!startLocation) return EMPTY_COVERAGE;
 
-  // Walk forward from the start, collecting the text nodes up to and including the end node. The
-  // walk includes its starting point, and returning `true` stops it.
+  // A start after its owner's content begins after the owner's whole subtree.
+  const skipsStartSubtree = startPosition.kind === 'after-content';
+  const endsAfterContent = endPosition.kind === 'after-content';
+
+  // Walk forward from the start, collecting the text nodes up to the end. The walk includes its
+  // starting point, and returning `true` stops it.
   const segments: { jsonPath: string; text: string }[] = [];
-  let reachedEnd = false;
-  // Set when the end path names a MarkerObject rather than a text node — see below.
-  let isInsideEndSubtree = false;
-  const isDescendantOfEnd = (jsonPath: string) => jsonPath.startsWith(`${endJsonPath}.`);
+  // An end after its owner's content is already reached when the start is inside that owner.
+  let reachedEnd =
+    endsAfterContent && isSelfOrDescendant(startPosition.jsonPath, endPosition.jsonPath);
   usjRW.findNextMatchingNode(startLocation, ({ node, documentLocation }) => {
     const { jsonPath } = documentLocation;
-    // Leaving the end node's subtree ends the walk. Checked before collecting so the node that
+    // Leaving the end owner's subtree ends the walk. Checked before collecting so the node that
     // carried us out never enters `segments`.
-    if (isInsideEndSubtree && !isDescendantOfEnd(jsonPath)) return true;
+    if (endsAfterContent && reachedEnd && !isSelfOrDescendant(jsonPath, endPosition.jsonPath))
+      return true;
 
-    if (isString(node)) segments.push({ jsonPath, text: node });
-
-    if (jsonPath === endJsonPath) {
+    if (jsonPath === endPosition.jsonPath) {
       reachedEnd = true;
-      if (isString(node)) return true;
-      // The end resolved to a MarkerObject, not to its text. The walk is PRE-ORDER — it runs the
-      // callback on an object before descending into its `content` — so stopping here would end
-      // the walk before the marker's own text was ever collected and silently undercount it.
-      // Descend instead, and stop on the way back out.
-      isInsideEndSubtree = true;
+      // An end at the start of a marker object is exclusive: it is the gap in front of that
+      // object, so nothing of it is selected.
+      if (!endsAfterContent && !isString(node)) return true;
     }
-    return false;
+
+    const isSkipped = skipsStartSubtree && isSelfOrDescendant(jsonPath, startPosition.jsonPath);
+    if (isString(node) && !isSkipped) segments.push({ jsonPath, text: node });
+
+    return !endsAfterContent && jsonPath === endPosition.jsonPath;
   });
   // An end that never came up (an unreachable range) degrades to the start node alone rather than
   // to the rest of the chapter. Note this is not the backwards-drag case: the editor normalizes
@@ -180,8 +257,8 @@ export function computeCharacterMarkerCoverage(
 
   // Trim the first and last segments to the selection's offsets. With one segment both apply to it.
   if (segments.length > 0) {
-    const startOffset = selection.start.offset ?? 0;
-    const endOffset = selection.end?.offset;
+    const startOffset = startPosition.kind === 'node' ? (startPosition.offset ?? 0) : 0;
+    const endOffset = endPosition.kind === 'node' ? endPosition.offset : undefined;
     if (segments.length === 1) {
       // `endOffset` indexes the END node's text. It applies here only when the end was actually
       // reached, which for a single segment means start and end name the same text node. On the
@@ -214,7 +291,7 @@ export function computeCharacterMarkerCoverage(
   // A collapsed caret selects no text, so length accounting says nothing. Fall back to the markers
   // enclosing the caret and call them 'all': everything selected (nothing) is inside them.
   if (totalLength === 0) {
-    const ancestors = getAncestorCharacterMarkers(usjRW, selection.start.jsonPath);
+    const ancestors = getAncestorCharacterMarkers(usjRW, startPosition.jsonPath);
     // Inside a note, which coverage excludes entirely. Report "no information" rather than
     // `hasUncovered: true`: claiming unmarked text is selected would describe a location this
     // function deliberately does not measure. The empty result makes the caller fall back to its

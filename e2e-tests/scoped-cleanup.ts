@@ -1,0 +1,257 @@
+/**
+ * Teardown cleanup scoped to the checkout that ran the tests.
+ *
+ * Matching processes by NAME reaches every `electron` and `dotnet` on the machine: the developer's
+ * own app, any app a CDP-based suite is attached to, and other checkouts' runs on a shared box.
+ * Selection here is by working directory instead, so cleanup stays inside this checkout. Note what
+ * that does and does not say: it reaches every sweepable process whose working directory is in
+ * here, including ones this run did not start — a `npm run start:data` left running in another
+ * terminal is inside the checkout and will be signalled.
+ *
+ * Two decisions live here so they can be tested without killing anything: whether to sweep at all,
+ * and which processes belong to this checkout.
+ */
+import fs from 'fs';
+import path from 'path';
+
+/** A process considered for cleanup. `cwd` is undefined when it could not be read. */
+export type ProcessCandidate = { pid: number; comm: string; cwd: string | undefined };
+
+/** `/proc/<pid>/comm` is capped at this many characters by the kernel (TASK_COMM_LEN - 1). */
+const COMM_MAX_LENGTH = 15;
+
+/**
+ * The only process names cleanup considers, truncated the way `/proc` reports them.
+ *
+ * Being under the repo root is necessary but NOT sufficient: npm, node and the shell running the
+ * suite are rooted there too, and killing them kills the run doing the killing.
+ *
+ * `dotnet` is the data provider in development (`dotnet watch --project
+ * c-sharp/ParanextDataProvider.csproj`), which is how every e2e run launches it. `dotnet watch`
+ * then execs the apphost binary, and a packaged build runs that binary directly — so the executable
+ * name is here too. It is longer than the cap, which is exactly why these are truncated rather than
+ * compared whole: spelled in full it would never match anything.
+ */
+const SWEEPABLE_PROCESS_NAMES = ['electron', 'dotnet', 'ParanextDataProvider'].map((name) =>
+  name.slice(0, COMM_MAX_LENGTH),
+);
+
+/** Values that mean "no" even though they are non-empty strings. */
+const NEGATIVE_FLAG_VALUES = ['0', 'false', 'no', 'off'];
+
+/**
+ * The environment's answer to "does this whole machine belong to the run".
+ *
+ * Reading it here rather than at the call site is what makes the CHOICE of variable testable: a
+ * caller that passed `process.env.CI` directly would look identical to one that passed the right
+ * thing, because the dispatch tests inject the value.
+ */
+export function machineOwnershipFlag(): string | undefined {
+  return process.env.GITHUB_ACTIONS;
+}
+
+/**
+ * Whether an environment flag asks for the machine-wide sweep.
+ *
+ * The flag to read is `GITHUB_ACTIONS`, not `CI`. `CI=true` is the ordinary way to make CLI tooling
+ * non-interactive and is exported by dev containers and wrapper scripts, so gating on it hands a
+ * developer's own machine the sweep this module exists to prevent — on a box where the sweep also
+ * reaches `webpack`, `vite` and `extension-host` by command line, not just Electron.
+ *
+ * The negative-value handling stays because it costs nothing and the failure it prevents is silent:
+ * a plain truthiness test treats `false` and `0` as yes, both being non-empty strings.
+ */
+export function isSweepEnabled(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '') return false;
+  return !NEGATIVE_FLAG_VALUES.includes(normalized);
+}
+
+/**
+ * `dir` with symlinks resolved, falling back to a plain resolve when the path cannot be read.
+ *
+ * A working directory read from /proc is always fully resolved, so a root that still contains a
+ * symlink compares against a path no process can match. The fallback covers a root that does not
+ * exist, which is what the unit tests' synthetic roots rely on.
+ */
+function realPathOrResolved(dir: string): string {
+  const resolved = path.posix.resolve(dir);
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+/**
+ * The pids of sweepable processes running inside `root`, excluding `excludePids`.
+ *
+ * Every path here is POSIX. Working directories come from `/proc`, which exists only on Linux, so
+ * both sides of the comparison are POSIX by construction — resolving them with the host's rules
+ * would rewrite them on a platform this selector never really runs on.
+ *
+ * Containment is checked against the resolved path with a separator, so a sibling checkout whose
+ * path merely starts with the same characters — `paranext-core-other` beside `paranext-core` — is
+ * not treated as inside it. A process whose working directory could not be read is left alone:
+ * unknown means "not ours", because /proc entries for another user's processes are unreadable and
+ * guessing in that direction is how a neighbour's app gets killed.
+ */
+export function selectPidsUnderRoot(
+  root: string,
+  candidates: ProcessCandidate[],
+  excludePids: number[],
+): number[] {
+  const resolvedRoot = realPathOrResolved(root);
+  const prefix = `${resolvedRoot}${path.posix.sep}`;
+  // Worktrees of this repository live at <root>/.claude/worktrees/<name>, so they sit INSIDE the
+  // root by path while belonging to a different checkout and, usually, a different run. Plain
+  // containment would claim all of them, which is the same cross-checkout kill this module exists
+  // to prevent. A run whose own root IS such a directory is unaffected: the container it excludes
+  // is relative to its own root, not the canonical one.
+  const nestedWorktrees = `${path.posix.join(resolvedRoot, '.claude', 'worktrees')}${path.posix.sep}`;
+  return candidates
+    .filter((candidate) => !excludePids.includes(candidate.pid))
+    .filter((candidate) => SWEEPABLE_PROCESS_NAMES.includes(candidate.comm))
+    .filter(
+      (candidate) =>
+        candidate.cwd !== undefined &&
+        (candidate.cwd === resolvedRoot || candidate.cwd.startsWith(prefix)) &&
+        !candidate.cwd.startsWith(nestedWorktrees),
+    )
+    .map((candidate) => candidate.pid);
+}
+
+/** The parent of `pid`, or undefined when it cannot be read. */
+function readParentPid(pid: number): number | undefined {
+  try {
+    // /proc/<pid>/stat field 4 is the parent pid. Field 2 is the command name, which can contain
+    // spaces and parentheses, so only the fields after the final ')' can be split safely.
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf-8');
+    const afterComm = stat
+      .slice(stat.lastIndexOf(')') + 1)
+      .trim()
+      .split(/\s+/);
+    const parsed = Number.parseInt(afterComm[1] ?? '', 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+/** This process and every ancestor of it, so cleanup cannot kill the run performing it. */
+export function selfAndAncestorPids(): number[] {
+  const pids: number[] = [];
+  let current = process.pid;
+  while (current > 1 && !pids.includes(current)) {
+    pids.push(current);
+    const parent = readParentPid(current);
+    if (parent === undefined) break;
+    current = parent;
+  }
+  return pids;
+}
+
+/** Every process this user can see, with its name and working directory. */
+export function readProcessCandidates(): ProcessCandidate[] {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync('/proc');
+  } catch {
+    return [];
+  }
+  return entries.flatMap((entry) => {
+    const pid = Number.parseInt(entry, 10);
+    if (Number.isNaN(pid)) return [];
+    let comm: string;
+    try {
+      comm = fs.readFileSync(`/proc/${pid}/comm`, 'utf-8').trim();
+    } catch {
+      return [];
+    }
+    let cwd: string | undefined;
+    try {
+      cwd = fs.readlinkSync(`/proc/${pid}/cwd`);
+    } catch {
+      cwd = undefined;
+    }
+    return [{ pid, comm, cwd }];
+  });
+}
+
+/**
+ * Terminate sweepable processes belonging to `root`, and report which.
+ *
+ * @returns The pids signalled, so a caller can say what it did rather than claiming a tidy exit.
+ */
+export function killProcessesUnderRoot(root: string): number[] {
+  const pids = selectPidsUnderRoot(root, readProcessCandidates(), selfAndAncestorPids());
+  pids.forEach((pid) => {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Already gone between listing and signalling; nothing to do.
+    }
+  });
+  return pids;
+}
+
+/** What a cleanup pass may do, injected so the choice between them is testable. */
+export type CleanupActions = {
+  /** Terminate this checkout's processes, returning their pids. */
+  killUnderRoot: (root: string) => number[];
+  /** Terminate by process name across the machine. Only ever correct where the machine is ours. */
+  sweepByProcessName: () => void;
+};
+
+/** What a cleanup did. */
+export type CleanupOutcome = {
+  /** Pids terminated because their working directory is inside this checkout. */
+  pids: number[];
+  /** Whether the working-directory-scoped sweep ran. */
+  scoped: boolean;
+  /** What the machine-wide sweep by process name did. */
+  byName: 'skipped' | 'ran' | 'failed';
+};
+
+/**
+ * Decide and perform the cleanup this run should do.
+ *
+ * The two sweeps answer different questions and are not alternatives. Scoping answers "which
+ * processes are mine", and matters most on a shared developer machine, where a run must clear its
+ * own leaked app without touching a peer's checkout or the app the developer is using. It reads
+ * `/proc`, so only Linux can do it at all.
+ *
+ * The machine-wide sweep answers "is anything left over", and is safe only where the machine
+ * belongs to the run. On a GitHub runner it does, so it runs there in addition — it matches build
+ * watchers by command line, which selection by process name cannot reach. Note the question is
+ * whether the machine is a runner, not whether `CI` is set; see {@link machineOwnershipFlag}.
+ *
+ * That leaves one combination with nothing to do: off a GitHub runner, on a platform without
+ * `/proc`, where scoping is impossible and a machine-wide kill would hit the developer's own
+ * processes. Doing nothing is the only safe answer there.
+ */
+export function runCleanup(
+  {
+    machineIsOursFlag,
+    platform,
+    root,
+  }: { machineIsOursFlag: string | undefined; platform: NodeJS.Platform; root: string },
+  actions: CleanupActions,
+): CleanupOutcome {
+  const scoped = platform === 'linux';
+  const pids = scoped ? actions.killUnderRoot(root) : [];
+  if (!isSweepEnabled(machineIsOursFlag)) return { pids, scoped, byName: 'skipped' };
+  try {
+    actions.sweepByProcessName();
+  } catch {
+    // Almost certainly the 10s timeout: `npm run stop` starts npm and tsx cold, scans every process
+    // on the machine, and gives fkill its own kill-wait, which on a loaded box does not always fit.
+    // Note that having nothing to stop is NOT a cause — fkill runs with `silent: true`, so it
+    // swallows "process doesn't exist" and still exits zero. Either way a cleanup that could not
+    // finish must not turn a run whose tests all passed into a failed one, nor discard pids already
+    // signalled.
+    return { pids, scoped, byName: 'failed' };
+  }
+  return { pids, scoped, byName: 'ran' };
+}

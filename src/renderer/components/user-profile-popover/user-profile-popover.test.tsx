@@ -1,9 +1,47 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { useState } from 'react';
+import { newPlatformError, type PlatformError } from 'platform-bible-utils';
+import type { ServerType } from 'paratext-registration';
 import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
+import {
+  publishRegistrationValidity,
+  refreshRegistrationValidity,
+  resetRegistrationValidityStore,
+} from '@renderer/services/registration-validity-store';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
 import { UserProfilePopover } from './user-profile-popover.component';
+
+vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
+  offerRestartAfterInterfaceLanguageChange: vi.fn(async () => {}),
+}));
+
+/**
+ * Lets tests simulate `paratextRegistration.internetSettingsDataProvider` registering AFTER the
+ * popover's first render — the PT-4417 scenario `NetworkSettingsRow`'s retry key works around.
+ */
+const { emitNetworkObjectCreated, mockOnDidCreateNetworkObject } = vi.hoisted(() => {
+  const handlers = new Set<(details: { id: string }) => void>();
+  return {
+    mockOnDidCreateNetworkObject: (handler: (details: { id: string }) => void) => {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    emitNetworkObjectCreated: (details: { id: string }) => {
+      handlers.forEach((handler) => handler(details));
+    },
+  };
+});
+
+vi.mock('@shared/services/network-object.service', () => ({
+  onDidCreateNetworkObject: mockOnDidCreateNetworkObject,
+}));
+
+vi.mock('@shared/services/data-provider.service', () => ({
+  getDataProviderObjectId: (providerName: string) => `${providerName}-data`,
+}));
 
 // Radix Popover/Tooltip use ResizeObserver internally; jsdom doesn't provide it, so we stub a
 // no-op implementation. The methods intentionally don't use `this` since they're empty stubs.
@@ -30,11 +68,19 @@ type MockState = {
   setInterfaceMode: ReturnType<typeof vi.fn> | undefined;
   interfaceLanguage: string[];
   setInterfaceLanguage: ReturnType<typeof vi.fn> | undefined;
-  availableLanguages: Record<string, { autonym: string }>;
+  /** Undefined means "still loading": the hook hands back the component's own default list. */
+  availableLanguages: Record<string, { autonym: string }> | PlatformError | undefined;
   themeType: 'light' | 'dark';
   setTheme: ReturnType<typeof vi.fn> | undefined;
   shouldMatchSystem: boolean;
   setShouldMatchSystem: ReturnType<typeof vi.fn>;
+  /** `false` means the internet settings data provider has not registered yet (still loading). */
+  internetSettingsProviderAvailable: boolean;
+  /**
+   * Undefined means still loading (the hook reports `isLoading: true` regardless of this value); a
+   * `PlatformError` reproduces a failed read.
+   */
+  internetSettings: { selectedServer: ServerType } | PlatformError | undefined;
 };
 
 /**
@@ -62,6 +108,9 @@ const mockState: MockState = {
   setTheme: mockSetter(),
   shouldMatchSystem: false,
   setShouldMatchSystem: mockSetter(),
+  internetSettingsProviderAvailable: true,
+  // See beforeEach for why this is not 'Production'.
+  internetSettings: { selectedServer: 'Development' },
 };
 
 const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
@@ -74,15 +123,28 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   // fail — proving the localization wiring is real end to end.
   useLocalizedStrings: vi.fn(() => [
     {
-      '%toolbar_userProfile_label%': 'User profile button label',
+      '%toolbar_userProfile_label_2%': 'User menu button label',
+      '%toolbar_userProfile_label_registrationNeeded_2%':
+        'User menu button label needing registration',
+      '%userProfile_registrationNeeded%': 'Registration reminder row text',
       '%userProfile_header_defaultName%': 'Default display name',
       '%userProfile_header_notRegistered%': 'Registration needed',
       '%userProfile_interfaceMode_simple_label%': 'Simplified UI',
+      // The deprecated description keys stay mocked so a test can assert they no longer render.
       '%userProfile_interfaceMode_simple_description%': 'Fewer panels',
       '%userProfile_interfaceMode_power_label%': 'Advanced UI',
       '%userProfile_interfaceMode_power_description%': 'All panels',
-      '%userProfile_profileAndRegistration%': 'Profile and registration row',
-      '%userProfile_networkSettings_2%': 'Internet and connectivity row',
+      '%userProfile_interfaceMode_simple_description_2%': 'Basic work, short list',
+      '%userProfile_interfaceMode_power_description_2%': 'Configurable, with PT9',
+      '%userProfile_interfaceMode_power_labelWithPreview%': '{label} [early look]',
+      '%userProfile_profileAndRegistration_2%': 'Registration information row',
+      '%userProfile_networkSettings_3%': 'Internet connectivity row',
+      '%userProfile_server_badge_development%': 'Development badge text',
+      '%userProfile_server_badge_qualityAssurance%': 'QA badge text',
+      '%userProfile_server_badge_test%': 'Test badge text',
+      '%userProfile_server_tooltip_development%': 'Development server tooltip',
+      '%userProfile_server_tooltip_qualityAssurance%': 'QA server tooltip',
+      '%userProfile_server_tooltip_test%': 'Test server tooltip',
       '%userProfile_language%': 'UI language',
       '%userProfile_appearance%': 'Appearance section',
       '%userProfile_appearance_light%': 'Light theme',
@@ -97,7 +159,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       return [mockState.interfaceLanguage, mockState.setInterfaceLanguage, vi.fn(), false];
     return [undefined, mockSetter(), vi.fn(), false];
   }),
-  useData: vi.fn(() => ({
+  useData: vi.fn((dataProviderSource: unknown) => ({
     CurrentTheme: vi.fn(() => [
       {
         type: mockState.themeType,
@@ -109,14 +171,75 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       mockState.setTheme,
     ]),
     ShouldMatchSystem: vi.fn(() => [mockState.shouldMatchSystem, mockState.setShouldMatchSystem]),
-    AvailableInterfaceLanguages: vi.fn(() => [mockState.availableLanguages]),
+    AvailableInterfaceLanguages: vi.fn((_selector: undefined, defaultValue: unknown) => [
+      mockState.availableLanguages ?? defaultValue,
+    ]),
+    InternetSettings: vi.fn((_selector: undefined, defaultValue: unknown) => {
+      // Depends on `dataProviderSource` (the possibly-stuck-at-mount value `useDataProvider`
+      // below returned), not the live `mockState` flag directly — otherwise this mock would
+      // "self-heal" on any re-render regardless of whether the real hook's stuck-forever bug
+      // (PT-4417) is actually worked around, and the regression tests would pass unconditionally.
+      const isProviderAvailable = dataProviderSource !== undefined;
+      return [
+        // Not gated on `isProviderAvailable`: the real `useData` hook keeps the last value it
+        // delivered while a resubscribe is in flight (`isLoading` goes back to `true`, but the
+        // value does not reset) — see create-use-data-hook.util.ts. Mirroring that here, instead of
+        // forcing `defaultValue` whenever the provider isn't available, is what lets a test prove
+        // the component's own `isLoadingInternetSettings ||` guard is doing the suppressing, rather
+        // than the mock accidentally returning a value that would be suppressed anyway.
+        mockState.internetSettings ?? defaultValue,
+        mockSetter(),
+        // Mirrors the real hook: with no data provider, the subscription never resolves and
+        // `isLoading` stays `true` forever — not just until the mock state supplies a value.
+        !isProviderAvailable || mockState.internetSettings === undefined,
+      ];
+    }),
   })),
-  useDataProvider: vi.fn(() => undefined),
+  useDataProvider: vi.fn((providerName: string) => {
+    // Captured ONCE at mount, like the real `useDataProvider`/`createUseNetworkObjectHook`: a
+    // lookup that comes back empty on its first attempt is never retried on its own (PT-4417), so
+    // later flipping `mockState.internetSettingsProviderAvailable` must NOT change what an
+    // already-mounted component instance sees. Only an actual remount re-reads it.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [wasAvailableAtMount] = useState(() => mockState.internetSettingsProviderAvailable);
+    if (providerName === 'paratextRegistration.internetSettingsDataProvider')
+      return wasAvailableAtMount ? {} : undefined;
+    return undefined;
+  }),
 }));
 
 vi.mock('@shared/services/command.service', () => ({
   sendCommand: vi.fn(async () => ({ name: '', code: '', email: '', supporterName: '' })),
 }));
+
+// A working fake of the registration-validity store rather than bare vi.fn()s, so the component's
+// real useSyncExternalStore wiring is exercised. Mocking the store (not the command service) is also
+// what keeps the resolver's 3x15s retry machinery out of this suite. The state lives inside the
+// factory because vi.mock is hoisted above any module-scope variable it could otherwise close over.
+vi.mock('@renderer/services/registration-validity-store', () => {
+  let validity: 'valid' | 'invalid' | 'unknown' = 'unknown';
+  const listeners = new Set<() => void>();
+  return {
+    getRegistrationValidity: () => validity,
+    subscribeToRegistrationValidity: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    publishRegistrationValidity: (next: 'valid' | 'invalid' | 'unknown') => {
+      validity = next;
+      listeners.forEach((listener) => listener());
+    },
+    refreshRegistrationValidity: vi.fn(async () => validity),
+    // Mirrors the real reset: keeps subscribers and notifies them. Clearing here would let this
+    // fake keep passing even if the real store regressed on that invariant.
+    resetRegistrationValidityStore: () => {
+      validity = 'unknown';
+      listeners.forEach((listener) => listener());
+    },
+  };
+});
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn() },
@@ -133,15 +256,68 @@ beforeEach(() => {
   setMockSetting('setTheme', mockSetter());
   setMockSetting('shouldMatchSystem', false);
   setMockSetting('setShouldMatchSystem', mockSetter());
+  setMockSetting('internetSettingsProviderAvailable', true);
+  // Not 'Production', which never shows a badge or dot (see "UserProfilePopover server badge" and
+  // "UserProfilePopover non-production server dot"): the provider-registration recovery tests below
+  // ("recovers once…", "only remounts the row…") rely on a non-Production default to prove the
+  // badge/dot actually reappears once recovery completes.
+  setMockSetting('internetSettings', { selectedServer: 'Development' });
   vi.mocked(sendCommand).mockClear();
   vi.mocked(logger.warn).mockClear();
+  vi.mocked(offerRestartAfterInterfaceLanguageChange).mockClear();
+  resetRegistrationValidityStore();
+  vi.mocked(refreshRegistrationValidity).mockClear();
 });
 
 describe('UserProfilePopover', () => {
-  test('renders the trigger button with the user profile aria-label', () => {
+  test('the tooltip on the trigger reads "User menu" and matches the aria-label', async () => {
+    render(<UserProfilePopover />);
+    const trigger = screen.getByTestId('user-profile-popover-trigger');
+    fireEvent.focus(trigger);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('User menu button label');
+    expect(trigger).toHaveAttribute('aria-label', 'User menu button label');
+  });
+
+  test('the tooltip reads "User menu — registration needed" when the registration is invalid', async () => {
+    act(() => publishRegistrationValidity('invalid'));
+    render(<UserProfilePopover />);
+    const trigger = screen.getByTestId('user-profile-popover-trigger');
+    fireEvent.focus(trigger);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'User menu button label needing registration',
+    );
+    expect(trigger).toHaveAttribute('aria-label', 'User menu button label needing registration');
+  });
+
+  test('the row labels read "Registration information" and "Internet connectivity"', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-action-registration')).toHaveTextContent(
+      'Registration information row',
+    );
+    expect(screen.getByTestId('user-profile-action-network')).toHaveTextContent(
+      'Internet connectivity row',
+    );
+  });
+
+  test('the trigger icon has tw:text-primary in Power', () => {
+    setMockSetting('interfaceMode', 'power');
+    render(<UserProfilePopover />);
+    const icon = screen.getByTestId('user-profile-popover-trigger').querySelector('svg');
+    expect(icon).toHaveClass('tw:text-primary');
+  });
+
+  test('the trigger icon does not have tw:text-primary in Simple', () => {
+    setMockSetting('interfaceMode', 'simple');
+    render(<UserProfilePopover />);
+    const icon = screen.getByTestId('user-profile-popover-trigger').querySelector('svg');
+    expect(icon).not.toHaveClass('tw:text-primary');
+  });
+
+  test('renders the trigger button with the user menu aria-label', () => {
     render(<UserProfilePopover />);
     expect(screen.getByTestId('user-profile-popover-trigger')).toBeInTheDocument();
-    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+    expect(screen.getByLabelText('User menu button label')).toBeInTheDocument();
   });
 
   test('opens the popover when the trigger is clicked', async () => {
@@ -239,10 +415,47 @@ describe('UserProfilePopover interface mode', () => {
     fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
   });
+
+  test('labels the Power option, and only the Power option, as a preview', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    const powerOption = screen.getByTestId('user-profile-interface-mode-power');
+    expect(within(powerOption).getByText('Advanced UI [early look]')).toBeInTheDocument();
+    // Screen-reader users get the preview status with the option itself, not as a separate stop.
+    expect(powerOption).toHaveAccessibleName(/Advanced UI \[early look\]/);
+    expect(screen.getByTestId('user-profile-interface-mode-simple')).not.toHaveTextContent(
+      '[early look]',
+    );
+  });
+
+  test('keeps the preview label on the Power option while Power mode is selected', () => {
+    setMockSetting('interfaceMode', 'power');
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    expect(
+      within(screen.getByTestId('user-profile-interface-mode-power')).getByText(
+        'Advanced UI [early look]',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  test('describes each mode with the current description strings', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    const simpleOption = screen.getByTestId('user-profile-interface-mode-simple');
+    const powerOption = screen.getByTestId('user-profile-interface-mode-power');
+    expect(simpleOption).toHaveTextContent('Basic work, short list');
+    expect(powerOption).toHaveTextContent('Configurable, with PT9');
+    expect(simpleOption).not.toHaveTextContent('Fewer panels');
+    expect(powerOption).not.toHaveTextContent('All panels');
+  });
 });
 
 describe('UserProfilePopover action rows', () => {
-  test('"Profile & registration" click sends the command and closes the popover', async () => {
+  test('"Registration information" click sends the command and closes the popover', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-registration');
@@ -253,7 +466,7 @@ describe('UserProfilePopover action rows', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  test('"Network settings" click sends the command and closes the popover', async () => {
+  test('"Internet connectivity" plain click sends the plain command and closes the popover', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');
@@ -262,6 +475,241 @@ describe('UserProfilePopover action rows', () => {
       'paratextRegistration.showInternetSettings',
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  test('"Internet connectivity" Shift+click sends the server-selection command', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const button = await screen.findByTestId('user-profile-action-network');
+    fireEvent.click(button, { shiftKey: true });
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettingsWithServerSelection',
+    );
+  });
+
+  test('Shift+Enter on the focused "Internet connectivity" row cancels the keydown and sends the server-selection command exactly once', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const button = await screen.findByTestId('user-profile-action-network');
+
+    // `fireEvent.keyDown` returns the same boolean a native `dispatchEvent` does: `false` once some
+    // handler calls `preventDefault()`. That return value IS the browser-level mechanism that decides
+    // whether a focused button also receives a synthesized click after Enter, so asserting on it
+    // directly is what pins the handler's `e.preventDefault()` call and fails if it is ever removed.
+    // (Firing a literal follow-up click instead cannot reach the handler here regardless of
+    // `preventDefault`: the first invocation's `setIsOpen(false)` unmounts this button before a second
+    // event could be dispatched on it — so that approach would pass unconditionally and prove
+    // nothing.)
+    const keydownWasCanceled = !fireEvent.keyDown(button, { key: 'Enter', shiftKey: true });
+    expect(keydownWasCanceled).toBe(true);
+
+    // Filtered to this one command (not a bare call count) because opening the popover itself fires
+    // a separate `getParatextRegistrationData` command.
+    const internetSettingsCalls = vi
+      .mocked(sendCommand)
+      .mock.calls.filter(
+        ([command]) => command === 'paratextRegistration.showInternetSettingsWithServerSelection',
+      );
+    expect(internetSettingsCalls).toEqual([
+      ['paratextRegistration.showInternetSettingsWithServerSelection'],
+    ]);
+  });
+});
+
+describe('UserProfilePopover server badge', () => {
+  test('never renders the badge when the selected server is Production', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'Production' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+  });
+
+  test.each<{ server: ServerType; label: string; tooltip: string }>([
+    { server: 'QualityAssurance', label: 'QA badge text', tooltip: 'QA server tooltip' },
+    {
+      server: 'Development',
+      label: 'Development badge text',
+      tooltip: 'Development server tooltip',
+    },
+    { server: 'Test', label: 'Test badge text', tooltip: 'Test server tooltip' },
+  ])(
+    'names the $server server in its label and its tooltip',
+    async ({ server, label, tooltip }) => {
+      setMockSetting('internetSettings', { selectedServer: server });
+      render(<UserProfilePopover />);
+      fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+      const badge = await screen.findByTestId('user-profile-server-badge');
+      expect(badge).toHaveTextContent(label);
+
+      // Radix opens a tooltip on a non-touch pointer move over its trigger, after the provider's
+      // delay. Its `role="tooltip"` node is the screen-reader copy of the content.
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      fireEvent.pointerMove(badge);
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(tooltip);
+    },
+  );
+
+  test('plain click on the badge sends the plain command, same as the row', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    fireEvent.click(badge);
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettings',
+    );
+  });
+
+  test('Shift+click on the badge sends the server-selection command, same as the row', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    fireEvent.click(badge, { shiftKey: true });
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettingsWithServerSelection',
+    );
+  });
+
+  test('Enter on the focused badge sends the plain command', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    fireEvent.keyDown(badge, { key: 'Enter' });
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettings',
+    );
+  });
+
+  test('Shift+Enter on the focused badge sends the server-selection command', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    fireEvent.keyDown(badge, { key: 'Enter', shiftKey: true });
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettingsWithServerSelection',
+    );
+  });
+
+  test('is absent while the internet settings data provider has not registered yet', async () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+  });
+
+  test('recovers once the internet settings data provider registers after the popover already rendered without it (PT-4417)', async () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+
+    // The provider finishes registering after this first render. useDataProvider/useData have
+    // nothing to retry from in that case (PT-4417: a lookup that comes back empty on its very first
+    // attempt is never retried), so recovery depends on the retry key remounting NetworkSettingsRow.
+    setMockSetting('internetSettingsProviderAvailable', true);
+    act(() => {
+      emitNetworkObjectCreated({ id: 'paratextRegistration.internetSettingsDataProvider-data' });
+    });
+
+    expect(await screen.findByTestId('user-profile-server-badge')).toBeInTheDocument();
+  });
+
+  test('only remounts the row for the internet settings provider’s own registration event', async () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+
+    setMockSetting('internetSettingsProviderAvailable', true);
+    act(() => {
+      emitNetworkObjectCreated({ id: 'someOtherExtension.someOtherDataProvider-data' });
+    });
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+
+    // Positive control: the harness can make the badge appear, so the assertion above is not
+    // vacuously true (it fires a matching id, proving a mismatched one really was ignored).
+    act(() => {
+      emitNetworkObjectCreated({ id: 'paratextRegistration.internetSettingsDataProvider-data' });
+    });
+    expect(await screen.findByTestId('user-profile-server-badge')).toBeInTheDocument();
+  });
+
+  test('is absent when the internet settings read fails', async () => {
+    setMockSetting('internetSettings', newPlatformError('Internet settings unavailable'));
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+  });
+});
+
+// Unlike the row badge above, this dot lives on the toolbar trigger itself, so every assertion here
+// deliberately never opens the popover — that's the whole point of it existing.
+describe('UserProfilePopover non-production server dot (toolbar trigger)', () => {
+  test('is absent for Production', () => {
+    setMockSetting('internetSettings', { selectedServer: 'Production' });
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
+  });
+
+  test.each<ServerType>(['QualityAssurance', 'Development', 'Test'])(
+    'shows a dot for %s, without opening the popover',
+    (server) => {
+      setMockSetting('internetSettings', { selectedServer: server });
+      render(<UserProfilePopover />);
+      expect(screen.getByTestId('user-profile-non-production-dot')).toBeInTheDocument();
+    },
+  );
+
+  test('is decorative, so it is hidden from assistive technology', () => {
+    setMockSetting('internetSettings', { selectedServer: 'Development' });
+    render(<UserProfilePopover />);
+    expect(screen.getByTestId('user-profile-non-production-dot')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+  });
+
+  test('is absent while the internet settings data provider has not registered yet', () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
+  });
+
+  test('recovers once the internet settings data provider registers after first mount without it (PT-4417)', () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    setMockSetting('internetSettings', { selectedServer: 'Development' });
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
+
+    // The provider finishes registering after this first render — see NetworkSettingsRow's PT-4417
+    // doc comment for why a remount (via the shared retry key) is the only recovery path.
+    setMockSetting('internetSettingsProviderAvailable', true);
+    act(() => {
+      emitNetworkObjectCreated({ id: 'paratextRegistration.internetSettingsDataProvider-data' });
+    });
+
+    expect(screen.getByTestId('user-profile-non-production-dot')).toBeInTheDocument();
+  });
+
+  test('is absent when the internet settings read fails', () => {
+    setMockSetting('internetSettings', newPlatformError('Internet settings unavailable'));
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
+  });
+
+  test('is hidden behind the registration reminder dot when both conditions hold, which always wins', () => {
+    setMockSetting('internetSettings', { selectedServer: 'Development' });
+    act(() => publishRegistrationValidity('invalid'));
+    render(<UserProfilePopover />);
+    expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
   });
 });
 
@@ -281,6 +729,37 @@ describe('UserProfilePopover language picker', () => {
     // 'en' is selectable but already primary - select 'es' instead
     fireEvent.click(await screen.findByTestId('user-profile-language-es'));
     expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
+  });
+
+  test('offers a restart once the new language has been written', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    await waitFor(() =>
+      expect(offerRestartAfterInterfaceLanguageChange).toHaveBeenCalledWith(
+        ['en', 'es'],
+        ['es', 'en'],
+      ),
+    );
+  });
+
+  test('does not offer a restart when writing the new language fails', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    setMockSetting(
+      'setInterfaceLanguage',
+      vi.fn(async () => {
+        throw new Error('write rejected');
+      }),
+    );
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    // Positive control: the failed write was reported.
+    await waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('write rejected')),
+    );
+    expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
   });
 
   test('clicking a language while the setting setter is dropped warns instead of doing nothing', async () => {
@@ -319,6 +798,55 @@ describe('UserProfilePopover language picker', () => {
       'user-profile-language-es',
       'user-profile-language-fr',
     ]);
+  });
+
+  test('offers exactly English and Español while the languages load', async () => {
+    setMockSetting('availableLanguages', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-language-en');
+    const pills = Array.from(
+      document.querySelectorAll('[data-testid^="user-profile-language-"]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    expect(pills).toEqual(['user-profile-language-en', 'user-profile-language-es']);
+  });
+
+  test('shows a hidden current language as the pressed pill next to the offered ones', async () => {
+    setMockSetting('availableLanguages', {
+      en: { autonym: 'English' },
+      es: { autonym: 'Español' },
+    });
+    setMockSetting('interfaceLanguage', ['fr']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const frenchPill = await screen.findByTestId('user-profile-language-fr');
+    expect(frenchPill).toHaveAttribute('data-state', 'on');
+    expect(frenchPill).toHaveAttribute('aria-label', 'Français');
+    expect(screen.getByTestId('user-profile-language-en')).toHaveAttribute('data-state', 'off');
+    expect(screen.getByTestId('user-profile-language-es')).toHaveAttribute('data-state', 'off');
+  });
+
+  test('switching away from a hidden language drops it and keeps the other offered languages', async () => {
+    setMockSetting('availableLanguages', {
+      en: { autonym: 'English' },
+      es: { autonym: 'Español' },
+    });
+    setMockSetting('interfaceLanguage', ['fr', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-en'));
+    expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  test('offers exactly English and Español when the offered languages cannot be read', async () => {
+    setMockSetting('availableLanguages', newPlatformError('Localization service unavailable'));
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-language-en');
+    const pills = Array.from(
+      document.querySelectorAll('[data-testid^="user-profile-language-"]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    expect(pills).toEqual(['user-profile-language-en', 'user-profile-language-es']);
   });
 });
 
@@ -385,5 +913,158 @@ describe('UserProfilePopover appearance', () => {
     fireEvent.click(await screen.findByTestId('user-profile-appearance-system'));
     expect(mockState.setShouldMatchSystem).toHaveBeenCalledWith(true);
     expect(mockState.setTheme).not.toHaveBeenCalled();
+  });
+});
+
+describe('UserProfilePopover registration reminder', () => {
+  test('shows no dot and the plain label while validity is unknown', () => {
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User menu button label')).toBeInTheDocument();
+  });
+
+  test('shows no dot when the registration is valid', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('valid'));
+    expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User menu button label')).toBeInTheDocument();
+  });
+
+  test('shows the dot and swaps the accessible label when the registration is invalid', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
+    // The dot must not be the only signal — the accessible name carries the state too.
+    expect(
+      screen.getByLabelText('User menu button label needing registration'),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('User menu button label')).not.toBeInTheDocument();
+  });
+
+  test('the dot is decorative, so it is hidden from assistive technology', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    expect(screen.getByTestId('user-profile-registration-dot')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+  });
+
+  test('clears the dot once the registration becomes valid', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
+
+    act(() => publishRegistrationValidity('valid'));
+
+    expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User menu button label')).toBeInTheDocument();
+  });
+
+  test('marks the Registration information row with a dot and screen-reader text', async () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    expect(await screen.findByTestId('user-profile-action-registration-dot')).toBeInTheDocument();
+    expect(screen.getByTestId('user-profile-action-registration')).toHaveTextContent(
+      'Registration reminder row text',
+    );
+  });
+
+  test('leaves the Registration information row unmarked when the registration is valid', async () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('valid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    await screen.findByTestId('user-profile-action-registration');
+    expect(screen.queryByTestId('user-profile-action-registration-dot')).not.toBeInTheDocument();
+  });
+
+  test('forces a registration re-check when the popover opens, so the dot can clear without a restart', async () => {
+    render(<UserProfilePopover />);
+    // The mount probe is unforced; opening must additionally force one past the cache.
+    vi.mocked(refreshRegistrationValidity).mockClear();
+
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    await waitFor(() => expect(refreshRegistrationValidity).toHaveBeenCalledWith({ force: true }));
+  });
+
+  test('resolves validity on mount so the dot works with the popover closed', async () => {
+    render(<UserProfilePopover />);
+    await waitFor(() => expect(refreshRegistrationValidity).toHaveBeenCalled());
+  });
+});
+
+describe('UserProfilePopover header agrees with the reminder dot', () => {
+  test('shows a visible warning line when the registration is invalid but the profile is populated', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: 'alice@example.com',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    // Identity is preserved...
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+    // ...and the header no longer implies all is well while the dots say otherwise.
+    expect(screen.getByTestId('user-profile-registration-warning')).toHaveTextContent(
+      'Registration reminder row text',
+    );
+  });
+
+  test('shows no warning line when the registration is valid', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: 'alice@example.com',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('valid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.queryByTestId('user-profile-registration-warning')).not.toBeInTheDocument();
+  });
+
+  test('replaces "Not registered" with the warning line rather than showing both', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: '',
+      code: '',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    // Two near-identical messages would read as two separate problems.
+    await waitFor(() =>
+      expect(screen.getByTestId('user-profile-registration-warning')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('user-profile-email')).not.toBeInTheDocument();
+  });
+
+  test('keeps "Not registered" when the profile is empty and validity is unknown', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: '',
+      code: '',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    // An unverifiable registration must not silently drop the existing empty-profile message.
+    await waitFor(() =>
+      expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Registration needed'),
+    );
+    expect(screen.queryByTestId('user-profile-registration-warning')).not.toBeInTheDocument();
   });
 });

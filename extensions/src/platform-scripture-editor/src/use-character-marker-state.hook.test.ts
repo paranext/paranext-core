@@ -391,3 +391,50 @@ describe('useCharacterMarkerState — disabled rows', () => {
     expect(removeRow?.isDisabled).toBe(false);
   });
 });
+
+describe('useCharacterMarkerState — selection starting at a property location', () => {
+  it('removes the covering marker instead of nesting it again', () => {
+    // A selection from an empty paragraph into `\nd LORD\nd*` starts at the paragraph's marker
+    // name. It still covers `nd`, so the `nd` row removes it; treated as unmeasurable, the row
+    // would insert a second `nd` inside the first.
+    const usj: Usj = {
+      type: 'USJ',
+      version: '3.0',
+      content: [
+        { type: 'book', marker: 'id', code: 'PSA', content: ['PSA'] },
+        { type: 'chapter', marker: 'c', number: '1', sid: 'PSA 1' },
+        { type: 'para', marker: 'b', content: [] },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '1', sid: 'PSA 1:1' },
+            { type: 'char', marker: 'nd', content: ['LORD'] },
+          ],
+        },
+      ],
+    };
+    const removeCharacterMarker = vi.fn();
+    const { result } = renderHook(() =>
+      useCharacterMarkerState(
+        options({
+          editorRef: makeEditorRef(usj),
+          contextMarker: 'p',
+          removeCharacterMarker,
+          getSelection: () => ({
+            start: { jsonPath: "$.content[2]['marker']", propertyOffset: 1 },
+            end: { jsonPath: '$.content[3].content[1].content[0]', offset: 4 },
+          }),
+        }),
+      ),
+    );
+
+    act(() => result.current.onOpen());
+
+    const ndRow = result.current.markerMenuItems.find((item) => item.marker === 'nd');
+    expect(ndRow?.selectionState).toBe('all');
+    ndRow?.action();
+    expect(removeCharacterMarker).toHaveBeenCalledWith('nd');
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+});

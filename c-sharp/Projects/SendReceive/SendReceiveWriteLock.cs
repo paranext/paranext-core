@@ -18,7 +18,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// projects is syncing, every <see cref="EnterWrite"/> for one of THOSE projects throws immediately
 /// (message ending in <see cref="EditBlockedSentinel"/>) rather than queueing — a user's keystroke
 /// must never hang behind a background sync. The editor catches the sentinel, shows an "editing
-/// paused during Send/Receive" notice, and reverts the un-saved change. A write to a project that
+/// paused during sync" notice, and reverts the un-saved change. A write to a project that
 /// is NOT being synced is unaffected and proceeds (see the per-project remarks below).
 /// </description>
 /// </item>
@@ -175,7 +175,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <b>Inert in open-source Platform.Bible.</b> Nothing in public core ever calls
 /// <see cref="SetSyncing"/>, so the gate is never armed, <see cref="IsBlocked"/> always returns
 /// <c>false</c>, every <see cref="EnterWrite"/> scope succeeds, and no write is ever rejected —
-/// public behavior is unchanged by this class. The Paratext 10 Studio closed-source patch brackets
+/// public behavior is unchanged by this class. The Paratext 10 closed-source patch brackets
 /// each automatic sync with <see cref="SetSyncing"/> / <see cref="Clear(long)"/> (Jira PT-4210),
 /// which is what activates the gate. This class is the public seam; the activation lives in the
 /// patch.
@@ -183,8 +183,8 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </remarks>
 internal static class SendReceiveWriteLock
 {
-    // The exact suffix on every rejection message. The Paratext 10 Studio Scripture editor matches
-    // this sentinel to show an "editing paused during Send/Receive" notification (rather than the
+    // The exact suffix on every rejection message. The Paratext 10 Scripture editor matches
+    // this sentinel to show an "editing paused during sync" notification (rather than the
     // generic permissions message) and revert the un-saved change.
     public const string EditBlockedSentinel = "(SR_EDIT_BLOCKED)";
 
@@ -223,6 +223,16 @@ internal static class SendReceiveWriteLock
     /// </para>
     /// </summary>
     public static event Action<SendReceiveBlockState>? BlockStateChanged;
+
+    /// <summary>
+    /// Raised once each time a write scope opened by <see cref="EnterWrite"/> is disposed, with the
+    /// project id that scope was opened for (exactly as passed to <see cref="EnterWrite"/>). Fires
+    /// AFTER the scope's in-flight count is released, on the disposing thread, and regardless of
+    /// whether the mutation inside the scope succeeded — a subscriber that needs the truth (e.g. an
+    /// unsynced-changes tracker) re-reads the repository rather than trusting the signal. A throwing
+    /// subscriber is logged and never propagates into the disposing data-provider write.
+    /// </summary>
+    public static event Action<string>? WriteScopeExited;
 
     // The single atomic word all mutual exclusion rests on (see the class remarks): bits 0–31
     // count in-flight write scopes, bit 32 is the "a sync is armed" flag, and bits 33–62 hold the
@@ -294,9 +304,11 @@ internal static class SendReceiveWriteLock
     /// </summary>
     internal static void ResetForTests(long generation = 0)
     {
-        // Drop every BlockStateChanged subscriber too — the event is static, so a subscription a
-        // test wires up would otherwise leak into later tests (and be invoked by their transitions).
+        // Drop every subscriber of both static events (BlockStateChanged, WriteScopeExited): a
+        // subscription a test wires up would otherwise leak into later tests and be invoked by
+        // their transitions and scope exits.
         BlockStateChanged = null;
+        WriteScopeExited = null;
         _blockedProjectIds = EmptyProjectIds;
         Volatile.Write(ref _state, (generation << GenerationShift) & GenerationMask);
     }
@@ -342,9 +354,31 @@ internal static class SendReceiveWriteLock
         }
     }
 
+    // Invokes WriteScopeExited handler by handler, so one faulting subscriber can neither abort the
+    // disposing write nor starve the subscribers after it.
+    private static void RaiseWriteScopeExited(string projectId)
+    {
+        Action<string>? handlers = WriteScopeExited;
+        if (handlers is null)
+            return;
+        foreach (Delegate handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((Action<string>)handler)(projectId);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    $"[SendReceiveWriteLock] A {nameof(WriteScopeExited)} handler threw: {ex}"
+                );
+            }
+        }
+    }
+
     private static InvalidOperationException EditBlocked(string projectId) =>
         new(
-            $"Cannot write to project '{projectId}' while an automatic Send/Receive is in "
+            $"Cannot write to project '{projectId}' while an automatic sync is in "
                 + $"progress. {EditBlockedSentinel}"
         );
 
@@ -501,7 +535,7 @@ internal static class SendReceiveWriteLock
                 // "nothing armed on this bracket's behalf, writes flow again, no cleanup owed".
                 Clear(token);
                 throw new TimeoutException(
-                    $"{drainFailure}; the Send/Receive arm was rolled back and the sync must "
+                    $"{drainFailure}; the sync arm was rolled back and the sync must "
                         + "not proceed."
                 );
             }
@@ -509,7 +543,7 @@ internal static class SendReceiveWriteLock
             // Degraded: proceed rather than deadlock the sync. The armed flag keeps rejecting
             // new writes; only the already-stuck write(s) we couldn't drain may still overlap.
             Console.Error.WriteLine(
-                $"[SendReceiveWriteLock] Warning: {drainFailure}; proceeding with Send/Receive "
+                $"[SendReceiveWriteLock] Warning: {drainFailure}; proceeding with the sync "
                     + "anyway (new writes stay rejected while the sync is armed)."
             );
         }
@@ -631,7 +665,7 @@ internal static class SendReceiveWriteLock
             if ((state & ArmedFlag) != 0 && _blockedProjectIds.Contains(projectId))
                 throw EditBlocked(projectId);
             if (Interlocked.CompareExchange(ref _state, state + 1, state) == state)
-                return new WriteScope();
+                return new WriteScope(projectId);
         }
     }
 
@@ -661,9 +695,9 @@ internal static class SendReceiveWriteLock
     /// <summary>
     /// The disposable returned by <see cref="EnterWrite"/>. Releases its in-flight count exactly
     /// once, from whatever thread disposes it (an interlocked guard makes cross-thread double-
-    /// dispose safe).
+    /// dispose safe), then raises <see cref="WriteScopeExited"/> for its project.
     /// </summary>
-    private sealed class WriteScope : IDisposable
+    private sealed class WriteScope(string projectId) : IDisposable
     {
         private int _disposed;
 
@@ -672,6 +706,7 @@ internal static class SendReceiveWriteLock
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
             ExitWrite();
+            RaiseWriteScopeExited(projectId);
         }
     }
 }

@@ -75,8 +75,6 @@ vi.mock('@renderer/services/usersnap.service', () => ({
   closeOpenUsersnapForm: vi.fn(),
   isUsersnapFormCurrentlyOpen: vi.fn(),
   openUsersnapForm: vi.fn(),
-  USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: '',
-  USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: '',
 }));
 
 // Dialog shard dependencies
@@ -460,4 +458,61 @@ describe('a dialog arriving while this window has an emptiness report in flight'
 
     releaseEmptiedReport({ action: 'stay' });
   });
+});
+
+describe('a docked dialog dropped by a whole-layout load', () => {
+  test('a layout load settles a dialog request whose tab the new layout drops', async () => {
+    // A Simple/Power mode switch replaces the whole dock via `loadLayout`, which never runs
+    // rc-dock's per-tab remove callback — the same mechanism `dialog.service-shard.layout-load.test.ts`'s
+    // other describes exercise for a load still in flight. Here the load actually lands, and the
+    // dialog's tab is not part of what it lands on, so nothing but the requestor would ever learn
+    // its request can no longer be answered.
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    let interfaceMode = 'power';
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:emptied') return { action: 'stay' };
+      if (requestType === 'windowLayout:get') return { kind: 'empty' };
+      return undefined;
+    });
+
+    const webViewModule = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout, loadedLayouts, dockedTabs } = makeLiveDockLayout();
+    webViewModule.registerDockLayout(dockLayout);
+    await webViewModule.startWebViewServiceShard();
+    await primeProvider();
+    await vi.waitFor(() => expect(loadedLayouts.length).toBe(1));
+
+    const dialogModule = await import('./dialog.service-shard');
+    await dialogModule.startDialogServiceShard();
+    const dialogShard = findPublishedShard<DialogShard>('showDialog');
+
+    const showing = dialogShard.showDialog(ALERT_DIALOG_TYPE, { prompt: 'Alert message' });
+    await vi.waitFor(() =>
+      expect(dockedTabs.map((tab) => tab.tabType)).toContain(ALERT_DIALOG_TYPE),
+    );
+    const dialogTab = dockedTabs.find((tab) => tab.tabType === ALERT_DIALOG_TYPE);
+    if (!dialogTab) throw new Error('the dialog tab was not docked');
+    expect(dialogModule.hasDialogRequest(dialogTab.id)).toBe(true);
+
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    interfaceMode = 'simple';
+    await interfaceModeCallback('simple');
+
+    await expect(showing).resolves.toBeUndefined();
+    expect(dialogModule.hasDialogRequest(dialogTab.id)).toBe(false);
+  });
+  // The control — a layout load that keeps the dialog's tab must leave its request alone — is
+  // covered in `dialog.service-shard.test.ts`, which drives the dialog shard's `onLayoutLoadTabIds`
+  // subscriber directly with a chosen surviving-tab set. None of this file's real layouts (baked
+  // Simple/Power defaults, `windowLayout:get` answers) ever include an arbitrary already-open
+  // non-web-view tab, so there is no realistic "kept" layout to load here.
 });

@@ -1,0 +1,711 @@
+// @vitest-environment jsdom
+
+import '@testing-library/jest-dom';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
+import type { DblResourceData } from 'platform-bible-utils';
+import { FAILED_PRECONDITION, isPlatformError } from 'platform-bible-utils';
+import localizedStringsContribution from '../contributions/localizedStrings.json';
+import {
+  GetResources,
+  newResourceActionDidNotTakeEffectError,
+  newResourceActionProviderNotReadyError,
+  RESOURCE_ACTION_DID_NOT_TAKE_EFFECT,
+  RESOURCE_ACTION_PROVIDER_NOT_READY,
+} from './get-resources.component';
+
+// jsdom implements none of what opening a combo box needs: ResizeObserver for cmdk's command list,
+// and scrollIntoView for the option it highlights.
+const originalScrollIntoView = Element.prototype.scrollIntoView;
+beforeAll(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
+  );
+  Element.prototype.scrollIntoView = vi.fn();
+});
+afterAll(() => {
+  vi.unstubAllGlobals();
+  // A prototype write is invisible to `unstubAllGlobals`, so it is undone by hand; leaving a
+  // working no-op behind would make any later suite's scroll assertion pass without scrolling.
+  Element.prototype.scrollIntoView = originalScrollIntoView;
+});
+
+/*
+ * A failed catalog fetch and a genuinely empty catalog are the same picture to the user unless the
+ * component distinguishes them: "no resources found" reads as a truthful answer, so a user who is
+ * merely offline stops looking. Get Resources is also where the resource picker sends people when
+ * its own list looks empty, so both surfaces reporting emptiness for the same failure leaves no way
+ * forward at all.
+ */
+
+const STRINGS = {
+  '%data_loading_error_internetAccess_disabled_3%': 'Internet access is disabled, translated',
+  '%resources_noResults%': 'No resources found',
+  '%resources_noResultsError%': 'Unable to search for resources',
+  '%resources_retry%': 'Try again',
+  '%resources_providerNotReady%': 'Resources are not ready yet, translated',
+  '%resources_actionDidNotTakeEffect%': 'That change could not be confirmed, translated',
+  '%resources_get%': 'Get',
+};
+
+describe('GetResources', () => {
+  it('reports a failed fetch instead of claiming there are no resources', () => {
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[]}
+        isResourcesError
+      />,
+    );
+
+    expect(screen.getByText('Unable to search for resources')).toBeInTheDocument();
+    expect(screen.queryByText('No resources found')).not.toBeInTheDocument();
+  });
+
+  it('offers a retry that re-drives the fetch when the fetch failed', () => {
+    const onRetryResources = vi.fn();
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[]}
+        isResourcesError
+        onRetryResources={onRetryResources}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(onRetryResources).toHaveBeenCalledTimes(1);
+  });
+
+  // The web view cannot supply this message itself: it holds no localized strings, so any text it
+  // authored would reach the user as untranslated English. It sends a sentinel and this component
+  // supplies the wording.
+  it('shows its own localized message for the provider-not-ready sentinel, not the raw sentinel', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() => Promise.reject(newResourceActionProviderNotReadyError())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+    expect(await screen.findByText('Resources are not ready yet, translated')).toBeInTheDocument();
+    expect(screen.queryByText(RESOURCE_ACTION_PROVIDER_NOT_READY)).not.toBeInTheDocument();
+  });
+
+  // The error state REPLACES the table, and a row action is the only other thing that clears this
+  // alert — so without the retry clearing it, a failed install followed by a failed catalog refresh
+  // pins the alert above a list that has since recovered, with no way left to dismiss it.
+  it('clears a stale install-failure alert when the catalog is retried', async () => {
+    const onRetryResources = vi.fn();
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    const { rerender } = render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() => Promise.reject(new Error('the install blew up'))}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+    expect(await screen.findByText('the install blew up')).toBeInTheDocument();
+
+    // The catalog refresh then fails, replacing the table with the error state.
+    rerender(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[]}
+        isResourcesError
+        onRetryResources={onRetryResources}
+      />,
+    );
+    expect(screen.getByText('the install blew up')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(onRetryResources).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('the install blew up')).not.toBeInTheDocument();
+  });
+
+  it('keeps the plain no-resources text when the fetch succeeded and returned nothing', () => {
+    render(<GetResources localizedStringsWithLoadingState={[STRINGS, false]} resources={[]} />);
+
+    expect(screen.getByText('No resources found')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  // PAPI rewrites a rejection that crosses a process boundary as
+  // `JSON-RPC Request error (-32000): <original>`. The sentinel is a public export, so the next
+  // caller may well raise it from the extension host rather than from inside the web view's own
+  // React tree — an equality check would fall through and put the raw machine token, JSON-RPC
+  // prefix and all, in front of the user.
+  it('classifies the provider-not-ready rejection as a failed precondition', () => {
+    const error = newResourceActionProviderNotReadyError();
+
+    // The machine-readable class, for anything that is not this component: a log surface, a generic
+    // handler, a caller deciding whether the action is worth retrying.
+    expect(isPlatformError(error)).toBe(true);
+    expect(error.code).toBe(FAILED_PRECONDITION);
+    expect(error.message).toContain(RESOURCE_ACTION_PROVIDER_NOT_READY);
+  });
+
+  // The code cannot be the discriminant: `doRequest` rebuilds a TypeScript rejection that crosses a
+  // process boundary as a message-only PlatformError, so a caller raising this from the extension
+  // host arrives with the code stripped and the prefix added.
+  it('recognises the provider-not-ready sentinel through a cross-process rejection prefix', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() =>
+          Promise.reject(
+            new Error(`JSON-RPC Request error (-32000): ${RESOURCE_ACTION_PROVIDER_NOT_READY}`),
+          )
+        }
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+    expect(await screen.findByText('Resources are not ready yet, translated')).toBeInTheDocument();
+    expect(screen.queryByText(/JSON-RPC/)).not.toBeInTheDocument();
+  });
+
+  // The web view reports "the list never agreed with the action" with a sentinel for the same
+  // reason as the one above: it holds no localized strings of its own.
+  it('shows its own localized message for the did-not-take-effect sentinel, not the raw sentinel', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() => Promise.reject(newResourceActionDidNotTakeEffectError())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+    expect(
+      await screen.findByText('That change could not be confirmed, translated'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(RESOURCE_ACTION_DID_NOT_TAKE_EFFECT)).not.toBeInTheDocument();
+  });
+
+  it('classifies the did-not-take-effect rejection as a failed precondition', () => {
+    const error = newResourceActionDidNotTakeEffectError();
+
+    // The action itself was valid and was carried out; what failed is the state of the system.
+    expect(isPlatformError(error)).toBe(true);
+    expect(error.code).toBe(FAILED_PRECONDITION);
+    expect(error.message).toContain(RESOURCE_ACTION_DID_NOT_TAKE_EFFECT);
+  });
+
+  it('recognises the did-not-take-effect sentinel through a cross-process rejection prefix', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() =>
+          Promise.reject(
+            new Error(`JSON-RPC Request error (-32000): ${RESOURCE_ACTION_DID_NOT_TAKE_EFFECT}`),
+          )
+        }
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+    expect(
+      await screen.findByText('That change could not be confirmed, translated'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/JSON-RPC/)).not.toBeInTheDocument();
+  });
+
+  // Every real install failure crosses a process boundary, so its message arrives carrying the
+  // prefix. The prefix is diagnostic noise to whoever is reading the alert.
+  it('strips the cross-process prefix from a real action failure before showing it', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() =>
+          Promise.reject(
+            new Error('JSON-RPC Request error (-32000): This resource is no longer available'),
+          )
+        }
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+    expect(await screen.findByText('This resource is no longer available')).toBeInTheDocument();
+  });
+
+  // Blocked installs show the message that points at the setting, not the raw text: ParatextData's
+  // describes ParatextData, and the gate's carries a sentinel. Installing a resource is the Get
+  // Resources action that runs into them.
+  it.each([
+    {
+      block: 'ParatextData blocks it',
+      rawMessage:
+        'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+    },
+    {
+      block: 'the internet setting gate blocks it',
+      rawMessage:
+        'JSON-RPC Request error (-32000): Internet access is off. (INTERNET_SERVICES_BLOCKED)',
+    },
+  ])(
+    'explains a blocked install when $block instead of showing the raw message',
+    async ({ rawMessage }) => {
+      const resource = {
+        dblEntryUid: 'uid-1',
+        displayName: 'NIV',
+        fullName: 'New International Version',
+        bestLanguageName: 'English',
+        type: 'ScriptureResource' as const,
+        size: 1000,
+        installed: false,
+        updateAvailable: false,
+        projectId: 'proj-1',
+      };
+
+      render(
+        <GetResources
+          localizedStringsWithLoadingState={[STRINGS, false]}
+          resources={[resource]}
+          selectedTypes={['ScriptureResource']}
+          selectedLanguages={['English']}
+          onInstallOrRemoveResource={() => Promise.reject(new Error(rawMessage))}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+      expect(
+        await screen.findByText('Internet access is disabled, translated'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/INTERNET_SERVICES_BLOCKED|Bug in Paratext/),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  // Localized strings arrive asynchronously, and `useLocalizedStrings` fills each key with the key
+  // itself until then — so a block that lands first must show the failure's own message, not the
+  // `%data_loading_error_...%` key.
+  it('shows the failure message rather than a localize key when strings have not loaded', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[
+          {
+            '%data_loading_error_internetAccess_disabled_3%':
+              '%data_loading_error_internetAccess_disabled_3%',
+            '%resources_get%': '%resources_get%',
+          },
+          true,
+        ]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() =>
+          Promise.reject(
+            new Error(
+              'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+            ),
+          )
+        }
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '%resources_get%' }));
+
+    expect(
+      await screen.findByText(
+        'Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('%data_loading_error_internetAccess_disabled_3%'),
+    ).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * The language filter and the grid must agree on which resources are in play. When they disagree —
+ * options built from the whole catalogue while rows are filtered by type — the dropdown offers a
+ * language whose only entries are of a hidden type, and choosing it lands on "No results". These
+ * tests pin both halves: what the filter offers, and what happens to a selection the filter stops
+ * offering.
+ */
+
+const resource = (
+  overrides: Pick<DblResourceData, 'bestLanguageName' | 'type'> & Partial<DblResourceData>,
+): DblResourceData => ({
+  dblEntryUid: `uid-${overrides.bestLanguageName}-${overrides.type}`,
+  displayName: `RES-${overrides.bestLanguageName}`,
+  fullName: `Resource ${overrides.bestLanguageName} ${overrides.type}`,
+  size: 1000,
+  installed: false,
+  updateAvailable: false,
+  projectId: `prj-${overrides.bestLanguageName}`,
+  ...overrides,
+});
+
+// Coptic has no Scripture resource, so it must not be offered while the type filter is Scripture.
+const RESOURCES: DblResourceData[] = [
+  resource({ bestLanguageName: 'Amharic', type: 'ScriptureResource' }),
+  resource({ bestLanguageName: 'Nepali', type: 'ScriptureResource' }),
+  resource({ bestLanguageName: 'Coptic', type: 'CommentaryResource' }),
+];
+
+function renderGetResources(overrides: Partial<Parameters<typeof GetResources>[0]> = {}) {
+  render(
+    <GetResources
+      resources={RESOURCES}
+      selectedTypes={['ScriptureResource']}
+      selectedLanguages={[]}
+      {...overrides}
+    />,
+  );
+}
+
+/** Opens the filter at `index` among the combo boxes and returns the text of each option. */
+function openFilter(index: number) {
+  const triggers = screen.getAllByRole('combobox').filter((el) => el.tagName === 'BUTTON');
+  fireEvent.click(triggers[index]);
+  return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
+}
+
+describe('GetResources search box', () => {
+  it("is described by what it matches, which isn't type", () => {
+    renderGetResources();
+
+    // The search matches name and language only; the type filter is the control for type.
+    expect(screen.getByRole('textbox')).toHaveAttribute(
+      'placeholder',
+      '%resources_filterInput_searchPlaceholder%',
+    );
+    // The wording itself, not just the key: it must not promise a search by type.
+    expect(
+      localizedStringsContribution.localizedStrings.en['%resources_filterInput_searchPlaceholder%'],
+    ).not.toMatch(/type/i);
+  });
+});
+
+/** The type filter is the first combo box. */
+function openTypeFilter() {
+  return openFilter(0);
+}
+
+/** The language filter is the second combo box. */
+function openLanguageFilter() {
+  return openFilter(1);
+}
+
+describe('GetResources type filter', () => {
+  it('offers Scripture and commentary types, but not source language, Enhanced or XML', () => {
+    renderGetResources();
+
+    // No localized strings are served, so each option renders its label key.
+    const offered = openTypeFilter();
+
+    expect(offered.some((label) => label.includes('%resources_type_Scripture%'))).toBe(true);
+    expect(offered.some((label) => label.includes('%resources_type_Commentary%'))).toBe(true);
+    expect(offered.some((label) => label.includes('%resources_type_SLR%'))).toBe(false);
+    expect(offered.some((label) => label.includes('%resources_type_ER%'))).toBe(false);
+    expect(offered.some((label) => label.includes('%resources_type_XR%'))).toBe(false);
+  });
+
+  it('lists no source language, Enhanced or XML resource, or a language only they have, when no type is selected', () => {
+    renderGetResources({
+      selectedTypes: [],
+      resources: [
+        ...RESOURCES,
+        resource({ bestLanguageName: 'Greek', type: 'SourceLanguageResource' }),
+        resource({ bestLanguageName: 'Hebrew', type: 'EnhancedResource' }),
+        resource({ bestLanguageName: 'Syriac', type: 'XmlResource' }),
+      ],
+    });
+
+    // Positive control: "Any type" does widen past Scripture.
+    expect(screen.getByText('Resource Coptic CommentaryResource')).toBeInTheDocument();
+    expect(screen.queryByText('Resource Greek SourceLanguageResource')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource Hebrew EnhancedResource')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource Syriac XmlResource')).not.toBeInTheDocument();
+
+    const offered = openLanguageFilter();
+    expect(offered.some((label) => label.includes('Coptic'))).toBe(true);
+    expect(offered.some((label) => label.includes('Greek'))).toBe(false);
+    expect(offered.some((label) => label.includes('Hebrew'))).toBe(false);
+    expect(offered.some((label) => label.includes('Syriac'))).toBe(false);
+  });
+});
+
+describe('GetResources language filter', () => {
+  it('offers only languages that have a resource of a selected type', () => {
+    renderGetResources();
+
+    const offered = openLanguageFilter();
+
+    expect(offered.some((label) => label.includes('Amharic'))).toBe(true);
+    expect(offered.some((label) => label.includes('Nepali'))).toBe(true);
+    expect(offered.some((label) => label.includes('Coptic'))).toBe(false);
+  });
+
+  it('counts only resources of a selected type', () => {
+    renderGetResources({
+      resources: [
+        ...RESOURCES,
+        resource({ bestLanguageName: 'Amharic', type: 'XmlResource' }),
+        resource({ bestLanguageName: 'Amharic', type: 'CommentaryResource' }),
+      ],
+    });
+
+    const amharic = openLanguageFilter().find((label) => label.includes('Amharic'));
+
+    // Three Amharic resources exist, but only one is Scripture.
+    expect(amharic).toContain('1');
+  });
+
+  it('offers every language when no type is selected', () => {
+    renderGetResources({ selectedTypes: [] });
+
+    expect(openLanguageFilter().some((label) => label.includes('Coptic'))).toBe(true);
+  });
+
+  it('drops a persisted type this build does not offer instead of badging it with no label', () => {
+    // The type selection is a plain `string[]` in web view state, so it can hold a value that is
+    // not one of this build's types. `Filter` labels a badge by looking the value up in its
+    // entries, so passing the raw selection through would render an X with nothing beside it.
+    renderGetResources({ selectedTypes: ['RetiredResource'] });
+
+    // The badges placeholder stands where the badges would be, so nothing is selected.
+    expect(screen.getByText('%resources_any_type%')).toBeInTheDocument();
+    // And with no type in play the grid shows the whole catalogue rather than nothing.
+    expect(screen.getByText('Resource Coptic CommentaryResource')).toBeInTheDocument();
+  });
+
+  it('ignores a selected language the type filter no longer offers, rather than emptying the grid', () => {
+    // Coptic is persisted from a session where commentaries were shown. Filtering rows on it now
+    // would hide every Scripture row and leave no way to un-pick it.
+    renderGetResources({ selectedLanguages: ['Coptic'] });
+
+    expect(screen.getByText('Resource Amharic ScriptureResource')).toBeDefined();
+    expect(screen.getByText('Resource Nepali ScriptureResource')).toBeDefined();
+  });
+
+  it('keeps a hidden language in the saved selection when another language is picked', () => {
+    // Coptic is hidden, not discarded: widening the type filter again should bring it back, which
+    // only works if choosing a visible language does not overwrite the saved selection without it.
+    const onSelectedLanguagesChange = vi.fn();
+    renderGetResources({ selectedLanguages: ['Coptic'], onSelectedLanguagesChange });
+
+    openLanguageFilter();
+    fireEvent.click(screen.getByRole('option', { name: (name) => name.startsWith('Amharic') }));
+
+    expect(onSelectedLanguagesChange).toHaveBeenCalledWith(['Coptic', 'Amharic']);
+  });
+
+  describe('waiting for the running sync', () => {
+    const heldResource: DblResourceData = {
+      dblEntryUid: 'uid-1',
+      displayName: 'WEB',
+      fullName: 'World English Bible',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource',
+      size: 1,
+      installed: false,
+      updateAvailable: false,
+      projectId: '',
+    };
+    const waitingStrings = {
+      ...STRINGS,
+      '%resources_waitingForSync_label%': 'Waiting for sync…',
+    };
+    /** The spinning icon `Spinner` renders */
+    const spinnerIn = (container: HTMLElement) => container.querySelector('svg.tw\\:animate-spin');
+
+    it('shows the waiting label, not the install spinner, for a resource the sync holds', () => {
+      const { container } = render(
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+          idsBeingHandled={['uid-1']}
+          idsWaitingForSync={['uid-1']}
+        />,
+      );
+
+      expect(screen.getByText('Waiting for sync…')).toBeInTheDocument();
+      expect(spinnerIn(container)).toBeNull();
+    });
+
+    it('keeps keyboard focus on the action button from Get through the spinner to waiting and back', () => {
+      const renderWith = (idsBeingHandled: string[], idsWaitingForSync: string[]) => (
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+          idsBeingHandled={idsBeingHandled}
+          idsWaitingForSync={idsWaitingForSync}
+        />
+      );
+      const { rerender } = render(renderWith([], []));
+      const getButton = screen.getByRole('button', { name: 'Get' });
+      getButton.focus();
+      expect(document.activeElement).toBe(getButton);
+
+      rerender(renderWith(['uid-1'], []));
+      expect(document.activeElement).toBe(getButton);
+
+      rerender(renderWith(['uid-1'], ['uid-1']));
+      expect(document.activeElement).toBe(getButton);
+      expect(getButton).toHaveTextContent('Waiting for sync…');
+      expect(getButton).toHaveAttribute('aria-disabled', 'true');
+
+      rerender(renderWith(['uid-1'], []));
+      expect(document.activeElement).toBe(getButton);
+    });
+
+    it('does nothing when the waiting button is clicked', () => {
+      const onInstallOrRemoveResource = vi.fn();
+      render(
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+          idsBeingHandled={['uid-1']}
+          idsWaitingForSync={['uid-1']}
+          onInstallOrRemoveResource={onInstallOrRemoveResource}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Waiting for sync…' }));
+
+      expect(onInstallOrRemoveResource).not.toHaveBeenCalled();
+    });
+
+    it('shows no waiting label while the action is merely in progress', () => {
+      const { container } = render(
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+          idsBeingHandled={['uid-1']}
+          idsWaitingForSync={[]}
+        />,
+      );
+
+      expect(screen.queryByText('Waiting for sync…')).not.toBeInTheDocument();
+      // The same query finds the spinner of an action in progress
+      expect(spinnerIn(container)).not.toBeNull();
+    });
+
+    it('shows no waiting label for a resource the user did not click', () => {
+      render(
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+        />,
+      );
+
+      expect(screen.queryByText('Waiting for sync…')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Get' })).toBeEnabled();
+    });
+  });
+});

@@ -1,36 +1,58 @@
 import { vi } from 'vitest';
+import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages.service';
 import { testingLocalizationService } from '@extension-host/services/localization.service-host';
 import { logger } from '@shared/services/logger.service';
 import { SettingNames } from 'papi-shared-types';
 import { LocalizeKey } from 'platform-bible-utils';
 
-const { getInterfaceLanguageCallback, setInterfaceLanguageCallback } = vi.hoisted(() => {
-  let cb: ((v: unknown) => void) | undefined;
-  return {
-    getInterfaceLanguageCallback: () => cb,
-    setInterfaceLanguageCallback: (c: (v: unknown) => void) => {
-      cb = c;
-    },
-  };
-});
+const { getInterfaceLanguageCallback, setInterfaceLanguageCallback, storedSetting } = vi.hoisted(
+  () => {
+    let cb: ((v: unknown) => void) | undefined;
+    return {
+      getInterfaceLanguageCallback: () => cb,
+      setInterfaceLanguageCallback: (c: (v: unknown) => void) => {
+        cb = c;
+      },
+      // Like the real settings service, `get` hands out the stored array itself, not a copy.
+      storedSetting: { interfaceLanguage: ['en'] },
+    };
+  },
+);
 
 const MOCK_FILES: { [uri: string]: string } = {
   'resources://assets/localization/en.json': `{
     "%some_localization_key%": "This is the English text for %some_localization_key%.",
     "%general_button_submit%": "Submit",
+    "%general_button_submit_2%": "Submit now",
+    "%fallbackTierLookup_old%": "Target in English",
     "%firstRun_title%": "Set up",
-    "%firstRun_button_next%": "Next"
+    "%firstRun_button_next%": "Next",
+    "%firstRun_button_back%": "Back"
   }`,
+  // fr has all 3 firstRun keys, so it clears the setup-dialog threshold, but it is not offered.
   'resources://assets/localization/fr.json': `{
     "%some_localization_key%": "Ceci est le texte en français pour %some_localization_key%.",
     "%general_button_submit%": "Soumettre",
     "%firstRun_title%": "Configurer",
-    "%firstRun_button_next%": "Suivant"
+    "%firstRun_button_next%": "Suivant",
+    "%firstRun_button_back%": "Retour"
   }`,
-  // de has only 1 of the 2 baseline firstRun keys (50%) → below the 90% setup-dialog threshold.
+  // es is offered but has only 2 of the 3 firstRun keys (67%), below the 90% setup-dialog
+  // threshold.
+  'resources://assets/localization/es.json': `{
+    "%general_button_submit%": "Enviar",
+    "%firstRun_title%": "Configurar",
+    "%firstRun_button_next%": "Siguiente"
+  }`,
+  // de has only 1 of the 3 firstRun keys and is not offered.
   'resources://assets/localization/de.json': `{
     "%general_button_submit%": "Senden",
     "%firstRun_title%": "Einrichten"
+  }`,
+  // it has strings but neither submit key, so the first language with data can resolve neither the
+  // key nor its fallbackKey.
+  'resources://assets/localization/it.json': `{
+    "%some_localization_key%": "Testo"
   }`,
   'resources://assets/localization/metadata.json': `{
     "%yes%": {
@@ -39,6 +61,12 @@ const MOCK_FILES: { [uri: string]: string } = {
     },
     "%submit%": {
       "fallbackKey": "%yes%"
+    },
+    "%general_button_submit_2%": {
+      "fallbackKey": "%general_button_submit%"
+    },
+    "%fallbackTierLookup_new%": {
+      "fallbackKey": "%fallbackTierLookup_old%"
     }
   }`,
 };
@@ -47,7 +75,7 @@ vi.mock('@shared/services/settings.service', () => ({
   __esModule: true,
   settingsService: {
     get<SettingName extends SettingNames>(key: SettingName) {
-      if (key === 'platform.interfaceLanguage') return ['en'];
+      if (key === 'platform.interfaceLanguage') return storedSetting.interfaceLanguage;
       return undefined;
     },
     subscribe(key: string, cb: (v: unknown) => void) {
@@ -101,6 +129,7 @@ beforeAll(async () => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  storedSetting.interfaceLanguage = ['en'];
 });
 
 test('Correct localized value returned to match single localizeKey', async () => {
@@ -122,6 +151,37 @@ test('Correct localized values returned to match array of localizeKeys', async (
     '%general_button_submit%': 'Soumettre',
     '%some_localization_key%': 'Ceci est le texte en français pour %some_localization_key%.',
   });
+});
+
+test('resolves a key missing in the current language through its fallbackKey in that language before falling back to English', async () => {
+  // fr has no %general_button_submit_2% but has its fallbackKey %general_button_submit%; English
+  // has the requested key itself ("Submit now"), which must not win over the fr fallbackKey.
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%general_button_submit_2%',
+    locales: ['fr'],
+  });
+  expect(response).toEqual('Soumettre');
+});
+
+test('a later interface language that translated only the old key does not win over the English new key', async () => {
+  // it has strings but neither key; de has only the old key %general_button_submit%; en has the
+  // new key. The new key is looked up across the remaining languages before the fallbackKey is
+  // tried in them, so English "Submit now" wins over German "Senden".
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%general_button_submit_2%',
+    locales: ['it', 'de'],
+  });
+  expect(response).toEqual('Submit now');
+});
+
+test('resolves a key that has no value in any language through its fallbackKey in the fallback languages', async () => {
+  // %fallbackTierLookup_new% has no value in any language and its fallbackKey has a value only in
+  // English, so only the final fallbackKey-in-fallback-languages tier can resolve it for fr.
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%fallbackTierLookup_new%',
+    locales: ['fr'],
+  });
+  expect(response).toEqual('Target in English');
 });
 
 test('Key returned with localizeKey that does not exist', async () => {
@@ -239,11 +299,47 @@ test('Good keys and missing but valid language code return default English', asy
   });
 });
 
-test('getSetupDialogLanguages includes fully-translated locales and excludes under-translated ones', async () => {
+test('getSetupDialogLanguages lists offered languages that clear the translation threshold', async () => {
   const result = await localizationDataProviderEngine.getSetupDialogLanguages();
-  expect(result.en).toBeDefined(); // always qualifies
-  expect(result.fr).toBeDefined(); // 2/2 firstRun keys = 100%
-  expect(result.de).toBeUndefined(); // 1/2 firstRun keys = 50% → excluded by the 90% threshold
+  // es is offered but under the threshold; fr clears it but is not offered; de is neither.
+  expect(Object.keys(result)).toEqual(['en']);
+});
+
+test('getAvailableInterfaceLanguages offers only allowlisted languages', async () => {
+  const result = await localizationDataProviderEngine.getAvailableInterfaceLanguages();
+  expect(Object.keys(result).sort()).toEqual(['en', 'es']);
+  expect(result.es?.autonym).toBe('Español');
+});
+
+test('every loaded language, offered or not, is reported as loaded once the files are read', async () => {
+  const result = await getAllLoadedInterfaceLanguages();
+  expect(Object.keys(result).sort()).toEqual(['de', 'en', 'es', 'fr', 'it']);
+});
+
+test('a hidden language stored in the setting renders', async () => {
+  storedSetting.interfaceLanguage = ['fr'];
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%general_button_submit%',
+  });
+  expect(response).toEqual('Soumettre');
+});
+
+test('looking up a string does not change the stored interface-language setting', async () => {
+  storedSetting.interfaceLanguage = ['fr'];
+  await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%general_button_submit%',
+  });
+  expect(storedSetting.interfaceLanguage).toEqual(['fr']);
+});
+
+test('looking up several strings does not change the stored interface-language setting', async () => {
+  // km has no locale file, so the lookup skips it.
+  storedSetting.interfaceLanguage = ['km', 'fr'];
+  const response = await localizationDataProviderEngine.getLocalizedStrings({
+    localizeKeys: ['%general_button_submit%'],
+  });
+  expect(response).toEqual({ '%general_button_submit%': 'Soumettre' });
+  expect(storedSetting.interfaceLanguage).toEqual(['km', 'fr']);
 });
 
 test('setSetupDialogLanguages always throws', async () => {
@@ -253,13 +349,13 @@ test('setSetupDialogLanguages always throws', async () => {
 });
 
 test('firstRun key falls back to English when the requested locale lacks it', async () => {
-  // %firstRun_button_next% exists in en (and fr here); request a firstRun key only in en via a
-  // locale that has no firstRun data → resolves to English (chosen → base → English → raw key).
+  // de.json has %firstRun_title% but not %firstRun_button_next% → resolves to English
+  // (chosen → base → English → raw key).
   const response = await localizationDataProviderEngine.getLocalizedString({
-    localizeKey: '%firstRun_title%',
-    locales: ['es'], // es.json has no firstRun keys in MOCK_FILES
+    localizeKey: '%firstRun_button_next%',
+    locales: ['de'],
   });
-  expect(response).toEqual('Set up');
+  expect(response).toEqual('Next');
 });
 
 test('re-emits localized strings when the interface language changes', async () => {

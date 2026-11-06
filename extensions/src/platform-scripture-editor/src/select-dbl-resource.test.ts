@@ -1,6 +1,12 @@
 import type { ResourceReferenceList } from 'platform-scripture';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
+import {
+  getScriptureTextGridContents,
+  getViewOptionsTexts,
+  removeFromUserResources,
+  type TextCollectionSources,
+} from './scripture-text-grid-contents.utils';
 import { selectTextConnection } from './select-dbl-resource';
 
 const RESOURCE_A = {
@@ -80,6 +86,36 @@ describe('selectDblResource', () => {
         items: [
           { type: 'dblResource', name: 'Resource B', id: 'uid-b' },
           { type: 'dblResource', name: 'name-uid-other', id: 'uid-other' },
+        ],
+      });
+    });
+
+    it('deduplicates an existing entry whose uid is cased differently', async () => {
+      const getUserList = vi.fn().mockResolvedValue(makeUserList(['UID-B', 'uid-other']));
+      await selectTextConnection(RESOURCE_B, getUserList, setUserList, undefined, onSelect);
+
+      expect(setUserList).toHaveBeenCalledWith({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource', name: 'Resource B', id: 'uid-b' },
+          { type: 'dblResource', name: 'name-uid-other', id: 'uid-other' },
+        ],
+      });
+    });
+
+    it("keeps the earlier entry's other fields, such as its Text collection flag", async () => {
+      const getUserList = vi.fn().mockResolvedValue({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource', name: 'old name', id: 'uid-b', isInTextCollectionForUser: true },
+        ],
+      });
+      await selectTextConnection(RESOURCE_B, getUserList, setUserList, undefined, onSelect);
+
+      expect(setUserList).toHaveBeenCalledWith({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource', name: 'Resource B', id: 'uid-b', isInTextCollectionForUser: true },
         ],
       });
     });
@@ -257,5 +293,38 @@ describe('selectDblResource', () => {
       expect(setUserList).toHaveBeenCalled();
       expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'uid-b' }));
     });
+  });
+});
+
+describe('removing a resource, then adding it back from Bible texts', () => {
+  it('keeps it listed in the Text Collection but off the grid', async () => {
+    const sources: TextCollectionSources = {
+      adminReferenced: { dataVersion: '1.1.0', items: [] },
+      userReferenced: {
+        dataVersion: '1.1.0',
+        items: [{ type: 'dblResource', name: 'A', id: 'uid-a', isInTextCollectionForUser: true }],
+      },
+      overlay: {},
+      order: [],
+    };
+    let userList = removeFromUserResources('uid-a', sources.userReferenced);
+    expect(getViewOptionsTexts({ ...sources, userReferenced: userList }).bottom).toEqual([]);
+
+    await selectTextConnection(
+      RESOURCE_A,
+      async () => userList,
+      async (list) => {
+        userList = list;
+      },
+    );
+
+    const readded = { ...sources, userReferenced: userList };
+    expect(getScriptureTextGridContents(readded)).toEqual([]);
+    expect(getViewOptionsTexts(readded).bottom).toEqual([
+      expect.objectContaining({
+        reference: expect.objectContaining({ id: 'uid-a' }),
+        checked: false,
+      }),
+    ]);
   });
 });

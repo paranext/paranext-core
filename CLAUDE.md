@@ -13,13 +13,14 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Topic                   | File                                                                      | Key Content                                                  |
 | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Architecture            | [Architecture.md](.context/standards/Architecture.md)                     | Multi-process architecture, core services, IPC, key patterns |
-| Architecture Decisions  | [Architecture-Decisions.md](.context/standards/Architecture-Decisions.md) | Append-only log (one carve-out, stated in the log) of significant architecture decisions + rationale; **update it whenever you make one** (see "Recording Architecture Decisions") |
+| Architecture Decisions  | [Architecture-Decisions.md](.context/standards/Architecture-Decisions.md) | Add-only log of significant architecture decisions + rationale — entries are added, not deleted (one carve-out, stated in the log), and inserted in byte-order slug position; **update it whenever you make one** (see "Recording Architecture Decisions") |
 | Code Style              | [Code-Style-Guide.md](.context/standards/Code-Style-Guide.md)             | TypeScript/C# conventions, API-surface TSDoc, localization, components, shadcn/ui |
 | Implementation Patterns | [Paranext-Core-Patterns.md](.context/standards/Paranext-Core-Patterns.md) | C# service/DataProvider/NetworkObject patterns, PAPI event registration, concurrency, extension structure, command naming |
 | Testing                 | [Testing-Guide.md](.context/standards/Testing-Guide.md)                   | Vitest/NUnit, TDD (outside-in), testing trophy, mutation/coverage, E2E, mocking, CI, platform gotchas |
 | Extensions              | [Extension-Development-Guide.md](.context/standards/Extension-Development-Guide.md) | Extension anatomy, PAPI, data providers, WebViews, contributions, type declarations |
 | Entry Points            | [Entry-Point-Guide.md](.context/standards/Entry-Point-Guide.md)           | Menus, commands, command handlers, WebView layout options    |
 | UI Components           | [Component-Selection-Quick-Reference.md](.context/standards/Component-Selection-Quick-Reference.md) · [Component-Builder-Patterns.md](.context/standards/Component-Builder-Patterns.md) | platform-bible-react component selection, styling, forms; web-view/provider/PAPI/styling patterns |
+| Data Fidelity           | [Scripture-Data-Fidelity-Catalog.md](.context/standards/Scripture-Data-Fidelity-Catalog.md) | The authoritative loss catalog: every known transformation between disk USFM and the editor, each with a fix/accept verdict — **add a row whenever a conversion-layer change transforms data**; the composed round-trip and sweep suites pin it |
 | Standard View           | [Standard-View-Invariants.md](.context/standards/Standard-View-Invariants.md) | **Read before touching anything Standard view depends on here** — the USJ/USFM writer contract, the markers map, the marker palette key table, the footnote editor, the C# serialization approval gate. The editor engine's own invariants live in the `scripture-editors` repo at `docs/standard-view-invariants.md`; each half is readable alone |
 | Localization            | [Localization-Guide.md](.context/standards/Localization-Guide.md)         | i18n store/APIs, fallback chain, RTL, immutable strings, C# localization |
 | Git and GitHub          | [Git-Guide.md](.context/standards/Git-Guide.md)                           | Branch structure, squash-merge, template merges              |
@@ -29,6 +30,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | PT9 Feature Inventory   | [paratext-9-features/](.context/research/paratext-9-features/README.md) | Catalogue of Paratext 9 features (entry points, forms, classes, sources) — used by `/investigate-prd` |
 | Capability Designs      | [designs/](.context/designs/)                                             | Design specs + implementation plans for capabilities (e.g. `/investigate-prd`) |
 | Startup performance     | [README.md](README.md#startup-performance-timing)                         | Enable `PT_STARTUP_MARKS`, capture marks, render the waterfall (`npm run startup-waterfall`), packaged-vs-dev caveat |
+| First-run wizard reset  | [README.md](README.md#resetting-the-first-run-wizard)                     | Bring the setup wizard back (`platform.resetFirstRun`, registered/unregistered Paratext 9 user), demo mode, where the registration lives |
 
 ## Terminology
 
@@ -54,23 +56,24 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 
 ### Multi-Process Architecture
 
-The application runs as four separate processes that communicate via JSON-RPC over WebSocket:
+The application runs as four kinds of process that communicate via JSON-RPC: the renderer windows over an Electron MessagePort, the extension host and the .NET data provider over WebSocket on port 8876.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Main Process (Electron)               │
-│  • Window management & app lifecycle                     │
-│  • Spawns and manages child processes                    │
-└────────────────┬────────────────────────────────────────┘
-                 │ JSON-RPC over WebSocket (port 8876)
-    ┌────────────┼────────────┬───────────────────┐
-    │            │            │                   │
-┌───▼────────┐ ┌─▼──────────┐ ┌▼────────────────┐
+┌──────────────────────────────────────────────────────────────┐
+│                    Main Process (Electron)                   │
+│  • Window management & app lifecycle                         │
+│  • Spawns and manages child processes                        │
+│  • WebSocket server on port 8876                             │
+│  • One MessagePort per renderer window                       │
+└──────┬─────────────┬─────────────────────────────────────────┘
+       │ JSON-RPC    │ JSON-RPC over WebSocket (port 8876)
+       │ MessagePort ├───────────────┐
+┌──────▼─────┐ ┌─────▼──────┐ ┌──────▼──────────┐
 │ Renderer   │ │ Extension  │ │ .NET Data       │
-│ (React UI) │ │ Host       │ │ Provider        │
-│            │ │            │ │                 │
+│ (React UI, │ │ Host       │ │ Provider        │
+│ per window)│ │            │ │                 │
 │ • Web UI   │ │ • Loads    │ │ • Project data  │
-│ • Dialogs  │ │  extensions│ │ • Paratext     │
+│ • Dialogs  │ │  extensions│ │ • Paratext      │
 │ • WebViews │ │ • PAPI     │ │   integration   │
 └────────────┘ └────────────┘ └─────────────────┘
 ```
@@ -146,7 +149,8 @@ cd c-sharp
 dotnet tool restore
 dotnet csharpier .
 
-# Type checking
+# Type checking (runs typecheck:core, typecheck:erb, typecheck:e2e, typecheck:workspaces
+# concurrently so one failing check doesn't hide the others)
 npm run typecheck
 ```
 
@@ -209,10 +213,14 @@ deciding where a feature lives — record it in
 [`Architecture-Decisions.md`](.context/standards/Architecture-Decisions.md). This applies to **all**
 work, not just `/investigate-prd`.
 
-- **Capture the decision** as an append-only entry (date · status · context · decision · alternatives
-  · consequences). Mark superseded decisions rather than deleting them — with the one carve-out the
-  log itself states: delete a superseded entry when leaving it would keep a dead approach readable as
-  available prior art, retire its number instead of reusing it, and leave a stub explaining the gap.
+- **Capture the decision** as an entry (date · status · context · decision · alternatives ·
+  consequences) inserted in its **byte-order slug position** (`LC_ALL=C sort`), not at the end of the
+  file. Mark superseded decisions rather than deleting them — with the one carve-out the log itself
+  states: delete a superseded entry when leaving it would keep a dead approach readable as available
+  prior art, retire its slug instead of reusing it, and leave a stub explaining the gap.
+- **Resolving a merge conflict in the log:** take the union of both sides **keyed by slug**, never
+  "keep both sides" — the same entry can appear on both sides at different offsets, so keeping both
+  duplicates it silently, and nothing checks for that. See the log's "How to use it" section.
 - **Promote settled conventions:** when a decision hardens into a rule everyone should follow, also
   fold it into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. The log keeps

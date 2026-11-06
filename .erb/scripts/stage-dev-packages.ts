@@ -1,0 +1,712 @@
+/**
+ * Stages each package listed in `dev-packages.json` into `dev-packages/staging/<stagingFolder>` so
+ * this repo can depend on it with a `file:` specifier.
+ *
+ * Those staged folders are the resolution targets for the `@eten-tech-foundation/*` entries in our
+ * `package.json` files. npm reads each staged package's own manifest and installs its dependencies
+ * into this repo's tree, so the editor is free to add, bump, or drop dependencies without any
+ * consumer restating them.
+ *
+ * This runs as the root `preinstall` to keep the staged copies current on every install. It cannot
+ * make the staged packages resolvable within the same run that first creates them — npm resolves
+ * the dependency tree from the on-disk state it saw at startup — but nothing here needs to handle
+ * that: `npm ci` installs the closure recorded in `package-lock.json` regardless, and for `npm
+ * install` on a fresh clone the root postinstall (`postinstall.ts`) detects the gap and re-runs the
+ * install once.
+ *
+ * The dev repos commit their built `dist/`, so staging is normally a copy: running this app needs
+ * nothing from their toolchain — no pnpm, no nx, no build. A build happens only in `--local` mode
+ * or when a checkout has no `dist/` to copy.
+ *
+ * Staging is skipped entirely when the staged output is already current — each staged folder
+ * carries a `.staged-from` marker naming the source commit it came from. The marker is local state,
+ * never committed (`dev-packages/` is gitignored); deleting it just makes the next run re-stage.
+ *
+ * Modes:
+ *
+ * - Default: fetch and check out the revision pinned in `dev-packages.json` (refusing to touch a
+ *   checkout with uncommitted changes), then build and stage if the marker is stale.
+ * - `--local`: build and stage whatever is currently checked out, working changes and all, skipping
+ *   the origin/revision handling. Its output is marked so the next regular run always replaces it.
+ *   This is the inner loop for editor development (`npm run build:editor`).
+ * - `--skip-fetch` (or `PT_SKIP_DEV_PACKAGE_FETCH=1`): resolve the revision against the refs the
+ *   checkout already has instead of fetching. `npm install` cannot pass a flag through to a
+ *   lifecycle script, so the environment variable is the form that works there. Use it offline;
+ *   what gets staged is whatever the checkout resolves the revision to, which may trail the
+ *   remote.
+ */
+
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+// Explicit `.ts`: this runs under bare `node` with type stripping, where extensionless resolution
+// of a TypeScript file does not work.
+const {
+  RESCUED_COMMITS_FILE,
+  formatRescuedCommitsBanner,
+  getExpectedMarker,
+  isEnvFlagEnabled,
+  normalizeRepoUrl,
+  shapeStagedManifest,
+} = require('./stage-dev-packages.util.ts');
+
+const REPO_ROOT: string = path.resolve(__dirname, '..', '..');
+const STAGING_ROOT: string = path.resolve(REPO_ROOT, 'dev-packages', 'staging');
+
+/** File inside each staged folder recording the source commit the staged copy was built from. */
+const STAGED_FROM_MARKER = '.staged-from';
+
+/**
+ * Bump whenever this script changes what a staged copy contains — which files are copied, or how
+ * `prepareStagedManifest` shapes the manifest.
+ *
+ * The marker records only the source commit, so without this a staged copy stays "current" until
+ * the pinned revision moves, and a fix to the staging logic would never reach anyone already
+ * staged. CI never notices (its tree is always fresh); developer machines keep the old copy for as
+ * long as the pin holds.
+ */
+const STAGING_FORMAT = 2;
+
+/** Build from the current checkout state instead of the pinned revision; always rebuild. */
+const isLocalMode: boolean = process.argv.includes('--local');
+
+/** Resolve the pinned revision against the checkout's existing refs rather than fetching. */
+const isFetchSkipped: boolean =
+  process.argv.includes('--skip-fetch') || isEnvFlagEnabled(process.env.PT_SKIP_DEV_PACKAGE_FETCH);
+
+// #region Types — keep in sync with dev-packages.schema.json (both must be updated together)
+
+/** A package within a dev repo that gets staged for `file:` consumption by this repo. */
+type DevPackage = {
+  /** The nx project name, used to build the package and roll up its type declarations. */
+  nxProject: string;
+  /** The package's path within its repo, e.g. `packages/platform`. */
+  packagePath: string;
+  /**
+   * The folder name under `dev-packages/staging/` to stage into. The `file:` specifiers in this
+   * repo's `package.json` files point at this name, so changing it means changing them too.
+   */
+  stagingFolder: string;
+};
+
+/** A development repository containing one or more packages consumed by this repo. */
+type DevRepo = {
+  /**
+   * The directory name of the repo, used as both the clone destination under `dev-packages/` and
+   * the sibling-directory fallback name.
+   */
+  folder: string;
+  /** The git clone URL for the repo, used when the repo is not already present locally. */
+  cloneUrl: string;
+  /** The git revision (branch name, tag, or commit hash) to check out before building. */
+  revision: string;
+  /** The packages within this repo to build and stage. */
+  devPackages: DevPackage[];
+};
+
+// #endregion
+
+const DEV_REPOS: DevRepo[] = JSON.parse(
+  fs.readFileSync(path.resolve(REPO_ROOT, 'dev-packages.json'), 'utf8'),
+).repos;
+
+/**
+ * Resolve a dev-package repo path. Prefers `dev-packages/<folder>` inside this repo, but falls back
+ * to a sibling directory `../<folder>` so a developer's existing checkout next to this repo keeps
+ * working. Only the staged output has to live inside this repo; the source can be either place.
+ */
+function getDevRepoPath(folder: string): string {
+  const inRepo = path.resolve(REPO_ROOT, 'dev-packages', folder);
+  if (fs.existsSync(inRepo)) return inRepo;
+  return path.resolve(REPO_ROOT, '..', folder);
+}
+
+/** Environment for commands run inside a dev repo. */
+function devRepoEnv(): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    // Allow volta to run pnpm commands
+    VOLTA_FEATURE_PNPM: '1',
+    // Disable Nx Cloud completely since it is not configured and would cause errors
+    NX_NO_CLOUD: 'true',
+    // Disable npm registry authentication since it is not needed and would cause warnings
+    NODE_AUTH_TOKEN: '',
+  };
+
+  // Volta sets this for anything it launches, so when npm itself runs through a Volta shim every
+  // command here inherits it — and Volta's pnpm shim then refuses to resolve Node at all ("Node is
+  // not available"). Dropping it lets pnpm run directly instead of falling back to `volta run`,
+  // which would nest Volta inside Volta and crash the nx build outright.
+  // Bracket access because the name is Volta's, not an identifier of ours — dot access trips
+  // no-underscore-dangle, and there is no third spelling.
+  // eslint-disable-next-line dot-notation
+  delete env['_VOLTA_TOOL_RECURSION'];
+  return env;
+}
+
+/** Runs a command in `cwd`, streaming its output. */
+function run(cmd: string, cwd: string): void {
+  execSync(cmd, { stdio: 'inherit', cwd, env: devRepoEnv() });
+}
+
+/** How pnpm can be launched here, worked out once and reused. */
+let pnpmLauncher: string | undefined;
+
+/**
+ * Whether pnpm runs on its own (CI with pnpm/action-setup, or a global install) or has to go
+ * through `volta run` (a volta-managed pnpm on a developer machine).
+ *
+ * Asked once, with a command that does nothing, rather than by letting a real command fail and
+ * retrying it: a failing build and an unavailable pnpm are not distinguishable from an exit code
+ * cross-platform, so retrying would run whole builds a second time under a launcher chosen because
+ * of a compile error.
+ */
+function getPnpmLauncher(cwd: string): string {
+  if (pnpmLauncher) return pnpmLauncher;
+  try {
+    execSync('pnpm --version', { cwd, env: devRepoEnv(), stdio: 'pipe' });
+    pnpmLauncher = 'pnpm';
+  } catch {
+    console.log('`pnpm` did not run on its own; using `volta run pnpm`.');
+    pnpmLauncher = 'volta run pnpm';
+  }
+  return pnpmLauncher;
+}
+
+/** Runs a pnpm command, letting any failure of that command surface as itself. */
+function runPnpm(args: string, cwd: string): void {
+  run(`${getPnpmLauncher(cwd)} ${args}`, cwd);
+}
+
+/** Clones the given dev repo into `dev-packages/<folder>` if it is not already present locally. */
+function cloneRepoIfNeeded(repo: DevRepo): void {
+  const existing = getDevRepoPath(repo.folder);
+  if (fs.existsSync(existing)) {
+    // A directory is not a clone. A clone killed partway through (SIGKILL, a full disk) leaves one
+    // behind with no `.git`, and treating it as a checkout turns every later run into a confusing
+    // "has no revision <pin>" for a repo that was never cloned at all.
+    if (!fs.existsSync(path.resolve(existing, '.git')))
+      throw new Error(
+        `${existing} exists but is not a git checkout — no .git in it. An interrupted clone leaves this behind.\n\nRemove it and let this script clone again:\n\n  rm -rf "${existing}"\n`,
+      );
+    return;
+  }
+
+  const devPackagesDir = path.resolve(REPO_ROOT, 'dev-packages');
+  fs.mkdirSync(devPackagesDir, { recursive: true });
+  const clonePath = path.resolve(devPackagesDir, repo.folder);
+  console.log(`Cloning ${repo.cloneUrl} into ${clonePath}...`);
+  execSync(`git clone "${repo.cloneUrl}" "${clonePath}"`, { stdio: 'inherit' });
+}
+
+/**
+ * Throws if an existing checkout's `origin` is not the configured `cloneUrl`.
+ *
+ * A repo is only ever cloned when its folder is absent, so a checkout made before the clone URL
+ * changed would keep fetching from the old remote and resolve the configured revision against it —
+ * building the wrong source with no visible error.
+ */
+function verifyOrigin(repo: DevRepo, repoPath: string): void {
+  // A checkout cloned with `-o <name>`, or one whose remote was renamed during an org migration
+  // (`docs/transferring-work-from-eten-tech-foundation.md` recommends exactly that), has no
+  // `origin`. Ask before reading, so that case gets these instructions instead of a bare
+  // `Command failed: git remote get-url origin`.
+  const remotes = execSync('git remote', { cwd: repoPath, encoding: 'utf8' })
+    .split('\n')
+    .map((remote: string) => remote.trim())
+    .filter((remote: string) => remote.length > 0);
+  if (!remotes.includes('origin')) {
+    throw new Error(
+      `The ${repo.folder} repo at ${repoPath} has no remote named "origin"${
+        remotes.length > 0 ? ` (it has: ${remotes.join(', ')})` : ''
+      }.\n\nThis script fetches and resolves ${repo.revision} through \`origin\`. Point one at the expected URL:\n\n  git -C "${repoPath}" remote add origin "${repo.cloneUrl}"\n\nAlternatively, move this checkout aside and let this script clone a fresh one.\n`,
+    );
+  }
+
+  const origin = execSync('git remote get-url origin', { cwd: repoPath, encoding: 'utf8' }).trim();
+  if (normalizeRepoUrl(origin) === normalizeRepoUrl(repo.cloneUrl)) return;
+
+  // Keep the previous URL under a remote named for its organization rather than overwriting it, so
+  // the old location stays reachable and the change is trivially reversible.
+  const previousRemoteName = /github\.com[:/]([^/]+)\//.exec(origin)?.[1] ?? 'previous-origin';
+
+  throw new Error(
+    `The ${repo.folder} repo at ${repoPath} has origin "${origin}", but dev-packages.json expects "${repo.cloneUrl}".\n\nThis is expected if the repo moved. Nothing here is destructive — the old URL is kept as a second remote, and you can undo it with \`git remote set-url origin "${origin}"\`:\n\n  git -C "${repoPath}" remote add ${previousRemoteName} "${origin}"\n  git -C "${repoPath}" remote set-url origin "${repo.cloneUrl}"\n  git -C "${repoPath}" fetch --all\n\nAlternatively, move this checkout aside and let this script clone a fresh one.\n`,
+  );
+}
+
+/**
+ * Brings a dev repo's checkout to the pinned revision, without ever discarding work.
+ *
+ * Refuses to touch a checkout with uncommitted changes at all. Otherwise it updates the checkout
+ * only when it is somewhere nothing is being kept — detached, on `main`, or on the pinned branch
+ * itself, which is force-pushed upstream by design. On any other branch it leaves the checkout
+ * exactly as it is and stages that instead, saying so.
+ */
+/**
+ * One checkout whose unpushed commits were moved aside. Mirrors `RescuedCommit` in the util, which
+ * this file reaches through `require` and so cannot import a type from.
+ */
+type RescuedCommit = {
+  repoFolder: string;
+  repoPath: string;
+  revision: string;
+  commitCount: number;
+  rescueRef: string;
+};
+
+/**
+ * Commits this run moved aside, filled in by `checkoutRevision` and reported once at the end.
+ *
+ * Reported at the end rather than where it happens: staging runs as `preinstall`, so a line printed
+ * mid-run is followed by the whole install and build chain before a developer sees a prompt again.
+ */
+const rescuedCommits: RescuedCommit[] = [];
+
+/**
+ * Announces this run's rescued commits, and leaves them for `postinstall` to announce again.
+ *
+ * The file is rewritten from scratch each run rather than appended to: it describes what THIS
+ * staging moved aside. `postinstall` prunes entries whose ref has since been deleted, which is how
+ * the reminder stops.
+ */
+function reportRescuedCommits(): void {
+  const recordPath = path.resolve(REPO_ROOT, RESCUED_COMMITS_FILE);
+  if (rescuedCommits.length === 0) {
+    // A run that moved nothing aside must not leave the last run's record behind for `postinstall`
+    // to re-announce.
+    fs.rmSync(recordPath, { force: true });
+    return;
+  }
+  fs.mkdirSync(path.dirname(recordPath), { recursive: true });
+  fs.writeFileSync(recordPath, `${JSON.stringify(rescuedCommits, undefined, 2)}\n`);
+  console.warn(formatRescuedCommitsBanner(rescuedCommits));
+}
+
+function checkoutRevision(repo: DevRepo): void {
+  const repoPath = getDevRepoPath(repo.folder);
+
+  verifyOrigin(repo, repoPath);
+
+  const status = execSync('git status --porcelain', { cwd: repoPath, encoding: 'utf8' });
+  if (status.trim().length > 0) {
+    throw new Error(
+      `The ${repo.folder} repo has working changes:\n${status}\nWe don't want to accidentally overwrite any changes. Please go handle your changes and try again when there are no more working changes.\n\nIf you are actively developing ${repo.folder}, build your working state with \`npm run build:editor\` instead. To get those changes into this repo's package-lock.json, commit them there first — this command stages a committed revision, and a lockfile built from uncommitted work records something nobody else can reproduce (the pre-commit hook blocks committing one).\n\n\`packages/*/dist\` and \`packages/*/etc\` are committed build outputs, so a \`build:editor\` run shows up here too. If they are the only changes listed, they are regenerable: \`git -C "${repoPath}" restore packages/*/dist packages/*/etc\`.`,
+    );
+  }
+
+  if (isFetchSkipped) {
+    console.log(`Skipping the fetch in ${repo.folder}; using the refs it already has.`);
+  } else {
+    console.log(`Fetching latest in ${repo.folder}...`);
+    try {
+      // `--force` so a re-pointed tag updates instead of aborting the fetch (releases are cut as
+      // tags, and an unreleased one can be re-cut). `--prune` so a branch deleted upstream stops
+      // resolving through a stale `origin/<branch>` and silently staging last month's source.
+      execSync('git fetch origin --tags --force --prune', { stdio: 'inherit', cwd: repoPath });
+    } catch (error) {
+      throw new Error(
+        `Could not fetch ${repo.cloneUrl} in ${repoPath}.\n\nIf you are offline and that checkout already has ${repo.revision}, stage what it has instead of fetching:\n\n  PT_SKIP_DEV_PACKAGE_FETCH=1 npm install\n\nWhatever the checkout resolves ${repo.revision} to is then what gets staged, which may be older than the remote.\n\nFetch failed with: ${error instanceof Error ? error.message : error}\n`,
+      );
+    }
+  }
+  // Prefer the remote-tracking ref when the revision names a branch. `platform-yalc` is routinely
+  // force-pushed (it is rebased onto main), so the local branch of that name can be on a commit
+  // that no longer exists upstream; `origin/<branch>` is always what the remote actually has.
+  let isRemoteBranch: boolean;
+  try {
+    execSync(`git show-ref --verify --quiet "refs/remotes/origin/${repo.revision}"`, {
+      stdio: 'pipe',
+      cwd: repoPath,
+    });
+    isRemoteBranch = true;
+  } catch {
+    isRemoteBranch = false;
+  }
+  const target = isRemoteBranch ? `origin/${repo.revision}` : repo.revision;
+
+  const resolve = (rev: string) =>
+    execSync(`git rev-parse --verify --quiet "${rev}^{commit}"`, {
+      cwd: repoPath,
+      encoding: 'utf8',
+    }).trim();
+
+  let targetCommit: string;
+  try {
+    targetCommit = resolve(target);
+  } catch {
+    throw new Error(
+      `${repoPath} has no revision "${repo.revision}"${
+        isFetchSkipped ? ', and the fetch that would have brought it in was skipped' : ''
+      }.\n`,
+    );
+  }
+
+  if (resolve('HEAD') === targetCommit) {
+    console.log(`${repo.folder} is already at ${repo.revision}.`);
+    return;
+  }
+
+  // `git rev-parse --abbrev-ref HEAD` answers `HEAD` when the checkout is detached.
+  const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+    cwd: repoPath,
+    encoding: 'utf8',
+  }).trim();
+
+  // Only move a checkout that is not somewhere deliberate. `main` is where a fresh clone starts and
+  // the pinned branch is force-pushed upstream by design, so neither is work worth protecting. Any
+  // other branch is somebody's, and this script has no business moving it, wherever it lives.
+  //
+  // A detached HEAD is deliberate wherever it is found: detaching is something a person does to
+  // hold a checkout at one commit, and it is only reached here when that commit is not the pinned
+  // one, since an already-at-the-target checkout returned above. Moving it is how a plain `npm
+  // install` silently relocates a checkout somebody was reading — and rebuilds inside it.
+  //
+  // The consequence to know about: when `revision` names a tag or a commit rather than a branch,
+  // this script leaves its own clone under `dev-packages/` detached at it, so moving that pin to a
+  // new tag warns instead of following it, on every install until someone checks the new one out.
+  // The warning says what to run. A branch pin, which is what `dev-packages.json` uses, checks out
+  // as a branch and never reaches this.
+  const isDetached = currentBranch === 'HEAD';
+  const isSomebodysBranch =
+    isDetached || (currentBranch !== 'main' && currentBranch !== repo.revision);
+
+  if (isSomebodysBranch) {
+    const where = isDetached
+      ? `is detached at ${resolve('HEAD').slice(0, 9)}`
+      : `is on "${currentBranch}"`;
+    console.warn(
+      `\nWARNING: ${repoPath} ${where}, not the pinned "${repo.revision}".\n` +
+        `Leaving it alone and staging what it has, so nothing you are working on is lost.\n` +
+        `Whatever this app runs is built from that state, not from the pinned revision.\n` +
+        `To stage the pinned revision instead: git -C "${repoPath}" checkout ${repo.revision}\n`,
+    );
+    return;
+  }
+
+  if (isRemoteBranch) {
+    // Check out the branch and force it to the remote's tip, in one command. Naming
+    // `origin/<branch>` explicitly rather than letting a bare `git checkout <branch>` guess the
+    // remote is what makes this work here: when the dev repo moves organizations, `verifyOrigin`
+    // has you keep the old URL as a second remote, and with the same branch on two remotes git
+    // refuses to guess (exit 128). The local branch is disposable in any case — it tracks a branch
+    // that is rebased and force-pushed upstream as a matter of course.
+    // `-B` discards whatever the local branch pointed at, and a commit that was never pushed then
+    // survives only in the reflog. Anything the remote does not have is therefore parked on a ref
+    // of its own first, and announced (see `formatRescuedCommitsBanner`).
+    //
+    // Parking rather than REFUSING, which is the obvious guard and the wrong one: the branch is
+    // rebased and force-pushed upstream as a matter of course, so after every editor bump each
+    // developer's local tip is a stale copy the remote no longer contains. A refusal cannot tell
+    // that from work somebody authored - `rev-list` reports both identically - so it would fire for
+    // everyone and stage a stale editor. Parking needs no such judgement: a ref for a stale tip
+    // costs nothing, and a ref for real work is the whole point.
+    const head = resolve('HEAD');
+    const unpushedCount = Number(
+      execSync(`git rev-list --count "${target}..HEAD"`, {
+        cwd: repoPath,
+        encoding: 'utf8',
+      }).trim(),
+    );
+    if (unpushedCount > 0) {
+      // Named by commit, so staging twice from two different tips parks both rather than the second
+      // overwriting the first.
+      const rescueRef = `refs/stage-rescue/${repo.revision}/${head.slice(0, 9)}`;
+      execSync(`git update-ref "${rescueRef}" ${head}`, { cwd: repoPath });
+      rescuedCommits.push({
+        repoFolder: repo.folder,
+        repoPath,
+        revision: repo.revision,
+        commitCount: unpushedCount,
+        rescueRef,
+      });
+    }
+    console.log(`Updating ${repo.folder} to ${target} (was at ${head.slice(0, 9)})...`);
+    execSync(`git checkout -B "${repo.revision}" "${target}"`, { stdio: 'inherit', cwd: repoPath });
+    return;
+  }
+
+  // A tag or a commit hash. There is no branch to be on, so this is the one case where a detached
+  // HEAD is not a choice.
+  console.log(`Checking out ${repo.revision} in ${repo.folder}...`);
+  execSync(`git checkout --detach "${repo.revision}"`, { stdio: 'inherit', cwd: repoPath });
+}
+
+/**
+ * Identifies what a staged copy would be built from right now: the source HEAD commit, with a
+ * `-dirty` suffix when the working tree has uncommitted changes so a locally built copy never
+ * passes as a clean one.
+ */
+function getSourceStamp(repoPath: string): string {
+  const head = execSync('git rev-parse HEAD', { cwd: repoPath, encoding: 'utf8' }).trim();
+  const status = execSync('git status --porcelain', { cwd: repoPath, encoding: 'utf8' });
+  if (status.trim().length > 0) return `${head}-dirty`;
+
+  // A committed-but-unpushed source commit is still work that exists on one machine, and a lockfile
+  // recording its dependency closure is one nobody else can reproduce — the same problem `-dirty`
+  // marks, one step later. Asked of the local remote-tracking refs, so it needs no network; a
+  // commit reachable from any `origin/*` is on the remote.
+  const remoteBranches = execSync('git branch -r --contains HEAD', {
+    cwd: repoPath,
+    encoding: 'utf8',
+  }).trim();
+  return remoteBranches.length > 0 ? head : `${head}-unpushed`;
+}
+
+/** What a marker written by this version of the script, for this source state, would say. */
+function markerFor(sourceStamp: string, devPackage: DevPackage): string {
+  return getExpectedMarker(sourceStamp, devPackage.packagePath, isLocalMode, STAGING_FORMAT);
+}
+
+/**
+ * Whether every package of this repo is already staged from exactly the currently checked-out
+ * commit, by a version of this script that produces what this one would. Neither a dirty source
+ * tree nor a `--local` build ever matches, so both are always superseded by the next regular run.
+ */
+function isStagingCurrent(repo: DevRepo, sourceStamp: string): boolean {
+  if (sourceStamp.endsWith('-dirty')) return false;
+  return repo.devPackages.every((devPackage) => {
+    const stagingDir = path.resolve(STAGING_ROOT, devPackage.stagingFolder);
+    const markerPath = path.resolve(stagingDir, STAGED_FROM_MARKER);
+    if (!fs.existsSync(markerPath)) return false;
+    // The staging folders are gitignored, so they look disposable; deleting one's contents by hand
+    // leaves the marker behind, and keying on it alone would skip staging forever afterwards.
+    if (!fs.existsSync(path.resolve(stagingDir, 'package.json'))) return false;
+    return fs.readFileSync(markerPath, 'utf8').trim() === markerFor(sourceStamp, devPackage);
+  });
+}
+
+/**
+ * Asks npm which files it would publish for the package at `packageDir`. Using npm's own answer
+ * keeps the staged copy faithful to the package's `files` allowlist without reimplementing its
+ * include/exclude semantics here.
+ */
+function getPublishedFiles(packageDir: string): string[] {
+  // This runs inside the dev repo, so it needs the same environment every other command there gets
+  // — in particular the `_VOLTA_TOOL_RECURSION` deletion, without which a Volta-shimmed npm cannot
+  // resolve Node at all.
+  //
+  // On top of that: npm exports its own flags to child processes as `npm_config_*`. `npm install -w
+  // <workspace>` in this repo would therefore hand `npm pack` a workspace filter that means nothing
+  // in the dev repo, and npm answers with an error object instead of a file list.
+  const env = devRepoEnv();
+  delete env.npm_config_workspace;
+  delete env.npm_config_workspaces;
+  const output = execSync('npm pack --dry-run --json', {
+    cwd: packageDir,
+    encoding: 'utf8',
+    env,
+    // npm writes its human-readable tarball summary to stderr, so capture that separately to keep
+    // stdout pure JSON. Captured rather than ignored so a failure still reports why.
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const parsed: { files?: { path: string }[] }[] = JSON.parse(output);
+  const files = parsed[0]?.files;
+  if (!files?.length) throw new Error(`npm reported no publishable files for ${packageDir}`);
+  return files.map((file) => file.path);
+}
+
+/**
+ * Shapes a staged package's manifest the way publishing would, and makes it installable by npm.
+ *
+ * The dev repo's own `prepublishOnly` does the first part, but running it requires that repo's
+ * toolchain and a full build. Doing it here on the copy instead means a consumer never needs either
+ * — and never mutates the source checkout, which `prepublishOnly` does (it rewrites `package.json`
+ * in place and relies on a `postpublish` git restore).
+ *
+ * - The `development` conditional export points at raw TypeScript source that our bundlers cannot
+ *   consume; publishing drops it, so we do too.
+ * - `devDependencies` are irrelevant to a consumer and would be noise in its lockfile.
+ * - Pnpm `workspace:` specifiers become `file:` paths at the sibling staged package. npm cannot parse
+ *   the `workspace:` protocol at all, so this rewrite is what makes the copy installable. Pointing
+ *   at the sibling staged copy — rather than at a published version, as a pnpm or yalc publish
+ *   would — keeps the whole graph on the build we just staged, instead of pulling someone else's
+ *   published artifact back in and risking a second copy of that package in the tree.
+ */
+function prepareStagedManifest(stagingDir: string, stagingFolderByName: Map<string, string>): void {
+  const manifestPath = path.resolve(stagingDir, 'package.json');
+  const manifest = shapeStagedManifest(
+    JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
+    stagingFolderByName,
+    manifestPath,
+  );
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, undefined, 2)}\n`);
+}
+
+/**
+ * Whether a package's `dist/` is a build that can actually be copied, rather than merely present.
+ *
+ * `dist/` existing is not the same as a build finishing: an `nx build`/`extract-api` interrupted by
+ * Ctrl-C, an OOM kill, or a sleep leaves a partial directory behind, and the next run would skip
+ * the build, stage the partial output, and stamp it with a marker that looks exactly like a good
+ * one. There is no completion sentinel to read, so this asks the manifest what the package promises
+ * consumers — `main`, `module`, `types`, and the files its `exports` map points at — and treats the
+ * build as usable only when all of it is on disk.
+ */
+function isBuiltOutputUsable(packageDir: string): boolean {
+  if (!fs.existsSync(path.resolve(packageDir, 'dist'))) return false;
+
+  const manifest = JSON.parse(fs.readFileSync(path.resolve(packageDir, 'package.json'), 'utf8'));
+  const targets = new Set<string>();
+  ['main', 'module', 'types', 'typings'].forEach((field) => {
+    if (typeof manifest[field] === 'string') targets.add(manifest[field]);
+  });
+  // `exports` nests arbitrarily (subpath -> condition -> ... -> path), so walk it for strings
+  // rather than assuming a shape.
+  const collect = (node: unknown) => {
+    if (typeof node === 'string') {
+      if (node.startsWith('./')) targets.add(node);
+      return;
+    }
+    if (node && typeof node === 'object') Object.values(node).forEach(collect);
+  };
+  collect(manifest.exports);
+
+  return [...targets]
+    .filter((target) => target.includes('dist/'))
+    .every((target) => fs.existsSync(path.resolve(packageDir, target)));
+}
+
+/**
+ * Copies a package's publishable files into `dev-packages/staging/<stagingFolder>`, building first
+ * only when there is nothing to copy.
+ *
+ * The dev repos commit their built `dist/`, so staging is normally just a copy: a consumer needs
+ * none of their toolchain — no pnpm, no nx, no build — to run this app. Only someone changing a dev
+ * package builds it, via `npm run build:editor`.
+ *
+ * The build fallback covers the two cases where a copy is not enough: `--local`, where the point is
+ * to pick up uncommitted source edits, and a checkout whose `dist/` is missing (an older revision
+ * from before the build was committed, or a partially cleaned tree).
+ *
+ * `mustBuild` is decided for the repo as a whole, and deliberately cannot be re-derived here from
+ * `dist/` existing. Building one package also builds the workspace dependencies nx resolves for it,
+ * which writes their `dist/` too — but with tsc's per-file declarations, never api-extractor's
+ * rolled-up one. So a package inspected after a sibling built looks already-built while holding a
+ * 13-line re-export stub where its API surface should be, and copying that stages a package whose
+ * types resolve through to its own dependencies' globals. Staging each package immediately after
+ * building it is the other half of this: it captures the rolled-up output before a later sibling's
+ * build can overwrite it.
+ */
+function stagePackage(
+  repo: DevRepo,
+  devPackage: DevPackage,
+  stagingFolderByName: Map<string, string>,
+  sourceStamp: string,
+  mustBuild: boolean,
+): void {
+  const packageDir = path.resolve(getDevRepoPath(repo.folder), devPackage.packagePath);
+  const stagingDir = path.resolve(STAGING_ROOT, devPackage.stagingFolder);
+
+  if (mustBuild) {
+    console.log(
+      `Building ${devPackage.nxProject}${isLocalMode ? '' : ' (no committed dist to copy)'}...`,
+    );
+    // --skip-nx-cache because the dev repos commit their `dist/`, and nx declares that directory as
+    // a cached target output: a cache hit RESTORES nx's copy over the committed one, silently
+    // deleting files the cache predates. A build here must reflect the source, not a cache.
+    runPnpm(
+      `exec nx extract-api ${devPackage.nxProject} --skip-nx-cache`,
+      getDevRepoPath(repo.folder),
+    );
+  }
+
+  console.log(`Staging ${devPackage.nxProject} into ${stagingDir}...`);
+  // Listed before the existing copy is removed: `npm pack --dry-run` is the step most likely to
+  // fail here (a `packagePath` that names no package, a transient npm error), and doing it first
+  // means such a failure aborts with the previous staged copy intact rather than leaving the folder
+  // deleted and `node_modules/<name>` a dangling symlink until the next install.
+  const publishedFiles = getPublishedFiles(packageDir);
+  // Replace rather than merge so a file deleted upstream does not linger in the staged copy.
+  fs.rmSync(stagingDir, { recursive: true, force: true });
+  publishedFiles.forEach((file) => {
+    const destination = path.resolve(stagingDir, file);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(path.resolve(packageDir, file), destination);
+  });
+  prepareStagedManifest(stagingDir, stagingFolderByName);
+  // `--local` marks its output so it can never satisfy `isStagingCurrent`: a local build is a
+  // developer's private state, and a clean checkout at the pinned commit would otherwise write a
+  // stamp indistinguishable from a real staging run, leaving that build in place indefinitely.
+  fs.writeFileSync(
+    path.resolve(stagingDir, STAGED_FROM_MARKER),
+    `${markerFor(sourceStamp, devPackage)}\n`,
+  );
+}
+
+function stageDevPackages(): void {
+  // Named in the failure message below: with several repos and packages staged in one run, "failed
+  // to stage dev packages" alone does not say which one was in flight.
+  let inFlight: string | undefined;
+  console.log(`Staging dev packages for file: consumption${isLocalMode ? ' (local mode)' : ''}...`);
+
+  try {
+    DEV_REPOS.forEach((repo) => {
+      inFlight = repo.folder;
+      if (isLocalMode) {
+        if (!fs.existsSync(getDevRepoPath(repo.folder)))
+          throw new Error(
+            `--local requires an existing ${repo.folder} checkout (in dev-packages/ or as a sibling of this repo), but none was found. Run a regular install first to clone it.`,
+          );
+      } else {
+        cloneRepoIfNeeded(repo);
+        checkoutRevision(repo);
+      }
+
+      const repoPath = getDevRepoPath(repo.folder);
+      const sourceStamp = getSourceStamp(repoPath);
+
+      if (!isLocalMode && isStagingCurrent(repo, sourceStamp)) {
+        console.log(`${repo.folder} is already staged from ${sourceStamp}; nothing to do.`);
+        return;
+      }
+
+      // One decision for the whole repo, made while the checkout is still untouched: if any package
+      // has to be built, build them all. Once a build runs, `dist/` no longer says whether a package
+      // was built as itself or as somebody's dependency (see `stagePackage`), so a per-package
+      // decision taken later reads a tree the earlier builds already rewrote.
+      const mustBuild =
+        isLocalMode ||
+        repo.devPackages.some(
+          (devPackage) => !isBuiltOutputUsable(path.resolve(repoPath, devPackage.packagePath)),
+        );
+
+      // Only a build needs the dev repo's dependencies installed. Skipping this is the difference
+      // between an install that needs pnpm and one that does not.
+      if (mustBuild) {
+        console.log(`Running pnpm install in ${repo.folder}...`);
+        runPnpm('install', repoPath);
+      }
+
+      // Map every staged package's npm name to its staging folder so a package that depends on a
+      // sibling in the same repo can be pointed at that sibling's staged copy.
+      const stagingFolderByName = new Map<string, string>(
+        repo.devPackages.map((devPackage) => {
+          const manifestPath = path.resolve(repoPath, devPackage.packagePath, 'package.json');
+          return [JSON.parse(fs.readFileSync(manifestPath, 'utf8')).name, devPackage.stagingFolder];
+        }),
+      );
+
+      repo.devPackages.forEach((devPackage) => {
+        inFlight = `${repo.folder}/${devPackage.packagePath}`;
+        stagePackage(repo, devPackage, stagingFolderByName, sourceStamp, mustBuild);
+      });
+      inFlight = undefined;
+    });
+
+    console.log('Successfully staged dev packages');
+    reportRescuedCommits();
+  } catch (error) {
+    console.error(
+      `Error: Failed to stage dev packages${inFlight ? ` while working on ${inFlight}` : ''}.`,
+    );
+    console.error('Error object:', error);
+    if (error instanceof Error) console.error('Stack:', error.stack);
+    // Not `process.exit`: it tears down the process synchronously, dropping anything still
+    // queued on a piped stderr (which is how npm runs lifecycle scripts) past the ~64KB buffer.
+    // Setting the code lets the remediation text above finish writing.
+    process.exitCode = 1;
+  }
+}
+
+stageDevPackages();

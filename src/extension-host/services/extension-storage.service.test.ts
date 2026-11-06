@@ -1,8 +1,7 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { vi } from 'vitest';
 import { createUuid } from '@node/utils/crypto-util';
-import { getAppDir } from '@node/utils/util';
 import { ExecutionToken } from '@node/models/execution-token.model';
 import { executionTokenService } from '@node/services/execution-token.service';
 import {
@@ -11,24 +10,14 @@ import {
   setExtensionUris,
 } from './extension-storage.service';
 
-vi.mock('@node/utils/util', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@node/utils/util')>();
-  // __dirname is a module global available in the factory closure
-  return {
-    ...actual,
-    /**
-     * Gets the dev app directory relative to this file instead of using `getAppDir` because
-     * `getAppDir` uses `globalThis.resourcesPath`, which is set to the repo root via command line
-     * argument in dev but is not set while testing
-     */
-    getAppDir: () => path.join(__dirname, '../..'),
-  };
-});
-
 const extensionName = 'storageTestExtName';
-const extensionsBasePath = path.join(getAppDir(), 'test-extensions');
-const thisExtensionBasePath = path.join(extensionsBasePath, 'extensions', extensionName);
-const thisUserBasePath = path.join(getAppDir(), extensionName);
+// Set in `beforeAll`, outside the source tree: other tests walk `src/`, and a folder that appears
+// and vanishes under them while they read it makes them fail at random. The service keeps user
+// data under `getAppDir()`, which is `<resourcesPath>/dev-appdata` while `isPackaged` is false, so
+// it lands in this folder too.
+let extensionsBasePath = '';
+let thisExtensionBasePath = '';
+const originalIsPackaged = globalThis.isPackaged;
 
 const resourcesUri = 'resources://extensions';
 const testData = 'TEST DATA';
@@ -36,21 +25,20 @@ const testData = 'TEST DATA';
 const token: ExecutionToken = executionTokenService.registerExtension(extensionName);
 
 beforeAll(() => {
+  extensionsBasePath = fs.mkdtempSync(path.join(os.tmpdir(), 'extension-storage-test-'));
+  thisExtensionBasePath = path.join(extensionsBasePath, 'extensions', extensionName);
   globalThis.resourcesPath = extensionsBasePath;
+  // A packaged app dir is the user's real data folder
+  globalThis.isPackaged = false;
   fs.mkdirSync(thisExtensionBasePath, { recursive: true });
-  fs.mkdirSync(thisUserBasePath, { recursive: true });
 
   setExtensionUris(new Map([[extensionName, `${resourcesUri}/${extensionName}`]]));
 });
 
 afterAll(() => {
+  globalThis.isPackaged = originalIsPackaged;
   try {
     fs.rmSync(extensionsBasePath, { recursive: true });
-  } catch {
-    // do nothing
-  }
-  try {
-    fs.rmSync(thisUserBasePath, { recursive: true });
   } catch {
     // do nothing
   }
@@ -59,11 +47,6 @@ afterAll(() => {
 beforeEach(() => {
   try {
     fs.rmSync(path.join(thisExtensionBasePath, '*.*'), { recursive: false });
-  } catch {
-    // do nothing
-  }
-  try {
-    fs.rmSync(path.join(thisUserBasePath, '*.*'), { recursive: false });
   } catch {
     // do nothing
   }

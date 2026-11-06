@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { MarkerMenu } from '@/components/advanced/marker-menu.component';
@@ -30,10 +30,6 @@ beforeAll(() => {
   }
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
-  }
-  // cmdk scrolls the active item into view on selection; jsdom doesn't implement it.
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 
@@ -495,5 +491,122 @@ describe('MarkerMenu — row layout', () => {
     const titleRow = screen.getByText('Poetry line 1').parentElement;
     expect(titleRow?.children).toHaveLength(1);
     expect(row).toHaveTextContent('q1');
+  });
+});
+
+describe('MarkerMenu — highlighted row on open', () => {
+  // Alphabetical, as the paragraph menu is: without a default, cmdk highlights the first row, so a
+  // second Enter would pick `b` whatever the paragraph actually is.
+  const ITEMS = [
+    { marker: 'b', title: 'Blank line', action: vi.fn() },
+    { marker: 'm', title: 'Margin paragraph', action: vi.fn() },
+    { marker: 'p', title: 'Paragraph', action: vi.fn() },
+    { marker: 'q1', title: 'Poetry line 1', action: vi.fn() },
+  ];
+
+  it('highlights the first row when no default is given', () => {
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    expect(screen.getByRole('option', { name: /Blank line/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('highlights the row for the default marker, so Enter re-applies it', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const items = ITEMS.map((item) => ({ ...item, action: vi.fn() }));
+    render(
+      <MarkerMenu
+        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
+        markerMenuItems={items}
+        defaultHighlightedMarker="p"
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Paragraph/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('option', { name: /Blank line/ })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+
+    await user.type(screen.getByRole('combobox'), '{Enter}');
+
+    expect(items[2].action).toHaveBeenCalledTimes(1);
+    expect(items[0].action).not.toHaveBeenCalled();
+  });
+
+  it('scrolls the highlighted row into view on open, as cmdk does for the first row', async () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      render(
+        <MarkerMenu
+          localizedStrings={DEFAULT_LOCALIZED_STRINGS}
+          markerMenuItems={ITEMS}
+          defaultHighlightedMarker="q1"
+        />,
+      );
+      const row = screen.getByRole('option', { name: /Poetry line 1/ });
+
+      await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(row));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('lets the arrow keys move the highlight on from the default, which a controlled value would not', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <MarkerMenu
+        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
+        markerMenuItems={ITEMS}
+        defaultHighlightedMarker="m"
+      />,
+    );
+    const search = screen.getByRole('combobox');
+
+    await user.type(search, '{ArrowDown}');
+
+    const paragraphRow = screen.getByRole('option', { name: /Paragraph/ });
+    expect(paragraphRow).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(search).toHaveAttribute('aria-activedescendant', paragraphRow.id));
+  });
+
+  it('falls back to the first row when no row has the default marker', () => {
+    // A project-custom or non-selectable marker has no row of its own.
+    render(
+      <MarkerMenu
+        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
+        markerMenuItems={ITEMS}
+        defaultHighlightedMarker="mt1"
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Blank line/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('falls back to the first selectable row when the default marker’s row cannot be picked', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
+        markerMenuItems={ITEMS.map((item) =>
+          item.marker === 'p' ? { ...item, isDisabled: true } : item,
+        )}
+        defaultHighlightedMarker="p"
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Blank line/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 });

@@ -180,6 +180,12 @@ internal sealed class ChecklistNetworkObject : NetworkObject
             // error conditions).
             return new ChecklistResultError(ChecklistErrorCodes.ProjectNotFound, ex.Message);
         }
+        catch (ProjectOpenBlockedException ex)
+        {
+            // The message keeps the exception's localize key and sentinel, so the web view can
+            // show the localized reason.
+            return new ChecklistResultError(ChecklistErrorCodes.ProjectOpenBlocked, ex.Message);
+        }
     }
 
     /// <summary>

@@ -1143,6 +1143,60 @@ investigation):
 
 ---
 
+### 1.18 Pane Zoom (View > Zoom)
+
+**Description**: Scale the text of the focused pane of a text window without changing the window's chrome, menus or toolbars. Zoom is per pane, not per window: the footnote pane of a Scripture text window keeps a zoom of its own, and the level is remembered per project and per window type between sessions. This is the display-size control users reach for; it is distinct from the project font size set in Language Settings (2.3), which is a project-wide property of the text itself.
+
+**Sub-Features**:
+- Zoom in / zoom out / actual size on the focused pane, from the ≡ Tab > View > Zoom menu and from Ctrl + Plus / Minus / Zero
+- Discrete zoom steps (0.25× through 4.0×) with the current percentage shown in the menu
+- The Scripture text window's footnote pane zooms separately from its text pane
+- The level is remembered per project and per window type, and restored when the window reopens
+- Comment/note list windows zoom their HTML body the same way
+
+**Sources**:
+
+| Source | Reference | Status |
+|--------|-----------|--------|
+| Menu Structure | Menu: `≡ Tab > View > Zoom`; Item: `zoomToolStripMenuItem` (a `ZoomMenuItem`); Owner: `TextForm` | `[MS]` |
+| HelpData | Keyword: "How do I change the size at which a text is displayed?" | `[H]` |
+| Code | `IZoomable` implemented by the zoomable windows; `FormZoomer` interprets the keyboard chords; `DefaultZoomMemento` persists the level | `[C]` |
+
+**Implementation**:
+
+| Depth | File | Found Via | Evidence |
+|-------|------|-----------|----------|
+| 0 | `Paratext/TextForm.Designer.cs` | Menu Structure | `zoomToolStripMenuItem = new Paratext.Base.MegaMenu.ZoomMenuItem()`, `Text = "Zoom"`, `ShortcutKeyDisplayString = "Ctrl + Plus/Minus/Zero"` |
+| 0 | `Paratext/TextForm.cs` | Owner of D0 | delegates `Zoom` to `uiScriptureEditor.FocusedPaneZoom`; saves and restores `SecondaryViewZooms` |
+| 1 | `ParatextBase/MegaMenu/MegaMenu.cs` | Hosts D0 | `IZoomable zoomProvider`, the `zoomSteps` ladder (0.25 … 4.0), `ZoomString` for the displayed percentage |
+| 1 | `ParatextBase/MegaMenu/ZoomMenuItem.cs` | Class of D0 | the menu item itself |
+| 1 | `PtxUtils.UI/IZoomable.cs` | Interface in D0/D1 | the `Zoom` contract every zoomable window implements |
+| 1 | `PtxUtils.UI/Winforms/FormZoomer.cs` | Keyboard path | `ZoomAction { Larger, Smaller, Actual, NoAction }`, `InterpretKeyCode(Keys)` |
+| 1 | `ParatextBase/ScriptureEditor/UsfmMultiPaneControl.cs` | Field in D0 | `FocusedPaneZoom` (the focused pane), `SecondaryViewZooms` (the footnote pane's own levels) |
+| 2 | `ParatextBase/ScriptureEditor/UsfmSinglePaneControl.cs` | Owned by D1 | regenerates the pane stylesheet per zoom via `usfmXhtmlConverter.GetCss(Zoom, …)` |
+| 2 | `HtmlEditor/HtmlZoomHelper.cs` | HTML-hosted windows | `Setup(IHtmlEditorAdaptor, IZoomable)`, `ZoomChanged` — the zoom path for HTML-rendered bodies |
+| 2 | `ParatextBase/DefaultZoomMemento.cs` | Persistence | `SaveZoom(ScrText, formName, zoom)`, `GetZoom(ScrText, formName)`, `ResetZoom(ScrText)` over a `SerializableDictionary<string, double>` |
+| 2 | `Paratext/TextFormMemento.cs` | Persistence | `Zoom` and `SecondaryViewZooms` restored with the window |
+| 2 | `Paratext/ProjectComments/CommentListForm.cs` | Variant | implements `IZoomable` and zooms its list body through `HtmlZoomHelper.Setup(listControl.HtmlEditor, listControl)`; persisted in its own memento |
+
+**UI Entry Points**:
+- ≡ Tab > View > Zoom (shows the current percentage; zoom in / out / actual size)
+  - Menu Structure: `TextForm`, item `zoomToolStripMenuItem`
+  - File: `Paratext/TextForm.Designer.cs`
+- Ctrl + Plus / Ctrl + Minus / Ctrl + 0 on the focused pane
+  - File: `PtxUtils.UI/Winforms/FormZoomer.cs`
+
+**Related Features**:
+- 1.1 Text Editor - the panes that zoom
+- 1.2 Editor Views - zoom applies to every view mode
+- 1.11 Insert Footnotes & Endnotes - the footnote pane that zooms separately
+- 2.3 Font Management (OpenType/Graphite) - the **project** font size, a different control; zoom scales on top of it
+- 10.4 Project Notes - the comment/note list windows that zoom their HTML body
+
+**Validation**: [MS] - - - [H] [C] — Last verified: 2026-09-15
+
+---
+
 ## Cross-References
 
 **Related Categories**:
@@ -1175,6 +1229,7 @@ investigation):
 | 1.15 Autocorrect | ✓ | - | - | - | ✓ | ✓ | 2026-01-20 |
 | 1.16 Text Normalization | ✓ | - | - | - | - | ✓ | 2026-01-21 |
 | 1.17 Editor Real-time Validation | ✓ | - | - | ✓ | ✓ | ✓ | 2026-01-22 |
+| 1.18 Pane Zoom | ✓ | - | - | - | ✓ | ✓ | 2026-09-15 |
 ## Notes
 
 - FormattedEditor is at repo root (`FormattedEditor/`), not under `Paratext/`

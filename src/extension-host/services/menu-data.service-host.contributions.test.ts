@@ -1,0 +1,428 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { USERSNAP_SPACE_API_KEY } from '@shared/data/platform.data';
+import { JsonDocumentLike } from 'platform-bible-utils';
+import { describe, expect, test } from 'vitest';
+import { LUCIDE_ICON_NAMES } from '../../../lib/platform-bible-react/src/components/basics/lucide-icons.util';
+import {
+  EXTENSIONS_DIR,
+  getMenuContributingExtensions,
+  getMenuDataEngineInMode,
+  getRealCombinedMenus,
+} from './menu-data.service-host.test-utils';
+
+/** How many application main menu items a shipped `menus.json` contributes. */
+function countMainMenuItems(menus: JsonDocumentLike): number {
+  if (Array.isArray(menus)) return 0;
+  const { mainMenu } = menus;
+  if (!mainMenu || typeof mainMenu !== 'object' || Array.isArray(mainMenu)) return 0;
+  if (!('items' in mainMenu)) return 0;
+  const { items } = mainMenu;
+  return Array.isArray(items) ? items.length : 0;
+}
+
+/**
+ * Extensions contributing at least one application main menu item — the empty-group expectations
+ * below are only true of the menu as a whole, so this file narrows to just those extensions.
+ */
+function hasMainMenuItems(menus: JsonDocumentLike): boolean {
+  return countMainMenuItems(menus) > 0;
+}
+
+async function getMainMenuInMode(mode: 'simple' | 'power') {
+  const engine = await getMenuDataEngineInMode(
+    getRealCombinedMenus({ filter: hasMainMenuItems }),
+    mode,
+  );
+  return engine.getMainMenu();
+}
+
+function hasCommand(menu: Awaited<ReturnType<typeof getMainMenuInMode>>, command: string): boolean {
+  return menu.items.some((item) => 'command' in item && item.command === command);
+}
+
+/** Every entry the main menu offers in `mode`, by command — or by id for a submenu root. */
+function entriesIn(menu: Awaited<ReturnType<typeof getMainMenuInMode>>): string[] {
+  return menu.items.map((item) => ('command' in item ? item.command : item.id)).sort();
+}
+
+describe('The shipped main menu is pinned exactly, per mode', () => {
+  /**
+   * The gating suites below name the items they care about, so they cannot see an item nobody
+   * thought to name. Groups marked `isExtensible` accept contributions from any extension, which
+   * means a new menu entry can reach Simple without this repo's menu document changing at all —
+   * exactly the regression the per-item checks cannot catch. Comparing the whole list makes any
+   * such addition fail here, naming the new command in the diff.
+   *
+   * `helloRock3.*` is in both lists deliberately: it ships main menu items with no
+   * `hiddenInterfaceModes`, so it is a live example of that hazard rather than an oversight. Its
+   * presence in the Simple list is the thing this test exists to make visible.
+   *
+   * Update these lists only alongside a deliberate decision about whether the item belongs in each
+   * mode — never to make a failing run green.
+   *
+   * A product build that sets the Usersnap space key (Paratext 10, through its repo patch) also
+   * re-adds two `platform.helpFeedback` items, so those are expected exactly when the key is set.
+   * The empty `platform.helpFeedback` group and the `%mainMenu_feedbackForm_screenshot%` /
+   * `%mainMenu_feedbackForm_textArea%` labels stay in core as anchors for that patch.
+   */
+  const PRODUCT_FEEDBACK_ITEMS = USERSNAP_SPACE_API_KEY
+    ? ['platform.usersnapReportIssue', 'platform.usersnapSubmitIdea']
+    : [];
+
+  const SIMPLE_MAIN_MENU = [
+    'helloRock3.createNewProject',
+    'helloRock3.deleteProject',
+    'helloRock3.openProject',
+    'helloRock3.projectSubmenu',
+    'platform.about',
+    'platform.openSettings',
+    'platform.quit',
+    'platform.showOnboardingTour',
+    ...PRODUCT_FEEDBACK_ITEMS,
+    'platform.visitFAQsPage',
+    'platform.visitGettingStartedPage',
+  ];
+
+  const POWER_MAIN_MENU = [
+    'helloRock3.createNewProject',
+    'helloRock3.deleteProject',
+    'helloRock3.openProject',
+    'helloRock3.projectSubmenu',
+    'paratextRegistration.showParatextRegistration',
+    'platform.about',
+    'platform.createWindow',
+    'platform.openSettings',
+    'platform.quit',
+    ...PRODUCT_FEEDBACK_ITEMS,
+    'platform.visitFAQsPage',
+    'platform.visitGettingStartedPage',
+    'platformGetResources.openGetResources',
+    'platformGetResources.openHome',
+    'platformLexicalTools.openDictionary',
+  ];
+
+  test('Simple offers exactly these entries', async () => {
+    expect(entriesIn(await getMainMenuInMode('simple'))).toEqual(SIMPLE_MAIN_MENU);
+  });
+
+  test('Power offers exactly these entries', async () => {
+    expect(entriesIn(await getMainMenuInMode('power'))).toEqual(POWER_MAIN_MENU);
+  });
+});
+
+/** English text of every string key the shipped menus use: core's `en.json` plus each extension's. */
+function readEnglishStrings(): Record<string, string> {
+  const coreStrings: Record<string, string> = JSON.parse(
+    readFileSync(resolve(__dirname, '../../../assets/localization/en.json'), 'utf8'),
+  );
+  const extensionStrings = readdirSync(EXTENSIONS_DIR, { withFileTypes: true }).map((entry) => {
+    const stringsPath = resolve(EXTENSIONS_DIR, entry.name, 'contributions/localizedStrings.json');
+    if (!entry.isDirectory() || !existsSync(stringsPath)) return {};
+    const contributed: { localizedStrings?: { en?: Record<string, string> } } = JSON.parse(
+      readFileSync(stringsPath, 'utf8'),
+    );
+    return contributed.localizedStrings?.en ?? {};
+  });
+  return Object.assign({}, coreStrings, ...extensionStrings);
+}
+
+describe('The Power main menu is laid out as designed', () => {
+  async function getPowerLayout() {
+    const menu = await getMainMenuInMode('power');
+    const strings = readEnglishStrings();
+    const find = (command: string) => {
+      const item = menu.items.find((entry) => 'command' in entry && entry.command === command);
+      if (!item) throw new Error(`Power main menu has no ${command}`);
+      return item;
+    };
+    return { menu, strings, find };
+  }
+
+  test.each([
+    ['platformGetResources.openGetResources', 'Get resources'],
+    ['platformGetResources.openHome', 'Open'],
+    ['platformLexicalTools.openDictionary', 'Dictionary: SDBH/SDBG'],
+    ['platform.createWindow', 'New window'],
+    ['platform.visitGettingStartedPage', 'Browse help'],
+    ['paratextRegistration.showParatextRegistration', 'Registration information'],
+  ])('%s is labelled "%s"', async (command, label) => {
+    const { strings, find } = await getPowerLayout();
+    expect(strings[find(command).label]).toBe(label);
+  });
+
+  test.each([
+    ['platformGetResources.openGetResources', 'download'],
+    ['platformGetResources.openHome', 'house'],
+    ['platformLexicalTools.openDictionary', 'book-a'],
+    ['platform.openSettings', 'settings'],
+    ['platform.visitGettingStartedPage', 'circle-question-mark'],
+    ['platform.visitFAQsPage', 'users'],
+  ])('%s shows the lucide icon "%s" before its label', async (command, icon) => {
+    const { find } = await getPowerLayout();
+    expect(find(command)).toMatchObject({ iconNameBefore: icon });
+  });
+
+  test.each(['platform.visitGettingStartedPage', 'platform.visitFAQsPage'])(
+    '%s marks its external destination with the lucide "external-link" icon',
+    async (command) => {
+      const { find } = await getPowerLayout();
+      const item = find(command);
+      expect(item).toMatchObject({ iconNameAfter: 'external-link' });
+      expect(item).not.toHaveProperty('iconPathAfter');
+    },
+  );
+
+  test('groups hold the items in the designed order', async () => {
+    const { menu } = await getPowerLayout();
+    const commandsIn = (group: string) =>
+      menu.items
+        .filter((item) => item.group === group && 'command' in item)
+        .sort((a, b) => a.order - b.order)
+        .map((item) => ('command' in item ? item.command : ''))
+        .filter((command) => !command.startsWith('helloRock3.'));
+    expect(commandsIn('platform.projectProjects')).toEqual([
+      'platformGetResources.openGetResources',
+    ]);
+    expect(commandsIn('platform.projectResources')).toEqual([
+      'platformGetResources.openHome',
+      'platformLexicalTools.openDictionary',
+    ]);
+    expect(commandsIn('platform.projectSettings')).toEqual(['platform.openSettings']);
+    expect(commandsIn('platform.projectMisc')).toEqual(['platform.createWindow', 'platform.quit']);
+    expect(commandsIn('platform.helpInfo')).toEqual([
+      'platform.visitGettingStartedPage',
+      'platform.visitFAQsPage',
+    ]);
+    expect(commandsIn('platform.helpRegistration')).toEqual([]);
+    expect(commandsIn('platform.helpMisc')).toEqual([
+      'paratextRegistration.showParatextRegistration',
+      'platform.about',
+    ]);
+  });
+
+  test('Open shows its shortcut hint', async () => {
+    const { find } = await getPowerLayout();
+    expect(find('platformGetResources.openHome')).toHaveProperty('shortcut', expect.any(String));
+  });
+
+  test('Get resources is absent in Simple', async () => {
+    expect(
+      hasCommand(await getMainMenuInMode('simple'), 'platformGetResources.openGetResources'),
+    ).toBe(false);
+  });
+});
+
+describe('Shipped menu contributions are discovered', () => {
+  /**
+   * Every assertion below reasons about the combined menu, so a scan that silently found nothing
+   * would make each "absent in Simple" case trivially true. These name the contributors the rest of
+   * the suite depends on without making the scan itself a hand-maintained list.
+   */
+  test.each([
+    'platformGetResources',
+    'platformLexicalTools',
+    'platformEnhancedResources',
+    'paratextRegistration',
+  ])('%s is picked up from the shipped extensions', (extensionName) => {
+    expect(
+      getMenuContributingExtensions({ filter: hasMainMenuItems }).map(([name]) => name),
+    ).toContain(extensionName);
+  });
+});
+
+describe('Extension-contributed main menu items are gated for Simple mode', () => {
+  /**
+   * The Power half of every case is what catches an over-broad `hiddenInterfaceModes`: without it,
+   * a flag that wrongly hides an item in both modes still passes.
+   */
+  const HIDDEN_IN_SIMPLE = [
+    ['Open', 'platformGetResources.openHome'],
+    ['Dictionary: SDBH/SDBG', 'platformLexicalTools.openDictionary'],
+    ['Open enhanced resource', 'platformEnhancedResources.openEnhancedResource'],
+    ['Registration information', 'paratextRegistration.showParatextRegistration'],
+  ] as const;
+
+  /** Hidden in both modes: Power's main menu leaves enhanced resources to the Open home view. */
+  const HIDDEN_IN_POWER = [
+    ['Open enhanced resource', 'platformEnhancedResources.openEnhancedResource'],
+  ] as const;
+
+  test.each(HIDDEN_IN_SIMPLE)('"%s" is absent from the main menu in Simple', async (_, command) => {
+    expect(hasCommand(await getMainMenuInMode('simple'), command)).toBe(false);
+  });
+
+  test.each(
+    HIDDEN_IN_SIMPLE.filter(
+      ([, command]) => !HIDDEN_IN_POWER.some(([, hidden]) => hidden === command),
+    ),
+  )('"%s" is still present in Power', async (_, command) => {
+    expect(hasCommand(await getMainMenuInMode('power'), command)).toBe(true);
+  });
+
+  test.each(HIDDEN_IN_POWER)('"%s" is absent from the main menu in Power', async (_, command) => {
+    expect(hasCommand(await getMainMenuInMode('power'), command)).toBe(false);
+  });
+});
+
+describe('Simple main menu keeps what Saroj still needs', () => {
+  /**
+   * These must survive the pruning. `platform.visitFAQsPage` is relabeled to "Community support",
+   * not removed, so its command is expected to still be here.
+   *
+   * "Show the tour" is a deliberate addition to that list: it postdates the Simple Help menu
+   * screenshots this pruning follows, and an onboarding tour is aimed squarely at the newcomer
+   * Simple exists to serve, so it stays visible.
+   */
+  const KEPT_IN_SIMPLE = [
+    ['Settings', 'platform.openSettings'],
+    ['Exit', 'platform.quit'],
+    ['Community support', 'platform.visitFAQsPage'],
+    ['Show the tour', 'platform.showOnboardingTour'],
+    ['About Platform.Bible', 'platform.about'],
+  ] as const;
+
+  test.each(KEPT_IN_SIMPLE)('"%s" is present in Simple', async (_, command) => {
+    expect(hasCommand(await getMainMenuInMode('simple'), command)).toBe(true);
+  });
+});
+
+/**
+ * The main menu's Settings opens Settings for no particular project, while the Project settings
+ * chord opens them for the focused tab's project — so the chord's hint belongs only on the web view
+ * menus' Project settings item, which runs a command of its own.
+ */
+describe('The main menu Settings item shows no shortcut hint', () => {
+  test.each(['simple', 'power'] as const)('in %s', async (mode) => {
+    const menu = await getMainMenuInMode(mode);
+    const settings = menu.items.find(
+      (item) => 'command' in item && item.command === 'platform.openSettings',
+    );
+    expect(settings).toBeDefined();
+    expect(settings).not.toHaveProperty('shortcut');
+  });
+});
+
+describe('Pruning empties menu groups but never a whole column', () => {
+  /**
+   * `filterItemsForInterfaceMode` prunes items only — groups and columns pass through untouched —
+   * so pruning every item out of a group leaves the group behind. That is accepted here rather than
+   * fixed: suppressing empty groups and columns belongs with the wider Project-menu restructure in
+   * PT-4532/PT-4534. This suite pins the outcome so a later ordering change cannot quietly worsen
+   * it — see the sibling `platform-menubar.component.test.tsx` for the separator half.
+   */
+  const EMPTIED_IN_SIMPLE = ['platform.projectResources', 'platform.helpRegistration'];
+
+  /** Groups Simple prunes empty that Power still fills; `helpRegistration` is left for extensions. */
+  const FILLED_IN_POWER = ['platform.projectResources'];
+
+  function itemCountsByGroup(menu: Awaited<ReturnType<typeof getMainMenuInMode>>) {
+    const counts = new Map<string, number>();
+    menu.items.forEach((item) => {
+      counts.set(item.group, (counts.get(item.group) ?? 0) + 1);
+    });
+    return counts;
+  }
+
+  test.each(EMPTIED_IN_SIMPLE)('group "%s" has no items left in Simple', async (group) => {
+    expect(itemCountsByGroup(await getMainMenuInMode('simple')).get(group) ?? 0).toBe(0);
+  });
+
+  test.each(FILLED_IN_POWER)('group "%s" still has items in Power', async (group) => {
+    expect(itemCountsByGroup(await getMainMenuInMode('power')).get(group) ?? 0).toBeGreaterThan(0);
+  });
+
+  test('every rendered column still has at least one item in Simple', async () => {
+    const menu = await getMainMenuInMode('simple');
+    const counts = itemCountsByGroup(menu);
+
+    // A column renders a trigger whether or not anything survives under it, so an emptied column
+    // would show an empty dropdown. Groups naming a column that does not exist are never rendered.
+    const columnKeys = Object.keys(menu.columns).filter((key) => key !== 'isExtensible');
+    const itemsPerColumn = new Map(columnKeys.map((column) => [column, 0]));
+    Object.entries(menu.groups).forEach(([groupKey, group]) => {
+      if (!('column' in group)) return;
+      const existing = itemsPerColumn.get(group.column);
+      if (existing === undefined) return;
+      itemsPerColumn.set(group.column, existing + (counts.get(groupKey) ?? 0));
+    });
+
+    expect(columnKeys.length).toBeGreaterThan(0);
+    // A zero here means that column renders a trigger over an empty dropdown.
+    const emptyColumns = [...itemsPerColumn.entries()]
+      .filter(([, count]) => count === 0)
+      .map(([column]) => column);
+    expect(emptyColumns).toEqual([]);
+  });
+});
+
+describe("The Scripture editor's hamburger offers zoom in both Power and Simple mode", () => {
+  const ZOOM_COMMANDS = [
+    'platform.webViewContentZoomIn',
+    'platform.webViewContentZoomOut',
+    'platform.webViewContentZoomReset',
+  ];
+
+  /** The editor's top menu as the menu data service serves it in `mode`. */
+  async function getEditorTopMenuInMode(mode: 'simple' | 'power') {
+    const engine = await getMenuDataEngineInMode(
+      getRealCombinedMenus({ excludeDevOnly: true }),
+      mode,
+    );
+    return (await engine.getWebViewMenu('platformScriptureEditor.react')).topMenu;
+  }
+
+  function zoomCommandsIn(topMenu: Awaited<ReturnType<typeof getEditorTopMenuInMode>>): string[] {
+    return (topMenu?.items ?? []).flatMap((item) =>
+      'command' in item && ZOOM_COMMANDS.includes(item.command) ? [item.command] : [],
+    );
+  }
+
+  test('Power mode: all three zoom items in the hamburger, in the View column', async () => {
+    const topMenu = await getEditorTopMenuInMode('power');
+    // Positive control: the editor's own menu was served.
+    expect(
+      topMenu?.items.some(
+        (item) => 'command' in item && item.command === 'platformScriptureEditor.toggleFootnotes',
+      ),
+    ).toBe(true);
+    expect(zoomCommandsIn(topMenu).sort()).toEqual([...ZOOM_COMMANDS].sort());
+    const viewColumnGroups = Object.entries(topMenu?.groups ?? {})
+      .filter(
+        ([, group]) => 'column' in group && group.column === 'platformScriptureEditor.options',
+      )
+      .map(([key]) => key);
+    const zoomGroups = (topMenu?.items ?? []).flatMap((item) =>
+      'command' in item && ZOOM_COMMANDS.includes(item.command) ? [item.group] : [],
+    );
+    zoomGroups.forEach((group) => expect(viewColumnGroups).toContain(group));
+  });
+
+  test('Simple mode: all three zoom items in the hamburger', async () => {
+    expect(zoomCommandsIn(await getEditorTopMenuInMode('simple')).sort()).toEqual(
+      [...ZOOM_COMMANDS].sort(),
+    );
+  });
+});
+
+describe('Shipped menu icons name icons the menus can draw', () => {
+  /** Every string value of an `iconNameBefore` / `iconNameAfter` key, at any depth of `value`. */
+  function collectIconNames(value: unknown): string[] {
+    if (Array.isArray(value)) return value.flatMap(collectIconNames);
+    if (!value || typeof value !== 'object') return [];
+    return Object.entries(value).flatMap(([key, child]) =>
+      (key === 'iconNameBefore' || key === 'iconNameAfter') && typeof child === 'string'
+        ? [child]
+        : collectIconNames(child),
+    );
+  }
+
+  // Covers only the menus shipped in this repo; menus contributed from other repos are not checked.
+  test('every iconNameBefore and iconNameAfter is a known icon name', () => {
+    const iconNames = collectIconNames(getRealCombinedMenus({ excludeDevOnly: true }));
+    // Positive control: the walk found icons to check.
+    expect(iconNames.length).toBeGreaterThan(0);
+    const knownIconNames = new Set(LUCIDE_ICON_NAMES);
+    expect([...new Set(iconNames)].filter((name) => !knownIconNames.has(name))).toEqual([]);
+  });
+});

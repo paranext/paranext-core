@@ -19,22 +19,35 @@ This document provides detailed architectural information for Platform.Bible (pa
 
 ### Overview
 
-Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communication. All processes connect to the Main process which acts as the message broker.
+Platform.Bible uses **JSON-RPC 2.0** for inter-process communication. All processes connect to the Main process which acts as the message broker. The extension host and the .NET data provider connect over a WebSocket; each renderer window connects over an Electron `MessagePort`, because Chromium closes every TCP client socket when the OS suspends (see `adr-renderer-papi-transport-is-messageport`).
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Main Process (Electron)               │
-│  • WebSocket server on port 8876                         │
-│  • Routes messages between processes                     │
-└────────────────┬────────────────────────────────────────┘
-                 │ JSON-RPC over WebSocket (port 8876)
-    ┌────────────┼────────────┬───────────────────┐
-    │            │            │                   │
-┌───▼────────┐ ┌─▼──────────┐ ┌▼────────────────┐
-│ Renderer   │ │ Extension  │ │ .NET Data       │
-│ (React UI) │ │ Host       │ │ Provider        │
-└────────────┘ └────────────┘ └─────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    Main Process (Electron)                   │
+│  • WebSocket server on port 8876                             │
+│  • One MessagePort per renderer window                       │
+│  • Routes messages between processes                         │
+└──────┬─────────────┬─────────────┬───────────────────────────┘
+       │ JSON-RPC    │ JSON-RPC    │ JSON-RPC over WebSocket (port 8876)
+       │ MessagePort │ MessagePort ├───────────────┐
+┌──────▼─────┐ ┌─────▼──────┐ ┌────▼───────┐ ┌─────▼───────────┐
+│ Renderer   │ │ Renderer   │ │ Extension  │ │ .NET Data       │
+│ (window 1) │ │ (window N) │ │ Host       │ │ Provider        │
+└────────────┘ └────────────┘ └────────────┘ └─────────────────┘
 ```
+
+One renderer process per window, not one for the application: a window is a full renderer hosting
+its own dock layout and its own window-scoped services. What decides where a service lives is
+lifetime, not subject matter. State that has to survive any individual window — and that two
+windows must agree on — lives in main, which outlives them all; the theme service is hosted there
+for exactly that reason. Whole-application data that no window owns — settings, menus, theme
+definitions, extension lifecycle — lives in the extension host, a single process shared by every
+window.
+
+Both of those outlive a window, so the distinction between them is not readable from what a service
+is *about*: the theme *definitions* are extension-host data while the theme *service* runs in main.
+The service tables below record where the app-global ones live; a window-scoped service is named for
+its window and lives in that window's renderer.
 
 ### Communication Patterns
 
@@ -43,6 +56,36 @@ Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communicat
 | Request/Response | Single operation with result | `papi.commands.sendCommand()` |
 | Events | Broadcast notifications | Data provider updates |
 | Subscriptions | Continuous data streaming | `useData()` hook subscriptions |
+
+### WebSocket Invariants
+
+Two rules govern the PAPI websocket. Both have been broken in practice, and neither failure was
+diagnosable from where it surfaced.
+
+**Bind to loopback only.** Connections to the PAPI websocket are unauthenticated, and every
+registered method is callable over them. The server must never accept traffic arriving on a
+non-loopback interface. Bind by the name `localhost` rather than a literal address: clients connect
+to `localhost` too, so both ends resolve through the same resolver and agree on the IP version,
+whichever the host prefers. IPv4-vs-IPv6 mismatches between the two ends have been hit in practice.
+
+**Never report ready before the endpoint accepts.** `IRpcHandler.connect` must not resolve `true`
+until the socket is actually accepting connections. `new WebSocketServer(...)` starts binding but
+does not finish synchronously — and binding by hostname defers it further, behind a DNS lookup.
+Once `connect()` resolves, nothing further gates the extension-host spawn or window creation on
+socket readiness; those clients get one attempt with no retry, so reporting ready optimistically
+refuses them. The symptom appears
+three processes away as missing settings/localization/theme providers and raw `%localizeKey%` text,
+with nothing in the log tying it back to the socket. Any new `IRpcHandler` implementation inherits
+this requirement.
+
+**The renderer is not a WebSocket client.** Each window's connection to main is an Electron
+`MessagePort` obtained through the preload and served by `RpcWebSocketListener.acceptLocalClient`.
+Both rules above still apply to the `ws` server, which the extension host and .NET use; a change to
+that server does not reach the renderer, and a change to the renderer's transport does not reach
+them. Anything that counts clients on port 8876 should expect two, not three.
+
+See `adr-papi-websocket-hostname-bind` in [Architecture-Decisions.md](Architecture-Decisions.md)
+for the incident and the alternatives that were rejected.
 
 ### Key Files
 
@@ -101,14 +144,14 @@ next to the services that use them. It stays in main, where it has to be; it jus
 the file whose job is routing.
 
 ```
-Renderer (window 1)          Main Process                  Renderer (window 2)
-┌──────────────────────┐    ┌────────────────────────┐    ┌──────────────────────┐
-│ web-view.service-    │    │ web-view.service-      │    │ web-view.service-    │
-│ shard.ts             │◄──►│ router.ts              │◄──►│ shard.ts             │
-│ id: WebViewService-1 │    │ id: WebViewService     │    │ id: WebViewService-2 │
-│ objectType:          │    │ (the generic name      │    │ objectType:          │
-│  webViewServiceShard │    │  consumers call)       │    │  webViewServiceShard │
-└──────────────────────┘    └────────────────────────┘    └──────────────────────┘
+Renderer (window 1)              Main Process                  Renderer (window 2)
+┌───────────────────────────┐    ┌────────────────────────┐    ┌───────────────────────────┐
+│ web-view.service-         │    │ web-view.service-      │    │ web-view.service-         │
+│ shard.ts                  │◄──►│ router.ts              │◄──►│ shard.ts                  │
+│ id: WebViewService-<guid> │    │ id: WebViewService     │    │ id: WebViewService-<guid> │
+│ objectType:               │    │ (the generic name      │    │ objectType:               │
+│  webViewServiceShard      │    │  consumers call)       │    │  webViewServiceShard      │
+└───────────────────────────┘    └────────────────────────┘    └───────────────────────────┘
 ```
 
 Consumers never see any of this: they call the generic name, exactly as they did before there was
@@ -154,13 +197,13 @@ more than one window.
   which resolves the shard of whichever window a call should currently run in. There is no router
   factory: with one genuinely plain forward across the routers that have one, generating them costs
   more than it saves and gives up the free coverage the type annotation provides.
-- **A router may claim command or request names instead of a network object** — the dialog, Usersnap
-  and BookChapterControl routers do, as does the scripture navigation command module. There is no
-  service interface to declare such a router as, so nothing type-checks the set of names it claims:
-  each one pins that set with an exact-set test in `src/main/services/__tests__/`, and each states
-  how it routes every command it claims so `assertCommandRoutingMatchesDocs`
-  (`src/main/services/owner-routed-command.util.ts`) can report a command whose OpenRPC parameters
-  say otherwise.
+- **A router may claim command or request names instead of a network object** — the dialog,
+  Usersnap, BookChapterControl and onboarding tour routers do, as does the scripture navigation
+  command module. There is no service interface to declare such a router as, so nothing type-checks
+  the set of names it claims: each one pins that set with an exact-set test in
+  `src/main/services/__tests__/`, and each states how it routes every command it claims so
+  `assertCommandRoutingMatchesDocs` (`src/main/services/owner-routed-command.util.ts`) can report a
+  command whose OpenRPC parameters say otherwise.
 - **The pattern does not depend on the transport.** Most routers and shards are plain network
   objects; the window service's are data providers, because it has subscription semantics.
   `registerEngine` passes `dataProviderType` / `dataProviderAttributes` straight through to

@@ -67,9 +67,11 @@ export type ILocalizationService = {
    */
   getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
   /**
-   * Get a collection of known user-interface languages
+   * Get the interface languages to list in language pickers: a curated subset of the languages that
+   * have a locale file. Any loaded language can still be set in `platform.interfaceLanguage` and
+   * renders; it just isn't listed here.
    *
-   * @returns All user-interface languages
+   * @returns The offered user-interface languages, keyed by raw locale tag
    */
   getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
   /**
@@ -79,8 +81,8 @@ export type ILocalizationService = {
    */
   retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
   /**
-   * Get the interface languages that have setup-dialog localizations (used by the first-run
-   * language picker). A language qualifies when it has ≥90% of the English setup-dialog
+   * Get the interface languages offered in the first-run language picker. A language qualifies when
+   * it is offered (see `getAvailableInterfaceLanguages`) and has ≥90% of the English setup-dialog
    * (`%firstRun_*%`) keys.
    *
    * @returns Qualifying user-interface languages, keyed by raw locale tag

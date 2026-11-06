@@ -437,5 +437,40 @@ describe('overlay-validation', () => {
     it('should pass with no anchor (centered mode)', () => {
       expect(() => validateCommandPaletteRequest(validRequest)).not.toThrow();
     });
+
+    it("should throw for focusTarget 'list' with no keyForwarding", () => {
+      // Such a palette focuses its list and renders its filter read-only, but nothing drives it:
+      // typing does nothing, the arrows do not move the highlight, Enter does not commit, and the
+      // user is left with Escape or a click. Rejected rather than shipped unusable.
+      expectValidationError(
+        () => validateCommandPaletteRequest({ ...validRequest, focusTarget: 'list' }),
+        "focusTarget 'list' requires keyForwarding",
+      );
+    });
+
+    it("should pass for focusTarget 'list' WITH keyForwarding", () => {
+      expect(() =>
+        validateCommandPaletteRequest({
+          ...validRequest,
+          focusTarget: 'list',
+          keyForwarding: { keys: ['Enter'], onKey: () => {} },
+        }),
+      ).not.toThrow();
+    });
+
+    it("should pass for a PASSIVE request with focusTarget 'list' and no keyForwarding", () => {
+      // `passive` takes no focus at all, which makes `focusTarget` moot — the requester already
+      // receives every key, so there is nothing for forwarding to rescue.
+      expect(() =>
+        validateCommandPaletteRequest({ ...validRequest, passive: true, focusTarget: 'list' }),
+      ).not.toThrow();
+    });
+
+    it("should pass for focusTarget 'input' with no keyForwarding", () => {
+      // The default palette drives itself: a real text box, cmdk navigation and commit.
+      expect(() =>
+        validateCommandPaletteRequest({ ...validRequest, focusTarget: 'input' }),
+      ).not.toThrow();
+    });
   });
 });

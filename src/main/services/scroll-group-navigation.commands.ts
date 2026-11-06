@@ -51,7 +51,7 @@ type ResolvedNavigationContext = {
    * The window that answered. Held so a write lands in the same window the context came from: focus
    * can move between the two, and re-deriving the window would send the write somewhere else.
    */
-  windowId: number;
+  windowId: string;
   context: NavigationContext;
 };
 

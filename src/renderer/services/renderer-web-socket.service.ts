@@ -3,7 +3,11 @@ import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
 // Allow system networking components to create web sockets that connect back to localhost at first
 let allowWebSocketsBackToPapiNetwork: boolean = true;
 
-/** Once our network is running, run this to stop extensions from connecting to it directly */
+/**
+ * Once our network is running, run this so `PapiRendererWebSocket` (the `WebSocket` web views get)
+ * refuses connections to it. Web views can still reach the native `WebSocket` on `window.top`; see
+ * "The renderer's PAPI port" in `.context/standards/Security-Guide.md`.
+ */
 export const blockWebSocketsToPapiNetwork = (): void => {
   allowWebSocketsBackToPapiNetwork = false;
 };

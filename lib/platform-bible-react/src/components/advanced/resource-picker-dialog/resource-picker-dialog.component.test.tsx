@@ -1,21 +1,42 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi, beforeAll, afterAll } from 'vitest';
-import { Dialog } from '@/components/shadcn-ui/dialog';
+import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
-import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.data';
+import {
+  MANY_LANGUAGE_INSTALLED_LANGUAGES,
+  MANY_LANGUAGE_RESOURCES,
+  SAMPLE_RESOURCES,
+  SAMPLE_SELECTED_IDS,
+} from './resource-picker-dialog.data';
 
-// jsdom does not implement IntersectionObserver — stub it so the hook can mount
+// jsdom implements none of what opening the language list needs: IntersectionObserver for the
+// progressive-list hook, ResizeObserver for cmdk's command list, and scrollIntoView for the option
+// cmdk highlights. Stubbed per file rather than globally — components that feature-detect
+// ResizeObserver take a different path when one exists, so defining it for every suite would
+// change what unrelated tests measure.
+const originalScrollIntoView = Element.prototype.scrollIntoView;
 beforeAll(() => {
   vi.stubGlobal(
     'IntersectionObserver',
     vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })),
   );
+  vi.stubGlobal(
+    'ResizeObserver',
+    vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
+  );
+  // cmdk scrolls its highlighted item into view; jsdom has no layout and so no such method.
+  Element.prototype.scrollIntoView = vi.fn();
 });
 afterAll(() => {
   vi.unstubAllGlobals();
+  // `vi.unstubAllGlobals` does not reach a prototype assignment, so restore it by hand rather than
+  // leaving a stub on `Element` for every test file that runs after this one in the same worker.
+  // The captured value is the repo-wide no-op shim from vitest.setup.ts, which later files rely on.
+  Element.prototype.scrollIntoView = originalScrollIntoView;
 });
 
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
@@ -26,7 +47,25 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_no_results%': 'No results found',
   '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
+  '%resourcePicker_language_filter_search_placeholder%': 'Search languages…',
+  '%resourcePicker_language_filter_no_results%': 'No languages found',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
+  '%resourcePicker_load_error%': "Couldn't load the list of available resources.",
+  '%resourcePicker_retry%': 'Try again',
+  '%resourcePicker_no_results_filtered%': 'No resources match the current filters.',
+  '%resourcePicker_clear_filters%': 'Clear filters',
+  '%resourcePicker_downloads_unavailable%':
+    "Resource downloads aren't available on this installation.",
+  '%resourcePicker_description%':
+    "Choose a resource to add. Picking one downloads it if it isn't already installed.",
+  '%resourcePicker_description_withRemove%':
+    'Choose a resource to add, or remove one of your own from your list.',
+  '%resourcePicker_section_team%': 'Team resources',
+  '%resourcePicker_section_team_caption%': 'Only a project administrator can remove these.',
+  '%resourcePicker_section_user%': 'User resources',
+  '%resourcePicker_section_user_caption%': 'Removing one takes it off your list.',
+  '%resourcePicker_teamLock%': 'Shared by your team',
+  '%resourcePicker_removeFromList%': 'Remove {resourceName} from your list',
 };
 
 function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>[0]> = {}) {
@@ -45,7 +84,104 @@ function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>
   return { onSelect };
 }
 
+/**
+ * Same as {@link renderDialog}, but keeps the handle needed to re-render with changed props.
+ *
+ * Wrapped in a real `DialogContent`, unlike {@link renderDialog}: the focus catch-up treats an
+ * element carrying `data-slot="dialog-content"` as "parked on the shell", and that is the branch
+ * `focusResourcePickerOnOpen`'s fallback actually produces in the app. Without the wrapper there is
+ * no such element to focus, so the tests below silently fall through to the `document.body` arm and
+ * the clause they exist for is never executed.
+ */
+function renderDialogForRerender(
+  overrides: Partial<Parameters<typeof ResourcePickerDialog>[0]> = {},
+) {
+  const props = {
+    allResources: SAMPLE_RESOURCES,
+    selectedResourceIds: SAMPLE_SELECTED_IDS,
+    localizedStrings: STRINGS,
+    onSelect: vi.fn(),
+    ...overrides,
+  };
+  const view = render(
+    <Dialog open>
+      <DialogContent>
+        <ResourcePickerDialog {...props} />
+      </DialogContent>
+    </Dialog>,
+  );
+  return {
+    rerender: (next: Partial<Parameters<typeof ResourcePickerDialog>[0]>) =>
+      view.rerender(
+        <Dialog open>
+          <DialogContent>
+            <ResourcePickerDialog {...props} {...next} />
+          </DialogContent>
+        </Dialog>,
+      ),
+  };
+}
+
+/**
+ * Matches a language option by its language, tolerating the resource count rendered beside it — an
+ * option's accessible name is the language followed by that count.
+ */
+const languageOptionName = (language: string) => (name: string) => name.startsWith(`${language} `);
+
 describe('ResourcePickerDialog', () => {
+  // A host opening this picker gets its opening focus from `focusResourcePickerOnOpen`, which parks
+  // focus on the dialog shell while the search box is disabled. That is the ORDINARY state for the
+  // first moment after opening, because the catalog fetch is still in flight — so without a
+  // catch-up the catalog arrives, the box enables, and focus is left on the shell for good.
+  it('moves focus to the search box when the catalog arrives and enables it', () => {
+    const { rerender } = renderDialogForRerender({ isResourcesLoading: true });
+
+    const searchBox = screen.getByPlaceholderText('Search resources…');
+    // The premise: while loading there is genuinely nothing to type into. Without this control the
+    // test could pass against a picker that never disabled the box in the first place.
+    expect(searchBox).toBeDisabled();
+    // Stand in for `focusResourcePickerOnOpen`'s fallback, which parks focus on the host's content.
+    // Asserted non-null before focusing: an optional call against a missing shell no-ops, and the
+    // test would then pass through the `document.body` arm instead of the `dialog-content` one it
+    // is here to pin.
+    const shell = document.querySelector<HTMLElement>('[data-slot="dialog-content"]');
+    if (!shell)
+      throw new Error('The harness must render a DialogContent for this test to mean anything');
+    shell.focus();
+    expect(shell).toHaveFocus();
+
+    rerender({ isResourcesLoading: false });
+
+    expect(screen.getByPlaceholderText('Search resources…')).toHaveFocus();
+  });
+
+  // The other half: a user who has already moved focus keeps their place. Taking it back from a
+  // control they chose is worse than the stranding the catch-up above fixes.
+  //
+  // The control is a host-rendered one rather than one of the picker's own, because while the
+  // catalog is loading the picker's search box and language filter are both disabled — so the only
+  // place a user's focus can actually be is on something the host rendered, typically its close
+  // button. `DialogContent`'s own close button is exactly that, and being inside the dialog it is
+  // somewhere focus can genuinely rest: a detached button on `document.body` sits outside the
+  // focus trap, which pulls focus back in and makes the test fail for a reason unrelated to the
+  // catch-up.
+  it('leaves focus alone when the catalog arrives and the user has already moved it', () => {
+    const { rerender } = renderDialogForRerender({ isResourcesLoading: true });
+
+    const hostControl = document.querySelector<HTMLElement>('[data-slot="dialog-close"]');
+    if (!hostControl)
+      throw new Error('The harness must render a DialogContent, which supplies the close button');
+    hostControl.focus();
+    expect(hostControl).toHaveFocus();
+
+    rerender({ isResourcesLoading: false });
+
+    expect(hostControl).toHaveFocus();
+    expect(screen.getByPlaceholderText('Search resources…')).not.toHaveFocus();
+
+    hostControl.remove();
+  });
+
   it('shows "Already Selected" section heading with selected resource names', () => {
     renderDialog();
     // The section heading and sr-only row labels both contain this text, so use getAllByText
@@ -62,33 +198,6 @@ describe('ResourcePickerDialog', () => {
     if (!nivRow) throw new Error('NIV row not found');
     fireEvent.click(nivRow);
     expect(onSelect).not.toHaveBeenCalled();
-  });
-
-  it('selects an installed resource by default', () => {
-    const { onSelect } = renderDialog();
-    const esvRow = screen.getByText('ESV').closest('tr');
-    if (!esvRow) throw new Error('ESV row not found');
-    fireEvent.click(esvRow);
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'installed-1' }));
-  });
-
-  it('does not select an installed resource when allowSelectingInstalled is false', () => {
-    const { onSelect } = renderDialog({ allowSelectingInstalled: false });
-    const esvRow = screen.getByText('ESV').closest('tr');
-    if (!esvRow) throw new Error('ESV row not found');
-    fireEvent.click(esvRow);
-    expect(onSelect).not.toHaveBeenCalled();
-    expect(esvRow.className).toContain('pointer-events-none');
-  });
-
-  // Only the Installed section is affected — a caller that cannot use an on-disk resource can
-  // still install a new one, which is the whole point of leaving the picker open.
-  it('still selects a downloadable resource when allowSelectingInstalled is false', () => {
-    const { onSelect } = renderDialog({ allowSelectingInstalled: false });
-    const nltRow = screen.getByText('NLT').closest('tr');
-    if (!nltRow) throw new Error('NLT row not found');
-    fireEvent.click(nltRow);
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ installed: false }));
   });
 
   it('allows selecting an already-selected resource when allowDeselect is true', () => {
@@ -149,14 +258,234 @@ describe('ResourcePickerDialog', () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'download-1' }));
   });
 
-  it('shows "No results found" when search matches nothing', () => {
+  it('blames the search, not the catalog, when the search matches nothing', () => {
     renderDialog();
     const searchInput = screen.getByPlaceholderText('Search resources…');
     fireEvent.change(searchInput, { target: { value: 'zzznomatch' } });
-    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.getByText('No resources match the current filters.')).toBeInTheDocument();
+    expect(screen.queryByText('No results found')).not.toBeInTheDocument();
     expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
     expect(screen.queryByText('Installed')).not.toBeInTheDocument();
     expect(screen.queryByText('Available to download')).not.toBeInTheDocument();
+  });
+
+  // Clears BOTH filters, so the language selection has to be part of the setup: with only a search
+  // term applied, dropping the `setSelectedLanguages([])` reset leaves this green while the button
+  // silently stops doing half its job.
+  it('restores the full list when the filters are cleared, including the language filter', () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('combobox'));
+    // Scoped to the option: "Spanish" also appears as the language cell of the RVR60 row behind the
+    // popover.
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('Spanish') }));
+    // Narrowed to Spanish: the English entries are gone, the Spanish one remains.
+    expect(screen.queryByText('NIV')).not.toBeInTheDocument();
+    expect(screen.getByText('RVR60')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'zzznomatch' },
+    });
+    expect(screen.getByText('No resources match the current filters.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(screen.queryByText('No resources match the current filters.')).not.toBeInTheDocument();
+    // NIV is English, so it only returns if the LANGUAGE filter was cleared too.
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+  });
+
+  // The type narrowing is not one of the filters `clearFilters` can reset, so offering the button
+  // here would route the user through a control that provably cannot change the result.
+  it('does not offer to clear filters when the resource type is what emptied the list', () => {
+    renderDialog({ resourceType: 'CommentaryResource' });
+
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'zzznomatch' },
+    });
+
+    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the plain no-results text when the catalog is empty with no filter applied', () => {
+    renderDialog({ allResources: [], selectedResourceIds: [] });
+
+    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  // An installation with no DBL credentials has an empty list for a reason the user cannot act on.
+  // "No results found" hides that; a retry would be an inert control attached to a false failure.
+  it('explains an installation that cannot download resources, and offers no retry', () => {
+    renderDialog({ allResources: [], selectedResourceIds: [], areDownloadsUnavailable: true });
+
+    expect(
+      screen.getByText("Resource downloads aren't available on this installation."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No results found')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  // Selecting every language excludes nothing, which is why the trigger keeps reading "Any
+  // language". Counting it as a filter would claim a narrowing that is not happening.
+  it('does not treat selecting every language as a filter', () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('combobox'));
+    ['English', 'Spanish', 'Greek', 'Hebrew'].forEach((language) => {
+      const option = screen.queryByRole('option', { name: languageOptionName(language) });
+      if (option) fireEvent.click(option);
+    });
+
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+  });
+
+  // The count describes what this picker is allowed to show. Reporting the whole catalog implies
+  // candidates the user could reach by clearing something, when the type narrowing is not clearable.
+  it('counts against the type-scoped set, not the whole catalog', () => {
+    renderDialog({ resourceType: 'XmlResource' });
+
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'UBS' },
+    });
+
+    // Two XmlResource entries exist in the sample catalog; only one matches "UBS".
+    expect(screen.getByText('Showing 1 of 2 resources')).toBeInTheDocument();
+  });
+
+  it('suppresses the count while the catalog is still loading or failed', () => {
+    const { rerender } = renderDialogForRerender({ isResourcesLoading: true });
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+
+    rerender({ allResources: [], hasResourcesError: true });
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+  });
+
+  // A count of zero above a message saying downloads are unavailable contradicts it: it reads as a
+  // search that came up empty, which is the reading the message exists to prevent.
+  it('suppresses the count over the downloads-unavailable message, filter or no filter', () => {
+    const { rerender } = renderDialogForRerender();
+
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'NIV' },
+    });
+    expect(screen.getByText(/^Showing/)).toBeInTheDocument();
+
+    rerender({ allResources: [], areDownloadsUnavailable: true });
+
+    expect(
+      screen.getByText("Resource downloads aren't available on this installation."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+  });
+
+  it('suppresses the count over a genuinely empty catalog, filter or no filter', () => {
+    const { rerender } = renderDialogForRerender();
+
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'NIV' },
+    });
+    expect(screen.getByText(/^Showing/)).toBeInTheDocument();
+
+    rerender({ allResources: [] });
+
+    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+  });
+
+  // The language predicate runs over the type-scoped set, so the "is this narrowing anything?"
+  // question has to be asked of that same set. Asked of the whole catalog it answers about
+  // languages this picker never shows.
+  it('does not call a language selection a filter when it excludes nothing of this type', () => {
+    // Every XmlResource in the sample catalog is English; Spanish, Greek and Hebrew exist only on
+    // resources this picker filters out anyway.
+    renderDialog({ resourceType: 'XmlResource' });
+
+    fireEvent.click(screen.getByRole('combobox'));
+    const english = screen.getByRole('option', { name: languageOptionName('English') });
+    fireEvent.click(english);
+
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  // The costlier direction: a language selection that outlives the catalog offering it would hide
+  // every row while reporting itself as no filter, withdrawing the one control that could reveal
+  // them again. Deriving the selection down to the languages still on offer removes the dead end
+  // instead of making it recoverable.
+  it('ignores a selected language the catalog no longer offers, rather than emptying the list', () => {
+    const { rerender } = renderDialogForRerender();
+
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('Spanish') }));
+
+    // A retry, or a host that persists the language filter, can deliver a catalog whose languages
+    // no longer include the selected one.
+    rerender({
+      allResources: SAMPLE_RESOURCES.filter((r) => r.bestLanguageName === 'English'),
+      selectedResourceIds: [],
+    });
+
+    expect(screen.queryByText('No resources match the current filters.')).not.toBeInTheDocument();
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  // Hiding a selection is not the same as discarding it. A language the catalog stops offering is
+  // held, so a later change to the languages still on offer does not quietly drop it, and it applies
+  // again once the catalog offers it.
+  it('keeps a hidden language selected through a change to the languages still on offer', () => {
+    const { rerender } = renderDialogForRerender({ selectedResourceIds: [] });
+
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('Spanish') }));
+
+    rerender({ allResources: SAMPLE_RESOURCES.filter((r) => r.bestLanguageName === 'English') });
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('English') }));
+
+    rerender({ allResources: SAMPLE_RESOURCES });
+
+    // Spanish and English are both in effect: the Spanish row is back, and Greek stays filtered out.
+    expect(screen.getByText('RVR60')).toBeInTheDocument();
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+    expect(screen.queryByText('UBS-SLR')).not.toBeInTheDocument();
+  });
+
+  // The button lives inside the region it removes, so without a deliberate move focus falls to
+  // `<body>` and a keyboard user restarts from the top of the dialog.
+  it('moves focus to the search box when Clear filters removes itself', () => {
+    renderDialog();
+    const searchInput = screen.getByPlaceholderText('Search resources…');
+    fireEvent.change(searchInput, { target: { value: 'zzznomatch' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(document.activeElement).toBe(searchInput);
+  });
+
+  it('reports a failed catalog fetch instead of claiming there are no results', () => {
+    renderDialog({ allResources: [], hasResourcesError: true });
+
+    expect(screen.getByText("Couldn't load the list of available resources.")).toBeInTheDocument();
+    expect(screen.queryByText('No results found')).not.toBeInTheDocument();
+  });
+
+  it('offers a retry that re-drives the fetch when the catalog fetch failed', () => {
+    const onRetryResources = vi.fn();
+    renderDialog({ allResources: [], hasResourcesError: true, onRetryResources });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(onRetryResources).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the loading spinner rather than the error while the fetch is still running', () => {
+    renderDialog({ allResources: [], isResourcesLoading: true, hasResourcesError: true });
+
+    expect(
+      screen.queryByText("Couldn't load the list of available resources."),
+    ).not.toBeInTheDocument();
   });
 
   it('filters all sections by search text', () => {
@@ -190,6 +519,49 @@ describe('ResourcePickerDialog', () => {
     expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
   });
 
+  it('renders only the first 50 "Available to Download" resources when there are more than 50', () => {
+    const manyResources = Array.from({ length: 60 }, (_, i) => ({
+      dblEntryUid: `dl-${i}`,
+      displayName: `RES-${i}`,
+      fullName: `Resource ${i}`,
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1_000_000,
+      installed: false,
+      updateAvailable: false,
+      projectId: `prj-${i}`,
+    }));
+    renderDialog({ allResources: manyResources, selectedResourceIds: [] });
+    expect(screen.getByText('RES-49')).toBeInTheDocument();
+    expect(screen.queryByText('RES-50')).not.toBeInTheDocument();
+  });
+  it('selects an installed resource by default', () => {
+    const { onSelect } = renderDialog();
+    const esvRow = screen.getByText('ESV').closest('tr');
+    if (!esvRow) throw new Error('ESV row not found');
+    fireEvent.click(esvRow);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'installed-1' }));
+  });
+
+  it('does not select an installed resource when allowSelectingInstalled is false', () => {
+    const { onSelect } = renderDialog({ allowSelectingInstalled: false });
+    const esvRow = screen.getByText('ESV').closest('tr');
+    if (!esvRow) throw new Error('ESV row not found');
+    fireEvent.click(esvRow);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(esvRow).not.toHaveAttribute('role', 'button');
+  });
+
+  // Only the Installed section is affected — a caller that cannot use an on-disk resource can
+  // still install a new one, which is the whole point of leaving the picker open.
+  it('still selects a downloadable resource when allowSelectingInstalled is false', () => {
+    const { onSelect } = renderDialog({ allowSelectingInstalled: false });
+    const nltRow = screen.getByText('NLT').closest('tr');
+    if (!nltRow) throw new Error('NLT row not found');
+    fireEvent.click(nltRow);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ installed: false }));
+  });
+
   it('renders a notice above the resource list when one is provided', () => {
     renderDialog({ notice: 'Only resources already on this computer are shown.' });
     expect(
@@ -214,36 +586,365 @@ describe('ResourcePickerDialog', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('still renders the resource list when a notice is shown', () => {
-    renderDialog({ notice: 'Only resources already on this computer are shown.' });
-    expect(screen.getByText('ESV')).toBeInTheDocument();
-    expect(screen.getByText('Available to download')).toBeInTheDocument();
-  });
+  // The notice explains an INCOMPLETE list; the error state is for having nothing to show. A
+  // failure that still left rows on screen must not replace them.
+  it('keeps the list and shows a notice when a fetch failed but rows still loaded', () => {
+    renderDialog({
+      hasResourcesError: true,
+      notice: 'Only resources already on this computer are shown.',
+    });
 
-  it('still renders the no-results message when a notice is shown', () => {
-    renderDialog({ notice: 'Only resources already on this computer are shown.' });
-    const searchInput = screen.getByPlaceholderText('Search resources…');
-    fireEvent.change(searchInput, { target: { value: 'zzznomatch' } });
-    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.getByText('NIV')).toBeInTheDocument();
     expect(
-      screen.getByText('Only resources already on this computer are shown.'),
-    ).toBeInTheDocument();
+      screen.queryByText("Couldn't load the list of available resources."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Only resources already on this computer are shown.',
+    );
+  });
+  // A long name is truncated rather than widening the table past a narrow dialog; the layout half
+  // of that contract is asserted in a real browser by the `LongNamesDoNotScrollHorizontally` story,
+  // because jsdom has no layout to measure. Truncation only stays honest if the untruncated text is
+  // still reachable, so every name cell carries it as a native hover label.
+  it('exposes each resource name in full on hover, so truncation hides nothing', () => {
+    renderDialog();
+
+    expect(screen.getByText('New International Version')).toHaveAttribute(
+      'title',
+      'New International Version',
+    );
+    expect(screen.getByText('NIV')).toHaveAttribute('title', 'NIV');
+    expect(screen.getAllByText('English')[0]).toHaveAttribute('title', 'English');
   });
 
-  it('renders only the first 50 "Available to Download" resources when there are more than 50', () => {
-    const manyResources = Array.from({ length: 60 }, (_, i) => ({
-      dblEntryUid: `dl-${i}`,
-      displayName: `RES-${i}`,
-      fullName: `Resource ${i}`,
-      bestLanguageName: 'English',
-      type: 'ScriptureResource' as const,
-      size: 1_000_000,
-      installed: false,
-      updateAvailable: false,
-      projectId: `prj-${i}`,
-    }));
-    renderDialog({ allResources: manyResources, selectedResourceIds: [] });
-    expect(screen.getByText('RES-49')).toBeInTheDocument();
-    expect(screen.queryByText('RES-50')).not.toBeInTheDocument();
+  // The other half of the picker row layout contract in
+  // `.context/standards/Architecture-Decisions.md`: the short name starts at the leading edge of
+  // its column in every picker. The "Select project" dialog asserts its own side
+  // (`project-picker.component.test.tsx`, "starts the short name at the leading edge of its
+  // column"); without this one, "identical in both pickers" is only claimed in prose, and moving
+  // this column would leave that test still green.
+  it('starts the short name at the leading edge of its column', () => {
+    renderDialog();
+
+    const shortNameCell = screen.getByText('NIV').closest('td');
+    expect(shortNameCell).not.toBeNull();
+
+    // The positive control comes first: the language column is the one cell in the row that IS
+    // end-aligned, so it proves the class this assertion looks for can appear on a `td` here at
+    // all. Without it, "the short name is not end-aligned" would pass against a file that had
+    // simply stopped aligning anything.
+    const languageCell = screen.getAllByText('English')[0].closest('td');
+    expect(languageCell?.className).toContain('tw:text-end');
+
+    // Asserted positively. "Not end-aligned" is satisfied by every other way of moving this edge —
+    // `text-center`, a start indent, a centring wrapper — so it would stay green against a column
+    // that had stopped being leading-aligned by some other means. The cell states `tw:text-start`
+    // rather than leaning on the table default precisely so there is something to assert.
+    expect(shortNameCell?.className).toContain('tw:text-start');
+    // Kept alongside it: `tw:text-right` is the physical class a regression would most likely
+    // reintroduce, and it would sit next to `tw:text-start` rather than replacing it.
+    expect(shortNameCell?.className).not.toContain('tw:text-end');
+    expect(shortNameCell?.className).not.toContain('tw:text-right');
+  });
+
+  // The description is visually hidden, so nothing on screen changes if it disappears — and Radix
+  // only warns in development. Without this, deleting it silently takes the dialog back to
+  // announcing its title and nothing else: no statement of what the list is, or that picking a row
+  // downloads. Anchored on `aria-describedby` rather than on the text, since the text is useless
+  // to a screen reader unless the dialog actually points at it.
+  //
+  // Rendered against a real `DialogContent` rather than through `renderDialog`, whose harness has
+  // no host content for Radix to wire the description onto.
+  it('describes itself to a screen reader, not merely titles itself', () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <ResourcePickerDialog
+            allResources={SAMPLE_RESOURCES}
+            selectedResourceIds={SAMPLE_SELECTED_IDS}
+            localizedStrings={STRINGS}
+            onSelect={vi.fn()}
+          />
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const content = document.querySelector('[data-slot="dialog-content"]');
+    const describedById = content?.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+
+    const description = describedById ? document.getElementById(describedById) : undefined;
+    expect(description?.textContent).toBe(
+      "Choose a resource to add. Picking one downloads it if it isn't already installed.",
+    );
+  });
+
+  describe('language filter', () => {
+    // Once the popover is open the cmdk search input carries the combobox role too, so the
+    // trigger is identified by being the button.
+    const languageTrigger = () => {
+      const trigger = screen
+        .getAllByRole('combobox')
+        .find((element) => element.tagName === 'BUTTON');
+      if (!trigger) throw new Error('Language filter trigger not found');
+      return trigger;
+    };
+
+    const toggleLanguageFilter = () => {
+      fireEvent.click(languageTrigger());
+      return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
+    };
+
+    it('holds the option order steady while the list is open', () => {
+      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+      const optionsBefore = toggleLanguageFilter();
+
+      // A language far enough down that re-sorting would visibly move it, and unstarred so that
+      // selecting it is what would float it up.
+      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+      const targetLabel = target.textContent ?? '';
+      fireEvent.click(target);
+
+      const optionsAfter = screen.getAllByRole('option').map((option) => option.textContent ?? '');
+      expect(optionsAfter).toEqual(optionsBefore);
+      expect(optionsAfter[optionsAfter.length - 1]).toBe(targetLabel);
+    });
+
+    it('re-sorts the selection to the top the next time the list is opened', () => {
+      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+      const optionsBefore = toggleLanguageFilter();
+      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+      const targetLabel = target.textContent ?? '';
+      fireEvent.click(target);
+
+      // Close and reopen: the snapshot refreshes, so the choice is now grouped with the starred
+      // languages instead of sitting at the far end of a 130-row list.
+      fireEvent.click(languageTrigger());
+      const reopened = toggleLanguageFilter();
+
+      // Starred (installed) languages lead, so the selection lands directly after them. An exact
+      // index also fails if the row went missing, which `indexOf`'s -1 would otherwise satisfy.
+      expect(reopened.indexOf(targetLabel)).toBe(MANY_LANGUAGE_INSTALLED_LANGUAGES.length);
+    });
+  });
+});
+
+describe('ResourcePickerDialog disabled rows', () => {
+  const REASON = 'Licensing terms prohibit using this text as a model.';
+  const disableEsvAndNlt = (resource: { displayName: string }) =>
+    resource.displayName === 'ESV' || resource.displayName === 'NLT' ? REASON : undefined;
+
+  function rowOf(name: string) {
+    const row = screen.getByText(name).closest('tr');
+    if (!row) throw new Error(`${name} row not found`);
+    return row;
+  }
+
+  it('shows the reason in a tooltip when a disabled row is hovered', async () => {
+    const user = userEvent.setup();
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    await user.hover(rowOf('ESV'));
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(REASON);
+  });
+
+  it('shows the reason in a tooltip when a disabled row receives focus', async () => {
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    // The table's arrow-key navigation moves focus between rows with `focus()`; jsdom has no
+    // layout, so the navigation itself cannot run here and the focus it produces is applied directly.
+    act(() => rowOf('NLT').focus());
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(REASON);
+  });
+
+  it('names a disabled row by its display name and describes it with the reason', () => {
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    const esvRow = screen.getByRole('button', { name: 'ESV' });
+    expect(esvRow).toHaveAttribute('aria-disabled', 'true');
+    expect(esvRow).toHaveAccessibleDescription(REASON);
+  });
+
+  it('does not select a disabled row on click, Enter, or Space', () => {
+    const { onSelect } = renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    fireEvent.click(rowOf('ESV'));
+    fireEvent.keyDown(rowOf('ESV'), { key: 'Enter' });
+    fireEvent.keyDown(rowOf('NLT'), { key: ' ' });
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('keeps Space on a disabled row from scrolling the list', () => {
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    const wasNotPrevented = fireEvent.keyDown(rowOf('NLT'), { key: ' ' });
+
+    expect(wasNotPrevented).toBe(false);
+  });
+
+  it('still selects rows without a disabled reason, by click and by Enter', () => {
+    const { onSelect } = renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    fireEvent.click(rowOf('KJV'));
+    fireEvent.keyDown(rowOf('UBS-SLR'), { key: 'Enter' });
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'KJV' }));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'UBS-SLR' }));
+  });
+
+  it('lets an already-selected row be deselected even when it has a disabled reason', () => {
+    const { onSelect } = renderDialog({
+      allowDeselect: true,
+      getDisabledReason: (resource) => (resource.displayName === 'NIV' ? REASON : undefined),
+    });
+
+    fireEvent.click(rowOf('NIV'));
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'NIV' }));
+  });
+});
+
+describe('ResourcePickerDialog team and user sections', () => {
+  // NIV is the team's; RVR60 is the user's own.
+  const TEAM_IDS = ['selected-1'];
+
+  function getRow(displayName: string): HTMLElement {
+    const row = screen.getByText(displayName).closest('tr');
+    if (!row) throw new Error(`${displayName} row not found`);
+    return row;
+  }
+
+  it('lists every selected row under "Included" when no team ids are given', () => {
+    renderDialog({ allowDeselect: true });
+    expect(screen.getAllByText('Already selected').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Team resources')).not.toBeInTheDocument();
+    expect(screen.queryByText('User resources')).not.toBeInTheDocument();
+  });
+
+  it('splits the selected rows into team and user sections when team ids are given', () => {
+    renderDialog({ teamResourceIds: TEAM_IDS, onRemove: vi.fn() });
+    expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
+    // Every `tr`, not `getAllByRole('row')`: a selectable row's role is `button`.
+    const rows = Array.from(document.querySelectorAll('tr')).map((row) => row.textContent ?? '');
+    const teamHeading = rows.findIndex((text) => text === 'Team resources');
+    const userHeading = rows.findIndex((text) => text === 'User resources');
+    const niv = rows.findIndex((text) => text.includes('NIV'));
+    const rvr = rows.findIndex((text) => text.includes('RVR60'));
+    expect(teamHeading).toBeGreaterThanOrEqual(0);
+    expect(teamHeading).toBeLessThan(niv);
+    expect(niv).toBeLessThan(userHeading);
+    expect(userHeading).toBeLessThan(rvr);
+    expect(screen.getByText('Only a project administrator can remove these.')).toBeInTheDocument();
+    expect(screen.getByText('Shared by your team')).toBeInTheDocument();
+  });
+
+  it('never lets a team row be picked or removed', async () => {
+    const onRemove = vi.fn();
+    const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS, onRemove });
+    const nivRow = getRow('NIV');
+    expect(nivRow).not.toHaveAttribute('role', 'button');
+    // Positive control: the user's row in the same dialog does get a remove button.
+    expect(screen.getByRole('button', { name: 'Remove RVR60 from your list' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove NIV from your list' })).toBeNull();
+    fireEvent.click(nivRow);
+    fireEvent.keyDown(nivRow, { key: 'Enter' });
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onRemove).not.toHaveBeenCalled();
+  });
+
+  // `pointer-events: none` would also block the native hover label a truncated name relies on.
+  it('leaves a team row hoverable, so a truncated name can still be read', () => {
+    renderDialog({ teamResourceIds: TEAM_IDS, onRemove: vi.fn() });
+    expect(getRow('NIV').className).not.toContain('pointer-events-none');
+  });
+
+  // A row's focus ring shows on `:focus`, so a click that focused a row it cannot pick would look
+  // like a selection. `fireEvent.mouseDown` returns false when the default (focusing) is prevented.
+  it('does not let a click focus a row that cannot be picked', async () => {
+    const onRemove = vi.fn();
+    renderDialog({ teamResourceIds: TEAM_IDS, onRemove });
+    expect(fireEvent.mouseDown(getRow('NIV'))).toBe(false);
+    expect(fireEvent.mouseDown(getRow('RVR60'))).toBe(false);
+    // Positive control: a row that can be picked still takes focus from a click.
+    expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'ESV' }))).toBe(true);
+
+    // The remove button sits inside a row that cannot be picked, and still gets its click.
+    await userEvent.click(screen.getByRole('button', { name: 'Remove RVR60 from your list' }));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'selected-2' }));
+  });
+
+  it('does not let a click focus an "Included" row that cannot be picked', () => {
+    renderDialog();
+    expect(fireEvent.mouseDown(getRow('NIV'))).toBe(false);
+  });
+
+  it('removes a user row only from its remove button, described by what removing does', () => {
+    const onRemove = vi.fn();
+    const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS, onRemove });
+    const removeButton = screen.getByRole('button', { name: 'Remove RVR60 from your list' });
+    expect(removeButton).toHaveAccessibleDescription('Removing one takes it off your list.');
+
+    const rvrRow = getRow('RVR60');
+    expect(rvrRow).not.toHaveAttribute('role', 'button');
+    fireEvent.click(rvrRow);
+    fireEvent.keyDown(rvrRow, { key: 'Enter' });
+    expect(onRemove).not.toHaveBeenCalled();
+
+    fireEvent.click(removeButton);
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'selected-2' }));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('describes removing only when the user can remove their own rows', () => {
+    const { unmount } = render(
+      <Dialog open>
+        <ResourcePickerDialog
+          allResources={SAMPLE_RESOURCES}
+          selectedResourceIds={SAMPLE_SELECTED_IDS}
+          teamResourceIds={TEAM_IDS}
+          localizedStrings={STRINGS}
+          onSelect={vi.fn()}
+        />
+      </Dialog>,
+    );
+    expect(screen.queryByText('Removing one takes it off your list.')).not.toBeInTheDocument();
+    expect(screen.getByText(/^Choose a resource to add\. Picking one/)).toBeInTheDocument();
+    unmount();
+
+    renderDialog({ teamResourceIds: TEAM_IDS, onRemove: vi.fn() });
+    expect(screen.getByText(/or remove one of your own from your list/)).toBeInTheDocument();
+  });
+
+  it("does not offer removing when every selected resource is the team's", () => {
+    renderDialog({ teamResourceIds: SAMPLE_SELECTED_IDS, onRemove: vi.fn() });
+    // Positive control: the split is on, so the add-only text is a real answer.
+    expect(screen.getAllByText('Team resources').length).toBeGreaterThan(0);
+    expect(screen.getByText(/^Choose a resource to add\. Picking one/)).toBeInTheDocument();
+  });
+
+  // `allowDeselect` belongs to the single "Included" section, so it must not make a user row
+  // removable.
+  it('keeps user rows inert without onRemove, even with allowDeselect', () => {
+    const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS, allowDeselect: true });
+    expect(screen.queryByRole('button', { name: /from your list/ })).toBeNull();
+    fireEvent.click(getRow('RVR60'));
+    fireEvent.keyDown(getRow('RVR60'), { key: 'Enter' });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('renders no heading for a group with no rows', () => {
+    renderDialog({ teamResourceIds: [], onRemove: vi.fn() });
+    expect(screen.queryByText('Team resources')).not.toBeInTheDocument();
+    expect(screen.getAllByText('User resources').length).toBeGreaterThan(0);
+  });
+
+  it('ignores a team id that is not selected', () => {
+    renderDialog({ teamResourceIds: ['installed-1'], onRemove: vi.fn() });
+    expect(screen.queryByText('Team resources')).not.toBeInTheDocument();
+    // ESV stays where an unselected installed resource belongs.
+    expect(screen.getByRole('button', { name: 'ESV' })).toBeInTheDocument();
   });
 });

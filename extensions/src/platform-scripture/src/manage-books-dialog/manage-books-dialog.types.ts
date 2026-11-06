@@ -72,9 +72,12 @@ export type ManageBooksDialogProject = {
    */
   name: string;
   /**
-   * Long human-readable name (typically the project's `platform.fullName` setting), e.g. "English
-   * Standard Version 2016". Falls back to `shortName` when no fullName is configured. Used as the
-   * secondary label in the `<ProjectSelector>` dialog pickers (Copy "From", Create "Based on").
+   * Long human-readable name, e.g. "English Standard Version 2016". Used as the secondary label in
+   * the `<ProjectSelector>` dialog pickers (Copy "From", Create "Based on").
+   *
+   * Optional, and absent when the project has no distinct full name — deliberately NOT mirrored
+   * from the short name, which would claim a full name the project does not have and leave every
+   * consumer downstream to un-claim it.
    */
   fullName?: string;
   /**
@@ -103,6 +106,23 @@ export type ManageBooksDialogProject = {
    * surfaced as the section header in versification-grouping mode.
    */
   versificationName?: string;
+  /**
+   * Whether licensing terms prohibit using the project as the base of new text: a traditionally
+   * licensed Biblica text. Sourced from the C# `ProjectSummary.IsRestrictedAsBase` field. The
+   * Create "Based on" picker lists such a project but does not let it be chosen.
+   */
+  isRestrictedAsBase?: boolean;
+  /**
+   * Locale-stable project-type key (the PT9 `ProjectType` enum value, e.g. "Standard"). Forwarded
+   * to the Copy "From" `<ProjectSelector>` so it can group projects by type. Arrives on the same
+   * project-list round-trip as the rest of this shape, so it costs no extra fetch.
+   */
+  type?: string;
+  /**
+   * Friendlier display name for {@link type}, used as the section heading. Falls back to the raw
+   * `type` key when absent.
+   */
+  typeName?: string;
 };
 
 /**
@@ -234,20 +254,23 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_filter_placeholder%',
   '%manageBooks_filter_books%',
   '%manageBooks_genericError%',
-  '%manageBooks_projectSelector_boundButClosedTooltip%',
-  '%manageBooks_projectSelector_clearAll%',
-  '%manageBooks_projectSelector_filterAriaLabel%',
-  '%manageBooks_projectSelector_filterGroupByOpenTabs%',
-  '%manageBooks_projectSelector_filterSectionLabel%',
-  '%manageBooks_projectSelector_filterShowSelectedOnly%',
-  '%manageBooks_projectSelector_groupSectionLabel%',
-  '%manageBooks_projectSelector_openButtonLabel%',
-  '%manageBooks_projectSelector_openTabsSectionHeading%',
-  '%manageBooks_projectSelector_otherProjectsSectionHeading%',
-  '%manageBooks_projectSelector_searchPlaceholder%',
   '%manageBooks_projectSelector_versificationSectionHeading%',
   '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
-  '%manageBooks_projectSelector_selectAll%',
+  // Create "Based on" disabled-row tooltip. A core resource picker string shared with the model
+  // text pickers, so it lives in core's localization files rather than this extension's.
+  '%restrictedModelOrBaseText_disabledReason%',
+  // Section headings for the built-in `type` grouping in the manage-books project pickers. The
+  // wire carries the raw PT9 `ProjectType` enum value with no display name, so the web view maps
+  // each value onto one of these keys consumer-side.
+  '%manageBooks_projectType_Auxiliary%',
+  '%manageBooks_projectType_BackTranslation%',
+  '%manageBooks_projectType_ConsultantNotes%',
+  '%manageBooks_projectType_Daughter%',
+  '%manageBooks_projectType_Standard%',
+  '%manageBooks_projectType_StudyBible%',
+  '%manageBooks_projectType_StudyBibleAdditions%',
+  '%manageBooks_projectType_TransliterationManual%',
+  '%manageBooks_projectType_TransliterationWithEncoder%',
   '%manageBooks_filter_count%',
   '%manageBooks_filter_zero%',
   '%manageBooks_filter_state_all%',
@@ -288,7 +311,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_grid_selectAll%',
   // View-mode shared stub label
   '%manageBooks_view_compareVersions_label%',
-  '%manageBooks_view_disabledStub_notYetAvailable%',
+  '%manageBooks_view_disabledStub_notYetAvailable_2%',
   // Import flow
   '%manageBooks_import_choose%',
   '%manageBooks_import_addMore%',
@@ -317,8 +340,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_delete_confirmTitle%',
   '%manageBooks_delete_confirmBodyPartial%',
   '%manageBooks_delete_confirmBodyAll%',
-  '%manageBooks_delete_confirmBodySharedSendReceive%',
-  '%manageBooks_delete_confirmBodyAllShared%',
+  '%manageBooks_delete_confirmBodySharedSendReceive_2%',
+  '%manageBooks_delete_confirmBodyAllShared_2%',
   '%manageBooks_delete_confirmCancel%',
   '%manageBooks_delete_confirmAccept%',
   // runDelete refreshes the destination book set before issuing the delete; if the user's
@@ -394,10 +417,10 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   // Disabled future sections (DEF-UI-011/012/013)
   '%manageBooks_progressTracking_label%',
   '%manageBooks_progressTracking_subtitle%',
-  '%manageBooks_progressTracking_notYetAvailable%',
+  '%manageBooks_progressTracking_notYetAvailable_2%',
   '%manageBooks_bookNames_label%',
   '%manageBooks_bookNames_subtitle%',
-  '%manageBooks_bookNames_notYetAvailable%',
+  '%manageBooks_bookNames_notYetAvailable_2%',
 ] as const);
 
 /** Localized strings consumed by `ManageBooksDialog`. */

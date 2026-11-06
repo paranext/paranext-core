@@ -14,15 +14,11 @@ import { useWebViewScrollGroupScrRef } from '@renderer/hooks/use-web-view-scroll
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import * as platformBibleReact from 'platform-bible-react';
 import * as platformBibleUtils from 'platform-bible-utils';
+import {
+  WEB_VIEW_MODULE_SPECIFIERS,
+  type WebViewModuleSpecifier,
+} from '@renderer/data/web-view-modules.data';
 
-// WARNING: This code should not be edited without serious review. For more information,
-// see https://github.com/paranext/paranext/wiki/Module-import-restrictions
-// Module types aren't compatible with each other
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const moduleMap = new Map<string, any>();
-moduleMap.set('@papi/core', papiCore);
-moduleMap.set('@papi/frontend', papiFrontend);
-moduleMap.set('@papi/frontend/react', papiReact);
 // Deprecated 27 April 2026 - __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED is an internal
 // React 18 API that is not available in React 19. Providing it here gives old extensions an extra
 // chance to run successfully.
@@ -50,18 +46,39 @@ const reactCompat = {
     },
   ),
 };
-moduleMap.set('react', reactCompat);
-moduleMap.set('react/jsx-runtime', ReactJsxRuntime);
-moduleMap.set('react-dom', ReactDOM);
-moduleMap.set('react-dom/client', ReactDOMClient);
-moduleMap.set('@sillsdev/scripture', SillsdevScripture);
-moduleMap.set('platform-bible-react', platformBibleReact);
-moduleMap.set('platform-bible-utils', platformBibleUtils);
 
-const registeredModuleList = [...moduleMap]
-  .map(([key]) => `${key}`)
-  .sort()
-  .join(', ');
+// WARNING: This code should not be edited without serious review. For more information,
+// see https://github.com/paranext/paranext/wiki/Module-import-restrictions
+//
+// A DATA table keyed by `WebViewModuleSpecifier` rather than a sequence of `.set()` calls, so the
+// set a web view may link against is something a guard can compare by VALUE - the same treatment
+// `EXTENSION_INTERFACE_MODULES` in `extension.service.ts` gets. The key type has no index
+// signature, so a module supplied here without a specifier in
+// `@renderer/data/web-view-modules.data` - or a specifier there with nothing supplied for it - is a
+// compile error. That file carries the licensing consequences of changing the list.
+// Module types aren't compatible with each other
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const webViewModules: Readonly<Record<WebViewModuleSpecifier, any>> = {
+  '@papi/core': papiCore,
+  '@papi/frontend': papiFrontend,
+  '@papi/frontend/react': papiReact,
+  '@sillsdev/scripture': SillsdevScripture,
+  'platform-bible-react': platformBibleReact,
+  'platform-bible-utils': platformBibleUtils,
+  react: reactCompat,
+  'react-dom': ReactDOM,
+  'react-dom/client': ReactDOMClient,
+  'react/jsx-runtime': ReactJsxRuntime,
+};
+
+// A `Map` rather than the record itself, because `webViewRequire` is handed an arbitrary string by
+// extension code: indexing a plain object with one answers every `Object.prototype` member -
+// `constructor`, `toString`, `valueOf` - as though it were a module this renderer supplies.
+// Typed read-only so the lookups `webViewRequire` runs against cannot be widened by a later
+// `moduleMap.set(...)` anywhere below: the record above protects the table, this protects the map.
+const moduleMap: ReadonlyMap<string, unknown> = new Map(Object.entries(webViewModules));
+
+const registeredModuleList = [...WEB_VIEW_MODULE_SPECIFIERS].sort().join(', ');
 
 /**
  * Provide a require implementation so we can provide some needed packages for extensions or for
@@ -75,7 +92,7 @@ function webViewRequire(moduleName: string) {
   if (module) return module;
   throw new Error(
     `Only these modules can be required in WebViews: ${registeredModuleList}. ${getModuleSimilarApiMessage(
-      module,
+      moduleName,
     )}`,
   );
 }
@@ -86,6 +103,27 @@ type SillsdevScriptureType = typeof SillsdevScripture;
 type WebViewRequire = typeof webViewRequire;
 type WebViewCleanup = {
   unmountRoot: () => void;
+};
+
+/**
+ * The React root a web view's bootstrap created in one document of its iframe, as the bootstrap
+ * reports it to the renderer. The root renders through the renderer's React, so it outlives the
+ * document that created it unless something in the renderer unmounts it.
+ */
+export type RegisteredWebViewRoot = {
+  /** Unmount the root. Calling it again after the root is unmounted does nothing. */
+  unmountRoot: () => void;
+  /**
+   * The document the root was created in. The renderer hands the root to the web view whose iframe
+   * is showing this document.
+   */
+  document: Document;
+  /**
+   * Whether the document has run its `unload` handlers. The bootstrap sets it from an `unload`
+   * listener it adds when it creates the root, so a root whose loaded document is gone while this
+   * is still `false` was not unmounted by the document itself.
+   */
+  hasUnloaded: boolean;
 };
 
 // `declare global` augmentation requires `var` declarations; they cannot be `const`/`let`.
@@ -106,6 +144,9 @@ declare global {
   var SillsdevScripture: SillsdevScriptureType;
   // Web view cleanup functions for iframe content
   var webViewCleanup: WebViewCleanup;
+  // Called by each React web view's bootstrap with the root it created, so the web view component
+  // can unmount the root once its document is replaced
+  var registerWebViewRootById: (webViewId: string, root: RegisteredWebViewRoot) => void;
 }
 /* eslint-enable */
 

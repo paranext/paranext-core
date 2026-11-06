@@ -60,6 +60,7 @@ describe('window service router module load', () => {
       getFocus: async () => undefined,
       setFocus: async () => true,
       subscribeFocus: async () => async () => true,
+      subscribeActiveEditorProjectId: async () => async () => true,
     };
 
     // The real window state service, so the router has a window to route the write to
@@ -68,7 +69,7 @@ describe('window service router module load', () => {
     // window state service touches
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     addWindow({ id: 1 } as never);
-    markWindowReady(1);
+    markWindowReady('1');
 
     const { testingWindowServiceRouter } = await import('@main/services/window.service-router');
     const { dataProviderService } = await import('@shared/services/data-provider.service');
@@ -79,8 +80,9 @@ describe('window service router module load', () => {
     // resolver instead, which is the seam `testingWindowServiceRouter` exists for. Everything under
     // test is still the real thing: the module was loaded (decorator evaluated) and the provider is
     // registered through the real data provider service.
-    // The engine only ever calls getFocus / setFocus / subscribeFocus on what it resolves, so the
-    // stub above implements just those rather than the whole IWindowService
+    // `setFocus` also triggers a relay repoint (`#getTargetWindowService`), which subscribes to
+    // both data types together — so the stub needs `subscribeActiveEditorProjectId` even though
+    // this test never reads that data type directly.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const resolveStubShard = async () => scopedWindowService as never;
     await dataProviderService.registerEngine(

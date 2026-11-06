@@ -21,9 +21,17 @@ export type SettingBase = StateBase & {
   /**
    * Boolean that controls whether a setting should be hidden or not. If hidden, the setting will
    * not show up in the settings dialog in `paranext-core`, and thus will not be configurable by the
-   * user unless an extension provides a way to interact with the setting.
+   * user unless an extension provides a way to interact with the setting. If every setting in a
+   * group is hidden, the group does not show up either.
    */
   isHidden?: boolean;
+  /**
+   * Boolean that controls whether a setting is read-only in the settings dialog. If read-only, the
+   * setting still shows up in the settings dialog in `paranext-core`, but the user cannot change it
+   * there. A read-only text field can still be selected and copied; controls with no read-only
+   * state, such as switches, are disabled. Extensions can still change the setting's value.
+   */
+  isReadOnly?: boolean;
 };
 /** The data an extension provides to inform Platform.Bible of the project settings it provides */
 export type ProjectSettingsContribution = ProjectSettingsGroup | ProjectSettingsGroup[];
@@ -447,7 +455,15 @@ const settingsDefs = {
             description: `Boolean that controls whether a setting should be hidden or not. If hidden
             , the setting will not show up in the settings dialog in \`paranext-core\`, and thus
             will not be configurable by the user unless an extension provides a way to interact with
-            the setting.`,
+            the setting. If every setting in a group is hidden, the group does not show up either.`,
+            type: 'boolean',
+          },
+          isReadOnly: {
+            description: `Boolean that controls whether a setting is read-only in the settings
+            dialog. If read-only, the setting still shows up in the settings dialog in
+            \`paranext-core\`, but the user cannot change it there. A read-only text field can still
+            be selected and copied; controls with no read-only state, such as switches, are
+            disabled. Extensions can still change the setting's value.`,
             type: 'boolean',
           },
         },

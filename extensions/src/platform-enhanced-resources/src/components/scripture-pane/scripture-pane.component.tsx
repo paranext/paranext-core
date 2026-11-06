@@ -79,8 +79,6 @@ export type EnhancedScripturePaneProps = {
   filteredTokenSurface?: string;
   /** When true, every word-kind annotation gets a `marble-highlight` overlay (BHV-301). */
   highlightAllResearchTerms?: boolean;
-  /** Zoom factor applied to the rendered scripture (1.0 = 100%). */
-  scripturePaneZoom?: number;
   /** Loading state - shows a Skeleton placeholder. */
   isLoading?: boolean;
   /** Error message - when set, renders an Alert. Overrides loading/empty states. */
@@ -491,6 +489,10 @@ function useLatestRef<T>(value: T): MutableRefObject<T> {
 // `editor.setAnnotation`). Inlining the object literal in JSX caused marks to silently disappear
 // on every parent re-render (e.g. when the MarbleGuide modal opens/closes). See
 // working-docs/2026-05-06-er-hover-regression-design.md.
+//
+// No `allowInvisibleCharacters` here: this pane shows an enhanced resource, not a Paratext project,
+// so there is no `platformScripture.allowInvisibleCharacters` to read. Copying therefore behaves as
+// it does in a project with the setting off, writing each no-break space as `~`.
 const EDITORIAL_OPTIONS = {
   isReadonly: true,
   hasExternalUI: true,
@@ -507,9 +509,9 @@ const EDITORIAL_OPTIONS = {
  * marble-word annotations against freshly mounted USJ. Since the resolver's "no-op + log" is the
  * editor's defined safe-fallback path, the log line is noise to us, not an actionable error.
  *
- * Cannot change the editor (yalc-pinned 0.8.15 per the stabilization charter), so we wrap the papi
- * logger and downgrade exactly this one message to debug. Everything else from Editorial still
- * surfaces at the original level.
+ * Cannot change the editor (pinned per the stabilization charter), so we wrap the papi logger and
+ * downgrade exactly this one message to debug. Everything else from Editorial still surfaces at the
+ * original level.
  */
 const FAILED_TO_FIND_ANNOTATION_MARKER = 'Failed to find start or end node of the annotation';
 
@@ -559,7 +561,6 @@ export function EnhancedScripturePane({
   filteredTokenId,
   filteredTokenSurface,
   highlightAllResearchTerms = false,
-  scripturePaneZoom = 1,
   isLoading = false,
   errorMessage,
   scrRef,
@@ -1211,14 +1212,11 @@ export function EnhancedScripturePane({
       data-testid="er-scripture-pane"
     >
       <div
-        className="tw:flex tw:h-auto tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto"
-        // Inline style is the appropriate primitive for a continuous numeric zoom factor that the
-        // user can drive from the View menu - Tailwind classes can't express arbitrary scales.
         // `overflow-auto` + `min-h-0` + `flex-1` is the same triple the platform-scripture-editor
         // uses on its scrolling region so the editor content scrolls vertically when it exceeds
         // the available pane height; without this the outer `overflow-hidden` simply clips long
         // chapters.
-        style={{ fontSize: `${scripturePaneZoom}rem` }}
+        className="tw:flex tw:h-auto tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto"
       >
         <Editorial
           ref={editorRef}

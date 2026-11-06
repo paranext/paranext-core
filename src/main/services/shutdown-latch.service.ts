@@ -12,13 +12,39 @@
  */
 
 import { areAllWindowsClosing } from '@main/services/window-state.service';
+import { AsyncVariable } from 'platform-bible-utils';
 
-let isQuitRequested = false;
 let shutdownTasksPromise: Promise<void> | undefined;
+
+/**
+ * Settles when a quit is requested, so something waiting on the user can stop waiting. A quit is a
+ * stronger statement than any answer the user could give. An asker that takes its own question down
+ * on a quit will answer on its own; this is what ends the wait for one that does not, so a question
+ * nobody answers can never hold the app open.
+ */
+let quitRequested = makeQuitRequestedSignal();
+
+/**
+ * A latch that lives as long as the session, so the timeout is disabled: `AsyncVariable` otherwise
+ * rejects an unsettled variable after ten seconds, and this one is unsettled for the whole of a
+ * session that never quits — that rejection would win the race it is waited on in.
+ */
+function makeQuitRequestedSignal(): AsyncVariable<void> {
+  return new AsyncVariable<void>('quit requested', -1);
+}
 
 /** Record that the whole app is quitting, not just one window. Called from `before-quit`. */
 export function markQuitRequested(): void {
-  isQuitRequested = true;
+  // Repeat calls are safe: settling an already-settled variable is a logged no-op, not a throw
+  quitRequested.resolveToValue(undefined);
+}
+
+/**
+ * Resolves once a quit has been requested — immediately if one already has. For a wait that has to
+ * give way to a quit, such as a question the user has not yet answered.
+ */
+export function whenQuitRequested(): Promise<void> {
+  return quitRequested.promise;
 }
 
 /**
@@ -27,7 +53,8 @@ export function markQuitRequested(): void {
  * the tracked-window count alone cannot distinguish them.
  */
 export function isAppQuitRequested(): boolean {
-  return isQuitRequested;
+  // Read from the latch rather than a flag kept beside it: one fact, so the two cannot drift
+  return quitRequested.hasSettled;
 }
 
 /**
@@ -123,7 +150,11 @@ export function runShutdownTasksOnce(performShutdownTasks: () => Promise<void>):
 }
 
 /**
- * Clear both latches because a new session is starting. Called when a window is created.
+ * Clear both latches because a new session is starting. Called when a window is created where there
+ * were NONE — that condition is load-bearing, not incidental. A window created alongside living
+ * windows is not a new session, and resetting there would replace the quit signal a close path may
+ * already be waiting on, leaving that wait to be settled by a quit that now signals something
+ * else.
  *
  * Without this the shutdown tasks would run at most once per process. Closing the last window on
  * macOS runs them and leaves the app resident; reactivating from the dock then gives the user a
@@ -138,6 +169,6 @@ export function runShutdownTasksOnce(performShutdownTasks: () => Promise<void>):
  * refuses to create a window during a quit for exactly this reason.
  */
 export function resetShutdownLatchesForNewSession(): void {
-  isQuitRequested = false;
   shutdownTasksPromise = undefined;
+  quitRequested = makeQuitRequestedSignal();
 }

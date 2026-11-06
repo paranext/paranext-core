@@ -7,7 +7,7 @@
  * was the original spec, now superseded by a centered Dialog so the image fills the viewport). It
  * is reached from the Media or Maps tab inside the Enhanced Resource WebView:
  *
- * 1. Open Enhanced Resource window from the main Platform.Bible menu (UI-PKG-009 wiring).
+ * 1. Open Enhanced Resource window with its `platformEnhancedResources.openEnhancedResource` command.
  * 2. Click an entry in the Media (Images) or Maps tab to open the side drawer.
  * 3. Click the Maximize affordance inside the drawer to promote the image into the MediaViewer Dialog.
  *
@@ -25,7 +25,7 @@
  * - Uses `cdp.fixture` only (NOT `papi.fixture` or `app.fixture`).
  * - Navigates via visible UI; no `sendPapiCommand`.
  */
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
@@ -45,7 +45,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
   test('should open MediaViewer from Media tab via Maximize button', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
-    // Open the Enhanced Resource window from the main Platform.Bible menu (UI-PKG-009).
+    // Open the Enhanced Resource window by command (UI-PKG-009).
     await openEnhancedResource(mainPage);
 
     // The ER window appears as a dock tab.

@@ -7,6 +7,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
+  useContentZoomTextProps,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import type { DictionarySenseDisplay } from '../shared/dictionary-sense-item.component';
@@ -138,6 +139,7 @@ export function DictionaryDisplayItem({
   onFindText = () => {},
   localizedStringsWithLoadingState = [{}, false],
 }: DictionaryDisplayItemProps) {
+  const contentZoomTextProps = useContentZoomTextProps();
   const getLocalizedString = (key: DictionaryDisplayItemLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
@@ -186,16 +188,33 @@ export function DictionaryDisplayItem({
                 onSourceTextClick(item.tokenId);
               }}
             >
-              <span className="tw:truncate tw:font-semibold">{item.sourceText}</span>
+              <span
+                className="tw:truncate tw:font-semibold"
+                // The hook returns only the content-zoom marker attribute, or nothing.
+                // eslint-disable-next-line react/jsx-props-no-spreading
+                {...contentZoomTextProps}
+              >
+                {item.sourceText}
+              </span>
             </Button>
             {item.translit && (
-              <span className="tw:truncate tw:text-xs tw:italic tw:text-muted-foreground">
+              <span
+                className="tw:truncate tw:text-xs tw:italic tw:text-muted-foreground"
+                // The hook returns only the content-zoom marker attribute, or nothing.
+                // eslint-disable-next-line react/jsx-props-no-spreading
+                {...contentZoomTextProps}
+              >
                 {item.translit}
               </span>
             )}
           </div>
           {preview && (
-            <span className="tw:flex-1 tw:truncate tw:text-sm tw:text-muted-foreground">
+            <span
+              className="tw:flex-1 tw:truncate tw:text-sm tw:text-muted-foreground"
+              // The hook returns only the content-zoom marker attribute, or nothing.
+              // eslint-disable-next-line react/jsx-props-no-spreading
+              {...contentZoomTextProps}
+            >
               {preview}
             </span>
           )}

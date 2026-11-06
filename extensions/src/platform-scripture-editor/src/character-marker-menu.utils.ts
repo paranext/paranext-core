@@ -44,6 +44,11 @@ export const CHARACTER_MARKER_MENU_STRING_KEYS = Object.freeze([
   REMOVE_CHARACTER_MARKERS_KEY,
 ] as const);
 
+/** Every USFM marker's description key, so marker-menu rows can show each marker's description. */
+export const ALL_USFM_MARKER_DESCRIPTION_KEYS = Object.values(usfmMarkers)
+  .map((marker) => marker.description)
+  .filter((description) => !!description);
+
 /**
  * Whether a marker row's action would do nothing, so the row must render unavailable rather than
  * silently swallowing the click.
@@ -155,6 +160,12 @@ export function generateCharacterMarkerMenuListItems(
      * (`adr-character-marker-removal-peels-one-layer`). Omit to offer no remove row at all.
      */
     removeCharacterMarker?: (marker?: string) => void;
+    /**
+     * Reports whether another chapter is loading, during which the editor still shows the chapter
+     * being left and an edit would be dropped. Every row only closes the menu while it returns
+     * `true`. Omitting it never blocks.
+     */
+    isChapterLoading?: () => boolean;
   },
 ): MarkerMenuItem[] {
   if (!parentMarker) return [];
@@ -167,6 +178,7 @@ export function generateCharacterMarkerMenuListItems(
     coverage,
     changeCharacterMarker,
     removeCharacterMarker,
+    isChapterLoading,
   } = characterMarkerOptions ?? {};
   // Defense-in-depth: the caller is expected to pass an already-filtered marker (the editor's
   // `contextMarker` run through `isCharacterMarker`), so this should normally already be a
@@ -222,6 +234,10 @@ export function generateCharacterMarkerMenuListItems(
             !!changeCharacterMarker,
           ),
           action: () => {
+            if (isChapterLoading?.()) {
+              closeMarkersMenu();
+              return;
+            }
             // Toggle off: the marker already covers the whole selection, so picking it again means
             // "take it away". Applying it again would nest an identical character marker.
             if (selectionState === 'all' && removeCharacterMarker) removeCharacterMarker(marker);
@@ -288,6 +304,10 @@ export function generateCharacterMarkerMenuListItems(
         // covered, so it always has something to do.
         isDisabled: false,
         action: () => {
+          if (isChapterLoading?.()) {
+            closeMarkersMenu();
+            return;
+          }
           removeCharacterMarker();
           closeMarkersMenu();
         },
@@ -298,6 +318,10 @@ export function generateCharacterMarkerMenuListItems(
         // See the row above: never inert.
         isDisabled: false,
         action: () => {
+          if (isChapterLoading?.()) {
+            closeMarkersMenu();
+            return;
+          }
           // Non-null: `hasSomethingToRemove` is true and `isMixedCoverage` is false here, so
           // `currentCharacterMarker` is set.
           removeCharacterMarker(currentCharacterMarker);

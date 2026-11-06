@@ -4,6 +4,7 @@ import {
   AlertTitle,
   Button,
   ColumnDef,
+  ContentZoomRoot,
   DataTable,
   TabToolbar,
   ToggleGroup,
@@ -17,7 +18,12 @@ import { LinkedScrRefButton } from 'platform-bible-react/experimental';
 import { AlertTriangle, Book, BookOpen, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import { formatScrRef } from 'platform-bible-utils';
+import {
+  formatProjectName,
+  formatReplacementString,
+  formatScrRef,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import type {
   ChecklistCell,
   ChecklistLocalizedStringKey,
@@ -101,17 +107,20 @@ type ParagraphRowProps = {
 
 function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: ParagraphRowProps) {
   return (
+    // Project text and the marker token zoom with the pane; the row keeps its indent at interface
+    // size, and backend error and message items stay unmarked because they are UI strings.
     <div
       className="tw:flex tw:flex-row tw:flex-wrap tw:items-baseline tw:gap-1"
       style={getMarkerIndentStyle(paragraph.marker)}
       data-marker={paragraph.marker}
     >
-      <span
+      <ContentZoomRoot
+        as="span"
         className="tw:font-mono tw:text-xs tw:font-semibold"
         aria-label={markerAriaTemplate.replace('{marker}', paragraph.marker)}
       >
         {`\\${paragraph.marker}`}
-      </span>
+      </ContentZoomRoot>
       {showVerseText &&
         paragraph.items.map((item, itemIndex) => {
           // Content items are an ordered, append-only list rendered by index within a paragraph;
@@ -123,33 +132,38 @@ function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: Paragrap
           if (item.type === 'text') {
             if (item.characterStyle) {
               return (
-                <span
+                <ContentZoomRoot
+                  as="span"
                   key={itemKey}
                   className="tw:italic tw:text-muted-foreground"
                   data-character-style={item.characterStyle}
                 >
                   {`(\\${item.characterStyle} ${item.text.trim()})`}
-                </span>
+                </ContentZoomRoot>
               );
             }
             return (
-              <span key={itemKey} className="tw:text-foreground">
+              <ContentZoomRoot as="span" key={itemKey} className="tw:text-foreground">
                 {item.text}
-              </span>
+              </ContentZoomRoot>
             );
           }
           if (item.type === 'verse') {
             return (
-              <sup key={itemKey} className="tw:font-semibold tw:text-muted-foreground">
+              <sup
+                key={itemKey}
+                className="tw:font-semibold tw:text-muted-foreground"
+                data-platform-content-zoom-root=""
+              >
                 {item.verseNumber}
               </sup>
             );
           }
           if (item.type === 'link') {
             return (
-              <span key={itemKey} className="tw:underline tw:text-primary">
+              <ContentZoomRoot as="span" key={itemKey} className="tw:underline tw:text-primary">
                 {item.displayText}
-              </span>
+              </ContentZoomRoot>
             );
           }
           if (item.type === 'error') {
@@ -235,8 +249,13 @@ function ColumnHeaderWithTooltip({
   fullName,
   ariaLabelTemplate,
 }: ColumnHeaderWithTooltipProps) {
-  const displayFullName = fullName ?? shortName;
-  const ariaLabel = ariaLabelTemplate.replace('{name}', displayFullName);
+  // The column shows only the short name, so the accessible name has to lead with it too — a
+  // screen-reader user who hears the full name alone cannot match the column to the tab titles or
+  // the toolbar, which name the same project by its short name.
+  const displayName = formatProjectName({ shortName, fullName: normalizeFullName(fullName) });
+  // `formatReplacementString`, not `String.replace`: a string replacement interprets `$&`, `` $` ``
+  // and `$'`, so a project whose name contains one would render mangled.
+  const ariaLabel = formatReplacementString(ariaLabelTemplate, { name: displayName });
   return (
     // delayDuration={0} → tooltip appears immediately on hover (per Sebastian's PR #2219
     // #3138170120: "do not use cursor help. show the tooltip immediately"). Mirrors the
@@ -252,7 +271,9 @@ function ColumnHeaderWithTooltip({
             {shortName}
           </span>
         </TooltipTrigger>
-        <TooltipContent>{displayFullName}</TooltipContent>
+        {/* `dir="auto"`: the tooltip is the joined `shortName - fullName` as one text node, so it
+            needs the name's own direction rather than the container's. */}
+        <TooltipContent dir="auto">{displayName}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

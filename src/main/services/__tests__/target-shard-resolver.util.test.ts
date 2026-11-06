@@ -21,14 +21,14 @@ vi.mock('@shared/services/logger.service', () => ({
 
 /** A shard index over the given windows, resolving each window's shard with the given function */
 function shardIndex(
-  shardWindowIds: number[],
-  getShard: (windowId: number) => Promise<unknown>,
+  shardWindowIds: string[],
+  getShard: (windowId: string) => Promise<unknown>,
 ): ServiceShardIndex<unknown> {
   return {
     onDidAddShard: vi.fn(() => () => true),
     onDidRemoveShard: vi.fn(() => () => true),
     getShard: vi.fn(getShard),
-    getShardNetworkObjectId: vi.fn((windowId: number) =>
+    getShardNetworkObjectId: vi.fn((windowId: string) =>
       shardWindowIds.includes(windowId) ? `shard-of-window-${windowId}` : undefined,
     ),
     getShardWindowIds: vi.fn(() => shardWindowIds),
@@ -39,26 +39,26 @@ function shardIndex(
  * A shard index no window has registered with yet, plus the lever a test pulls to announce one —
  * the state a window is in between becoming routable and its every shard being announced.
  */
-function shardIndexAwaitingAnnouncement(getShard: (windowId: number) => Promise<unknown>) {
-  const indexedWindowIds: number[] = [];
-  const listeners: ((windowId: number) => void)[] = [];
+function shardIndexAwaitingAnnouncement(getShard: (windowId: string) => Promise<unknown>) {
+  const indexedWindowIds: string[] = [];
+  const listeners: ((windowId: string) => void)[] = [];
   const index: ServiceShardIndex<unknown> = {
-    onDidAddShard: vi.fn((listener: (windowId: number) => void) => {
+    onDidAddShard: vi.fn((listener: (windowId: string) => void) => {
       listeners.push(listener);
       return () => true;
     }),
     onDidRemoveShard: vi.fn(() => () => true),
-    getShard: vi.fn(async (windowId: number) =>
+    getShard: vi.fn(async (windowId: string) =>
       indexedWindowIds.includes(windowId) ? getShard(windowId) : undefined,
     ),
-    getShardNetworkObjectId: vi.fn((windowId: number) =>
+    getShardNetworkObjectId: vi.fn((windowId: string) =>
       indexedWindowIds.includes(windowId) ? `shard-of-window-${windowId}` : undefined,
     ),
     getShardWindowIds: vi.fn(() => [...indexedWindowIds]),
   };
   return {
     index,
-    announceShard(windowId: number) {
+    announceShard(windowId: string) {
       indexedWindowIds.push(windowId);
       listeners.forEach((listener) => listener(windowId));
     },
@@ -68,17 +68,17 @@ function shardIndexAwaitingAnnouncement(getShard: (windowId: number) => Promise<
 describe('target shard resolver', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getTargetWindowId.mockReturnValue('1');
   });
 
   test('answers with the shard of the window calls currently route to', async () => {
     const resolve = createTargetShardResolver(
       'TestService',
-      shardIndex([1, 2], async (windowId) => ({ servedBy: windowId })),
+      shardIndex(['1', '2'], async (windowId) => ({ servedBy: windowId })),
     );
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
 
-    expect(await resolve()).toEqual({ servedBy: 2 });
+    expect(await resolve()).toEqual({ servedBy: '2' });
   });
 
   test('re-resolves per call rather than pinning the window it first answered with', async () => {
@@ -86,12 +86,12 @@ describe('target shard resolver', () => {
     // call to whichever window happened to be the target at startup
     const resolve = createTargetShardResolver(
       'TestService',
-      shardIndex([1, 2], async (windowId) => ({ servedBy: windowId })),
+      shardIndex(['1', '2'], async (windowId) => ({ servedBy: windowId })),
     );
 
-    expect(await resolve()).toEqual({ servedBy: 1 });
-    mocks.getTargetWindowId.mockReturnValue(2);
-    expect(await resolve()).toEqual({ servedBy: 2 });
+    expect(await resolve()).toEqual({ servedBy: '1' });
+    mocks.getTargetWindowId.mockReturnValue('2');
+    expect(await resolve()).toEqual({ servedBy: '2' });
   });
 
   test('refuses to route rather than guessing when there is no window to route to', async () => {
@@ -114,9 +114,9 @@ describe('target shard resolver', () => {
     const resolve = createTargetShardResolver('TestService', index);
 
     const resolving = resolve();
-    announceShard(1);
+    announceShard('1');
 
-    expect(await resolving).toEqual({ servedBy: 1 });
+    expect(await resolving).toEqual({ servedBy: '1' });
   });
 
   test('says the renderer may still be starting when no shard is announced in time', async () => {
@@ -153,7 +153,7 @@ describe('target shard resolver', () => {
     // saying that is how an hour-old wedged window ends up looking like a normal startup race.
     const resolve = createTargetShardResolver(
       'TestService',
-      shardIndex([1], async () => undefined),
+      shardIndex(['1'], async () => undefined),
     );
 
     await expect(resolve()).rejects.toThrow(
@@ -165,7 +165,7 @@ describe('target shard resolver', () => {
   test('lets a failing lookup say what went wrong instead of flattening it into "not available"', async () => {
     const resolve = createTargetShardResolver(
       'TestService',
-      shardIndex([1], async () => {
+      shardIndex(['1'], async () => {
         throw new Error('the websocket went away mid-lookup');
       }),
     );
@@ -177,7 +177,7 @@ describe('target shard resolver', () => {
 describe('target shard resolver that reports which window answered', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getTargetWindowId.mockReturnValue('1');
   });
 
   test('answers with the window alongside its shard', async () => {
@@ -186,11 +186,11 @@ describe('target shard resolver that reports which window answered', () => {
     // rather than being derived a second time
     const resolve = createTargetWindowShardResolver(
       'TestService',
-      shardIndex([1, 2], async (windowId) => ({ servedBy: windowId })),
+      shardIndex(['1', '2'], async (windowId) => ({ servedBy: windowId })),
     );
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
 
-    expect(await resolve()).toEqual({ windowId: 2, shard: { servedBy: 2 } });
+    expect(await resolve()).toEqual({ windowId: '2', shard: { servedBy: '2' } });
   });
 
   test('refuses to route rather than guessing when there is no window to route to', async () => {
@@ -210,9 +210,9 @@ describe('resolveShardForWindow', () => {
   });
 
   test('answers with the shard already indexed for the named window', async () => {
-    const index = shardIndex([1, 2], async (windowId) => ({ servedBy: windowId }));
+    const index = shardIndex(['1', '2'], async (windowId) => ({ servedBy: windowId }));
 
-    expect(await resolveShardForWindow('TestService', index, 2)).toEqual({ servedBy: 2 });
+    expect(await resolveShardForWindow('TestService', index, '2')).toEqual({ servedBy: '2' });
   });
 
   test('waits for a late shard announcement for the named window and resolves when it lands', async () => {
@@ -222,10 +222,10 @@ describe('resolveShardForWindow', () => {
       servedBy: windowId,
     }));
 
-    const resolving = resolveShardForWindow('TestService', index, 3);
-    announceShard(3);
+    const resolving = resolveShardForWindow('TestService', index, '3');
+    announceShard('3');
 
-    expect(await resolving).toEqual({ servedBy: 3 });
+    expect(await resolving).toEqual({ servedBy: '3' });
   });
 
   test('throws when the named window never announces a shard within the grace period', async () => {
@@ -233,7 +233,7 @@ describe('resolveShardForWindow', () => {
     try {
       const index = shardIndex([], async () => undefined);
 
-      const resolving = resolveShardForWindow('TestService', index, 5);
+      const resolving = resolveShardForWindow('TestService', index, '5');
       // Take hold of the rejection before advancing the clock, same reasoning as the equivalent
       // createTargetShardResolver test above: an unattached rejection during the timer run is
       // reported as an unhandled rejection against the whole file.

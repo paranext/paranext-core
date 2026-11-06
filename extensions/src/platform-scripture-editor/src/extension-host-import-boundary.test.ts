@@ -41,6 +41,11 @@ const ALLOWED_MODULES = new Set([
   '@sillsdev/scripture',
   'platform-bible-utils',
   'crypto',
+  // Not a shim module: webpack's `externals` match only the bare `platform-bible-utils`, so this
+  // subpath is bundled into main.js. That is host-safe because `platform-bible-utils` has no React
+  // or other UI dependency: the `experimental` entry draws on the same dependencies as the main
+  // entry the shim already loads into the host.
+  'platform-bible-utils/experimental',
   // This extension's own ambient module declaration (`src/types/platform-scripture-editor.d.ts`).
   // It declares types only, so TypeScript erases these imports and no `require` is emitted.
   'platform-scripture-editor',

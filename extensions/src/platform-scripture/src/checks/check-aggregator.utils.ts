@@ -1,5 +1,11 @@
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { ScriptureRange } from 'platform-scripture';
+import {
+  CheckConfigurationProvider,
+  CheckJobError,
+  CheckJobStatusReport,
+  CheckSetupState,
+  ScriptureRange,
+} from 'platform-scripture';
 
 /* All these types and functions could live in `check-aggregator.service.ts`, but to get jest tests
  * to run properly, it was much easier to pull these standalone functions into a different file and
@@ -18,4 +24,53 @@ export function isWithinRange(range: ScriptureRange, verseRef: SerializedVerseRe
 
   // Don't worry about verse numbers for now since the UI only works at the chapter level
   return true;
+}
+
+/**
+ * Records that a check could not run, unless the same check already failed with the same message
+ *
+ * @returns `true` when the error was added, `false` when the same error was already recorded
+ */
+export function addCheckError(errors: CheckJobError[], checkError: CheckJobError): boolean {
+  if (
+    errors.some(
+      (existing) =>
+        existing.checkId === checkError.checkId && existing.message === checkError.message,
+    )
+  )
+    return false;
+  errors.push(checkError);
+  return true;
+}
+
+/** Combines the check errors several runners reported for one job; undefined when there are none */
+export function mergeCheckErrors(reports: CheckJobStatusReport[]): CheckJobError[] | undefined {
+  const merged = reports.flatMap((report) => report.checkErrors ?? []);
+  return merged.length > 0 ? merged : undefined;
+}
+
+/**
+ * Asks a check runner for a check's setup status. A runner that predates `lookUpCheckSetupStatus`
+ * rejects the call, so the answer is derived from its `isCheckSetupForProject` instead; when that
+ * also rejects, the original lookup error is rethrown.
+ *
+ * Falls back on ANY rejection on purpose: telling "method not found" apart from a real error would
+ * mean matching JSON-RPC error message text. A real error therefore costs one extra failing
+ * `isCheckSetupForProject` call before the original error is rethrown.
+ */
+export async function lookUpCheckSetupStatusWithFallback(
+  runner: Pick<CheckConfigurationProvider, 'lookUpCheckSetupStatus' | 'isCheckSetupForProject'>,
+  checkId: string,
+  projectId: string,
+): Promise<CheckSetupState> {
+  try {
+    return await runner.lookUpCheckSetupStatus(checkId, projectId);
+  } catch (lookupError) {
+    try {
+      const isSetUp = await runner.isCheckSetupForProject(checkId, projectId);
+      return { status: isSetUp ? 'ready' : 'setupRequired' };
+    } catch {
+      throw lookupError;
+    }
+  }
 }

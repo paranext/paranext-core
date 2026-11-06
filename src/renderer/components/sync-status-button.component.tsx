@@ -1,9 +1,17 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { SyncStatus, useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
+import { SyncStatus, SyncingProject, useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
-import { CircleAlert, CircleCheck, CircleHelp, RefreshCw } from 'lucide-react';
+import {
+  ArrowDownUp,
+  CircleAlert,
+  CircleArrowDown,
+  CircleArrowUp,
+  CircleCheck,
+  CircleHelp,
+  RefreshCw,
+} from 'lucide-react';
 import {
   Button,
   Popover,
@@ -24,7 +32,8 @@ import {
   isolateBidi,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { CANCEL_SYNC_PROMPT_COMMAND } from 'platform-bible-utils/experimental';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 /**
  * Message shown when Cancel is clicked but send/receive can't answer. Declared here rather than
@@ -68,10 +77,13 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_cancelling%',
   '%toolbar_sync_open_status%',
   '%toolbar_sync_popover_cancelled%',
-  '%toolbar_sync_popover_last_sync_unfinished%',
   '%toolbar_sync_popover_idle%',
+  '%toolbar_sync_popover_last_sync_unfinished%',
+  '%toolbar_sync_popover_no_details%',
   '%toolbar_sync_popover_synced%',
   '%toolbar_sync_popover_unknown%',
+  '%toolbar_sync_popover_unsynced_receive%',
+  '%toolbar_sync_popover_unsynced_send%',
   '%toolbar_sync_progress_item%',
   '%toolbar_sync_status_cancelled%',
   '%toolbar_sync_status_failed%',
@@ -80,10 +92,46 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_status_syncing_project%',
   '%toolbar_sync_status_syncing_projects%',
   '%toolbar_sync_status_unknown%',
+  '%toolbar_sync_status_unsynced%',
+  '%toolbar_sync_status_unsynced_both%',
+  '%toolbar_sync_status_unsynced_receive%',
+  '%toolbar_sync_status_unsynced_send%',
   '%toolbar_sync_view_details%',
   SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
   SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
 ];
+
+/**
+ * The popover's list of project names, shared by the syncing and unsynced states so both render the
+ * same markup. `testId` tells apart the lists that can be on screen together, and `labelledBy` is
+ * the id of the heading that names a list.
+ */
+function ProjectList({
+  projects,
+  testId = 'toolbar-sync-popover-projects',
+  labelledBy = undefined,
+}: {
+  projects: readonly SyncingProject[];
+  testId?: string;
+  labelledBy?: string;
+}) {
+  return (
+    // Tailwind's reset strips list semantics in Safari; role="list" re-establishes
+    // them for VoiceOver, as `first-run/steps/sync-progress.component.tsx` documents.
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles
+    <ul role="list" data-testid={testId} aria-labelledby={labelledBy} className="tw:text-sm">
+      {projects.map((project) => (
+        // Keyed on the id, not the name: two projects can share a name, and a name
+        // falls back to the id only when its metadata couldn't be read.
+        // `data-project-id` because two projects can share a display name, which
+        // makes the rendered rows indistinguishable from each other otherwise.
+        <li key={project.projectId} data-project-id={project.projectId} className="tw:truncate">
+          {project.name}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /**
  * Ambient Send/Receive status for the toolbar: a button reporting whether a sync is running, a
@@ -91,17 +139,32 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
  * web view for the detail this compact surface cannot carry (per-project conflicts, failure
  * messages, warnings).
  *
- * Deferred: three of the richer states in the design — "Connection problem", "Unsaved changes",
- * "Unsynced changes" — are not implemented, because none is derivable from what Send/Receive
- * currently emits; each needs a new event from that extension, so showing them now would mean
- * guessing at state, which is precisely the untruthfulness this control exists to fix. Sync FAILURE
- * is derivable (from the last sync's per-project results) and is reported. See
- * `adr-toolbar-sync-status-is-local` in `.context/standards/Architecture-Decisions.md`.
+ * "Unsynced changes" is driven by `useUnsyncedChanges` through `useSyncStatus`, which reads each
+ * project's repository for local changes not yet sent and, where the build can query the server,
+ * for server changes not yet received. The icon shows which direction applies, and the popover
+ * names the projects under a heading per direction.
+ *
+ * Deferred: two of the richer states in the design — "Connection problem" and "Unsaved changes" —
+ * are not implemented, because neither is derivable from what Send/Receive currently emits; each
+ * needs a new event from that extension, so showing them now would mean guessing at state, which is
+ * precisely the untruthfulness this control exists to fix. Sync FAILURE is derivable — from the
+ * last sync's per-project results, or from the backend's own sync outcome for a sync send/receive
+ * never saw — and is reported. See `adr-toolbar-sync-status-is-local` in
+ * `.context/standards/Architecture-Decisions.md`.
  */
 export function SyncStatusButton() {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
-  const { status, syncingProjects, syncProgress } = useSyncStatus();
+  const {
+    status,
+    syncingProjects,
+    unsyncedProjects,
+    unsyncedDirection,
+    syncProgress,
+    isVerdictFromBackendOnly,
+    runEpoch,
+  } = useSyncStatus();
   const [isOpen, setIsOpen] = useState(false);
+  const noDetailsHintId = useId();
   const [isCancelEnabled, setIsCancelEnabled] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
   /**
@@ -111,14 +174,6 @@ export function SyncStatusButton() {
    * their own request back to them as an error.
    */
   const [wasCancelRequested, setWasCancelRequested] = useState(false);
-  /**
-   * The popover's rendered content node. Radix portals it to `document.body`, so it is NOT a
-   * descendant of the trigger — which is why {@link handleWindowBlur} measures containment against
-   * this rather than against the trigger.
-   */
-  // React's useRef requires null as the initial value for DOM refs
-  // eslint-disable-next-line no-null/no-null
-  const popoverContentRef = useRef<HTMLDivElement>(null);
   const {
     ref: labelRef,
     open: isTooltipTruncated,
@@ -149,11 +204,11 @@ export function SyncStatusButton() {
    *
    * Written during RENDER, deliberately, and unlike the effect-written refs below. React schedules
    * the passive-effect flush as its own task after commit, i.e. after pending microtasks — so a
-   * `cancelSync` rejection delivered between the commit that moved `status` to `failed` and that
-   * flush would read an effect-written ref as still `syncing`, and toast "Couldn't cancel the sync"
-   * beside a popover saying the sync finished. That is precisely what the guard exists to suppress.
-   * A render-phase write cannot lag the commit it belongs to, and for a SUPPRESSION guard being
-   * marginally ahead is the safe direction: it errs toward staying quiet.
+   * `cancelSyncPrompt` rejection delivered between the commit that moved `status` to `failed` and
+   * that flush would read an effect-written ref as still `syncing`, and toast "Couldn't cancel the
+   * sync" beside a popover saying the sync finished. That is precisely what the guard exists to
+   * suppress. A render-phase write cannot lag the commit it belongs to, and for a SUPPRESSION guard
+   * being marginally ahead is the safe direction: it errs toward staying quiet.
    */
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -163,14 +218,19 @@ export function SyncStatusButton() {
    * again whenever the status leaves `syncing` (see the settle effect below) — so an episode
    * boundary invalidates any request still in flight across it.
    *
-   * `cancelSync` can reject long after it was sent (an unregistered handler rejects only after the
-   * RPC layer's ~10s retry budget), by which time the sync it targeted may have ended and another
-   * begun. Without this, sync A's rejection re-enables Cancel and toasts "Couldn't cancel the sync"
-   * against sync B — and if the user had already cancelled B, it reverts B's "Cancelling…" while
-   * B's own request is still in flight, defeating the single-shot guard the whole handler is built
-   * around.
+   * `cancelSyncPrompt` can reject long after it was sent (an unregistered handler rejects only
+   * after the RPC layer's ~10s retry budget), by which time the sync it targeted may have ended and
+   * another begun. Without this, sync A's rejection re-enables Cancel and toasts "Couldn't cancel
+   * the sync" against sync B — and if the user had already cancelled B, it reverts B's
+   * "Cancelling…" while B's own request is still in flight, defeating the single-shot guard the
+   * whole handler is built around.
    */
   const cancelGenerationRef = useRef(0);
+  /**
+   * Whether the cancel prompt of the current sync is still open. Cancel stays disarmed while it is,
+   * including across a popover close and reopen, so one sync is never asked twice.
+   */
+  const isCancelPromptOpenRef = useRef(false);
 
   const handleCancel = useCallback(async () => {
     // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the
@@ -178,13 +238,10 @@ export function SyncStatusButton() {
     // other's click. See `adr-toolbar-sync-status-is-local` in
     // `.context/standards/Architecture-Decisions.md`.
     // Single-shot: one cancel request per click-through. Disabled immediately so a second click
-    // can't queue another request, and re-enabled only if this one is rejected while a sync is
-    // still running, so the user can retry.
+    // can't queue another request, and re-enabled only if this one is rejected or the user answers
+    // that the sync should go on (nothing was cancelled), so the user can retry.
     setIsCancelEnabled(false);
-    // A cancel takes effect whenever send/receive reaches a stopping point, so the sync keeps
-    // reporting `syncing` for a while yet. Saying "Cancelling…" is what distinguishes a request that
-    // was accepted from a button that has merely gone dim.
-    setIsCancelling(true);
+    isCancelPromptOpenRef.current = true;
     cancelGenerationRef.current += 1;
     const generation = cancelGenerationRef.current;
     try {
@@ -195,13 +252,32 @@ export function SyncStatusButton() {
       // ask for. If an implementation ever REQUIRES the id to act, this cancel would silently do
       // nothing while the button said "Cancelling…", so the contract commits to treating an absent
       // id as an unconditional cancel.
-      await sendCommand('paratextBibleSendReceive.cancelSync');
+      //
+      // The prompt variant, so a user with projects waiting behind this sync is asked whether to
+      // drop them too. It is served by the Send/Receive extension; a rejection (including the
+      // command not being registered) takes the error path below.
+      const isCancelSent = await sendCommand(CANCEL_SYNC_PROMPT_COMMAND);
+      // The prompt of a sync that is over says nothing about the sync that shows now.
+      if (generation !== cancelGenerationRef.current) return;
+      isCancelPromptOpenRef.current = false;
+      if (isCancelSent === false) {
+        // Nothing was cancelled (the user chose to keep syncing): nothing is pending, so Cancel is
+        // offered again and the sync's outcome is not reported as one they asked for.
+        setIsCancelEnabled(true);
+      } else {
+        // A cancel takes effect whenever send/receive reaches a stopping point, so the sync keeps
+        // reporting `syncing` for a while yet. Saying "Cancelling…" once the cancel is confirmed is
+        // what distinguishes a request that was accepted from a button that has merely gone dim; it
+        // is not said while the prompt is still open, since the user may yet keep syncing.
+        setIsCancelling(true);
+      }
     } catch (e) {
       logger.warn(`Toolbar could not cancel the running sync: ${getErrorMessage(e)}`);
       // The sync this request was for is over, and everything below would land on a later one's
       // state. Nothing to re-enable and nothing to report: whatever is showing now describes the
       // episode that is actually running.
       if (generation !== cancelGenerationRef.current) return;
+      isCancelPromptOpenRef.current = false;
       setIsCancelEnabled(true);
       setIsCancelling(false);
       // A rejected cancel does NOT prove the sync is still running — the declaration guarantees
@@ -274,6 +350,8 @@ export function SyncStatusButton() {
    * immediately overwrite the answer it just recorded.
    */
   const isCancellingRef = useRef(isCancelling);
+  /** The `runEpoch` the settle effect last saw, to tell a change of run from a re-render. */
+  const lastRunEpochRef = useRef(runEpoch);
   useEffect(() => {
     isCancellingRef.current = isCancelling;
   }, [isCancelling]);
@@ -287,16 +365,30 @@ export function SyncStatusButton() {
   // `isSyncing: true` window spans however many overlapping claims the sync paths take out — so a
   // project can release and re-claim without a new sync having started, and "an id this cancel did
   // not cover" is not evidence of a different sync. A pending cancel is therefore settled only by
-  // the status leaving `syncing` and by the popover being reopened, at the cost of a genuinely new
-  // overlapping sync keeping a dim "Cancelling…" until the whole union goes idle. That is the safe
-  // half of the trade: the alternative offers a live Cancel while a cancel is still in flight.
-  // Settling it positively needs a monotonic sync-episode id in `SyncState` (`adr-toolbar-sync-status-is-local` follow-up 4).
+  // the status leaving `syncing`, by the popover being reopened, and by a new run's epoch (below),
+  // at the cost of a genuinely new overlapping sync keeping a dim "Cancelling…" until the whole
+  // union goes idle or the backend opens a new run. That is the safe half of the trade: the
+  // alternative offers a live Cancel while a cancel is still in flight. Settling it positively needs
+  // a monotonic sync-episode id in `SyncState` (`adr-toolbar-sync-status-is-local` follow-up 4).
+  //
+  // The one positive signal available is `runEpoch`: the backend's run ended and another opened.
+  // When the queue starts the next run as soon as a cancelled one ends, `status` never leaves
+  // `syncing`, so the epoch is what hands the new run a live Cancel.
   useEffect(() => {
     if (status === 'syncing') {
       // A running sync has no settled outcome to attribute to a cancel yet.
       setWasCancelRequested(false);
+      // Only a change of run settles a cancel while `status` stays `syncing`.
+      if (lastRunEpochRef.current !== runEpoch) {
+        lastRunEpochRef.current = runEpoch;
+        setIsCancelling(false);
+        setIsCancelEnabled(true);
+        cancelGenerationRef.current += 1;
+        isCancelPromptOpenRef.current = false;
+      }
       return;
     }
+    lastRunEpochRef.current = runEpoch;
     // Recorded before `isCancelling` is cleared, because it is the only evidence that the non-success
     // outcome now being reported is one the user asked for.
     setWasCancelRequested(isCancellingRef.current);
@@ -304,58 +396,16 @@ export function SyncStatusButton() {
     setIsCancelEnabled(true);
     // This episode is over, so a cancel request still in flight from it must not reach the next one.
     cancelGenerationRef.current += 1;
-  }, [status]);
-
-  /**
-   * Dismiss when focus leaves the popover's content for a foreign browsing context — a
-   * scripture-editor WebView, say. Those WebViews are cross-origin sandboxed iframes, so a click
-   * into one delivers no `pointerdown` to this document at all: Radix's outside-press detection
-   * never fires and the popover would sit open over a view the user has already moved into. A
-   * `blur` on this window is the only signal that arrives.
-   *
-   * `document.hasFocus()` is what separates the two things that blur reports. It stays true while
-   * focus is anywhere in this top-level page — including inside a child iframe — and flips to false
-   * only when the OS window itself loses focus, so a plain alt-tab or a DevTools click leaves the
-   * popover open. Containment is measured against the portaled content node because Radix renders
-   * it under `document.body`; asking the trigger instead would read the popover's own content as
-   * "outside" and dismiss it the moment the user clicked inside it.
-   *
-   * Closing through the controlled `open` prop keeps Radix's own close lifecycle — and with it the
-   * focus restore — rather than tearing the surface down behind its back. See the
-   * `Guidelines/Dismissal Patterns` Storybook page; no shared hook for this exists yet, so each
-   * Click-away surface implements it itself.
-   *
-   * What the tests here pin is this handler's logic given the values it reads, by spying
-   * `document.activeElement` rather than moving focus into a real cross-origin iframe — which jsdom
-   * has no way to reproduce. So the load-bearing assumption, that Electron has already moved focus
-   * to the `<iframe>` element by the time `blur` fires on this window, is asserted from the spec
-   * and not observed. It needs one manual pass in a Studio build with a scripture-editor WebView
-   * open.
-   */
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const handleWindowBlur = () => {
-      // The whole window lost focus, not a crossing within the page.
-      if (!document.hasFocus()) return;
-      const contentEl = popoverContentRef.current;
-      const focusedEl = document.activeElement;
-      // Nothing to measure against, so there is no evidence focus went anywhere foreign.
-      if (!contentEl || !focusedEl) return;
-      // For a cross-origin WebView the element holding focus is the `<iframe>` itself.
-      if (contentEl.contains(focusedEl)) return;
-      setIsOpen(false);
-    };
-    window.addEventListener('blur', handleWindowBlur);
-    return () => window.removeEventListener('blur', handleWindowBlur);
-  }, [isOpen]);
+    isCancelPromptOpenRef.current = false;
+  }, [status, runEpoch]);
 
   // Re-arm Cancel each time the popover is reopened, so a rejected-then-abandoned attempt doesn't
-  // leave the button dead for the rest of the session. Not while a cancel is still pending, though:
-  // that would produce an enabled button reading "Cancelling…" which fires a second request.
+  // leave the button dead for the rest of the session. Not while a cancel is still pending or its
+  // prompt is still open, though: that would let a second click send a second request.
   const handleOpenChange = useCallback(
     (nextIsOpen: boolean) => {
       setIsOpen(nextIsOpen);
-      if (nextIsOpen && !isCancelling) setIsCancelEnabled(true);
+      if (nextIsOpen && !isCancelling && !isCancelPromptOpenRef.current) setIsCancelEnabled(true);
     },
     [isCancelling],
   );
@@ -398,6 +448,7 @@ export function SyncStatusButton() {
     if (wasCancelled) return localizedStrings['%toolbar_sync_status_cancelled%'];
     if (status === 'synced') return localizedStrings['%toolbar_sync_status_synced%'];
     if (status === 'failed') return localizedStrings['%toolbar_sync_status_failed%'];
+    if (status === 'unsynced') return localizedStrings['%toolbar_sync_status_unsynced%'];
     // `unknown` says so in the button's accessible name instead (see `buttonAccessibleName`): the
     // visible label is capped and truncates, so it carries the control's identity rather than its
     // status, and the icon carries the distinction visually.
@@ -419,6 +470,12 @@ export function SyncStatusButton() {
    * screen reader read "Syncing HNF" and then "Syncing HNF, button" for a single change, and the
    * label churns as project names resolve, turning one sync into three announcements. Empty until
    * the strings load, so the region can never speak a raw `%key%` aloud.
+   *
+   * `unknown` and `unsynced` are announced only as the outcome of a sync the user watched: the hook
+   * keeps a just-synced project out of the unsynced count until the backend has rechecked it, so
+   * the first status after syncing is that sync's outcome. An `unsynced` that appears later,
+   * because of an edit, is not announced, and neither is its direction (see
+   * {@link isShowingSyncOutcomeRef}).
    */
   const [announcement, setAnnouncement] = useState('');
   /**
@@ -445,15 +502,22 @@ export function SyncStatusButton() {
    */
   const lastSeenStatusRef = useRef<SyncStatus | undefined>(undefined);
   /**
-   * Set when a sync the user was watching ended in "we cannot tell" while the region could not
-   * speak. Without it that transition is simply lost: by the time the strings load, `status` and
-   * the previous status are both `unknown`, which is indistinguishable from an `unknown` nobody was
-   * waiting on — the one case this region deliberately stays quiet about.
+   * Whether the status shown now is the outcome of a sync this button watched: true from the status
+   * leaving `syncing` until the status changes again, false while syncing and for a status that
+   * arrived some other way. Deliberately stays set while that status shows — it is not cleared once
+   * spoken — so a locale switch re-announces the outcome in the new language. The hook keeps a
+   * project the sync just exchanged out of the unsynced count until the backend has rechecked it,
+   * so the first status after a sync IS that sync's outcome — and `unknown` and `unsynced` are
+   * announced only as that outcome. An `unknown` nobody was waiting on, or an `unsynced` that
+   * appears later because of an edit, stays silent. Updated on every run of the effect below,
+   * including the silent runs before the strings load, so a transition that happens while the
+   * region cannot speak is not lost: by the time the strings load, the previous status no longer
+   * shows it.
    */
-  const hasUnspokenSyncEndedUnknownRef = useRef(false);
+  const isShowingSyncOutcomeRef = useRef(false);
 
   // Names every string the announcement can be built from, so a locale change is a change to this
-  // key. Not memoized: it is a join of five strings, and the effect below reads it on every render
+  // key. Not memoized: it is a join of six strings, and the effect below reads it on every render
   // anyway.
   const announcementStringsKey = [
     localizedStrings['%toolbar_sync_status_syncing%'],
@@ -461,17 +525,19 @@ export function SyncStatusButton() {
     localizedStrings['%toolbar_sync_status_cancelled%'],
     localizedStrings['%toolbar_sync_status_failed%'],
     localizedStrings['%toolbar_sync_status_unknown%'],
+    localizedStrings['%toolbar_sync_status_unsynced%'],
   ].join('\u0000');
 
   useEffect(() => {
     const previousStatus = lastSeenStatusRef.current;
     lastSeenStatusRef.current = status;
-    // A sync the user was watching ending in "we cannot tell" IS worth saying; `idle`, and an
-    // `unknown` nobody was waiting on, are not transitions worth interrupting a screen reader for.
-    // Recorded whether or not it can be spoken yet.
-    if (status === 'unknown' && previousStatus === 'syncing')
-      hasUnspokenSyncEndedUnknownRef.current = true;
-    if (status !== 'unknown') hasUnspokenSyncEndedUnknownRef.current = false;
+    // A sync the user was watching ending in "we cannot tell" or with changes left to exchange IS
+    // worth saying; `idle`, and an `unknown` or `unsynced` nobody was waiting on, are not
+    // transitions worth interrupting a screen reader for. Recorded whether or not it can be spoken
+    // yet.
+    if (status === 'syncing') isShowingSyncOutcomeRef.current = false;
+    else if (previousStatus === 'syncing') isShowingSyncOutcomeRef.current = true;
+    else if (status !== previousStatus) isShowingSyncOutcomeRef.current = false;
 
     // Silent until the strings load, so the region can never speak a raw `%key%`. No announcement
     // state is recorded either: nothing was said, so there is nothing to compare a later run against.
@@ -503,19 +569,42 @@ export function SyncStatusButton() {
       setAnnouncement(localizedStrings['%toolbar_sync_status_failed%']);
       return;
     }
-    if (status === 'unknown' && hasUnspokenSyncEndedUnknownRef.current) {
+    if (status === 'unknown' && isShowingSyncOutcomeRef.current) {
       setAnnouncement(localizedStrings['%toolbar_sync_status_unknown%']);
+      return;
+    }
+    // No direction is spoken: the visible surfaces and the button's accessible name carry it.
+    if (status === 'unsynced' && isShowingSyncOutcomeRef.current) {
+      setAnnouncement(localizedStrings['%toolbar_sync_status_unsynced%']);
       return;
     }
     setAnnouncement('');
   }, [status, areStringsLoaded, wasCancelled, localizedStrings, announcementStringsKey]);
 
   /**
-   * The button's accessible name, supplied only for `unknown`. `idle` and `unknown` share one
-   * visible label — the label is capped and truncates, so it names the control rather than the
-   * status — which would otherwise leave the difference between them carried only by an
-   * `aria-hidden` icon, and a screen-reader user hearing "Sync, button" for both. That collapses
-   * the very distinction `unknown` exists to draw.
+   * The words that complete the button's accessible name, for the two states whose difference from
+   * the visible label would otherwise live only in an `aria-hidden` icon.
+   *
+   * `idle` and `unknown` share one visible label — the label is capped and truncates, so it names
+   * the control rather than the status — so a screen-reader user would hear "Sync, button" for
+   * both. That collapses the very distinction `unknown` exists to draw. `unsynced` has one label
+   * for three icons (send, receive, both), so the direction would be sighted-only; it is spoken as
+   * the same wording the popover's headings use. A missing direction takes the send wording,
+   * matching the send icon the button falls back to.
+   */
+  const buttonStatusDetail = (() => {
+    if (status === 'unknown') return localizedStrings['%toolbar_sync_status_unknown%'];
+    if (status !== 'unsynced') return undefined;
+    if (unsyncedDirection === 'receive') {
+      return localizedStrings['%toolbar_sync_status_unsynced_receive%'];
+    }
+    if (unsyncedDirection === 'both')
+      return localizedStrings['%toolbar_sync_status_unsynced_both%'];
+    return localizedStrings['%toolbar_sync_status_unsynced_send%'];
+  })();
+
+  /**
+   * The button's accessible name, supplied for the states {@link buttonStatusDetail} describes.
    *
    * The visible label is KEPT as the first half rather than replaced. An `aria-label` overrides the
    * accessible name wholesale, so naming the button only for its status leaves no overlap between
@@ -530,11 +619,8 @@ export function SyncStatusButton() {
    * underscore status underscore unknown percent, button". The live region beside it is explicitly
    * guarded against the same thing.
    */
-  const unknownStatusText = localizedStrings['%toolbar_sync_status_unknown%'];
   const buttonAccessibleName =
-    status === 'unknown' && areStringsLoaded && unknownStatusText
-      ? `${buttonLabel} — ${unknownStatusText}`
-      : undefined;
+    areStringsLoaded && buttonStatusDetail ? `${buttonLabel} — ${buttonStatusDetail}` : undefined;
 
   /**
    * The progress line for the running sync, or `undefined` when there is nothing to say.
@@ -556,6 +642,9 @@ export function SyncStatusButton() {
       percent: Math.round(syncProgress.fraction * 100),
     });
   })();
+
+  const unsyncedToSend = unsyncedProjects.filter((project) => project.direction !== 'receive');
+  const unsyncedToReceive = unsyncedProjects.filter((project) => project.direction !== 'send');
 
   const popoverStatusMessage = (() => {
     if (status === 'synced') return localizedStrings['%toolbar_sync_popover_synced%'];
@@ -643,6 +732,33 @@ export function SyncStatusButton() {
                   {status === 'idle' && (
                     <RefreshCw className="tw:h-4 tw:w-4 tw:shrink-0" aria-hidden />
                   )}
+                  {status === 'unsynced' && unsyncedDirection === 'receive' && (
+                    <CircleArrowDown
+                      data-testid="toolbar-sync-unsynced-icon-receive"
+                      className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-primary"
+                      aria-hidden
+                    />
+                  )}
+                  {status === 'unsynced' && unsyncedDirection === 'both' && (
+                    <ArrowDownUp
+                      data-testid="toolbar-sync-unsynced-icon-both"
+                      className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-primary"
+                      aria-hidden
+                    />
+                  )}
+                  {/*
+                   * The real hook always reports a direction with `unsynced`; the send icon is the
+                   * fallback for a consumer or mock that omits it, so the icon never blinks out.
+                   */}
+                  {status === 'unsynced' &&
+                    unsyncedDirection !== 'receive' &&
+                    unsyncedDirection !== 'both' && (
+                      <CircleArrowUp
+                        data-testid="toolbar-sync-unsynced-icon-send"
+                        className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-primary"
+                        aria-hidden
+                      />
+                    )}
                   {status === 'unknown' && (
                     <CircleHelp
                       className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
@@ -670,7 +786,6 @@ export function SyncStatusButton() {
          */}
         <PopoverContent
           align="end"
-          ref={popoverContentRef}
           // Withheld until the strings load, for the same reason as `buttonAccessibleName`: an
           // `aria-label` of `%toolbar_sync_open_status%` would be spoken verbatim.
           aria-label={areStringsLoaded ? localizedStrings['%toolbar_sync_open_status%'] : undefined}
@@ -681,31 +796,10 @@ export function SyncStatusButton() {
             </PopoverTitle>
           </PopoverHeader>
           <div className="tw:flex tw:flex-col tw:gap-2 tw:px-2 tw:pb-1">
-            {status === 'syncing' ? (
+            {status === 'syncing' && (
               <>
                 {syncingProjects.length > 0 ? (
-                  // Tailwind's reset strips list semantics in Safari; role="list" re-establishes
-                  // them for VoiceOver, as `first-run/steps/sync-progress.component.tsx` documents.
-                  // eslint-disable-next-line jsx-a11y/no-redundant-roles
-                  <ul
-                    role="list"
-                    data-testid="toolbar-sync-popover-projects"
-                    className="tw:text-sm"
-                  >
-                    {syncingProjects.map((project) => (
-                      // Keyed on the id, not the name: two projects can share a name, and a name
-                      // falls back to the id only when its metadata couldn't be read.
-                      // `data-project-id` because two projects can share a display name, which
-                      // makes the rendered rows indistinguishable from each other otherwise.
-                      <li
-                        key={project.projectId}
-                        data-project-id={project.projectId}
-                        className="tw:truncate"
-                      >
-                        {project.name}
-                      </li>
-                    ))}
-                  </ul>
+                  <ProjectList projects={syncingProjects} />
                 ) : (
                   <p className="tw:text-sm">{localizedStrings['%toolbar_sync_status_syncing%']}</p>
                 )}
@@ -752,23 +846,84 @@ export function SyncStatusButton() {
                     : localizedStrings['%toolbar_sync_cancel%']}
                 </Button>
               </>
-            ) : (
-              <p data-testid="toolbar-sync-popover-status" className="tw:text-sm">
-                {popoverStatusMessage}
-              </p>
+            )}
+            {status === 'unsynced' && (
+              <>
+                {/*
+                 * A project with changes in both directions appears under both headings. The names
+                 * resolve after the status does, so both groups can be empty for a moment.
+                 */}
+                {unsyncedToSend.length > 0 && (
+                  <>
+                    <p id="toolbar-sync-popover-heading-send" className="tw:text-sm">
+                      {localizedStrings['%toolbar_sync_popover_unsynced_send%']}
+                    </p>
+                    <ProjectList
+                      projects={unsyncedToSend}
+                      testId="toolbar-sync-popover-projects-send"
+                      labelledBy="toolbar-sync-popover-heading-send"
+                    />
+                  </>
+                )}
+                {unsyncedToReceive.length > 0 && (
+                  <>
+                    <p id="toolbar-sync-popover-heading-receive" className="tw:text-sm">
+                      {localizedStrings['%toolbar_sync_popover_unsynced_receive%']}
+                    </p>
+                    <ProjectList
+                      projects={unsyncedToReceive}
+                      testId="toolbar-sync-popover-projects-receive"
+                      labelledBy="toolbar-sync-popover-heading-receive"
+                    />
+                  </>
+                )}
+              </>
+            )}
+            {status !== 'syncing' && status !== 'unsynced' && (
+              <>
+                <p data-testid="toolbar-sync-popover-status" className="tw:text-sm">
+                  {popoverStatusMessage}
+                </p>
+                {/*
+                 * Says why the link below it is inert, rather than leaving the user to work out
+                 * that the one control on offer does nothing. The verdict above is still the whole
+                 * truth about the sync; what is missing is the per-project detail behind it.
+                 */}
+                {isVerdictFromBackendOnly && (
+                  <p
+                    id={noDetailsHintId}
+                    data-testid="toolbar-sync-popover-no-details"
+                    className="tw:text-xs tw:text-muted-foreground"
+                  >
+                    {localizedStrings['%toolbar_sync_popover_no_details%']}
+                  </p>
+                )}
+              </>
             )}
             {/*
              * The way through to per-project conflicts, failure messages and warnings. This compact
              * surface deliberately reports only whether a sync is running and whether it succeeded;
              * the sync status web view is the only place the detail behind a failure exists, so
              * without this link a failed sync would be reported with nowhere to go.
+             *
+             * Inert when the verdict came from the backend's own signal, because that view shows
+             * send/receive's last results — a DIFFERENT sync — so following it would answer "what
+             * happened?" with an unrelated sync's detail.
+             *
+             * `aria-disabled` rather than unmounting, for the same reason Cancel above uses it: this
+             * popover updates live, so a verdict arriving while the user is in it would otherwise
+             * remove the control under them and drop focus to `<body>`, and the next Tab would
+             * restart from the top of the document.
              */}
             <Button
               data-testid="toolbar-sync-view-details-button"
               variant="link"
               size="sm"
-              className="tw:h-6 tw:self-start tw:px-0"
-              onClick={handleViewDetails}
+              className="tw:h-6 tw:self-start tw:px-0 tw:aria-disabled:pointer-events-none tw:aria-disabled:opacity-50"
+              aria-disabled={isVerdictFromBackendOnly}
+              // A screen reader announces the link as disabled; this tells it why.
+              aria-describedby={isVerdictFromBackendOnly ? noDetailsHintId : undefined}
+              onClick={isVerdictFromBackendOnly ? undefined : handleViewDetails}
             >
               {localizedStrings['%toolbar_sync_view_details%']}
             </Button>

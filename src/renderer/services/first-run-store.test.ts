@@ -1,23 +1,39 @@
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import { settingsService } from '@shared/services/settings.service';
+import * as commandService from '@shared/services/command.service';
 import { getCurrentLocale } from 'platform-bible-utils';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import * as resolver from './resolve-registration-validity';
 import { RegistrationValidity } from './first-run.model';
 import {
+  getRegistrationValidity,
+  resetRegistrationValidityStore,
+} from './registration-validity-store';
+import {
+  clearFirstRunLocalState,
   completeFirstRun,
   continueWithoutRegistration,
+  declineFirstRunSync,
   getFirstRunStatus,
+  haveInternetSettingsChanged,
   markJustRegistered,
+  markWizardRestarting,
+  noteInternetSettingsLoaded,
+  noteInternetSettingsSaved,
   resetFirstRunStore,
   resolveFirstRunState,
   retryFirstRunResolution,
 } from './first-run-store';
+import { askForInternetUseChoiceIfNeeded } from './internet-use-choice-store';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn(), set: vi.fn() },
 }));
+// `paratextRegistration.isRegistrationCopiedFromParatext9` and `paratextBibleSendReceive.isAvailable`
+// are sent from this store. A bare resolved value answers both; see stubSendReceive to tell them apart.
+vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -25,9 +41,15 @@ vi.mock('./resolve-registration-validity', () => ({
   REGISTRATION_RESOLVE_TIMEOUT_MS: 15000,
   resolveRegistrationValidity: vi.fn(),
 }));
+vi.mock('@shared/services/data-provider.service', () => ({
+  dataProviderService: { get: vi.fn() },
+}));
 vi.mock('@shared/services/localization.service', () => ({
   localizationService: { getSetupDialogLanguages: vi.fn() },
 }));
+// What the Power-mode question does is covered by internet-use-choice-store.test.ts; here only
+// whether startup asks it.
+vi.mock('./internet-use-choice-store', () => ({ askForInternetUseChoiceIfNeeded: vi.fn() }));
 vi.mock('platform-bible-utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('platform-bible-utils')>()),
   getCurrentLocale: vi.fn(() => 'en-US'),
@@ -39,13 +61,27 @@ const mockResolveReg = vi.mocked(resolver.resolveRegistrationValidity);
 const mockGetCurrentLocale = vi.mocked(getCurrentLocale);
 const mockGetSetupDialogLanguages = vi.mocked(localizationService.getSetupDialogLanguages);
 const mockLogger = vi.mocked(logger);
+const mockSendCommand = vi.mocked(commandService.sendCommand);
+const mockAskForInternetUseChoice = vi.mocked(askForInternetUseChoiceIfNeeded);
+const mockGetDataProvider = vi.mocked(dataProviderService.get);
 
 /** SettingsService.get is keyed; return the right value per setting. */
 function stubSettings({
   mode = 'simple',
   firstRunComplete = false,
   showReminder,
-}: { mode?: string; firstRunComplete?: boolean; showReminder?: boolean } = {}) {
+  interfaceLanguage,
+  firstSyncState = 'unknown',
+  internetUseChoiceAsked = false,
+}: {
+  mode?: string;
+  firstRunComplete?: boolean;
+  showReminder?: boolean;
+  interfaceLanguage?: string[];
+  /** An `Error` makes the read throw it. */
+  firstSyncState?: string | Error;
+  internetUseChoiceAsked?: boolean;
+} = {}) {
   // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable to
   // the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
   // setting this store reads has a case above (no member of SettingTypes admits undefined).
@@ -53,9 +89,22 @@ function stubSettings({
     if (key === 'platform.interfaceMode') return mode;
     if (key === 'platform.firstRunComplete') return firstRunComplete;
     if (key === 'platform.showRegistrationReminderOnStartup') return showReminder;
-    // Intentionally leave platform.interfaceLanguage undefined to exercise the 'en' fallback in currentPrimary derivation.
+    // Left undefined unless a test sets it, to exercise the seed's handling of an unset value.
+    if (key === 'platform.interfaceLanguage') return interfaceLanguage;
+    if (key === 'platform.firstSyncState') {
+      if (firstSyncState instanceof Error) throw firstSyncState;
+      return firstSyncState;
+    }
+    if (key === 'platform.internetUseChoiceAsked') return internetUseChoiceAsked;
     return undefined;
   });
+}
+
+/** Answers that the registration was copied from Paratext 9, and every other command `false`. */
+function stubRegistrationCopiedFromParatext9() {
+  mockSendCommand.mockImplementation(
+    async (command: string) => command === 'paratextRegistration.isRegistrationCopiedFromParatext9',
+  );
 }
 
 // This suite deliberately uses the real (jsdom) localStorage rather than a mock: the cache
@@ -69,7 +118,15 @@ beforeEach(() => {
   localStorage.clear();
   // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
   mockSet.mockResolvedValue(undefined);
+  // clearAllMocks keeps implementations, so a rejection set by one test would leak into the next.
+  mockSendCommand.mockReset();
+  // Registration entered in Platform.Bible unless a test says it came from Paratext 9.
+  mockSendCommand.mockResolvedValue(false);
   resetFirstRunStore();
+  // Required, not hygiene: the gate now resolves registration through the shared store, which caches
+  // a definitive answer for the session. Without this reset a value cached by one test would be
+  // reused by the next, which would silently stop probing and make `mockResolveReg` assertions lie.
+  resetRegistrationValidityStore();
 });
 afterEach(() => localStorage.clear());
 
@@ -81,6 +138,20 @@ describe('resolveFirstRunState', () => {
     expect(mockResolveReg).not.toHaveBeenCalled();
   });
 
+  it('asks a power-mode user for an internet-use choice, since the wizard never does', async () => {
+    stubSettings({ mode: 'power' });
+    await resolveFirstRunState();
+    expect(mockAskForInternetUseChoice).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the internet-use question to the wizard in simple mode', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard' });
+    expect(mockAskForInternetUseChoice).not.toHaveBeenCalled();
+  });
+
   it('shows the app when first run is already complete', async () => {
     stubSettings({ firstRunComplete: true, showReminder: false }); // suppress background recheck so this stays a unit test of the sync path only
     await resolveFirstRunState();
@@ -88,20 +159,47 @@ describe('resolveFirstRunState', () => {
     expect(mockResolveReg).not.toHaveBeenCalled();
   });
 
-  it('silently completes for a pre-existing registered user (no wizard)', async () => {
+  it('shows the full wizard to a user whose registration was copied from Paratext 9', async () => {
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid'); // wizardActive is false (localStorage cleared)
+    stubRegistrationCopiedFromParatext9();
     await resolveFirstRunState();
-    expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
-    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(getFirstRunStatus()).toEqual({
+      kind: 'wizard',
+      step: 'language',
+      registrationValidAtStart: true,
+      registrationPreexisting: true,
+    });
+    // Only finishing the wizard completes first run — which is what gates auto-sync on startup.
+    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunComplete', expect.anything());
+    expect(localStorage.getItem('platform-bible.firstRunComplete')).not.toBe('true');
   });
 
   it('starts a fresh user at the language step and marks the wizard active', async () => {
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('invalid');
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toEqual({
+      kind: 'wizard',
+      step: 'language',
+      registrationValidAtStart: false,
+      registrationPreexisting: false,
+    });
     expect(localStorage.getItem('platform-bible.firstRunWizardActive')).toBe('true');
+  });
+
+  it('starts a registered user at the language step when a stale wizard-active flag is set', async () => {
+    // A wizard-active flag with no restart behind it — e.g. one left from an earlier run.
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('valid');
+    stubRegistrationCopiedFromParatext9();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'language',
+      registrationPreexisting: true,
+    });
   });
 
   it('continuing without setup supersedes a slow in-flight resolution (PT-4302)', async () => {
@@ -148,12 +246,73 @@ describe('resolveFirstRunState', () => {
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
   });
 
+  it('does not describe a registration entered in Platform.Bible as copied from Paratext 9', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('valid');
+
+    await resolveFirstRunState();
+
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextRegistration.isRegistrationCopiedFromParatext9',
+    );
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      registrationValidAtStart: true,
+      registrationPreexisting: false,
+    });
+  });
+
+  it('still starts the wizard, without the banner, when the copied-from check fails', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('valid');
+    mockSendCommand.mockRejectedValue(new Error('provider down'));
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'language',
+      registrationPreexisting: false,
+    });
+    expect(mockLogger.warn).toHaveBeenCalled();
+  });
+
+  it('resumes at sync consent after the wizard restarted to apply internet settings', async () => {
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    markWizardRestarting();
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('valid');
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    // One launch only: the flag is spent.
+    expect(localStorage.getItem('platform-bible.firstRunWizardRestarted')).toBe('false');
+  });
+
+  it('resumes at sync consent when the wizard restarted for internet settings and validity returns invalid (transient failure guard)', async () => {
+    // The restart is only offered with a registration that was valid moments earlier.
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    markWizardRestarting();
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      registrationValidAtStart: true,
+    });
+  });
+
   it('resumes at sync consent after the registration relaunch (wizardActive persisted)', async () => {
     localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid');
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'syncConsent' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
     expect(mockSet).not.toHaveBeenCalled(); // not completed yet
   });
 
@@ -163,7 +322,7 @@ describe('resolveFirstRunState', () => {
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('invalid'); // transient backend failure after restart
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'syncConsent' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
     // Flag must be consumed so it doesn't persist into a subsequent startup.
     expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
   });
@@ -175,7 +334,8 @@ describe('resolveFirstRunState', () => {
     mockResolveReg.mockResolvedValue('unknown');
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'error' });
-    // Flag is consumed regardless.
+    // The durable flag is spent on the first read so it can never leak into the next launch. The
+    // guard itself survives for the rest of THIS startup — see the retryFirstRunResolution suite.
     expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
   });
 
@@ -191,6 +351,13 @@ describe('resolveFirstRunState', () => {
     mockResolveReg.mockResolvedValue('invalid');
     await Promise.all([resolveFirstRunState(), resolveFirstRunState()]);
     expect(mockResolveReg).toHaveBeenCalledTimes(1);
+    // Assert the whole resolution ran once, not just that the probe was deduped: the shared
+    // registration-validity store dedupes the probe by itself, so a probe-count assertion alone
+    // passes even with this store's guard removed. resolveInternal's settings reads are the part
+    // only the guard can prevent from repeating — and with them, its durable writes.
+    expect(mockGet.mock.calls.filter(([key]) => key === 'platform.firstRunComplete')).toHaveLength(
+      1,
+    );
   });
 
   it('does not falsely gate a completed user when the setting read fails (no cache clobber)', async () => {
@@ -222,43 +389,409 @@ describe('resolveFirstRunState', () => {
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true); // self-heal retry
   });
 
-  it('re-persists platform.syncOnStartup when cache indicates a failed write', async () => {
-    // Reproduces the analogous failure for skipping sync: the wizard wrote the localStorage cache
-    // but settingsService.set threw. A subsequent launch finds firstRunComplete=true but
-    // syncOnStartup still true on disk — the self-heal must re-persist from the cache.
-    localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
-    stubSettings({ firstRunComplete: true, showReminder: false }); // suppress background recheck; focus on self-heal path
+  it('never touches platform.syncOnStartup for an already-completed user', async () => {
+    stubSettings({ firstRunComplete: true, showReminder: false }); // suppress background recheck
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).toHaveBeenCalledWith('platform.syncOnStartup', false);
-    // Cache cleared after success so subsequent startups skip the settings round-trip.
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
+    expect(mockGet).not.toHaveBeenCalledWith('platform.syncOnStartup');
+    expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
+  });
+});
+
+describe('first sync (Simple mode with Send/Receive available)', () => {
+  /**
+   * Answers `paratextBibleSendReceive.isAvailable` with `available` (or rejects with it), and the
+   * internet settings provider with `permittedInternetUse`.
+   */
+  function stubSendReceive({
+    available = true,
+    permittedInternetUse = 'Enabled',
+  }: {
+    available?: boolean | Error;
+    permittedInternetUse?: string | Error;
+  } = {}) {
+    mockSendCommand.mockImplementation(async (command: string) => {
+      if (command !== 'paratextBibleSendReceive.isAvailable') return false;
+      if (available instanceof Error) throw available;
+      return available;
+    });
+    mockGetDataProvider.mockResolvedValue({
+      getInternetSettings: vi.fn(async () => {
+        if (permittedInternetUse instanceof Error) throw permittedInternetUse;
+        return { permittedInternetUse };
+      }),
+    });
+  }
+
+  const pendingWrites = () =>
+    mockSet.mock.calls.filter(([key]) => key === 'platform.firstSyncState');
+
+  it('leaves a user who finished setup before the first-sync state existed in the app', async () => {
+    stubSettings({ firstRunComplete: true, firstSyncState: 'unknown', showReminder: false });
+    stubSendReceive();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(pendingWrites()).toEqual([]);
   });
 
-  it('does not re-persist platform.syncOnStartup when the setting is already persisted', async () => {
-    localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
-    // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable
-    // to the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
-    // setting this store reads has a case above (no member of SettingTypes admits undefined).
-    mockGet.mockImplementation(async (key: string) => {
-      if (key === 'platform.interfaceMode') return 'simple';
-      if (key === 'platform.firstRunComplete') return true;
-      if (key === 'platform.syncOnStartup') return false; // already persisted as false (skip)
-      if (key === 'platform.showRegistrationReminderOnStartup') return false; // suppress background recheck
-      return undefined;
+  it('reopens the wizard at the Sync step for a finished setup whose first sync is pending', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+    });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      firstSyncRequired: true,
+    });
+  });
+
+  it('shows the app to a finished setup whose first sync is pending but internet is off', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: false,
+    });
+    stubSendReceive({ permittedInternetUse: 'Disabled' });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('asks a finished setup whose first sync is pending to re-register when its registration is invalid', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: true,
+    });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(getFirstRunStatus()).toEqual({
+        kind: 'wizard',
+        step: 'identify',
+        allowContinueWithoutRegistration: true,
+      }),
+    );
+  });
+
+  it('shows the app to a finished setup whose first sync is pending and whose registration is invalid when the reminder is off', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: false,
+    });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(mockGet).toHaveBeenCalledWith('platform.showRegistrationReminderOnStartup'),
+    );
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+  });
+
+  it('starts an unfinished setup that can sync at the Sync step and records the first sync as pending', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      firstSyncRequired: true,
+    });
+    expect(mockSet).toHaveBeenCalledWith('platform.firstSyncState', 'pending');
+  });
+
+  it('does not mark a first sync that already succeeded as pending', async () => {
+    stubSettings({ firstSyncState: 'synced', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard' });
+    expect(getFirstRunStatus()).not.toHaveProperty('firstSyncRequired');
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('does not overwrite a first sync that succeeded while the wizard was starting', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    const stubbedGet = mockGet.getMockImplementation();
+    let firstSyncStateReads = 0;
+    // @ts-expect-error ts(2345) - as in stubSettings, a generic per-key return is not expressible here
+    mockGet.mockImplementation(async (key) => {
+      if (key !== 'platform.firstSyncState') return stubbedGet?.(key);
+      firstSyncStateReads += 1;
+      return firstSyncStateReads === 1 ? 'unknown' : 'synced';
     });
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
-    // Cache cleared even when no write was needed, to avoid future redundant reads.
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    expect(firstSyncStateReads).toBe(2);
+    expect(pendingWrites()).toEqual([]);
   });
 
-  it('does not attempt platform.syncOnStartup self-heal when cache says skip never happened', async () => {
-    stubSettings({ firstRunComplete: true, showReminder: false }); // suppress background recheck; focus on self-heal path
+  it('asks again after the registration probe when a cold start rejects the availability question', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockSendCommand.mockRejectedValueOnce(new Error('not registered yet'));
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toHaveLength(2);
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      firstSyncRequired: true,
+    });
+    expect(mockSet).toHaveBeenCalledWith('platform.firstSyncState', 'pending');
+  });
+
+  it('does not record the first sync as pending when the state cannot be re-read', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    const stubbedGet = mockGet.getMockImplementation();
+    let firstSyncStateReads = 0;
+    // @ts-expect-error ts(2345) - as in stubSettings, a generic per-key return is not expressible here
+    mockGet.mockImplementation(async (key) => {
+      if (key !== 'platform.firstSyncState') return stubbedGet?.(key);
+      firstSyncStateReads += 1;
+      if (firstSyncStateReads === 1) return 'unknown';
+      throw new Error('settings unavailable');
+    });
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    expect(firstSyncStateReads).toBe(2);
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('does not rewrite a first sync that is already pending', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+    });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('shows the app to a finished setup with a pending first sync when the registration probe cannot resolve', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: false,
+    });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('unknown');
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
+  });
+
+  it('re-checks the registration of a finished setup with a pending first sync when availability cannot be read', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: true,
+    });
+    stubSendReceive({ available: new Error('not registered yet') });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(getFirstRunStatus()).toEqual({
+        kind: 'wizard',
+        step: 'identify',
+        allowContinueWithoutRegistration: true,
+      }),
+    );
+  });
+
+  it('seeds the loading gate, not the app, for a finished setup whose first sync is pending', () => {
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    resetFirstRunStore(); // recomputes status from computeInitialStatus
+    expect(getFirstRunStatus()).toEqual({ kind: 'loading' });
+  });
+
+  it('remembers a pending first sync for the next launch', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).toBe('true');
+  });
+
+  it('forgets a pending first sync once the first sync has succeeded', async () => {
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    resetFirstRunStore();
+    stubSettings({ firstRunComplete: true, firstSyncState: 'synced', showReminder: false });
+    stubSendReceive();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).not.toBe('true');
+    resetFirstRunStore();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+  });
+
+  it('forgets a pending first sync when Send/Receive is not available', async () => {
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    stubSettings({ firstRunComplete: true, firstSyncState: 'pending', showReminder: false });
+    stubSendReceive({ available: false });
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).not.toBe('true');
+  });
+
+  it('reopens the Sync step for a finished setup whose first sync is pending when only the early availability question rejects', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+    });
+    stubSendReceive();
+    mockSendCommand.mockRejectedValueOnce(new Error('not registered yet'));
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toHaveLength(2);
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      firstSyncRequired: true,
+    });
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).toBe('true');
+  });
+
+  it('shows the app to a finished setup whose first sync is pending when availability cannot be read, and keeps it pending for the next launch', async () => {
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    resetFirstRunStore();
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: false,
+    });
+    stubSendReceive({ available: new Error('not registered yet') });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toHaveLength(2);
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(pendingWrites()).toEqual([]);
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).toBe('true');
+    resetFirstRunStore();
+    expect(getFirstRunStatus()).toEqual({ kind: 'loading' });
+  });
+
+  it('does not ask again when the registration probe cannot resolve either', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive({ available: new Error('not registered yet') });
+    mockResolveReg.mockResolvedValue('unknown');
+    await resolveFirstRunState();
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toHaveLength(1);
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+  });
+
+  it('shows the app to a finished setup that is not waiting for a first sync without asking whether Send/Receive is available', async () => {
+    stubSettings({ firstRunComplete: true, firstSyncState: 'synced', showReminder: false });
+    stubSendReceive();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toEqual([]);
+  });
+
+  it('treats unreadable internet settings as unable to sync', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive({ permittedInternetUse: new Error('provider down') });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+  });
+
+  it('starts an unfinished setup whose internet choice was never saved at the first step', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: false });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'language',
+      firstSyncRequired: true,
+    });
+    expect(mockSet).toHaveBeenCalledWith('platform.firstSyncState', 'pending');
+  });
+
+  it("keeps today's wizard when Send/Receive is not available", async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive({ available: false });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).not.toHaveProperty('firstSyncRequired');
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('still starts the wizard when the pending state cannot be saved', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    mockSet.mockImplementation(async (key) => {
+      if (key === 'platform.firstSyncState') throw new Error('disk full');
+      return true;
+    });
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    // Nothing was saved to bring the Sync step back, so the step must not say it will return.
+    expect(getFirstRunStatus()).not.toHaveProperty('firstSyncRequired');
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('firstSyncState'));
+  });
+
+  it('keeps the remembered pending first sync when the state cannot be read', async () => {
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    resetFirstRunStore();
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: new Error('settings unavailable'),
+      showReminder: false,
+    });
+    stubSendReceive();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).toBe('true');
   });
 });
 
@@ -276,7 +809,7 @@ describe('demo mode (PT-4219)', () => {
     localStorage.setItem(DEMO_MODE_KEY, 'true');
     resetFirstRunStore();
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
     // Demo must NOT dirty the wizard-active flag: leaving it set would misroute a later real
     // first-run on the same profile to the sync-consent resume step (code-review finding).
     expect(localStorage.getItem('platform-bible.firstRunWizardActive')).toBeNull();
@@ -290,7 +823,7 @@ describe('demo mode (PT-4219)', () => {
     localStorage.setItem('platform-bible.firstRunComplete', 'true');
     resetFirstRunStore();
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   it('seeds loading synchronously (never flashes the app from a stale completion cache)', () => {
@@ -303,11 +836,10 @@ describe('demo mode (PT-4219)', () => {
   it('completion reveals the app but persists nothing, so the demo re-runs next launch', async () => {
     localStorage.setItem(DEMO_MODE_KEY, 'true');
     resetFirstRunStore();
-    await completeFirstRun({ skippedStep: 'syncConsent' });
+    await completeFirstRun();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockSet).not.toHaveBeenCalled();
     expect(localStorage.getItem('platform-bible.firstRunComplete')).toBeNull();
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBeNull();
   });
 });
 
@@ -328,63 +860,36 @@ describe('completeFirstRun', () => {
     expect(localStorage.getItem('platform-bible.firstRunComplete')).toBe('true');
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
   });
+});
 
-  it('clears the sync-disabled cache hint after a successful syncOnStartup write', async () => {
-    // The hint is set before the write (crash recovery) and cleared once the write is confirmed.
-    // A stale 'true' hint would trigger a redundant self-heal read on every subsequent launch.
-    await completeFirstRun({ skippedStep: 'syncConsent' });
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
+describe('declineFirstRunSync', () => {
+  it('withholds automatic sync for the session before persisting completion', async () => {
+    await declineFirstRunSync();
+
+    expect(mockSendCommand).toHaveBeenCalledWith('platform.deferAutomaticSyncForSession');
+    expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
+    // Persisted completion opens every automatic sync gate, so the deferral must be recorded first.
+    expect(mockSendCommand.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSet.mock.invocationCallOrder[0],
+    );
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
   });
 
-  it('persists platform.syncOnStartup=false when sync consent is skipped', async () => {
-    await completeFirstRun({ skippedStep: 'syncConsent' });
-    expect(mockSet).toHaveBeenCalledWith('platform.syncOnStartup', false);
-  });
+  it('persists no sync preference, so the next launch syncs as usual', async () => {
+    // A persisted platform.syncOnStartup=false would disable startup sync on every later launch,
+    // with no way back from the wizard.
+    await declineFirstRunSync();
 
-  it('does not write platform.syncOnStartup when no step was skipped', async () => {
-    await completeFirstRun();
     expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
   });
 
-  it('clears the sync-disabled hint when no step was skipped', async () => {
-    // A stale hint (e.g. from devtools or a prior aborted skip flow) must not trigger the self-heal
-    // to set syncOnStartup=false on a user who completed without skipping.
-    localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
-    await completeFirstRun();
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
-  });
+  it('completes nothing when the deferral cannot be recorded', async () => {
+    mockSendCommand.mockRejectedValue(new Error('main process unavailable'));
 
-  it('writes firstRunComplete before syncOnStartup (crash-safe ordering)', async () => {
-    // A crash between the two writes must leave the wizard closed and sync enabled.
-    // If the order were swapped, an aborted session would permanently disable sync.
-    const callOrder: string[] = [];
-    // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
-    mockSet.mockImplementation(async (key: string) => {
-      callOrder.push(key);
-      return undefined;
-    });
+    await expect(declineFirstRunSync()).rejects.toThrow('main process unavailable');
 
-    await completeFirstRun({ skippedStep: 'syncConsent' });
-
-    const completeIdx = callOrder.indexOf('platform.firstRunComplete');
-    const skippedIdx = callOrder.indexOf('platform.syncOnStartup');
-    expect(completeIdx).toBeGreaterThanOrEqual(0);
-    expect(skippedIdx).toBeGreaterThanOrEqual(0);
-    expect(completeIdx).toBeLessThan(skippedIdx);
-  });
-
-  it('still completes first run even when persisting sync-disabled throws', async () => {
-    // Make the syncOnStartup write fail, but the firstRunComplete write succeed
-    // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
-    mockSet.mockImplementation(async (key: string) => {
-      if (key === 'platform.syncOnStartup') throw new Error('write failed');
-      return undefined;
-    });
-    await completeFirstRun({ skippedStep: 'syncConsent' });
-    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
-    expect(mockSet).toHaveBeenCalledWith('platform.syncOnStartup', false);
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('true');
+    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunComplete', true);
+    expect(localStorage.getItem('platform-bible.firstRunComplete')).toBeNull();
   });
 });
 
@@ -405,6 +910,11 @@ describe('retryFirstRunResolution', () => {
     await Promise.all([first, second]);
 
     expect(mockResolveReg).toHaveBeenCalledTimes(1);
+    // See the StrictMode test above: the probe count alone no longer proves the `resolving` guard
+    // works, because the shared store dedupes the probe regardless.
+    expect(mockGet.mock.calls.filter(([key]) => key === 'platform.firstRunComplete')).toHaveLength(
+      1,
+    );
   });
 
   it('reaches wizard status on a successful retry after an initial error', async () => {
@@ -415,7 +925,29 @@ describe('retryFirstRunResolution', () => {
 
     mockResolveReg.mockResolvedValue('invalid');
     await retryFirstRunResolution();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+  });
+
+  it('still guards a just-registered user when the transient invalid lands on the retry', async () => {
+    // The durable one-shot is spent by the first probe, which answers 'unknown' and so never uses
+    // it. The transient 'invalid' the flag exists to absorb then arrives on the retry — where,
+    // unguarded, it would send a user who just registered successfully back to the front of the
+    // wizard instead of resuming at sync consent.
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('unknown'); // backend not up yet → "couldn't verify" screen
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+    // The durable flag is still spent on the first read — it must not survive into the next launch.
+    expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
+
+    mockResolveReg.mockResolvedValue('invalid'); // the fluke the flag exists to absorb
+    await retryFirstRunResolution();
+
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    // The dot must agree with the gate rather than nag about the registration just fixed.
+    expect(getRegistrationValidity()).toBe('valid');
   });
 });
 
@@ -582,8 +1114,12 @@ describe('background registration re-check (completed simple-mode user)', () => 
     // Flag consumed on first launch.
     expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
 
-    // Simulate a new launch (flag already consumed — reads false this time).
+    // Simulate a new launch (flag already consumed — reads false this time). A real relaunch is a
+    // new process, so every piece of per-process module state has to be cleared — including the
+    // registration-validity store, whose whole job is to cache one probe per session. Leaving it
+    // would hand this second launch the first launch's suppressed 'valid' instead of re-probing.
     resetFirstRunStore();
+    resetRegistrationValidityStore();
     stubSettings({ firstRunComplete: true, showReminder: true });
     mockResolveReg.mockResolvedValue('invalid');
     await resolveFirstRunState();
@@ -606,6 +1142,7 @@ describe('resolveFirstRunState — power mode cache fallback (FIX 3)', () => {
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockResolveReg).not.toHaveBeenCalled();
+    expect(mockAskForInternetUseChoice).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -629,8 +1166,41 @@ describe('OS-language default on fresh first-run', () => {
     });
     await resolveFirstRunState();
     expect(mockSet).toHaveBeenCalledWith('platform.interfaceLanguage', ['km']);
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
+
+  test.each([[['en']], [[]]])(
+    'replaces the default value (%j) with the OS language',
+    async (interfaceLanguage) => {
+      stubSettings({ firstRunComplete: false, interfaceLanguage });
+      mockResolveReg.mockResolvedValue('invalid');
+      mockGetCurrentLocale.mockReturnValue('es-419');
+      mockGetSetupDialogLanguages.mockResolvedValue({
+        en: { autonym: 'English' },
+        es: { autonym: 'Español' },
+      });
+      await resolveFirstRunState();
+      expect(mockSet).toHaveBeenCalledWith('platform.interfaceLanguage', ['es']);
+    },
+  );
+
+  test.each([[['fr']], [['en', 'fr']], [['es', 'en']]])(
+    'keeps an interface language that is already set (%j) instead of the OS language',
+    async (interfaceLanguage) => {
+      stubSettings({ firstRunComplete: false, interfaceLanguage });
+      mockResolveReg.mockResolvedValue('invalid');
+      mockGetCurrentLocale.mockReturnValue('km-KH');
+      mockGetSetupDialogLanguages.mockResolvedValue({
+        en: { autonym: 'English' },
+        km: { autonym: 'ខ្មែរ' },
+      });
+      await resolveFirstRunState();
+      // Positive control: the seed path ran and read the current value.
+      expect(mockGet).toHaveBeenCalledWith('platform.interfaceLanguage');
+      expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+      expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+    },
+  );
 
   test('stays in English when the OS language does not qualify', async () => {
     stubSettings({ firstRunComplete: false });
@@ -645,7 +1215,7 @@ describe('OS-language default on fresh first-run', () => {
     // distinguishes "matcher rejected ja" from "seed never ran".
     expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   test('stays in English when only English qualifies (early-startup / minimal set)', async () => {
@@ -658,7 +1228,7 @@ describe('OS-language default on fresh first-run', () => {
     await resolveFirstRunState();
     expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   test('does not re-seed when reopening mid-wizard (wizard already active)', async () => {
@@ -675,7 +1245,7 @@ describe('OS-language default on fresh first-run', () => {
     // `!wizardActive` guard (not merely a non-matching locale) is what suppressed the write.
     expect(mockGetSetupDialogLanguages).not.toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   test('still starts the wizard if the OS-default lookup throws', async () => {
@@ -687,31 +1257,182 @@ describe('OS-language default on fresh first-run', () => {
     // Best-effort swallow: warn logged, no language write, wizard still starts.
     expect(mockLogger.warn).toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
-  test('skips the write when the OS match equals the current primary language (read as ["en"])', async () => {
-    stubSettings({ firstRunComplete: false });
+  test('skips the write when the best OS match is English, the default', async () => {
+    stubSettings({ firstRunComplete: false, interfaceLanguage: ['en'] });
     mockResolveReg.mockResolvedValue('invalid');
     mockGetCurrentLocale.mockReturnValue('en-US');
     mockGetSetupDialogLanguages.mockResolvedValue({
       en: { autonym: 'English' },
     });
-    // Override the stubSettings mock to return ['en'] for platform.interfaceLanguage.
-    // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable
-    // to the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
-    // setting this store reads has a case above (no member of SettingTypes admits undefined).
-    mockGet.mockImplementation(async (key: string) => {
-      if (key === 'platform.interfaceMode') return 'simple';
-      if (key === 'platform.firstRunComplete') return false;
-      if (key === 'platform.interfaceLanguage') return ['en'];
-      return undefined;
+    await resolveFirstRunState();
+    // Positive control: the seed ran (the lookup happened) but found nothing to change.
+    expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
+    expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+  });
+
+  test('never replaces a language the user already chose (e.g. after a developer reset)', async () => {
+    stubSettings({ firstRunComplete: false, interfaceLanguage: ['fr', 'en'] });
+    mockResolveReg.mockResolvedValue('valid');
+    mockGetCurrentLocale.mockReturnValue('km-KH');
+    mockGetSetupDialogLanguages.mockResolvedValue({
+      en: { autonym: 'English' },
+      fr: { autonym: 'Français' },
+      km: { autonym: 'ខ្មែរ' },
     });
     await resolveFirstRunState();
-    // Prove the seed ran (lookup happened)
-    expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
-    // but the skip fired because best 'en' === currentPrimary 'en' read from the real array
+    // Positive control: the seed path ran (it read the current language) and the wizard started.
+    expect(mockGet).toHaveBeenCalledWith('platform.interfaceLanguage');
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+  });
+
+  test('still replaces the default English with a qualifying OS language', async () => {
+    stubSettings({ firstRunComplete: false, interfaceLanguage: ['en'] });
+    mockResolveReg.mockResolvedValue('valid');
+    mockGetCurrentLocale.mockReturnValue('km-KH');
+    mockGetSetupDialogLanguages.mockResolvedValue({
+      en: { autonym: 'English' },
+      km: { autonym: 'ខ្មែរ' },
+    });
+    await resolveFirstRunState();
+    expect(mockSet).toHaveBeenCalledWith('platform.interfaceLanguage', ['km']);
+  });
+});
+
+describe('internet settings changed this run', () => {
+  const START = {
+    selectedServer: 'Production',
+    permittedInternetUse: 'Disabled',
+    proxyPort: 0,
+  } as const;
+  const CHANGED = { ...START, permittedInternetUse: 'Enabled' } as const;
+
+  it('is false until a saved value differs from the one first loaded', () => {
+    noteInternetSettingsLoaded(START);
+    expect(haveInternetSettingsChanged()).toBe(false);
+
+    noteInternetSettingsSaved(CHANGED);
+    expect(haveInternetSettingsChanged()).toBe(true);
+  });
+
+  it('is false again once the settings are changed back', () => {
+    noteInternetSettingsLoaded(START);
+    noteInternetSettingsSaved(CHANGED);
+
+    // The step reloads the saved value when it is shown again; that must not move the baseline.
+    noteInternetSettingsLoaded(CHANGED);
+    noteInternetSettingsSaved({ ...START });
+
+    expect(haveInternetSettingsChanged()).toBe(false);
+  });
+});
+
+describe('clearFirstRunLocalState', () => {
+  it('clears every first-run flag but leaves demo mode alone', () => {
+    const firstRunKeys = [
+      'platform-bible.firstRunComplete',
+      'platform-bible.firstSyncPending',
+      'platform-bible.firstRunWizardActive',
+      'platform-bible.firstRunJustRegistered',
+      'platform-bible.firstRunWizardRestarted',
+    ];
+    firstRunKeys.forEach((key) => localStorage.setItem(key, 'true'));
+    localStorage.setItem('platform-bible.firstRunDemoMode', 'true');
+
+    clearFirstRunLocalState();
+
+    // Names any key left behind, rather than just failing on a null check.
+    expect(firstRunKeys.filter((key) => typeof localStorage.getItem(key) === 'string')).toEqual([]);
+    expect(localStorage.getItem('platform-bible.firstRunDemoMode')).toBe('true');
+  });
+});
+
+describe('registration validity published to the shared store', () => {
+  it('publishes the probe result so registration-dependent UI agrees with the gate', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+    expect(getRegistrationValidity()).toBe('invalid');
+  });
+
+  it("publishes 'valid' when the fresh-user path suppresses a just-registered transient 'invalid'", async () => {
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await resolveFirstRunState();
+
+    // The gate treated the transient as valid; the store must not contradict it and re-nag.
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    expect(getRegistrationValidity()).toBe('valid');
+  });
+
+  it("publishes 'valid' when the background re-check suppresses a just-registered transient 'invalid'", async () => {
+    stubSettings({ firstRunComplete: true, showReminder: true });
+    mockResolveReg.mockResolvedValue('invalid');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+
+    await resolveFirstRunState();
+    await vi.waitFor(() => expect(mockResolveReg).toHaveBeenCalled());
+
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    await vi.waitFor(() => expect(getRegistrationValidity()).toBe('valid'));
+  });
+
+  it("leaves the store at 'invalid' when the background re-check genuinely raises the wizard", async () => {
+    stubSettings({ firstRunComplete: true, showReminder: true });
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(getFirstRunStatus()).toEqual({
+        kind: 'wizard',
+        step: 'identify',
+        allowContinueWithoutRegistration: true,
+      }),
+    );
+
+    expect(getRegistrationValidity()).toBe('invalid');
+  });
+
+  it("publishes 'valid' when the reminder is suppressed and the user just re-registered", async () => {
+    stubSettings({ firstRunComplete: true, showReminder: false });
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+
+    await resolveFirstRunState();
+
+    // This path never probes, so nothing else can correct the toolbar's own transient 'invalid'.
+    // Without the publish the spent flag would leave the dot nagging about a fixed registration.
+    await vi.waitFor(() => expect(getRegistrationValidity()).toBe('valid'));
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockResolveReg).not.toHaveBeenCalled();
+    expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
+  });
+
+  it('leaves the store alone when the reminder is suppressed and nothing was just registered', async () => {
+    stubSettings({ firstRunComplete: true, showReminder: false });
+
+    await resolveFirstRunState();
+
+    expect(getRegistrationValidity()).toBe('unknown');
+    expect(mockResolveReg).not.toHaveBeenCalled();
+  });
+
+  it("leaves the store at 'unknown' when the probe cannot resolve, so no UI nags", async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('unknown');
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+    expect(getRegistrationValidity()).toBe('unknown');
   });
 });

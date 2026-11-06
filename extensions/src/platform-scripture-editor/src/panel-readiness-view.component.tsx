@@ -6,19 +6,24 @@ import {
   EmptyHeader,
   EmptyMedia,
 } from 'platform-bible-react';
-import { AlertTriangle, BookOpen, CloudOff } from 'lucide-react';
+import { BookOpen, CloudOff } from 'lucide-react';
 import { ReactNode } from 'react';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
-import { RetryableErrorView, LoadingView } from './panel-state-views.component';
+import {
+  PANEL_FILL_CLASSES,
+  PanelRetryableErrorView,
+  LoadingView,
+} from './panel-state-views.component';
 
 /**
  * Renders the front of a resource panel's state machine — everything before it has something to
  * display — from a single `readiness` value.
  *
  * Used by BOTH the Resource (Bible Texts / Commentaries) and Model Text panels, so neither can
- * drift from the other on the question that caused this bug. Keeping the states here also gives the
- * Resource panel its only testable seam for them: it lives entirely in a web view with no extracted
- * component.
+ * drift from the other on the question that caused this bug. Both panels have an extracted
+ * component (`resource-text-panel.component.tsx`, `model-text-panel.component.tsx`), so these
+ * states are reachable from a component test through either of them as well as from this view's own
+ * stories.
  *
  * Deciding these states inline is what went wrong in both panels: an empty prompt was rendered from
  * a value that was only meaningful once the data had arrived. Taking one `readiness` value makes
@@ -38,6 +43,9 @@ import { RetryableErrorView, LoadingView } from './panel-state-views.component';
  *   the settings error this one IS recoverable, so it is paired with a working retry.
  * @param loadingLabel Already-localized status text shown beside the loading spinner.
  * @param emptyPrompt Already-localized prompt shown when nothing is configured.
+ * @param moreInfo Optional disclosure rendered between the empty prompt and the pick button, for
+ *   panels whose prompt alone does not explain what the user is being asked to choose. Omitted
+ *   where the prompt is self-explanatory, so the empty state stays as short as it can be.
  * @param pickLabel Already-localized label for the resource picker button.
  * @param retryLabel Already-localized label for the catalog retry button.
  * @param onPick Opens the resource picker.
@@ -49,6 +57,7 @@ export function PanelReadinessView({
   catalogErrorMessage,
   loadingLabel,
   emptyPrompt,
+  moreInfo,
   pickLabel,
   retryLabel,
   onPick,
@@ -59,6 +68,7 @@ export function PanelReadinessView({
   catalogErrorMessage: ReactNode;
   loadingLabel: ReactNode;
   emptyPrompt: ReactNode;
+  moreInfo?: ReactNode;
   pickLabel: ReactNode;
   retryLabel: ReactNode;
   onPick: () => void;
@@ -67,23 +77,15 @@ export function PanelReadinessView({
   // An unreadable setting is its own answer — never the empty prompt, which would invite the user
   // to replace a resource that may already be configured.
   if (readiness === 'error') {
-    return (
-      <Empty className="tw:h-screen" role="alert">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <AlertTriangle />
-          </EmptyMedia>
-          <EmptyDescription>{errorMessage}</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
+    // No `onRetry`: nothing here can re-drive the setting read, so the view shows its message alone.
+    return <PanelRetryableErrorView message={errorMessage} />;
   }
 
   // A failed catalog fetch, unlike an unreadable setting, can genuinely be re-driven — so this
   // state gets a control and the settings error does not.
   if (readiness === 'catalogError') {
     return (
-      <RetryableErrorView
+      <PanelRetryableErrorView
         message={catalogErrorMessage}
         retryLabel={retryLabel}
         onRetry={onRetryCatalog}
@@ -96,7 +98,7 @@ export function PanelReadinessView({
 
   if (readiness === 'empty') {
     return (
-      <Empty className="tw:h-screen">
+      <Empty className={PANEL_FILL_CLASSES}>
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <BookOpen />
@@ -104,6 +106,9 @@ export function PanelReadinessView({
           <EmptyDescription>{emptyPrompt}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
+          {/* The disclosure sits above the button (PT-4262). A long expansion can push the button
+              below the fold; the panel's safe centering keeps it reachable by scrolling. */}
+          {moreInfo}
           <Button onClick={() => onPick()}>{pickLabel}</Button>
         </EmptyContent>
       </Empty>

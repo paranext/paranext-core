@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import type { IncomingMessage } from 'http';
 import {
   ConnectionStatus,
   createErrorResponse,
@@ -10,12 +11,16 @@ import {
   REGISTER_METHOD,
   RequestParams,
   requestWithRetry,
+  ServerSocketLike,
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
+  MAX_WEBSOCKET_PAYLOAD_BYTES,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import {
+  IRpcLocalClientAcceptor,
   IRpcMethodRegistrar,
+  IRpcWebSocketClientCloser,
   RegisteredRpcMethodDetails,
   RpcClientDisconnectEvent,
 } from '@shared/models/rpc.interface';
@@ -42,6 +47,26 @@ import { RpcEventRegistry } from './rpc-event-registry';
 export { RpcEventRegistry };
 
 /**
+ * How long to wait for the websocket server to bind before treating the attempt as failed. Generous
+ * against a healthy bind (sub-millisecond) — this exists to turn an indefinite hang into a logged
+ * failure, not to police a slow machine.
+ */
+const BIND_TIMEOUT_MS = 10_000;
+
+/**
+ * Handles an error the websocket server reports once it is already bound, so Node does not throw an
+ * uncaught exception for an unhandled `error` event.
+ *
+ * Distinct from the bind-time handler in `connect`, which decides whether binding succeeded; by the
+ * time this runs the server is listening and there is nothing left to report back to. Declared at
+ * module scope so adding and removing it use the same reference, and because it needs nothing from
+ * the instance.
+ */
+function onServerError(error: unknown): void {
+  logger.error(`PAPI websocket server error: ${getErrorMessage(error)}`);
+}
+
+/**
  * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
  * connects, an RpcServer is created in this same process to service that connection.
  *
@@ -52,7 +77,9 @@ export { RpcEventRegistry };
  *
  * Created by the main process on start up when the network service initializes
  */
-export class RpcWebSocketListener implements IRpcMethodRegistrar {
+export class RpcWebSocketListener
+  implements IRpcMethodRegistrar, IRpcLocalClientAcceptor, IRpcWebSocketClientCloser
+{
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
   /**
    * Event that fires when a connected process goes away, carrying the method names its departure
@@ -63,11 +90,18 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    * @experimental
    */
   readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Never fires here. Only a process holding a client connection can lose one; this end of the seam
+   * exists so shared code can subscribe in any process without asking which one it is running in.
+   *
+   * @experimental
+   */
+  readonly onDidLoseConnection: PlatformEvent<void>;
   private localEventHandler: EventHandler | undefined;
   private webSocketServer: WebSocketServer | undefined;
   private nextSocketNumber = 1;
   private readonly connectionMutex = new Mutex();
-  private readonly rpcServerBySocket = new Map<WebSocket, RpcServer>();
+  private readonly rpcServerBySocket = new Map<ServerSocketLike, RpcServer>();
   private readonly rpcMethodDetailsByMethodName = new Map<string, RegisteredRpcMethodDetails>();
   private readonly localMethodsByMethodName = new Map<string, InternalRequestHandler>();
   private readonly rpcEventDetailsByEventName = new RpcEventRegistry();
@@ -83,10 +117,17 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    */
   private readonly warnedForeignAnnouncements = new Set<string>();
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
+  private readonly connectionLostEmitter = new PlatformEventEmitter<void>();
 
-  constructor() {
+  /**
+   * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
+   *   overridden only by tests that need to bind a real socket without colliding with a running
+   *   app.
+   */
+  constructor(private readonly port: number = WEBSOCKET_PORT) {
     bindClassMethods.call(this);
     this.onDidDisconnectClient = this.clientDisconnectEmitter.event;
+    this.onDidLoseConnection = this.connectionLostEmitter.event;
   }
 
   get nextSocketId(): string {
@@ -96,8 +137,13 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   }
 
   connect(localEventHandler: EventHandler): Promise<boolean> {
-    return this.connectionMutex.runExclusive(() => {
+    return this.connectionMutex.runExclusive(async () => {
+      // TODO(PT-4495): `false` here means "already connected", but the bind-failure path below
+      // returns it too, and the caller cannot tell the benign case from the fatal one.
       if (this.connectionStatus !== ConnectionStatus.Disconnected) return false;
+      // Binding is asynchronous, so there is a real window where an attempt is in flight; report it
+      // rather than staying indistinguishable from "never started" until it finishes.
+      this.connectionStatus = ConnectionStatus.Connecting;
       this.localEventHandler = localEventHandler;
       this.registerMethod(GET_METHODS, this.generateOpenRpcSchema, {
         method: {
@@ -116,10 +162,90 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       // are unauthenticated and every registered method is callable over them, so the server must
       // never accept traffic arriving on a non-loopback interface. Bind by name rather than a
       // literal address: clients connect to `localhost` too, so both ends resolve through the same
-      // resolver and agree on the IP version, whichever the host prefers.
-      this.webSocketServer = new WebSocketServer({ host: 'localhost', port: WEBSOCKET_PORT });
-      this.webSocketServer.addListener('connection', this.onClientConnect);
-      this.webSocketServer.addListener('close', this.disconnect);
+      // resolver and agree on the IP version, whichever the host prefers. IPv4-vs-IPv6 mismatches
+      // between the two ends have been hit in practice, and external tools (websocat and the like)
+      // resolve on their own, so the hostname stays even though it defers the bind behind a DNS
+      // lookup and forces the `listening` wait below. See `adr-papi-websocket-hostname-bind`.
+      //
+      // This binding is also load-bearing for AGPL-3.0's network clause (section 13): loopback
+      // traffic never leaves the host, so it does not put a remote user "interacting with it ...
+      // through a computer network" in play. Making this address configurable would change what
+      // downstream licensees are exposed to, so treat that as a licensing decision, not just a
+      // networking one.
+      const webSocketServer = new WebSocketServer({
+        host: 'localhost',
+        port: this.port,
+        maxPayload: MAX_WEBSOCKET_PAYLOAD_BYTES,
+      });
+      this.webSocketServer = webSocketServer;
+      webSocketServer.addListener('connection', this.onClientConnect);
+      webSocketServer.addListener('close', this.disconnect);
+
+      // `new WebSocketServer` starts binding but does not finish synchronously, so the socket is
+      // not accepting yet. Wait for `listening` before reporting success: main spawns the
+      // extension host and opens windows as soon as this resolves, and those clients get refused
+      // by a socket that is not bound yet. On a cold start that window is wide enough to lose.
+      // main.ts's ordering (network service, then extension host) is only a real guarantee because
+      // of this wait, so reporting ready before the socket accepts reopens the bug three processes
+      // away.
+      const isListening = await new Promise<boolean>((resolve) => {
+        // `listen` resolves the hostname before it binds, so a wedged resolver can leave the server
+        // emitting neither `listening` nor `error`. Without a bound, `connect()` would never settle
+        // while holding the mutex, and main would sit forever before creating any window, with
+        // nothing logged. A healthy bind takes well under a millisecond, so this only fires when
+        // something is genuinely broken.
+        let bindTimeout: ReturnType<typeof setTimeout>;
+        const onListening = () => {
+          clearTimeout(bindTimeout);
+          webSocketServer.removeListener('error', onError);
+          // A bound server still needs an `error` listener for the rest of its life. `ws` forwards
+          // the underlying HTTP server's errors — an accept failing with EMFILE, say — and Node
+          // throws an uncaught exception when `error` is emitted with no listener. main's
+          // process-level `uncaughtException` handler catches that and logs it, but Node documents
+          // the process as being in an undefined state afterwards, and the line it produces names
+          // neither the socket nor the server. Handle it here so the failure stays local and says
+          // what it was.
+          webSocketServer.addListener('error', onServerError);
+          resolve(true);
+        };
+        function onError(error: unknown) {
+          // Settle before anything that could throw, and disarm the safety timer only once the
+          // attempt is already settled. Clearing it first inverts the guarantee it exists for: a
+          // throw in between would leave `connect()` unsettled inside the mutex with no timer left
+          // to settle it, and main waiting forever before it creates any window.
+          resolve(false);
+          clearTimeout(bindTimeout);
+          webSocketServer.removeListener('listening', onListening);
+          logger.error(`PAPI websocket server failed to bind: ${getErrorMessage(error)}`);
+        }
+        bindTimeout = setTimeout(() => {
+          webSocketServer.removeListener('listening', onListening);
+          webSocketServer.removeListener('error', onError);
+          logger.error(
+            `PAPI websocket server did not bind within ${BIND_TIMEOUT_MS}ms; giving up so startup can report the failure`,
+          );
+          resolve(false);
+        }, BIND_TIMEOUT_MS);
+        webSocketServer.once('listening', onListening);
+        webSocketServer.once('error', onError);
+      });
+
+      if (!isListening) {
+        // TODO(PT-4495): this rollback does not unwind the `GET_METHODS` registration above.
+        // Whether it should is part of settling what a failed connect is supposed to leave behind.
+        //
+        // Drop the `close` listener before closing. `ws` emits `close` on a later tick, so the
+        // hazard is not re-entrancy but staleness: left attached, the failed server's `close`
+        // arrives after a subsequent attempt has already bound and runs `disconnect` against the
+        // NEW server, closing it and reporting Disconnected while `connect()` returned true.
+        webSocketServer.removeListener('connection', this.onClientConnect);
+        webSocketServer.removeListener('close', this.disconnect);
+        webSocketServer.close();
+        this.webSocketServer = undefined;
+        this.localEventHandler = undefined;
+        this.connectionStatus = ConnectionStatus.Disconnected;
+        return false;
+      }
 
       this.connectionStatus = ConnectionStatus.Connected;
       return true;
@@ -131,6 +257,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       if (this.webSocketServer) {
         this.webSocketServer.removeListener('connection', this.onClientConnect);
         this.webSocketServer.removeListener('close', this.disconnect);
+        this.webSocketServer.removeListener('error', onServerError);
         this.webSocketServer.close();
         this.webSocketServer = undefined;
       }
@@ -228,6 +355,45 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
 
   async unregisterEvent(eventName: string): Promise<boolean> {
     return this.rpcEventDetailsByEventName.tryUnregister(this, eventName);
+  }
+
+  /**
+   * Start serving a caller-created socket as a client of main's RPC server. See
+   * {@link IRpcLocalClientAcceptor.acceptLocalClient}.
+   *
+   * @experimental
+   */
+  acceptLocalClient(socket: ServerSocketLike, name: string): void {
+    if (this.connectionStatus !== ConnectionStatus.Connected)
+      throw new Error(
+        `The PAPI network is not accepting clients (status ${this.connectionStatus})`,
+      );
+    // Only renderers connect this way, and a web view can drive its renderer's connection
+    this.serveClient(socket, name, false);
+    logger.info(`PAPI client ${name} connected over a local port`);
+  }
+
+  /**
+   * Close every client the websocket server accepted. See
+   * {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+   *
+   * @experimental
+   */
+  closeWebSocketClients(code: number, reason: string): void {
+    // `WebSocketServer.clients` holds exactly the sockets the server accepted; local clients never
+    // enter it. It is unreachable once `disconnect()` has cleared the server, so this has to run
+    // first. Copied before iterating because a socket's close handler removes it from the set.
+    const sockets = [...(this.webSocketServer?.clients ?? [])];
+    if (sockets.length === 0) return;
+    logger.info(`Closing ${sockets.length} PAPI websocket clients (${reason})`);
+    sockets.forEach((socket) => {
+      // One socket failing to close must not leave the others, possibly the data provider, open
+      try {
+        socket.close(code, reason);
+      } catch (error) {
+        logger.warn(`Could not close a PAPI websocket client: ${getErrorMessage(error)}`);
+      }
+    });
   }
 
   generateOpenRpcSchema(): OpenRpc {
@@ -488,21 +654,40 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
     );
   }
 
-  private onClientConnect(webSocket: WebSocket): void {
+  /**
+   * @param upgradeRequest The handshake request, which `ws` always passes. Without one the client
+   *   is treated as having sent `Origin`.
+   */
+  private onClientConnect(webSocket: WebSocket, upgradeRequest?: IncomingMessage): void {
     const socketId = this.nextSocketId;
-    const rpcServer = new RpcServer(
-      socketId,
+    // TODO(PT-2893): The Origin check is an insecure temporary stopgap; see RpcServer.processMessage
+    this.serveClient(
       webSocket,
+      socketId,
+      !!upgradeRequest && upgradeRequest.headers.origin === undefined,
+    );
+    // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
+    logger.info(`Websocket client ${socketId} connected`);
+  }
+
+  /** Attach an `RpcServer` to a socket and track it until the socket closes */
+  private serveClient(
+    socket: ServerSocketLike,
+    name: string,
+    isWebSocketWithoutOrigin: boolean,
+  ): void {
+    const rpcServer = new RpcServer(
+      name,
+      socket,
       this.propagateEvent,
       this.rpcMethodDetailsByMethodName,
       this.rpcEventDetailsByEventName,
       this.announceClientDisconnect,
+      isWebSocketWithoutOrigin,
     );
     rpcServer.connect();
-    this.rpcServerBySocket.set(webSocket, rpcServer);
-    // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
-    logger.info(`Websocket client ${socketId} connected`);
-    webSocket.addEventListener('close', this.onClientDisconnect);
+    this.rpcServerBySocket.set(socket, rpcServer);
+    socket.addEventListener('close', this.onClientDisconnect);
   }
 
   // Run by an RpcServer once it has removed its client's methods from the registry
@@ -522,7 +707,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   private onClientDisconnect(ev: CloseEvent): void {
     // Assert the correct type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const webSocket = ev.target as WebSocket;
+    const webSocket = ev.target as unknown as ServerSocketLike;
     webSocket.removeEventListener('close', this.onClientDisconnect);
     if (!this.rpcServerBySocket.delete(webSocket)) {
       logger.warn('Close called on a websocket, but no rpc server handler was found for it');

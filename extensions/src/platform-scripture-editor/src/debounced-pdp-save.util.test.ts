@@ -1,6 +1,12 @@
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { describe, expect, it, vi } from 'vitest';
-import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
+import {
+  editorHoldsUnsavedChanges,
+  isEditorContentForChapter,
+  performDebouncedPdpSave,
+  resolveUsjToSaveToPdp,
+  withoutZeroWidthNoBreakSpaces,
+} from './debounced-pdp-save.util';
 
 const usjWith = (text: string): Usj => ({
   type: 'USJ',
@@ -177,6 +183,11 @@ describe('performDebouncedPdpSave — settled-snapshot replay (no re-derivation 
 });
 
 describe('resolveUsjToSaveToPdp', () => {
+  it('skips a save that only adds direction marks, but saves a real change', () => {
+    expect(resolveUsjToSaveToPdp(usjWith('tell\u200E them'), usjWith('tell them'))).toBeUndefined();
+    expect(resolveUsjToSaveToPdp(usjWith('tell\u200F thEm'), usjWith('tell them'))).toBeDefined();
+  });
+
   it('returns undefined when the editor content matches the PDP except for whitespace', () => {
     expect(resolveUsjToSaveToPdp(usjWith('tell them'), usjWith('tell  them'))).toBeUndefined();
   });
@@ -185,6 +196,107 @@ describe('resolveUsjToSaveToPdp', () => {
     expect(resolveUsjToSaveToPdp(usjWith('tell them'), usjWith('tell us'))).toEqual(
       usjWith('tell them'),
     );
+  });
+});
+
+// A stored U+FEFF goes the way Paratext 9's editor save takes it: out of what a user's edit rewrites,
+// and only then. It never counts as a change itself, so opening a chapter writes nothing and the
+// echo of a save that dropped one, whose text no longer matches the editor's, asks for no new write.
+describe('resolveUsjToSaveToPdp — a zero-width no-break space the chapter already holds', () => {
+  it('writes nothing for a chapter nobody edited', () => {
+    const stored = usjWith('in a\uFEFFshes');
+    expect(resolveUsjToSaveToPdp(stored, stored)).toBeUndefined();
+  });
+
+  it('drops it from the document an edit saves, and keeps every other character', () => {
+    const others = '\u00A0\u200B\u200C\u200D\u2060\u202F\u2009\u200E\u200F\u00AD~';
+    expect(
+      resolveUsjToSaveToPdp(usjWith(`edited${others} a\uFEFFshes`), usjWith(`in a\uFEFFshes`)),
+    ).toEqual(usjWith(`edited${others} ashes`));
+  });
+
+  it('writes nothing once the save that dropped it has come back', () => {
+    expect(resolveUsjToSaveToPdp(usjWith('in a\uFEFFshes'), usjWith('in ashes'))).toBeUndefined();
+  });
+
+  it('saves an edit undone back to the text as it was opened, without the character', () => {
+    expect(resolveUsjToSaveToPdp(usjWith('in a\uFEFFshes'), usjWith('in ashes!'))).toEqual(
+      usjWith('in ashes'),
+    );
+  });
+});
+
+describe('withoutZeroWidthNoBreakSpaces', () => {
+  it('reaches the text of nested markers and leaves everything else as it is', () => {
+    const usj: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'chapter', marker: 'c', number: '3', sid: 'JON 3' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            '\uFEFFone',
+            { type: 'verse', marker: 'v', number: '1', sid: 'JON 3:1' },
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [{ type: 'char', marker: 'ft', content: ['no\uFEFFte'] }],
+            },
+          ],
+        },
+      ],
+    };
+    expect(withoutZeroWidthNoBreakSpaces(usj)).toEqual({
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'chapter', marker: 'c', number: '3', sid: 'JON 3' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            'one',
+            { type: 'verse', marker: 'v', number: '1', sid: 'JON 3:1' },
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [{ type: 'char', marker: 'ft', content: ['note'] }],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('removes a text that held nothing else', () => {
+    expect(withoutZeroWidthNoBreakSpaces(usjWith('\uFEFF')).content).toEqual([
+      { type: 'para', marker: 'p', content: [] },
+    ]);
+  });
+
+  it('does not change the document it is given', () => {
+    const usj = usjWith('a\uFEFFb');
+    withoutZeroWidthNoBreakSpaces(usj);
+    expect(usj).toEqual(usjWith('a\uFEFFb'));
+  });
+});
+
+describe('editorHoldsUnsavedChanges', () => {
+  it('is false for the document just saved, with or without the characters the save dropped', () => {
+    expect(editorHoldsUnsavedChanges(usjWith('ashes'), usjWith('ashes'))).toBe(false);
+    expect(editorHoldsUnsavedChanges(usjWith('a\uFEFFshes'), usjWith('ashes'))).toBe(false);
+  });
+
+  it('is true when the editor has moved on', () => {
+    expect(editorHoldsUnsavedChanges(usjWith('a\uFEFFshes!'), usjWith('ashes'))).toBe(true);
+  });
+
+  it('is true when the editor cannot be read, leaving the save to find nothing there', () => {
+    expect(editorHoldsUnsavedChanges(undefined, usjWith('ashes'))).toBe(true);
   });
 });
 
@@ -287,5 +399,21 @@ describe('an undone document reaches the PDP the same way a typed one does', () 
 
     expect(fromUndo.mock.calls).toEqual(fromTyping.mock.calls);
     expect(resolveUsjToSaveToPdp(fromUndo.mock.calls[0][0], renamed)).toEqual(undone);
+  });
+});
+
+describe('isEditorContentForChapter', () => {
+  it('allows a save to the chapter the editor is holding', () => {
+    expect(isEditorContentForChapter('JON|2|', 'JON|2|')).toBe(true);
+  });
+
+  // The window after navigation: the editor still holds the chapter being left, and the save is
+  // bound to the chapter being loaded. Writing it would put one chapter's text over another.
+  it('refuses a save to a chapter the editor is not holding', () => {
+    expect(isEditorContentForChapter('JON|1|', 'JON|2|')).toBe(false);
+  });
+
+  it('allows the save when nothing has been applied to the editor yet', () => {
+    expect(isEditorContentForChapter(undefined, 'JON|2|')).toBe(true);
   });
 });

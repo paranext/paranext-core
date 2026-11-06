@@ -91,7 +91,7 @@ Do NOT reach for it to park a test that is merely inconvenient, flaky, or unfini
 named defect and no ticket is a skipped test wearing a disguise; skip it explicitly instead.
 
 Live example: the three reconnect blockers in
-`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4435.
+`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4495.
 
 ### Continuous Testing Frequency
 
@@ -395,6 +395,8 @@ export default defineConfig(async () => {
       // Warms the lazy one-time ICU init behind Intl.* so it never lands inside a test's
       // timeout window on a slow CI worker. See vitest.setup.ts for the rationale.
       setupFiles: ['./vitest.setup.ts'],
+      // Must stay comfortably above vitest.setup.ts's asyncUtilTimeout — see note below.
+      testTimeout: 15000,
       include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     },
   };
@@ -404,6 +406,16 @@ export default defineConfig(async () => {
 > The workspace configs (`extensions/vitest.config.ts`, `lib/platform-bible-utils/vite.config.ts`,
 > `lib/platform-bible-react/vitest.config.ts`) reference this same repo-root `vitest.setup.ts` via a
 > relative `setupFiles` path, so every vitest worker warms Intl once before any timed test.
+
+> **`testTimeout` vs. `asyncUtilTimeout`.** `vitest.setup.ts` also raises testing-library's own
+> `asyncUtilTimeout` — the deadline a bare `waitFor`/`findBy*` gives up at — independently of
+> vitest's per-test `testTimeout`. `testTimeout`'s clock starts at the beginning of the test body,
+> while a given `waitFor` call only starts its own `asyncUtilTimeout` countdown when that call is
+> reached, so whichever deadline elapses first wins. Every project that loads this shared setup
+> file must keep its own `testTimeout` comfortably above `asyncUtilTimeout` — not just nominally
+> above it, since any work a test does before reaching the `waitFor` call eats into that margin —
+> or a failing `waitFor` is reported as vitest's bare timeout instead of testing-library's richer
+> error (with its DOM dump), silently losing the more useful failure message.
 
 ### Key Dependencies
 
@@ -589,29 +601,47 @@ internal abstract class PapiTestBase
 [ExcludeFromCodeCoverage]
 public class FixtureSetup
 {
-    private static readonly string s_testFolder = Path.Combine(
-        Path.GetTempPath(),
-        "Platform.Bible.Tests"
-    );
+    internal const string TEST_FOLDER_PREFIX = "Platform.Bible.Tests";
 
-    public static string TestFolderPath => s_testFolder;
+    public static string RunId { get; } = Guid.NewGuid().ToString("N");
+
+    public static string TestFolderPath =>
+        Path.Combine(Path.GetTempPath(), $"{TEST_FOLDER_PREFIX}-{RunId}");
 
     [OneTimeSetUp]
     public void RunBeforeAnyTests()
     {
-        if (!Directory.Exists(s_testFolder))
-            Directory.CreateDirectory(s_testFolder);
-        ParatextGlobals.Initialize(s_testFolder);
+        // Best effort: deletes Platform.Bible.Tests and Platform.Bible.Tests-* folders that were
+        // neither created nor modified in the last 24 hours, left by runs that never tore down.
+        DeleteStaleTestFolders(Path.GetTempPath(), DateTime.UtcNow.AddHours(-24));
+
+        Directory.CreateDirectory(TestFolderPath);
+        // usfm.sty is copied in with overwrite: true, so setup tolerates an existing folder.
+        ParatextGlobals.Initialize(TestFolderPath);
     }
 
     [OneTimeTearDown]
     public void RunAfterAnyTests()
     {
-        if (Directory.Exists(s_testFolder))
-            Directory.Delete(s_testFolder, true);
+        if (Directory.Exists(TestFolderPath))
+            Directory.Delete(TestFolderPath, true);
     }
+
+    internal static void DeleteStaleTestFolders(string parentDirectory, DateTime cutoffUtc);
 }
 ```
+
+The folder is unique per run, so two runs at once (two sessions, or an IDE run beside a CLI run)
+never delete each other's files in teardown. A test that needs its own temp folder names it
+`{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}` (as
+`TestLocalParatextProjectsInTempDir` does), so it is unique per run too and falls under the prefix
+the sweep cleans up if a crashed run leaks it.
+
+No fixture in `c-sharp-tests` is `[Parallelizable]`, so a test may change process-global state
+(`Trace.Listeners`, `Console.Out`/`Console.Error`, a static flag) as long as it restores it, even
+when an assertion fails (`[TearDown]` or `finally`). New fixtures of that kind are marked
+`[NonParallelizable]` so they stay serial if parallel execution is ever turned on; two older ones,
+`ThreadingUtilsTests` and `StartupTimingTests`, document the assumption in a comment instead.
 
 ### Test Doubles
 
@@ -1176,7 +1206,9 @@ End-to-end testing verifies complete user workflows across all processes (Electr
 
 E2E tests that verify user flows MUST interact through visible UI only:
 
-- Use `cdp.fixture` for all per-feature E2E tests (connects to the running app via CDP).
+- Pick the fixture from how the test gets its app: `isolated.fixture` for a spec under
+  `tests/isolated/` (a fresh Electron per test), `cdp.fixture` for one under `tests/attached/`
+  (attaches to an app you started yourself).
 - Click menu items, buttons, and fill forms through the UI.
 - NEVER use `papi.fixture` or `app.fixture` for per-feature tests.
 - NEVER send JSON-RPC commands to set up UI state.
@@ -1250,34 +1282,51 @@ async function clickEditorMenuItem(page: Page, projectName: string, itemLabel: R
 
 ### Test Location
 
-Create E2E tests in: `e2e-tests/tests/{feature}/`
+Where a spec lives is decided by how it gets its app, and that choice also picks its config:
+
+- `tests/isolated/{feature}/` — the default. Each test launches its own Electron, so specs are
+  self-contained and can run in CI. Uses `isolated.fixture` and `playwright.config.ts`.
+- `tests/attached/` — for specs that must attach to an app you started yourself (`refresh.sh`),
+  because they cannot own its lifecycle. Uses `cdp.fixture` and `playwright-cdp.config.ts`.
+  Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
+  port 8876 is bound, which is exactly the state these specs need.
+- `tests/enhanced-resources/`, `tests/manage-books/`, `tests/markers-checklist/` — older
+  local-only suites that also use `cdp.fixture` and the CDP config. They are not part of any
+  standard run (see their READMEs for what collects each and why), so put new work in one of the
+  three directories above rather than extending them.
+- `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
+  tests, apart from the bare-Electron checks its README describes.
 
 ```
 e2e-tests/
 ├── fixtures/
-│   ├── cdp.fixture.ts           # Connects to running app via CDP (DEFAULT for features)
+│   ├── cdp.fixture.ts           # Connects to running app via CDP (for tests/attached/)
 │   ├── app.fixture.ts           # Launches fresh Electron (CI smoke tests only)
 │   ├── papi.fixture.ts          # @deprecated — CI smoke tests only
 │   ├── papi-live.fixture.ts     # Connects to already-running app's WebSocket (command-surface verification)
-│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (state-mutating tests)
+│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (DEFAULT for features)
 │   ├── comment.fixture.ts       # Comment-testing fixture (+ comment-test-helpers.ts)
 │   └── helpers.ts               # waitForAppReady(), sendPapiCommand()  (tree non-exhaustive)
 ├── playwright-cdp.config.ts     # Config for CDP mode (no setup/teardown)
 ├── playwright.config.ts         # Config for standalone mode (with setup/teardown)
 └── tests/
-    └── {feature}/
-        └── {feature}.spec.ts
+    ├── isolated/                 # Default: one Electron per test (playwright.config.ts)
+    │   └── {feature}/
+    │       └── {feature}.spec.ts
+    ├── attached/                 # Attaches to an app you started (playwright-cdp.config.ts)
+    ├── smoke/                    # What CI runs
+    └── _example/                 # Templates
 ```
 
 ### Fixture Selection
 
 | Fixture       | Mode                               | When to Use                               | Provides                  |
 | ------------- | ---------------------------------- | ----------------------------------------- | ------------------------- |
-| `cdp.fixture`      | Connects to running app (CDP 9223)        | **Default for all per-feature E2E tests** | `mainPage`                |
+| `cdp.fixture`      | Connects to running app (CDP 9223)        | Specs that attach to an app you started   | `mainPage`                |
 | `app.fixture`      | Launches fresh Electron                   | CI smoke tests, standalone testing        | `electronApp`, `mainPage` |
 | `papi.fixture`     | Extends app.fixture + WebSocket           | **Deprecated** — CI smoke tests only      | `papiClient` + app.fixture |
 | `papi-live.fixture`| Connects to already-running app (WS 8876) | Command-surface verification only (see below) | `papiLive`                |
-| `isolated.fixture` | Launches an isolated Electron per test    | Tests that mutate application state       | fresh app per test        |
+| `isolated.fixture` | Launches an isolated Electron per test    | **Default for all per-feature E2E tests** | fresh app per test        |
 
 ### Command-Surface Verification (papi-live.fixture)
 
@@ -1322,7 +1371,7 @@ if (res.error) expect(RESERVED, res.error.message).not.toContain(res.error.code)
 
 ### E2E Test Templates
 
-**UI Interaction Tests (cdp.fixture — default for per-feature tests):**
+**UI Interaction Tests (cdp.fixture — for specs under `tests/attached/`):**
 
 ```typescript
 import { test, expect } from '../../fixtures/cdp.fixture';
@@ -1342,7 +1391,7 @@ test.describe('{Feature} E2E Tests', () => {
 });
 ```
 
-**Render Smoke Test (cdp.fixture):**
+**Render Smoke Test (cdp.fixture — for specs under `tests/attached/`):**
 
 ```typescript
 import { test, expect } from '../../fixtures/cdp.fixture';
@@ -1397,11 +1446,13 @@ A cross-screen journey test that only checks `toBeVisible()` proves the page ren
 **IMPORTANT**: Always use the `--config` flag when running Playwright from the repo root. Without `--config`, Playwright uses defaults — the `--project` flag won't work, no dev server is started, and bare `npx playwright test` (without a test path) will discover vitest `.test.ts` files and fail.
 
 ```bash
-# CDP mode (default — app already running via ./.erb/scripts/refresh.sh)
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
+# CDP mode (app already running via ./.erb/scripts/refresh.sh)
+# Swap tests/attached/ for tests/enhanced-resources/, tests/manage-books/ or
+# tests/markers-checklist/ to run one of the local-only suites.
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
 
 # CDP mode with HTML report
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
 npx playwright show-report e2e-tests/playwright-report
 
 # Standalone mode (launches its own Electron, port 8876 must be free). Each project in
@@ -1416,6 +1467,19 @@ npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playw
 # A bare Xvfb has no window manager, so compositor-dependent suites can behave differently.
 e2e-tests/run-e2e-wsl.sh --wrap npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated
 ```
+
+**On an Electron upgrade, re-run `tests/isolated/web-view-lifecycle/` by hand.** CI runs only the
+smoke project (`.github/workflows/test.yml`), and that subset is the only place that would notice
+Chromium no longer firing `unload` in web view iframes: the React web view bootstrap unmounts a
+replaced document's root on `unload`, and `extension-teardown-listeners.spec.ts` goes red if it stops.
+
+### Manually Testing the First-Run Wizard
+
+To bring the setup wizard back in a running app (dev or installed), including as a registered or
+unregistered Paratext 9 user, use the `platform.resetFirstRun` command from DevTools — see
+[Resetting the first-run wizard](../../README.md#resetting-the-first-run-wizard) in the README. The
+automated first-run suites (`e2e-tests/tests/isolated/first-run/`) run in demo mode instead, so
+they do not depend on the machine's Paratext registration.
 
 ### Failure Analysis
 

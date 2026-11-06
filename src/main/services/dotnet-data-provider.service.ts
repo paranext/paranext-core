@@ -1,4 +1,5 @@
 import { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio, spawn } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 import { logger } from '@shared/services/logger.service';
 import { waitForDuration } from 'platform-bible-utils';
@@ -66,8 +67,10 @@ function logProcessInfo(messageObj: unknown) {
   logger.info(formatLog(message, DOTNET_DATA_PROVIDER_NAME));
 }
 
-/** Hard kills the Dotnet Data Provider. */
-// TODO: add a more elegant shutdown to avoid this if we possibly can
+/**
+ * Hard kills the Dotnet Data Provider. On a normal quit this is only the fallback: the provider
+ * exits by itself once main closes its PAPI connection (see the `will-quit` handler in `main.ts`).
+ */
 function killDotnetDataProvider() {
   if (!dotnet) return;
 
@@ -81,6 +84,13 @@ function killDotnetDataProvider() {
   dotnet = undefined;
 }
 
+/**
+ * Waits for the Dotnet Data Provider to exit, and hard kills it if it has not within the time
+ * given. Waiting does not ask it to stop: it keeps running while its PAPI connection is open, so
+ * close that connection first to give it the chance to exit by itself.
+ *
+ * @param maxWaitTimeInMS How long to wait for it to exit before killing it
+ */
 async function waitForDotnetDataProvider(maxWaitTimeInMS: number) {
   const didClose = await waitForDuration(async () => {
     await closePromise;
@@ -99,6 +109,45 @@ function startDotnetDataProvider() {
   let args: string[] = ['watch', '--project', 'c-sharp/ParanextDataProvider.csproj'];
   let options: SpawnOptionsWithoutStdio | undefined;
 
+  // `dotnet watch` restores and builds before the provider's `Main()` runs at all, which is the
+  // single largest block of dev startup. Opting out (`npm run start:no-dotnet-watch`) runs the
+  // already-built assembly instead, so that cost moves out of startup — at the price of hot reload
+  // on C# edits: you must run `npm run build:data` yourself and restart the app (the provider is
+  // started once, from main.ts, and never re-spawned in place), or the app keeps
+  // running the previous build. Logged below, because a stale build is otherwise invisible: the app
+  // starts and behaves normally, just against older C#.
+  // `run --no-build` rather than the built assembly directly: the build output path is
+  // runtime-identifier specific (e.g. `bin/Debug/net8.0/linux-x64/`), so letting MSBuild resolve it
+  // keeps this working on every platform without hardcoding that layout.
+  if (!globalThis.isPackaged && process.env.PT_DOTNET_NO_WATCH === 'true') {
+    // `dotnet watch --project X` runs the app with the project directory as its cwd, while
+    // `dotnet run --project X --no-build` inherits ours. Match the watcher so the two dev modes
+    // agree, which means the project path has to be absolute — a relative one would resolve
+    // against the new cwd.
+    const cSharpDir = path.join(globalThis.resourcesPath, 'c-sharp');
+    args = ['run', '--project', path.join(cSharpDir, 'ParanextDataProvider.csproj'), '--no-build'];
+    options = { cwd: cSharpDir };
+    logger.info(
+      formatLog(
+        'PT_DOTNET_NO_WATCH is set: running the prebuilt assembly with no watcher. C# changes will NOT be picked up until you run `npm run build:data` and restart.',
+        DOTNET_DATA_PROVIDER_NAME,
+      ),
+    );
+    // `npm run build` produces only a Release publish (`build:data-release`), never a Debug build,
+    // so this path commonly runs with nothing to execute. Say so plainly: otherwise the failure
+    // arrives as a raw MSBuild trace after the line above, and because `start` is
+    // fire-and-forget the window just opens and requests hang. Checking the directory rather than
+    // a binary because the output path is runtime-identifier specific.
+    if (!fs.existsSync(path.join(cSharpDir, 'bin', 'Debug'))) {
+      logger.error(
+        formatLog(
+          'PT_DOTNET_NO_WATCH is set but no Debug build was found. Run `npm run build:data` first.',
+          DOTNET_DATA_PROVIDER_NAME,
+        ),
+      );
+    }
+  }
+
   if (globalThis.isPackaged) {
     let dotnetPath: string = path.join(process.resourcesPath, 'dotnet');
     if (process.platform === 'darwin')
@@ -112,6 +161,21 @@ function startDotnetDataProvider() {
       args = [];
     }
     options = { cwd: dotnetPath };
+  } else {
+    // Dev runs, which include the E2E tests, get the bundled sample project when no projects are
+    // found (`LocalParatextProjects.Initialize`). To try the no-projects experience, set the
+    // variable to `false` AND point PLATFORM_BIBLE_PROJECT_ROOT_FOLDER at an empty folder: the
+    // default folder already holds WEB from earlier runs. `npm run start:data` and VS Code's "Debug
+    // .NET Core" always set it to `true`. `||` so an empty value (which Windows cannot even store)
+    // means the default on every OS.
+    options = {
+      ...options,
+      env: {
+        ...process.env,
+        PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT:
+          process.env.PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT || 'true',
+      },
+    };
   }
 
   dotnet = spawn(command, args, options);

@@ -1,0 +1,75 @@
+{
+  "product": {
+    "name": "Example Product",
+    "repository": "example-org/example-product",
+    "isParatext": false,
+    "licenseDocument": {
+      "label": "the Example Product licence",
+      "file": "LICENSING.md",
+      "href": "https://example.org/licence"
+    }
+  },
+  "allowed": ["Zlib"],
+  "separatePrograms": {
+    "Example Tool": {
+      "spdx": ["Zlib"],
+      "copyright": "Copyright (c) 2014 Example Authors",
+      "reviewer": "reviewer@example.org",
+      "date": "2026-09-04",
+      "reason": "Redistributed unmodified as a separate executable and invoked as a subprocess. No product code links against it or shares an address space with it, so this is aggregation rather than derivation.",
+      "sourceAvailability": "Corresponding source is published beside the binaries at <https://example.org/src>.",
+      "deliveries": [
+        {
+          "platform": "Windows",
+          "version": "2.1.0",
+          "mechanism": "NuGet package",
+          "evidence": {
+            "file": ".erb/scripts/third-party-notices/__fixtures__/overlay/evidence.txt",
+            "contains": "example-tool-windows-delivery"
+          },
+          "carriesNotices": "LICENSE.txt beside the executable",
+          "alsoContains": [
+            {
+              "name": "example-runtime",
+              "version": "3.9.6",
+              "spdx": ["ISC"],
+              "copyright": "Copyright (c) 2001 Example Runtime Foundation"
+            }
+          ]
+        },
+        {
+          "platform": "Linux (snap)",
+          "version": "1.8.2",
+          "mechanism": "Debian packages staged into the snap",
+          "evidence": {
+            "file": ".erb/scripts/third-party-notices/__fixtures__/overlay/evidence.txt",
+            "contains": "example-tool-linux-delivery"
+          },
+          "carriesNotices": false,
+          "alsoContains": [
+            {
+              "name": "example-runtime",
+              "version": "2.7.18",
+              "spdx": ["ISC"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "overrides": {
+    "nuget:ExampleTool.Windows": {
+      "license": "Zlib",
+      "version": "2.1.0",
+      "alwaysList": true,
+      "separateProgram": "Example Tool",
+      "note": "Windows only. The package IS the Example Tool program described under \"Third-party programs redistributed as separate executables\", whose reviewed determination is what admits this row."
+    }
+  },
+  "externalExtensions": {
+    "example-private-extension": {
+      "itemized": false,
+      "reason": "Built in another repository, which emits no module manifest yet, so its bundle cannot be itemized here."
+    }
+  }
+}

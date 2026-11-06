@@ -19,7 +19,11 @@ import {
   type BookResultEntry,
   type FindProject,
 } from './find.component';
-import { replacementContainsStructuralMarker } from './structure-protection.util';
+import {
+  extractGuardedMarkers,
+  replacementContainsStructuralMarker,
+} from './structure-protection.util';
+import { collapseUsfmMarkersForDisplay } from './usfm-tokens.util';
 import { isFindQueryValid } from './find.utils';
 import { LocalizedBookData, SearchTextType } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
@@ -86,6 +90,18 @@ const seedUsxByBook: Record<string, string> = {
   <para style="p"><verse number="1" style="v" sid="JHN 1:1" />In the beginning was the Word, and the Word was with God, and the Word was God.<verse eid="JHN 1:1" /></para>
 </usx>
 `,
+  // Only the MarkersInResults showcase reads this book, so it is not offered in the scope selector.
+  PSA: `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="PSA" style="id">World English Bible (WEB)</book>
+  <chapter number="23" style="c" sid="PSA 23" />
+  <para style="q1"><verse number="1" style="v" sid="PSA 23:1" /><char style="nd">Yahweh</char> is my shepherd;</para>
+  <para style="q2">I shall lack nothing.<verse eid="PSA 23:1" /></para>
+  <para style="q1"><verse number="2" style="v" sid="PSA 23:2" />He makes me lie down in green pastures.<note caller="+" style="f"><char style="ft">Or, grass</char></note></para>
+  <para style="q2">He leads me beside still waters.<verse eid="PSA 23:2" /></para>
+  <para style="q1"><verse number="6" style="v" sid="PSA 23:6" />I will dwell in <char style="nd">Yahweh</char>’s house forever.<verse eid="PSA 23:6" /></para>
+</usx>
+`,
 };
 
 const seedUsjByBook: Record<string, Usj> = Object.fromEntries(
@@ -114,7 +130,47 @@ const hasExcludedExtraMaterial = false;
 const localizedBookData = new Map<string, LocalizedBookData>([
   ['GEN', { localizedId: 'Genesis', localizedName: 'Genesis' }],
   ['JHN', { localizedId: 'John', localizedName: 'John' }],
+  ['PSA', { localizedId: 'Psalms', localizedName: 'Psalms' }],
 ]);
+
+/**
+ * Builds a result whose match runs from the first `from` in verse `verseNum` of Psalm 23 to the
+ * first `to` after it, as a search with the markup removed would find it. Its USFM is read from the
+ * seed, so the match and its context come from one text.
+ */
+function buildPsalmResult(verseNum: number, from: string, to: string): HidableFindResult {
+  const readerWriter = new UsjReaderWriter(seedUsjByBook.PSA, {
+    markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+  });
+  const usfm = readerWriter.toUsfm();
+  const verseRef: SerializedVerseRef = { book: 'PSA', chapterNum: 23, verseNum };
+  const verseStart = readerWriter.usfmVerseLocationToIndexInUsfm(verseRef);
+  const matchStart = usfm.indexOf(from, verseStart);
+  const matchEnd = usfm.indexOf(to, matchStart + from.length) + to.length;
+  if (matchStart < 0 || matchEnd < to.length) throw new Error(`No "${from}…${to}" in PSA 23`);
+  const matchedUsfm = usfm.slice(matchStart, matchEnd);
+  return {
+    start: { verseRef, offset: matchStart - verseStart },
+    end: { verseRef, offset: matchEnd - verseStart },
+    text: collapseUsfmMarkersForDisplay(matchedUsfm),
+    matchedUsfm,
+    removedMarkers: extractGuardedMarkers(matchedUsfm),
+  };
+}
+
+/** One result for each kind of marker a match can cross, in Psalm 23. */
+const MARKER_RESULTS: HidableFindResult[] = [
+  // The end of a character style, without its start: Replace skips it.
+  buildPsalmResult(1, 'Yahweh', 'is my'),
+  // A paragraph break.
+  buildPsalmResult(1, 'shepherd', 'I shall'),
+  // A verse and the paragraph it starts.
+  buildPsalmResult(1, 'nothing', 'He makes'),
+  // A whole footnote and a paragraph break.
+  buildPsalmResult(2, 'pastures', 'He leads'),
+  // A whole character style: Replace asks before deleting it.
+  buildPsalmResult(6, 'in ', '’s house'),
+];
 
 type SearchParams = {
   term: string;
@@ -137,8 +193,10 @@ function escapeRegExp(value: string): string {
  * Build the regular expression for the current search params (or `undefined` for an empty term or
  * an invalid user-supplied regex). Honors match-case, the word-boundary restriction, the
  * allow-regex toggle and ignore-whitespace-differences the same way the real find job's options
- * would. Ignore-diacritics is not emulated here — the real engine NFD-normalizes the source text to
- * apply it, which this fixture-backed harness does not do.
+ * would. Two things the real engine does are not emulated here: ignore-diacritics, which needs the
+ * source text NFD-normalized, and the block-boundary whitespace tolerance, which needs the USJ
+ * block structure this fixture-backed harness does not have. A phrase spanning a rendered line
+ * break therefore matches in the app but not in this story.
  */
 function buildSearchRegex(params: SearchParams): RegExp | undefined {
   if (!params.term) return undefined;
@@ -214,7 +272,7 @@ function runSearch(params: SearchParams): HidableFindResult[] {
           verseRef: verse,
           offset: offset + match[0].length,
         };
-        results.push({ start, end, text: match[0] });
+        results.push({ start, end, text: match[0], matchedUsfm: match[0] });
       });
     });
   });
@@ -250,6 +308,8 @@ type HarnessConfig = {
   scope?: Scope;
   /** Initial selected books for the `selectedBooks` scope. */
   selectedBookIds?: string[];
+  /** The current scripture reference the `book`/`chapter` scopes resolve to. Defaults to GEN 1:1. */
+  verseRef?: SerializedVerseRef;
   /** The find-job status the status bar reflects (fixed-state stories only). */
   searchStatus?: FindJobStatus;
   /** Percent complete for an in-progress search. */
@@ -324,9 +384,10 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   // eslint-disable-next-line no-null/no-null
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const configVerseRef = config.verseRef;
   const verseRef = useMemo<SerializedVerseRef>(
-    () => ({ book: 'GEN', chapterNum: 1, verseNum: 1 }),
-    [],
+    () => configVerseRef ?? { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    [configVerseRef],
   );
 
   const baseResults = useMemo<HidableFindResult[]>(() => {
@@ -477,11 +538,14 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   }, []);
 
   const numberOfHiddenResults = hiddenKeys.size + committedKeys.size;
-  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge —
-  // this exact divergence (the harness's own copy dropped the empty-term check) shipped once
-  // already (see PT-4343 review) and made the NoBooksSelected story pass despite testing the wrong
-  // rule.
-  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge: a
+  // harness with its own copy of the rule can make a story pass while testing a different rule.
+  const isSearchQueryValid = isFindQueryValid({
+    searchTerm,
+    scope,
+    selectedBookIds,
+    currentBookId: verseRef.book,
+  });
   const liveSearchStatus: FindJobStatus | undefined = isSearchQueryValid
     ? completedStatus
     : undefined;
@@ -537,6 +601,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       isRegexAllowed={isRegexAllowed}
       activeMode={activeMode}
       hideModeToggle={config.hideModeToggle}
+      // As the web view does: the markers go wherever Replace is offered.
+      shouldShowMarkers={!config.hideModeToggle}
       hideScrollGroups={config.hideScrollGroups}
       previewOptions={previewOptions}
       onPreviewOptionsChange={setPreviewOptions}
@@ -660,6 +726,29 @@ export const Replaced: Story = {
 };
 
 /**
+ * Replace mode with results whose matches cross markers: a paragraph break, a verse, a whole
+ * footnote, a whole character style, and the end of one without its start. Each shows the markers
+ * Replace would delete, in its heading and in the highlighted match. A fixed set, one of each kind,
+ * rather than one live search. Simple mode has no Replace, so it never shows them.
+ */
+export const MarkersInResults: Story = {
+  decorators: [
+    createDecorator({
+      live: false,
+      activeMode: 'replace',
+      results: MARKER_RESULTS,
+      searchTerm: 'Yahweh',
+      searchStatus: completedStatus,
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findAllByText('\\nd*')).not.toHaveLength(0);
+    await expect(await canvas.findAllByText('\\f')).not.toHaveLength(0);
+  },
+};
+
+/**
  * Replace mode with structure locked. The locked-structure note shows above the results, and
  * because the replace term contains a paragraph marker (`\p`) the replacement would change
  * structure — so Replace / Replace All are disabled and hovering them explains why. Clear or edit
@@ -688,6 +777,19 @@ export const ReadOnly: Story = {
  */
 export const NoBooksSelected: Story = {
   decorators: [createDecorator({ scope: 'selectedBooks', selectedBookIds: [] })],
+};
+
+/**
+ * The current reference sits in extra material (a glossary), which the `Current book` and `Current
+ * chapter` scopes resolve to and Find cannot search. Both scopes are disabled in the scope selector
+ * with an explanation, and the results area shows a placeholder naming the two ways out — choose
+ * books to search, or move to a Scripture book — rather than the generic "select a book" wording,
+ * which would point at a picker that never offers extra material.
+ */
+export const CurrentReferenceInExtraMaterial: Story = {
+  decorators: [
+    createDecorator({ scope: 'book', verseRef: { book: 'GLO', chapterNum: 1, verseNum: 1 } }),
+  ],
 };
 
 /**
@@ -750,9 +852,13 @@ export const NarrowPanelClipsScopeSummary: Story = {
     const canvas = within(canvasElement);
 
     await step('The panel does not scroll horizontally', async () => {
-      const panel = canvas.getByTestId('find-panel');
+      // Measured on the Find root, not on this wrapper. The root is a scroll container, and a scroll
+      // container's overflow never reaches its ancestors' scrollWidth, so on the wrapper this could
+      // never fail.
+      const root = canvas.getByTestId('find-panel').firstElementChild;
+      if (!(root instanceof HTMLElement)) throw new Error('The Find root did not render');
       // The regression: scrollWidth exceeding clientWidth IS the horizontal scrollbar.
-      await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth);
+      await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
     });
 
     await step('The scope summary is the element that gives, by clipping', async () => {
@@ -767,7 +873,7 @@ export const NarrowPanelClipsScopeSummary: Story = {
       description: {
         story:
           'The scope trigger must clip its summary rather than widen the row. Asserted by ' +
-          "comparing the panel's scrollWidth against its clientWidth in a 260px column. Runs " +
+          "comparing the Find root's scrollWidth against its clientWidth in a 260px column. Runs " +
           'in the Interactions panel, not in CI — bundled-extension stories have no vitest ' +
           'browser project.',
       },

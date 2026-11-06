@@ -266,17 +266,15 @@ describe('computeCharacterMarkerCoverage', () => {
     expect(coverage.hasUncovered).toBe(false);
   });
 
-  it('counts the text inside an end that names a marker rather than its text', () => {
-    // `end` is the `\bd` MarkerObject itself, not the 'Mulu' inside it. The walk visits an object
-    // before descending into it, so it must not stop on arrival or the marker's own text goes
-    // uncounted and `bd` vanishes from the result entirely.
+  it('excludes an end that names a marker rather than its text', () => {
+    // `end` is the gap in front of the `\bd` MarkerObject, the same position as offset 5 of 'kolo '.
+    // Nothing of the marker is selected, so `bd` must not appear.
     const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
       start: { jsonPath: KOLO, offset: 0 },
       end: { jsonPath: '$.content[2].content[2]' },
     });
 
-    // 'kolo ' (5) + 'Mulu' (4): `bd` covers 4 of 9, and ' rest' after the marker stays out.
-    expect(coverage.markerStates.bd).toBe('partial');
+    expect(coverage.markerStates).toEqual({});
     expect(coverage.hasUncovered).toBe(true);
   });
 
@@ -320,5 +318,194 @@ describe('computeCharacterMarkerCoverage', () => {
         },
       ),
     ).toEqual({ markerStates: {}, hasUncovered: false });
+  });
+});
+
+// `\b` (empty) then `\p \v 1 \nd LORD\nd* said`. Paths:
+//   $.content[2]                          → the empty `\b` paragraph
+//   $.content[3].content[1].content[0]    → 'LORD' (inside \nd)
+const USJ_EMPTY_B_THEN_ND: Usj = {
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'book', marker: 'id', code: 'PSA', content: ['PSA'] },
+    { type: 'chapter', marker: 'c', number: '1', sid: 'PSA 1' },
+    { type: 'para', marker: 'b', content: [] },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'PSA 1:1' },
+        { type: 'char', marker: 'nd', content: ['LORD'] },
+        ' said',
+      ],
+    },
+  ],
+};
+
+// `\q1 \v 1 plain text` then `\q2 \wj spoken\wj*`. Paths:
+//   $.content[2].content[1]               → 'plain text'
+//   $.content[3]                          → the `\q2` paragraph
+//   $.content[3].content[0]               → `\wj`
+const USJ_POETRY: Usj = {
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN', content: ['GEN'] },
+    { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+    {
+      type: 'para',
+      marker: 'q1',
+      content: [{ type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' }, 'plain text'],
+    },
+    {
+      type: 'para',
+      marker: 'q2',
+      content: [{ type: 'char', marker: 'wj', content: ['spoken'] }],
+    },
+  ],
+};
+
+// `\v 1 kolo \v 2 next`. Paths:
+//   $.content[2].content[1]   → 'kolo '
+//   $.content[2].content[2]   → the `\v 2` verse marker
+const USJ_VERSE_AFTER_TEXT: Usj = {
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN', content: ['GEN'] },
+    { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+        'kolo ',
+        { type: 'verse', marker: 'v', number: '2', sid: 'GEN 1:2' },
+        'next',
+      ],
+    },
+  ],
+};
+
+// `\p \v 1 \nd In\nd* \bd the\bd* x` — identical ' ' strings at content[2] and content[4].
+const USJ_DUPLICATE_SEPARATORS: Usj = {
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN', content: ['GEN'] },
+    { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+        { type: 'char', marker: 'nd', content: ['In'] },
+        ' ',
+        { type: 'char', marker: 'bd', content: ['the'] },
+        ' ',
+        'x',
+      ],
+    },
+  ],
+};
+
+describe('computeCharacterMarkerCoverage — non-text locations', () => {
+  it("treats a start at an empty paragraph's marker name as the paragraph's start", () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_EMPTY_B_THEN_ND, {
+      start: { jsonPath: "$.content[2]['marker']", propertyOffset: 1 },
+      end: { jsonPath: '$.content[3].content[1].content[0]', offset: 4 },
+    });
+
+    expect(coverage).toEqual({ markerStates: { nd: 'all' }, hasUncovered: false });
+  });
+
+  it('measures nothing for a caret at an empty paragraph', () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_EMPTY_B_THEN_ND, {
+      start: { jsonPath: "$.content[2]['marker']", propertyOffset: 1 },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: false });
+  });
+
+  it("treats an end at a verse's number as the gap in front of that verse", () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_VERSE_AFTER_TEXT, {
+      start: { jsonPath: '$.content[2].content[1]', offset: 0 },
+      end: { jsonPath: "$.content[2].content[2]['number']", propertyOffset: 1 },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: true });
+  });
+
+  it("excludes the next paragraph when the end names that paragraph's object", () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_POETRY, {
+      start: { jsonPath: '$.content[2].content[1]', offset: 0 },
+      end: { jsonPath: '$.content[3]' },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: true });
+  });
+
+  it("excludes the next paragraph's first marker when the end names its opener", () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_POETRY, {
+      start: { jsonPath: '$.content[2].content[1]', offset: 0 },
+      end: { jsonPath: '$.content[3].content[0]' },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: true });
+  });
+
+  it("begins after the marker's content for a start at its closing marker", () => {
+    // From just after `\bd Mulu\bd*` into ' rest': the bold run is not selected.
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: '$.content[2].content[2]', closingMarkerOffset: 3 },
+      end: { jsonPath: REST, offset: 3 },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: true });
+  });
+
+  it("begins after the marker's content for a start at an attribute", () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: '$.content[2].content[2]', keyName: 'lemma', keyOffset: 0 },
+      end: { jsonPath: REST, offset: 3 },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: true });
+  });
+
+  it("includes the marker's content for an end at its closing marker", () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: MULU, offset: 2 },
+      end: { jsonPath: '$.content[2].content[2]', closingMarkerOffset: 3 },
+    });
+
+    expect(coverage).toEqual({ markerStates: { bd: 'all' }, hasUncovered: false });
+  });
+
+  it("stops at the marker's content for an end at its closing marker when it starts before it", () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: KOLO, offset: 0 },
+      end: { jsonPath: '$.content[2].content[2]', closingMarkerOffset: 3 },
+    });
+
+    // 'kolo ' (5) + 'Mulu' (4); ' rest' stays out.
+    expect(coverage).toEqual({ markerStates: { bd: 'partial' }, hasUncovered: true });
+  });
+
+  it('measures nothing for a caret just after a closing marker with nothing selected', () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: '$.content[2].content[2]', closingMarkerOffset: 3 },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: false });
+  });
+
+  it('keeps the second of two identical separator strings distinct from the first', () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_DUPLICATE_SEPARATORS, {
+      start: { jsonPath: '$.content[2].content[4]', offset: 1 },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: true });
   });
 });

@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogTitle,
   Tooltip,
+  TOOLTIP_DELAY_MS,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
@@ -130,7 +131,7 @@ export function MediaViewer({
       >
         <div className="tw:flex tw:items-center tw:gap-2">
           <DialogTitle className="tw:flex-1 tw:truncate">{item ? item.title : ''}</DialogTitle>
-          <TooltipProvider delayDuration={300}>
+          <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

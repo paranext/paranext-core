@@ -1,11 +1,14 @@
 import { dataProviderService } from '@shared/services/data-provider.service';
-import { createSyncProxyForAsyncObject, getLocalizedIdFromBookNumber } from 'platform-bible-utils';
 import {
   ILocalizationService,
   localizationServiceProviderName,
   localizationServiceObjectToProxy,
 } from '@shared/services/localization.service-model';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import {
+  createCachedInitializer,
+  createSyncProxyForAsyncObject,
+  getLocalizedIdFromBookNumber,
+} from 'platform-bible-utils';
 
 let dataProvider: ILocalizationService;
 const initialize = createCachedInitializer(async () => {

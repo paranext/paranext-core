@@ -5,6 +5,10 @@
     "csharpier": {
       "version": "0.29.2",
       "commands": ["dotnet-csharpier"]
+    },
+    "nuget-license": {
+      "version": "4.0.16",
+      "commands": ["nuget-license"]
     }
   }
 }

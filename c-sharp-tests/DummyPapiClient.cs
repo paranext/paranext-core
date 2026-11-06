@@ -171,14 +171,19 @@ namespace TestParanextDataProvider
         /// websocket the base client would use) and returns its result. Lets a test assert what a
         /// registered command handler returns without a live PAPI connection.
         /// </summary>
-        public object? InvokeRequestHandler(string requestType, params object?[] args)
-        {
-            if (!_localMethods.TryGetValue(requestType, out var handler))
-                throw new InvalidOperationException(
+        public object? InvokeRequestHandler(string requestType, params object?[] args) =>
+            GetRequestHandler(requestType).DynamicInvoke(args);
+
+        /// <summary>
+        /// Test-only accessor for the delegate a request type was registered with, so a test can
+        /// inspect its signature or bind it to a real <c>JsonRpc</c> instance.
+        /// </summary>
+        public Delegate GetRequestHandler(string requestType) =>
+            _localMethods.TryGetValue(requestType, out var handler)
+                ? handler
+                : throw new InvalidOperationException(
                     $"No handler registered for request type \"{requestType}\""
                 );
-            return handler.DynamicInvoke(args);
-        }
 
         /// <summary>
         /// Records the handler instead of adding a JSON-RPC local method (the base client's

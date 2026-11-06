@@ -31,6 +31,7 @@ export type {
   CommentListProps,
   CommentListLocalizedStrings,
   AddCommentToThreadOptions,
+  CommentDraft,
 } from './components/advanced/comment-list/comment-list.types';
 export {
   COMMENT_LIST_STRING_KEYS,
@@ -38,6 +39,34 @@ export {
   getCommentThreadElementId,
 } from './components/advanced/comment-list/comment-list.types';
 export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
+/**
+ * Resolves a localize key against `localizedStrings`, falling back when the key has not actually
+ * resolved to translated text. `useLocalizedStrings` seeds every requested key to itself and
+ * returns that seed both before the subscription delivers and permanently on a `PlatformError`, so
+ * `localizedStrings[key] ?? fallback` can never catch that case — the value is a truthy string
+ * equal to the key, not `undefined`. Any consumer that renders a `CommentList` localize key
+ * directly (e.g. a filter dropdown built from `COMMENT_LIST_STRING_KEYS`) needs this instead of a
+ * bare `??` lookup, or an unresolved key renders as visible text like
+ * `%comment_filter_preset_all%`.
+ *
+ * @param key The localize key to look up.
+ * @param localizedStrings The localized strings to resolve `key` against.
+ * @param fallback English text to show while `key` has not resolved to anything else.
+ * @returns The resolved string, or `fallback` when `key` is missing or still unresolved.
+ */
+export { localizeOrFallback } from './components/advanced/comment-list/comment-list.utils';
+/**
+ * Whether a `CommentDraft` counts as empty: no unsent reply, no pending assignee, and no
+ * in-progress edit to an existing comment. `CommentThread` uses this rule to decide when to report
+ * `undefined` (instead of the draft object) through `onDraftChange`. Any consumer that stores
+ * drafts outside `CommentThread` — to persist them, prune stale entries, or decide whether a thread
+ * has unsaved content — must use this same rule rather than a separately-maintained equivalent, or
+ * the two silently disagree the moment `CommentDraft` gains a field.
+ *
+ * @param draft The draft to check.
+ * @returns `true` when none of the draft's three parts carry anything.
+ */
+export { isCommentDraftEmpty } from './components/advanced/comment-list/comment-list.utils';
 export type {
   ConflictNoteCardProps,
   ConflictResolution,
@@ -46,6 +75,16 @@ export type {
 } from './components/advanced/comment-list/conflict-note-card.types';
 export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
 export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
+export { ContentZoomRoot } from './components/advanced/content-zoom-root.component';
+export type { ContentZoomRootProps } from './components/advanced/content-zoom-root.component';
+export {
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
+  ContentZoomTextProvider,
+  useContentZoomTextProps,
+} from './context/content-zoom-text.context';
+export type { ContentZoomTextProviderProps } from './context/content-zoom-text.context';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
@@ -70,23 +109,28 @@ export type { VersionHistoryType } from './components/advanced/extension-marketp
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 export { default as Filter } from './components/advanced/filter.component';
 export type {
+  FootnoteCaretPosition,
   FootnoteItemProps,
   FootnoteLayout,
   FootnoteListProps,
 } from './components/advanced/footnotes/footnotes.types';
+export { getCaretPositionFromClick } from './components/advanced/footnotes/footnote-caret.utils';
 export {
   default as FootnoteEditor,
+  INLINE_APPLY_DEBOUNCE_MS,
+  type FootnoteEditorHandle,
   type FootnoteEditorProps,
-  type FootnoteEditorMarkerPalette,
-  markerMenuItemToPaletteItem,
 } from './components/advanced/footnote-editor/footnote-editor.component';
 // The marker-palette session/keydown/filter utilities are exported from `./experimental.ts` —
-// they are new, still-moving API surface.
+// they are new, still-moving API surface. `FootnoteEditorMarkerPalette` and
+// `markerMenuItemToPaletteItem` are there for the same reason: they arrived with the Standard View
+// port and are still moving, so they do not belong in this stable entry point.
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,
   type FootnoteCallerType,
 } from './components/advanced/footnote-editor/footnote-editor.types';
+export { isUnclosedNoteOp } from './components/advanced/footnote-editor/footnote-editor.utils';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
 export {
@@ -123,6 +167,7 @@ export {
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
+export { isGroupUnderColumnOrSubMenu } from './components/advanced/menus/menu.util';
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
@@ -227,6 +272,8 @@ export type {
 export { default as ResultsCard } from './components/basics/results-card.component';
 export { EmptyState } from './components/basics/empty-state.component';
 export type { EmptyStateProps } from './components/basics/empty-state.component';
+export { RetryableErrorView } from './components/basics/retryable-error-view.component';
+export type { RetryableErrorViewProps } from './components/basics/retryable-error-view.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
@@ -307,20 +354,41 @@ export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-grou
 export {
   Tooltip,
   TooltipContent,
+  TooltipPortalContainerProvider,
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export type { Scope } from './components/utils/scripture.util';
+export type { Scope, ScopeWithRange } from './components/utils/scripture.util';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
+export { default as useRetryablePromise } from './hooks/use-retryable-promise.hook';
+export type { RetryablePromiseState } from './hooks/use-retryable-promise.hook';
+export { default as useEventSeededState } from './hooks/use-event-seeded-state.hook';
+export type {
+  EventSeededState,
+  EventSeededStateOptions,
+} from './hooks/use-event-seeded-state.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export { useViewVisibility } from './hooks/use-view-visibility.hook';
 export { useRunWhenVisible } from './hooks/use-run-when-visible.hook';
+export {
+  isRunningInWebView,
+  shouldSuppressFocusReturn,
+  useDismissOnWindowBlur,
+} from './hooks/use-dismiss-on-window-blur.hook';
+export { useHasContentBelow } from './hooks/use-has-content-below.hook';
+export {
+  useLivePopoverAnchor,
+  measureBox,
+  leftEdgeRect,
+  type LivePopoverAnchor,
+  type LivePopoverAnchorSource,
+} from './hooks/use-live-popover-anchor.hook';
 export {
   pickTabIconUrl,
   useTabIconSelection,
@@ -342,17 +410,34 @@ export {
 export { useShrinkStep } from './hooks/use-shrink-step.hook';
 
 // Contexts
-export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/shrink-step.context';
+export {
+  ShrinkStepContext,
+  ShrinkStepOverrideContext,
+  useShrinkStepValue,
+  useShrinkStepOverride,
+  SHRINK_STEP,
+} from './context/shrink-step.context';
+export {
+  ShrinkStepOverride,
+  type ShrinkStepOverrideProps,
+} from './context/shrink-step-override.component';
 
 // Z-index scale
 export {
   Z_INDEX_ABOVE_DOCK,
+  Z_INDEX_CONNECTION_LOST,
   Z_INDEX_FIRST_RUN,
   Z_INDEX_ABOVE_POPOVER,
+  Z_INDEX_ONBOARDING_TOUR,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
+  Z_INDEX_NESTED_MODAL,
 } from './components/z-index';
+
+// Tooltip delay
+export { TOOLTIP_DELAY_MS } from './components/tooltip-delay';
 
 // Utils
 export { cn } from './utils/shadcn-ui/utils';

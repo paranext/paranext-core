@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => {
     getUnreachableWindowIds: vi.fn(),
     getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
+    isWindowTracked: vi.fn(() => true),
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -59,8 +60,8 @@ const mocks = vi.hoisted(() => {
 
 /** Wire windows whose WebView service shards are the given objects */
 function withWindows(
-  shardsByWindowId: Record<number, unknown>,
-  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
+  shardsByWindowId: Record<string, unknown>,
+  options?: { startingWindowIds?: string[]; unreachableWindowIds?: string[] },
 ) {
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
 }
@@ -73,10 +74,15 @@ vi.mock('@main/services/window-state.service', () => ({
   isWindowReady: mocks.isWindowReady,
   // No test here names a closing window; the routed-open guard just needs an answer
   isWindowClosing: () => false,
+  // Driven by the window fixture, so a routed open names a window these tests actually set up
+  isWindowTracked: mocks.isWindowTracked,
   getFocusedWindowId: mocks.getFocusedWindowId,
   // No test here is about the cross-window raise; the app holding focus is what allows one
   isApplicationFocused: () => true,
   focusWindow: mocks.focusWindow,
+  // Ids are still minted from a numeric counter (stringified) in this slice, so a numeric
+  // comparison recovers the creation-order ranking the real function reads from the tracked list.
+  getWindowCreationRank: (windowId: string) => Number(windowId),
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
@@ -123,12 +129,12 @@ const FLOAT_LAYOUT: Layout = {
 describe('float layouts are untouched by multi-window routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getTargetWindowId.mockReturnValue('1');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
-    mocks.getFocusedWindowId.mockReturnValue(1);
+    mocks.getFocusedWindowId.mockReturnValue('1');
     mocks.settingsGet.mockResolvedValue('power');
   });
 
@@ -136,14 +142,14 @@ describe('float layouts are untouched by multi-window routing', () => {
     const focused = windowShard([]);
     const other = windowShard([]);
     withWindows({ 1: focused, 2: other });
-    const creator = { createPendingContentWindow: vi.fn(async () => 99), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '99'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
     const router = await getRouter();
 
     await router.openWebView('someType', FLOAT_LAYOUT);
 
     // Same focused-window rung a bare 'tab' open uses — 'float' gets no rung of its own
-    expect(focused.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, undefined);
+    expect(focused.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, undefined, false);
     expect(other.openWebView).not.toHaveBeenCalled();
     // A float never creates a window: only the 'window'-layout rung ever calls this
     expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
@@ -153,15 +159,18 @@ describe('float layouts are untouched by multi-window routing', () => {
     const focused = windowShard([]);
     const named = windowShard([]);
     withWindows({ 1: focused, 2: named });
-    const creator = { createPendingContentWindow: vi.fn(async () => 99), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '99'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
     const router = await getRouter();
 
-    await router.openWebView('someType', FLOAT_LAYOUT, { targetWindowId: 2 });
+    await router.openWebView('someType', FLOAT_LAYOUT, { targetWindowId: '2' });
 
-    expect(named.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, {
-      targetWindowId: 2,
-    });
+    expect(named.openWebView).toHaveBeenCalledWith(
+      'someType',
+      FLOAT_LAYOUT,
+      { targetWindowId: '2' },
+      false,
+    );
     expect(focused.openWebView).not.toHaveBeenCalled();
     expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
   });
@@ -174,9 +183,15 @@ describe('float layouts are untouched by multi-window routing', () => {
 
     await router.openWebView('someType', FLOAT_LAYOUT, { existingId: 'existing-view' });
 
-    expect(owner.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, {
-      existingId: 'existing-view',
-    });
+    // The owner (window 2) is not the target window (window 1) and the app holds focus, so this
+    // open is about to raise the owner across windows — `true` here, not the layout, is what the
+    // raise gate in `web-view.service-router.test.ts` pins.
+    expect(owner.openWebView).toHaveBeenCalledWith(
+      'someType',
+      FLOAT_LAYOUT,
+      { existingId: 'existing-view' },
+      true,
+    );
     expect(focused.openWebView).not.toHaveBeenCalled();
   });
 
@@ -191,6 +206,6 @@ describe('float layouts are untouched by multi-window routing', () => {
     const router = await getRouter();
 
     await expect(router.openWebView('someType', FLOAT_LAYOUT)).resolves.toBe('opened');
-    expect(focused.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, undefined);
+    expect(focused.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, undefined, false);
   });
 });

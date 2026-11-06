@@ -178,7 +178,13 @@ function getMenubarColumnContent(
     ) as LocalizedMacosMenubar;
 }
 
-async function translatePlatformMenuItemsAndCombine(
+/**
+ * Merges the contributed platform main menu into the macOS menubar template.
+ *
+ * Exported for `platform-macos-menubar.util.test.ts`, which drives the real combine rather than a
+ * helper the combine could stop calling. Main-process-internal; it is on no PAPI surface.
+ */
+export async function translatePlatformMenuItemsAndCombine(
   currentPlatformMainMenu: MultiColumnMenu,
 ): Promise<MenuItemConstructorOptions[]> {
   // Convert the platform-specific main menu into the correct format
@@ -195,7 +201,18 @@ async function translatePlatformMenuItemsAndCombine(
       ).filter((menuItem) => menuItem.label !== '%mainMenu_exit%'), // Remove duplicate 'Exit' here
     })) as MenuItemConstructorOptionsWithOrder[];
 
-  const combinedMenubar = [...macosMenubarObject];
+  // Each entry gets its own object AND its own submenu array: the combine below pushes contributed
+  // items into the app menu's and a matching column's submenu, and `macosMenubarObject` is a
+  // module-level template that `fallbackToDefaultMacosMenubar` and every later rebuild read again.
+  // Writing through it would leave every later build carrying the items of the builds before it —
+  // one more copy of each contributed item per menu rebuild, for the life of the process.
+  // Deliberately not `structuredClone` or a JSON round trip: the zoom items carry `click` closures,
+  // which `structuredClone` refuses outright and a JSON round trip drops silently — leaving menu
+  // items that render and do nothing.
+  const combinedMenubar: MenuItemConstructorOptionsWithOrder[] = macosMenubarObject.map((menu) => ({
+    ...menu,
+    submenu: Array.isArray(menu.submenu) ? [...menu.submenu] : menu.submenu,
+  }));
 
   platformMainMenuContent.forEach((column) => {
     if (!column.submenu || !Array.isArray(column.submenu)) return;
@@ -217,7 +234,12 @@ async function translatePlatformMenuItemsAndCombine(
     );
 
     if (existingMenu) {
-      existingMenu.submenu = column.submenu;
+      // Combine rather than replace: a contributed column sharing a header with a platform menu
+      // must not displace that menu's own items. On the View menu those are the only delivery path
+      // for ⌘=/⌘-/⌘0, reload, dev tools and full screen. `sortMenuAndRemoveAddedProps` interleaves
+      // both sets by `order`, the same way a contributed app-menu column is merged above.
+      if (Array.isArray(existingMenu.submenu)) existingMenu.submenu.push(...column.submenu);
+      else existingMenu.submenu = column.submenu;
     } else {
       combinedMenubar.push(column);
     }

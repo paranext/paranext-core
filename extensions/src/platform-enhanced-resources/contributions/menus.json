@@ -5,7 +5,8 @@
     "items": [
       {
         "label": "%platformEnhancedResources_mainMenu_openEnhancedResource%",
-        "localizeNotes": "Application main menu > Platform.bible > Open Enhanced Resource",
+        "hiddenInterfaceModes": ["simple", "power"],
+        "localizeNotes": "Application main menu > Project > Open enhanced resource",
         "group": "platform.projectResources",
         "order": 200,
         "command": "platformEnhancedResources.openEnhancedResource"

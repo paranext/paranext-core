@@ -11,6 +11,7 @@
  */
 import { ElectronApplication, Page, expect } from '@playwright/test';
 import {
+  killProcessTree,
   sendPapiRequestOnce,
   waitForOverlayGone,
   waitForPapiMethodRegistered,
@@ -19,11 +20,13 @@ import {
 export const WEBSOCKET_PORT = 8876;
 
 /**
- * Fixed web view id of the Home tab in the non-noisy dev layout. Source:
- * `src/renderer/testing/test-layout.data.ts` (the `DEV_NOISY=false` branch). The renderer suffixes
- * every web view id from a shared layout with the window it loads into (`-w1`, `-w2`, …; see
- * `src/renderer/components/docking/window-scoped-web-view-ids.util.ts`), so the rendered
- * `data-web-view-id` is this UUID plus that suffix.
+ * Baked web view id of the Home tab slot in the non-noisy dev layout — its identity in the data
+ * file (`src/renderer/testing/test-layout.data.ts`, the `DEV_NOISY=false` branch), not a runtime
+ * id. Every materialization of a baked layout mints a fresh id for its web views (see
+ * `mintFreshWebViewIds` in `src/renderer/components/docking/mint-web-view-ids.util.ts`), so this
+ * value never appears in a live `data-web-view-id` — read a window's actual Home tab id off the DOM
+ * with {@link getHomeTabWebViewId} instead. No code in these suites reads this constant; it stays
+ * here as the documented identity of the slot the other helpers' doc comments point back to.
  */
 export const HOME_TAB_UUID = '7fc0e34a-d601-4995-fadc-92daa9ef713f';
 
@@ -199,8 +202,8 @@ export async function pollUntil<T>(
 const ROUTED_CALL_TIMEOUT_MS = 15_000;
 
 /** Ask the main process which window id it currently routes to. */
-export async function getFocusedWindowId(): Promise<number | undefined> {
-  return sendPapiRequestOnce<number | undefined>(
+export async function getFocusedWindowId(): Promise<string | undefined> {
+  return sendPapiRequestOnce<string | undefined>(
     'command:platform.getFocusedWindowId',
     [],
     WEBSOCKET_PORT,
@@ -213,8 +216,27 @@ export async function getFocusedWindowId(): Promise<number | undefined> {
  * window before falling back to delivering the focus notification at the Electron boundary itself.
  * Activation requests that a compositor honors at all are honored within a second or two, so ten
  * seconds of retries means it will not cooperate.
+ *
+ * Deliberately NOT shared with {@link RAISE_FOCUS_SYNTHESIS_BUDGET_MS} below, though the two do the
+ * same thing. The synthetic event satisfies `getFocusedWindowId()` but leaves `win.isFocused()`
+ * false, so every second spent synthesizing is a second in which a caller that goes on to assert
+ * REAL OS focus cannot be satisfied — and callers do assert exactly that, e.g. the
+ * foreground-withholding test in `web-view-move-between-windows.spec.ts`. This budget stays long
+ * enough to give a slow-but-cooperating compositor its chance.
  */
 const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
+
+/**
+ * The same fallback for {@link waitForWindowToBeRaised}, which cannot use the budget above.
+ *
+ * That helper waits on a raise the APP asked for, and the renderer only honors the note such a
+ * raise leaves behind for `CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS` (5000ms,
+ * `src/renderer/services/window-activation.util.ts`). A synthetic focus event delivered after that
+ * bound finds the note already stale, the catch-up declines it, and the assertion the caller is
+ * waiting on can never be satisfied. So this has to stay clearly under that bound — nothing
+ * enforces the relationship, which is why it is written down here.
+ */
+const RAISE_FOCUS_SYNTHESIS_BUDGET_MS = 3000;
 
 /**
  * Give a window focus and wait until the main process routes to it.
@@ -235,25 +257,26 @@ const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
  */
 export async function focusWindowAndWaitForRouting(
   electronApp: ElectronApplication,
-  windowId: number,
+  windowId: string,
 ): Promise<void> {
   const startTime = Date.now();
   await pollUntil(
     async () => {
       const shouldSimulateFocusDelivery = Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS;
-      await electronApp.evaluate(
-        ({ BrowserWindow }, { id, simulateFocusDelivery }) => {
-          const win = BrowserWindow.fromId(id);
-          if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+      await withPlatformWindow(
+        electronApp,
+        windowId,
+        (win, { BrowserWindow }, simulateFocusDelivery) => {
+          // Every other window steps aside so the compositor has one candidate to activate
           BrowserWindow.getAllWindows().forEach((otherWindow) => {
-            if (otherWindow.id !== id && !otherWindow.isMinimized()) otherWindow.minimize();
+            if (otherWindow !== win && !otherWindow.isMinimized()) otherWindow.minimize();
           });
           if (win.isMinimized()) win.restore();
           win.show();
           win.focus();
           if (simulateFocusDelivery) win.emit('focus');
         },
-        { id: windowId, simulateFocusDelivery: shouldSimulateFocusDelivery },
+        shouldSimulateFocusDelivery,
       );
       return getFocusedWindowId();
     },
@@ -263,39 +286,140 @@ export async function focusWindowAndWaitForRouting(
   );
 }
 
+/**
+ * Wait for the main process to route to `windowId` after something INSIDE THE APP already asked the
+ * OS to raise it (`web-view.service-router.ts`'s cross-window reveal calling `focusWindow`) —
+ * deliberately never drives focus itself the way {@link focusWindowAndWaitForRouting} does, since
+ * doing so would prove this test's own focus-forcing worked rather than the app's raise. Simulates
+ * the compositor's own focus delivery only once a cooperation budget elapses without it, for the
+ * same reason {@link focusWindowAndWaitForRouting} does: this suite's WSLg/Weston compositor is
+ * known to sometimes ignore programmatic re-activation of an already-shown window, regardless of
+ * which code inside the app asked for it.
+ */
+export async function waitForWindowToBeRaised(
+  electronApp: ElectronApplication,
+  windowId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const startTime = Date.now();
+  await pollUntil(
+    async () => {
+      if (Date.now() - startTime >= RAISE_FOCUS_SYNTHESIS_BUDGET_MS) {
+        await withPlatformWindow(electronApp, windowId, (win) => win.emit('focus'));
+      }
+      return getFocusedWindowId();
+    },
+    (focusedId) => focusedId === windowId,
+    timeoutMs,
+    `main process to route to window ${windowId} after it was asked to be raised`,
+  );
+}
+
 // #endregion
 
 // #region window helpers
 
 /**
- * The window's Electron BrowserWindow id, read from the `windowId` query parameter the main process
- * puts in every renderer URL (`WINDOW_ID` in `src/shared/data/platform.data.ts`).
+ * What an action against a resolved window may use from the main process.
+ *
+ * Deliberately not the whole `electron` module: a body is serialised and re-instantiated in the
+ * main process, so what it can reach is exactly what is handed to it here.
  */
-export function getWindowIdOfPage(page: Page): number {
-  const rawId = new URL(page.url()).searchParams.get('windowId');
-  const id = Number(rawId);
-  if (!Number.isInteger(id) || id <= 0)
-    throw new Error(`Page URL ${page.url()} has no usable windowId query parameter`);
-  return id;
+export type PlatformWindowActionContext = {
+  BrowserWindow: typeof import('electron').BrowserWindow;
+  screen: typeof import('electron').screen;
+};
+
+/**
+ * Run `action` in the main process against the window carrying the given platform id.
+ *
+ * Every window is matched on the `windowId` query parameter the main process puts in its renderer
+ * URL — the id `getWindowIdOfPage` reads — rather than looked up with `BrowserWindow.fromId`.
+ * `fromId` takes Electron's ids, and the platform's id is a durable GUID with no relationship to
+ * Electron's numeric `BrowserWindow.id` at all — it does not merely diverge after a relaunch, so
+ * `fromId` would answer `undefined` or, worse, a different window. A window whose URL is not yet
+ * parseable (one still loading, with an empty URL) is skipped rather than aborting the lookup with
+ * an opaque `TypeError`.
+ *
+ * `action` is sent to the main process as source text, so it must be self-contained: it may use its
+ * parameters and nothing from the enclosing scope. Anything it needs from the test goes in `arg`.
+ *
+ * @param electronApp The app under test
+ * @param windowId Platform id of the window to act on
+ * @param action What to do with the resolved window. Receives the window, the main-process context,
+ *   and `arg`.
+ * @param arg A JSON-serialisable value forwarded to `action`
+ * @returns Whatever `action` returns
+ * @throws If no open window carries `windowId`
+ */
+export async function withPlatformWindow<TArg, TResult>(
+  electronApp: ElectronApplication,
+  windowId: string,
+  action: (
+    win: import('electron').BrowserWindow,
+    context: PlatformWindowActionContext,
+    arg: TArg,
+  ) => TResult,
+  arg?: TArg,
+): Promise<TResult> {
+  return electronApp.evaluate(
+    ({ BrowserWindow, screen }, { id, actionSource, actionArg }) => {
+      const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
+        try {
+          return new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined;
+        } catch {
+          return undefined;
+        }
+      };
+      const win = BrowserWindow.getAllWindows().find(
+        (someWindow) => platformIdOf(someWindow) === id,
+      );
+      if (!win) throw new Error(`No window with platform id ${id}`);
+      // Re-instantiated from source here because a function cannot cross the evaluate boundary.
+      // The surrounding `new Function` gives the body a name to be called by.
+      // eslint-disable-next-line no-new-func
+      const runAction = new Function(`return (${actionSource});`)();
+      return runAction(win, { BrowserWindow, screen }, actionArg);
+    },
+    { id: windowId, actionSource: action.toString(), actionArg: arg },
+  );
 }
 
 /**
- * The app's renderer pages (windows), sorted by their BrowserWindow id. Filters out any non-app
- * page (e.g. a detached devtools window) by requiring the renderer URL's `windowId` query
- * parameter. BrowserWindow ids increase in creation order within one app session, so the sort puts
- * the earliest-created window first — at startup that is the main window, which the app creates
- * before any secondary window.
+ * The window's platform id, read from the `windowId` query parameter the main process puts in every
+ * renderer URL (`WINDOW_ID` in `src/shared/data/platform.data.ts`).
+ *
+ * Not Electron's `BrowserWindow.id`, which the platform stopped exporting — anything resolving a
+ * window from this value has to match on the same query parameter rather than call
+ * `BrowserWindow.fromId`.
+ */
+export function getWindowIdOfPage(page: Page): string {
+  const rawId = new URL(page.url()).searchParams.get('windowId');
+  if (!rawId) throw new Error(`Page URL ${page.url()} has no usable windowId query parameter`);
+  return rawId;
+}
+
+/**
+ * The app's renderer pages (windows), in creation order. Filters out any non-app page (e.g. a
+ * detached devtools window) by requiring the renderer URL's `windowId` query parameter.
+ *
+ * Creation order falls out of Playwright's own bookkeeping rather than anything sorted here:
+ * `ElectronApplication` keeps its windows in a `Set`, appending each as its `window` event fires,
+ * and `windows()` returns them spread from that `Set` — `[...this._windows]` — so the array comes
+ * back in insertion (i.e. creation) order already (see
+ * `node_modules/playwright-core/lib/client/electron.js`). That is also why `firstWindow()` can take
+ * `values().next()`. Platform window ids are durable GUIDs with no ordering relationship to
+ * creation, so there is nothing to sort by even if a sort were wanted.
  */
 export function getAppPages(electronApp: ElectronApplication): Page[] {
   return electronApp
     .windows()
-    .filter((page) => !page.isClosed() && page.url().includes('windowId='))
-    .sort((a, b) => getWindowIdOfPage(a) - getWindowIdOfPage(b));
+    .filter((page) => !page.isClosed() && page.url().includes('windowId='));
 }
 
 /**
- * Wait until the app has at least `count` open windows (renderer pages), then return them sorted by
- * BrowserWindow id (see {@link getAppPages}), each with its React root attached. For asserting
+ * Wait until the app has at least `count` open windows (renderer pages), then return them in
+ * creation order (see {@link getAppPages}), each with its React root attached. For asserting
  * "exactly N windows", follow this with a settle period and a {@link getAppPages} length check —
  * this only waits for the count to be reached.
  */
@@ -350,6 +474,27 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 const TOOLBAR_REFERENCE_MIN_CSS_PX = 800;
 
 /**
+ * Close a window the way the user's ✕ does, and wait for it to go.
+ *
+ * Deliberately not `window.close()` from the renderer. That destroys the web contents and fires
+ * only the past-tense `closed`, so the cancellable `close` never reaches main — and with it none of
+ * main's close handler runs: not the shutdown work, not the layout flush, not the close-all
+ * question. A test closing that way looks like a user close and exercises none of one.
+ *
+ * @param electronApp The running app
+ * @param page The window to close
+ */
+export async function closeWindowLikeAUser(
+  electronApp: ElectronApplication,
+  page: Page,
+): Promise<void> {
+  const windowId = getWindowIdOfPage(page);
+  const pageClosed = page.waitForEvent('close', { timeout: 30_000 });
+  await withPlatformWindow(electronApp, windowId, (win) => win.close());
+  await pageClosed;
+}
+
+/**
  * Widen a window until its toolbar has room to show a reference in full, and return the renderer
  * width that achieved it.
  *
@@ -365,18 +510,13 @@ export async function widenWindowForToolbarReference(
   page: Page,
 ): Promise<number> {
   const windowId = getWindowIdOfPage(page);
-  await electronApp.evaluate(
-    ({ BrowserWindow, screen }, { id }) => {
-      const win = BrowserWindow.fromId(id);
-      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
-      // An unmapped window reports stale bounds and ignores the resize.
-      if (win.isMinimized()) win.restore();
-      const { workArea } = screen.getPrimaryDisplay();
-      const { height, y } = win.getBounds();
-      win.setBounds({ x: workArea.x, y, width: workArea.width, height });
-    },
-    { id: windowId },
-  );
+  await withPlatformWindow(electronApp, windowId, (win, { screen }) => {
+    // An unmapped window reports stale bounds and ignores the resize.
+    if (win.isMinimized()) win.restore();
+    const { height, y } = win.getBounds();
+    const { workArea } = screen.getDisplayMatching(win.getBounds());
+    win.setBounds({ x: workArea.x, y, width: workArea.width, height });
+  });
   // The shrink step comes from a `ResizeObserver`, so the label re-renders after the resize lands
   // rather than with it.
   let rendererWidth = 0;
@@ -395,11 +535,11 @@ export async function widenWindowForToolbarReference(
  * command at this window right after the gate needs the shard behind THAT command to have arrived.
  */
 const SCOPED_SHARD_METHOD_PATTERNS = [
-  (windowId: number) => `^object:DialogService-${windowId}\\.showDialog$`,
-  (windowId: number) => `^object:UsersnapService-${windowId}\\.submitIdea$`,
-  (windowId: number) => `^object:BookChapterControlService-${windowId}\\.open$`,
-  (windowId: number) => `^object:WebViewService-${windowId}\\.openSettingsTab$`,
-  (windowId: number) => `^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`,
+  (windowId: string) => `^object:DialogService-${windowId}\\.showDialog$`,
+  (windowId: string) => `^object:UsersnapService-${windowId}\\.submitIdea$`,
+  (windowId: string) => `^object:BookChapterControlService-${windowId}\\.open$`,
+  (windowId: string) => `^object:WebViewService-${windowId}\\.openSettingsTab$`,
+  (windowId: string) => `^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`,
 ];
 
 /**
@@ -407,7 +547,7 @@ const SCOPED_SHARD_METHOD_PATTERNS = [
  * routers forward to. Only then can generic-name calls be routed to this window.
  */
 export async function waitForRendererRegistered(
-  windowId: number,
+  windowId: string,
   timeoutMs: number,
 ): Promise<void> {
   // Waited on together: the renderer starts them together too, so they arrive within a poll of one
@@ -420,16 +560,80 @@ export async function waitForRendererRegistered(
 }
 
 /**
- * Locator for a window's Home tab title BY ITS FIXED FALLBACK-LAYOUT ID — only valid for a window
- * that loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of
- * a fresh profile or one restored from a saved layout that already carried that id. A window whose
- * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
- * generated web view id each time, so this locator will not find it — identify that one by title
- * text instead.
+ * Locator for a window's Home tab title, BY ITS TAB TEXT. Every Home tab renders the same title
+ * ("Home") whatever id it was minted with, so title text is what identifies it whether it came from
+ * the first window's fallback layout or was docked on the fly (see
+ * {@link expectWindowDockHasOnlyHomeTab}) — no fixed id survives to key on (see
+ * {@link HOME_TAB_UUID}). Locale-independent in these suites because they pin
+ * `platform.interfaceLanguage` to English.
+ *
+ * Scoped to `page` already identifies THAT window's Home tab: each `BrowserWindow` gets its own
+ * Playwright `Page`, so page-scoping is the identity boundary, not the tab's id. Matches more than
+ * one element only in a window deliberately holding two Home-titled tabs at once (a legacy-layout
+ * clone, for instance) — such a site must not use this locator unmodified; see its caller in
+ * `window-layout-persistence.spec.ts`'s upgrade test for the pattern that excludes the clone.
  */
-export function homeTabTitle(page: Page, windowId: number) {
-  return page.locator(`.platform-tab-title[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`);
+export function homeTabTitle(page: Page) {
+  return page.locator('.platform-tab-title', { hasText: 'Home' });
 }
+
+/**
+ * Read the web view id a window's Home tab is CURRENTLY rendering under. Every materialization of
+ * the Home tab mints a fresh id (see {@link HOME_TAB_UUID}'s doc), so no fixed constant identifies
+ * it — callers that need the id (to prove focus, a persisted layout, or a move tracks THIS Home tab
+ * and not some other one) must read it off the live DOM once and compare against the captured value
+ * from then on.
+ *
+ * Resolves through {@link homeTabTitle}, so it carries the same single-match precondition: a page
+ * holding more than one Home-titled tab needs its own narrower locator instead of this helper.
+ */
+export async function getHomeTabWebViewId(page: Page): Promise<string> {
+  const title = homeTabTitle(page);
+  await expect(title).toBeAttached({ timeout: 60_000 });
+  const id = await title.getAttribute('data-web-view-id');
+  if (!id) throw new Error('Home tab title has no data-web-view-id attribute');
+  return id;
+}
+
+/**
+ * The tab title element for a web view, by its id.
+ *
+ * The one place this selector is spelled, so the id is the only thing a caller can get wrong —
+ * which matters because a wrong id yields a zero-element locator that blocks until the test times
+ * out rather than failing with something that names the cause. Note {@link homeTabTitle} builds the
+ * FIXED fallback-layout id, which only the first window's Home tab carries; a window that docks
+ * Home on the fly mints its own, and must be looked up by that.
+ */
+export function webViewTabTitle(page: Page, webViewId: string) {
+  return page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
+}
+
+/**
+ * The web view ids a window is holding, read off its dock's tab titles
+ * (`platform-tab-title.component.tsx` stamps each web view tab with `data-web-view-id`;
+ * non-web-view tabs carry no such attribute and are therefore not matched).
+ *
+ * Tab titles rather than iframes: every tab in the tab bar renders its title whether or not it has
+ * ever been the active tab, while rc-dock mounts a tab's pane — and with it the web view's iframe —
+ * lazily. A window holding a tab the user has not looked at yet must still count as holding it.
+ */
+export async function getHeldWebViewIds(page: Page): Promise<string[]> {
+  return page
+    .locator('.platform-tab-title[data-web-view-id]')
+    .evaluateAll((titles) => titles.map((title) => title.getAttribute('data-web-view-id') ?? ''));
+}
+
+/**
+ * Per-request timeout for a move (`platform.moveWebViewToWindow` /
+ * `platform.moveWebViewToNewWindow` — see `src/declarations/papi-shared-types.ts`). A move to a new
+ * window pays a whole cold renderer start before it touches the web view — deliberately, so a
+ * window that never comes up costs a wait and an error rather than a web view open in no window —
+ * and a cold start on a loaded machine can take a minute. A budget shorter than that would report a
+ * transport timeout for a move that was still legitimately under way, even for a move whose target
+ * is already open and so pays no cold start of its own: it inherits the same CI machines as the
+ * moves that do.
+ */
+export const MOVE_COMMAND_TIMEOUT_MS = 180_000;
 
 /**
  * How long {@link expectWindowDockHasOnlyHomeTab} waits after the Home tab attaches before asserting
@@ -448,10 +652,8 @@ const HOME_ONLY_SETTLE_MS = 5_000;
  * docks Home instead of staying empty.
  *
  * A freshly docked Home tab is not restored from any saved layout, so it gets a new web view id
- * each time — identity here is asserted by title text ("Home"), not by a fixed id. That text is
- * locale-independent in these suites because they pin `platform.interfaceLanguage` to English.
- * Contrast {@link homeTabTitle}, which locates a Home tab that came from the fixed-id fallback
- * layout.
+ * each time — identity here is asserted by title text ("Home"), the same way {@link homeTabTitle}
+ * locates any window's Home tab.
  *
  * Fails if the window renders zero tabs (Home never got docked) or more than one tab (something
  * besides Home is also present) — which is exactly what a regression to failing the dock-Home
@@ -490,9 +692,10 @@ export interface AppExitResult {
 }
 
 /**
- * Trigger a REAL app quit — exactly what File > Exit or Cmd+Q does — and wait for the Electron OS
- * process to exit, then reap the leftover process group. Returns the exit code/signal for the
- * caller to assert on (a clean quit exits with code 0 and no signal).
+ * Bring the app down — a real quit, exactly what File > Exit or Cmd+Q does, or a caller-supplied
+ * trigger (see `triggerExit`) — and wait for the Electron OS process to exit, then reap the
+ * leftover process group. Returns the exit code/signal for the caller to assert on (a clean quit
+ * exits with code 0 and no signal).
  *
  * Watches the OS process itself, not Playwright's ElectronApplication `close` event. That event
  * additionally waits for the process's stdio streams to close, and a graceful dev-mode quit leaves
@@ -502,6 +705,12 @@ export interface AppExitResult {
  *
  * `app.quit()` is scheduled rather than called inline so the evaluate round-trip completes before
  * teardown begins.
+ *
+ * Pass `triggerExit` to bring the app down some other way — closing a window through its ✕, say. It
+ * runs after the exit listener is armed, raced against that listener rather than plain-awaited: a
+ * trigger that brings the process down itself can have its own round trip rejected once that
+ * process is already gone, and that rejection must not skip the wait below or the reap that follows
+ * it.
  *
  * Budget: the quit path is a bounded shutdown-sync attempt (which rejects immediately in this
  * suite's configuration, since no S/R extension is registered) plus bounded child-process waits of
@@ -520,6 +729,7 @@ export interface AppExitResult {
 export async function quitAppAndWaitForExit(
   electronApp: ElectronApplication,
   output?: AppOutputCapture,
+  triggerExit?: () => Promise<void>,
 ): Promise<AppExitResult> {
   const electronProcess = electronApp.process();
   const processExit = new Promise<AppExitResult>((resolve) => {
@@ -528,18 +738,45 @@ export async function quitAppAndWaitForExit(
     );
   });
 
-  await electronApp.evaluate(({ app }) => {
-    setTimeout(() => app.quit(), 0);
-  });
+  // Armed before the trigger, never after: a trigger whose own round trip outlives the exit would
+  // otherwise land the exit before anything is listening, and the wait below would burn its whole
+  // budget on an event that already fired.
+  //
+  // Raced against the exit rather than bare-awaited: a trigger that brings the process down itself
+  // (closing the primary through its ✕, say) can have its own round trip rejected with "Target
+  // page, context or browser has been closed" once that process is gone — before it ever resolves.
+  // The rejection is caught rather than left to settle the race: `Promise.race` resolves OR rejects
+  // on whichever promise settles first, so an uncaught rejection here would still be able to win
+  // against `processExit` and throw out of this function on a run where the CDP round trip is cut
+  // before libuv reaps the child — skipping both the wait below and the process-group reap that
+  // follows it. Catching it means this race can only ever resolve — whichever of the two settles
+  // first — so the wait and the reap below always run, and the error is kept to report if the
+  // trigger failed for a reason unrelated to the exit it caused.
+  let triggerError: unknown;
+  if (triggerExit)
+    await Promise.race([
+      triggerExit().catch((e: unknown) => {
+        triggerError = e;
+      }),
+      processExit,
+    ]);
+  else
+    await electronApp.evaluate(({ app }) => {
+      setTimeout(() => app.quit(), 0);
+    });
 
+  const exitTriggerDescription = triggerExit ? 'the trigger' : 'app.quit()';
   const exitResult = await Promise.race([
     processExit,
     new Promise<never>((_resolve, reject) => {
       setTimeout(() => {
         const outputTail = output?.text().split('\n').slice(-60).join('\n');
+        const triggerErrorNote = triggerError
+          ? `; trigger failed with: ${triggerError instanceof Error ? triggerError.message : String(triggerError)}`
+          : '';
         reject(
           new Error(
-            `Electron process did not exit within 120 s of app.quit()${
+            `Electron process did not exit within 120 s of ${exitTriggerDescription}${triggerErrorNote}${
               outputTail ? `; last app output:\n${outputTail}` : ''
             }`,
           ),
@@ -548,15 +785,26 @@ export async function quitAppAndWaitForExit(
     }),
   ]);
 
-  if (electronProcess.pid) {
-    try {
-      process.kill(-electronProcess.pid, 'SIGKILL');
-    } catch {
-      /* process group already gone */
-    }
-  }
+  if (electronProcess.pid) killProcessTree(electronProcess.pid, 'SIGKILL');
 
   return exitResult;
+}
+
+/**
+ * Sweep a still-running app's output for faults and duplicate registrations.
+ *
+ * The counterpart to {@link quitAndExpectCleanExit} for a test that never quits.
+ * {@link RENDERER_STARTING_LOG} is the positive control: every caller creates a window during the
+ * test, so that line lands after the capture attached — without it an empty capture would satisfy
+ * both negative assertions and the sweep would examine nothing.
+ *
+ * @param output The capture taken at the start of the test
+ */
+export function expectNoFaultsWhileRunning(output: AppOutputCapture): void {
+  const log = output.text();
+  expect(log).toContain(RENDERER_STARTING_LOG);
+  FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
+  expect(log).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 }
 
 /**

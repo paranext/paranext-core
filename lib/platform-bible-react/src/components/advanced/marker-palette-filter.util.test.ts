@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { filterAndRankPaletteItems } from './marker-palette-filter.util';
+import type { StyleInfo } from '@eten-tech-foundation/platform-editor';
+import { filterAndRankPaletteItems, isNoteMarker } from './marker-palette-filter.util';
 
 // Fixtures mirror the library's real context-ordered offers (basic markers first), where the
 // exact match is deliberately NOT first — the shape that produced the wrong-marker commits
@@ -126,5 +127,48 @@ describe('filterAndRankPaletteItems', () => {
         '+wj*',
       ]);
     });
+  });
+});
+
+describe('isNoteMarker', () => {
+  /** A stylesheet with one note marker, one nested note, and a character marker. */
+  const styleInfo: StyleInfo = {
+    markers: {
+      f: { marker: 'f', styleType: 'note' },
+      fe: { marker: 'fe', styleType: 'note' },
+      nd: { marker: 'nd', styleType: 'character' },
+      p: { marker: 'p', styleType: 'paragraph' },
+    },
+  };
+
+  it('is true when the typed filter names a note marker in the stylesheet', () => {
+    expect(isNoteMarker(styleInfo, 'f')).toBe(true);
+    expect(isNoteMarker(styleInfo, 'fe')).toBe(true);
+  });
+
+  it('does not depend on what the palette offers', () => {
+    // Why the table cannot answer this from its own items: a note marker a palette does not offer
+    // is missing from that list exactly when the rule matters.
+    expect(isNoteMarker(styleInfo, 'f')).toBe(true);
+  });
+
+  it('matches case-insensitively — `\\F` must resolve to the same `f` entry', () => {
+    expect(isNoteMarker(styleInfo, 'F')).toBe(true);
+  });
+
+  it('strips the `+` nesting prefix from the typed filter, like every other matching site', () => {
+    expect(isNoteMarker(styleInfo, '+f')).toBe(true);
+  });
+
+  it('is false for non-note markers, and for a filter that only PREFIXES a note marker', () => {
+    expect(isNoteMarker(styleInfo, 'nd')).toBe(false);
+    expect(isNoteMarker(styleInfo, 'p')).toBe(false);
+    // `fe` is a note, but `f` must match the `f` entry exactly rather than prefix-matching it.
+    expect(isNoteMarker({ markers: { fe: styleInfo.markers.fe } }, 'f')).toBe(false);
+  });
+
+  it('is false with no filter, and with no stylesheet to consult', () => {
+    expect(isNoteMarker(styleInfo, '')).toBe(false);
+    expect(isNoteMarker(undefined, 'f')).toBe(false);
   });
 });

@@ -547,6 +547,7 @@ internal class ChecklistDataModelTests
         );
         Assert.That(ChecklistErrorCodes.MaxRowsExceeded, Is.EqualTo("MAX_ROWS_EXCEEDED"));
         Assert.That(ChecklistErrorCodes.Cancelled, Is.EqualTo("CANCELLED"));
+        Assert.That(ChecklistErrorCodes.ProjectOpenBlocked, Is.EqualTo("PROJECT_OPEN_BLOCKED"));
     }
 
     // ---------------------------------------------------------------------

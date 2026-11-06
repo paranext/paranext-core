@@ -1,6 +1,8 @@
 //----------------------------------------------------------------------------------------------
 // NOTE: If you change any of the types, make sure the JSON schema at the end of this file gets
 // changed so they align.
+// Deliberate difference: `MenuItemContainingCommand.shortcut` is platform-filled; the schema
+// omits it.
 //----------------------------------------------------------------------------------------------
 
 import { ReplaceType } from '../util';
@@ -53,6 +55,15 @@ export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
 export type MenuColumnWithHeader = OrderedExtensibleContainer & {
   /** Key that represents the text of the header text of the column */
   label: LocalizeKey;
+  /**
+   * Set to `true` to show this column's items without its header text in the menu that opens when
+   * you click on the top left corner of a tab (`topMenu`), which heads each section with its
+   * column's header. While that menu shows two or more sections, the label still names this section
+   * for assistive technology; a section left on its own, including one left alone by interface-mode
+   * filtering, gets neither a heading nor a name. Give it a real label regardless. The application
+   * menubar ignores this, because there the header is what opens the column.
+   */
+  isHeaderHidden?: boolean;
 };
 
 export type MenuItemBase = OrderedItem & {
@@ -71,6 +82,26 @@ export type MenuItemBase = OrderedItem & {
    * items that should show in every mode — most items need no value here at all.
    */
   hiddenInterfaceModes?: InterfaceMode[];
+  /**
+   * Lucide icon name (kebab-case, e.g. `refresh-cw`) identifying the icon to display before the
+   * menu text. The icon takes the text colour of the item. The curated names are listed in
+   * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over
+   * `iconPathBefore` when both are set, unless the name is not in that set: then `iconPathBefore`
+   * is shown if set, else no icon.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  iconNameBefore?: string;
+  /**
+   * Lucide icon name (kebab-case, e.g. `external-link`) identifying the icon to display after the
+   * menu text. The icon takes the text colour of the item. The curated names are listed in
+   * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over
+   * `iconPathAfter` when both are set, unless the name is not in that set: then `iconPathAfter` is
+   * shown if set, else no icon.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  iconNameAfter?: string;
 };
 
 /** Menu item that hosts a submenu */
@@ -84,15 +115,30 @@ export type MenuItemContainingCommand = MenuItemBase & {
   /** Name of the PAPI command to run when this menu item is selected. */
   command: ReferencedItem;
   /**
-   * Uri path to the icon to display after the menu text. Ex:
-   * `papi-extension://helloWorld/assets/icon.png`
+   * Uri path to the icon to display after the menu text, shown at up to 16px wide and tall (the
+   * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
    */
   iconPathAfter?: string;
   /**
-   * Uri path to the icon to display before the menu text. Ex:
-   * `papi-extension://helloWorld/assets/icon.png`
+   * Uri path to the icon to display before the menu text, shown at up to 16px wide and tall (the
+   * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
    */
   iconPathBefore?: string;
+  /**
+   * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
+   * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: renderers
+   * split it into one keycap per key, but never treat it as a key binding.
+   *
+   * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
+   * the unlocalized main menu never has it. Key names are not localized, and only the first
+   * catalogued alternative is shown.
+   *
+   * A `menus.json` contribution cannot set it: the menus schema rejects it, which rejects the
+   * extension's whole `menus.json`.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  shortcut?: string;
 };
 
 /**
@@ -147,12 +193,39 @@ export type MultiColumnMenu = {
 
 /** Menus for one single web view */
 export type WebViewMenu = {
-  /** Indicates whether the platform default menus should be included for this webview */
+  /**
+   * Indicates whether the platform default top and context menus should be included for this web
+   * view.
+   *
+   * This does not govern the tab menu. Its items act on the tab frame rather than on the web view's
+   * contents, so the platform's tab items are included whatever this says — see
+   * {@link WebViewMenu.tabMenu}.
+   */
   includeDefaults: boolean | undefined;
   /** Menu that opens when you click on the top left corner of a tab */
   topMenu: MultiColumnMenu | undefined;
   /** Menu that opens when you right click on the main body/area of a tab */
   contextMenu: SingleColumnMenu | undefined;
+  /**
+   * Menu that opens when you right click on the tab itself, rather than on its contents.
+   *
+   * Items here act on the tab, so they are offered on every tab — including tabs that host no web
+   * view. Absent means this web view contributes nothing of its own, and the tab shows the platform
+   * items alone; unlike the menus above, there is no opting out of those.
+   *
+   * Some platform items in this menu carry a `command` that names an action the tab menu performs
+   * itself rather than a registered PAPI command — `platform.floatTab` moves the tab into a float
+   * panel within its own window, which never leaves the renderer. Treat a `command` here as the
+   * name of the action, not as something to invoke through the command service.
+   *
+   * The platform's own groups here sit at orders 50 and 100, so choose another order for yours. A
+   * single-column menu buckets every group together for the duplicate-order check, so a second
+   * group at 100 throws — and because a failed contribution is rolled back whole, that would cost
+   * this extension its entire `menus.json`, not just its tab items.
+   *
+   * @experimental This menu is unstable and may change or disappear without notice
+   */
+  tabMenu?: SingleColumnMenu;
   /**
    * Set to `true` to mark this WebView menu as experimental. Experimental menu content may change
    * or be removed without notice. Extensions reading this should treat the marker as
@@ -177,6 +250,17 @@ export type PlatformMenus = {
   defaultWebViewContextMenu: SingleColumnMenu;
   /** Default top menu for web views that don't specify their own */
   defaultWebViewTopMenu: MultiColumnMenu;
+  /**
+   * Default tab context menu, offered on every tab. Web views that specify their own tab menu have
+   * this folded into it.
+   *
+   * Optional so that adding it does not break code that already builds a `PlatformMenus`, matching
+   * the per-web-view `tabMenu` on the same channel. A document that omits it simply contributes no
+   * platform tab items.
+   *
+   * @experimental This menu is unstable and may change or disappear without notice
+   */
+  defaultWebViewTabMenu?: SingleColumnMenu;
 };
 
 /**
@@ -203,6 +287,10 @@ export const menuDocumentSchema = {
     },
     defaultWebViewContextMenu: {
       description: "Default context menu for web views that don't specify their own",
+      $ref: '#/$defs/singleColumnMenu',
+    },
+    defaultWebViewTabMenu: {
+      description: 'Default menu that opens when you right click a tab itself',
       $ref: '#/$defs/singleColumnMenu',
     },
     webViewMenus: {
@@ -262,6 +350,11 @@ export const menuDocumentSchema = {
             isExperimental: {
               description:
                 'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
+              type: 'boolean',
+            },
+            isHeaderHidden: {
+              description:
+                "Set to `true` to show this column's items without its header text in the menu that opens when you click on the top left corner of a tab (`topMenu`), which heads each section with its column's header. While that menu shows two or more sections, the label still names this section for assistive technology; a section left on its own, including one left alone by interface-mode filtering, gets neither a heading nor a name. Give it a real label regardless. The application menubar ignores this, because there the header is what opens the column.",
               type: 'boolean',
             },
           },
@@ -365,6 +458,7 @@ export const menuDocumentSchema = {
           required: ['id'],
         },
         {
+          // No `shortcut`: the platform fills it in, so contributions must not set it
           properties: {
             command: {
               description: 'Name of the PAPI command to run when this menu item is selected.',
@@ -372,12 +466,12 @@ export const menuDocumentSchema = {
             },
             iconPathBefore: {
               description:
-                'Uri path to the icon to display before the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
+                'Uri path to the icon to display before the menu text, shown at up to 16px wide and tall (the size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`',
               type: 'string',
             },
             iconPathAfter: {
               description:
-                'Uri path to the icon to display after the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
+                'Uri path to the icon to display after the menu text, shown at up to 16px wide and tall (the size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`',
               type: 'string',
             },
           },
@@ -419,6 +513,16 @@ export const menuDocumentSchema = {
           type: 'array',
           items: { enum: ['simple', 'power'] },
           uniqueItems: true,
+        },
+        iconNameBefore: {
+          description:
+            'Lucide icon name (kebab-case, e.g. `refresh-cw`) identifying the icon to display before the menu text. The curated names are listed in `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over `iconPathBefore` when both are set, unless the name is not in that set: then `iconPathBefore` is shown if set, else no icon.',
+          type: 'string',
+        },
+        iconNameAfter: {
+          description:
+            'Lucide icon name (kebab-case, e.g. `external-link`) identifying the icon to display after the menu text. The curated names are listed in `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over `iconPathAfter` when both are set, unless the name is not in that set: then `iconPathAfter` is shown if set, else no icon.',
+          type: 'string',
         },
       },
       required: ['label', 'group', 'order'],
@@ -479,6 +583,10 @@ export const menuDocumentSchema = {
         },
         contextMenu: {
           description: 'Menu that opens when you right click on the main body/area of a tab',
+          $ref: '#/$defs/singleColumnMenu',
+        },
+        tabMenu: {
+          description: 'Menu that opens when you right click the tab itself',
           $ref: '#/$defs/singleColumnMenu',
         },
         isExperimental: {

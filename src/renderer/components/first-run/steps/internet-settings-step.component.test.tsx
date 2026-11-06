@@ -2,12 +2,18 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { useDataProvider, useData } from '@renderer/hooks/papi-hooks';
+import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
+import { settingsService } from '@shared/services/settings.service';
 import { newPlatformError } from 'platform-bible-utils';
+import {
+  noteInternetSettingsLoaded,
+  noteInternetSettingsSaved,
+} from '@renderer/services/first-run-store';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { InternetSettingsStep } from './internet-settings-step.component';
 
@@ -18,11 +24,22 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%internetSettings_button_retry%': 'Retry',
-      '%firstRun_step_internetSettings_body%': 'Body sentinel',
+      '%firstRun_step_internetSettings_heading_2%': 'Internet connectivity',
+      '%firstRun_step_internetSettings_body_2%': 'Choose how Paratext accesses the internet.',
+      '%firstRun_step_internetSettings_restartNote%': 'Restart note sentinel',
       '%firstRun_step_internetSettings_connecting%': 'Getting things ready…',
-      '%firstRun_step_internetSettings_heading%': 'Heading sentinel',
       '%firstRun_step_internetSettings_loadError%':
         "We couldn't get things ready. Please try again in a moment.",
+      '%firstRun_step_internetSettings_paratext9Unsupported%':
+        'Paratext 9 has {setting}, which is unsupported by {%product_name%}',
+      '%firstRun_step_internetSettings_paratext9Setting_Disabled%': 'Disable all sentinel',
+      '%firstRun_step_internetSettings_paratext9Setting_VpnRequired%': 'Sensitive sentinel',
+      '%firstRun_step_internetSettings_paratext9Setting_ProxyOnly%': 'Proxy sentinel',
+      '%firstRun_step_internetSettings_sensitiveCountries%':
+        'Sensitive countries sentinel for {%product_name%}',
+      '%firstRun_step_internetSettings_useWithInternet%': 'Use {%product_name%} with internet',
+      '%firstRun_step_internetSettings_closeApp%': 'Close {%product_name%}',
+      '%product_name%': 'Product sentinel',
     },
     false,
   ]),
@@ -30,8 +47,16 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useData: vi.fn(),
 }));
 
+vi.mock('@renderer/services/first-run-store', () => ({
+  noteInternetSettingsLoaded: vi.fn(),
+  noteInternetSettingsSaved: vi.fn(),
+}));
+vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn() },
+}));
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: { get: vi.fn(), set: vi.fn().mockResolvedValue(undefined) },
 }));
 
 vi.mock('platform-bible-react', () => ({
@@ -44,11 +69,13 @@ vi.mock('platform-bible-react', () => ({
   Button: ({
     children,
     onClick,
+    disabled,
   }: {
     children: React.ReactNode;
     onClick?: React.MouseEventHandler<HTMLButtonElement>;
+    disabled?: boolean;
   }) => (
-    <button type="button" onClick={onClick}>
+    <button type="button" onClick={onClick} disabled={disabled}>
       {children}
     </button>
   ),
@@ -56,38 +83,9 @@ vi.mock('platform-bible-react', () => ({
   cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 
-vi.mock('platform-bible-react/experimental', () => ({
-  InternetAccessOptionList: ({
-    value,
-    onChange,
-    showFooter,
-  }: {
-    value: string;
-    onChange: (value: string) => void;
-    showFooter?: boolean;
-  }) => (
-    <button
-      data-testid="option-list"
-      data-value={value}
-      data-show-footer={String(showFooter)}
-      type="button"
-      onClick={() => onChange('Enabled')}
-    >
-      option list
-    </button>
-  ),
-  DeveloperSection: ({ onServerChange }: { onServerChange: (server: string) => void }) => (
-    <button data-testid="dev-section" type="button" onClick={() => onServerChange('Development')}>
-      dev section
-    </button>
-  ),
-  INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: [],
-  DEVELOPER_SECTION_STRING_KEYS: [],
-}));
-
 const MOCK_SETTINGS = {
-  permittedInternetUse: 'VpnRequired' as const,
-  selectedServer: 'Production' as const,
+  permittedInternetUse: 'Disabled' as const,
+  selectedServer: 'Test' as const,
   proxyPort: 0,
 };
 
@@ -122,141 +120,373 @@ function configureHooks(opts: {
   return { setData };
 }
 
-function renderStep(setCanProceed = vi.fn()) {
-  const props: FirstRunStepProps = { onNext: vi.fn(), setCanProceed };
-  return { ...render(<InternetSettingsStep {...props} />), setCanProceed };
+/**
+ * Answer `paratextRegistration.getParatext9InternetUse` with `paratext9InternetUse` (a promise, to
+ * hold or reject it), and `platform.quit` with nothing.
+ */
+function configureCommands(paratext9InternetUse: unknown) {
+  vi.mocked(sendCommand).mockImplementation(async (command: string) => {
+    if (command === 'paratextRegistration.getParatext9InternetUse') return paratext9InternetUse;
+    return undefined;
+  });
 }
+
+function renderStep() {
+  const setCanProceed = vi.fn();
+  const onNext = vi.fn();
+  const props: FirstRunStepProps = { onNext, setCanProceed };
+  return { ...render(<InternetSettingsStep {...props} />), setCanProceed, onNext };
+}
+
+const continueWithInternetButton = () =>
+  screen.findByRole('button', { name: 'Use Product sentinel with internet' });
+const closeButton = () => screen.findByRole('button', { name: 'Close Product sentinel' });
 
 describe('InternetSettingsStep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    configureCommands(undefined);
   });
 
-  it('shows the heading and description while the provider is still undefined', () => {
-    configureHooks({ provider: undefined });
+  // The heading and its lead-in match the standalone Internet connectivity web view. They wrap
+  // every state so they hold their place instead of popping in once the provider resolves.
+  it.each([
+    ['loaded', { value: MOCK_SETTINGS, isLoading: false }],
+    ['provider not yet registered', { provider: undefined }],
+    ['data still loading', { isLoading: true }],
+    ['read failed', { value: newPlatformError('boom'), isLoading: false }],
+  ])('shows the "Internet connectivity" heading and its lead-in when %s', (_label, opts) => {
+    configureHooks(opts);
     renderStep();
 
-    expect(screen.getByRole('heading', { name: 'Heading sentinel' })).toBeInTheDocument();
-    expect(screen.getByText('Body sentinel')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Internet connectivity', level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Choose how Paratext accesses the internet.')).toBeInTheDocument();
   });
 
-  it('keeps the heading and description once the settings have loaded', () => {
+  it('says up front that changes take effect after a restart', () => {
     configureHooks({ value: MOCK_SETTINGS });
     renderStep();
 
-    expect(screen.getByRole('heading', { name: 'Heading sentinel' })).toBeInTheDocument();
-    expect(screen.getByText('Body sentinel')).toBeInTheDocument();
+    expect(screen.getByText('Restart note sentinel')).toBeInTheDocument();
   });
 
-  it('hides the option list footer so the wizard Next button stays above the fold', () => {
+  // The step's own buttons are the only ways on: the shell's Next would accept the saved setting
+  // without the user choosing.
+  it("hides the shell's Next button", () => {
     configureHooks({ value: MOCK_SETTINGS });
-    renderStep();
-
-    expect(screen.getByTestId('option-list')).toHaveAttribute('data-show-footer', 'false');
-  });
-
-  it('shows a spinner and no error while the provider is undefined', () => {
-    configureHooks({ provider: undefined });
     const { setCanProceed } = renderStep();
 
-    expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
-    expect(setCanProceed).toHaveBeenCalledWith(false);
-  });
-
-  it('shows a spinner and keeps Next disabled while the provider is available but data is still loading', () => {
-    configureHooks({ isLoading: true });
-    const { setCanProceed } = renderStep();
-
-    expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    expect(screen.queryByTestId('option-list')).not.toBeInTheDocument();
-    // Next must NOT be enabled while the first read is still loading and the spinner is showing.
+    expect(setCanProceed).toHaveBeenCalledWith(undefined);
     expect(setCanProceed).not.toHaveBeenCalledWith(true);
   });
 
-  it('renders the settings form and enables Next once data has loaded', async () => {
-    configureHooks({ value: MOCK_SETTINGS, isLoading: false });
-    const { setCanProceed } = renderStep();
-
-    expect(screen.getByTestId('option-list')).toBeInTheDocument();
-    await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(true));
-  });
-
-  it('calls setData with the new value immediately when a selection changes', async () => {
-    const { setData } = configureHooks({ value: MOCK_SETTINGS });
+  it('shows a spinner and no choices while the provider is undefined', () => {
+    configureHooks({ provider: undefined });
     renderStep();
 
-    await userEvent.click(screen.getByTestId('option-list'));
+    expect(screen.getByTestId('spinner')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
+  });
 
-    expect(setData).toHaveBeenCalledWith(
-      expect.objectContaining({ permittedInternetUse: 'Enabled' }),
+  it('shows a spinner and no choices while the settings are still loading', () => {
+    configureHooks({ isLoading: true });
+    renderStep();
+
+    expect(screen.getByTestId('spinner')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
+  });
+
+  // So the provider wait and the Paratext 9 lookup overlap instead of adding up.
+  it('starts looking up the Paratext 9 setting before the provider is available', () => {
+    configureHooks({ provider: undefined });
+    renderStep();
+
+    expect(sendCommand).toHaveBeenCalledWith('paratextRegistration.getParatext9InternetUse');
+  });
+
+  // So the Paratext 9 line does not pop in after the user has started reading.
+  it('waits for the Paratext 9 setting before showing the choices', async () => {
+    let answerParatext9: (internetUse: string) => void = () => {};
+    configureCommands(
+      new Promise<string>((resolve) => {
+        answerParatext9 = resolve;
+      }),
     );
-  });
-
-  it('shows a save-error alert and disables Next when setData rejects', async () => {
-    const setData = vi.fn().mockRejectedValue(new Error('save failed'));
-    configureHooks({ value: MOCK_SETTINGS, setData });
-    const { setCanProceed } = renderStep();
-
-    await userEvent.click(screen.getByTestId('option-list'));
-
-    await waitFor(() => expect(screen.getByText(/save failed/i)).toBeInTheDocument());
-    const calls = setCanProceed.mock.calls.map((c) => c[0]);
-    expect(calls.at(-1)).toBe(false);
-  });
-
-  it('reverts the displayed selection to the last-good value when a save fails', async () => {
-    const setData = vi.fn().mockRejectedValue(new Error('save failed'));
-    configureHooks({ value: MOCK_SETTINGS, setData });
+    configureHooks({ value: MOCK_SETTINGS });
     renderStep();
 
-    // Loaded value is VpnRequired; the click optimistically switches to Enabled, then the failed
-    // save must revert the displayed value back to VpnRequired (lastGood).
-    expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'VpnRequired');
-    await userEvent.click(screen.getByTestId('option-list'));
+    expect(screen.getByTestId('spinner')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
 
-    await waitFor(() =>
-      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'VpnRequired'),
+    answerParatext9('Disabled');
+
+    expect(await continueWithInternetButton()).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Paratext 9 has Disable all sentinel, which is unsupported by Product sentinel',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('always warns against sensitive countries and offers both choices', async () => {
+    configureHooks({ value: MOCK_SETTINGS });
+    renderStep();
+
+    expect(await continueWithInternetButton()).toBeEnabled();
+    expect(await closeButton()).toBeEnabled();
+    expect(
+      screen.getByText('Sensitive countries sentinel for Product sentinel'),
+    ).toBeInTheDocument();
+  });
+
+  // Paratext 9's own setting, not Platform.Bible's copy: startup turns a copied VpnRequired into
+  // Disabled, and a new user's copy holds ParatextData's default.
+  describe('the Paratext 9 setting', () => {
+    it.each([
+      ['Disabled', 'Disable all sentinel'],
+      ['VpnRequired', 'Sensitive sentinel'],
+      ['ProxyOnly', 'Proxy sentinel'],
+    ])('names %s as not supported yet', async (paratext9InternetUse, label) => {
+      configureCommands(paratext9InternetUse);
+      configureHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' } });
+      renderStep();
+
+      await continueWithInternetButton();
+      expect(
+        screen.getByText(`Paratext 9 has ${label}, which is unsupported by Product sentinel`),
+      ).toBeInTheDocument();
+    });
+
+    // `null` is what "no setting" looks like after the trip from C#, so the test has to send one.
+    // eslint-disable-next-line no-null/no-null
+    it.each([['Enabled'], [undefined], [null]])(
+      'is not mentioned when it is %s, whatever Platform.Bible has saved',
+      async (paratext9InternetUse) => {
+        configureCommands(paratext9InternetUse);
+        configureHooks({ value: MOCK_SETTINGS });
+        renderStep();
+
+        await continueWithInternetButton();
+        expect(screen.queryByText(/which is unsupported/)).toBeNull();
+      },
     );
+
+    it('is not mentioned when it cannot be looked up', async () => {
+      configureCommands(Promise.reject(new Error('lookup failed')));
+      configureHooks({ value: MOCK_SETTINGS });
+      renderStep();
+
+      expect(await continueWithInternetButton()).toBeEnabled();
+      expect(screen.queryByText(/which is unsupported/)).toBeNull();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('lookup failed'));
+    });
   });
 
-  it('bails without persisting or reporting success when setData is unavailable', async () => {
-    // A defined provider whose useData has not yet produced a setter (setData === undefined).
-    configureHooks({ value: MOCK_SETTINGS, setData: undefined });
-    renderStep();
+  describe('"Use <product name> with internet access"', () => {
+    it('saves Enabled, keeping the other settings, and moves on', async () => {
+      const { setData } = configureHooks({ value: MOCK_SETTINGS });
+      const { onNext } = renderStep();
 
-    await userEvent.click(screen.getByTestId('option-list'));
+      await userEvent.click(await continueWithInternetButton());
 
-    // The guard warns and returns before the optimistic update, so the selection does not change and
-    // no false "saved" state is reported.
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
-    expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'VpnRequired');
+      expect(setData).toHaveBeenCalledWith({ ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' });
+      await waitFor(() => expect(onNext).toHaveBeenCalledTimes(1));
+    });
+
+    it('reports the loaded and the saved settings so the wizard can tell whether to restart', async () => {
+      configureHooks({ value: MOCK_SETTINGS });
+      renderStep();
+
+      await waitFor(() => expect(noteInternetSettingsLoaded).toHaveBeenCalledWith(MOCK_SETTINGS));
+      await userEvent.click(await continueWithInternetButton());
+
+      await waitFor(() =>
+        expect(noteInternetSettingsSaved).toHaveBeenCalledWith({
+          ...MOCK_SETTINGS,
+          permittedInternetUse: 'Enabled',
+        }),
+      );
+    });
+
+    // So a later switch to Power mode does not ask again (internet-use-choice-store).
+    it('records durably that the user was asked', async () => {
+      configureHooks({ value: MOCK_SETTINGS });
+      renderStep();
+
+      await userEvent.click(await continueWithInternetButton());
+
+      await waitFor(() =>
+        expect(settingsService.set).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true),
+      );
+    });
+
+    it('shows the error and stays when the save fails', async () => {
+      configureHooks({
+        value: MOCK_SETTINGS,
+        setData: vi.fn().mockRejectedValue(new Error('save rejected')),
+      });
+      const { onNext } = renderStep();
+
+      await userEvent.click(await continueWithInternetButton());
+
+      await waitFor(() => expect(screen.getByText(/save rejected/i)).toBeInTheDocument());
+      expect(onNext).not.toHaveBeenCalled();
+      expect(noteInternetSettingsSaved).not.toHaveBeenCalled();
+      expect(settingsService.set).not.toHaveBeenCalled();
+      expect(await continueWithInternetButton()).toBeEnabled();
+    });
+
+    it('disables both choices while the save runs', async () => {
+      let finishSave: () => void = () => {};
+      configureHooks({
+        value: MOCK_SETTINGS,
+        setData: vi.fn(
+          () =>
+            new Promise<void>((resolve) => {
+              finishSave = resolve;
+            }),
+        ),
+      });
+      const { onNext } = renderStep();
+
+      await userEvent.click(await continueWithInternetButton());
+
+      expect(await continueWithInternetButton()).toBeDisabled();
+      expect(await closeButton()).toBeDisabled();
+      finishSave();
+      await waitFor(() => expect(onNext).toHaveBeenCalledTimes(1));
+    });
+
+    // Back stays available while the save runs. A save that finishes after the user left must not
+    // pull them forward again, though it still counts as their choice.
+    it('does not move on when the step is left before the save finishes', async () => {
+      let finishSave: () => void = () => {};
+      configureHooks({
+        value: MOCK_SETTINGS,
+        setData: vi.fn(
+          () =>
+            new Promise<void>((resolve) => {
+              finishSave = resolve;
+            }),
+        ),
+      });
+      const { onNext, unmount } = renderStep();
+
+      await userEvent.click(await continueWithInternetButton());
+      unmount();
+      finishSave();
+
+      await waitFor(() =>
+        expect(settingsService.set).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true),
+      );
+      expect(noteInternetSettingsSaved).toHaveBeenCalled();
+      expect(onNext).not.toHaveBeenCalled();
+    });
+
+    it('bails without saving or moving on when setData is unavailable', async () => {
+      // A defined provider whose useData has not yet produced a setter (setData === undefined).
+      configureHooks({ value: MOCK_SETTINGS, setData: undefined });
+      const { onNext } = renderStep();
+
+      await userEvent.click(await continueWithInternetButton());
+
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+      expect(onNext).not.toHaveBeenCalled();
+    });
   });
 
-  it('shows a friendly error, a Retry button, and keeps Next disabled when the read is a PlatformError', () => {
+  describe('"Close <product name>"', () => {
+    // The saved setting stays as it is, so the next launch asks again.
+    it('quits the app without saving anything', async () => {
+      const { setData } = configureHooks({ value: MOCK_SETTINGS });
+      const { onNext } = renderStep();
+
+      await userEvent.click(await closeButton());
+
+      await waitFor(() => expect(sendCommand).toHaveBeenCalledWith('platform.quit'));
+      expect(setData).not.toHaveBeenCalled();
+      expect(onNext).not.toHaveBeenCalled();
+    });
+
+    // `platform.quit` resolves as soon as shutdown starts, and a quit once started is not cancelled,
+    // so a click while the app shuts down must not save anything.
+    it('keeps both choices disabled once the app is closing', async () => {
+      configureHooks({ value: MOCK_SETTINGS });
+      renderStep();
+
+      await userEvent.click(await closeButton());
+      await waitFor(() => expect(sendCommand).toHaveBeenCalledWith('platform.quit'));
+      await act(async () => {});
+
+      expect(await closeButton()).toBeDisabled();
+      expect(await continueWithInternetButton()).toBeDisabled();
+    });
+
+    it('shows the error when the app cannot be closed', async () => {
+      configureHooks({ value: MOCK_SETTINGS });
+      vi.mocked(sendCommand).mockImplementation(async (command: string) => {
+        if (command === 'platform.quit') throw new Error('quit refused');
+        return undefined;
+      });
+      renderStep();
+
+      await userEvent.click(await closeButton());
+
+      await waitFor(() => expect(screen.getByText(/quit refused/i)).toBeInTheDocument());
+      expect(await closeButton()).toBeEnabled();
+      expect(await continueWithInternetButton()).toBeEnabled();
+    });
+  });
+
+  it('shows a friendly error and a Retry button when the read is a PlatformError', () => {
     configureHooks({ value: newPlatformError('boom'), isLoading: false });
-    const { setCanProceed } = renderStep();
+    renderStep();
 
     expect(screen.getByText(/couldn't get things ready/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     expect(screen.queryByText(/boom/i)).not.toBeInTheDocument();
-    // Next must be disabled on the error screen so the wizard can't advance past an unloaded step.
-    expect(setCanProceed).toHaveBeenCalledWith(false);
-    expect(setCanProceed).not.toHaveBeenCalledWith(true);
+    expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
   });
 
+  // The mocked `useData` answers every render with whatever was configured last, so the step must
+  // have stopped re-rendering before the mock is reconfigured. Otherwise the Paratext 9 lookup
+  // settling re-renders it into the loaded state, the Retry button is gone before the click lands,
+  // and nothing is retried.
+  const clickRetryOnceSettled = async () => {
+    await act(async () => {});
+    configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+  };
+
   it('recovers when Retry remounts the subscription and the read then succeeds', async () => {
-    // First render errors.
     configureHooks({ value: newPlatformError('boom'), isLoading: false });
     renderStep();
 
-    // Reconfigure the mock BEFORE clicking Retry so the remounted InternetSettingsLoaded
-    // picks up MOCK_SETTINGS on its first render. (The mock is synchronous; it takes effect
-    // on the next call to useData, which happens when the component remounts.)
-    configureHooks({ value: MOCK_SETTINGS, isLoading: false });
-    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    await clickRetryOnceSettled();
 
-    await waitFor(() => expect(screen.getByTestId('option-list')).toBeInTheDocument());
+    expect(await continueWithInternetButton()).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('does not look up the Paratext 9 setting again on Retry', async () => {
+    configureCommands('ProxyOnly');
+    configureHooks({ value: newPlatformError('boom'), isLoading: false });
+    renderStep();
+
+    await clickRetryOnceSettled();
+
+    expect(await continueWithInternetButton()).toBeInTheDocument();
+    expect(
+      screen.getByText('Paratext 9 has Proxy sentinel, which is unsupported by Product sentinel'),
+    ).toBeInTheDocument();
+    expect(
+      vi
+        .mocked(sendCommand)
+        .mock.calls.filter(
+          ([command]) => command === 'paratextRegistration.getParatext9InternetUse',
+        ),
+    ).toHaveLength(1);
   });
 });

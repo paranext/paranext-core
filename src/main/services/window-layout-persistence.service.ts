@@ -4,15 +4,20 @@
  * and is read and written ONLY by the main process — renderers get and push their layout through
  * the `windowLayout:get`/`windowLayout:save` request handlers registered here.
  *
- * Identity model: a window's position in the structure's list IS its identity across sessions;
- * Electron window ids are runtime-only and are never persisted (they restart at 1 each process
- * launch, so a persisted one would name a different window). Every window has a slot in that list
- * from the moment it is created — a restored window binds to the slot it restores, a window opened
- * mid-session appends one — and the slot is the only place that window's layout and bounds live. A
- * slot with no window in it is a preserved entry: one this session never restored (a power-mode
- * secondary window while the app runs in simple mode, which restores only the main window), or one
- * whose window has gone down with the app. Either way it is written back out untouched, so a
- * session that holds fewer windows than the file holds entries can never destroy the others.
+ * Identity model: the entry's own `windowId` decides which saved entry a restoring window binds to.
+ * `assignEntryToWindow` resolves the entry by that id, never by where it sits in the list, because
+ * the list shifts under a restore in progress: a window closing takes its entry out (see
+ * {@link handleWindowRemoved}) while the restore loop is still working from positions it read before
+ * it started. That id is the window's durable platform id: minted once, handed to `addWindow` when
+ * a window restores the entry (so the id a restored window is given always matches the one its
+ * entry already carries), and never reused — which is also what makes it what the renderer keys its
+ * per-window storage by. Every entry has a slot in that list from the moment it is created — a
+ * restored window binds to the slot it restores, a window opened mid-session appends one — and the
+ * slot is the only place that window's layout and bounds live. A slot with no window in it is a
+ * preserved entry: one this session never restored (a power-mode secondary window while the app
+ * runs in simple mode, which restores only the main window), or one whose window has gone down with
+ * the app. Either way it is written back out untouched, so a session that holds fewer windows than
+ * the file holds entries can never destroy the others.
  *
  * A write is that list, in order. Nothing has to be joined to anything, and there is no second
  * account of which windows exist that a departure could leave stale.
@@ -22,6 +27,7 @@ import path from 'path';
 import { readFile, rename, writeFile } from 'fs/promises';
 import { app } from 'electron';
 import {
+  FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE,
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
   WindowBoundsState,
@@ -38,6 +44,7 @@ import {
   savedLayoutHasViewableTabs,
 } from '@shared/utils/saved-layout-reconciliation.util';
 import { getErrorMessage } from 'platform-bible-utils';
+import { createUuid } from '@node/utils/crypto-util';
 
 /** File holding the persisted structure, in the app's user data folder */
 const WINDOW_LAYOUTS_FILE_NAME = 'window-layouts.json';
@@ -68,12 +75,15 @@ export type StartupWindowsPlan =
  * everything that gets written — layout, bounds, `isMain` — so a live window's state and a
  * preserved entry are the same thing, and updating one IS updating the other.
  *
- * `windowId` is absent for a preserved entry: a slot this session never restored, or one whose
- * window has gone away while its entry stays (see {@link handleWindowRemoved}).
+ * `windowId` here is a separate, narrower fact from `entry.windowId`: it names which LIVE window
+ * currently occupies this slot, and is absent for a preserved entry — a slot this session never
+ * restored, or one whose window has gone away while its entry stays (see
+ * {@link handleWindowRemoved}). `entry.windowId` survives regardless, since it belongs to the entry
+ * rather than to whichever window is currently living in it.
  */
 type FileSlot = {
   entry: WindowLayoutEntry;
-  windowId?: number;
+  windowId?: string;
   /**
    * Whether this window should fall back to the legacy (pre-multi-window) saved layout when it has
    * no layout of its own: the single window of a legacy startup, or the MAIN entry when it has
@@ -87,8 +97,16 @@ type FileSlot = {
 
 /** Every window's entry in file order — the whole of what a write puts on disk */
 let fileSlots: FileSlot[] = [];
+/**
+ * Whether {@link loadWindowLayouts} actually parsed a structure from disk this session, as opposed
+ * to falling back to the legacy single-window plan (no file, an unreadable/corrupt file, or one
+ * with no windows in it). The legacy fallback synchronously tracks one window before any renderer
+ * could ask which ids are dead — see {@link handleFilterDeadWindowIdsRequest}, which is what this
+ * guards.
+ */
+let hasStructureBeenLoaded = false;
 /** Windows created to receive specific content, until their first layout push arrives */
-const pendingContentWindowIds = new Set<number>();
+const pendingContentWindowIds = new Set<string>();
 /** Bounds the previous keeper saved, seeded into the legacy window so an upgrade keeps placement */
 let legacyBoundsState: WindowBoundsState | undefined;
 /** Pending debounced write, if any */
@@ -136,7 +154,6 @@ function parseBoundsState(
     bounds: parseRectangle(boundsSource),
     isMaximized: record.isMaximized === true ? true : undefined,
     isFullScreen: record.isFullScreen === true ? true : undefined,
-    displayBounds: parseRectangle(record.displayBounds),
   };
 }
 
@@ -145,20 +162,40 @@ function parseBoundsState(
  * the discriminator between a legitimately empty window (no tabs as saved: restore it) and junk
  * (tabs saved but none viewable: drop it). See the filter in {@link loadWindowLayouts}.
  */
-type ParsedEntry = { entry: WindowLayoutEntry; layoutHadTabs: boolean };
+type ParsedEntry = {
+  entry: WindowLayoutEntry;
+  layoutHadTabs: boolean;
+  /**
+   * Whether the entry had no window id on disk and was given one here, which the file must catch up
+   * with
+   */
+  wasWindowIdMinted: boolean;
+};
+
+/** A non-empty string field, or `undefined` if the field is absent, empty, or not a string */
+function nonEmptyStringField(record: Record<string, unknown>, field: string): string | undefined {
+  const value = record[field];
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
 
 function parseEntry(value: unknown): ParsedEntry | undefined {
   const record = asRecord(value);
   if (!record) return undefined;
   const layout = asRecord(record.layout);
+  const windowIdOnDisk = nonEmptyStringField(record, 'windowId');
   return {
     entry: {
       ...parseBoundsState(record, record.bounds),
+      // An entry written before entries carried their own id gets one now. It is minted rather
+      // than derived from the entry's position so it never changes once the file is rewritten, and
+      // through the same generator the tracker mints with so one kind of id fills this space.
+      windowId: windowIdOnDisk ?? createUuid(),
       // Reconcile at load so phantom content in a saved layout never reaches a window
       layout: layout ? reconcileSavedLayout(layout) : undefined,
       isMain: record.isMain === true ? true : undefined,
     },
     layoutHadTabs: layout ? savedLayoutHasAnyTabs(layout) : false,
+    wasWindowIdMinted: windowIdOnDisk === undefined,
   };
 }
 
@@ -196,7 +233,7 @@ async function readLegacyWindowState(): Promise<WindowBoundsState | undefined> {
 }
 
 /** The slot the given runtime window is living in, if this service knows the window at all */
-function findSlotByWindowId(windowId: number): FileSlot | undefined {
+function findSlotByWindowId(windowId: string): FileSlot | undefined {
   return fileSlots.find((slot) => slot.windowId === windowId);
 }
 
@@ -228,6 +265,7 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
   fileSlots = [];
   legacyBoundsState = undefined;
   pendingContentWindowIds.clear();
+  hasStructureBeenLoaded = false;
 
   let raw: string | undefined;
   try {
@@ -257,6 +295,14 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
         else delete entry.isMain;
       });
       fileSlots = keptEntries.map((entry) => ({ entry }));
+      // A structure was genuinely read from disk, so the ids in `fileSlots` are trustworthy enough
+      // to answer which of a renderer's stored ids are dead — see `handleFilterDeadWindowIdsRequest`
+      hasStructureBeenLoaded = true;
+      // A window id minted just now exists only here until the file carries it. Nothing else is
+      // certain to write before the session ends — a bounds change, a layout push and a clean quit
+      // all do, but a session that ends without any of them would mint again next launch and orphan
+      // every blob the renderer stored under this one.
+      if (keptParsedEntries.some(({ wasWindowIdMinted }) => wasWindowIdMinted)) scheduleWrite();
       return { kind: 'restore', entries: keptEntries, mainEntryIndex };
     }
     logger.warn(
@@ -272,12 +318,21 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
  * Tie a freshly created window to the file entry it restores. The entry is where that window's
  * layout and bounds live from here on, so a session that never updates it writes the entry back out
  * unchanged.
+ *
+ * The entry is named by its own durable id rather than by where it sits in the file: the restore
+ * loop reads every position before it creates the first window and yields between windows, so a
+ * window closing in one of those gaps takes its entry out of the list and moves every later one.
+ * Nothing tells the loop that happened, and a position resolved afterwards names a different entry
+ * than the one that window restores.
+ *
+ * @param windowId Platform id of the window being tied to the entry
+ * @param entryWindowId Durable id of the entry it restores, from the restore plan
  */
-export function assignEntryToWindow(windowId: number, entryIndex: number): void {
-  const slot = fileSlots[entryIndex];
+export function assignEntryToWindow(windowId: string, entryWindowId: string): void {
+  const slot = fileSlots.find((candidate) => candidate.entry.windowId === entryWindowId);
   if (!slot || slot.windowId !== undefined || findSlotByWindowId(windowId)) {
     logger.warn(
-      `Cannot assign window ${windowId} to window-layout entry ${entryIndex}; tracking it as a new window instead`,
+      `Cannot assign window ${windowId} to the window-layout entry for ${entryWindowId}; tracking it as a new window instead`,
     );
     trackNewWindow(windowId);
     return;
@@ -294,15 +349,25 @@ export function assignEntryToWindow(windowId: number, entryIndex: number): void 
  * does not exist yet. Its renderer falls back to the pre-multi-window saved layout, and its bounds
  * seed from the previous keeper's file so an upgrade keeps the user's window placement.
  */
-export function trackLegacyWindow(windowId: number): void {
+export function trackLegacyWindow(windowId: string): void {
   if (findSlotByWindowId(windowId)) return;
-  fileSlots.push({ entry: { ...legacyBoundsState }, windowId, usesLegacyLayout: true });
+  fileSlots.push({
+    entry: { ...legacyBoundsState, windowId },
+    windowId,
+    usesLegacyLayout: true,
+  });
+  // This window's id is not persisted until the file carries it — see the same write after a load
+  // mints one for an entry that had none
+  scheduleWrite();
 }
 
 /** Give a window created mid-session a slot. It has no saved entry, so it starts with an empty one */
-export function trackNewWindow(windowId: number): void {
+export function trackNewWindow(windowId: string): void {
   if (findSlotByWindowId(windowId)) return;
-  fileSlots.push({ entry: {}, windowId });
+  fileSlots.push({ entry: { windowId }, windowId });
+  // As in `trackLegacyWindow`: this window's id is not real to the next launch until the file
+  // carries it
+  scheduleWrite();
 }
 
 /**
@@ -313,7 +378,7 @@ export function trackNewWindow(windowId: number): void {
  * therefore stays with that entry for the rest of the session however the window itself ends, and
  * leaves the structure only when the entry does.
  */
-export function setMainWindowId(windowId: number): void {
+export function setMainWindowId(windowId: string): void {
   const mainSlot = findSlotByWindowId(windowId);
   if (!mainSlot) {
     logger.warn(`Ignoring the main-window mark for untracked window ${windowId}`);
@@ -325,8 +390,60 @@ export function setMainWindowId(windowId: number): void {
   mainSlot.entry.isMain = true;
 }
 
+/**
+ * Which live window currently holds the main role, or `undefined` if none does.
+ *
+ * Undefined is a real answer, not only an error case: main-ness belongs to the entry rather than to
+ * a window, so it outlives the window that held it and the role can sit on an entry with no window
+ * living in it.
+ *
+ * Deliberately not exported: `undefined` here does not mean no window answers for the application,
+ * only that no live window holds the marked entry. {@link isPrimaryWindow} is the question callers
+ * actually want, and it resolves that case rather than passing it on.
+ */
+function getMainWindowId(): string | undefined {
+  return fileSlots.find((slot) => slot.entry.isMain === true)?.windowId;
+}
+
+/**
+ * Whether a window holds the primary role — the one whose ✕ decides whether the app quits.
+ *
+ * Answered from the persisted `isMain` slot rather than a second live pointer. The slot lets go of
+ * its runtime id in {@link handleWindowRemoved}, which runs from a window's `closed` handler, one
+ * event AFTER the `close` handler where the close path asks this — so the answer is still there
+ * every time it is needed. And the primary never goes away while the app runs: an emptied primary
+ * docks Home rather than closing, so only its own ✕ or a quit takes it down, and both of those
+ * bring the whole app with them.
+ *
+ * @param windowId Window to check
+ */
+export function isPrimaryWindow(windowId: string): boolean {
+  const mainWindowId = getMainWindowId();
+  if (mainWindowId !== undefined) return mainWindowId === windowId;
+  // No live window holds the marked entry. The startup restore always leaves one that does, so
+  // reaching here means every window it created has gone and something else opened one — on macOS
+  // the app stays resident with no windows, and an extension can call `platform.createWindow` into
+  // that gap. Some live window has to answer for the app's lifetime, or nothing would ask before
+  // closing and an emptied window would close itself; the oldest one does, matching the role the
+  // restore would have given the window it created first.
+  //
+  // The flag itself deliberately does NOT move. It names the entry simple mode restores and the
+  // only entry allowed the legacy layout fallback, so handing it to a window created into the gap
+  // would cost the user that layout on the next launch.
+  //
+  // A window still waiting for the content it was created to receive is not a candidate, for the
+  // same reason `countWindowsThatCouldBeTheLastOne` leaves it out of its own count: it starts truly
+  // empty and the operation that created it can still fail and take it away again. Answering for
+  // the app would make that rollback refuse to close it — the close would be read as the primary's
+  // — and it would then stand blank with nothing to heal it.
+  return (
+    fileSlots.find((slot) => slot.windowId !== undefined && !isWindowPendingContent(slot.windowId))
+      ?.windowId === windowId
+  );
+}
+
 /** Merge captured bounds into a window's entry and schedule a write */
-export function updateWindowBounds(windowId: number, boundsState: WindowBoundsState): void {
+export function updateWindowBounds(windowId: string, boundsState: WindowBoundsState): void {
   const slot = findSlotByWindowId(windowId);
   if (!slot) {
     logger.warn(`Ignoring bounds update for untracked window ${windowId}`);
@@ -335,7 +452,6 @@ export function updateWindowBounds(windowId: number, boundsState: WindowBoundsSt
   // Bounds are captured only while the window is in its normal state; a maximized/minimized/
   // full-screen capture carries no bounds and must keep the last normal placement
   slot.entry.bounds = boundsState.bounds ?? slot.entry.bounds;
-  slot.entry.displayBounds = boundsState.displayBounds ?? slot.entry.displayBounds;
   slot.entry.isMaximized = boundsState.isMaximized ?? slot.entry.isMaximized;
   slot.entry.isFullScreen = boundsState.isFullScreen ?? slot.entry.isFullScreen;
   scheduleWrite();
@@ -346,8 +462,10 @@ export function updateWindowBounds(windowId: number, boundsState: WindowBoundsSt
  *
  * - `entry-goes-with-it`: the user closed this window while the app stays up, so it must not come
  *   back next session.
- * - `entry-stays`: the window is going down with the app, so it is not leaving the structure — it has
- *   to be there next session, holding whatever it held when the app went down.
+ * - `entry-stays`: the window is not leaving the structure. Either it is going down with the app and
+ *   has to be there next session holding whatever it held, or the application is fully alive and
+ *   the window is being closed because the interface mode changed — in which case the entry is what
+ *   the switch back re-creates the window from.
  */
 export type RemovedWindowDisposition = 'entry-goes-with-it' | 'entry-stays';
 
@@ -365,7 +483,7 @@ export type RemovedWindowDisposition = 'entry-goes-with-it' | 'entry-stays';
  * @param windowId Window that has gone away
  * @param disposition What that means for the window's entry — see {@link RemovedWindowDisposition}
  */
-export function handleWindowRemoved(windowId: number, disposition: RemovedWindowDisposition): void {
+export function handleWindowRemoved(windowId: string, disposition: RemovedWindowDisposition): void {
   // Unconditional, whatever the disposition and whether or not the id is one this service knows: a
   // write scheduled before the removal fires into a session that is either rewriting the structure
   // itself (a deliberate close) or on its way down, and neither wants a debounce landing behind it.
@@ -466,10 +584,56 @@ export function setPendingContentChangeListener(listener: () => void): void {
 }
 
 /**
+ * Whether a window is closing because the interface mode changed. Injected rather than imported, so
+ * this service does not depend on the orchestration that decides it — the same shape
+ * {@link setWindowPendingContentPredicate} uses from the other direction.
+ */
+let isClosingForModeSwitch: (windowId: string) => boolean = () => false;
+
+/**
+ * Wire the predicate answering whether a window is closing because the interface mode changed.
+ *
+ * @param predicate Answers for a window id
+ */
+export function setModeSwitchClosePredicate(predicate: (windowId: string) => boolean): void {
+  isClosingForModeSwitch = predicate;
+}
+
+/**
+ * Which entries have no window living in them — the windows a switch back to power mode brings
+ * back.
+ *
+ * These are entries this session never restored (simple mode restores only the main one) and
+ * entries whose window went away while the entry stayed. Both are the same thing to a caller: a
+ * saved window with nothing on screen, which is exactly what a reopen creates a window from. This
+ * is the whole of what "the set of windows the power session had open" means — there is no separate
+ * record of it, and none is needed.
+ *
+ * @returns Durable ids of the preserved entries, in file order
+ */
+export function getPreservedEntryIds(): string[] {
+  return fileSlots.filter((slot) => slot.windowId === undefined).map((slot) => slot.entry.windowId);
+}
+
+/**
+ * The entry a durable id names, or `undefined` if that entry has left the structure.
+ *
+ * A copy of the entry's own fields, but a SHALLOW one: `bounds` and the whole `layout` tree are the
+ * live slot's objects, so a caller that mutates them mutates what the window is keeping up to date.
+ * Callers read placement and pass the layout along untouched, which is all this promises.
+ *
+ * @param entryWindowId Durable id of the entry to read
+ */
+export function getEntryByWindowId(entryWindowId: string): WindowLayoutEntry | undefined {
+  const slot = fileSlots.find((candidate) => candidate.entry.windowId === entryWindowId);
+  return slot ? { ...slot.entry } : undefined;
+}
+
+/**
  * Mark a window as created-for-content: its layout get answers `pending-content` (start truly
  * empty) until the window pushes its first real layout.
  */
-export function markWindowPendingContent(windowId: number): void {
+export function markWindowPendingContent(windowId: string): void {
   pendingContentWindowIds.add(windowId);
   handlePendingContentChanged();
 }
@@ -478,7 +642,7 @@ export function markWindowPendingContent(windowId: number): void {
  * Un-mark a pending-content window: its routed content has arrived (or its creator gave up), so
  * from now on it restores like any other window.
  */
-export function clearWindowPendingContent(windowId: number): void {
+export function clearWindowPendingContent(windowId: string): void {
   pendingContentWindowIds.delete(windowId);
   handlePendingContentChanged();
 }
@@ -492,12 +656,12 @@ export function clearWindowPendingContent(windowId: number): void {
  * and take it away again. Letting it stand in as "the last window" would leave the app with zero
  * windows the instant that failure path runs.
  */
-export function isWindowPendingContent(windowId: number): boolean {
+export function isWindowPendingContent(windowId: string): boolean {
   return pendingContentWindowIds.has(windowId);
 }
 
 function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
-  if (typeof windowId !== 'number') {
+  if (typeof windowId !== 'string') {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called without a window id`);
     return { kind: 'empty' };
   }
@@ -512,8 +676,30 @@ function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
   return { kind: 'empty' };
 }
 
+function handleFilterDeadWindowIdsRequest(candidateWindowIds: unknown): string[] {
+  if (
+    !Array.isArray(candidateWindowIds) ||
+    candidateWindowIds.some((windowId) => typeof windowId !== 'string')
+  ) {
+    logger.warn(`${FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE} called without a list of window ids`);
+    return [];
+  }
+  // Nothing can be called dead while this process has not actually read what is alive off disk.
+  // The legacy startup fallback (no file, an unreadable/corrupt file, or one with no windows in it)
+  // synchronously tracks one window — giving `fileSlots` a freshly minted entry — before any
+  // renderer could possibly ask this; answering off that entry alone would report every id a
+  // renderer already holds as dead and tell it to delete state that a real read of the structure
+  // would have kept alive.
+  if (!hasStructureBeenLoaded) {
+    logger.warn(`${FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE} called before a structure was loaded`);
+    return [];
+  }
+  const liveWindowIds = new Set(fileSlots.map((slot) => slot.entry.windowId));
+  return candidateWindowIds.filter((windowId) => !liveWindowIds.has(windowId));
+}
+
 function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
-  if (typeof windowId !== 'number') {
+  if (typeof windowId !== 'string') {
     logger.warn(`${SAVE_WINDOW_LAYOUT_REQUEST_TYPE} called without a window id`);
     return;
   }
@@ -527,12 +713,24 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
     logger.warn(`Ignoring layout push from untracked window ${windowId}`);
     return;
   }
+  // A window closing because the mode changed is showing the mode it is leaving, so what it pushes
+  // from here on would overwrite the layout its entry is being kept for.
+  //
+  // Keyed on the mode-switch close rather than on any close in progress, deliberately: a window's
+  // close handler records the window as closing BEFORE it flushes its layout, so a guard covering
+  // every closing window would drop a layout change made just before a quit and the flush would
+  // then write the older one.
+  //
+  // The pending-content mark stays set on this path, and that is the point of refusing before
+  // clearing it: the mark says the entry holds nothing, which after a refused push is still true.
+  // Clearing it here would have the entry kept — empty — and a blank window built from it on every
+  // later switch to power and every launch.
+  if (isClosingForModeSwitch(windowId)) return;
   // Reconcile on arrival so phantom content (duplicate or orphaned tabs, empty panels) cannot
   // enter the persisted structure even when a pusher skipped its own reconciliation
   slot.entry.layout = reconcileSavedLayout(layoutRecord);
-  // This push is the window's real content arriving, so it stops being pending-content — a
-  // second get request must be answered with the entry it just saved, not told to wait again.
-  // Announced like any other change to the mark: the window becomes one routed work can go to.
+  // This push is the window's real content arriving, so it stops being pending-content. Announced
+  // like any other change to the mark: the window becomes one routed work can go to.
   if (pendingContentWindowIds.delete(windowId)) handlePendingContentChanged();
   scheduleWrite();
 }
@@ -558,15 +756,50 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
             {
               name: 'windowId',
               required: true,
-              summary: 'Electron BrowserWindow ID of the window asking what to restore',
-              schema: { type: 'number' },
+              summary: 'Id of the window asking what to restore',
+              schema: { type: 'string' },
             },
           ],
           result: {
             name: 'return value',
             summary:
               "The window's saved layout, the pre-multi-window layout to fall back to, or nothing to restore",
-            schema: { type: 'object' },
+            schema: {
+              type: 'object',
+              properties: {
+                kind: {
+                  type: 'string',
+                  enum: ['entry', 'legacy', 'empty', 'pending-content'],
+                },
+                layout: { type: 'object' },
+              },
+              required: ['kind'],
+            },
+          },
+        },
+      },
+    ),
+    networkService.registerRequestHandler(
+      FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE,
+      async (...args) => handleFilterDeadWindowIdsRequest(args[0]),
+      {
+        method: {
+          'x-experimental': true,
+          summary:
+            'Report which of the given window ids no longer have an entry in the persisted structure, so a renderer can drop the state it is still holding for them',
+          params: [
+            {
+              name: 'candidateWindowIds',
+              required: true,
+              summary: 'Window ids the caller holds stored state for',
+              schema: { type: 'array', items: { type: 'string' } },
+            },
+          ],
+          result: {
+            name: 'return value',
+            summary:
+              'The subset with no entry in the persisted structure. Empty when the structure is not loaded, so a caller can never be told to delete everything',
+            schema: { type: 'array', items: { type: 'string' } },
           },
         },
       },
@@ -582,8 +815,8 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
             {
               name: 'windowId',
               required: true,
-              summary: 'Electron BrowserWindow ID of the window whose layout this is',
-              schema: { type: 'number' },
+              summary: 'Id of the window whose layout this is',
+              schema: { type: 'string' },
             },
             {
               name: 'layout',

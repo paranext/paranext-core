@@ -1,6 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { expect, fn, spyOn, within, userEvent, waitFor } from 'storybook/test';
-import * as commandService from '@shared/services/command.service';
+import { expect, fn, within, userEvent, waitFor } from 'storybook/test';
+import {
+  noteInternetSettingsLoaded,
+  noteInternetSettingsSaved,
+} from '@renderer/services/first-run-store';
+// Deep relative (not aliased) so tsc follows only the dependency-free channel, never the
+// webpack-only mock it drives. Same reasoning as the first-run language mock.
+import {
+  resetCommandServiceMock,
+  setCommandServiceMock,
+} from '../../../../../.storybook/mocks/command-service-mock-channel';
 import { IdentifyStep } from './identify-step.component';
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
@@ -36,16 +45,16 @@ export const RegistryLinkFollowsSelectedServer: Story = {
   beforeEach: () => {
     // Route by command name so the mount-time URL lookup returns the non-production site while
     // any other command (none are triggered here) resolves harmlessly.
-    const spy = spyOn(commandService, 'sendCommand').mockImplementation((command: string) =>
+    setCommandServiceMock((command) =>
       command === 'paratextRegistration.getParatextRegistryUrl'
-        ? Promise.resolve(NON_PRODUCTION_REGISTRY_URL)
-        : Promise.resolve(undefined),
+        ? NON_PRODUCTION_REGISTRY_URL
+        : undefined,
     );
-    return () => spy.mockRestore();
+    return () => resetCommandServiceMock();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const link = canvas.getByRole('link', { name: /visit paratext registry/i });
+    const link = await canvas.findByRole('link', { name: /visit paratext registry/i });
     await waitFor(() => expect(link).toHaveAttribute('href', NON_PRODUCTION_REGISTRY_URL));
   },
 };
@@ -75,13 +84,13 @@ export const FilledValid: Story = {
  */
 export const InvalidCode: Story = {
   beforeEach: () => {
-    // Replaces sendCommand so every validation attempt returns false (not found).
-    const spy = spyOn(commandService, 'sendCommand').mockResolvedValue(false);
-    return () => spy.mockRestore();
+    // Every command answers false, which is what a validation attempt reads as "not found".
+    setCommandServiceMock(() => false);
+    return () => resetCommandServiceMock();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByLabelText(/registration name/i), 'Test User');
+    await userEvent.type(await canvas.findByLabelText(/registration name/i), 'Test User');
     await userEvent.type(canvas.getByLabelText(/registration code/i), VALID_CODE);
     await waitFor(() => expect(canvas.getByText(/not found/i)).toBeInTheDocument(), {
       timeout: 5000,
@@ -118,23 +127,23 @@ export const RestartPending: Story = {
     // Route by command name so the mount-time registry-URL lookup can't consume the
     // validation/save mocks off a positional queue (it would leave Save disabled). Restart never
     // settles because the real process reboots here.
-    const spy = spyOn(commandService, 'sendCommand').mockImplementation((command: string) => {
+    setCommandServiceMock((command) => {
       switch (command) {
         case 'paratextRegistration.validateParatextRegistrationData':
-          return Promise.resolve(true);
+          return true;
         case 'paratextRegistration.setParatextRegistrationData':
-          return Promise.resolve(undefined);
+          return undefined;
         case 'platform.restart':
           return new Promise<never>(() => {});
         default:
-          return Promise.resolve(undefined);
+          return undefined;
       }
     });
-    return () => spy.mockRestore();
+    return () => resetCommandServiceMock();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByLabelText(/registration name/i), 'Test User');
+    await userEvent.type(await canvas.findByLabelText(/registration name/i), 'Test User');
     await userEvent.type(canvas.getByLabelText(/registration code/i), VALID_CODE);
     await waitFor(
       () => expect(canvas.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
@@ -144,5 +153,75 @@ export const RestartPending: Story = {
     await waitFor(() => expect(canvas.getByText(/restarting/i)).toBeInTheDocument(), {
       timeout: 3000,
     });
+  },
+};
+
+/**
+ * A valid registration already exists — typically the one Platform.Bible copied from Paratext 9 on
+ * its first launch. The step shows it as text (the backend only ever returns the code masked) and
+ * moves on with Next, without saving or restarting. "Change registration" opens the empty form.
+ */
+export const ExistingRegistration: Story = {
+  args: { onBack: fn(), registrationValidAtStart: true },
+  beforeEach: () => {
+    setCommandServiceMock((command) => {
+      switch (command) {
+        case 'paratextRegistration.getParatextRegistrationData':
+          return {
+            name: 'Pat Translator',
+            code: '******-******-******-******-******',
+            email: '',
+            supporterName: '',
+          };
+        default:
+          return undefined;
+      }
+    });
+    return () => resetCommandServiceMock();
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('Pat Translator')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Next' }));
+    await expect(args.onNext).toHaveBeenCalled();
+  },
+};
+
+const INTERNET_SETTINGS_AT_START = {
+  selectedServer: 'Production',
+  permittedInternetUse: 'Disabled',
+  proxyPort: 0,
+} as const;
+
+/**
+ * An existing registration after the user changed something on the Internet settings step. Those
+ * settings only take effect after a restart, so the primary action is "Restart and continue", with
+ * a note saying why; the next launch resumes at sync consent.
+ */
+export const ExistingRegistrationWithChangedInternetSettings: Story = {
+  args: { onBack: fn(), registrationValidAtStart: true, onRestartAfterSave: fn() },
+  beforeEach: () => {
+    setCommandServiceMock((command) =>
+      command === 'paratextRegistration.getParatextRegistrationData'
+        ? {
+            name: 'Pat Translator',
+            code: '******-******-******-******-******',
+            email: '',
+            supporterName: '',
+          }
+        : undefined,
+    );
+    noteInternetSettingsLoaded(INTERNET_SETTINGS_AT_START);
+    noteInternetSettingsSaved({ ...INTERNET_SETTINGS_AT_START, permittedInternetUse: 'Enabled' });
+    return () => {
+      noteInternetSettingsSaved(INTERNET_SETTINGS_AT_START);
+      resetCommandServiceMock();
+    };
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByRole('button', { name: /restart and continue/i }),
+    ).toBeInTheDocument();
   },
 };

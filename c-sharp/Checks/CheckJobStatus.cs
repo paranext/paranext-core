@@ -23,6 +23,31 @@ internal sealed class CheckJobStatus(CheckJobScope jobScope) : CheckJobStatusRep
     public DateTime? EndTimeUtc { get; set; } = null;
     public bool StopRequested { get; set; } = false;
 
+    private readonly List<CheckJobError> _checkErrors = [];
+    private readonly object _checkErrorsLock = new();
+
+    /// <summary>
+    /// Records that a check could not run. A check that fails the same way in several books is
+    /// recorded once.
+    /// </summary>
+    /// <returns>True if the error was new to this job; false if it was already recorded</returns>
+    public bool AddCheckError(CheckJobError checkError)
+    {
+        lock (_checkErrorsLock)
+        {
+            if (_checkErrors.Contains(checkError))
+                return false;
+            _checkErrors.Add(checkError);
+            return true;
+        }
+    }
+
+    private List<CheckJobError>? SnapshotCheckErrors()
+    {
+        lock (_checkErrorsLock)
+            return _checkErrors.Count > 0 ? [.. _checkErrors] : null;
+    }
+
     public CheckJobStatusReport GenerateStatusReport(int maxResultsToInclude)
     {
         return new CheckJobStatusReport
@@ -34,6 +59,7 @@ internal sealed class CheckJobStatus(CheckJobScope jobScope) : CheckJobStatusRep
             NextResults =
                 AllResults.Count > 0 ? AllResults.DequeueRange(maxResultsToInclude) : null,
             Error = string.IsNullOrEmpty(Error) ? null : Error,
+            CheckErrors = SnapshotCheckErrors(),
             TotalExecutionTimeMs = (
                 (EndTimeUtc ?? DateTime.UtcNow) - StartTimeUtc
             ).TotalMilliseconds,

@@ -8,6 +8,7 @@ import {
   GetResourcesProps,
   GET_RESOURCES_STRING_KEYS,
   ResourceAction,
+  RESOURCE_TYPES,
 } from './get-resources.component';
 
 // Get all localized strings needed by the GetResources component
@@ -57,17 +58,6 @@ const staticResources: DblResourceData[] = [
     installed: false,
     updateAvailable: false,
     projectId: 'project-tsk',
-  },
-  {
-    dblEntryUid: 'uid-5',
-    displayName: 'SDBG',
-    fullName: 'Semantic Dictionary of Biblical Greek',
-    bestLanguageName: 'Greek',
-    type: 'EnhancedResource',
-    size: 800,
-    installed: false,
-    updateAvailable: false,
-    projectId: 'project-sdbg',
   },
 ];
 
@@ -202,7 +192,12 @@ type DecoratorConfig = {
   resources?: DblResourceData[];
   isLoadingResources?: boolean;
   isResourcesError?: boolean;
+  onRetryResources?: GetResourcesProps['onRetryResources'];
   onInstallOrRemoveResource?: GetResourcesProps['onInstallOrRemoveResource'];
+  /** Rows already busy when the story opens, e.g. to show the "Waiting for sync…" state */
+  initialIdsBeingHandled?: string[];
+  /** Rows among the busy ones that are waiting for the running sync */
+  idsWaitingForSync?: string[];
 };
 
 /** How long the in-memory "service" pretends an install/remove takes, so the spinner is visible. */
@@ -219,12 +214,14 @@ function createDecorator(config: DecoratorConfig) {
   return function GetResourcesDecorator(
     Story: (update?: { args: GetResourcesProps }) => ReactElement,
   ) {
-    const [selectedTypes, setSelectedTypes] = useState<string[]>(['ScriptureResource']);
+    const [selectedTypes, setSelectedTypes] = useState<string[]>(RESOURCE_TYPES);
     const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
     const [resources, setResources] = useState<DblResourceData[]>(
       config.resources ?? staticResources,
     );
-    const [idsBeingHandled, setIdsBeingHandled] = useState<string[]>([]);
+    const [idsBeingHandled, setIdsBeingHandled] = useState<string[]>(
+      config.initialIdsBeingHandled ?? [],
+    );
 
     // Default install/remove: show the spinner, then flip the resource's installed state after a
     // short delay so the table updates (get → installing → installed, and the reverse for remove).
@@ -255,7 +252,9 @@ function createDecorator(config: DecoratorConfig) {
           resources,
           isLoadingResources: config.isLoadingResources ?? false,
           isResourcesError: config.isResourcesError ?? false,
+          onRetryResources: config.onRetryResources,
           idsBeingHandled,
+          idsWaitingForSync: config.idsWaitingForSync,
           selectedTypes,
           selectedLanguages,
           onSelectedTypesChange: setSelectedTypes,
@@ -282,6 +281,16 @@ export const ManyLanguages: Story = {
   decorators: [createDecorator({ resources: manyLanguageResources })],
 };
 
+/**
+ * A row whose Get or update is waiting for the running sync to finish (`idsBeingHandled` plus
+ * `idsWaitingForSync`): its action shows "Waiting for sync…" instead of a spinner.
+ */
+export const WaitingForSync: Story = {
+  decorators: [
+    createDecorator({ initialIdsBeingHandled: ['uid-1'], idsWaitingForSync: ['uid-1'] }),
+  ],
+};
+
 export const Loading: Story = {
   decorators: [createDecorator({ isLoadingResources: true, resources: [] })],
 };
@@ -291,7 +300,15 @@ export const Empty: Story = {
 };
 
 export const ResourcesError: Story = {
-  decorators: [createDecorator({ isResourcesError: true, resources: [] })],
+  decorators: [
+    createDecorator({
+      isResourcesError: true,
+      resources: [],
+      // Storybook story — console.log is the intended demo handler
+      // eslint-disable-next-line no-console
+      onRetryResources: () => console.log('Retry requested'),
+    }),
+  ],
 };
 
 /**
@@ -317,6 +334,22 @@ export const RemoveError: Story = {
     createDecorator({
       onInstallOrRemoveResource: rejectingMock(
         'Cannot remove resource: it is currently open in another window',
+      ),
+    }),
+  ],
+};
+
+/**
+ * An install refused by the "Disable access to some Bible translation services" setting. The
+ * component shows the message that points at the setting instead of the raw error. (In the app, the
+ * web view also raises a notification that opens the setting; this story renders only the
+ * component, so no notification appears.)
+ */
+export const BlockedByInternetSettings: Story = {
+  decorators: [
+    createDecorator({
+      onInstallOrRemoveResource: rejectingMock(
+        'Internet access is disabled in “Internet connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)',
       ),
     }),
   ],

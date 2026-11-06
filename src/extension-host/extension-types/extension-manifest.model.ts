@@ -20,6 +20,12 @@ export type ExtensionManifest = {
   /** List of special permissions required by the extension to work as intended */
   elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
   /**
+   * Services this extension may request Paratext Registry access tokens for, as exact resource
+   * identifiers (for example `https://assistant.example.org`). Required, and must be non-empty,
+   * when `elevatedPrivileges` includes `requestRegistryTokens`; otherwise ignored.
+   */
+  paratextRegistryTokenResources?: string[];
+  /**
    * Path to the TypeScript type declaration file that describes this extension and its interactions
    * on the PAPI. Relative to the extension's root folder.
    *

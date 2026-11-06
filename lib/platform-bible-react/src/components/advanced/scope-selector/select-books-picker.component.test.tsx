@@ -9,8 +9,9 @@ import { SelectBooksPicker } from './select-books-picker.component';
 import { SelectBooksLocalizedStrings } from './select-books.types';
 
 // cmdk (Command/CommandInput) instantiates a ResizeObserver on mount and cmdk's list schedules
-// scrollTo/scrollIntoView; jsdom ships none of them. No-op stubs are sufficient — these tests
-// assert which controls are enabled and what they commit, not layout or scroll behavior.
+// scrollTo; jsdom ships neither. No-op stubs are sufficient — these tests assert which controls are
+// enabled and what they commit, not layout or scroll behavior. scrollIntoView is shimmed repo-wide
+// in vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -33,9 +34,6 @@ beforeAll(() => {
   }
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 

@@ -17,7 +17,7 @@ import type { ScriptureRange } from 'platform-scripture';
 export const CHECKLIST_STRING_KEYS = Object.freeze([
   // Toolbar — selector trigger labels (aria-label on the outline-button stand-ins)
   '%markersChecklist_toolbar_primaryProject%',
-  '%markersChecklist_toolbar_comparativeTexts%',
+  '%markersChecklist_toolbar_comparativeProjects%',
   '%markersChecklist_toolbar_verseRange%',
   // Toolbar — action buttons + view dropdown
   '%markersChecklist_toolbar_copy%',
@@ -70,8 +70,8 @@ export type ChecklistLocalizedStrings = {
  *
  * Mirrors `ScrTextRef` from `ui-state-contracts.md` but is intentionally redeclared locally so the
  * component doesn't take on a dependency on the full state-contract interface (which carries wiring
- * concerns not relevant here). The wiring layer supplies the `fullName` via the
- * `columnProjectFullNames` prop, resolved from `pdp.getSetting('platform.fullName')`.
+ * concerns not relevant here). The wiring layer supplies the full name via the
+ * `columnProjectFullNames` prop, sourced from project metadata.
  */
 export type ChecklistProjectRef = {
   /** Project short name shown in the column header. */
@@ -176,9 +176,11 @@ export type ChecklistToolProps = {
   data?: ChecklistData | undefined;
 
   /**
-   * Map of projectId → full project name, resolved by the wiring layer from
-   * `pdp.getSetting('platform.fullName')`. Used for column-header tooltips. Missing entries fall
-   * back to the short name.
+   * Map of projectId → full project name, sourced by the wiring layer from project metadata. Used
+   * for column-header tooltips.
+   *
+   * Deliberately sparse: a project with no distinct full name has no entry, and its header shows
+   * the short name alone rather than a mirrored pair.
    */
   columnProjectFullNames?: Record<string, string>;
 
