@@ -11809,6 +11809,43 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   element, which could not tell a click elsewhere from Escape.
 - **Source:** PT-2989 (PR #2963); related PT-2205, PT-4627; prototype PR #2887.
 
+## adr-unmapped-project-settings-stored-as-json: A project setting with no Paratext mapping is stored in Settings.xml as JSON text, read back with a raw-string fallback
+
+- **Date:** 2026-11-06
+- **Status:** Accepted
+- **Context:** `ParatextProjectDataProvider` stores every project setting in the project's
+  Settings.xml. Settings with no entry in `ProjectSettingsNames.s_platformBibleToParatextSettingsNames`
+  (in practice, those contributed by extensions) were written with `ToString()` and read back as
+  strings, so a boolean extension setting came back as `"True"`, and the settings UI, which picks
+  its control from the runtime type of the current value (`setting.component.tsx`), showed a text
+  box instead of a switch. Numbers and objects had the same problem.
+- **Decision:** For a setting with no Paratext mapping (`ProjectSettingsNames.IsStoredAsJson`), the
+  write path stores the value as JSON text and the read path parses it, returning a `JsonElement`
+  of the type that was written. A stored value that does not parse as JSON comes back as the raw
+  string and becomes JSON on its next write. Mapped settings keep Paratext's own formats (e.g.,
+  `T`/`F` booleans), because ParatextData and Paratext 9 read them.
+- **Alternatives:**
+  - Infer the type from the registered default: a `getDefault` round trip per read, `getDefault`
+    returns localized values, and a union-typed setting whose default is not a boolean never
+    converts.
+  - Convert any `T`/`F`-shaped value of an unmapped setting: a string setting that legitimately
+    holds `"T"` would turn into a boolean, and the settings UI would replace its text box with a
+    switch the user cannot undo.
+  - Wait for a declared `type` on extension settings: `settings.model.ts` forbids one, and there is
+    no plan to add it.
+  - Store every setting as JSON: ParatextData and Paratext 9 read the mapped settings in their
+    existing formats.
+  - Prefix JSON values with a marker (like the `"<version> <json>"` format `ModelTexts` uses):
+    existing numbers and objects, which `ToString()` had already written as valid JSON, would keep
+    coming back as strings until each project rewrote them, so a consumer would see a string in one
+    project and an object in another.
+- **Consequences:** `getSetting`, and a validator's `currentValue`, receive the type that was
+  written instead of a string. A legacy raw string that happens to be valid JSON (e.g., `123`,
+  `true`, `[ ]`) changes type until it is rewritten; no unmapped setting in this repo or the other
+  extension repos was found to hold such values. Adding a Paratext mapping for a setting that
+  projects already store changes how its values are read, so its stored values must be migrated.
+- **Source:** PT-2307; paranext-core PR #2238.
+
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
 
 - **Date:** 2026-08-27
