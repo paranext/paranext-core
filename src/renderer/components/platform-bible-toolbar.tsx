@@ -266,11 +266,17 @@ function ProjectSelectorLabel({
       // string that builds the tooltip, so a locale can reorder the pair and the visible text and
       // the tooltip cannot disagree about that order.
       primary={shortName}
+      // `hasFullName` is `hasDistinctFullName` hoisted above — the helper makes the decision, the
+      // ternary only fills the slot.
+      // eslint-disable-next-line paranext/no-inline-project-name
       secondary={hasFullName ? fullName : undefined}
       secondaryFirst={isFullNameFirst}
       separator={separator}
       showSecondary={!isAtMinimum}
       fullText={
+        // Joins through the localized format string (the documented toolbar exception) under the
+        // hoisted `hasDistinctFullName` decision.
+        // eslint-disable-next-line paranext/no-inline-project-name
         hasFullName ? formatReplacementString(template, { shortName, fullName }) : shortName
       }
     />

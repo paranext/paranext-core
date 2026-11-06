@@ -715,6 +715,8 @@ function ProjectRowView({
   const rowNode = (
     <CommandItem
       ref={row.isSelected ? selectedRowRef : undefined}
+      // cmdk search haystack — three fields concatenated for matching, never rendered.
+      // eslint-disable-next-line paranext/no-inline-project-name
       value={`${row.rowKey} ${row.shortName} ${row.fullName ?? ''}`}
       onSelect={() => {
         if (row.isDisabled) return;
@@ -1101,6 +1103,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     return rows.filter(
       (r) =>
         r.shortName.toLowerCase().includes(needle) ||
+        // Search predicate — matches on either name, renders neither.
+        // eslint-disable-next-line paranext/no-inline-project-name
         (r.fullName ?? '').toLowerCase().includes(needle),
     );
   }, [rows, query]);

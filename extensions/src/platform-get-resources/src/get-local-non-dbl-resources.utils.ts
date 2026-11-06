@@ -69,6 +69,9 @@ export function buildLocalNonDblResources(
       // than mirrored from the short name: the table renders Full Name in its own column beside
       // Name, so a mirror would print the same text twice. `DblResourceData.fullName` is a
       // required wire field, so empty is the absent form here.
+      // Narrows an absent full name to the empty string because `DblResourceData.fullName` is a
+      // required wire field — mirrors nothing and composes no label.
+      // eslint-disable-next-line paranext/no-inline-project-name
       fullName: normalizeFullName(m.fullName) ?? '',
       bestLanguageName: m.language ?? '',
       // Best-effort: a project id need not start with the DBL entry uid it was installed from

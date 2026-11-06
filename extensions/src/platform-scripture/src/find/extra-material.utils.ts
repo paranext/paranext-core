@@ -13,7 +13,7 @@ import { Canon } from '@sillsdev/scripture';
  * `find.utils.ts`, which the finder data provider — and therefore the extension host entry point —
  * loads, and the host's `require` shim supplies no UI package. `find-book-lists.utils.ts` cannot
  * hold this predicate for that reason: it imports `platform-bible-react`, which emits a bare react
- * require the host rejects. `extension-host-import-boundary.test.ts` guards the rule.
+ * require the host rejects. The extensions' main-bundle build fails if that require is reached.
  *
  * `Canon.isExtraMaterial` validates case-insensitively but then matches its non-canonical id list
  * case-sensitively, so it answers `false` for a lowercase id. The reference's book id is

@@ -215,7 +215,8 @@ One exception, by design: a surface whose label is already a localized sentence 
 from a format string with `{shortName}`/`{fullName}` placeholders instead of calling
 `formatProjectName`, so a locale can reorder or re-punctuate it. The Simple-mode toolbar
 (`%projectPicker_toolbar_label_shortNameAndFullName%`) is the one such site today. Keep the English
-string in the helper's order, and exempt the site in the sweep if its wording trips the pattern.
+string in the helper's order, and disable `paranext/no-inline-project-name` at the site, with the
+reason, if its wording trips the rule.
 
 Such a surface must derive its VISIBLE label from that same string, not just its tooltip. The
 toolbar renders the two names as separate nodes so each can shrink on its own, and reads the order
@@ -224,9 +225,11 @@ and separator off the template with `parseProjectNameTemplate`
 beside a localizable joined form is the failure this rule exists to prevent: a locale that reorders
 the string makes the label and its own tooltip disagree.
 
-`src/renderer/components/projects/project-name-adoption.test.ts` sweeps the repo and fails the build
-on a re-inlined format or de-dup. A site that matches the pattern without being a project-name label
-goes in that file's `EXEMPT` list with a reason. Rationale and history:
+The ESLint rule `paranext/no-inline-project-name` (`lib/eslint-plugin-paranext`) fails lint on a
+re-inlined format or de-dup: a `*fullName` value composed with `??`, `||`, `&&`, an equality
+comparison, `+`, a template literal, a conditional, or `.join`/`.concat` outside the helpers. A site
+that matches without being a project-name label (a search predicate, a sort key) disables the rule
+on that line, with the reason on the line above. Rationale and history:
 `adr-project-name-short-name-first` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
 
 ### Read-only (non-editable) projects in a picker
