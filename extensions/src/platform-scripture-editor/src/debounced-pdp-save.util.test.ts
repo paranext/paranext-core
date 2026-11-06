@@ -426,27 +426,35 @@ describe('isTypingLostToNavigation', () => {
   // typed into JON 1, so the save scheduled for JON 2 is refused and the typing is gone.
   it('is true when the editor lags the selection and holds typing the backend lacks', () => {
     expect(
-      isTypingLostToNavigation('JON|2|', 'JON|2|', usjWith('In the beginning God'), lastSaved),
+      isTypingLostToNavigation('JON|1|', 'JON|2|', usjWith('In the beginning God'), lastSaved),
+    ).toBe(true);
+  });
+
+  // The user moved on again, to JON 3, before JON 2 loaded: the editor still shows JON 1, and the
+  // save flushed on leaving JON 2 is refused just the same.
+  it('is true when the user moves on again before the next chapter loads', () => {
+    expect(
+      isTypingLostToNavigation('JON|1|', 'JON|3|', usjWith('In the beginning God'), lastSaved),
     ).toBe(true);
   });
 
   // A declined save from JON 1 retries after JON 2 has loaded: the editor's typing is JON 2's own,
   // and JON 2's save sends it.
-  it('is false for a save from a chapter left earlier', () => {
+  it('is false for a save from a chapter left earlier once the editor shows the selected chapter', () => {
     expect(
-      isTypingLostToNavigation('JON|1|', 'JON|2|', usjWith('In the beginning God'), lastSaved),
+      isTypingLostToNavigation('JON|2|', 'JON|2|', usjWith('In the beginning God'), lastSaved),
     ).toBe(false);
   });
 
   it('is false when the editor holds nothing new for its chapter', () => {
     expect(
-      isTypingLostToNavigation('JON|2|', 'JON|2|', usjWith('In the  beginning'), lastSaved),
+      isTypingLostToNavigation('JON|1|', 'JON|2|', usjWith('In the  beginning'), lastSaved),
     ).toBe(false);
   });
 
   it('is false when the only difference is a zero-width no-break space, which is never a change', () => {
     expect(
-      isTypingLostToNavigation('JON|2|', 'JON|2|', usjWith('In the\uFEFF beginning'), lastSaved),
+      isTypingLostToNavigation('JON|1|', 'JON|2|', usjWith('In the\uFEFF beginning'), lastSaved),
     ).toBe(false);
   });
 });

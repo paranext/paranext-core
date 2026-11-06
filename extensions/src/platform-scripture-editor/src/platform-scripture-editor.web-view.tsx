@@ -559,6 +559,14 @@ function describeChapterWithLostEdits(
   };
 }
 
+/** Forgets the edits recorded as held behind a running write, if they are `chapterKey`'s. */
+function forgetEditsHeldFor(
+  heldRef: { current: EditsLostInChapter | undefined },
+  chapterKey: string,
+): void {
+  if (heldRef.current?.chapterKey === chapterKey) heldRef.current = undefined;
+}
+
 /**
  * Notification ids for one editor's own save notices, so its own repeats update one toast each.
  *
@@ -3232,7 +3240,9 @@ function PlatformScriptureEditor({
   // Localized names of the books this editor has shown, for naming a chapter it has since moved off
   // (the editor keeps showing the chapter it is leaving until the next one loads).
   const localizedBookNames = useRef(new Map<string, string>());
-  localizedBookNames.current.set(scrRef.book, localizedBookName);
+  useEffect(() => {
+    localizedBookNames.current.set(scrRef.book, localizedBookName);
+  }, [scrRef.book, localizedBookName]);
 
   const [usjFromPdpPossiblyError, saveUsjToPdpRaw, isUsjFromPdpLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
@@ -3409,6 +3419,9 @@ function PlatformScriptureEditor({
   // go on reaching it until the next chapter loads (from the footnotes pane), each lost the same
   // way, so the user is told once per chapter left. Cleared by each chapter switch.
   const chapterReportedLostOnLeaving = useRef<string | undefined>(undefined);
+  // Set once `pagehide` fires: the editor is closing, so no loss reported from then on is routed to
+  // it, whatever reports it (a save the flush on closing sends can be refused and report too).
+  const isPageHiding = useRef(false);
 
   /**
    * Tells the user that their latest edits in a chapter were not saved, so they can check it and
@@ -3494,7 +3507,7 @@ function PlatformScriptureEditor({
         lost.book,
         lost.chapterNum,
         cause === 'replacedByUpdate' && !held,
-        cause !== 'editorClosed',
+        cause !== 'editorClosed' && !isPageHiding.current,
       );
     },
     [],
@@ -3998,13 +4011,15 @@ function PlatformScriptureEditor({
         // and the like are held off meanwhile (`usePauseEditing`), but an edit that does not come
         // through the editor's own keyboard, such as one from the footnotes pane, still lands. If its
         // save fires before the next chapter arrives, it lands here and the edit is lost, so it is
-        // reported like any other edits lost to leaving a chapter. `usjSentToPdp` holds the last
-        // chapter delivered or sent for the document the editor holds.
+        // reported like any other edits lost to leaving a chapter — also when the user moves on
+        // again before the next chapter loads, and the save flushed on that second move is the one
+        // refused. `usjSentToPdp` holds the last chapter delivered or sent for the document the
+        // editor holds.
         if (
           editorDocument &&
           editorDocumentKey &&
           isTypingLostToNavigation(
-            savedChapterKey,
+            editorDocumentKey,
             chapterKeyRef.current,
             usjFromEditor,
             usjSentToPdp.current,
@@ -4068,6 +4083,8 @@ function PlatformScriptureEditor({
             ? () => notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum)
             : undefined,
         );
+      // The backend already has what the editor holds, so no edits of this chapter are waiting.
+      forgetEditsHeldFor(chapterWithEditsHeldBehindWrite, savedChapterKey);
       return Promise.resolve(false);
     }
 
@@ -4252,8 +4269,7 @@ function PlatformScriptureEditor({
         // from an update that arrived mid-write, say, with the editor unchanged since — and it means
         // the editor no longer holds anything newer than that write.
         if (usjSentToPdp.current && deepEqualAcrossIframes(newUsj, usjSentToPdp.current)) {
-          if (chapterWithEditsHeldBehindWrite.current?.chapterKey === savedChapterKey)
-            chapterWithEditsHeldBehindWrite.current = undefined;
+          forgetEditsHeldFor(chapterWithEditsHeldBehindWrite, savedChapterKey);
           return false;
         }
         chapterWithEditsHeldBehindWrite.current = {
@@ -4276,8 +4292,7 @@ function PlatformScriptureEditor({
         // is already in flight, but the check above returns before reaching it then.
         const outcome = await withWriteInFlightGuard(currentlyWritingUsjToPdp, () => {
           usjSentToPdp.current = newUsj;
-          if (chapterWithEditsHeldBehindWrite.current?.chapterKey === savedChapterKey)
-            chapterWithEditsHeldBehindWrite.current = undefined;
+          forgetEditsHeldFor(chapterWithEditsHeldBehindWrite, savedChapterKey);
           return rawSave(newUsj);
         });
         if (!outcome.ran) {
@@ -4377,6 +4392,9 @@ function PlatformScriptureEditor({
           try {
             if (usjFromPdp && editorRef.current) {
               usjSentToPdp.current = usjFromPdp;
+              // The revert takes back the edits held behind this write too, and the failure is
+              // reported below, so leaving the chapter must not report them again.
+              forgetEditsHeldFor(chapterWithEditsHeldBehindWrite, savedChapterKey);
               // Forced: when the refused edit is a marker edit still in progress — a chapter or
               // verse number retyped — the stored document can equal the editor's own record from
               // before that edit, which the editor would take for a re-send of old text and keep
@@ -4849,6 +4867,7 @@ function PlatformScriptureEditor({
       );
     };
     const flushOnPageHide = () => {
+      isPageHiding.current = true;
       flush();
       reportLostEdits('editorClosed');
     };
@@ -4864,8 +4883,17 @@ function PlatformScriptureEditor({
     };
     // Focus moving to a toolbar or another control in this web view leaves the window focused, so
     // `blur` does not fire, but the editor no longer has focus and so no longer claims the chapter.
+    // Scoped to the editor itself, not `editorContainerRef`, which also holds the footnotes pane:
+    // focus moving into the pane ends the editor's claim too, and the pane claims the chapter only
+    // once it is edited.
     const flushOnLeavingEditor = (event: FocusEvent) => {
-      if (isFocusLeavingContainer(editorContainerRef.current, event.target, event.relatedTarget))
+      if (
+        isFocusLeavingContainer(
+          editorContainerRef.current?.querySelector('.editor-container'),
+          event.target,
+          event.relatedTarget,
+        )
+      )
         flushOnBlur();
     };
     window.addEventListener('blur', flushOnBlur);

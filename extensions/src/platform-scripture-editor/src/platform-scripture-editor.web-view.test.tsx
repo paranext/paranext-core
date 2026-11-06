@@ -174,7 +174,13 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
     Editorial: React.forwardRef((props: Record<string, unknown>, ref) => {
       editorProps.current = props;
       React.useImperativeHandle(ref, () => editorHandle.current);
-      return <div data-testid="editorial" tabIndex={-1} />;
+      // The real editor wraps its content-editable in `.editor-container`; the web view scopes its
+      // focus handling to that element.
+      return (
+        <div className="editor-container">
+          <div data-testid="editorial" tabIndex={-1} />
+        </div>
+      );
     }),
   };
 });
@@ -639,10 +645,15 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
       return [usj, false];
     };
 
-    const saves: { chapterNum: number; usj: unknown; finish: (result: boolean) => void }[] = [];
+    const saves: {
+      chapterNum: number;
+      usj: unknown;
+      finish: (result: boolean) => void;
+      reject: (error: Error) => void;
+    }[] = [];
     chapterUsjSave.current = (chapterNum, usj) =>
-      new Promise<boolean>((resolve) => {
-        saves.push({ chapterNum, usj, finish: resolve });
+      new Promise<boolean>((resolve, reject) => {
+        saves.push({ chapterNum, usj, finish: resolve, reject });
       });
 
     let editorUsj: unknown;
@@ -715,6 +726,12 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
       finishSave: async (index: number) => {
         await act(async () => {
           saves[index].finish(true);
+        });
+      },
+      /** Lets a save in flight come back refused by the backend with `message`. */
+      rejectSave: async (index: number, message: string) => {
+        await act(async () => {
+          saves[index].reject(new Error(message));
         });
       },
     };
@@ -817,16 +834,41 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     const editorElement = screen.getByTestId('editorial');
     const outside = document.createElement('button');
     document.body.append(outside);
-    editor.type('In the beginning God');
+    try {
+      editor.type('In the beginning God');
 
-    // Control: focus moving within the editor's own area sends nothing yet.
-    fireEvent.focusOut(editorElement, { relatedTarget: editorElement.parentElement });
-    expect(editor.saves).toHaveLength(0);
+      // Control: focus moving within the editor's own area sends nothing yet.
+      fireEvent.focusOut(editorElement, { relatedTarget: editorElement.parentElement });
+      expect(editor.saves).toHaveLength(0);
 
-    fireEvent.focusOut(editorElement, { relatedTarget: outside });
+      fireEvent.focusOut(editorElement, { relatedTarget: outside });
 
-    expect(editor.saves).toHaveLength(1);
-    expect(verseText(editor.saves[0].usj)).toBe('In the beginning God');
+      expect(editor.saves).toHaveLength(1);
+      expect(verseText(editor.saves[0].usj)).toBe('In the beginning God');
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it('sends waiting edits as soon as focus moves from the editor to another part of its container, such as the footnotes pane', async () => {
+    const editor = await setUp();
+    const editorElement = screen.getByTestId('editorial');
+    const editorArea = editorElement.closest('.editor-container');
+    const pane = document.createElement('button');
+    editorArea?.after(pane);
+    try {
+      // Positive control: the pane sits in the same container as the editor but outside its area.
+      expect(editorArea?.parentElement?.contains(pane)).toBe(true);
+      expect(editorArea?.contains(pane)).toBe(false);
+      editor.type('In the beginning God');
+
+      fireEvent.focusOut(editorElement, { relatedTarget: pane });
+
+      expect(editor.saves).toHaveLength(1);
+      expect(verseText(editor.saves[0].usj)).toBe('In the beginning God');
+    } finally {
+      pane.remove();
+    }
   });
 
   it('throws waiting edits away, saying the chapter was changed outside, when an update arrives without the claim', async () => {
@@ -969,6 +1011,52 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
 
     expect(lostEditsNotices()).toEqual([
       expect.objectContaining({ message: 'Not saved: GEN 1', duration: 0 }),
+    ]);
+  });
+
+  it('reports nothing more on leaving the chapter once a refused save has put the stored chapter back over the held edits', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+
+    // The backend refuses the running save for a reason that reverts the editor, which takes the
+    // held edits back too; the failure notice is the user's word that the edit was not saved.
+    await editor.rejectSave(0, 'Permissions exception for projectId PROJECT1');
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports once, naming the chapter first left, when the user moves on again before the next chapter loads', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    // Still within the save debounce: the move on flushes the waiting save, which is refused.
+    await editor.goToChapter(3);
+    await waitForSaveDebounce();
+    await editor.deliver(3, chapterText(3, 'And the earth'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('sends the notice outside the closing editor when the page goes away while the next chapter loads', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    editor.unmount();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsNotices()).toEqual([
+      expect.objectContaining({ message: 'Not saved: GEN 1', webViewId: undefined }),
     ]);
   });
 });
