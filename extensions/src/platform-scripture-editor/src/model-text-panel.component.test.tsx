@@ -1031,6 +1031,22 @@ describe('ModelTextPanel', () => {
     expect(container).toHaveAttribute('dir', 'ltr');
   });
 
+  it("uses Simple mode's editor styling without the typing indicators of the editable editor", async () => {
+    // `.character-marker-indicators` tints text inside invisible character markers to warn against
+    // typing in them, which means nothing in a read-only panel.
+    const { container } = renderPanel({
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter: vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' })),
+    });
+    await screen.findByTestId('editorial');
+
+    expect(container.querySelector('.editor-container-simple')).toContainElement(
+      screen.getByTestId('editorial'),
+    );
+    expect(container.querySelector('.character-marker-indicators')).toBeNull();
+  });
+
   it('marks the text inside the scroll box, so scrolling to a verse measures unzoomed pixels', async () => {
     // `scrollToVerse` adds a `getBoundingClientRect()` distance to the scroll box's `scrollTop`. A
     // rect read under a zoomed ancestor is in zoomed pixels while `scrollTop` is not, so a marker on

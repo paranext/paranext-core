@@ -108,6 +108,15 @@ test.describe('scripture editor default view', () => {
     await expect(editorFrame.locator('.editor-input.marker-editable')).toHaveCount(0);
     await expect(editorFrame.locator('span.opening[data-marker]')).toHaveCount(0);
 
+    await test.step('switches on the typing indicators for invisible character markers', async () => {
+      // `_simple-mode.scss` tints text inside a character marker with no visible style, scoped to
+      // both classes on the editor's root; the Simple panels, which cannot be typed into, carry only
+      // the first. The project was made editable above, so the editor turns the indicators on.
+      await expect(
+        editorFrame.locator('.editor-container-simple.character-marker-indicators'),
+      ).toHaveCount(1, { timeout: 30_000 });
+    });
+
     await test.step('uses the project font and size', async () => {
       const computedStyle = (selector: string) =>
         editorFrame
