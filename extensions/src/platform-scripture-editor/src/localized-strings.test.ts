@@ -513,8 +513,8 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
 // can borrow.
 const SAVE_NOTIFICATION_KEYS = [
   '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
+  '%webView_platformScriptureEditor_error_editsLost_format%',
   '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%',
-  '%webView_platformScriptureEditor_error_heldEditsLost_format%',
   '%webView_platformScriptureEditor_error_saveFailed_format%',
 ];
 
@@ -604,8 +604,8 @@ describe.each(['en', 'es'])('chapter marker correction notification in %s', (loc
 // The notices that typing was lost name the chapter it was typed in, which is often not the one on
 // screen: the user has usually just moved to another chapter.
 describe.each([
-  ['en', '%webView_platformScriptureEditor_error_heldEditsLost_format%'],
-  ['es', '%webView_platformScriptureEditor_error_heldEditsLost_format%'],
+  ['en', '%webView_platformScriptureEditor_error_editsLost_format%'],
+  ['es', '%webView_platformScriptureEditor_error_editsLost_format%'],
   ['en', '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'],
   ['es', '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'],
 ])('lost edits notification in %s: %s', (locale, key) => {
