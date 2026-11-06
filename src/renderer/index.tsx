@@ -5,6 +5,7 @@ import '@renderer/global-this.model';
 
 import { RendererRoot } from '@renderer/renderer-root.component';
 import { cleanupWebViewStateOnUnload } from '@renderer/renderer-teardown.util';
+import { startRendererServices } from '@renderer/renderer-startup.util';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
@@ -113,27 +114,19 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   throw new Error(`${reasons}`);
 }
 
-// Subscribed here, at module evaluation, rather than inside the async startup below or from a React
-// effect: `onDidLoseConnection` is a module-level emitter on the network service, so it exists
-// before `initialize()` runs, and subscribing before any await means a loss cannot land in a window
-// where nothing is listening. `PlatformEvent` does not replay to a late subscriber, so a missed loss
-// is missed for good — and this store is the one thing that tells the user the app has stopped
-// working. Returns an unsubscriber we intentionally never call; it runs for the renderer's lifetime.
-initConnectionLostService();
-// Same reasoning as above, for main's lifecycle events: `getNetworkEvent` returns a subscribable
-// before the network service has connected, and neither event replays to a late subscriber.
-initExtensionHostStoppedService();
-
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
 // - They internally await other services when they need others in order to start
 // - Nothing in this React tree requires the services to have started in order to get to first paint
 // - If any of these fail, it is a very serious problem that we have not attempted to address up to
 //   this point. TODO: https://github.com/paranext/paranext-core/issues/559
-(async () => {
-  try {
-    // The network service has to start first, and it uses the shared store after initialization
-    await networkService.initialize();
+// The connection-lost and extension-host-stopped subscriptions run first, before anything awaits;
+// see `startRendererServices`.
+startRendererServices({
+  networkService,
+  initConnectionLostService,
+  initExtensionHostStoppedService,
+  startServices: async () => {
     markStartup('papi-connected');
     // Not awaited: nothing at startup needs the answer, and it never rejects.
     catchUpExtensionHostStoppedState();
@@ -204,10 +197,8 @@ initExtensionHostStoppedService();
     // at startup instead of restarting on each Simple/Power toggle. Also returns an unsubscriber we
     // intentionally never call — it runs for the renderer's lifetime.
     initSyncActivityService();
-  } catch (e) {
-    logger.error(`Service(s) failed to initialize! Error: ${e}`);
-  }
-})();
+  },
+});
 
 // #endregion
 
