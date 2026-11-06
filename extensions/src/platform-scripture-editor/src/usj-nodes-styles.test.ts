@@ -116,10 +116,14 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       );
     });
 
-    it('drops the verse badge background in Standard view (PT9 has no verse badge)', () => {
+    // Left out, not overridden: an override would also paint over an annotation's own background
+    // on a verse number it holds.
+    it('gives the verse badge background only to the views without editable markers', () => {
       expect(scss).toMatch(
-        /\.formatted-font\.marker-editable \.verse \{[^}]*background-color: transparent;[^}]*\}/,
+        /\.formatted-font:where\(:not\(\.marker-editable\)\) \.verse \{[^}]*background-color: rgba\(222, 222, 222, 1\);[^}]*\}/,
       );
+      expect(scss).not.toMatch(/\.formatted-font \.verse \{[^}]*background-color/);
+      expect(scss).not.toMatch(/\.formatted-font\.marker-editable \.verse \{[^}]*background-color/);
     });
 
     it('scopes marker validation status rules to editable marker modes', () => {
@@ -135,8 +139,15 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // A fixed near-black hover color is all but invisible against a dark theme. The host's
     // `--foreground` carries a complete color value here, so `var()` resolves; the literal stays
     // only as the fallback for a host that defines no such token.
+    // An annotation that holds part of an attribute run cuts it into sibling `.attribute` pieces,
+    // so hovering one piece lifts every attribute child of the same parent.
     it('resolves the attribute hover color against the host theme', () => {
-      expect(scss).toMatch(rule(['.attribute:hover'], 'color: var(--foreground'));
+      expect(scss).toMatch(
+        rule(
+          ['.attribute:hover', ':has(> .attribute:hover) > .attribute'],
+          'color: var(--foreground',
+        ),
+      );
       expect(scss).toMatch(rule(['.attribute-run:hover'], 'color: var(--foreground'));
     });
 
@@ -190,13 +201,24 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
 
     // A row's own \tr glyph rides in the anonymous cell the browser generates around the only
     // non-cell content of a <tr>, so it matches neither the td nor the th rule and would sit flush
-    // against the table edge without this.
+    // against the table edge without this. Only the head piece of a glyph an annotation cuts into
+    // pieces is padded, so the cut glyph keeps the one gap the uncut glyph has.
     it('pads a row marker like the cells around it', () => {
       expect(scss).toContain(
-        '.usfm .table-row > .opening,\n' +
-          '.usfm .table-row > .marker {\n' +
+        '.usfm .table-row > .opening:not([data-piece-continuation]),\n' +
+          '.usfm .table-row > .marker:not([data-piece-continuation]) {\n' +
           '  padding-inline-start: 0.28em;\n' +
           '}',
+      );
+    });
+  });
+
+  // A collapsed note hides its content's text but not a `<mark>` around it, so an annotation's box
+  // style would draw an empty sliver beside the caller.
+  describe('collapsed note content', () => {
+    it('draws no box on an annotation mark inside it', () => {
+      ['margin: 0', 'padding: 0', 'border: none', 'outline: none', 'box-shadow: none'].forEach(
+        (declaration) => expect(scss).toMatch(rule(['.note.collapsed mark'], declaration)),
       );
     });
   });
