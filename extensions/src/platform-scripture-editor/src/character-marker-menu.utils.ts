@@ -6,10 +6,10 @@
  * rejects any `require` other than `papi` ("Requiring other than papi is not allowed in
  * extensions!"), so a UI value reachable from there makes the whole extension fail to activate and
  * no scripture editor opens. That is why these helpers live in their own module instead of in
- * `platform-scripture-editor.utils.ts`, which `main.ts` imports. Neither the build nor lint catches
- * the violation — it fails at runtime — so `extension-host-import-boundary.test.ts` enforces the
- * boundary by walking `main.ts`'s transitive value-import graph. Keeping this module out of that
- * graph is what makes the `lucide-react` import below safe.
+ * `platform-scripture-editor.utils.ts`, which `main.ts` imports. The extensions' main-bundle build
+ * enforces the boundary by walking `main.ts`'s module graph and failing on any module the host does
+ * not supply. Keeping this module out of that graph is what makes the `lucide-react` import below
+ * safe.
  */
 
 import { isCharacterMarker, LanguageStrings, LocalizeKey, usfmMarkers } from 'platform-bible-utils';

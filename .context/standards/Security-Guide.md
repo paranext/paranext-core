@@ -44,6 +44,8 @@ For the full CSP design visualization, see the [CSP Design wiki](https://github.
 
 Platform.Bible runs extension code in a partially sandboxed environment. Only specific modules are available to extensions.
 
+For the extensions in this repository, the build enforces the extension host's half of this list. `extensions/webpack/extension-host-import-boundary-webpack-plugin.ts` fails the main-bundle build (`npm run build:extensions`, and watch mode) when an extension's entry point reaches a module the host does not supply — typically `react` pulled in by a value import of a UI component or icon — or a `.tsx` file, and names the import chain from `main.ts`. It checks against `EXTENSION_INTERFACE_MODULE_SPECIFIERS` in `src/extension-host/data/extension-interface-modules.data.ts`, the same list the host's `require` shim uses. Web views are not checked: they are imported into the main bundle as `?inline` strings and run in the renderer.
+
 ### Security Approval Criteria
 
 Modules must not enable:

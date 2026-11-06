@@ -8,12 +8,15 @@
  * outside the exception. Treat a change here as a licensing change as well as a security one, and
  * see https://github.com/paranext/paranext/wiki/Module-import-restrictions.
  *
- * Kept in a module of its own, importing nothing, for one reason: the guard that has to notice a
- * change to it (`extension.service.module-allowlist.test.ts`) must be able to read it as a VALUE.
- * `extension.service.ts` cannot be imported from a test - it creates directories at module scope,
- * and installing the shim is a side effect of `activateExtensions`, which also deletes
- * `globalThis.eval` and replaces `fetch` - so a guard that reached for the list there would have to
- * scrape source text and would only recognize the one syntax it was written against.
+ * Kept in a module of its own, importing nothing, so that code outside the extension host can read
+ * it as a VALUE: the guard that has to notice a change to it
+ * (`extension.service.module-allowlist.test.ts`), and the extensions' main-bundle build
+ * (`extensions/webpack/extension-host-import-boundary-webpack-plugin.ts`), which fails when an
+ * extension's entry point reaches a module the shim would refuse. `extension.service.ts` cannot be
+ * imported from a test - it creates directories at module scope, and installing the shim is a side
+ * effect of `activateExtensions`, which also deletes `globalThis.eval` and replaces `fetch` - so a
+ * guard that reached for the list there would have to scrape source text and would only recognize
+ * the one syntax it was written against.
  *
  * `EXTENSION_INTERFACE_MODULES` in `extension.service.ts` is typed as a `Record` over this union,
  * so the two cannot drift: a module supplied without a specifier here, or a specifier here with no
