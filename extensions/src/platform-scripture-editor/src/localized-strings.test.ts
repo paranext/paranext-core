@@ -17,6 +17,7 @@ import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-opti
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
 import { HIDDEN_CONTENT_DELETE_STRING_KEYS } from './hidden-content-delete-confirm.utils';
+import { UNSTORABLE_TEXT_NOTICE_STRING_KEYS } from './unstorable-text-notice.utils';
 import { TWO_STEP_DELETE_MESSAGE_STRING_KEYS } from './two-step-delete-tooltip/two-step-delete-tooltip.utils';
 import {
   paragraphMarkerNameKey,
@@ -645,6 +646,21 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
 // The confirmation shown before an edit removes content the view does not show: its title, prompt,
 // and buttons.
 describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The notice shown when the editor removes `\` or `//` from pasted, dropped or typed text.
+describe.each([...UNSTORABLE_TEXT_NOTICE_STRING_KEYS])('unstorable text notice %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });
