@@ -27,16 +27,28 @@ import { sendCommand } from '@shared/services/command.service';
 import {
   formatReplacementString,
   isLocalizeKey,
+  getErrorMessage,
   isPlatformError,
   LocalizeKey,
   newGuid,
   newPlatformError,
+  createMenuTemplateVars,
+  getTemplateVarNames,
   ReferencedItem,
   ABORTED,
   FAILED_PRECONDITION,
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
-import type { LanguageStrings, PlatformError } from 'platform-bible-utils';
+import type {
+  LanguageStrings,
+  Localized,
+  PlatformError,
+  SingleColumnMenu,
+} from 'platform-bible-utils';
+import { contextKeysService } from '@shared/services/context-keys.service';
+import { evaluateMenuRecordingReads } from '@shared/utils/evaluate-menu-recording-reads.util';
+import { collectContextMenuKeys } from '@renderer/components/overlays/overlay-context-menu-localization.util';
+import { webViewService } from '@shared/services/web-view.service';
 import type { ReactElement } from 'react';
 import {
   CommandPaletteItem,
@@ -62,6 +74,7 @@ import {
   getOverlayById,
   getTopmostOverlay,
   updateOverlayContent,
+  updateContextMenuItems,
   updateCommandPaletteState,
 } from './overlay-store';
 import {
@@ -522,6 +535,20 @@ function dismissTransientOverlays(
   });
 }
 
+/** Whether any item's `when` or `enabledWhen` uses the template variable `{name}`. */
+function menuExpressionsUseTemplateVar(menu: Localized<SingleColumnMenu>, name: string): boolean {
+  return menu.items.some((item) =>
+    [item.when, item.enabledWhen].some((expression) => {
+      if (!expression) return false;
+      try {
+        return getTemplateVarNames(expression).includes(name);
+      } catch {
+        return false;
+      }
+    }),
+  );
+}
+
 // ── Core Service Methods ──
 
 /**
@@ -549,19 +576,51 @@ async function showContextMenu(
 
   // Fetch menu contributions for this webViewType
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const webViewMenu = await menuDataService.getWebViewMenu(webViewType as ReferencedItem);
+  const { contextMenu } = await menuDataService.getWebViewMenu(webViewType as ReferencedItem);
 
-  if (!webViewMenu.contextMenu) {
+  if (!contextMenu) {
     return undefined;
   }
 
-  const items = convertContributionToContextMenuItems(webViewMenu.contextMenu);
+  // The only network call while building a menu, made only when an item's expression uses
+  // {projectId}. Through the shared proxy rather than the renderer's own web view service shard: the
+  // shard's import graph reaches back to this module through the frontend PAPI, which would be a
+  // cycle. A failed lookup leaves the project unset: the menu is evaluated without a project, so positive
+  // {projectId} gates read as unset.
+  let projectId: string | undefined;
+  if (menuExpressionsUseTemplateVar(contextMenu, 'projectId')) {
+    try {
+      projectId = (await webViewService.getOpenWebViewDefinition(webViewId))?.projectId;
+    } catch (error) {
+      logger.warn(
+        `Could not look up the project of web view ${webViewId}; the context menu is evaluated without a project (positive {projectId} gates read as unset): ${getErrorMessage(error)}`,
+      );
+    }
+  }
+  const templateVars = createMenuTemplateVars({ webViewId, webViewType, projectId });
+  // `when` hides an item and `enabledWhen` on a command item disables it. `checkedWhen`, and
+  // `enabledWhen` on a submenu, are rejected at load. While the menu is open it re-evaluates
+  // whenever a context key it read changes, and closes if every item becomes hidden.
+  const onEvaluationError = (expression: string, error: unknown) =>
+    logger.warn(
+      `Error evaluating context menu when-expression '${expression}': ${getErrorMessage(error)}`,
+    );
+  const initialEvaluation = evaluateMenuRecordingReads(
+    contextMenu,
+    templateVars,
+    onEvaluationError,
+  );
+  let { readKeys } = initialEvaluation;
+  const items = convertContributionToContextMenuItems(initialEvaluation.evaluatedMenu);
 
   if (items.length === 0) {
     return undefined;
   }
 
   validateContextMenuItems(items);
+  // Every item the menu can show, hidden ones included, so a label that appears later is already
+  // localized. The converter ignores `when`/`enabledWhen`, so the unevaluated menu is safe to use.
+  const localizeKeys = collectContextMenuKeys(convertContributionToContextMenuItems(contextMenu));
 
   const existingOverlays = getOverlaysByWebView(webViewId).filter((o) => o.type === 'contextMenu');
   existingOverlays.forEach((existing) => {
@@ -581,12 +640,15 @@ async function showContextMenu(
   announceLocalizedToScreenReader('%overlay_aria_contextMenuOpened%');
   noteOverlayCreated(overlayId);
 
-  const selectedCommand = await new Promise<string | undefined>((resolve, reject) => {
+  // Nothing between the first evaluation and the subscription below may await: a key change in
+  // that gap would be missed.
+  const selectedCommandPromise = new Promise<string | undefined>((resolve, reject) => {
     addOverlay({
       type: 'contextMenu',
       id: overlayId,
       webViewId,
       items,
+      localizeKeys,
       position: clampedPosition,
       resolve: (result) => {
         settleTransientOverlayFocus(overlayId, result !== undefined);
@@ -598,6 +660,30 @@ async function showContextMenu(
       },
     });
   });
+
+  const unsubscribe = contextKeysService.onDidChange((event) => {
+    if (!readKeys.has(event.key)) return;
+    try {
+      if (!getOverlayById(overlayId)) return;
+      const next = evaluateMenuRecordingReads(contextMenu, templateVars, onEvaluationError);
+      readKeys = next.readKeys;
+      const nextItems = convertContributionToContextMenuItems(next.evaluatedMenu);
+      if (nextItems.length === 0) {
+        resolveAndRemoveOverlay(overlayId, 'contextMenu', undefined);
+        return;
+      }
+      validateContextMenuItems(nextItems);
+      updateContextMenuItems(overlayId, nextItems);
+    } catch (error) {
+      logger.warn(`Could not refresh open context menu ${overlayId}: ${getErrorMessage(error)}`);
+    }
+  });
+  let selectedCommand: string | undefined;
+  try {
+    selectedCommand = await selectedCommandPromise;
+  } finally {
+    unsubscribe();
+  }
 
   if (selectedCommand) {
     try {

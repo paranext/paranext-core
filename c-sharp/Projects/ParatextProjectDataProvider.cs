@@ -62,6 +62,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private readonly LocalParatextProjects _paratextProjects;
 
+    // Null means the process-wide shared store, resolved on first publish
+    private readonly ContextKeys? _contextKeys;
+
     // Lazy because published PDPs do not register the comment wire methods (see GetFunctions),
     // so for those PDPs the comment manager is never accessed - and CommentManager.Get loads
     // comment XML on first access for unpublished projects, work we don't want to pay for on
@@ -96,11 +99,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         string name,
         PapiClient papiClient,
         ProjectDetails projectDetails,
-        LocalParatextProjects paratextProjects
+        LocalParatextProjects paratextProjects,
+        ContextKeys? contextKeys = null
     )
         : base(name, papiClient, projectDetails)
     {
         _paratextProjects = paratextProjects;
+        _contextKeys = contextKeys;
         _commentManager = new Lazy<CommentManager>(
             () =>
                 CommentManager.Get(
@@ -411,7 +416,56 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     protected override Task StartDataProviderAsync()
     {
         _paratextProjects.Initialize();
+        PublishContextKeys();
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Publishes this project's context keys (<c>platform.project.{id}.isResource</c>,
+    /// <c>platform.project.{id}.isEditable</c>, <c>platformScripture.project.{id}.canEditScripture</c>
+    /// and <c>platformScripture.project.{id}.canCreateComments</c>) so menus can enable and disable
+    /// items from them. Call whenever one of those facts may have changed. Never throws; a failure
+    /// is logged and leaves the provider working.
+    /// </summary>
+    /// <remarks>
+    /// Experimental: the key set is unstable and may change or disappear without notice.
+    /// </remarks>
+    internal void PublishContextKeys()
+    {
+        try
+        {
+            var projectId = ProjectDetails.Metadata.Id;
+            // Read the facts straight from the collection: GetParatextProject refuses a resource
+            // while the user has no valid registration, but isResource must still be published.
+            var scrText = ScrTextCollection.GetById(HexId.FromStr(projectId));
+            SetContextKey($"platform.project.{projectId}.isResource", scrText.IsResourceProject);
+            SetContextKey(
+                $"platform.project.{projectId}.isEditable",
+                ScrTextExtensions.GetIsEditable(scrText)
+            );
+            SetContextKey(
+                $"platformScripture.project.{projectId}.canEditScripture",
+                CanUserEditScripture()
+            );
+            SetContextKey(
+                $"platformScripture.project.{projectId}.canCreateComments",
+                CanUserCreateComments()
+            );
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(
+                $"Publishing context keys for project {ProjectDetails.Metadata.Id} failed! {e}"
+            );
+        }
+    }
+
+    private void SetContextKey(string key, bool value)
+    {
+        if (_contextKeys != null)
+            _contextKeys.Set(key, value);
+        else
+            ContextKeysService.Set(key, value);
     }
 
     /// <summary>
@@ -2208,6 +2262,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new Exception(errorMessage);
 
         SendDataUpdateEvent(ProjectDataType.SETTING, "project setting data update event");
+        PublishContextKeys();
 
         // If the write changed a setting that backs the project-picker / Home metadata (name,
         // fullName, language, languageTag, isEditable), tell those list consumers the metadata is
@@ -2313,8 +2368,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <summary>
     /// Reactive getter for the CanUserEditScripture project data type. Delegates to
     /// CanUserEditScripture() so the one-shot RPC method and the reactive data type share
-    /// identical logic. Not settable - subscribers refresh automatically after every Send/Receive
-    /// sync via SendFullProjectUpdateEvent(), which already fires a wildcard data-update event.
+    /// identical logic. Not settable - subscribers refresh when SendFullProjectUpdateEvent() runs,
+    /// which core's book management emits; a Send/Receive implementation that changes the user's
+    /// roles must call it. It fires a wildcard data-update event and republishes the context keys.
     /// </summary>
     public bool GetCanUserEditScripture(object? param = null)
     {
@@ -2709,6 +2765,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public void SendFullProjectUpdateEvent()
     {
         SendDataUpdateEvent("*", "full project updated event");
+        PublishContextKeys();
     }
 
     #endregion

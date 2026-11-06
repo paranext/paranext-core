@@ -5894,7 +5894,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0003
 - **Date:** 2026-06-18
-- **Status:** Accepted
+- **Status:** Superseded in part by adr-menus-gate-declaratively-with-context-keys (the
+  menu-availability half); the DataProvider-vs-NetworkObject half stays accepted.
 - **Context:** Two placement questions recur when porting a PT9 tool that mutates project data.
   (a) PT9 menu items hide/disable themselves via predicate evaluation before render
   (permission checks, project-state guards). paranext-core's menu system has **no arbitrary
@@ -5935,6 +5936,97 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** manage-books port (menu-availability deferred); keyboard-switching port (OS-keyboard
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
+
+## adr-menus-gate-declaratively-with-context-keys: Menu items may be gated by when-expressions over context keys; handlers keep submission-time checks
+
+- **Date:** 2026-10-28
+- **Status:** Accepted, amended 2026-11-02, with the D3 amendment (menus updating while open, and
+  the `when` vs `enabledWhen`/`checkedWhen` authoring rule) provisional until UX review (PT-5037)
+  confirms it (see D3)
+- **Context:** Menu items that cannot act (Insert footnote in a read-only project, Sync on a
+  resource, Insert comment without the comment role) were clickable and failed only at submission
+  with an error, which users read as a dead click. The earlier decision
+  (`adr-menus-always-available-gate-at-submission`) kept menus always-available because the menu
+  system had no way to express a condition. A prototype added `when`/`enabledWhen`/`checkedWhen`
+  expressions that the consumer of a menu document (main menu, web view top menu, tab menu,
+  overlay context menu, the scripture editor's self-rendered toolbar) evaluates against a flat
+  store of context keys (`papi.contextKeys`, backed by the shared store). Evaluation sits with the
+  consumer, not the menu data provider, because the facts change at a rate and in processes the
+  menu data provider does not see: a producer only writes a scalar, and every surface re-evaluates
+  from its own copy of the store without a round trip.
+- **Decision:** Menu items may be gated declaratively by when-expressions over context keys, for
+  state the platform or an extension already knows reactively.
+  - Keys are plain facts (booleans and scalars such as `platform.project.{projectId}.isEditable`),
+    never pre-computed menu answers; the expression combines them.
+  - Each key has exactly one producer process: a TypeScript process refuses (logs, does not throw)
+    a write to a key another process wrote first; the .NET store does not check, so a C# write to
+    another process's key takes it over. A key released after its writer disconnected is
+    claimable by any process. Either way two producers on one key race, so keep exactly one.
+  - Items are disabled (`enabledWhen`), not hidden (`when`), when the user could fix the cause or
+    would otherwise wonder where an item went.
+  - Command handlers keep their own guards and `PlatformError`s: keyboard shortcuts and direct
+    PAPI calls bypass menus, and a key can lag the state it describes.
+  - **Amended 2026-11-02 (D3, provisional).** Originally: overlay context menus applied `when` only
+    and tab menus evaluated once when read, with `enabledWhen`/`checkedWhen` rejected there.
+  - A key that no producer has published reads as unknown, which counts as false.
+- **Alternatives:** Evaluate expressions in the menu data provider (producer side): rejected, since
+  it would need every key change to travel to the provider and back to every window, and the
+  provider has no per-web-view or per-window facts. Keep gate-at-submission only: rejected, since
+  it leaves the dead clicks. Expose the shared store directly to extensions: rejected, since it
+  has no key-format rule, no namespacing convention and no typed values.
+- **Consequences:** A new public surface (`papi.contextKeys`, the `when`/`enabledWhen`/`checkedWhen`
+  menu properties, `evaluateMenu`, `useEvaluatedMenu`), all experimental. The shared store releases
+  a disconnected process's keys so a restarted producer can republish. Until a producer publishes,
+  a gate on that key reads as false, so an item gated on a positive fact is disabled for a moment
+  after startup; a gate on a negated fact is enabled for that moment. **Amended 2026-11-02
+  (D3, provisional).** Originally: "Revisit when a second surface needs `enabledWhen` (overlay
+  context menus) or when key volume becomes noticeable." Tab menus and overlay context menus now
+  honor `enabledWhen` on command items; revisit when key volume becomes noticeable.
+- **Amendments (2026-11-02, review of #2959):**
+  - **D1:** A producer's `remove` releases its key for any process. A `set` refused because another
+    live process owns the key is held (and logged at info on each refused set) and applied when that key is released
+    (`applyPendingClaim` in `shared-store.service.ts`). This covers a moved tab whose old
+    renderer's cleanup (the deferred `setTimeout` `unmountRoot` in `web-view.component.tsx`, or the
+    late "unload never ran" path) lands after the new renderer's first set, and a restarted
+    producer that fetched the store before main released the old process's keys
+    (`releaseKeysOfDisconnectedProcesses`). Release applies to every shared-store caller,
+    including the network request timeouts and the dialog router. C# `SharedStore.Remove<T>`
+    writes a live default value (for example `null`, or `false` for a bool) through `Set`, never a
+    released tombstone, so release semantics do not apply to keys written from C#.
+  - **D2:** There is no public change subscription: keys are menu facts, not a state bus. A
+    self-rendered menu uses `useEvaluatedMenu`, and menus re-evaluate only when a key they READ
+    changes (`evaluateMenuRecordingReads` records the keys; the same holds for the tab menu, the
+    overlay context menu and the macOS menubar).
+  - **D3 (provisional until UX review confirms it; as of 2026-11-05 that review has not
+    happened):** what follows is what the code does, not yet a settled convention. UX is to decide
+    whether a menu may change under the pointer while it is open, and with it whether the authoring
+    rule below stands. TODO(PT-5037): settle or change D3 per that review, then drop this note.
+    Every surface updates while open: toolbar, web view top menus, self-rendered menus, tab menus
+    and overlay context menus. On the macOS menubar, enabled/checked update in place on the
+    existing native items; a visibility or structure change rebuilds the menubar, because
+    evaluation removes hidden items and prunes emptied containers. Behaviour while a native menu is
+    open is unverified on a real Mac as of 2026-11-02. `enabledWhen` became allowed on tab-menu and
+    overlay-context-menu command items; `checkedWhen` there, and `enabledWhen` on their submenu
+    items, stay rejected when the contribution loads (`limitedSurface` in
+    `menu-document-combiner.ts`): those surfaces show no check marks and can disable only command
+    items, so there the authoring rule below has these exceptions. Authoring rule: use `enabledWhen`/`checkedWhen` for state
+    that can change while a menu is open, and `when` for state that does not. Handlers keep their
+    own guards. A tab's zoomability is held for one open, as layout state.
+  - **D4:** No network call while building a menu, with one exception: the overlay context menu
+    looks up the web view's `{projectId}` once per open, only when an item's expression uses it
+    (`menuExpressionsUseTemplateVar`). If the lookup fails, the menu is evaluated without a project
+    for that open (positive project gates read as unset).
+  - **D5:** Release depends on the network method registry: main releases on removal of
+    `shared-store:owner:<id>` at disconnect, and .NET registers no marker. Live-checked
+    2026-11-02 in the dev app: after `platform.restartExtensionHost`, main removed the old
+    extension host's owner-marker method and the open editor's keys and menu state stayed
+    correct; an editor tab moved with `platform.moveWebViewToNewWindow` had its keys re-owned by
+    the new window's process. As of 2026-11-02 no bundled extension-host producer exists in this
+    repo, so a restarted producer re-claiming its own keys is covered by unit tests only.
+  - **D6:** C# `SharedStore.Set` skips a publish whose JSON equals the stored value, and TS
+    `setFromRemote` does not emit an equal remote value. There is still no ownership check in C#;
+    keeping one producer per key is the producer's job.
+- **Source:** PT-4805 / PT-4732; prototype spec attached to PT-4805.
 
 ## adr-mode-switch-sends-one-send-receive-for-all-closing-windows: A mode switch starts ONE send/receive covering every window it closes, not one per window
 

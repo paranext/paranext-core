@@ -1,5 +1,6 @@
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -39,6 +40,7 @@ import {
   joinGroupsWithSeparators,
   LeadingIconSlot,
   MenuGroupNode,
+  MenuItemNodeSource,
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
@@ -46,6 +48,12 @@ import MenuItemIcon from './menu-icon.component';
 const createDropdownSeparator = (groupKey: string) => (
   <DropdownMenuSeparator key={`separator-${groupKey}`} />
 );
+
+/**
+ * A checkbox item's check indicator sits at the end of its row in this menu, so it reserves no
+ * leading icon slot. Clearing `checked` keeps it out of the slot decision.
+ */
+const withoutCheckedState = (item: MenuItemNodeSource) => ({ ...item, checked: undefined });
 
 /**
  * Renders the items of the given groups in the order given, one entry per group. A submenu joins
@@ -72,36 +80,55 @@ const getGroupContent = (
       // branch attaches the tooltip to `DropdownMenuSubTrigger` itself instead, which is the
       // element the tooltip needs to describe anyway.
       if ('command' in item) {
+        const itemContent = (
+          <>
+            <MenuItemIcon
+              iconName={item.iconNameBefore}
+              icon={item.iconPathBefore}
+              menuLabel={item.label}
+              leading
+              leadingSlot={leadingSlot}
+            />
+            {item.label}
+            <MenuItemIcon
+              iconName={item.iconNameAfter}
+              icon={item.iconPathAfter}
+              menuLabel={item.label}
+            />
+            {item.shortcut && (
+              <DropdownMenuShortcut className="tw:ps-4">
+                <ShortcutKeys hint={item.shortcut} />
+              </DropdownMenuShortcut>
+            )}
+          </>
+        );
+        // `onSelect` rather than `onClick`: Radix does not fire `onSelect` for a disabled item
+        const handleSelect = () => {
+          // Since the item has a command, we know it is a MenuItemContainingCommand.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          onSelectMenuItem(item as MenuItemContainingCommand);
+        };
         return (
           <Tooltip key={`tooltip-${item.label}-${item.command}`}>
             <TooltipTrigger asChild>
-              <DropdownMenuItem
-                key={`dropdown-menu-item-${item.label}-${item.command}`}
-                onClick={() => {
-                  // Since the item has a command, we know it is a MenuItemContainingCommand.
-                  // eslint-disable-next-line no-type-assertion/no-type-assertion
-                  onSelectMenuItem(item as MenuItemContainingCommand);
-                }}
-              >
-                <MenuItemIcon
-                  iconName={item.iconNameBefore}
-                  icon={item.iconPathBefore}
-                  menuLabel={item.label}
-                  leading
-                  leadingSlot={leadingSlot}
-                />
-                {item.label}
-                <MenuItemIcon
-                  iconName={item.iconNameAfter}
-                  icon={item.iconPathAfter}
-                  menuLabel={item.label}
-                />
-                {item.shortcut && (
-                  <DropdownMenuShortcut className="tw:ps-4">
-                    <ShortcutKeys hint={item.shortcut} />
-                  </DropdownMenuShortcut>
-                )}
-              </DropdownMenuItem>
+              {item.checked !== undefined ? (
+                <DropdownMenuCheckboxItem
+                  key={`dropdown-menu-item-${item.label}-${item.command}`}
+                  checked={item.checked}
+                  disabled={item.disabled}
+                  onSelect={handleSelect}
+                >
+                  {itemContent}
+                </DropdownMenuCheckboxItem>
+              ) : (
+                <DropdownMenuItem
+                  key={`dropdown-menu-item-${item.label}-${item.command}`}
+                  disabled={item.disabled}
+                  onSelect={handleSelect}
+                >
+                  {itemContent}
+                </DropdownMenuItem>
+              )}
             </TooltipTrigger>
             {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
           </Tooltip>
@@ -112,7 +139,7 @@ const getGroupContent = (
       // `data-state` and `data-slot` onto the trigger, hiding the submenu's open state from
       // `data-open:` styles
       const subTrigger = (
-        <DropdownMenuSubTrigger>
+        <DropdownMenuSubTrigger disabled={item.disabled}>
           <MenuItemIcon
             iconName={item.iconNameBefore}
             menuLabel={item.label}
@@ -141,7 +168,9 @@ const getGroupContent = (
                   subGroups,
                   onSelectMenuItem,
                   getLeadingIconSlot(
-                    subGroups.flatMap((group) => group.items.map((node) => node.item)),
+                    subGroups.flatMap((group) =>
+                      group.items.map(({ item: subItem }) => withoutCheckedState(subItem)),
+                    ),
                   ),
                 ),
                 createDropdownSeparator,
@@ -220,7 +249,9 @@ export default function TabDropdownMenu({
   // Every section shares one content, so one slot keeps all their labels aligned
   const leadingSlot = getLeadingIconSlot(
     sections.flatMap(({ columnKey }) =>
-      groupsOfSection(columnKey).flatMap((group) => group.items.map((node) => node.item)),
+      groupsOfSection(columnKey).flatMap((group) =>
+        group.items.map(({ item }) => withoutCheckedState(item)),
+      ),
     ),
   );
 

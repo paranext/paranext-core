@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LocalizeKey, MultiColumnMenu } from 'platform-bible-utils';
+import {
+  newPlatformError,
+  type LocalizeKey,
+  type MultiColumnMenu,
+  type PlatformError,
+} from 'platform-bible-utils';
+import { Menu } from 'electron';
+import { localizationService } from '@shared/services/localization.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 
 vi.mock('@shared/services/localization.service', () => ({
   localizationService: {
@@ -10,21 +18,73 @@ vi.mock('@shared/services/localization.service', () => ({
     ),
   },
 }));
-vi.mock('@shared/services/menu-data.service', () => ({ menuDataService: {} }));
+vi.mock('@shared/services/menu-data.service', () => ({
+  menuDataService: { subscribeUnlocalizedMainMenu: vi.fn() },
+}));
+const { mockKeyValues, keyListeners } = vi.hoisted(() => ({
+  mockKeyValues: new Map<string, string | number | boolean>(),
+  keyListeners: new Set<(event: { key: string; value: unknown }) => void>(),
+}));
+vi.mock('@shared/services/context-keys.service', () => ({
+  contextKeysService: {
+    get: (key: string) => mockKeyValues.get(key),
+    onDidChange: (listener: (event: { key: string; value: unknown }) => void) => {
+      keyListeners.add(listener);
+      return () => keyListeners.delete(listener);
+    },
+  },
+}));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@shared/services/command.service', () => ({
   sendCommand: vi.fn().mockResolvedValue(undefined),
 }));
+/** Minimal stand-in for an Electron Menu: item state by id, mutable like the real items */
+const { fakeMenuFromTemplate } = vi.hoisted(() => {
+  type Template = {
+    id?: string;
+    type?: string;
+    enabled?: boolean;
+    checked?: boolean;
+    submenu?: unknown;
+  };
+  function isTemplate(candidate: unknown): candidate is Template {
+    return !!candidate && typeof candidate === 'object';
+  }
+  return {
+    fakeMenuFromTemplate: (template: unknown[]) => {
+      const items = new Map<string, { type: string; enabled: boolean; checked: boolean }>();
+      const walk = (entries: unknown[]) =>
+        entries.filter(isTemplate).forEach((entry) => {
+          if (entry.id)
+            items.set(entry.id, {
+              type: entry.type ?? 'normal',
+              enabled: entry.enabled ?? true,
+              checked: entry.checked ?? false,
+            });
+          if (Array.isArray(entry.submenu)) walk(entry.submenu);
+        });
+      walk(template);
+      return { getMenuItemById: (id: string) => items.get(id) };
+    },
+  };
+});
 vi.mock('electron', () => ({
-  Menu: { buildFromTemplate: vi.fn(), setApplicationMenu: vi.fn() },
+  Menu: {
+    buildFromTemplate: vi.fn((template: unknown[]) => fakeMenuFromTemplate(template)),
+    setApplicationMenu: vi.fn(),
+  },
 }));
 vi.mock('@shared/data/platform-bible-menu.commands', () => ({ handleMenuCommand: vi.fn() }));
 
 // The module under test, imported after the mocks above are established.
 // eslint-disable-next-line import/first
-import { translatePlatformMenuItemsAndCombine } from './platform-macos-menubar.util';
+import {
+  getMacosMenuItemId,
+  subscribeCurrentMacosMenubar,
+  translatePlatformMenuItemsAndCombine,
+} from './platform-macos-menubar.util';
 // The module-level template the combine reads on every call; these tests assert it stays pristine.
 // eslint-disable-next-line import/first
 import { macosMenubarObject } from './platform-macos-menubar.data';
@@ -80,15 +140,14 @@ describe('translatePlatformMenuItemsAndCombine', () => {
       menuWithContributedColumn('%mainMenu_view%'),
     );
     const submenu = viewSubmenuOf(combined);
-    // A contributed item carries no `id` (only `label`, `click` and `order` — see
-    // `getMenubarColumnContent`), so falling back to `label` keeps its position in the sequence
-    // readable. Asserting the full order — not just membership — pins that it is interleaved by
-    // `order` rather than appended after the platform items.
+    // A contributed item carries the id `getMacosMenuItemId` gives it. Asserting the full order —
+    // not just membership — pins that it is interleaved by `order` rather than appended after the
+    // platform items.
     expect(submenu.map((item) => item.id ?? item.label)).toEqual([
       'reload',
       'forceReload',
       'toggleDevTools',
-      '%test_contributedItem%',
+      'platformMenu:test.group:test.command',
       'viewSeparatorAfterDevTools',
       'contentZoomIn',
       'contentZoomInShift',
@@ -142,11 +201,430 @@ describe('translatePlatformMenuItemsAndCombine', () => {
     expect(appMenuLength()).toBe(before);
   });
 
+  it('marks a disabled submenu parent item as not enabled', async () => {
+    const combined = await translatePlatformMenuItemsAndCombine({
+      columns: { 'test.column': { label: '%mainMenu_custom%', order: 1 }, isExtensible: true },
+      groups: {
+        'test.group': { column: 'test.column', order: 1 },
+        'test.subGroup': { menuItem: 'test.parent', order: 1 },
+      },
+      items: [
+        {
+          label: '%test_parent%',
+          group: 'test.group',
+          order: 1,
+          id: 'test.parent',
+          disabled: true,
+          localizeNotes: 'Fixture submenu parent contributed by a test.',
+        },
+        {
+          label: '%test_child%',
+          group: 'test.subGroup',
+          order: 1,
+          command: 'test.command',
+          localizeNotes: 'Fixture submenu child contributed by a test.',
+        },
+      ],
+    });
+    const column = combined.find((menu) => menu.label === '%mainMenu_custom%');
+    const submenu: unknown = column?.submenu;
+    const parent = Array.isArray(submenu)
+      ? submenu.filter(isRecord).find((item) => item.label === '%test_parent%')
+      : undefined;
+    expect(parent?.enabled).toBe(false);
+    // Positive control: the parent really carries its child submenu
+    expect(Array.isArray(parent?.submenu)).toBe(true);
+  });
+
   it("keeps each zoom item's click handler callable", async () => {
     const combined = await translatePlatformMenuItemsAndCombine(
       menuWithContributedColumn('%mainMenu_file%'),
     );
     const zoomIn = viewSubmenuOf(combined).find((item) => item.id === 'contentZoomIn');
     expect(typeof zoomIn?.click).toBe('function');
+  });
+});
+
+/** Fixture with one item per kind of when-expression, all reading a distinct key */
+function menuWithGatedItems(extraItems: MultiColumnMenu['items'] = []): MultiColumnMenu {
+  return {
+    columns: { 'test.column': { label: '%mainMenu_custom%', order: 1 }, isExtensible: true },
+    groups: { 'test.group': { column: 'test.column', order: 1 } },
+    items: [
+      {
+        label: '%test_gated%',
+        group: 'test.group',
+        order: 1,
+        command: 'test.gated',
+        localizeNotes: 'Fixture item gated by enabledWhen.',
+        enabledWhen: 'test.flag',
+      },
+      {
+        label: '%test_checked%',
+        group: 'test.group',
+        order: 2,
+        command: 'test.checked',
+        localizeNotes: 'Fixture item with checkedWhen.',
+        checkedWhen: 'test.checkFlag',
+      },
+      {
+        label: '%test_shown%',
+        group: 'test.group',
+        order: 3,
+        command: 'test.shown',
+        localizeNotes: 'Fixture item with a visibility condition.',
+        when: 'test.showFlag',
+      },
+      ...extraItems,
+    ],
+  };
+}
+
+/** Finds the template entry with the given id, searching submenus */
+function findTemplateEntry(entries: unknown[], id: string): Record<string, unknown> | undefined {
+  const records = entries.filter(isRecord);
+  const direct = records.find((entry) => entry.id === id);
+  if (direct) return direct;
+  return records
+    .map((entry) =>
+      Array.isArray(entry.submenu) ? findTemplateEntry(entry.submenu, id) : undefined,
+    )
+    .find((found) => found !== undefined);
+}
+
+function emitKey(key: string, value: unknown) {
+  keyListeners.forEach((listener) => listener({ key, value }));
+}
+
+/** Lets fire-and-forget rebuilds started by a key listener finish */
+async function flushRebuilds() {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+describe('getMacosMenuItemId', () => {
+  it('derives the id from the group and the command or submenu id', () => {
+    expect(
+      getMacosMenuItemId({
+        label: '%a%',
+        group: 'g.one',
+        order: 1,
+        command: 'c.one',
+        localizeNotes: '',
+      }),
+    ).toBe('platformMenu:g.one:c.one');
+    expect(
+      getMacosMenuItemId({
+        label: '%a%',
+        group: 'g.one',
+        order: 1,
+        id: 'sub.one',
+        localizeNotes: '',
+      }),
+    ).toBe('platformMenu:g.one:sub.one');
+  });
+});
+
+describe('subscribeCurrentMacosMenubar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    keyListeners.clear();
+    mockKeyValues.clear();
+  });
+
+  async function subscribe() {
+    let onMenuChange: ((menu: MultiColumnMenu | PlatformError) => Promise<void>) | undefined;
+    vi.mocked(menuDataService.subscribeUnlocalizedMainMenu).mockImplementation(
+      async (_selector, callback) => {
+        // The test only ever delivers a MultiColumnMenu or a PlatformError
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        onMenuChange = callback as (menu: MultiColumnMenu | PlatformError) => Promise<void>;
+        return async () => true;
+      },
+    );
+    await subscribeCurrentMacosMenubar();
+    return (menu: MultiColumnMenu | PlatformError) => onMenuChange?.(menu);
+  }
+
+  function lastAppliedMenu() {
+    const { results } = vi.mocked(Menu.buildFromTemplate).mock;
+    return results.at(-1)?.value;
+  }
+
+  it('updates enabled in place when a key it reads changes', async () => {
+    const deliver = await subscribe();
+    await deliver(menuWithGatedItems());
+    const applied = lastAppliedMenu();
+    expect(applied.getMenuItemById('platformMenu:test.group:test.gated').enabled).toBe(false);
+
+    mockKeyValues.set('test.flag', true);
+    emitKey('test.flag', true);
+    await flushRebuilds();
+
+    expect(applied.getMenuItemById('platformMenu:test.group:test.gated').enabled).toBe(true);
+    expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1);
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates checked in place', async () => {
+    const deliver = await subscribe();
+    await deliver(menuWithGatedItems());
+    const applied = lastAppliedMenu();
+    expect(applied.getMenuItemById('platformMenu:test.group:test.checked').checked).toBe(false);
+
+    mockKeyValues.set('test.checkFlag', true);
+    emitKey('test.checkFlag', true);
+    await flushRebuilds();
+
+    expect(applied.getMenuItemById('platformMenu:test.group:test.checked').checked).toBe(true);
+    expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1);
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it('picks up a short-circuited key once the key before it changes', async () => {
+    const deliver = await subscribe();
+    await deliver(
+      menuWithGatedItems([
+        {
+          label: '%test_both%',
+          group: 'test.group',
+          order: 4,
+          command: 'test.both',
+          localizeNotes: 'Fixture item enabled by two keys.',
+          enabledWhen: 'test.a && test.b',
+        },
+      ]),
+    );
+    const applied = lastAppliedMenu();
+    const bothId = 'platformMenu:test.group:test.both';
+
+    mockKeyValues.set('test.a', true);
+    emitKey('test.a', true);
+    await flushRebuilds();
+    expect(applied.getMenuItemById(bothId).enabled).toBe(false);
+
+    mockKeyValues.set('test.b', true);
+    emitKey('test.b', true);
+    await flushRebuilds();
+
+    expect(applied.getMenuItemById(bothId).enabled).toBe(true);
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  describe('clicking a command item', () => {
+    const CHECKED_ID = 'platformMenu:test.group:test.checked';
+    const GATED_ID = 'platformMenu:test.group:test.gated';
+
+    /** Gets the native item and the template's click handler, called the way Electron calls it */
+    function clickLikeElectron(id: string, applied: ReturnType<typeof lastAppliedMenu>) {
+      const nativeItem = applied.getMenuItemById(id);
+      const entry = findTemplateEntry(vi.mocked(Menu.buildFromTemplate).mock.calls[0][0], id);
+      const click = entry?.click;
+      if (typeof click !== 'function') throw new Error(`No click handler for ${id}`);
+      return { nativeItem, click: () => click(nativeItem, undefined, {}) };
+    }
+
+    it('keeps a checkbox item at its evaluated state when Electron toggles it natively', async () => {
+      const deliver = await subscribe();
+      await deliver(menuWithGatedItems());
+      const applied = lastAppliedMenu();
+      const { nativeItem, click } = clickLikeElectron(CHECKED_ID, applied);
+
+      nativeItem.checked = !nativeItem.checked;
+      click();
+
+      expect(nativeItem.checked).toBe(false);
+    });
+
+    it('keeps a checkbox item at the state an in-place update gave it', async () => {
+      const deliver = await subscribe();
+      await deliver(menuWithGatedItems());
+      const applied = lastAppliedMenu();
+      mockKeyValues.set('test.checkFlag', true);
+      emitKey('test.checkFlag', true);
+      await flushRebuilds();
+      const { nativeItem, click } = clickLikeElectron(CHECKED_ID, applied);
+      expect(nativeItem.checked).toBe(true);
+
+      nativeItem.checked = !nativeItem.checked;
+      click();
+
+      expect(nativeItem.checked).toBe(true);
+    });
+
+    it('does not touch the checked state of a non-checkbox item', async () => {
+      const deliver = await subscribe();
+      await deliver(menuWithGatedItems());
+      const applied = lastAppliedMenu();
+      const { nativeItem, click } = clickLikeElectron(GATED_ID, applied);
+
+      nativeItem.checked = true;
+      click();
+
+      expect(nativeItem.checked).toBe(true);
+    });
+  });
+
+  it('rebuilds when a visibility key changes', async () => {
+    const deliver = await subscribe();
+    await deliver(menuWithGatedItems());
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+
+    mockKeyValues.set('test.showFlag', true);
+    emitKey('test.showFlag', true);
+    await flushRebuilds();
+
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(2);
+    const lastTemplate = vi.mocked(Menu.buildFromTemplate).mock.calls[1][0];
+    expect(JSON.stringify(lastTemplate)).toContain('%test_shown%');
+  });
+
+  it('ignores a key the menu did not read', async () => {
+    const deliver = await subscribe();
+    await deliver(menuWithGatedItems());
+
+    emitKey('other.key', true);
+    await flushRebuilds();
+
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+    expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('rebuilds instead of updating in place while a rebuild is pending', async () => {
+    const deliver = await subscribe();
+    await deliver(menuWithGatedItems());
+
+    let releasePending: () => void = () => {};
+    vi.mocked(localizationService.getLocalizedStrings).mockImplementationOnce(
+      ({ localizeKeys }) =>
+        new Promise((resolve) => {
+          releasePending = () => resolve(Object.fromEntries(localizeKeys.map((key) => [key, key])));
+        }),
+    );
+    const pending = deliver(menuWithGatedItems());
+    mockKeyValues.set('test.flag', true);
+    emitKey('test.flag', true);
+    await flushRebuilds();
+    releasePending();
+    await pending;
+    await flushRebuilds();
+
+    const lastTemplate = vi.mocked(Menu.buildFromTemplate).mock.calls.at(-1)?.[0] ?? [];
+    expect(findTemplateEntry(lastTemplate, 'platformMenu:test.group:test.gated')?.enabled).toBe(
+      true,
+    );
+  });
+
+  it('rebuilds when two items share an id', async () => {
+    const deliver = await subscribe();
+    await deliver(
+      menuWithGatedItems([
+        {
+          label: '%test_gatedTwin%',
+          group: 'test.group',
+          order: 4,
+          command: 'test.gated',
+          localizeNotes: 'Fixture item sharing an id with the first.',
+        },
+      ]),
+    );
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+
+    mockKeyValues.set('test.flag', true);
+    emitKey('test.flag', true);
+    await flushRebuilds();
+
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps tracking keys after an overtaken rebuild fails', async () => {
+    const deliver = await subscribe();
+    let rejectFirst: (reason: Error) => void = () => {};
+    vi.mocked(localizationService.getLocalizedStrings).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    const first = deliver(menuWithGatedItems());
+    await deliver(menuWithGatedItems());
+    rejectFirst(new Error('localization failed'));
+    await first;
+    await flushRebuilds();
+
+    mockKeyValues.set('test.flag', true);
+    emitKey('test.flag', true);
+    await flushRebuilds();
+
+    expect(lastAppliedMenu().getMenuItemById('platformMenu:test.group:test.gated').enabled).toBe(
+      true,
+    );
+  });
+
+  it('rebuilds on a read key after the only rebuild fell back to the default menubar', async () => {
+    const deliver = await subscribe();
+    vi.mocked(localizationService.getLocalizedStrings).mockRejectedValueOnce(
+      new Error('localization failed'),
+    );
+    await deliver(menuWithGatedItems());
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+
+    mockKeyValues.set('test.flag', true);
+    emitKey('test.flag', true);
+    await flushRebuilds();
+
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(2);
+    const lastTemplate = vi.mocked(Menu.buildFromTemplate).mock.calls.at(-1)?.[0] ?? [];
+    expect(findTemplateEntry(lastTemplate, 'platformMenu:test.group:test.gated')?.enabled).toBe(
+      true,
+    );
+  });
+
+  it('the default fallback reads no keys', async () => {
+    const deliver = await subscribe();
+    await deliver(newPlatformError('test failure'));
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+
+    emitKey('test.flag', true);
+    await flushRebuilds();
+
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips applying a rebuild that a newer rebuild overtook', async () => {
+    let onMenuChange: ((menu: MultiColumnMenu) => Promise<void>) | undefined;
+    vi.mocked(menuDataService.subscribeUnlocalizedMainMenu).mockImplementation(
+      async (_selector, callback) => {
+        // The test only ever delivers a MultiColumnMenu
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        onMenuChange = callback as (menu: MultiColumnMenu) => Promise<void>;
+        return async () => true;
+      },
+    );
+    await subscribeCurrentMacosMenubar();
+
+    // The first rebuild waits on localization; the second finishes while it waits
+    let releaseFirstLocalization: () => void = () => {};
+    vi.mocked(localizationService.getLocalizedStrings).mockImplementationOnce(
+      ({ localizeKeys }) =>
+        new Promise((resolve) => {
+          releaseFirstLocalization = () =>
+            resolve(Object.fromEntries(localizeKeys.map((key) => [key, key])));
+        }),
+    );
+    const firstRebuild = onMenuChange?.(menuWithContributedColumn('%mainMenu_first%'));
+    await onMenuChange?.(menuWithContributedColumn('%mainMenu_second%'));
+    expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1);
+
+    releaseFirstLocalization();
+    await firstRebuild;
+    expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1);
+    // The one applied menu is the newer rebuild's, not the overtaken first one
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+    const appliedTemplate = vi.mocked(Menu.buildFromTemplate).mock.calls[0][0];
+    const appliedLabels = appliedTemplate.map((menu) => menu.label);
+    expect(appliedLabels).toContain('%mainMenu_second%');
+    expect(appliedLabels).not.toContain('%mainMenu_first%');
   });
 });

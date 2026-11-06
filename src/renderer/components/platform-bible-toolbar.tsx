@@ -17,6 +17,7 @@ import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.ho
 import { usePendingProject } from '@renderer/hooks/use-pending-project.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
+import { useEvaluatedMenu } from '@renderer/hooks/papi-hooks/use-evaluated-menu.hook';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { parseProjectNameTemplate } from '@renderer/components/projects/project-name-template.util';
@@ -79,6 +80,8 @@ import {
 import { CSSProperties, useCallback, useMemo } from 'react';
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
+/** The main menu has no template variables; its expressions can reference only global keys */
+const MAIN_MENU_TEMPLATE_VARS = {};
 
 // Stable identity for the "nothing extra to offer" case, so the memo below does not hand
 // BookChapterControl a fresh empty array on every render.
@@ -870,6 +873,9 @@ export function PlatformBibleToolbar() {
     return menuDataPossiblyError;
   }, [menuDataPossiblyError]);
 
+  // `undefined` exactly when `menuData` is: secondary windows draw no menu
+  const evaluatedMenuData = useEvaluatedMenu(menuData, MAIN_MENU_TEMPLATE_VARS);
+
   const [marketingVersion] = usePromise(
     useCallback(async () => {
       const marketingInfo = await app.getMarketingInfo();
@@ -921,7 +927,7 @@ export function PlatformBibleToolbar() {
   return (
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
       <Toolbar
-        menuData={menuData}
+        menuData={evaluatedMenuData}
         onSelectMenuItem={handleMenuCommand}
         className={cn(
           // If these heights change, update POWER_MODE_TOOLBAR_HEIGHT / SIMPLE_MODE_TOOLBAR_HEIGHT

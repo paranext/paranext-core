@@ -703,20 +703,28 @@ export interface InsertContextMenuState {
   isReadOnly: boolean;
   canUserCreateComments: boolean;
   isSyncBlocked: boolean;
+  /**
+   * Whether the project is a resource (`platform.isPublished`). A resource can never be edited or
+   * commented on, so it gets no insert items at all rather than disabled ones.
+   */
+  isResource: boolean;
 }
 
 /**
  * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu's
  * `platformScriptureEditor.insert` column (`contributions/menus.json`, every group in that column)
  * — same items, same order; pinned by the parity test in
- * `platform-scripture-editor.web-view.utils.test.ts`.
+ * `platform-scripture-editor.web-view.utils.test.ts`. A resource gets none of them, mirroring the
+ * `when` that removes the same items from the top menu; the editor then shows only its built-in
+ * clipboard entries.
  */
 export function createInsertContextMenuItems(
   localizedStrings: LanguageStrings,
   actions: InsertContextMenuActions,
   state: InsertContextMenuState,
 ): ContextMenuOptionConfig[] {
-  const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
+  const { isReadOnly, canUserCreateComments, isSyncBlocked, isResource } = state;
+  if (isResource) return [];
   return [
     {
       title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
@@ -783,6 +791,30 @@ export function isEditorContextMenuOpen(editorContainer: Element | null | undefi
   return isEditorContextMenuOpenFor(editorContainer);
 }
 
+/** The facts one editor web view publishes about itself; both key functions below map over this */
+const EDITOR_WEB_VIEW_CONTEXT_FACTS = [
+  'isPreview',
+  'isSyncBlocked',
+  'footnotesPaneVisible',
+] as const;
+
+function getEditorWebViewContextKeyPrefix(webViewId: string): string {
+  return `platformScriptureEditor.webView.${webViewId}`;
+}
+
+/**
+ * Lists the names of the context keys one editor web view publishes, for removing them when it
+ * closes. Derived from the same fact list as {@link getEditorWebViewContextKeys}, so the two cannot
+ * disagree.
+ *
+ * @param webViewId The web view's id
+ * @returns The full context key names, one per published fact
+ */
+export function getEditorWebViewContextKeyNames(webViewId: string): string[] {
+  const prefix = getEditorWebViewContextKeyPrefix(webViewId);
+  return EDITOR_WEB_VIEW_CONTEXT_FACTS.map((fact) => `${prefix}.${fact}`);
+}
+
 /**
  * Where keyboard focus is, from this editor's point of view (see {@link EditorFocusLocation}).
  * Projects the subject to a web view id as core's `getWebViewIdFromFocusSubject` does (extensions
@@ -811,4 +843,22 @@ export function getEditorFocusLocation(
   if (subjectWebViewId !== ownWebViewId) return 'anotherWebView';
   if (focusSubject?.focusType === 'webView' && !doesEditorDocumentHaveFocus) return 'settling';
   return 'thisEditor';
+}
+
+/**
+ * Names the context keys one editor web view publishes about itself, which its menu items'
+ * `enabledWhen` / `checkedWhen` expressions read.
+ *
+ * @param webViewId The web view's id
+ * @param state The facts to publish
+ * @returns Context key name -> value, one entry per published fact
+ */
+export function getEditorWebViewContextKeys(
+  webViewId: string,
+  state: Record<(typeof EDITOR_WEB_VIEW_CONTEXT_FACTS)[number], boolean>,
+): Record<string, boolean> {
+  const prefix = getEditorWebViewContextKeyPrefix(webViewId);
+  return Object.fromEntries(
+    EDITOR_WEB_VIEW_CONTEXT_FACTS.map((fact) => [`${prefix}.${fact}`, state[fact]]),
+  );
 }
