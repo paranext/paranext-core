@@ -590,7 +590,7 @@ describe('Scripture editor while the invisible-characters setting cannot be read
 });
 
 describe('Scripture editor when its latest edits cannot be saved', () => {
-  const HELD_EDITS_LOST_KEY = '%webView_platformScriptureEditor_error_heldEditsLost_format%';
+  const EDITS_LOST_KEY = '%webView_platformScriptureEditor_error_editsLost_format%';
   const EDITS_REPLACED_KEY = '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%';
   /** Longer than the editor's save debounce, so a pending save has fired after it. */
   const LONGER_THAN_SAVE_DEBOUNCE_MS = 800;
@@ -622,7 +622,7 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     mockUseLocalizedStrings.mockImplementation(
       localizeWith({
         ...TRANSLATIONS,
-        [HELD_EDITS_LOST_KEY]: 'Not saved: {book} {chapter}',
+        [EDITS_LOST_KEY]: 'Not saved: {book} {chapter}',
         [EDITS_REPLACED_KEY]: 'Changed outside: {book} {chapter}',
       }),
     );
@@ -667,6 +667,7 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
       vi.fn(),
       undefined,
       vi.fn(),
+      undefined,
     ]);
     const EditorWebView = getEditorWebView();
     let result: ReturnType<typeof render> | undefined;
@@ -861,6 +862,113 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     await editor.deliver(2, chapterText(2, 'Thus the heavens'));
 
     expect(editor.saves).toHaveLength(0);
+    expect(lostEditsNotices()).toEqual([
+      expect.objectContaining({ message: 'Not saved: GEN 1', severity: 'error', duration: 0 }),
+    ]);
+  });
+
+  async function waitForSaveDebounce() {
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, LONGER_THAN_SAVE_DEBOUNCE_MS);
+      });
+    });
+  }
+
+  it('reports once when edits keep reaching the chapter being left, each save refused', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    // Positive control: the first refused save was reported.
+    expect(lostEditsNotices()).toHaveLength(1);
+    editor.type('In the beginning God created');
+    await waitForSaveDebounce();
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
     expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports once when an edit is still waiting to save as the next chapter arrives after a refused one', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    expect(lostEditsNotices()).toHaveLength(1);
+    editor.type('In the beginning God created');
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports an edit still waiting to save when the next chapter arrives, naming the chapter being left', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports nothing on leaving the chapter after a save that carries what the running save sends', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    expect(editor.saves).toHaveLength(1);
+    // The editor still holds exactly what the running save sends: the save it triggers holds
+    // nothing back.
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    expect(editor.saves).toHaveLength(1);
+
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports nothing on leaving the chapter after the editor returns to what the running save sends', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    editor.type('In the beginning God created');
+    editor.blurWindow();
+    // Positive control: the newer content was held back.
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledWith(
+      expect.stringContaining('waiting for the save of GEN|1|'),
+    );
+    editor.type('In the beginning God');
+    editor.blurWindow();
+
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('gives held edits replaced by an incoming update the plain not-saved notice', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+    await editor.finishSave(0);
+
+    // The running save's update comes back different from what it sent, replacing the held edits.
+    await editor.deliver(1, chapterText(1, 'In the beginning, reformatted'));
+    await waitForSaveDebounce();
+
+    expect(lostEditsNotices()).toEqual([
+      expect.objectContaining({ message: 'Not saved: GEN 1', duration: 0 }),
+    ]);
   });
 });

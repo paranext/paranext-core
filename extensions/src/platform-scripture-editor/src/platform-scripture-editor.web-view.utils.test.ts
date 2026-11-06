@@ -3,7 +3,7 @@
 // `document` at module-eval time (it re-exports the whole component library). The default `node`
 // environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom — same fix
 // already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -856,6 +856,12 @@ describe('discardRowEditsAndPendingSave', () => {
 });
 
 describe('isFocusLeavingContainer', () => {
+  const attachedNodes: Element[] = [];
+
+  afterEach(() => {
+    attachedNodes.splice(0).forEach((node) => node.remove());
+  });
+
   function makeTree() {
     const container = document.createElement('div');
     const inside = document.createElement('div');
@@ -863,6 +869,7 @@ describe('isFocusLeavingContainer', () => {
     const outside = document.createElement('button');
     container.append(inside, alsoInside);
     document.body.append(container, outside);
+    attachedNodes.push(container, outside);
     return { container, inside, alsoInside, outside };
   }
 

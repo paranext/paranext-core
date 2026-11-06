@@ -3291,7 +3291,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   claim ends", which is usually a fraction of a second. A save the backend reformats (Unicode
   normalization, some invisible characters; see `Scripture-Data-Fidelity-Catalog.md`) comes back
   looking like an outside change, so held edits behind it are thrown away and reported even though
-  nothing else changed the chapter. While the next chapter loads after navigation, the editor holds
+  nothing else changed the chapter; held edits therefore get the plain "not saved" notice, never
+  the "changed outside this editor" one. A loss on leaving a chapter is reported once per chapter
+  left, however many edits reach it while the next one loads. While the next chapter loads after navigation, the editor holds
   off typing, pasting and the like (`usePauseEditing`), but an edit that does not come through its
   own keyboard (for example from the footnotes pane) can still reach the chapter being left.
   It is lost and reported either way: thrown away if the next chapter arrives first, or refused by

@@ -8,7 +8,7 @@ import { debounce } from 'platform-bible-utils';
  * would produce unhandled rejections. This adapter keeps the promise plumbing internal for
  * `schedule` (each scheduled call's promise gets a no-op rejection handler) and exposes the
  * `schedule`/`flush`/`cancel`/`isPending` surface the save pipeline wants; only `flush` reports its
- * invocation's promise, for the one caller that sequences work after a flush.
+ * invocation's promise, so a caller that needs to wait for the flushed save can.
  *
  * Why a debounced save needs `flush` at all — two holes in a plain trailing-edge debounce:
  *
