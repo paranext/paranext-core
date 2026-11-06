@@ -176,7 +176,7 @@ import {
   scheduleCaretRestore,
   ScheduledCaretRestore,
 } from './caret-restore.util';
-import { getEditorViewOptions } from './editor-view-options.util';
+import { getEditorViewOptions, resolveFootnotesPaneViewOptions } from './editor-view-options.util';
 import {
   getPaneRowEditorOptions,
   runPaneNoteEditRequest,
@@ -241,7 +241,6 @@ import {
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   resolveAddChapterNumberClick,
   resolveCallerHighlight,
-  resolveFootnotesPaneViewOptions,
   resolveNoteEditingSurface,
   resolveNoteVerseRef,
   getDisplayedViewType,

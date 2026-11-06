@@ -44,3 +44,36 @@ export function getEditorViewOptions(
 ): ViewOptions {
   return { ...getViewOptionsForType(viewType, isPowerMode), allowInvisibleCharacters };
 }
+
+/**
+ * Decides the view options the footnotes pane and its row editor render with. Power mode's pane
+ * follows the main editor's view (in Standard view they are Standard's already). Simple mode's pane
+ * shows markers as Standard view's does, while the main text keeps Simple's own view options and
+ * goes on hiding them. While `platform.interfaceMode` is still loading, `isPowerMode` reads `false`
+ * whatever the mode really is, so the pane follows the main editor then: a Power user's pane never
+ * briefly takes Simple's answer.
+ *
+ * Standard view's options carry the project's `allowInvisibleCharacters`, so Simple's pane reads a
+ * literal `~` as the project spells it rather than as a no-break space.
+ *
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
+ * @param options.mainViewOptions The main editor's view options
+ * @param options.allowInvisibleCharacters The project's
+ *   `platformScripture.allowInvisibleCharacters`
+ * @returns The view options for the footnotes pane and its row editor
+ */
+export function resolveFootnotesPaneViewOptions({
+  isPowerMode,
+  isInterfaceModeLoading,
+  mainViewOptions,
+  allowInvisibleCharacters,
+}: {
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+  mainViewOptions: ViewOptions | undefined;
+  allowInvisibleCharacters: boolean;
+}): ViewOptions | undefined {
+  if (isPowerMode || isInterfaceModeLoading) return mainViewOptions;
+  return getEditorViewOptions('standard', isPowerMode, allowInvisibleCharacters);
+}

@@ -5,7 +5,7 @@ import type PapiBackend from '@papi/backend';
 import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import type { EditorRef, SelectionRange, ViewOptions } from '@eten-tech-foundation/platform-editor';
+import type { EditorRef, SelectionRange } from '@eten-tech-foundation/platform-editor';
 import {
   USJ_TYPE,
   USJ_VERSION,
@@ -69,7 +69,6 @@ import {
   parseMissingBookError,
   resolveResourceContentState,
   resolveCallerHighlight,
-  resolveFootnotesPaneViewOptions,
   resolveNoteEditingSurface,
   usesPaneNoteModel,
   shouldEndPaneNoteEditOnRowSelect,
@@ -84,7 +83,6 @@ import {
   showNewCommentThread,
   createCommentThreadClickHandlerFactory,
 } from './platform-scripture-editor.utils';
-import { getEditorViewOptions } from './editor-view-options.util';
 import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
 /**
@@ -5311,65 +5309,6 @@ describe('resolveNoteEditingSurface', () => {
   it('has no editing surface when read-only, in any view', () => {
     expect(resolveNoteEditingSurface({ usesPaneModel: true, isReadOnly: true })).toBe('none');
     expect(resolveNoteEditingSurface({ usesPaneModel: false, isReadOnly: true })).toBe('none');
-  });
-});
-
-describe('resolveFootnotesPaneViewOptions', () => {
-  const mainViewOptions: ViewOptions = {
-    markerMode: 'hidden',
-    noteMode: 'collapsed',
-    hasSpacing: true,
-    isFormattedFont: true,
-  };
-
-  it('leaves Power on the main editor’s view options', () => {
-    expect(
-      resolveFootnotesPaneViewOptions({
-        isPowerMode: true,
-        isInterfaceModeLoading: false,
-        mainViewOptions,
-        allowInvisibleCharacters: false,
-      }),
-    ).toBe(mainViewOptions);
-  });
-
-  it('gives Simple Standard’s view options, so the pane shows markers', () => {
-    expect(
-      resolveFootnotesPaneViewOptions({
-        isPowerMode: false,
-        isInterfaceModeLoading: false,
-        mainViewOptions,
-        allowInvisibleCharacters: false,
-      }),
-    ).toEqual(getEditorViewOptions('standard', false, false));
-  });
-
-  it.each([true, false])(
-    'spells no-break spaces in Simple’s pane as the project does (allowInvisibleCharacters %s)',
-    (allowInvisibleCharacters) => {
-      // Without it, Standard view reads a literal `~` in such a project as a no-break space.
-      expect(
-        resolveFootnotesPaneViewOptions({
-          isPowerMode: false,
-          isInterfaceModeLoading: false,
-          mainViewOptions,
-          allowInvisibleCharacters,
-        })?.allowInvisibleCharacters,
-      ).toBe(allowInvisibleCharacters);
-    },
-  );
-
-  it('keeps the main editor’s view options while the interface mode is still loading', () => {
-    // `isPowerMode` reads false until the mode loads, so a Power user's pane must not take
-    // Simple's answer in the meantime.
-    expect(
-      resolveFootnotesPaneViewOptions({
-        isPowerMode: false,
-        isInterfaceModeLoading: true,
-        mainViewOptions,
-        allowInvisibleCharacters: false,
-      }),
-    ).toBe(mainViewOptions);
   });
 });
 

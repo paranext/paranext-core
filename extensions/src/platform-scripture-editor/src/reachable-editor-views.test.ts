@@ -7,12 +7,11 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import { deepEqual } from 'platform-bible-utils';
 import { describe, expect, it } from 'vitest';
-import { getEditorViewOptions } from './editor-view-options.util';
+import { getEditorViewOptions, resolveFootnotesPaneViewOptions } from './editor-view-options.util';
 import {
   getDisplayedViewType,
   getNextViewTypeInCycle,
   type PersistedViewType,
-  resolveFootnotesPaneViewOptions,
   resolveNoteEditingSurface,
   usesPaneNoteModel,
   VIEW_TYPE_UNSET,
