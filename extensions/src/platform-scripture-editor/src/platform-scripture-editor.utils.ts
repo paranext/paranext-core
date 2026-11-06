@@ -55,9 +55,8 @@ import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
 // extension activation. See platform-scripture-editor.web-view.utils.ts's header.
-import type { DeltaOp, EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
+import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
-import { getEditorViewOptions } from './editor-view-options.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE } from './scripture-text-grid-web-view-type.const';
 
@@ -540,39 +539,6 @@ export function resolveNoteEditingSurface({
 }): NoteEditingSurface {
   if (isReadOnly) return 'none';
   return usesPaneModel ? 'pane' : 'popover';
-}
-
-/**
- * Decides the view options the footnotes pane and its row editor render with. Power mode's pane
- * follows the main editor's view (in Standard view they are Standard's already). Simple mode's pane
- * shows markers as Standard view's does, while the main text keeps Simple's own view options and
- * goes on hiding them. While `platform.interfaceMode` is still loading, `isPowerMode` reads `false`
- * whatever the mode really is, so the pane follows the main editor then: a Power user's pane never
- * briefly takes Simple's answer.
- *
- * Standard view's options carry the project's `allowInvisibleCharacters`, so Simple's pane reads a
- * literal `~` as the project spells it rather than as a no-break space.
- *
- * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
- * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
- * @param options.mainViewOptions The main editor's view options
- * @param options.allowInvisibleCharacters The project's
- *   `platformScripture.allowInvisibleCharacters`
- * @returns The view options for the footnotes pane and its row editor
- */
-export function resolveFootnotesPaneViewOptions({
-  isPowerMode,
-  isInterfaceModeLoading,
-  mainViewOptions,
-  allowInvisibleCharacters,
-}: {
-  isPowerMode: boolean;
-  isInterfaceModeLoading: boolean;
-  mainViewOptions: ViewOptions | undefined;
-  allowInvisibleCharacters: boolean;
-}): ViewOptions | undefined {
-  if (isPowerMode || isInterfaceModeLoading) return mainViewOptions;
-  return getEditorViewOptions('standard', isPowerMode, allowInvisibleCharacters);
 }
 
 /**
