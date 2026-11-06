@@ -1854,6 +1854,23 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
     }
 
+    /// <summary>
+    /// Gets a project setting value.
+    /// </summary>
+    /// <remarks>
+    /// How a stored value is read depends on whether the setting maps to a Paratext setting (see
+    /// <see cref="ProjectSettingsNames.IsStoredAsJson"/>):
+    /// <list type="bullet">
+    /// <item>A mapped setting keeps Paratext's own format, e.g. a "T"/"F" boolean comes back as a
+    /// bool and other values come back as strings.</item>
+    /// <item>Any other setting (in practice, one contributed by an extension) is stored as JSON
+    /// text and comes back as a <see cref="JsonElement"/> of the type that was written. A stored
+    /// value that does not parse as JSON (one written before this rule) comes back as the raw
+    /// string, and becomes JSON on its next write.</item>
+    /// </list>
+    /// </remarks>
+    /// <param name="settingName">Setting name in Platform.Bible terminology</param>
+    /// <returns>The setting value, or its registered default if the project has no value</returns>
     public object? GetProjectSetting(string settingName)
     {
         var paratextSettingName =
@@ -1994,6 +2011,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     );
                 return boolValue;
             }
+
+            if (ProjectSettingsNames.IsStoredAsJson(settingName))
+            {
+                try
+                {
+                    return settingValue.DeserializeFromJson<JsonElement>();
+                }
+                catch (JsonException)
+                {
+                    // A legacy value in the raw-string format; return it as stored
+                }
+            }
+
             return settingValue;
         }
 
@@ -2191,6 +2221,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                             // Normalize to the canonical single-letter form Paratext stores
                             value = boolValue ? "T" : "F";
                         }
+                        else if (ProjectSettingsNames.IsStoredAsJson(settingName))
+                            value = value.SerializeToJson();
                         scrText.Settings.SetSetting(paratextSettingName, value!.ToString());
                         // We are notifying when we release our lock, so don't automatically
                         // notify in `Save`

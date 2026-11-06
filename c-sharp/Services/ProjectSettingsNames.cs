@@ -218,7 +218,11 @@ public sealed class ProjectSettingsNames
         "StructureProtected",
     ];
 
-    // Make sure this dictionary gets updated whenever new settings are added
+    // Make sure this dictionary gets updated whenever new settings are added.
+    // Settings missing from this dictionary are stored as JSON text (see IsStoredAsJson), while
+    // mapped settings keep Paratext's own format. Adding a mapping for a setting that projects
+    // already store therefore changes how its stored values are read: migrate them to the
+    // Paratext format, or they will come back as raw JSON text.
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =
         new()
         {
@@ -263,6 +267,18 @@ public sealed class ProjectSettingsNames
             ? retVal
             : null;
     }
+
+    /// <summary>
+    /// Whether a project setting's value is stored in Settings.xml as JSON text. True for every
+    /// setting with no Paratext mapping (in practice, settings contributed by extensions), so
+    /// values keep their type across a write and a read. Mapped settings are read by ParatextData
+    /// and Paratext 9, so they keep Paratext's own format. See
+    /// `adr-unmapped-project-settings-stored-as-json`.
+    /// </summary>
+    /// <param name="pbSettingName">Setting name in Platform.Bible terminology</param>
+    /// <returns>True if the setting's value is stored as JSON text</returns>
+    public static bool IsStoredAsJson(string pbSettingName) =>
+        !s_platformBibleToParatextSettingsNames.ContainsKey(pbSettingName);
 
     /// <summary>
     /// Convert project setting names from Paratext terminology to Platform.Bible terminology
