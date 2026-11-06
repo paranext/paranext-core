@@ -21,6 +21,29 @@ Create pull requests for Platform.Bible following team standards.
 | Create PR | `gh pr create --title "..." --body "..."` |
 | View PR | `gh pr view --web` |
 
+## Verification first, when the plugin is installed
+
+If the `process-pr-feedback` plugin (from the `paratext-team` marketplace) is installed and its
+skill has a `--verify-only` mode (version 1.2.0 or later; check by reading the installed skill's usage block
+under `~/.claude/plugins/cache/paratext-team/`), run that mode on the branch before anything else — before the
+pre-flight checks, before the push — and put the table it ends with into the PR body under a
+`## Verification` heading, every row, including the ones that failed or did not run, with the
+reason. The mode needs a clean tree, so commit pending work first; if its table says the build
+changed `papi.d.ts`, commit that file on the branch and run it again:
+
+```
+/process-pr-feedback:process-pr-feedback --verify-only <branch> [--base <base>] [--scenarios <path>]
+```
+
+It verifies the branch against its requirement in the running app, not only against its tests.
+The mode owns the detail — what a red, pre-existing or not-run row means, where the scenarios
+come from; read its section in that skill rather than this one. Screenshots the table cites are
+local files; embed them if you have a way to upload images to GitHub, else name the file.
+
+Without the mode, the verification is the project `CLAUDE.md`'s pre-commit check line (typecheck,
+lint, tests) plus the pre-flight checks below, tests capped as step 4 shows: run them and say
+under `## Verification` what ran and what did not (e2e, live run).
+
 ## Pre-Flight Checks
 
 Before creating a PR, verify:
@@ -41,8 +64,10 @@ fi
 # 3. Branch is pushed
 git push -u origin "$BRANCH" 2>/dev/null || true
 
-# 4. Tests pass (optional but recommended)
-npm test
+# 4. Tests pass — skip when --verify-only ran above; by hand, keep vitest capped (bare `npm test`
+#    forks a worker per CPU and can exhaust the machine's memory)
+npx vitest run --maxWorkers=4
+npm run test --workspaces --if-present -- --run --maxWorkers=2
 dotnet test c-sharp-tests/
 ```
 
@@ -114,10 +139,10 @@ gh pr create \
 - [Change 1]
 - [Change 2]
 
-## Testing
+## Verification
 
-- [ ] Tests pass
-- [ ] Manual verification done
+[The table `--verify-only` ended with, every row — or, without the mode, what the
+by-hand checks ran and what did not.]
 EOF
 )"
 ```
@@ -143,10 +168,10 @@ gh pr create \
 (see "Git & PR Conventions" in the project CLAUDE.md). Briefly describe what
 AI contributed and how it was reviewed.]
 
-## Testing
+## Verification
 
-- [ ] Tests pass
-- [ ] Manual verification done
+[The table `--verify-only` ended with, every row — or, without the mode, what the
+by-hand checks ran and what did not.]
 
 ## Risk Level
 
@@ -176,10 +201,10 @@ Merge latest changes from paranext-extension-template. [Why review this.]
 
 - [Template updates]
 
-## Testing
+## Verification
 
-- [ ] Build succeeds
-- [ ] Existing functionality unaffected
+[The table `--verify-only` ended with, every row — or, without the mode, what the
+by-hand checks ran and what did not.]
 EOF
 )"
 ```
@@ -294,3 +319,4 @@ git push
 - [Git-Guide.md](../../../.context/standards/Git-Guide.md) - Branch naming, merge practices
 - [Code-Review-Guide.md](../../../.context/standards/Code-Review-Guide.md) - Review workflow
 - [test-runner skill](../test-runner/SKILL.md) - Run tests before PR
+- `process-pr-feedback` plugin (`/plugin marketplace add paranext/claude-plugins`, then `/plugin install process-pr-feedback@paratext-team`) - its `--verify-only` mode, see "Verification first" above
