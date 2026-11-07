@@ -4296,6 +4296,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     pane-scoped fonts-only sheet (`FOOTNOTE_ROWS_SELECTOR`), so a row keeps its font and size when it
     is opened for editing. Rows take fonts only (family, size, per-marker family). Standard view's row
     editor still applies per-marker size and style that read-only rows do not; this is accepted.
+- **Amended 2026-11-06 (PT-4086, UX review):** Simple's `\s`-`\s3` headings no longer have a size
+  of their own. Their gutter rule now only places them, as upstream
+  (eten-tech-foundation/scripture-editors#486), so they take the formatted view's standard heading
+  styles, as in Preview. Only the verse number and the ellipsis box still derive from
+  `--psc-base-font-size`.
 - **Source:** PT-4966.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service

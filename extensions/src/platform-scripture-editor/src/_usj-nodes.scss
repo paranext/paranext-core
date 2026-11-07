@@ -11,7 +11,7 @@
    (`--psc-empty-verse-ellipsis-width`) is the verse number size (`--psc-verse-number-size`, 13/16
    of the base size, so 13px at the default) rather than 18px, closer to this copy's previous
    ellipsis, which had no padding around the glyph.
-   The Simple-mode verse, heading and ellipsis sizes are base-relative here
+   The Simple-mode verse and ellipsis sizes are base-relative here
    (`--psc-base-font-size`, in the gutter section) and intentionally not in the demo copy, where
    no project stylesheet is injected.
    The source's four `local()`-only Charis SIL @font-face rules are dropped. */
@@ -2759,9 +2759,9 @@ span.read img {
 
 /* The editor's own font size, as an absolute length computed once on `.psc-gutter-markers`
    (registered, so `1em` resolves there rather than in each descendant's font size). The verse
-   number, section heading and empty-verse ellipsis sizes below are multiples of it, so a project
-   font size scales them together and none can compound with an ancestor's size. 16px is the size
-   at the 12pt default. The chapter numeral is decorative and stays a fixed size. */
+   number and empty-verse ellipsis sizes below are multiples of it, so a project font size scales
+   them together and neither can compound with an ancestor's size. 16px is the size at the 12pt
+   default. The chapter numeral is decorative and stays a fixed size. */
 @property --psc-base-font-size {
   syntax: '<length>';
   inherits: true;
@@ -2865,10 +2865,6 @@ span.read img {
 .psc-gutter-markers .usfm_s2,
 .psc-gutter-markers .usfm_s3 {
   text-align: center;
-  letter-spacing: 0.1em;
-  font-size: calc(var(--psc-base-font-size) * 0.8);
-  font-weight: 400;
-  color: var(--muted-foreground, #6b7280);
   border-top: none;
   margin-top: 1rem;
 }

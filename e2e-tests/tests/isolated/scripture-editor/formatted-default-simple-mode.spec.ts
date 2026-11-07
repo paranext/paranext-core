@@ -127,7 +127,7 @@ test.describe('scripture editor default view', () => {
       expect(startsWithProjectFont((await computedStyle('.editor-input.usfm')).fontFamily)).toBe(
         true,
       );
-      // Verse numbers are 13/16 of the project size and headings 0.8 of it.
+      // Verse numbers are 13/16 of the project size, and headings are the project size.
       await expect
         .poll(
           async () => (await computedStyle('span[data-marker="v"][data-number="1"]')).fontSize,
@@ -138,7 +138,25 @@ test.describe('scripture editor default view', () => {
         .toBeCloseTo((PROJECT_FONT_SIZE_PX * 13) / 16, 1);
       await expect
         .poll(async () => (await computedStyle('.usfm_s1')).fontSize, { timeout: 30_000 })
-        .toBeCloseTo(PROJECT_FONT_SIZE_PX * 0.8, 1);
+        .toBeCloseTo(PROJECT_FONT_SIZE_PX, 1);
+      // The heading shows the case it was typed in (`Heading`), and its gutter glyph reads `\s1`
+      // at regular weight: `innerText` applies `text-transform`, small caps are checked on their
+      // own, and bold marks a selected row.
+      const heading = await editorFrame
+        .locator('.usfm_s1')
+        .first()
+        .evaluate((element) => {
+          const glyph = element.querySelector(':scope > .marker:first-child');
+          return {
+            text: element instanceof HTMLElement ? element.innerText : '',
+            fontVariantCaps: getComputedStyle(element).fontVariantCaps,
+            glyphWeight: glyph ? getComputedStyle(glyph).fontWeight : '',
+          };
+        });
+      expect(heading.text).toContain('\\s1');
+      expect(heading.text).toContain('Heading');
+      expect(heading.fontVariantCaps).toBe('normal');
+      expect(heading.glyphWeight).toBe('400');
       // An empty verse's `…` placeholder is a box as wide as the verse number is tall.
       const emptyVerse = editorFrame
         .locator(

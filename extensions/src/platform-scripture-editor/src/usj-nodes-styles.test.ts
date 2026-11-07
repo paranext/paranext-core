@@ -1,5 +1,7 @@
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
+import postcss, { type Root } from 'postcss';
+import { compile } from 'sass';
 
 /**
  * Regression pin for the vendored editor stylesheet `_usj-nodes.scss`.
@@ -237,35 +239,6 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     });
   });
 
-  describe('gutter-view section headings', () => {
-    // Any text-transform hides the case the translator typed. The gutter marker glyph sits inside
-    // its paragraph, so uppercase or capitalize would also show `\s1` as the invalid `\S1`.
-    const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
-    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const headings = [
-      '.psc-gutter-markers .usfm_s',
-      '.psc-gutter-markers .usfm_s1',
-      '.psc-gutter-markers .usfm_s2',
-      '.psc-gutter-markers .usfm_s3',
-    ];
-    const headingRule = new RegExp(
-      `(?:^|\\}|;)\\s*${headings.map(escapeRegExp).join(',\\s*')}\\s*\\{([^}]*)\\}`,
-    ).exec(code)?.[1];
-
-    it('keeps the regular-weight, muted heading look', () => {
-      expect(headingRule).toBeDefined();
-      // Anchored so a custom property or `background-color` can't stand in for the real one.
-      // Without the weight, `.formatted-font .usfm_s1` makes the heading bold.
-      expect(headingRule).toMatch(/(?:^|[;\s])font-weight: 400;/);
-      expect(headingRule).toMatch(/(?:^|[;\s])color: var\(--muted-foreground, #6b7280\);/);
-    });
-
-    it('transforms no text anywhere in the sheet, so headings keep their typed case', () => {
-      // `none` is allowed, since it only undoes a transform.
-      expect(code).not.toMatch(/text-transform\s*:(?!\s*none\s*[;}])/i);
-    });
-  });
-
   describe('cross-copy drift pins (must agree with the demo copy in platform-bible-react)', () => {
     // The two vendored copies of the editor stylesheet (this one and
     // lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css) are pinned at
@@ -395,5 +368,63 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       expect(rtlGutter).not.toBeNull();
       expect(rtlGutter?.[1]).not.toContain('text-align');
     });
+  });
+});
+
+describe('Simple-mode section headings in the compiled editor sheets', () => {
+  // Compiled, so rules from every sheet a web view `@use`s, nested rules and Sass-generated
+  // properties are all seen as the browser sees them.
+  const markerStylesDir = path.resolve(__dirname, 'marker-styles');
+  const sheets: { file: string; root: Root }[] = [
+    ...readdirSync(__dirname)
+      .filter((file) => file.endsWith('.web-view.scss'))
+      .map((file) => path.resolve(__dirname, file)),
+    ...readdirSync(markerStylesDir)
+      .filter((file) => file.endsWith('.scss'))
+      .map((file) => path.resolve(markerStylesDir, file)),
+  ].map((file) => ({ file: path.basename(file), root: postcss.parse(compile(file).css) }));
+
+  /** A selector for a gutter-view `\s`-`\s3` heading itself, not for something inside or after it. */
+  const isGutterHeading = (selector: string) =>
+    selector.includes('.psc-gutter-markers') &&
+    /\.usfm_s[1-3]?(?![\w-])[^\s>+~]*$/.test(selector.trim());
+
+  it('only places the headings, leaving their size, weight and color to the base styles', () => {
+    // As upstream (eten-tech-foundation/scripture-editors#486), so a heading looks as it does in
+    // Preview: the `.formatted-font .usfm_s…` rules give its size, weight and style.
+    const placed: string[] = [];
+    const styled: string[] = [];
+    sheets.forEach(({ file, root }) =>
+      root.walkRules((rule) => {
+        if (!rule.selectors.some(isGutterHeading)) return;
+        rule.walkDecls((declaration) => {
+          if (declaration.prop === 'text-align')
+            rule.selectors
+              .filter(isGutterHeading)
+              .forEach((selector) => placed.push(`${file}: ${selector}`));
+          if (/^(?:font|font-size|font-weight|color|letter-spacing)$/.test(declaration.prop))
+            styled.push(`${file}: ${rule.selector} { ${declaration.toString()} }`);
+        });
+      }),
+    );
+    // Positive control, so a parser that finds no heading rule doesn't pass vacuously.
+    expect(placed).toContain(
+      'platform-scripture-editor.web-view.scss: .psc-gutter-markers .usfm_s1',
+    );
+    expect(styled).toEqual([]);
+  });
+
+  it('transforms no text, so headings keep their typed case', () => {
+    // Any text-transform hides the case the translator typed. The gutter marker glyph sits inside
+    // its paragraph, so uppercase or capitalize would also show `\s1` as the invalid `\S1`. Only
+    // `none` and `initial` are allowed: `revert`, `unset` and `inherit` keep an inherited transform.
+    const transforms: string[] = [];
+    sheets.forEach(({ file, root }) =>
+      root.walkDecls('text-transform', (declaration) => {
+        if (!['none', 'initial'].includes(declaration.value))
+          transforms.push(`${file}: ${declaration.toString()}`);
+      }),
+    );
+    expect(transforms).toEqual([]);
   });
 });
