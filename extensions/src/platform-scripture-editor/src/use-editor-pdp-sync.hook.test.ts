@@ -2044,7 +2044,7 @@ describe('useEditorPdpSync', () => {
         isFocused?: boolean;
         isEditingSessionActive?: () => boolean;
         isFootnotesPaneOwner?: () => boolean;
-        discardUnsavedEdits?: (cause: 'replacedByUpdate' | 'leftChapter') => void;
+        discardUnsavedEdits?: Parameters<typeof useEditorPdpSync>[0]['discardUnsavedEdits'];
         initialIsSyncBlocked?: boolean;
         omitFocusAndSyncParams?: boolean;
       }) {

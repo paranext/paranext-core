@@ -4084,6 +4084,9 @@ function PlatformScriptureEditor({
             ? () => notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum)
             : undefined,
         );
+      // `usjFromPdp` is the chapter a running write started from, not what it sends, so an editor
+      // matching it (an edit undone back to it) still has something waiting behind that write.
+      if (currentlyWritingUsjToPdp.current) return saveUsjToPdpInternal(usjFromEditor);
       // The backend already has what the editor holds, so no edits of this chapter are waiting.
       forgetEditsHeldFor(chapterWithEditsHeldBehindWrite, savedChapterKey);
       return Promise.resolve(false);
@@ -4260,9 +4263,10 @@ function PlatformScriptureEditor({
 
       // Another write is in flight, so this one does not start. Its content is not lost while the
       // editor stays on this chapter: when the in-flight write's update comes back,
-      // `useEditorPdpSync` sends whatever the editor holds by then. It is lost only if the editor
+      // `useEditorPdpSync` sends whatever the editor holds by then. It is lost if the editor
       // leaves the chapter, closes, or is replaced by an update first, which
-      // `reportLostEdits` warns about. Checked here rather than left to the guard, whose verdict
+      // `reportLostEdits` warns about. If no update comes back (the write fails, or is declined
+      // while another update arrived during it), nothing sends it until the next edit. Checked here rather than left to the guard, whose verdict
       // arrives only after an `await`, so the held chapter is recorded synchronously: a flush on
       // leaving reads it straight after flushing.
       if (currentlyWritingUsjToPdp.current) {

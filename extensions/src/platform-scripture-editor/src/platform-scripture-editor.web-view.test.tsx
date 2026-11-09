@@ -1026,6 +1026,38 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     expect(lostEditsNotices()).toHaveLength(0);
   });
 
+  it('reports an edit undone back to the chapter the running save started from when the editor leaves before that save comes back', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    expect(editor.saves).toHaveLength(1);
+    // Undone back to what the backend held before the running save, which is not what it sends.
+    editor.type('In the beginning');
+    editor.blurWindow();
+
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('sends an edit undone back to the chapter the running save started from once that save comes back', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    editor.type('In the beginning');
+    editor.blurWindow();
+
+    await editor.finishSave(0);
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+
+    expect(editor.saves).toHaveLength(2);
+    expect(verseText(editor.saves[1].usj)).toBe('In the beginning');
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
   it('gives held edits replaced by an incoming update the plain not-saved notice', async () => {
     const editor = await setUp();
     await holdBackEditsBehindARunningSave(editor);
