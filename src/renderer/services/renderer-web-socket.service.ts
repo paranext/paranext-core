@@ -7,8 +7,11 @@ let allowWebSocketsBackToPapiNetwork: boolean = true;
  * Makes `PapiRendererWebSocket` (the `WebSocket` web views get) refuse connections to the PAPI
  * network. Web views can still reach the native `WebSocket` on `window.top`; see "The renderer's
  * PAPI port" in `.context/standards/Security-Guide.md`.
+ *
+ * Private so that {@link initializeNetworkThenBlockPapiWebSockets} is the only way in: it is what
+ * guarantees the block runs after the network service has settled, never before.
  */
-export const blockWebSocketsToPapiNetwork = (): void => {
+const blockWebSocketsToPapiNetwork = (): void => {
   allowWebSocketsBackToPapiNetwork = false;
 };
 

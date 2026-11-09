@@ -23,6 +23,7 @@ import {
   ALARM_STRIP_ALERT_CLASS_NAME,
 } from '@renderer/components/alarm-strip.util';
 import { useConnectionFailure } from '@renderer/hooks/use-is-connection-lost.hook';
+import type { ConnectionFailure } from '@renderer/services/connection-lost-store';
 
 // Declared without a `LocalizeKey` annotation so each keeps its literal type, which is what makes
 // `ConnectionLostKey` below a union of these exact keys rather than plain `string`.
@@ -46,6 +47,10 @@ export const PRODUCT_NAME_KEY = '%product_name%' satisfies LocalizeKey;
 /**
  * Shown instead of the connection-lost text when the first connect at startup failed. Nothing was
  * ever connected, so no work can be lost and the reload label carries no warning.
+ *
+ * Localization travels over the connection that never opened, so in this state the user normally
+ * sees {@link ENGLISH_FALLBACKS}, whatever their interface language. The other locales' entries
+ * still ship, for the uncommon case where localization resolves anyway.
  */
 export const COULD_NOT_START_TITLE_KEY = '%overlay_couldNotStartTitle%' satisfies LocalizeKey;
 export const COULD_NOT_START_MESSAGE_KEY = '%overlay_couldNotStart%' satisfies LocalizeKey;
@@ -94,7 +99,8 @@ export const ENGLISH_FALLBACKS: { [K in ConnectionLostKey]: string } = {
     "{%product_name%} can't reach the rest of the app. Anything you changed just now may not be saved.",
   [CONNECTION_LOST_RELOAD_KEY]: 'Reload anyway',
   [COULD_NOT_START_TITLE_KEY]: "Couldn't start",
-  [COULD_NOT_START_MESSAGE_KEY]: "{%product_name%} couldn't connect to the rest of the app.",
+  [COULD_NOT_START_MESSAGE_KEY]:
+    "{%product_name%} couldn't connect to the rest of the app. If this keeps happening, close and reopen {%product_name%}.",
   [COULD_NOT_START_RELOAD_KEY]: 'Reload',
   [PRODUCT_NAME_KEY]: 'Platform.Bible',
 };
@@ -115,6 +121,26 @@ function localizedOrEnglish(
   if (!value || value === key) return ENGLISH_FALLBACKS[key];
   return value;
 }
+
+/** The keys each kind of connection failure is worded with */
+const KEYS_BY_FAILURE: {
+  [F in ConnectionFailure]: {
+    titleKey: ConnectionLostKey;
+    messageKey: ConnectionLostKey;
+    reloadKey: ConnectionLostKey;
+  };
+} = {
+  lost: {
+    titleKey: CONNECTION_LOST_TITLE_KEY,
+    messageKey: CONNECTION_LOST_MESSAGE_KEY,
+    reloadKey: CONNECTION_LOST_RELOAD_KEY,
+  },
+  neverConnected: {
+    titleKey: COULD_NOT_START_TITLE_KEY,
+    messageKey: COULD_NOT_START_MESSAGE_KEY,
+    reloadKey: COULD_NOT_START_RELOAD_KEY,
+  },
+};
 
 type Props = {
   title: string;
@@ -261,13 +287,17 @@ export function ConnectionLostOverlayPresentational({
 /**
  * The connection-lost state, wired to the store.
  *
- * Mounted unconditionally from app startup and rendering nothing until the connection drops. That
+ * Mounted unconditionally from app startup and rendering nothing until the connection fails. That
  * is load-bearing, not stylistic: `useLocalizedStrings` and `useIsPowerMode` both read over PAPI,
  * and PAPI is exactly what has broken by the time this state is needed. Mounted from startup, both
  * resolve while the connection is alive and their values persist afterwards. Mounted on the
  * disconnect, both would fail — showing the user a raw `%overlay_connectionLost%`, positioned for
  * the wrong toolbar height. {@link localizedOrEnglish} backs that up for the case where the socket
  * dies before localization has answered at all.
+ *
+ * When the first connect at startup fails there is never a live connection, so localization never
+ * resolves and interface mode keeps its default: the user sees the English fallbacks, and the
+ * banner is placed for the Simple-mode toolbar, which reads the same default.
  *
  * Why this whole path uses no PAPI is recorded in `adr-connection-lost-is-renderer-local` in
  * `.context/standards/Architecture-Decisions.md`.
@@ -290,10 +320,7 @@ export function ConnectionLostOverlay() {
 
   if (!isConnectionLost) return undefined;
 
-  const neverConnected = connectionFailure === 'neverConnected';
-  const titleKey = neverConnected ? COULD_NOT_START_TITLE_KEY : CONNECTION_LOST_TITLE_KEY;
-  const messageKey = neverConnected ? COULD_NOT_START_MESSAGE_KEY : CONNECTION_LOST_MESSAGE_KEY;
-  const reloadKey = neverConnected ? COULD_NOT_START_RELOAD_KEY : CONNECTION_LOST_RELOAD_KEY;
+  const { titleKey, messageKey, reloadKey } = KEYS_BY_FAILURE[connectionFailure];
 
   // Bypasses OverlayHost intentionally, as WorkspaceUpdatingOverlay does: this state must cover the
   // whole window rather than take its place in the overlay stack.

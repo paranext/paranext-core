@@ -4,6 +4,9 @@ import {
   CONNECTION_LOST_MESSAGE_KEY,
   CONNECTION_LOST_RELOAD_KEY,
   CONNECTION_LOST_TITLE_KEY,
+  COULD_NOT_START_MESSAGE_KEY,
+  COULD_NOT_START_RELOAD_KEY,
+  COULD_NOT_START_TITLE_KEY,
   ConnectionLostOverlayPresentational,
   ENGLISH_FALLBACKS,
   PRODUCT_NAME_KEY,
@@ -36,7 +39,7 @@ const meta: Meta<typeof ConnectionLostOverlayPresentational> = {
     docs: {
       description: {
         component:
-          'Shown when this renderer loses its websocket connection to the rest of the app. A banner names the problem and offers a reload; a scrim covers the whole window, including the toolbar, because every control on screen reaches the app over the connection that just died.',
+          "Shown when this renderer loses its websocket connection to the rest of the app, or when its first connect at startup fails (the Couldn't start story). A banner names the problem and offers a reload; a scrim covers the whole window, including the toolbar, because every control on screen reaches the app over that connection.",
       },
     },
   },
@@ -61,3 +64,19 @@ const ARGS = {
 export const PowerMode: Story = { args: { ...ARGS, isPowerMode: true } };
 
 export const SimpleMode: Story = { args: { ...ARGS, isPowerMode: false } };
+
+/**
+ * The first connect at startup failed. Shown in English: localization travels over the connection
+ * that never opened, so the fallbacks are what the user normally sees in this state.
+ */
+export const CouldNotStart: Story = {
+  args: {
+    title: ENGLISH_FALLBACKS[COULD_NOT_START_TITLE_KEY],
+    message: formatReplacementString(ENGLISH_FALLBACKS[COULD_NOT_START_MESSAGE_KEY], {
+      [PRODUCT_NAME_KEY]: ENGLISH_FALLBACKS[PRODUCT_NAME_KEY],
+    }),
+    reloadLabel: ENGLISH_FALLBACKS[COULD_NOT_START_RELOAD_KEY],
+    onReload: () => {},
+    isPowerMode: false,
+  },
+};

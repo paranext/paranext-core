@@ -296,7 +296,8 @@ describe('ConnectionLostOverlay', () => {
       const alert = screen.getByRole('alertdialog');
       expect(alert).not.toHaveTextContent('%');
       expect(alert).toHaveTextContent(ENGLISH_FALLBACKS[COULD_NOT_START_TITLE_KEY]);
-      expect(alert).toHaveTextContent('Platform.Bible');
+      // Names a next step for when Reload does not help, with the product name expanded there too
+      expect(alert).toHaveTextContent('close and reopen Platform.Bible.');
       expect(
         screen.getByRole('button', { name: ENGLISH_FALLBACKS[COULD_NOT_START_RELOAD_KEY] }),
       ).toBeInTheDocument();

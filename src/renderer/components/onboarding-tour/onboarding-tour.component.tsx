@@ -233,15 +233,11 @@ export function OnboardingTour() {
   // interrupted this way resumes from stop 1 after the reload, which is the same thing quitting
   // mid-tour already does: an interrupted user has not been oriented.
   //
-  // Two edges the guard does not reach. The connection-lost state latches only on an ESTABLISHED
-  // connection dropping, so reloading while the server is still down comes back to a renderer that
-  // never latches and this guard never fires — what keeps the Escape handler off the window there
-  // is the readiness gate instead: the localization provider is reached over the dead socket, so
-  // `isLoading` never resolves, `mightShow` stays false and `Tour` is never opened. Telling that
-  // user anything at all belongs to PT-4494/PT-4495, which cover a failed opening handshake. And
-  // the latch is per renderer while the done flag is `localStorage` shared across windows, so a
-  // second window whose socket survived can still spend the flag; there the user has a working app
-  // and a visible tour, so dismissing it is a genuine dismissal.
+  // This also covers reloading while the server is still down: the renderer's first connect fails,
+  // which latches the store as never connected, and that counts as lost here. One edge the guard
+  // does not reach: the latch is per renderer while the done flag is `localStorage` shared across
+  // windows, so a second window whose socket survived can still spend the flag; there the user has
+  // a working app and a visible tour, so dismissing it is a genuine dismissal.
   if (isConnectionLost) return undefined;
 
   if (doneAtMount && replayCount === 0) return undefined;
