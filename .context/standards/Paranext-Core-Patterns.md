@@ -1629,10 +1629,11 @@ hold for every producer:
 - Publish when the fact becomes known and again whenever it changes. Consumers treat an unpublished
   key as false.
 
-**From C#.** Build the key string and publish through `ContextKeysService.Set`
-(`c-sharp/Services/ContextKeysService.cs`, a static wrapper over the process-wide shared store) on
-load and on every change of the fact. For unit tests, accept an optional `ContextKeys? contextKeys
-= null` constructor parameter that falls back to `ContextKeysService`, as
+**From C#.** Build the key string and publish through `ContextKeysService.Instance.Set`
+(`c-sharp/Services/ContextKeysService.cs`, whose `Instance` is the process-wide `ContextKeys` over the
+shared store) on load and on every change of the fact. For unit tests, accept an optional
+`ContextKeys? contextKeys = null` constructor parameter that falls back to
+`ContextKeysService.Instance`, as
 `InternetSettingsDataProvider` and `ParatextProjectDataProvider` do; do not add a required
 dependency, because nothing in production constructs one. Catch and log any exception from `Set`
 instead of letting it reach the data provider. The typed shared-store keys in

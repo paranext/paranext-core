@@ -462,10 +462,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private void SetContextKey(string key, bool value)
     {
-        if (_contextKeys != null)
-            _contextKeys.Set(key, value);
-        else
-            ContextKeysService.Set(key, value);
+        (_contextKeys ?? ContextKeysService.Instance).Set(key, value);
     }
 
     /// <summary>

@@ -52,10 +52,10 @@ internal sealed class InternetSettingsDataProvider : NetworkObjects.DataProvider
         try
         {
             var allowed = !InternetServicesGate.IsBlocked(_readRawStatus());
-            if (_contextKeys != null)
-                _contextKeys.Set(INTERNET_SERVICES_ALLOWED_KEY, allowed);
-            else
-                ContextKeysService.Set(INTERNET_SERVICES_ALLOWED_KEY, allowed);
+            (_contextKeys ?? ContextKeysService.Instance).Set(
+                INTERNET_SERVICES_ALLOWED_KEY,
+                allowed
+            );
         }
         catch (Exception e)
         {
