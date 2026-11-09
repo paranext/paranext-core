@@ -458,59 +458,70 @@ test.describe('Replace operations', () => {
   //
   // Skipped while Find hides Replace All (IS_REPLACE_ALL_ENABLED in replace-all-enabled.const.ts);
   // un-skip it when that switch is turned back on.
-  test.skip('replaces every visible result from Replace All', async ({ mainPage }) => {
-    const frame = await openFindPanel(mainPage);
+  test.skip(
+    'replaces every visible result from Replace All',
+    {
+      annotation: {
+        type: 'skip',
+        description: 'Find hides Replace All while IS_REPLACE_ALL_ENABLED is false',
+      },
+    },
+    async ({ mainPage }) => {
+      const frame = await openFindPanel(mainPage);
 
-    // Baseline occurrences of the replacement word already in the project: the three single-replace
-    // tests above each wrote one, using the same default replacement term as this test, so counting
-    // "replaced" after this test's own Replace All would double-count theirs (running this test
-    // alone, with those three skipped, the baseline is legitimately 0). Read the total from the
-    // status-bar message, not the "N of M" counter above the results list: that counter tracks only
-    // the loaded batch (capped at RESULTS_BATCH_SIZE, 100 — see find.web-view.tsx) and freezes at
-    // "1 of 100" once REPLACE_SEARCH_TERM's several hundred real matches push the true total past
-    // it, while the status-bar total comes straight from the find job's own count.
-    await frame.locator('#search-term').fill('replaced');
-    await frame.locator('#search-term').press('Enter');
-    const baselineText = await waitForSearchToSettle(frame);
-    expect(baselineText).toMatch(/^(no results found|\d+ results)$/i);
-    const baselineCount = /no results found/i.test(baselineText)
-      ? 0
-      : Number(baselineText.match(/(\d+) results$/)?.[1]);
-    expect(Number.isNaN(baselineCount)).toBe(false);
+      // Baseline occurrences of the replacement word already in the project: the three single-replace
+      // tests above each wrote one, using the same default replacement term as this test, so counting
+      // "replaced" after this test's own Replace All would double-count theirs (running this test
+      // alone, with those three skipped, the baseline is legitimately 0). Read the total from the
+      // status-bar message, not the "N of M" counter above the results list: that counter tracks only
+      // the loaded batch (capped at RESULTS_BATCH_SIZE, 100 — see find.web-view.tsx) and freezes at
+      // "1 of 100" once REPLACE_SEARCH_TERM's several hundred real matches push the true total past
+      // it, while the status-bar total comes straight from the find job's own count.
+      await frame.locator('#search-term').fill('replaced');
+      await frame.locator('#search-term').press('Enter');
+      const baselineText = await waitForSearchToSettle(frame);
+      expect(baselineText).toMatch(/^(no results found|\d+ results)$/i);
+      const baselineCount = /no results found/i.test(baselineText)
+        ? 0
+        : Number(baselineText.match(/(\d+) results$/)?.[1]);
+      expect(Number.isNaN(baselineCount)).toBe(false);
 
-    await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
-    await frame.locator('#search-term').press('Enter');
-    await switchToReplaceMode(frame);
-    await frame.locator('#replace-term').fill('replaced');
-    await expect(firstResultCard(frame)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
+      await frame.locator('#search-term').press('Enter');
+      await switchToReplaceMode(frame);
+      await frame.locator('#replace-term').fill('replaced');
+      await expect(firstResultCard(frame)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
 
-    const replaceAllBtn = frame.getByRole('button', { name: /^replace all$/i });
-    await expect(replaceAllBtn).toBeEnabled({ timeout: 5_000 });
-    await replaceAllBtn.click();
+      const replaceAllBtn = frame.getByRole('button', { name: /^replace all$/i });
+      await expect(replaceAllBtn).toBeEnabled({ timeout: 5_000 });
+      await replaceAllBtn.click();
 
-    const toast = frame.getByText(/replaced \d+ occurrences/i).first();
-    await expect(toast).toBeVisible({ timeout: 10_000 });
-    const toastCount = Number((await toast.textContent())?.match(/(\d+)/)?.[1]);
-    expect(toastCount).toBeGreaterThan(0);
+      const toast = frame.getByText(/replaced \d+ occurrences/i).first();
+      await expect(toast).toBeVisible({ timeout: 10_000 });
+      const toastCount = Number((await toast.textContent())?.match(/(\d+)/)?.[1]);
+      expect(toastCount).toBeGreaterThan(0);
 
-    // The toast's count is computed client-side from the FIND results loaded before the replace,
-    // not from what replace() (a Promise<void>) actually wrote. Confirm it against the project
-    // itself: a fresh Find for the old term must come back empty, and a fresh Find for the
-    // replacement term must report exactly the baseline plus what the toast claimed — proving the
-    // write landed rather than merely that the toast fired.
-    await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
-    await frame.locator('#search-term').press('Enter');
-    await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      // The toast's count is computed client-side from the FIND results loaded before the replace,
+      // not from what replace() (a Promise<void>) actually wrote. Confirm it against the project
+      // itself: a fresh Find for the old term must come back empty, and a fresh Find for the
+      // replacement term must report exactly the baseline plus what the toast claimed — proving the
+      // write landed rather than merely that the toast fired.
+      await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
+      await frame.locator('#search-term').press('Enter');
+      await expect(frame.getByText(/no results found/i)).toBeVisible({
+        timeout: SEARCH_TIMEOUT_MS,
+      });
 
-    await frame.locator('#search-term').fill('replaced');
-    await frame.locator('#search-term').press('Enter');
-    await expect(resultsMessage(frame)).toHaveText(
-      new RegExp(`^${baselineCount + toastCount} results$`),
-      { timeout: SEARCH_TIMEOUT_MS },
-    );
+      await frame.locator('#search-term').fill('replaced');
+      await frame.locator('#search-term').press('Enter');
+      await expect(resultsMessage(frame)).toHaveText(
+        new RegExp(`^${baselineCount + toastCount} results$`),
+        { timeout: SEARCH_TIMEOUT_MS },
+      );
 
-    await closeFindPanel(mainPage);
-  });
+      await closeFindPanel(mainPage);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
