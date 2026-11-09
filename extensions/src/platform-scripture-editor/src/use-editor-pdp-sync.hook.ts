@@ -250,11 +250,12 @@ export function useEditorPdpSync({
   focusLocationKey?: unknown;
   /**
    * True while a Send/Receive blocks this editor. When it turns true the editor gives up its claim
-   * to the chapter (the last local edit is forgotten), so the merge is applied unless the user has
-   * typed again since the block ended or a footnote popover is still open. While it is true, a
-   * pending debounced save is not flushed before an incoming update replaces the editor: it holds
-   * pre-merge text. The write gate would reject it, and the save-failure path would put that text
-   * back on screen; in the moment the block outlasts the gate, it would be written over the merge.
+   * to the chapter (the last edit in this view is forgotten), so the merge is applied unless the
+   * user has typed again since the block ended or a footnote popover is still open. While it is
+   * true, a pending debounced save is not flushed before an incoming update replaces the editor: it
+   * holds pre-merge text. The write gate would reject it, and the save-failure path would put that
+   * text back on screen; in the moment the block outlasts the gate, it would be written over the
+   * merge.
    */
   isSyncBlocked?: boolean;
 }): void {
@@ -323,9 +324,9 @@ export function useEditorPdpSync({
   const [graceExpiryCount, setGraceExpiryCount] = useState(0);
   useEffect(() => () => releaseHeldDelivery(heldDelivery), []);
 
-  // A Send/Receive replaces the chapter on disk with its merge. Forget the last local edit as soon
-  // as it starts, so the merge is applied during the block or after it. Two exceptions push the
-  // pre-merge text over the merge once writes are accepted again: a footnote popover still open
+  // A Send/Receive replaces the chapter on disk with its merge. Forget the last edit in this view
+  // as soon as it starts, so the merge is applied during the block or after it. Two exceptions push
+  // the pre-merge text over the merge once writes are accepted again: a footnote popover still open
   // (`isEditingSessionActive`), and a merge delivered after the user has typed again. The block
   // outlasts the write gate by the store's `HIDE_GRACE_MS` to make the second unlikely, but nothing
   // here rules it out. Called before the sync effect so a block and a delivery in the same render
@@ -479,7 +480,7 @@ export function useEditorPdpSync({
       // even if it comes back before the update arrives. The footnotes pane claims on the same
       // terms (`isFootnotesPaneOwner`).
       //
-      // Once the last local edit is OLDER than the window, focus alone confers nothing: the
+      // Once the last edit in this view is OLDER than the window, focus alone confers nothing: the
       // incoming update is applied exactly as if the editor were unfocused, and nothing is pushed
       // back. A parked caret must never defer external writes indefinitely: a Send/Receive merge
       // or another app's concurrent write has to land — not be overwritten by the focused editor's

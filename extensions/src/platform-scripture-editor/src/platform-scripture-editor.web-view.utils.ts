@@ -358,8 +358,8 @@ export function doesPaneSessionOwnContent(
  * session suppresses.
  *
  * Tracked as PT-4817. The intended fix is a staleness bound like the note session's refreshed-at
- * bound — a palette session defers only within the editor-ownership window of the last local edit,
- * after which the update applies and the change guard closes the palette — not dismissing the
+ * bound — a palette session defers only within the editor-ownership window of the last edit in this
+ * view, after which the update applies and the change guard closes the palette — not dismissing the
  * palette on unrelated keys. An automatic Send/Receive dismisses the palette before it writes, so
  * that particular collision is closed; other external writers can still be overwritten.
  *
