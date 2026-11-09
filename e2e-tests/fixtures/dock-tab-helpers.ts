@@ -40,6 +40,34 @@ export function panelLocator(page: Page, panelId: string): Locator {
   return page.locator(panelSelector(panelId));
 }
 
+/**
+ * Waits until the window's first layout load has reached the dock and its tab titles have been
+ * localized: some docked tab shows a title with no `%key%` left in it.
+ *
+ * `waitForAppReady` returns before that load lands, and when it does land it replaces the whole
+ * dock, closing what the test opened in the meantime (a floating panel, a drag in progress). Wait
+ * on this before acting on the dock right after launch. The product side of this is PT-4755 (tabs
+ * opened while a window starts up can be silently lost). A toolbar popover needs more than this:
+ * later re-renders can still close it, so reopen it until it reads right, as `openInternetSettings`
+ * in `tests/isolated/internet-settings.page.ts` does.
+ *
+ * A heuristic, not the renderer's own load state, which tests cannot see: it needs at least one
+ * docked tab, so it does not fit a layout that starts empty.
+ */
+export async function waitForFirstLayoutLoad(page: Page, timeout = 60_000): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page
+          .locator('.dock-tab')
+          .evaluateAll((tabs) =>
+            tabs.some((tab) => !!tab.textContent?.trim() && !tab.textContent.includes('%')),
+          ),
+      { message: 'a docked tab with a localized title (the first layout load landed)', timeout },
+    )
+    .toBe(true);
+}
+
 /** The tab header button of the tab showing `webViewId`. */
 export function tabButton(page: Page, webViewId: string): Locator {
   return page.locator('.dock-tab-btn', {

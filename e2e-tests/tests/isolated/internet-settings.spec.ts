@@ -47,8 +47,15 @@ test.describe('Internet connectivity settings', () => {
   }) => {
     await waitForAppReady(mainPage);
 
-    // The button label is %userProfile_networkSettings_3% (superseding "Network settings")
-    await expect(await openUserProfilePopover(mainPage)).toContainText('Internet connectivity');
+    // The button label is %userProfile_networkSettings_3% (superseding "Network settings"). Reopened
+    // until it reads so, for the reason `openInternetSettings` retries: re-renders of the toolbar
+    // after startup close the popover, and one closed before its strings arrived leaves nothing to
+    // read.
+    await expect(async () => {
+      await expect(await openUserProfilePopover(mainPage)).toContainText('Internet connectivity', {
+        timeout: 2_000,
+      });
+    }).toPass({ timeout: 30_000 });
 
     await openInternetSettings(mainPage);
 
