@@ -456,14 +456,13 @@ export function useEditorPdpSync({
     if (isNewFromPdp) {
       const usjKnownBeforeDelivery = usjSentToPdp.current;
       usjSentToPdp.current = usjFromPdp;
-      // The PDP round-trips USJ through USFM, so a save made
-      // MID-marker-typing (a pending literal like `\q1` still in plain text) echoes back
-      // NORMALIZED-different from what we sent even though nobody else wrote — sometimes across
-      // MULTIPLE subscription deliveries per save (whichUpdates '*'), so a one-shot "our write is
-      // in flight" flag cannot classify them. Hard-replacing the editor with such an echo while
-      // the user is typing nulls the Lexical selection and eats the keystrokes typed during the
-      // round trip (observed live: `\q1<space>` type-through lost q/1/space ~150-250ms after the
-      // `\`).
+      // The PDP round-trips USJ through USFM and the backend rewrites some text on the way (the
+      // data-fidelity catalog's S rows), so a save can echo back different from what we sent even
+      // though nobody else wrote — sometimes across MULTIPLE subscription deliveries per save
+      // (whichUpdates '*'), so a one-shot "our write is in flight" flag cannot classify them.
+      // Half-typed marker text is not a cause: `EditorRef.getUsj()` settles it before it is sent.
+      // Hard-replacing the editor with such an echo while the user is typing nulls the Lexical
+      // selection and eats the keystrokes typed during the round trip.
       //
       // THE CONTRACT: the editor owns the chapter's data for EDITOR_OWNERSHIP_WINDOW_MS after the
       // user's last edit in this view (in the text or in a footnotes-pane row), while focused.

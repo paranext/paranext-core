@@ -3290,8 +3290,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** The window in which typing can be lost shrinks to "a save is in flight when the
   claim ends", which is usually a fraction of a second. A save the backend reformats (Unicode
   normalization and some invisible characters: rows S-5 and S-6 of
-  `Scripture-Data-Fidelity-Catalog.md`), or reshapes through the USFM round trip (a marker still
-  half typed), comes back looking like an outside change, so held edits
+  `Scripture-Data-Fidelity-Catalog.md`) comes back looking like an outside change, so held edits
   behind it are thrown away and reported even though nothing else changed the chapter; held edits
   therefore get the plain "not saved" notice, never the "changed outside this editor" one. That
   loss is catalog row O-15, which PT-5043 is to fix. A loss on leaving a chapter is reported once
