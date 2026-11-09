@@ -19,6 +19,7 @@ import {
   getDeduplicatedOccurrencesFromSenses,
   DictionaryOccurrenceView,
 } from '../../utils/dictionary.utils';
+import { collapseToLexicalSenses } from '../../utils/lexical-senses.utils';
 import { DomainsDisplay } from './domains-display.component';
 import { BackToListButton } from './back-to-list-button.component';
 
@@ -58,13 +59,12 @@ export function DictionaryEntryDisplay({
   const [selectedSenseIndex, setSelectedSenseIndex] = useState<number | undefined>();
   const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
 
+  const lexicalEntry = useMemo(() => collapseToLexicalSenses(dictionaryEntry), [dictionaryEntry]);
+
   const formattedGlosses = useMemo(
     () =>
-      getFormatGlossesStringFromDictionaryEntrySenses(
-        dictionaryEntry,
-        scriptureReferenceToFilterBy,
-      ),
-    [dictionaryEntry, scriptureReferenceToFilterBy],
+      getFormatGlossesStringFromDictionaryEntrySenses(lexicalEntry, scriptureReferenceToFilterBy),
+    [lexicalEntry, scriptureReferenceToFilterBy],
   );
 
   const occurrencesLabel = useMemo(
@@ -80,7 +80,7 @@ export function DictionaryEntryDisplay({
 
   const sensesFilteredByScrRef = useMemo(() => {
     const result: { [uniqueSenseId: string]: Sense[] } = {};
-    Object.values(dictionaryEntry.senses)
+    Object.values(lexicalEntry.senses)
       .filter((sense) => {
         if (!sense?.occurrences) return false;
         if (
@@ -106,7 +106,7 @@ export function DictionaryEntryDisplay({
         result[key].push(sense);
       });
     return result;
-  }, [dictionaryEntry.senses, scriptureReferenceToFilterBy]);
+  }, [lexicalEntry.senses, scriptureReferenceToFilterBy]);
 
   const deduplicatedOccurrences = useMemo(() => {
     return selectedSense
