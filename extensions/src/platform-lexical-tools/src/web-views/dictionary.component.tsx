@@ -200,6 +200,10 @@ export function Dictionary({
     setLinkedEntry(undefined);
   }, [scope, scrRef.book, scrRef.chapterNum]);
 
+  useEffect(() => {
+    if (linkedEntry) dictionaryEntryRef.current?.scrollTo({ top: 0 });
+  }, [linkedEntry]);
+
   const handleEntryLinkClick = useCallback(
     async (dictionaryId: string, lemma: string) => {
       const entry = await getEntryByLemma(dictionaryId, lemma);
@@ -226,13 +230,18 @@ export function Dictionary({
 
   if (linkedEntry)
     return (
-      <div ref={dictionaryEntryRef} className="tw:overflow-y-auto tw:p-4">
+      <div ref={dictionaryEntryRef} className="tw:h-[100dvh] tw:overflow-y-auto tw:p-4">
         <DictionaryEntryDisplay
           localizedStrings={localizedStrings}
           isDrawer={false}
           dictionaryEntry={linkedEntry}
           handleBackToListButton={() => setLinkedEntry(undefined)}
-          onSelectOccurrence={onSelectOccurrence}
+          onSelectOccurrence={(scrRefOfOccurrence) => {
+            // Keeps the entry open if it is in the list for the chapter the reader moves to
+            setSelectedEntry(linkedEntry);
+            setLinkedEntry(undefined);
+            onSelectOccurrence(scrRefOfOccurrence);
+          }}
           onClickScrollToTop={scrollToTop}
           onEntryLinkClick={handleEntryLinkClick}
         />

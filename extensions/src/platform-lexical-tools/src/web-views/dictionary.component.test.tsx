@@ -11,6 +11,7 @@ beforeAll(() => {
     vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
   );
   Element.prototype.scrollIntoView = vi.fn();
+  Element.prototype.scrollTo = vi.fn();
 });
 
 const SCR_REF = { book: 'RUT', chapterNum: 1, verseNum: 2 };
@@ -47,13 +48,13 @@ const entry = (id: string, lemma: string, definition: string): Entry => {
 const ELIMELECH = entry('000421', 'אֱלִימֶלֶךְ', 'from {L:Bethlehem<SDBH:בֵּית לֶחֶם>}');
 const BETHLEHEM = entry('000999', 'בֵּית לֶחֶם', 'a town in Judah');
 
-const renderDictionary = () => {
+const renderDictionary = (onSelectOccurrence = vi.fn()) => {
   const getEntryByLemma = vi.fn().mockResolvedValue(BETHLEHEM);
   render(
     <Dictionary
       localizedStrings={LOCALIZED_STRINGS}
       scrRef={SCR_REF}
-      onSelectOccurrence={vi.fn()}
+      onSelectOccurrence={onSelectOccurrence}
       getEntries={vi.fn().mockResolvedValue({ entriesById: { [ELIMELECH.id]: [ELIMELECH] } })}
       getFullEntry={vi.fn().mockResolvedValue(ELIMELECH)}
       getEntryByLemma={getEntryByLemma}
@@ -76,5 +77,23 @@ describe('Dictionary entry links', () => {
     fireEvent.click(await screen.findByRole('button', { name: BACK_LABEL }));
     expect(await screen.findByRole('link', { name: 'Bethlehem' })).toBeInTheDocument();
     expect(screen.queryByText('a town in Judah')).not.toBeInTheDocument();
+  });
+
+  it('scrolls a bounded container to the top when a linked entry opens', async () => {
+    renderDictionary();
+    fireEvent.click(await screen.findByRole('link', { name: 'Bethlehem' }));
+    const description = await screen.findByText('a town in Judah');
+    expect(description.closest('[class*="h-[100dvh]"]')).toBeInTheDocument();
+    expect(Element.prototype.scrollTo).toHaveBeenCalledWith({ top: 0 });
+  });
+
+  it('leaves the linked view when an occurrence is selected', async () => {
+    const onSelectOccurrence = vi.fn();
+    renderDictionary(onSelectOccurrence);
+    fireEvent.click(await screen.findByRole('link', { name: 'Bethlehem' }));
+    await screen.findByText('a town in Judah');
+    fireEvent.click(screen.getByRole('button', { name: /1:2/ }));
+    expect(onSelectOccurrence).toHaveBeenCalledWith(SCR_REF);
+    expect(screen.queryByRole('button', { name: BACK_LABEL })).not.toBeInTheDocument();
   });
 });
