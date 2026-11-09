@@ -1291,8 +1291,9 @@ describe('getEditorFocusLocation', () => {
 });
 
 describe('getEditorWebViewContextKeys', () => {
-  it('names the three per-web-view keys from the web view id', () => {
+  it('names the four per-web-view keys from the web view id', () => {
     const keys = getEditorWebViewContextKeys('wv1', {
+      isReadOnly: false,
       isPreview: false,
       isSyncBlocked: false,
       footnotesPaneVisible: false,
@@ -1300,6 +1301,7 @@ describe('getEditorWebViewContextKeys', () => {
     expect(Object.keys(keys).sort()).toEqual([
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
       'platformScriptureEditor.webView.wv1.isPreview',
+      'platformScriptureEditor.webView.wv1.isReadOnly',
       'platformScriptureEditor.webView.wv1.isSyncBlocked',
     ]);
   });
@@ -1309,6 +1311,7 @@ describe('getEditorWebViewContextKeys', () => {
     expect(names).toEqual(
       Object.keys(
         getEditorWebViewContextKeys('wv1', {
+          isReadOnly: true,
           isPreview: true,
           isSyncBlocked: true,
           footnotesPaneVisible: true,
@@ -1318,18 +1321,21 @@ describe('getEditorWebViewContextKeys', () => {
     expect([...names].sort()).toEqual([
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
       'platformScriptureEditor.webView.wv1.isPreview',
+      'platformScriptureEditor.webView.wv1.isReadOnly',
       'platformScriptureEditor.webView.wv1.isSyncBlocked',
     ]);
   });
 
-  it('mirrors isPreview, isSyncBlocked and footnotesPaneVisible', () => {
+  it('mirrors isReadOnly, isPreview, isSyncBlocked and footnotesPaneVisible', () => {
     expect(
       getEditorWebViewContextKeys('wv1', {
+        isReadOnly: true,
         isPreview: true,
         isSyncBlocked: false,
         footnotesPaneVisible: true,
       }),
     ).toEqual({
+      'platformScriptureEditor.webView.wv1.isReadOnly': true,
       'platformScriptureEditor.webView.wv1.isPreview': true,
       'platformScriptureEditor.webView.wv1.isSyncBlocked': false,
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible': true,
@@ -1349,6 +1355,7 @@ describe('menus.json dynamic conditions', () => {
     'platform.project.p1.isEditable': true,
     'platformScripture.project.p1.canEditScripture': true,
     'platformScripture.project.p1.canCreateComments': true,
+    'platformScriptureEditor.webView.wv.isReadOnly': false,
     'platformScriptureEditor.webView.wv.isPreview': false,
     'platformScriptureEditor.webView.wv.isSyncBlocked': false,
     'platformScriptureEditor.webView.wv.footnotesPaneVisible': true,
@@ -1396,6 +1403,20 @@ describe('menus.json dynamic conditions', () => {
     expect(readOnly(INSERT_COMMENT_COMMAND)).toBe(false);
   });
 
+  it('disables the note inserts and the editing Edit items in a tab whose frozen read-only state is set, even when the project is editable', () => {
+    const frozen = isDisabledFn(
+      evaluate({
+        'platform.project.p1.isEditable': true,
+        'platformScriptureEditor.webView.wv.isReadOnly': true,
+      }),
+    );
+    [...INSERT_NOTE_COMMANDS, ...EDIT_COMMANDS].forEach((command) =>
+      expect(frozen(command)).toBe(true),
+    );
+    // Comments are governed by comment permission, not by the tab's read-only state
+    expect(frozen(INSERT_COMMENT_COMMAND)).toBe(false);
+  });
+
   it('disables the note inserts in a preview and while sync is blocked', () => {
     const preview = isDisabledFn(
       evaluate({ 'platformScriptureEditor.webView.wv.isPreview': true }),
@@ -1441,6 +1462,7 @@ describe('menus.json dynamic conditions', () => {
     const FACTS_THAT_DISABLE = [
       { 'platform.project.p1.isEditable': false },
       { 'platformScripture.project.p1.canEditScripture': false },
+      { 'platformScriptureEditor.webView.wv.isReadOnly': true },
       { 'platformScriptureEditor.webView.wv.isPreview': true },
       { 'platformScriptureEditor.webView.wv.isSyncBlocked': true },
     ];

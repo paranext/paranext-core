@@ -1210,12 +1210,13 @@ function PlatformScriptureEditor({
   // current whenever the tab is shown; nothing waits for activation.
   useEffect(() => {
     const keys = getEditorWebViewContextKeys(webViewId, {
+      isReadOnly,
       isPreview,
       isSyncBlocked,
       footnotesPaneVisible,
     });
     Object.entries(keys).forEach(([key, value]) => papi.contextKeys.set(key, value));
-  }, [webViewId, isPreview, isSyncBlocked, footnotesPaneVisible]);
+  }, [webViewId, isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible]);
 
   useEffect(() => {
     return () => {

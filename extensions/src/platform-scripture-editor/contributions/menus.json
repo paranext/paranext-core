@@ -129,7 +129,7 @@
             "order": 1,
             "command": "platformScriptureEditor.undo",
             "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_redo%",
@@ -138,7 +138,7 @@
             "order": 2,
             "command": "platformScriptureEditor.redo",
             "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_cut%",
@@ -147,7 +147,7 @@
             "order": 3,
             "command": "platformScriptureEditor.cutSelection",
             "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_copy%",
@@ -163,7 +163,7 @@
             "order": 5,
             "command": "platformScriptureEditor.pasteAtSelection",
             "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_openFind%",
@@ -258,7 +258,7 @@
             "order": 2,
             "command": "platformScriptureEditor.insertFootnoteAtSelection",
             "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
@@ -268,7 +268,7 @@
             "order": 3,
             "command": "platformScriptureEditor.insertCrossReferenceAtSelection",
             "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_insertEndnoteAtSelection%",
@@ -278,7 +278,7 @@
             "order": 4,
             "command": "platformScriptureEditor.insertEndnoteAtSelection",
             "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_legacyCommentManager_openComments_2%",

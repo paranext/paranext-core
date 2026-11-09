@@ -798,6 +798,7 @@ export function isEditorContextMenuOpen(editorContainer: Element | null | undefi
 
 /** The facts one editor web view publishes about itself; both key functions below map over this */
 const EDITOR_WEB_VIEW_CONTEXT_FACTS = [
+  'isReadOnly',
   'isPreview',
   'isSyncBlocked',
   'footnotesPaneVisible',
