@@ -43,3 +43,68 @@ export function loadExtensionModule(
   );
   return extensionModule.exports;
 }
+
+/** `process` members that hand out Node modules or native code without going through `require` */
+const PROCESS_MODULE_ACCESS_MEMBERS = ['getBuiltinModule', 'binding', '_linkedBinding', 'dlopen'];
+
+/**
+ * Replaces the `process` members that load Node modules or native code outside `require` with
+ * functions that throw, and hides `process.mainModule` (a handle on Node's module loader). Safe to
+ * call more than once.
+ */
+export function blockProcessModuleAccess(): void {
+  PROCESS_MODULE_ACCESS_MEMBERS.forEach((memberName) => {
+    Object.defineProperty(process, memberName, {
+      value: () => {
+        throw new Error(`process.${memberName} is ${NOT_ALLOWED_IN_EXTENSIONS}`);
+      },
+      writable: true,
+      configurable: true,
+    });
+  });
+  Object.defineProperty(process, 'mainModule', {
+    value: undefined,
+    writable: true,
+    configurable: true,
+  });
+}
+
+function refuseCodeGenerationFromStrings(): never {
+  throw new Error(`Generating code from strings is ${NOT_ALLOWED_IN_EXTENSIONS}`);
+}
+
+/**
+ * Removes `eval` and `Function` from the global object and locks the `constructor` of every
+ * function kind's prototype (`Function`, `AsyncFunction`, `GeneratorFunction`,
+ * `AsyncGeneratorFunction`) to a function that throws, so code cannot compile strings by calling
+ * the `constructor` of any function it can write as a literal. Safe to call more than once.
+ *
+ * The prototypes are reached through `Object.getPrototypeOf` on function literals rather than
+ * through `.constructor`, so a repeat call still finds them after the first call has replaced
+ * `constructor`.
+ */
+export function blockCodeGenerationFromStrings(): void {
+  Reflect.deleteProperty(globalThis, 'eval');
+  Reflect.deleteProperty(globalThis, 'Function');
+
+  const functionPrototypes: object[] = [
+    Object.getPrototypeOf(() => {}),
+    Object.getPrototypeOf(async () => {}),
+    Object.getPrototypeOf(function* generator() {
+      yield undefined;
+    }),
+    Object.getPrototypeOf(async function* asyncGenerator() {
+      yield undefined;
+    }),
+  ];
+  functionPrototypes.forEach((functionPrototype) => {
+    // Already locked: redefining a non-configurable property throws
+    if (Object.getOwnPropertyDescriptor(functionPrototype, 'constructor')?.configurable === false)
+      return;
+    Object.defineProperty(functionPrototype, 'constructor', {
+      value: refuseCodeGenerationFromStrings,
+      writable: false,
+      configurable: false,
+    });
+  });
+}
