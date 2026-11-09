@@ -3,10 +3,18 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
 import { findHelloRock3Frame } from './overlay-helpers';
 
-/** Right-click the .title element and wait for the context menu to appear in the parent doc. */
+/**
+ * Right-click the .title element and wait for the context menu to appear in the parent doc.
+ *
+ * Every step opens a fresh menu right after the previous step pressed Escape on one, so this first
+ * waits for that menu to be gone. Without the wait, the right-click can land while the previous
+ * menu is still being dismissed, and whether a new menu then opens depends on how that dismissal
+ * and the new request interleave — a race the test has no business taking part in.
+ */
 async function openContextMenu(mainPage: Page, frame: Frame) {
-  await frame.locator('.title').click({ button: 'right' });
   const menu = mainPage.locator('[role="menu"]');
+  await expect(menu).toHaveCount(0, { timeout: 5_000 });
+  await frame.locator('.title').click({ button: 'right' });
   await expect(menu).toBeVisible({ timeout: 10_000 });
   return menu;
 }

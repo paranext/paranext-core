@@ -225,15 +225,25 @@ test.describe('Reference history', () => {
   // OS-level input injection (e.g. xdotool into the Xvfb display), which this harness does not
   // have. Do NOT delete the body — it documents the intended end-to-end behaviour and can be
   // re-enabled if OS-level injection becomes available.
-  test.skip('keyboard shortcuts navigate back and forward', async ({ mainPage }) => {
-    const bcvTrigger = mainPage.locator(BCV_TRIGGER);
+  test.skip(
+    'keyboard shortcuts navigate back and forward',
+    {
+      annotation: {
+        type: 'skip',
+        description:
+          "Harness limitation: the main process's before-input-event handles these keys, and CDP key events never reach it",
+      },
+    },
+    async ({ mainPage }) => {
+      const bcvTrigger = mainPage.locator(BCV_TRIGGER);
 
-    await navigateToRef(mainPage, 'MRK 4', /Mark 4(?!\d)/i);
-    await navigateToRef(mainPage, 'LUK 2', /Luke 2(?!\d)/i);
+      await navigateToRef(mainPage, 'MRK 4', /Mark 4(?!\d)/i);
+      await navigateToRef(mainPage, 'LUK 2', /Luke 2(?!\d)/i);
 
-    await mainPage.keyboard.press(BACK_KEY);
-    await expect(bcvTrigger).toContainText(/Mark 4(?!\d)/i, { timeout: 10_000 });
-    await mainPage.keyboard.press(FORWARD_KEY);
-    await expect(bcvTrigger).toContainText(/Luke 2(?!\d)/i, { timeout: 10_000 });
-  });
+      await mainPage.keyboard.press(BACK_KEY);
+      await expect(bcvTrigger).toContainText(/Mark 4(?!\d)/i, { timeout: 10_000 });
+      await mainPage.keyboard.press(FORWARD_KEY);
+      await expect(bcvTrigger).toContainText(/Luke 2(?!\d)/i, { timeout: 10_000 });
+    },
+  );
 });

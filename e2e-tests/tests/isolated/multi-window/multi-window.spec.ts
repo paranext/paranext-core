@@ -144,10 +144,15 @@ const SHUTDOWN_SYNC_ATTEMPT_MARKER = 'power-mode shutdown session sync';
 const SIMPLE_MODE_SHUTDOWN_MARKERS = ['Syncing projects on shutdown', 'Sync on shutdown'];
 
 /**
- * Logged when the shutdown path cannot read the interface mode and skips the sync entirely.
- * `src/main/shutdown-tasks.ts`
+ * Logged when the shutdown path cannot read the interface mode and skips the sync entirely
+ * (`src/main/shutdown-tasks.ts`; the startup sync paths in `src/main/startup-tasks.ts` share the
+ * prefix, which is harmless to match too). The `; skipping` part is what keeps it from matching the
+ * renderer's first-run read (`src/renderer/services/first-run-store.ts`), which logs `Could not
+ * read platform.interfaceMode: …` when the quit closes the socket while a renderer — here, the
+ * second window's, quit moments after it registered — is still making its startup reads. That
+ * warning says nothing about the shutdown path.
  */
-const SHUTDOWN_MODE_UNREADABLE_LOG = 'Could not read platform.interfaceMode';
+const SHUTDOWN_MODE_UNREADABLE_LOG = 'Could not read platform.interfaceMode; skipping';
 
 // #endregion
 
