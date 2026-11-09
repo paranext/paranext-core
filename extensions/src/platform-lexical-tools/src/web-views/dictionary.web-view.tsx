@@ -83,6 +83,22 @@ globalThis.webViewComponent = function DictionaryWebView({
     }
   }, []);
 
+  // Fetch the entry an in-definition link points to. Lemmas are unique within a lexical reference
+  // text, so there is at most one match.
+  const getEntryByLemma = useCallback(async (dictionaryId: string, lemma: string) => {
+    const selector: LexicalReferenceSelector = { lemma, lexicalReferenceTextId: dictionaryId };
+    try {
+      const dp = await papi.dataProviders.get('platformLexicalTools.lexicalReferenceService');
+      if (!dp) throw new Error('Could not get lexical reference service data provider');
+      const entriesById = await dp.getEntriesById(selector);
+      if (!entriesById || isPlatformError(entriesById)) return undefined;
+      return Object.values(entriesById).flat()[0];
+    } catch (e) {
+      logger.error(`Error getting entry by lemma: ${getErrorMessage(e)}`);
+      return undefined;
+    }
+  }, []);
+
   return (
     <Dictionary
       localizedStrings={localizedStrings}
@@ -90,6 +106,7 @@ globalThis.webViewComponent = function DictionaryWebView({
       onSelectOccurrence={onSelectOccurrence}
       getEntries={getEntries}
       getFullEntry={getFullEntry}
+      getEntryByLemma={getEntryByLemma}
     />
   );
 };

@@ -14,6 +14,7 @@ import { DictionaryEntryDisplay } from './dictionary-entry-display.component';
 import { useIsWideScreen } from '../../utils/dictionary-ui.utils';
 import { DictionaryScope } from '../../utils/dictionary.utils';
 import { DictionaryListItem } from './dictionary-list-item.component';
+import { EntryLinkClickHandler } from './definition-text.component';
 
 function getEntryId(entry: Entry): string {
   return `${entry.lexicalReferenceTextId}-entry-${entry.id}`;
@@ -45,6 +46,8 @@ type DictionaryListProps = {
    * selected entry instead of the full data.
    */
   fullSelectedEntry?: Entry;
+  /** Callback function to open an entry linked from a definition */
+  onEntryLinkClick?: EntryLinkClickHandler;
 };
 
 /**
@@ -68,6 +71,7 @@ export function DictionaryList({
   onCharacterPress,
   onEntrySelected,
   fullSelectedEntry,
+  onEntryLinkClick,
 }: DictionaryListProps) {
   const isWideScreen = useIsWideScreen();
 
@@ -144,6 +148,7 @@ export function DictionaryList({
               handleBackToListButton={handleOptionSelect}
               onSelectOccurrence={onSelectOccurrence}
               onClickScrollToTop={scrollToTop}
+              onEntryLinkClick={onEntryLinkClick}
             />
           </div>
         ) : (
@@ -167,6 +172,7 @@ export function DictionaryList({
                   handleBackToListButton={() => onEntrySelected(undefined)}
                   onSelectOccurrence={onSelectOccurrence}
                   onClickScrollToTop={scrollToTop}
+                  onEntryLinkClick={onEntryLinkClick}
                 />
               </div>
             </DrawerContent>
