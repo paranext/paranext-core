@@ -4,9 +4,10 @@
  * This IS the Extension Interface for the extension host, and `LICENSE-EXCEPTION.md` grants an
  * additional permission under section 7 of the AGPL over works that reach Platform.Bible only
  * through it. Adding an entry widens a published, irrevocable grant as well as the security
- * boundary the `Module.prototype.require` shim enforces; removing one can put an existing extension
- * outside the exception. Treat a change here as a licensing change as well as a security one, and
- * see https://github.com/paranext/paranext/wiki/Module-import-restrictions.
+ * boundary enforced by the extension `require` the host hands each extension file (and the
+ * `Module.prototype.require` shim); removing one can put an existing extension outside the
+ * exception. Treat a change here as a licensing change as well as a security one, and see
+ * https://github.com/paranext/paranext/wiki/Module-import-restrictions.
  *
  * Kept in a module of its own, importing nothing, for one reason: the guard that has to notice a
  * change to it (`extension.service.module-allowlist.test.ts`) must be able to read it as a VALUE.

@@ -142,9 +142,9 @@ The facts, which are not in doubt:
   extension's own bundle contains none of them and every call into them is resolved at runtime. The
   four `@papi/*` entries are the ones the linkage question turns on; the rest are libraries the host
   supplies, which is why the paragraph above reasons from `platform-bible-utils` being on this list.
-- They are supplied by `src/extension-host/services/extension.service.ts`, which shims
-  `Module.prototype.require` so that `require('@papi/backend')` returns the host's own `papi`
-  object. An extension does not load a copy of a library; it is loaded **by** the host, into the
+- They are supplied by `src/extension-host/services/extension.service.ts` through the `require` it
+  hands each extension file when it loads it (and through its `Module.prototype.require` shim), so
+  that `require('@papi/backend')` returns the host's own `papi` object. An extension does not load a copy of a library; it is loaded **by** the host, into the
   host's process, and calls directly into the host's objects.
 - `src/extension-host/` is AGPL-3.0-or-later. It is not carved out, and nothing above suggests it
   should be.

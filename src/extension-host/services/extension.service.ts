@@ -113,11 +113,13 @@ type ActiveExtension = {
 };
 
 /**
- * A dynamically imported extension module which could be an ES Module or a CommonJS module.
+ * The exports of an extension entry file as returned by `loadExtensionModule`. The loader only runs
+ * CommonJS-shaped source, but the file may export its `activate` directly or under `default`
+ * (`exports.default`).
  *
- * Using webpack's 'commonjs-static' library type as we use in our extensions, the import is the
- * extension module with its exports directly in the object; there is no need to go into `default`.
- * However, it probably doesn't hurt to support multiple shapes of modules.
+ * Using webpack's 'commonjs-static' library type as we use in our extensions, the exports are
+ * directly in the object; there is no need to go into `default`. However, it probably doesn't hurt
+ * to support both shapes.
  */
 type AmbiguousExtensionModule = IExtension | { default: IExtension };
 
