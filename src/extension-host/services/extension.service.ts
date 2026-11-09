@@ -32,6 +32,11 @@ import {
   type ExtensionInterfaceModuleSpecifier,
 } from '@extension-host/data/extension-interface-modules.data';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
+import {
+  blockCodeGenerationFromStrings,
+  blockProcessModuleAccess,
+  loadExtensionModule,
+} from '@extension-host/services/extension-sandbox.util';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import * as papiCore from '@shared/services/papi-core.service';
 import { executionTokenService } from '@node/services/execution-token.service';
@@ -92,13 +97,6 @@ import {
 import { FullExtensionData } from '@shared/models/full-extension-data.model';
 import { ExtensionInfo } from '@extension-host/extension-types/extension-info.model';
 
-/**
- * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
- * https://webpack.js.org/api/module-variables/#**non_webpack_require**-webpack-specific
- */
-// eslint-disable-next-line camelcase, no-underscore-dangle, @typescript-eslint/naming-convention
-declare const __non_webpack_require__: typeof require;
-
 /** These are names of extensions that should only be loaded if "noisy dev mode" is enabled */
 const TEST_EXTENSION_NAMES = [
   'c-sharp-provider-test',
@@ -158,13 +156,6 @@ const RESTART_DELAY_MS = 2000;
  * `waitForExtensionsReload()` if it takes to long
  */
 const RESTART_WAIT_TIMEOUT_MS = 60000;
-
-/** Save the original `require` function. */
-const requireOriginal = Module.prototype.require;
-
-// `__non_webpack_require__` is a webpack-injected global that does not follow camelCase naming.
-// eslint-disable-next-line camelcase
-const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
 
 /** The location where installed extensions are stored. Created if it does not exist for ease of use */
 const installedExtensionsUri: Uri = `app://${INSTALLED_EXTENSIONS_DIR}`;
@@ -1163,12 +1154,12 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
  */
 async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtension> {
   logger.info(`extension.service: importing ${extension.name}`);
-  // Import the extension file. Tell webpack to ignore it because extension files are not in the
-  // bundle and should not be looked up in the bundle. Assert a more ambiguous type.
-  // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
+  // Run the extension file through the sandbox loader so its `require` only reaches the extension
+  // interface modules. Assert a more ambiguous type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const extensionModuleAmbiguous = systemRequire(
-    /* webpackIgnore: true */ getPathFromUri(extension.dirUri),
+  const extensionModuleAmbiguous = loadExtensionModule(
+    getPathFromUri(joinUriPaths(extension.dirUri, extension.main)),
+    requireForExtension,
   ) as AmbiguousExtensionModule;
   logger.info(`extension.service: finished importing ${extension.name}`);
   // Some modules import with their exports directly on the module object, while others put their
@@ -1343,6 +1334,27 @@ function isExtensionInterfaceModule(
 }
 
 /**
+ * Resolves a `require` call made by extension code: returns the extension interface module with
+ * this name, or throws for anything else.
+ *
+ * WARNING: This code should not be edited without serious review. For more information, see
+ * https://github.com/paranext/paranext/wiki/Module-import-restrictions
+ */
+function requireForExtension(moduleName: string): unknown {
+  // Allow the extension to import papi and some other things. The list is EXTENSION_INTERFACE_MODULES
+  // (above), looked up rather than compared against name by name, so the set an extension may
+  // link against is a value a test can read instead of a source pattern it has to recognize.
+  if (isExtensionInterfaceModule(moduleName)) return EXTENSION_INTERFACE_MODULES[moduleName];
+
+  // Disallow any imports within the extension
+  // Tell the extension dev if there is an api similar to what they want to import
+  const message = `Requiring other than papi is not allowed in extensions! ${getModuleSimilarApiMessage(
+    moduleName,
+  )}. Read more about Platform.Bible import restrictions at https://github.com/paranext/paranext/wiki/Module-import-restrictions`;
+  throw new Error(message);
+}
+
+/**
  * Whether the startup marks in {@link activateExtensions} have already been emitted this session.
  * Activation re-runs whenever extensions are installed/updated/removed mid-session (the watcher
  * calls `reloadExtensions`), and re-emitting the marks then would inject duplicate rows and a
@@ -1363,56 +1375,22 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
       ? extensions.filter((extension) => activeExtensions.get(extension.name) === undefined)
       : extensions;
 
-  /** Include whether that extension has already been imported */
-  const extensionsWithCheck = extensionsToActivate.map((extension) => ({
-    extension,
-    hasBeenImported: false,
-  }));
-
-  // Shim out require so extensions can use it only as prescribed.
+  // Shim out require so extensions can use it only as prescribed. Extension entry files get
+  // `requireForExtension` from the sandbox loader; this shim covers any other module loaded after
+  // activation starts.
   // WARNING: This code should not be edited without serious review. For more information,
   // see https://github.com/paranext/paranext/wiki/Module-import-restrictions
   //
   // Assert the specific type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  Module.prototype.require = ((moduleName: string) => {
-    // Allow the extension to import papi and some other things. The list is EXTENSION_INTERFACE_MODULES
-    // (above), looked up rather than compared against name by name, so the set an extension may
-    // link against is a value a test can read instead of a source pattern it has to recognize.
-    if (isExtensionInterfaceModule(moduleName)) return EXTENSION_INTERFACE_MODULES[moduleName];
+  Module.prototype.require = requireForExtension as typeof Module.prototype.require;
 
-    // Figure out if we are doing the import for the extension file in activateExtension
-    const extensionFile = extensionsWithCheck.find(
-      (extensionToCheck) =>
-        !extensionToCheck.hasBeenImported &&
-        getPathFromUri(extensionToCheck.extension.dirUri) === moduleName,
-    );
-
-    if (extensionFile) {
-      // The file that is being imported is the extension file, so this hopefully means we are
-      // importing the extension file in activateExtension. Allow this and mark the extension as
-      // imported.
-      // TODO: an extension can probably import another extension's file and mess this up. Maybe try to find a better way
-      extensionFile.hasBeenImported = true;
-      return requireOriginal(moduleName);
-    }
-
-    // Disallow any imports within the extension
-    // Tell the extension dev if there is an api similar to what they want to import
-    const message = `Requiring other than papi is not allowed in extensions! ${getModuleSimilarApiMessage(
-      moduleName,
-    )}. Read more about Platform.Bible import restrictions at https://github.com/paranext/paranext/wiki/Module-import-restrictions`;
-    throw new Error(message);
-  }) as typeof Module.prototype.require;
-
-  // Delete ways to execute arbitrary code https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/script-src#unsafe_eval_expressions
+  // Remove ways to execute arbitrary code https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/script-src#unsafe_eval_expressions
   // Note: node does not allow strings in setTimeout, setInterval, or setImmediate, so we don't need
   // to monkey-patch them https://nodejs.org/api/timers.html#scheduling-timers
-  // @ts-expect-error we want to remove eval because it can create code from strings
-  // eslint-disable-next-line no-eval
-  delete globalThis.eval;
-  // @ts-expect-error we want to remove Function because it can create code from strings
-  delete globalThis.Function;
+  blockCodeGenerationFromStrings();
+  // Remove the `process` members that load Node modules or native code without `require`
+  blockProcessModuleAccess();
 
   // Replace fetch with papi.fetch.
   // eslint-disable-next-line no-global-assign
@@ -1431,7 +1409,7 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   };
 
   logger.info(
-    `Activating the following extensions: ${extensionsWithCheck.map(({ extension }) => extension.name).join(',')}`,
+    `Activating the following extensions: ${extensionsToActivate.map(({ name }) => name).join(',')}`,
   );
 
   // Import the extensions and run their activate() functions
@@ -1443,23 +1421,23 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   startupActivationMarksEmitted = true;
   // This is a case where we want to run through the array in order sequentially
   // eslint-disable-next-line no-restricted-syntax
-  for (const extensionWithCheck of extensionsWithCheck) {
+  for (const extensionToActivate of extensionsToActivate) {
     // The extension name is embedded in the mark token; collapse whitespace runs to '-' since
     // manifest `name` is a free-form string (core extensions are camelCase/space-free, but
     // third-party extensions are not guaranteed to be) so the token stays a single readable word.
     // (markStartup strips line terminators itself, so this is now purely cosmetic.) Built only when
     // a mark will actually be emitted.
     const extensionMarkName = shouldEmitStartupMarks
-      ? extensionWithCheck.extension.name.replace(/\s+/g, '-')
+      ? extensionToActivate.name.replace(/\s+/g, '-')
       : '';
     try {
       if (shouldEmitStartupMarks) markStartup(`activate-start ${extensionMarkName}`);
       // Extensions must be activated in dependency order, so sequential awaiting is intentional.
       // eslint-disable-next-line no-await-in-loop
-      const extension = await activateExtension(extensionWithCheck.extension);
+      const extension = await activateExtension(extensionToActivate);
       extensionsActive.push(extension);
     } catch (e) {
-      logger.error(`Extension '${extensionWithCheck.extension.name}' threw while activating! ${e}`);
+      logger.error(`Extension '${extensionToActivate.name}' threw while activating! ${e}`);
     } finally {
       // Emit activate-end in `finally` so a failed activation still terminates its waterfall span.
       // If it only fired on success, a throwing extension would leave a dangling activate-start and
@@ -1500,12 +1478,6 @@ async function deactivateExtension(extension: ActiveExtension): Promise<boolean 
     );
   }
   if (extensionKey) uriHandlersByExtensionKey.delete(extensionKey);
-
-  // Delete the extension module from Node's module cache if we previously loaded it.
-  const moduleKey = systemRequire.resolve(getPathFromUri(extension.info.dirUri));
-  if (moduleKey in systemRequire.cache) delete systemRequire.cache[moduleKey];
-  else
-    logger.warn(`Extension '${extension.info.name}' not found in the module cache to be removed!`);
 
   return isUnsubscribed;
 }
