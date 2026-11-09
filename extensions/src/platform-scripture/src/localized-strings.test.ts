@@ -161,6 +161,118 @@ const TEXT_CHANGED_TOAST_KEYS = [
   '%webView_find_replace_textChangedOrMarkerAllResults%',
 ];
 
+describe('skipped match messages', () => {
+  it('says where the match is, what it is, and that it is skipped', () => {
+    [
+      '%webView_find_replace_skippedOneEndedMarker%',
+      '%webView_find_replace_skippedChapterMarker%',
+      '%webView_find_replace_skippedStructureProtected%',
+    ].forEach((key) => {
+      expect(localizedStrings.en[key]).toContain('{reference}');
+      expect(localizedStrings.en[key]).toContain('{text}');
+      expect(localizedStrings.en[key]).toContain('skipped');
+    });
+  });
+
+  it('names structure protection and its markers as the rest of Find does', () => {
+    const skipped = localizedStrings.en['%webView_find_replace_skippedStructureProtected%'];
+    expect(localizedStrings.en['%webView_find_replace_structureProtectedNote%']).toContain(
+      'Structure is locked',
+    );
+    expect(skipped).toContain('structure is locked');
+    expect(skipped).toContain('a paragraph, verse, or chapter marker');
+    expect(localizedStrings.en['%webView_find_replace_structureProtectedMarkerTooltip%']).toContain(
+      'a paragraph, verse, or chapter marker',
+    );
+  });
+
+  it('reads as UX drafted it for a match with only part of a marker', () => {
+    expect(localizedStrings.en['%webView_find_replace_skippedOneEndedMarker%']).toBe(
+      'The text in {reference} to be replaced ("{text}") includes only part of a marker, so it will be skipped.',
+    );
+  });
+});
+
+/** What Find's Replace asks or tells the user about the markers in a match. */
+const MARKER_PROMPT_STRING_KEYS = [
+  '%webView_find_replace_markersPrompt_confirm%',
+  '%webView_find_replace_markersPrompt_deletedMarker%',
+  '%webView_find_replace_markersPrompt_message%',
+  '%webView_find_replace_markersPrompt_title%',
+  '%webView_find_replace_oneEndedMarkerError%',
+  '%webView_find_replace_skippedChapterMarker%',
+  '%webView_find_replace_skippedOneEndedMarker%',
+  '%webView_find_replace_skippedStructureProtected%',
+  '%webView_find_replace_skipped_title%',
+];
+
+describe.each(MARKER_PROMPT_STRING_KEYS)('marker prompt %s', (key) => {
+  it('has a Spanish string that differs from English', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+
+  it('keeps every placeholder in Spanish', () => {
+    const placeholders = localizedStrings.en[key].match(/\{\w+\}/g) ?? [];
+    placeholders.forEach((placeholder) => expect(localizedStrings.es[key]).toContain(placeholder));
+  });
+});
+
+/**
+ * The messages saying a Replace would delete a marker. Each replaces a key that listed eight kinds
+ * of marker, from before every marker counted, and falls back to it.
+ */
+const MARKER_DELETION_KEYS = {
+  '%webView_find_replace_markerDeletionError_2%': '%webView_find_replace_markerDeletionError%',
+  '%webView_find_replace_skippedAllNResults_2%': '%webView_find_replace_skippedAllNResults%',
+  '%webView_find_replace_skippedAllOneResult_2%': '%webView_find_replace_skippedAllOneResult%',
+};
+
+describe.each(Object.entries(MARKER_DELETION_KEYS))(
+  'marker deletion message %s',
+  (key, replaces) => {
+    it('says "a marker" rather than listing kinds of marker', () => {
+      expect(localizedStrings.en[key]).toContain('would delete a marker');
+      expect(localizedStrings.en[key]).not.toMatch(/footnote|paragraph/);
+    });
+
+    it('has a Spanish string that differs from English and keeps its placeholders', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+      const placeholders = localizedStrings.en[key].match(/\{\w+\}/g) ?? [];
+      placeholders.forEach((placeholder) =>
+        expect(localizedStrings.es[key]).toContain(placeholder),
+      );
+    });
+
+    it('falls back to the key it replaces, which is marked deprecated', () => {
+      expect(metadata[key]?.fallbackKey).toBe(replaces);
+      expect(metadata[replaces]?.deprecationInfo?.message).toContain(key);
+    });
+  },
+);
+
+/** The marker prompt's message, which points at the cue that is not color alone. */
+describe('marker prompt message', () => {
+  const key = '%webView_find_replace_markersPrompt_message%';
+
+  it('says only the crossed-out markers are deleted', () => {
+    expect(localizedStrings.en[key]).toContain('will delete the crossed-out markers');
+  });
+
+  it('is what the deprecated tooltip points readers to, and is not deprecated itself', () => {
+    expect(
+      metadata['%webView_find_replace_markerDeletionTooltip%']?.deprecationInfo?.message,
+    ).toContain(key);
+    expect(metadata[key]?.deprecationInfo).toBeUndefined();
+  });
+
+  it('has translator notes, as the label read after each deleted marker does', () => {
+    expect(metadata[key]?.notes).toBeTruthy();
+    expect(metadata['%webView_find_replace_markersPrompt_deletedMarker%']?.notes).toBeTruthy();
+  });
+});
+
 describe.each(TEXT_CHANGED_TOAST_KEYS)('text-changed toast %s', (key) => {
   it('has an English string and translator notes', () => {
     expect(localizedStrings.en[key]).toBeTruthy();

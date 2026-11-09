@@ -25,6 +25,7 @@ const {
   editorHandle,
   projectDataProviders,
   projectSettings,
+  loadingProjectSettings,
 } = vi.hoisted(() => ({
   mockUseProjectData: vi.fn(),
   mockUseLocalizedStrings: vi.fn(),
@@ -40,6 +41,8 @@ const {
   projectDataProviders: new Map<string, unknown>(),
   /** Project settings that read as something other than their default, by key. */
   projectSettings: new Map<string, unknown>(),
+  /** Project settings whose read is still pending, by key; they read as their default meanwhile. */
+  loadingProjectSettings: new Set<string>(),
 }));
 
 /** What each key localizes to by default; any other key echoes itself, as an unresolved one does. */
@@ -100,7 +103,7 @@ vi.mock('@papi/frontend/react', () => ({
     projectSettings.has(key) ? projectSettings.get(key) : defaultValue,
     vi.fn(),
     vi.fn(),
-    false,
+    loadingProjectSettings.has(key),
   ],
   useSetting: (_key: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), vi.fn(), false],
   useRecentScriptureRefs: () => ({ recentScriptureRefs: [], addRecentScriptureRef: vi.fn() }),
@@ -199,6 +202,7 @@ beforeEach(() => {
   editorHandle.current = undefined;
   projectDataProviders.clear();
   projectSettings.clear();
+  loadingProjectSettings.clear();
   mockUseLocalizedStrings.mockReset();
   mockUseLocalizedStrings.mockImplementation(localizeWith(TRANSLATIONS));
   // The web view host supplies this global; the editor reads its persisted view type through it.
@@ -423,5 +427,110 @@ describe('Scripture editor "Add chapter number" on an empty book', () => {
     fireEvent.click(button);
 
     expect(insertFirstChapter).toHaveBeenCalledWith(31);
+  });
+});
+
+describe('Scripture editor footnotes pane while the chapter is held back from the editor', () => {
+  const ALLOW_INVISIBLE_KEY = 'platformScripture.allowInvisibleCharacters';
+
+  /** A chapter with one footnote. */
+  const chapterWithFootnote = {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'In the beginning',
+          { type: 'note', marker: 'f', caller: '+', content: ['A footnote text'] },
+        ],
+      },
+    ],
+  };
+
+  async function renderWithPaneOpen() {
+    chapterUsjValue.current = chapterWithFootnote;
+    const EditorWebView = getEditorWebView();
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(
+        <EditorWebView {...makeProps('', { footnotesPaneVisible: true, isReadOnly: false })} />,
+      );
+    });
+    return result;
+  }
+
+  it('lists no footnotes beside the spinner until the setting is read', async () => {
+    loadingProjectSettings.add(ALLOW_INVISIBLE_KEY);
+
+    await renderWithPaneOpen();
+
+    // The editor is not mounted yet, so a row listed here could not be opened for editing.
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('lists the footnotes once the setting is read', async () => {
+    await renderWithPaneOpen();
+
+    // Positive control: the same chapter and pane list its footnote when nothing is held back.
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+});
+
+describe('Scripture editor while the invisible-characters setting cannot be read', () => {
+  const ALLOW_INVISIBLE_KEY = 'platformScripture.allowInvisibleCharacters';
+  const BANNER_KEY = '%webView_platformScriptureEditor_settingUnreadable_withheld_banner%';
+
+  const chapterWithFootnote = {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'a~b',
+          { type: 'note', marker: 'f', caller: '+', content: ['A footnote text'] },
+        ],
+      },
+    ],
+  };
+
+  const EditorWebView = getEditorWebView();
+  /** A new element each time, so a rerender is not skipped for identical props. */
+  const webViewElement = () => (
+    <EditorWebView {...makeProps('', { footnotesPaneVisible: true, isReadOnly: false })} />
+  );
+
+  it('shows the banner and no editor or footnote rows, then mounts the editor once it is read', async () => {
+    chapterUsjValue.current = chapterWithFootnote;
+    projectSettings.set(ALLOW_INVISIBLE_KEY, newPlatformError('project unavailable'));
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(webViewElement());
+    });
+
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(BANNER_KEY);
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+
+    projectSettings.set(ALLOW_INVISIBLE_KEY, true);
+    await act(async () => {
+      result?.rerender(webViewElement());
+    });
+
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+    expect(screen.queryByText(BANNER_KEY)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(1);
   });
 });

@@ -268,6 +268,56 @@ describe('useSyncStatus', () => {
     expect(result.current.syncingProjects).toEqual([]);
   });
 
+  it('advances runEpoch only when a run opens after another ended, with status syncing throughout', async () => {
+    commands.mockGetSyncState({ isSyncing: true, lastRequestedProjectIds: [] });
+    seedActivity({ isSyncing: true, projectIds: [] });
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // The first run opening is not a change of run.
+    expect(result.current.runEpoch).toBe(0);
+
+    pushActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+    pushActivity({ isSyncing: true, projectIds: ['b'] });
+
+    // The claim still says `syncing`, so the status cannot show the change of run.
+    expect(result.current.status).toBe('syncing');
+    expect(result.current.runEpoch).toBe(1);
+  });
+
+  it('does not advance runEpoch when the backend reports a run the claim announced after the last one ended', async () => {
+    const { emitSyncStateChanged } = captureEventCallbacks();
+    commands.mockGetSyncState(
+      { isSyncing: true, lastRequestedProjectIds: [] },
+      completedStateFor({ a: 'succeeded' }),
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['b'] },
+    );
+    seedActivity({ isSyncing: true, projectIds: ['a'] });
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Run A ends on both signals.
+    pushActivity({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+    emitSyncStateChanged({ isSyncing: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('synced');
+
+    // The claim announces run B, and only then does the backend report it.
+    emitSyncStateChanged({ isSyncing: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: true, projectIds: ['b'] });
+
+    expect(result.current.status).toBe('syncing');
+    expect(result.current.runEpoch).toBe(0);
+  });
+
   it('names projects once the backend resolves its merge set', async () => {
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
     seedActivity({ isSyncing: true, projectIds: [] });

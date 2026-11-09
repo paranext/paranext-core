@@ -26,7 +26,7 @@ describe('chapter save caret (platform-scripture-editor.web-view.tsx)', () => {
 
   it("passes the editor's caret", () => {
     expect(source).toContain(
-      'prepareUsjForChapterSave( correctEditorUsjVersion(usjFromEditor), usjFromPdp, savedChapterSelector.chapterNum, editorRef.current?.getSelection(), )',
+      'prepareUsjForChapterSave( usjFromEditor, usjFromPdp, savedChapterSelector.chapterNum, editorRef.current?.getSelection(), )',
     );
   });
 });

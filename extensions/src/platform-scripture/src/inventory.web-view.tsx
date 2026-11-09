@@ -25,7 +25,11 @@ import {
 import { useInventory } from './hooks/use-inventory';
 import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { useOnSyncWriteLockReleased } from './hooks/use-sync-write-lock-release';
 import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
+
+/** Shown in place of "No results." while an automatic sync keeps the inventory from loading */
+const WAITING_FOR_SYNC_KEY = '%webView_inventory_waitingForSync%';
 
 const VALID_ITEMS_DEFAULT = '';
 const INVALID_ITEMS_DEFAULT = '';
@@ -203,7 +207,7 @@ global.webViewComponent = function InventoryWebView({
   // Resolve the shared inventory strings plus the rendered type's table-header strings (lifted out
   // of the per-type components so they no longer import `@papi`).
   const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => Array.from(INVENTORY_STRING_KEYS), []),
+    useMemo(() => [...INVENTORY_STRING_KEYS, WAITING_FOR_SYNC_KEY], []),
   );
   const [typeStrings] = useLocalizedStrings(useMemo(() => [...typeStringKeys], [typeStringKeys]));
 
@@ -215,20 +219,30 @@ global.webViewComponent = function InventoryWebView({
     error: inventoryError,
     getItemOccurrences,
     cleanup,
+    reload: reloadInventory,
   } = useInventory(checkId, inventoryInputRange, projectId);
+
+  // An automatic sync on the project refuses the inventory; it loads once the sync ends.
+  const isWaitingForSync = isSyncEditBlockedError(inventoryError);
+  useOnSyncWriteLockReleased(projectId ?? undefined, () => {
+    if (isWaitingForSync) reloadInventory();
+  });
 
   // When the backend refuses the project because it cannot be opened, the empty table says why
   // instead of reporting that nothing was found.
   const openBlockedMessage = useProjectOpenBlockedMessage(
     getProjectOpenBlockedReasonKeyFromResult(inventoryError),
   );
-  const inventoryLocalizedStrings = useMemo(
-    () =>
-      openBlockedMessage
-        ? { ...localizedStrings, '%webView_inventory_no_results%': openBlockedMessage }
-        : localizedStrings,
-    [localizedStrings, openBlockedMessage],
-  );
+  const inventoryLocalizedStrings = useMemo(() => {
+    if (openBlockedMessage)
+      return { ...localizedStrings, '%webView_inventory_no_results%': openBlockedMessage };
+    if (isWaitingForSync)
+      return {
+        ...localizedStrings,
+        '%webView_inventory_no_results%': localizedStrings[WAITING_FOR_SYNC_KEY],
+      };
+    return localizedStrings;
+  }, [localizedStrings, openBlockedMessage, isWaitingForSync]);
 
   useEffect(() => {
     return () => {

@@ -257,9 +257,10 @@ beforeEach(() => {
   setMockSetting('shouldMatchSystem', false);
   setMockSetting('setShouldMatchSystem', mockSetter());
   setMockSetting('internetSettingsProviderAvailable', true);
-  // Not 'Production', which never shows a badge (see "UserProfilePopover server badge"): the
-  // provider-registration recovery tests below ("recovers once…", "only remounts the row…") rely on
-  // a non-Production default to prove the badge actually reappears once recovery completes.
+  // Not 'Production', which never shows a badge or dot (see "UserProfilePopover server badge" and
+  // "UserProfilePopover non-production server dot"): the provider-registration recovery tests below
+  // ("recovers once…", "only remounts the row…") rely on a non-Production default to prove the
+  // badge/dot actually reappears once recovery completes.
   setMockSetting('internetSettings', { selectedServer: 'Development' });
   vi.mocked(sendCommand).mockClear();
   vi.mocked(logger.warn).mockClear();
@@ -645,6 +646,70 @@ describe('UserProfilePopover server badge', () => {
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     await screen.findByTestId('user-profile-action-network');
     expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+  });
+});
+
+// Unlike the row badge above, this dot lives on the toolbar trigger itself, so every assertion here
+// deliberately never opens the popover — that's the whole point of it existing.
+describe('UserProfilePopover non-production server dot (toolbar trigger)', () => {
+  test('is absent for Production', () => {
+    setMockSetting('internetSettings', { selectedServer: 'Production' });
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
+  });
+
+  test.each<ServerType>(['QualityAssurance', 'Development', 'Test'])(
+    'shows a dot for %s, without opening the popover',
+    (server) => {
+      setMockSetting('internetSettings', { selectedServer: server });
+      render(<UserProfilePopover />);
+      expect(screen.getByTestId('user-profile-non-production-dot')).toBeInTheDocument();
+    },
+  );
+
+  test('is decorative, so it is hidden from assistive technology', () => {
+    setMockSetting('internetSettings', { selectedServer: 'Development' });
+    render(<UserProfilePopover />);
+    expect(screen.getByTestId('user-profile-non-production-dot')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+  });
+
+  test('is absent while the internet settings data provider has not registered yet', () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
+  });
+
+  test('recovers once the internet settings data provider registers after first mount without it (PT-4417)', () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    setMockSetting('internetSettings', { selectedServer: 'Development' });
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
+
+    // The provider finishes registering after this first render — see NetworkSettingsRow's PT-4417
+    // doc comment for why a remount (via the shared retry key) is the only recovery path.
+    setMockSetting('internetSettingsProviderAvailable', true);
+    act(() => {
+      emitNetworkObjectCreated({ id: 'paratextRegistration.internetSettingsDataProvider-data' });
+    });
+
+    expect(screen.getByTestId('user-profile-non-production-dot')).toBeInTheDocument();
+  });
+
+  test('is absent when the internet settings read fails', () => {
+    setMockSetting('internetSettings', newPlatformError('Internet settings unavailable'));
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
+  });
+
+  test('is hidden behind the registration reminder dot when both conditions hold, which always wins', () => {
+    setMockSetting('internetSettings', { selectedServer: 'Development' });
+    act(() => publishRegistrationValidity('invalid'));
+    render(<UserProfilePopover />);
+    expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
   });
 });
 

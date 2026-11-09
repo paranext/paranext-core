@@ -348,6 +348,17 @@ export const SEARCH_WHITESPACE_GROUP_PREFIX = 'ws';
 /** Options controlling how {@link IUsjReaderWriter.search} performs its search */
 export type UsjSearchOptions = {
   /**
+   * Zero-width tests that a match's start and end must each pass, unless that end sits where the
+   * block changes: an offset in the concatenated text where the adjacent text nodes belong to
+   * different block-level markers. A match failing one is discarded.
+   *
+   * This is how a word restriction reaches a word at a block's edge. The regex itself sees
+   * neighboring blocks joined with nothing between them, so a lookaround in it reads `Isaac` at the
+   * end of a paragraph and `And` at the start of the next as `IsaacAnd`, which is no word boundary.
+   * Unlike a lookaround, a test here cannot make the regex try a different length of match.
+   */
+  wordEdges?: { start?: RegExp; end?: RegExp };
+  /**
    * Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include in the search. When provided,
    * only text within markers whose style is in this set will be searched. Text inside markers not
    * in this set (e.g., footnotes, cross-references) will be excluded. When omitted, all text is
@@ -433,8 +444,31 @@ export type UsjReaderWriterOptions = {
    */
   markersMap?: MarkersMap;
   /**
-   * Whether the transformations should preserve invisible characters as in Paratext 9
-   * (`ScrText.Settings.AllowInvisibleChars`).
+   * The Paratext project setting "Allow invisible characters" (`AllowInvisibleChars` in
+   * `Settings.xml`, `ScrText.Settings.AllowInvisibleChars` in ParatextData) of the project this USJ
+   * belongs to. Pass the value of the project setting `platformScripture.allowInvisibleCharacters`
+   * for that project — `useProjectSetting(projectId, 'platformScripture.allowInvisibleCharacters',
+   * false)` in a web view, `getSetting('platformScripture.allowInvisibleCharacters')` on the
+   * project's `platform.base` PDP elsewhere. It can be left unset for USJ that belongs to no
+   * Paratext project, or when nothing reads USFM text from this instance.
+   *
+   * It decides how a no-break space (U+00A0) in the USJ text is spelled in the USFM this class
+   * writes ({@link IUsjReaderWriter.toUsfm}), matching what Paratext reads and writes for that
+   * project. It covers text content and the values of attribute markers such as `\ca`, `\va` and
+   * `\cat`; a value in a marker's `|` attribute list (`lemma`, a milestone's `who`, a figure's
+   * `src`) is written exactly as the USJ holds it, as ParatextData writes one:
+   *
+   * - `false`: the project's USFM spells a no-break space `~`, so U+00A0 in text is written as `~`.
+   *   The USJ text Platform.Bible gets for such a project never contains `~` (an attribute value
+   *   can: ParatextData keeps a `~` in most attribute values as written); a `~` that is in the text
+   *   anyway is written as `~` too, so Paratext saves it as a no-break space. A literal tilde
+   *   cannot be represented in text.
+   * - `true`: `~` is an ordinary character (a literal tilde) and U+00A0 is written as itself, so the
+   *   two stay distinct. Writing this project's USJ with `false` would turn every no-break space
+   *   into a literal tilde when the USFM is saved.
+   *
+   * Nothing else depends on it: searching and every location and index conversion read the USJ, and
+   * `~` and U+00A0 are each one UTF-16 code unit, so USFM indices are the same either way.
    *
    * Defaults to `false`
    */

@@ -6,6 +6,7 @@ import type {
   CheckSetupState,
   CheckSetupStatus,
 } from 'platform-scripture';
+import { isSyncEditBlockedError } from './sync-edit-blocked.util';
 
 export const CHECK_SCOPE_FILTER_STRINGS: { [key in CheckScopes]: LocalizeKey } = {
   Chapter: '%webView_checksSidePanel_scopeFilter_chapter%',
@@ -83,19 +84,24 @@ export type CheckInfo = {
 /**
  * Looks up every check's setup status for the project. A lookup that fails counts as `ready`, so a
  * runner that cannot answer does not blank the other checks' labels.
+ *
+ * @param onLookupRefused Called when a lookup fails because an automatic sync is running on the
+ *   project, so the caller can look the check up again once the sync ends
  */
 export async function buildChecksInfo(
   checks: CheckRunnerCheckDetails[],
   lookUpCheckSetupStatus: (checkId: string) => Promise<CheckSetupState>,
   getCheckName: (checkId: string) => string,
+  onLookupRefused?: () => void,
 ): Promise<CheckInfo[]> {
   return Promise.all(
     checks.map(async ({ checkId }) => {
       let state: CheckSetupState = { status: 'ready' };
       try {
         state = await lookUpCheckSetupStatus(checkId);
-      } catch {
+      } catch (error) {
         // Keep the default: no label is better than a wrong one
+        if (isSyncEditBlockedError(error)) onLookupRefused?.();
       }
       return {
         checkId,

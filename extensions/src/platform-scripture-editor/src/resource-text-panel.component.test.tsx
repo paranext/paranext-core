@@ -27,6 +27,9 @@ import { RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID } from './resource-book-not-availab
  */
 const setUsjSpy = vi.fn();
 
+/** Collects the `options` prop passed to each Editorial render. */
+const capturedEditorOptions = vi.fn();
+
 /**
  * Drives `useViewVisibility` from the tests.
  *
@@ -67,10 +70,12 @@ beforeAll(() => {
 });
 
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
-  Editorial: React.forwardRef((_props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+  Editorial: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+    capturedEditorOptions(props.options);
     React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
     return <div data-testid="editorial" />;
   }),
+  getDefaultViewOptions: () => ({ viewOptionsFor: 'default' }),
 }));
 
 const BIBLE_TEXT_MISSING_BOOK = 'This book does not exist in this Bible text.';
@@ -231,6 +236,7 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     onRetryChapter: vi.fn(),
     textDirection: 'ltr',
     copyLimit: undefined,
+    allowInvisibleCharacters: false,
     isSelecting: false,
     isInstalling: false,
     installFailed: false,
@@ -303,6 +309,21 @@ afterEach(() => {
   // which every test depends on to start out visible.
   vi.clearAllMocks();
   intersectionCallbacks.length = 0;
+});
+
+describe('ResourceTextPanel copy spelling', () => {
+  it.each([true, false])(
+    "gives the editor the project's allowInvisibleCharacters (%s) in its view options",
+    (allowInvisibleCharacters) => {
+      renderPanel({ allowInvisibleCharacters });
+
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          view: { viewOptionsFor: 'default', allowInvisibleCharacters },
+        }),
+      );
+    },
+  );
 });
 
 describe('ResourceTextPanel book not in this resource', () => {

@@ -1,6 +1,7 @@
 import { isPlatformError, PlatformError } from 'platform-bible-utils';
 import type { CheckRunnerCheckDetails, ICheckAggregatorService } from 'platform-scripture';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useOnSyncWriteLockReleased } from './hooks/use-sync-write-lock-release';
 import {
   buildChecksInfo,
   CheckInfo,
@@ -19,6 +20,9 @@ import {
  * @param getLocalizedCheckDescription Gives the name to show for a check
  * @param refreshKey Changing it looks every check up again while the old labels stay in place, for
  *   a change to the project that can alter a check's setup status
+ *
+ *   A lookup the Send/Receive write gate refuses while an automatic sync runs on the project leaves
+ *   that check unlabeled; the checks are looked up again when the sync ends.
  */
 export function useChecksInfo(
   checkAggregator: Pick<ICheckAggregatorService, 'lookUpCheckSetupStatus'> | undefined,
@@ -28,6 +32,15 @@ export function useChecksInfo(
   refreshKey: number,
 ): CheckInfo[] {
   const [checksInfo, setChecksInfo] = useState<CheckInfo[]>([]);
+  // Whether the latest lookups were refused by the write gate, and the nonce that repeats them
+  const wasLookupRefusedRef = useRef(false);
+  const [syncReleaseKey, setSyncReleaseKey] = useState(0);
+
+  useOnSyncWriteLockReleased(projectId, () => {
+    if (!wasLookupRefusedRef.current) return;
+    wasLookupRefusedRef.current = false;
+    setSyncReleaseKey((key) => key + 1);
+  });
 
   useEffect(() => {
     if (
@@ -45,10 +58,14 @@ export function useChecksInfo(
     let isCurrent = true;
 
     const fetchChecksInfo = async () => {
+      wasLookupRefusedRef.current = false;
       const newChecksInfo = await buildChecksInfo(
         availableChecks,
         (checkId) => checkAggregator.lookUpCheckSetupStatus(checkId, projectId),
         getLocalizedCheckDescription,
+        () => {
+          if (isCurrent) wasLookupRefusedRef.current = true;
+        },
       );
       if (isCurrent) setChecksInfo(newChecksInfo);
     };
@@ -58,7 +75,14 @@ export function useChecksInfo(
     return () => {
       isCurrent = false;
     };
-  }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription, refreshKey]);
+  }, [
+    checkAggregator,
+    projectId,
+    availableChecks,
+    getLocalizedCheckDescription,
+    refreshKey,
+    syncReleaseKey,
+  ]);
 
   return checksInfo;
 }

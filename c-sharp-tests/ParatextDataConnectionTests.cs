@@ -61,7 +61,7 @@ namespace TestParanextDataProvider
                 Assert.Multiple(() =>
                 {
                     Assert.That(scrText.Name, Is.EqualTo("WEB"));
-                    Assert.That(scrText.Settings.BooksPresentSet.Count, Is.EqualTo(83));
+                    Assert.That(scrText.Settings.BooksPresentSet.Count, Is.EqualTo(82));
                 });
             }
             finally

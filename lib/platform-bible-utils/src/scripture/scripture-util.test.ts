@@ -490,6 +490,39 @@ describe('normalizeScriptureSpaces', () => {
 });
 
 describe('areUsjContentsEqualExceptWhitespace', () => {
+  describe('ignoreDirectionMarks', () => {
+    const usjWith = (text: string): Usj => ({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: [text] }],
+    });
+
+    it('treats added LRM/RLM as equal only when asked', () => {
+      const plain = usjWith('In the beginning');
+      const marked = usjWith('In\u200E the\u200F beginning\u200E');
+      expect(areUsjContentsEqualExceptWhitespace(plain, marked)).toBe(false);
+      expect(
+        areUsjContentsEqualExceptWhitespace(plain, marked, { ignoreDirectionMarks: true }),
+      ).toBe(true);
+    });
+
+    it('does not treat other bidi characters as ignorable', () => {
+      expect(
+        areUsjContentsEqualExceptWhitespace(usjWith('abc'), usjWith('a\u061Cbc'), {
+          ignoreDirectionMarks: true,
+        }),
+      ).toBe(false);
+    });
+
+    it('still reports a real text change', () => {
+      expect(
+        areUsjContentsEqualExceptWhitespace(usjWith('abc'), usjWith('a\u200Ebd'), {
+          ignoreDirectionMarks: true,
+        }),
+      ).toBe(false);
+    });
+  });
+
   it('should return true for crazy whitespace around and inside in-line markers', () => {
     const usj1: Usj = {
       type: 'USJ',

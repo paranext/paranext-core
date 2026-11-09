@@ -21,13 +21,8 @@ import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
 // only `papi`, so this package must never become a runtime import here (see the note at the top of
-// this file). `USJ_VERSION` is used solely under `typeof`, so `import type` keeps it erased.
-import type {
-  MarkerContent,
-  MarkerObject,
-  Usj,
-  USJ_VERSION,
-} from '@eten-tech-foundation/scripture-utilities';
+// this file).
+import type { MarkerContent, MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
   formatReplacementString,
@@ -49,10 +44,11 @@ import {
   UsjReaderWriter,
   UsjTextContentLocation,
 } from 'platform-bible-utils';
+import { isSyncRequestRemovedError, REQUEST_SYNC_COMMAND } from 'platform-bible-utils/experimental';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
-import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
+import type { SyncRequestOptions, UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
 import type { InternetUse } from 'paratext-registration';
 import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
@@ -274,21 +270,6 @@ export function valuesAreDeeplyEqual(a: unknown, b: unknown): boolean {
 // Alias that makes the "across iframes" intent explicit for callers that prefer it.
 // Exported with this syntax to preserve the TSDocs
 export { valuesAreDeeplyEqual as deepEqualAcrossIframes };
-
-/**
- * Corrects editor USJ version from 3.1 to 3.0. Returns a shallow clone of the object passed in.
- *
- * Currently, this is appropriate to do because the editor seems to work properly with 3.0, but it
- * doesn't handle the version well right now. It always sets it to 3.1 even if it started as 3.0.
- * When we better deal with USFM version differences and when Paratext 9 adds 3.1.2 support, we will
- * need to change how we're handling this.
- */
-export function correctEditorUsjVersion(editorUsj: Usj): Usj {
-  // Use version 3.0 because `ParatextData.dll` serves 3.0 but the editor isn't handling version
-  // well right now
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
-}
 
 /** Whether `jsonPath` names the very last item of `usj`: the last item at every level. */
 function isFinalItemOfDocument(usj: Usj, jsonPath: string): boolean {
@@ -876,15 +857,11 @@ export function decideNoteSessionUpdate(state: NoteSessionUpdateState): NoteSess
  * The notes in a document the editor produced, in document order - the list the footnotes pane
  * shows and `EditorRef.getNoteIndex` indexes.
  *
- * The editor stamps its documents with a USJ version the markers map is not declared for, and
- * `UsjReaderWriter` warns on every read when that happens; this corrects the version first (see
- * {@link correctEditorUsjVersion}) so reading the notes on every keystroke logs nothing.
- *
  * @param editorUsj A document from the editor (`EditorRef.getUsj`) or the PDP
  * @returns The notes, as `UsjReaderWriter.findAllNotes` returns them
  */
 export function findEditorUsjNotes(editorUsj: Usj): MarkerObject[] {
-  return new UsjReaderWriter(correctEditorUsjVersion(editorUsj), {
+  return new UsjReaderWriter(editorUsj, {
     markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
   }).findAllNotes();
 }
@@ -944,8 +921,7 @@ export function resolveNoteVerseRef(
 ): SerializedVerseRef | undefined {
   if (!usj || noteIndex < 0) return undefined;
   try {
-    // Corrected for the same reason as in `findEditorUsjNotes`.
-    const usjReaderWriter = new UsjReaderWriter(correctEditorUsjVersion(usj), {
+    const usjReaderWriter = new UsjReaderWriter(usj, {
       markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
     });
     const note = usjReaderWriter.findAllNotes()[noteIndex];
@@ -2049,15 +2025,51 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 // #region Project-Switch Sync
 
 /**
+ * Asks the Send/Receive extension's sync queue to sync `projectIds` as an automatic sync. A request
+ * that was taken out of the queue before it ran (the user removed it, or it was dropped at quit) is
+ * not a failure and only logs at info. Any other rejection is rethrown for the caller to report.
+ *
+ * The queue skips an automatic request for a project whose sync is already running or waiting with
+ * at least the same scope (a request that includes connected resources is not covered by a waiting
+ * one that does not), so edits made during that run go out with the project's next sync.
+ *
+ * The mode, the first-run consent and `suppressNotification` are decided by the caller when it
+ * requests, and a queued request runs later under that decision. If a sync is already running, the
+ * request can wait behind it, and the user can switch interface mode before it starts: a queued
+ * switch-to-Power sync then still runs after the switch back to Simple, and a queued Simple
+ * project-switch sync still runs, without notifications, after a switch to Power. The window needs
+ * a running sync plus a mode change before the queued run starts, and the sync only sends or
+ * receives what the project had pending, so it is accepted. The queue itself re-checks only the
+ * scheduled-sync engine's own "still wanted" condition at run start.
+ */
+async function requestAutoSync(
+  papi: typeof PapiBackend,
+  projectIds: string[],
+  options: SyncRequestOptions,
+): Promise<void> {
+  try {
+    await papi.commands.sendCommand(REQUEST_SYNC_COMMAND, projectIds, 'autoSync', options);
+  } catch (e) {
+    if (isSyncRequestRemovedError(e)) {
+      papi.logger.info(
+        `Automatic sync of ${projectIds.join(', ')} was removed from the sync queue`,
+      );
+      return;
+    }
+    throw e;
+  }
+}
+
+/**
  * Fire-and-forget helper that flushes the outgoing project, then syncs the incoming one. Each sync
  * is independently error-isolated so a failure in one doesn't block the other. Called after a
  * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
  * mode switch — by which time the user may be back in Power mode.
  *
- * Uses `paratextBibleSendReceive.syncProjects` for the incoming project because it also pulls
- * connected resources and translation partners (deep sync). Uses the shallower
- * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
- * flush any local edits — a full deep sync is unnecessary on the way out.
+ * Both syncs request through `paratextBibleSendReceive.requestSync` (the sync queue). The incoming
+ * project asks for a deep sync (it also pulls connected resources and translation partners). The
+ * outgoing project asks for the shallower plain sync because we only need to flush any local edits
+ * — a full deep sync is unnecessary on the way out.
  *
  * The incoming project syncs LAST because these are two separate backend runs and the sync
  * indicator reports the most recent one. Whichever runs last is the verdict the user is shown, and
@@ -2078,11 +2090,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * `interfaceMode` is the caller's read of `platform.interfaceMode` (`undefined` when that read
  * failed). The incoming sync suppresses the dotnet progress toast only for a known `'simple'`,
  * where the toolbar sync indicator is its surface; any other value keeps the toast, since the
- * indicator may not be mounted. The flag is sent only when it is `true`: a dotnet `SyncProjects`
- * that predates the parameter rejects a two-argument call, so omitting it keeps the toast-keeping
- * cases working against that backend. The outgoing `sendReceiveProjects` keeps its toast: its
- * `suppressNotification` would also hide the failure toast, which is this claimless sync's only
- * failure surface.
+ * indicator may not be mounted. The outgoing request keeps its toast: `suppressNotification` would
+ * also hide the failure toast, which is this claimless sync's only failure surface.
  *
  * Gated on first-run sync consent: neither Send/Receive command runs unless the
  * `platform.getAutomaticSyncConsent` command answers `granted`. That command is the main process's
@@ -2121,9 +2130,9 @@ export async function syncOnProjectSwitch(
 
   if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
     try {
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
-        outgoingProjectId,
-      ]);
+      // Skipped when the outgoing project's sync is already running or waiting; edits made during
+      // that run go out with the project's next sync.
+      await requestAutoSync(papi, [outgoingProjectId], { includeConnected: false });
     } catch (e) {
       papi.logger.warn(
         `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
@@ -2136,12 +2145,10 @@ export async function syncOnProjectSwitch(
     // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
     // runs leaves it with no progress surface until it ends. Accepted in
     // `adr-sync-surface-per-interface-mode`.
-    const flag: [true] | [] = interfaceMode === 'simple' ? [true] : [];
-    await papi.commands.sendCommand(
-      'paratextBibleSendReceive.syncProjects',
-      [incomingProjectId],
-      ...flag,
-    );
+    await requestAutoSync(papi, [incomingProjectId], {
+      includeConnected: true,
+      ...(interfaceMode === 'simple' ? { suppressNotification: true } : {}),
+    });
   } catch (e) {
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
@@ -2309,8 +2316,9 @@ const projectIdsDecidingSyncOnSwitchToPower = new Set<string>();
  *   user who started in Power mode never sees the wizard that records consent. Nor does
  *   `notYetSynced`: the switch is the user's own act, and the unsent changes are what it sends. See
  *   `adr-switch-to-power-sends-unsent-changes`.
- * - The mode no longer reads `'power'` when the sync would start: the switch back to Simple makes its
- *   own (consent-gated) sync decision, and anything still unsent goes on the next switch to Power.
+ * - The mode no longer reads `'power'` when the sync is requested: the switch back to Simple makes
+ *   its own (consent-gated) sync decision, and anything still unsent goes on the next switch to
+ *   Power.
  * - The saved internet setting turns Send/Receive off (`VpnRequired` or `Disabled`). Whether the
  *   machine is actually online cannot be known without trying, so offline is left to the sync's own
  *   failure notification.
@@ -2346,7 +2354,7 @@ export async function syncOnSwitchToPower(
   if (!shouldSync) return;
 
   try {
-    await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+    await requestAutoSync(papi, [projectId], { includeConnected: false });
   } catch (e) {
     papi.logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`);
   }

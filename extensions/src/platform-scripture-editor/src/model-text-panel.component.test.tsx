@@ -43,9 +43,9 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
     }, []);
     return <div data-testid="editorial" />;
   }),
-  // The component reads `getDefaultViewOptions()` at module scope; the mocked component below
-  // doesn't inspect the returned `view` options, so an empty object is sufficient.
-  getDefaultViewOptions: () => ({}),
+  // A recognizable stand-in for the editor's default view options, so a test can see that the
+  // panel's `view` starts from them.
+  getDefaultViewOptions: () => ({ viewOptionsFor: 'default' }),
 }));
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
@@ -185,6 +185,7 @@ function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanel
     showResourcePicker: vi.fn(async () => undefined),
     getResourceChapter: vi.fn(async () => ({ usj: undefined, textDirection: 'ltr' })),
     resourceCopyLimit: undefined,
+    allowInvisibleCharacters: false,
     ...overrides,
   };
 }
@@ -1066,6 +1067,26 @@ describe('ModelTextPanel', () => {
       ),
     );
   });
+
+  it.each([true, false])(
+    "gives the editor the project's allowInvisibleCharacters (%s) in its view options",
+    async (allowInvisibleCharacters) => {
+      renderPanel({
+        modelTextsState: readyState(configuredModelText('uid-web')),
+        dblResources: [INSTALLED_RESOURCE],
+        getResourceChapter: vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' })),
+        allowInvisibleCharacters,
+      });
+
+      await waitFor(() =>
+        expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            view: { viewOptionsFor: 'default', allowInvisibleCharacters },
+          }),
+        ),
+      );
+    },
+  );
 
   it('blocks copying from the render that changes chapter until the new chapter has loaded', async () => {
     let resolveChapter2: (value: {

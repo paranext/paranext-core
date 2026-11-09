@@ -1,0 +1,13 @@
+\id 1SA - TJs USFM Test
+\h 1 Samuel
+\toc1 1 Samuel
+\mt1 1 Samuel
+\imt Introduction
+\is Introduction section heading
+\ip An introduction paragraph. Introduction material precedes the first chapter, so it lives in this book-start fixture rather than in a 2 Samuel chapter.
+\io1 Outline entry one \ior 1.1-4.22\ior*
+\io2 Outline entry two \ior 5.1-7.17\ior*
+\ie
+\c 1
+\p
+\v 1 The first verse after the introduction.

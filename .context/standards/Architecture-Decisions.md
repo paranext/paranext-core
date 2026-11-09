@@ -1224,6 +1224,40 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   PT-4602 (open as of 2026-09-21), since it's a code fix in the Studio patch, not a doc fix.
 - **Source:** PT-4483, review of #2771.
 
+## adr-collab-ot-two-coordinate-systems: The editor keeps two named OT coordinate systems rather than unifying them
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** The scripture editor's collab/OT layer counts document positions in two subtly
+  different ways, and they diverge only in editable marker mode: the doc delta that
+  `DeltaOnChangePlugin` serializes counts an editable chapter embed (1 unit) PLUS its glyph text
+  (`"\c 1 "`, 5 units), while `$applyUpdate`'s insert/delete traversals treat every element embed
+  as one opaque unit. Producing an op in one counting and applying or reverse-looking-it-up in the
+  other lands it offset by the glyph length of each preceding editable chapter — a real bug
+  (footnote-popover Save ops displaced by `"\c 1 "`) before the two countings were made explicit.
+  The standard-view epic (PT-4186) deferred the "apply vs delta-doc" question; PT-4197's audit
+  requires the decision recorded.
+- **Decision:** Keep BOTH countings and name them: `OTCoordinateSystem` is an explicit two-member
+  type (`"delta-doc" | "apply"`) in scripture-editors
+  `libs/shared-react/src/plugins/usj/collab/delta-common.utils.ts`, and the position helpers take
+  it as a parameter. The TSDoc at that definition is the normative specification — the counting
+  rules, a worked example, and the choose-which-one rule by caller (reading or agreeing with the
+  `DeltaOnChangePlugin`/`getEditorDelta` op stream → `"delta-doc"`; building ops for `$applyUpdate`
+  or reverse-looking-up where it placed a node → `"apply"`). This log entry records that the
+  decision was made and where the rules live; it does not restate them.
+- **Alternatives:**
+  - *Unify on one counting.* Rejected for now: the OT collab path was never fully completed, no
+    live flow routes ops across an editable chapter into `$applyUpdate`, and unifying editable-mode
+    doc-delta coordinates with the apply-side traversals is future collab work, not a bug fix.
+  - *Leave the difference implicit.* Rejected: that is what produced the displaced-op bug — the two
+    countings coincide in every non-editable marker mode, so an implicit convention looks correct
+    until an editable chapter precedes the op.
+- **Consequences:** Callers must say which counting they mean, and the type surfaces the question
+  at every new call site. The remaining editable-chapter divergence between the two systems is
+  accepted. **Revisit** when OT collab work resumes and ops can cross an editable chapter into
+  `$applyUpdate` — that is when unification earns its cost.
+- **Source:** PT-4197 (WI-10 audit, item 3).
+
 ## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
 
 - **Date:** 2026-09-15
@@ -2968,6 +3002,66 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
 
+## adr-editor-nbsp-spelling-follows-project-setting: The editor learns the project's `AllowInvisibleChars` through `ViewOptions`, and Standard view holds a stored U+00A0 as an internal U+001A stand-in, drawn as a blank, where `~` is an ordinary character
+
+- **Date:** 2026-10-26
+- **Status:** Accepted (2026-10-29) as the interim design; PT-4931 is meant to replace it.
+- **Context:** Paratext's per-project `AllowInvisibleChars` (`platformScripture.allowInvisibleCharacters`)
+  decides how the USFM spells a no-break space. Measured with ParatextData 9.5: off, the file spells
+  U+00A0 as `~` and a literal tilde cannot exist; on, the file, the USX/USJ and the save all carry
+  `~` and U+00A0 verbatim and distinct. Standard view shows a stored U+00A0 as `~`, so an editor
+  that does not know the setting saves a literal `~` as U+00A0 in a project with it on. Standard
+  view cannot hold the U+00A0 itself: a displayed NBSP means a space (a space-run member or a marker
+  separator) throughout the marker-edit engine.
+- **Decision:** The editor gets the setting as `ViewOptions.allowInvisibleCharacters`, which the
+  scripture editor web view sets for every view type (`getEditorViewOptions`) and the footnote
+  editor inherits; `getViewMode` ignores it. With it on, Standard view holds a stored U+00A0 as
+  `NBSP_STAND_IN`, U+001A (SUBSTITUTE) — in its tree, in the settle's USFM fragments, in paste and
+  for a typed U+00A0 — and `~` is an ordinary character. One helper in the editor
+  (`getNbspSpelling`) supplies the spelling to every layer.
+  - **Why U+001A:** ParatextData's `ScrText.GetText` turns U+0001–U+0008 and U+000E–U+001F into
+    spaces on every read (measured), so no project text can hold it and the stand-in collides with
+    nothing. Bidi class BN, line-break class CM (no break before it), one grapheme. Not U+0000 (the
+    editor's settle-scope signature separator), U+000B/U+000C (whitespace to JavaScript) or
+    U+001C–U+001F (bidi separators).
+  - **It looks like a no-break space:** a one-glyph font family, `PlatformEditorNbspStandIn` (an
+    empty glyph a quarter of an em wide, `unicode-range: U+1A`), draws it as a blank about the width
+    of a space. The editor adds the face to its document through the CSS Font Loading API, from
+    bytes, so no content security policy is involved. Chromium draws a control character as a box
+    unless the FIRST family in the font stack has a glyph for it, so the family leads every
+    Scripture `font-family`, both in the editor's generated CSS and in host stylesheets.
+  - **It never leaves the editor:** `getUsj`/`onUsjChange`, the ops the editor gives out
+    (`onUsjChange`, `getNoteOps`, `getOpsAfterNote`, `takeOpsAfterNote`, and the `getNoteOps` a
+    note caller's click handler receives), the clipboard and drag flavors, annotation callback text
+    and note-caller previews all carry U+00A0. Ops going out also carry a space where the view shows
+    a space of a run as an NBSP, and ops coming in (`applyUpdate`, `replaceEmbedUpdate`) take a
+    U+00A0 that is not a marker's separator as a stored no-break space, so the footnote popover's
+    op round trip keeps both. Text a host reads from the editor's DOM still holds the stand-in; host
+    code respells it with `toUsfmNbspSpelling`.
+  - **Nothing from outside becomes it:** Standard view turns every incoming C0 control character but
+    tab, LF and CR into a space (load, paste, drop, typing, applied ops), as ParatextData would read
+    it back; a drop goes in as a paste of the same data does.
+- **Alternatives:** **`⍽` (U+237D), a visible picture of a no-break space** — rejected: U+237D can
+  occur in Paratext 9 text, so a literal one would be saved as a no-break space. **A noncharacter or private-use code point** — private use is used by some projects' scripts;
+  a noncharacter has no blank rendering and the editor already uses U+FDD0 as an internal placeholder.
+  **A top-level `EditorOptions` field** (where `styleInfo` lives) — rejected: every place the
+  whitespace regime is decided already receives `ViewOptions`, so a separate field would have to be
+  threaded to all of them and a missed one would load under one spelling and save under another.
+  **Hold the real U+00A0, as Paratext 9 does** — deferred to PT-4931, as the long-term fix that
+  replaces this decision. Standard view would keep a stored U+00A0 as itself and tell it apart
+  from the engine's display spaces some other way (for example, by node identity), and the
+  stand-in, its font and the incoming control-character rule would go. Deferred, not done now,
+  because the marker-edit engine reads a displayed U+00A0 as a space in dozens of rules (space
+  runs, separators, lone-NBSP spacers, positions, caret), so the change is too risky to make just
+  before a release. **Escape a literal `~` instead** — no 1:1 spelling exists, and positions
+  depend on display and data lengths agreeing.
+- **Consequences:** No project character is lost to the stand-in. Every editing host must pass the
+  setting, or Standard view corrupts the project's tildes, and every host stylesheet that sets a
+  Scripture `font-family` of its own must name `PlatformEditorNbspStandIn` first or the stand-in
+  shows as a box. The ops Standard view hands out with the setting on carry spaces, not U+00A0, for
+  displayed space runs. Revisit with PT-4931, which is meant to retire the stand-in.
+- **Source:** PT-4197 data-fidelity catalog row AI-1.
+
 ## adr-editor-opener-rename-renames-closer: A char opener rename renames its closer, and a pending `getUsj()` equals the settled document
 
 - **Date:** 2026-10-01
@@ -3315,6 +3409,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-09-09
 - **Status:** Accepted
+- **Amended by:** [adr-find-replace-confirms-marker-deletion](#adr-find-replace-confirms-marker-deletion-a-confirmed-replace-may-delete-markers-but-never-one-end-of-a-pair-or-a-chapter) (2026-10-30). The marker-deletion guard below is no longer unconditional: Replace asks instead of being disabled, and a confirmed Replace may delete whole markers. Every marker now counts, not only structural markers and notes, and `usfmDeletesMarkers` is gone, because `replace()` decides with `getMarkerReplaceAction`; `isNoteMarker` now decides only which closers end everything opened inside them. Whole-word Find at a block boundary, left out of scope below, is fixed there too.
 - **Context:** `UsjReaderWriter.search` builds the text it searches by concatenating every USJ text
   node with no separator, and paragraph-final whitespace is stripped during the USFM→USX conversion,
   so a phrase copied out of the editor across a paragraph, table, or sidebar break (e.g. `of Abraham.
@@ -3632,6 +3727,141 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   saved books, such as a New Testament resource, would otherwise empty the saved scope for good.
   One deliberate exception: a picker edit made while books are hidden this way commits the visible
   set and drops the hidden books, so that Select all and Clear all act on the whole scope.
+
+## adr-find-replace-confirms-marker-deletion: A confirmed Replace may delete markers, but never one end of a pair or a chapter
+
+- **Date:** 2026-10-30
+- **Status:** Accepted, with the structure-protection answer provisional until UX confirms it (see Consequences)
+- **Context:** Find searches text with the markup removed, so a match can start in one verse,
+  paragraph, footnote or character style and end in the next, and Replace removes all the USFM
+  between its ends. `adr-find-block-boundary-whitespace` refused deletion of structural markers and
+  notes outright and disabled Replace on those results, but it did not count character markers, so
+  `Lord God` in `\nd Lord\nd* God` deleted `\nd*` and left a style that never closes. UX decided that
+  a match may keep crossing markers, that a result shows the markers it includes, that a single
+  Replace asks before deleting them, with **Cancel** and **Replace (including markers)**, and that a
+  match holding only one end of a pair is skipped, with a message and one button, **OK**.
+- **Decision:**
+  - Every marker in a match counts, not only structural ones and notes. `FindResult.removedMarkers`
+    lists them all.
+  - `replace()` deletes markers only when the caller passes `allowMarkerDeletion`, which requires
+    `expectedUsfm` so that the agreement holds only for the text the user saw. It is per call and
+    explicit; a web view that has not asked cannot reach it by accident.
+  - Three refusals stand even so, in every interface mode: **one end of a pair**, which leaves a
+    style that never ends or a note with no start; **a chapter marker**, which merges two chapters;
+    and structure protection. One end of a pair is found by counting, for each pair in the span, the
+    ends it holds without the other, in order: closers with no opener before them in the span, and
+    openers with no closer after them. The replacement must hold exactly as many of each. The two
+    counts are kept apart rather than netted, because `LORD\nd* said to my \nd Lord` holds the end of
+    one `\nd` span and the start of another, which a net count would cancel out and a confirmed
+    Replace would merge into one span. Counting catches that, a replacement that keeps one end of a
+    balanced pair or swaps its ends (`\nd* X \nd`), and one that keeps an inner closer of a note it
+    deletes (`X\fq*`). A pair only the replacement holds is not checked, since adding markers is
+    editorial policy. The rest of the chapter does not change, so checking the span with its
+    replacement gives the whole chapter's answer, and the web view and `replace()` cannot disagree.
+  - Refusing one end of a pair is a temporary safeguard against broken text, not the final design.
+    Replacing one end can be intended, such as replacing every start marker matching one thing and
+    then every end marker matching another, so Find with markers (PT-3199) may allow it behind a
+    clearly labeled Replace button.
+  - `getMarkerReplaceAction` is the one place that makes these decisions. The Find web view asks it
+    before the pre-replace version-history commit, so backing out leaves nothing behind, and
+    `replace()` enforces its answer. A refused match is skipped: one `ReplaceMarkersPrompt` either
+    asks or says so with only OK, and the selection stays on the result. A replacement that puts
+    every marker back deletes nothing and asks nothing.
+  - `ReplaceMarkersPrompt` is built from `platform-bible-react`'s `Dialog`, not `platform.confirm`,
+    because the confirm shows the matched text with each marker it deletes marked, and
+    `platform.confirm` takes only a string. That display is what the user agrees to, and what
+    `allowMarkerDeletion` ("the user has seen the markers in each range") rests on; a bare list such
+    as `\nd, \nd*, //` would weaken that consent. A marker the replacement puts back is shown but not
+    marked, decided by `getIsMarkerLost`, which `getMarkerReplaceAction` also decides on, and each
+    deleted one is struck through and followed by text only a screen reader reads. The button labels and the selection staying on the
+    result would work with `platform.confirm` too. It is also not modal for the whole app, and sits
+    beside the result it is about. It is an alert dialog named by its title and described by its
+    message and the marked match, keeps focus inside, and closes on Escape, as `platform.alert` does.
+    A press outside it does not close it, as with Radix's `AlertDialog`, so the second press of a
+    double-click on Replace cannot dismiss it, and the second click of a double-click is ignored on
+    **Replace (including markers)** and **OK**, so it cannot answer a prompt nobody has read. It has no trigger, so it
+    hands focus back itself: to the element that had focus when Replace opened it, or the nearest
+    focusable element around it that is still there. While it is open, an edit made elsewhere does not re-run the search, which would close it under the user;
+    the re-search runs once it closes, and a confirm still writes only if the match reads as the
+    user saw it. A `platform.confirm` that accepts rich content would let it go; that is separate
+    work.
+  - Results show the markers only where Replace exists (Find's `shouldShowMarkers`, which the web
+    view sets from the same flag that offers Replace). Simple mode has no Replace, and nothing else
+    there exposes USFM markers.
+  - Which markers pair comes from the markers map (`isCloseable`, `independentClosingMarkers`), plus
+    `\fs`, `\wr`, `\xtSee` and `\xtSeeAlso`, which it omits, and any marker whose `*` closer is in the
+    match or the replacement. Milestones are told by their spelling instead, since the map types
+    every custom `\z` marker as one: `-s`/`-e` pair by name plus `sid`/`eid` when given, and a bare
+    `\*` closes one on the spot. The id is read whether written out (`eid="q1"`) or bare
+    (`\qt-e |q1\*`), the form the USFM writer uses when it is the only attribute and the map makes it
+    the marker's default attribute. Which attribute a bare value sets comes from the map, not the
+    marker's side: `\qt-s`'s default is `who`, so `\qt-s |Pilate\*` names a speaker, not an id. Any
+    other marker counts as single, so confirming can strand the closer of a custom pair whose other
+    end is outside the match; looking it up in the project's stylesheet waits on PT-4489. A marker
+    whose closer is optional still counts: if a match holds `\fq` and not where it ends, the text
+    after the match is in that style, and deleting `\fq` restyles it. A note's closer ends whatever
+    opened inside it, so a whole note is whole even though its `\ft` has no closer of its own; which
+    closers do that is `isNoteMarker`'s answer from the map (`\f`, `\fe`, `\x`, `\ef`, `\ex`,
+    `\efe`, not `\ft` or `\xt`). Other closers end only their own opener, so a style that overlaps a
+    milestone is not ended by it. The cost is that a match ending exactly where such a marker's
+    content ends is skipped too.
+  - Preserve case changes only the replacement's text, never its markers, verse numbers or
+    attributes. An attribute is a `|…` that ends right before a closer; a `|` anywhere else is text.
+  - An optional line break (`//`) counts as a marker, though it has no backslash.
+  - A word restriction is enforced by `UsjReaderWriter.search` through `wordEdges` rather than by
+    lookarounds in the regex, because only `search` knows where blocks change. Both ends of a match
+    pass on a block change; no separator enters the searched text, so matches still cross blocks.
+    `search` tests a match only after the regex has chosen its length, so the one place a plain
+    pattern's length can vary at its end — a trailing whitespace run under Ignore whitespace
+    differences — tries the end-of-word lookahead first and falls back to the shortest run for
+    `search` to judge. Without that, `and ` over `and ` + ZWNJ + `.` would stop the run before the
+    word-forming ZWNJ and find nothing.
+- **Alternatives considered:**
+  - **Keep the markers in place.** Rejected by UX: Replace cannot know where in the replacement a
+    marker should go. Replacing `and he eat \w bread\w*` with `and he drank wine` is the example.
+  - **Separators between text nodes**, so that a match cannot cross by accident. Rejected: a match
+    may cross markers on purpose. A separator would also have to survive every project's word-forming
+    character classes, which can include unassigned code points.
+  - **Match within one text run, as Paratext 9's Replace does.** Rejected for the same reason, and
+    because it fails silently: Paratext 9's Find matches where its Replace reports nothing.
+  - **A second search pass over each block for whole-word search.** Rejected: it cannot see a phrase
+    spanning blocks, where one end fails a lookaround and no single block holds the phrase.
+  - **Whole-word lookarounds with a post-filter in regex mode too.** Rejected: a lazy user pattern
+    relies on the engine backtracking to satisfy the lookaround, so regex mode keeps its lookarounds.
+  - **Keep the lookarounds in the regex for plain search, and use `wordEdges` only at block
+    boundaries.** Rejected: `wordEdges` can only discard matches, and a lookaround has already
+    discarded the word at a block's edge, which reads `IsaacAnd` in the joined text. Any regex that
+    lets that word through also lets through every in-word candidate, which looks the same, so the
+    post-filter's cost — `search` rejecting each in-word candidate in turn, where a lookaround would
+    skip it inside the engine — comes with block-edge words under the current `search` API.
+- **Consequences:** `the Lord` over `\nd Lord\nd*` holds only the opening marker, so it can be found
+  but not replaced; a user searches `Lord` or `the Lord said` instead. Extending a match to take in
+  the start marker just before it (PT-4979) is on hold until PT-3199 is designed. A structure marker
+  under structure protection is skipped the same way, but that answer is still open with UX; it is
+  one line in `getMarkerReplaceAction`, and is unreachable from the UI today because Replace is
+  Power-only and protection is Simple-only. Skipping chapter markers is stricter than the ticket
+  asked, confirmed with the developer; it should relax only with a decision on what merging two
+  chapters does to their notes and references.
+
+  Replace All stays disabled and never passes `allowMarkerDeletion`. It takes only the results for
+  which `getMarkerReplaceAction` answers `replace`, judged against what would be written for each
+  after any preserve-case change, so it and `replace()` cannot disagree, and it skips the rest:
+  every result whose term would delete a marker, which now includes character markers, and every
+  one a single Replace would skip. Its messages, and the toast when `replace()` refuses a deletion,
+  say "a marker" rather than listing kinds, since every marker counts. A refusal of one end of a
+  pair gets a toast of its own, as the other refusals do, rather than the generic failure. Regex-mode whole-word search keeps the block-edge gap, and a
+  note boundary is still not a word boundary: `Isaac\f + \ft And\f*` reads `IsaacAnd`, because a note
+  is not a block. Revisit all of this when Find can search for markers (PT-3199); an option to match
+  markers or not may make sense then.
+- **Key symbols:** `getMarkerReplaceAction`, `extractGuardedMarkers`, `markersLoseOneEnd`
+  (`extensions/src/platform-scripture/src/find/structure-protection.util.ts`);
+  `splitUsfmForMarkerDisplay`, `mustMarkerBeClosed`, `transformUsfmText`
+  (`extensions/src/platform-scripture/src/find/usfm-tokens.util.ts`);
+  `ReplaceMarkersPrompt` (`extensions/src/platform-scripture/src/find/replace-markers-prompt.component.tsx`);
+  `buildSkippedMatchMessage` (`extensions/src/platform-scripture/src/find/find.utils.ts`);
+  `ReplaceOptions` (`extensions/src/platform-scripture/src/types/platform-scripture.d.ts`);
+  `UsjSearchOptions.wordEdges` (`lib/platform-bible-utils/src/scripture/usj-reader-writer.model.ts`).
+- **Source:** PT-4969 (parent PT-4910). PT-3199 for searching with markers.
 
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 
@@ -4296,6 +4526,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     pane-scoped fonts-only sheet (`FOOTNOTE_ROWS_SELECTOR`), so a row keeps its font and size when it
     is opened for editing. Rows take fonts only (family, size, per-marker family). Standard view's row
     editor still applies per-marker size and style that read-only rows do not; this is accepted.
+- **Amended 2026-10-30 (PT-4974):** the fonts-only sheet now comes from the editor package's
+  `generateUsjFontCss` (scripture-editors #42), which shares its font helpers with
+  `generateUsjCss`; core's copy (`generateProjectFontCss`) and the parity tests that pinned it are
+  deleted. `useProjectStylesheet` and `useFootnotePaneFontStylesheet` call it, the latter with
+  `FOOTNOTE_ROWS_SELECTOR` as `containerSelector`. The decision itself is unchanged. The
+  `release-prep` branch keeps core's copy.
 - **Amended 2026-11-06 (PT-4086, UX review):** Simple's `\s`-`\s3` headings no longer have a size
   of their own. Their gutter rule now only places them, as upstream
   (eten-tech-foundation/scripture-editors#486), so they take the formatted view's standard heading
@@ -7542,6 +7778,45 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4551 (Ian NN-3.3 (a) and (d)), with the overflow mechanism measured in the running
   app rather than inferred.
 
+## adr-platform-error-code-crosses-json-rpc: A C# exception's platform error code travels in `error.data.data.platformErrorCode`, and main relays that code and no other error data
+
+- **Date:** 2026-10-30
+- **Status:** Accepted
+- **Context:** C# services throw `PlatformErrorCodes.WithCode(code, message)`, which stores the
+  code in `Exception.Data`, and `doRequest` in `network.service.ts` was written to read it from
+  `error.data.data.platformErrorCode`. It never arrived: StreamJsonRpc's default
+  `ExceptionStrategy` (`CommonErrorData`) serializes the exception's type, message, stack, HResult
+  and inner exception but not `Exception.Data`, and `RpcServer.processMessage` in main rebuilt
+  every relayed error response from its message and JSON-RPC code. So TypeScript callers matched
+  localized message text instead, which works only in the languages the matcher lists (the
+  Send/Receive queue's "backend busy, retry" check was the case that surfaced it).
+- **Decision:** `PapiJsonRpc` (`c-sharp/PapiJsonRpc.cs`), the `JsonRpc` subclass `PapiClient`
+  uses, overrides `CreateErrorDetails`: when the exception carries a code (`TryFindCode`, which
+  also looks through a `TargetInvocationException` and a single-exception `AggregateException`),
+  the `CommonErrorData` is replaced by `PlatformCodedErrorData` — the same fields plus
+  `data: { platformErrorCode }`. An exception without a code keeps the default shape. Main relays
+  an error response's `code`, `message` and `error.data.data.platformErrorCode` and nothing else
+  from `error.data`: the exception type names, stack and inner exceptions can hold absolute paths
+  with the user's name, and browser pages connect to the same WebSocket.
+- **Alternatives:**
+  - *`ExceptionStrategy = ISerializable`.* Serializes the whole exception, `Data` included, but
+    changes the JSON-RPC error code and the shape of every error for every caller, and couples the
+    wire to .NET's exception serialization. Rejected.
+  - *Throw `LocalRpcException` with `ErrorData` at each site.* Works without a subclass, but every
+    `WithCode` call site (Manage Books, Enhanced Resources, Send/Receive) would change, and the
+    common error fields would be lost unless each site rebuilt them. Rejected.
+  - *Encode the code in the message.* That is the message matching this replaces. Rejected.
+- **Consequences:** Every `WithCode` throw now reaches TypeScript as a `PlatformError` with
+  `.code`, so a TypeScript branch on a code from C# fires for real; the TypeScript code that read
+  these codes was checked when this landed. A code thrown by a TypeScript handler still does not
+  cross a process boundary: the layers that answer a throwing TypeScript handler (the `json-rpc-2.0`
+  server inside `RpcClient`, `RpcWebSocketListener.request` in main) send its message, not its
+  `code`. Message matching stays as a fallback where a caller may run against a core build without
+  this change. The Send/Receive busy refusal is recognised by a message sentinel (` (SYNC_BUSY)`),
+  because a code alone does not identify it and does not survive a TypeScript handler hop.
+- **Amended 2026-11-03:** the busy-refusal discriminator is the message marker, not the code; see
+  `adr-sync-queue-one-run-at-a-time`.
+
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26
@@ -8302,6 +8577,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   change detection, unpublished-only advertisement - rather than re-litigating it.
 - **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
   architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
+- **Amended 2026-11-03:** a C# `WithCode` code now crosses JSON-RPC to TypeScript
+  (`adr-platform-error-code-crosses-json-rpc`), so "the platform error code in Exception.Data"
+  reaches a TypeScript caller as the error's `code`. The documented message prefix remains a
+  fallback only where a caller may meet a core build without that change.
 
 ## adr-range-scroll-owned-by-editor: The editor, not the requesting panel, owns bringing a Find/Checks/Comments jump target into view
 
@@ -8543,6 +8822,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   look up the location for it, so a slow lookup cannot turn the refusal into `UNAVAILABLE`. See
   `adr-internet-use-options-follow-pt9-values`.
 - **Source:** PT-4865 (design spec attached there).
+- **Amended 2026-11-03:** C# codes now cross JSON-RPC (`adr-platform-error-code-crosses-json-rpc`),
+  so the extension host no longer has to rely on returned codes because thrown ones are lost. The
+  follow-up above, previously tracked as PT-4750, is retargeted to PT-4884 (throw codes instead of
+  returning them); revisit it together with the WebSocket-authentication and consent-prompt
+  conditions above.
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
 
@@ -8735,7 +9019,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-replace-verifies-expected-usfm: Replace writes only text that is unchanged since the search
 
 - **Date:** 2026-10-29
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-11-02 — `replace()` reads a cached chapter again before
+  writing over it
 - **Context:** Find & Replace wrote at the offsets Find reported, so text that changed after the
   search could be overwritten.
 - **Decision:** `replace(ranges, usfm, expectedUsfm?)` on the Scripture Finder data provider
@@ -8748,8 +9033,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   see.
 - **Consequences:**
   - The check reads the finder's cached chapter, which a change notification invalidates, and the
-    write replaces the whole chapter. An edit whose notification has not arrived yet can still be
-    overwritten: there is no compare-and-swap.
+    write replaces the whole chapter. A notification can arrive after its change, such as the save
+    the editor sends when a click on Replace takes its focus, so `replace()` reads a cached chapter
+    again just before writing and starts over if it changed. A chapter it fetched itself during the
+    call is not read twice. *(Amended 2026-11-02; before, such an edit was overwritten.)*
+  - There is still no compare-and-swap: a save the data provider has not finished by that second
+    read can still be overwritten. Closing that needs `SetChapterUsfm` to compare the stored text
+    with what the change was based on, inside its write lock.
   - An identical token shifted onto the old offsets passes the check (deleting the first `a ` of
     `a a a`).
   - If PR #2922 lands (open as of 2026-10-29), toggling `allowInvisibleCharacters` between Find and
@@ -10509,6 +10799,121 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   4. *"Has this user ever synced"* (PT-4327) — the outcome lasts one backend process, so answering
      that across restarts still needs persistence.
 
+## adr-sync-queue-one-run-at-a-time: Sync requests from the Send/Receive extension queue and run one run at a time; nothing is disabled because another sync is running
+
+- **Date:** 2026-10-30
+- **Status:** Accepted
+- **Context:** One Send/Receive run may hold the backend at a time. Before this decision the surfaces
+  prevented a second request by refusal: Home, the Sync dialog and the sync-status view disabled
+  their controls while any sync ran. That guarded against two real failures — a second sync
+  clobbering the first's progress state, and a server repository lock left behind when two runs
+  overlapped on a project. The cost was that a click during a sync (often the automatic one the user
+  never started) did nothing, and a user could not line up several projects and walk away. A DBL
+  resource install or uninstall could also overlap a sync's connected-resource update of the same
+  resource, with no ordering between them.
+- **Decision:**
+  - **The queue lives in the Send/Receive extension** and is the one path for extension-side
+    requests (`paratextBibleSendReceive.requestSync`, `removeFromSyncQueue`). Home, the Sync dialog,
+    the editor's menu and project-switch syncs, the sync-status view, lock-prompt retries and the
+    auto-sync interval all request through it; every click is accepted. A project clicked while it
+    is running is queued for the next run; clicking a waiting row removes it.
+  - **A run never mixes the two sync kinds** — plain (`sendReceiveProjects`: only the projects
+    asked for) and with-connected (`syncProjects`: also each project's connected projects and
+    resources). A project is of the with-connected kind while any waiting request that includes
+    connected projects names it; that run also satisfies the project's plain requests, while a plain
+    run never satisfies a request that includes connected projects. The oldest request with a
+    project still unplanned picks the next run's kind, and that run takes every waiting project of
+    that kind; the other kind runs next.
+  - **Results are per project.** `requestSync` resolves with the results for the ids it asked about
+    when the run containing them ends, and rejects if the user removed them or they were dropped at
+    quit.
+  - **The automatic sync never re-queues a project that is running or already waiting**, so it
+    cannot become a continuous re-sync loop; it raises no same-user lock prompt.
+  - **Two snapshots.** C# serves the activity snapshot (`getSyncActivity` / `onSyncActivityChanged`,
+    including the resource ids the running run will update); the extension serves the queue snapshot
+    (`getSyncQueue` / `onSyncQueueChanged`: `waitingProjectIds`, `sendingProjectIds` and
+    `runningProjectIds`). Home reads both. The queue claims a run (announces "syncing") only once the
+    backend has accepted it. Until then the run's projects are sending: sent to the backend, not yet
+    accepted. A busy refusal moves them back to waiting and the snapshot fires, so a surface can
+    show "starting" (Home and the sync-status view show the spinner) and still flip to "waiting" at
+    once on a refusal. A run sent again during a streak of busy refusals is not reported as sending:
+    its projects stay waiting until the backend accepts it, so the retries do not make a row blink
+    between the two. A project asked for again while its run is being sent is also waiting, for the
+    later run.
+  - **Cancel asks.** Every Cancel (toast, toolbar, Sync dialog and the editor's sync-blocked banner)
+    goes through `cancelSyncPrompt`, which asks whether to stop the running sync and then, if
+    projects are waiting, whether to drop them too. A run counter keeps a late answer from
+    cancelling or clearing for a run that started while the question was open.
+  - **Startup and shutdown boundary syncs stay direct** — core's startup/shutdown tasks and the
+    extension's session-boundary syncs call the C# commands without the queue. The queue waits for
+    them through the activity signal and also re-reads `getSyncActivity` every 30 s while anything is
+    waiting, so a missed idle edge delays the next run by at most 30 s and cannot hang it.
+  - **Busy refusals are retried on a marker.** The C# semaphore is also held briefly with the
+    activity already idle (the shared-project list fetch, a run's closing project-list refresh).
+    The backend's two busy refusals keep their codes (`FAILED_PRECONDITION` / `UNAVAILABLE`) and end
+    their message with ` (SYNC_BUSY)`. The queue retries only on that marker, with backoff; while
+    the activity signal reports no sync, after about 2 minutes of retrying (the retry delays
+    count toward it) it rejects the waiting requests with the last error. A busy refusal is never
+    reported as a failure or stamped while the queue is still retrying; an `INTERNAL` "not
+    responding" error is never retried. A code alone does not identify the refusal, and the marker
+    survives a TypeScript handler hop that keeps only the message. Core's quit sync retries on the
+    marker within its own 30 s budget.
+  - **A C# `SyncRunResourceGuard` in core** orders a DBL resource install/uninstall against a sync
+    run's connected-resource update. A sync registers only the connected resources it will
+    install or update, and skips any resource with an open user install or removal: it does not
+    wait, logs the skip, and does not count it as a failure. A user write on a registered resource
+    still waits for the sync's update, bounded by a timeout that restarts for each run that holds
+    the resource; that wait cannot be cancelled, and the sync side never waits at all. An install
+    waits only for the running run, never a waiting one.
+  - **The queue is in memory** and is dropped at quit; rows are plain again on restart. The
+    extension host is killed in `will-quit` without deactivating, so core's shutdown tasks drop the
+    queue's waiting requests first (`paratextBibleSendReceive.dropSyncQueue`, bounded), before
+    cancelling the running sync — a queued run must not start and make the shutdown sync fail as
+    busy. Closing the last window on macOS runs the shutdown tasks while the app stays resident:
+    core drops the waiting requests and pauses the queue, and when a window opens again in the same
+    process core sends `resumeSyncQueue`.
+  - **No fallbacks for a missing command.** Callers do not fall back when a sync command is
+    absent, so the three pull requests (core, Studio, internal extensions) must ship together. As of
+    2026-11-03, planned: merge them on the same day, in the order core, Studio,
+    internal-extensions.
+- **Alternatives:**
+  - *Queue in C#.* Would make it authoritative for every path, but puts UI-shaped policy (source
+    kinds, per-project result routing, the Cancel question) in the backend and needs a Studio build
+    for every change. Rejected; the activity snapshot already gives C# authority over "a run is
+    active".
+  - *Queue in Home.* Only Home would queue; the dialog, the editor and the auto-sync would still
+    collide. Rejected.
+  - *Per-surface queues.* Each surface would order only its own clicks, so cross-surface overlap —
+    the case that caused the failures — would remain. Rejected.
+  - *Mixing the kinds in one run* (any with-connected request upgrades the whole run). One toast
+    instead of two, but an unrelated auto-sync would pull connected projects into a run the user
+    started, syncing projects nobody chose. Rejected.
+  - *Keep disabling controls.* Prevents the failures but drops the user's click. Rejected.
+- **Consequences:**
+  - Home is the main surface with waiting UI (waiting rows, per-row results); Get Resources also
+    shows a waiting row for a resource the running sync will update, only for a row the user
+    clicked. The Sync dialog and the editor menu are thin callers, which keeps the way open to
+    merge sync into Home later.
+  - Every new automatic trigger must request through the queue AND still ask the first-run consent
+    gate (`.claude/rules/first-run-sync-consent.md`), except the Simple to Power switch, see the
+    rule; the queue is not a consent chokepoint.
+  - When both kinds are waiting at once, two progress toasts appear back to back.
+  - A waiting queue is lost at quit; a missed run is picked up at the next opportunity.
+  - Revisit if a core-authoritative "a sync is running" signal (PT-4214) lands — the 30 s recheck
+    could then be dropped.
+- **Amended 2026-11-03:** busy refusals carry a ` (SYNC_BUSY)` message marker and the queue retries
+  only on it (backoff; while the activity signal reports no sync, after about 2 minutes of
+  retrying the waiting requests reject with the last error; `INTERNAL` is never retried); a sync
+  skips a resource with an open user install or removal instead of waiting, so only a user write
+  waits, and that wait is bounded and cannot be cancelled; quit drops the waiting requests first,
+  the extension host is killed in `will-quit`, and on macOS closing the last window pauses the
+  queue until a window opens again (`resumeSyncQueue`); the fallbacks for a missing command are
+  gone, so the three pull requests must ship together; the snapshot carries `sendingProjectIds`
+  (sent, not yet accepted; a busy refusal moves them back to waiting and fires; a run retried during
+  a busy streak stays waiting until accepted) and `runningProjectIds`, and a run is announced only
+  once the backend accepted it; consent applies to automatic callers except the Simple to Power
+  switch.
+
 ## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
 
 - **Date:** 2026-10-13
@@ -11277,6 +11682,144 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4262 review (PR #2632), where the Help entry was found to ship Simple-only against
   an explicit request for both modes.
 
+## adr-transient-surfaces-close-on-window-blur: Transient surfaces close on window blur, in every frame
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** Menus, dropdowns and pickers close on an outside press because Radix's
+  `DismissableLayer` listens for `pointerdown` on the document that owns the surface. Panes are
+  `<iframe>`s (web views), and a click inside an iframe never produces a `pointerdown` in any other
+  document, in either direction. A menu in the main toolbar stayed open when the user clicked into a
+  web view, and the editor's hamburger menu (inside its own iframe) stayed open when the user clicked
+  the toolbar or another pane. The follow-on symptom: the stray click moved keyboard focus into the
+  other frame, so Escape went there too. The Storybook "Dismissal Patterns" guideline prescribed a
+  per-surface focus supplement guarded by `document.hasFocus()`, and only `SyncStatusButton` carried a
+  hand-rolled copy (removed by this decision, which covers it through the shared wrappers); the
+  recipe cannot work inside a web view: a click from a web view onto the main toolbar fires
+  `window.blur` with `document.hasFocus() === false`, which the recipe reads as a plain window switch,
+  and web views cannot ask the host where focus went. The product owner agreed the behaviour on
+  2026-10-29.
+- **Decision:** A transient surface treats "my window lost focus" as an outside click, whichever
+  frame the focus went to, including another application. `useDismissOnWindowBlur`
+  (`lib/platform-bible-react/src/hooks/use-dismiss-on-window-blur.hook.ts`) listens for `blur` on
+  `window` for the lifetime of the mounted wrapper, ignoring blur while the content is closed or
+  animating out (`data-state="closed"`), and dispatches a synthetic `pointerdown` on the content
+  element's parent (not `document.body`, so a dialog hosting a portaled popover sees an inside press
+  and stays open), so Radix's normal outside-press path runs. Focus return follows a rule read from
+  document state at close time (`shouldSuppressFocusReturn`): focus is not returned to the trigger
+  when `activeElement` is an iframe or, inside a web view, when the document is not focused, because
+  returning focus across frames blurs the window the user moved to and closes the menu they opened
+  there. This departs from WCAG 2.4.3 (return focus to the opener) only in that cross-frame case;
+  every other close, including Escape, restores focus. The shared wrappers `PopoverContent`,
+  `DropdownMenuContent`, `MenubarContent` and `ContextMenuContent` call it, so every consumer, in
+  sibling repos too, gets the behavior with no per-surface code. There is no opt-out prop: a surface
+  that must survive blur says so the same way it survives a real outside click, by calling
+  `event.preventDefault()` in `onPointerDownOutside`, or by controlling `open` without
+  `onOpenChange`. Not wired: `Select` (it already closes on window blur by itself; `SelectContent`
+  applies the same focus-return rule), `Tooltip` and `Dialog` (not on this axis), sub-menu contents
+  (dismissing the root closes them), and the Scripture editor's right-click menu (the editor
+  package's `ContextMenuPlugin`, not Radix), which gets its own window-blur close in the
+  scripture-editors repository and reaches Platform.Bible through the editor package (as of
+  2026-10-30 that fix is a separate scripture-editors change, not yet merged). This matches native
+  menus, which close on app deactivation, and the overlay service's own context menus
+  and popovers.
+- **Alternatives:**
+  - *Per-surface focus supplement* (the old guideline recipe). Wrong inside web views, and it was
+    built once (`SyncStatusButton`) and nowhere else, because every author had to remember to add it.
+  - *Host forwards pointer events between frames.* The renderer would inject a `pointerdown` listener
+    into every same-origin web view and the host would re-dispatch synthetic presses in all other
+    frames. It makes Radix's own detection work with no wrapper change and could carry a keydown twin
+    for Escape across frames, but it has more moving parts and needs cooperation from cross-origin
+    `src` web views, while the blur rule already covers every reported case. Sebastian prototyped
+    this route for PT-2989 in PR #2887 (draft as of 2026-10-29), including a title-bar drag-region
+    toggle that this decision does not adopt (the toolbar keeps its drag behaviour, as in VS Code).
+    Worth revisiting if cross-frame keyboard forwarding is ever built; the two should share a channel.
+  - *Reuse the main process's app-window input broadcast.* The main process already broadcasts
+    app-window mouse-down and Escape across frames (`EVENT_NAME_ON_DID_APP_WINDOW_INPUT`, consumed
+    by `handleAppWindowInput`). It is not reused here because the component library has no PAPI
+    access to subscribe to it; relevant to PT-4627 if cross-frame keyboard forwarding is built.
+  - *Transparent backdrop while a menu is open.* It would swallow the dismissing click like a native
+    menu, but only for main-document surfaces (a web view cannot cover the rest of the window), and
+    it changes the feel of every popover.
+- **Consequences:**
+  - Menus and pickers close when the user alt-tabs away and when DevTools takes focus; developers
+    will notice this while debugging.
+  - The dismissing click is not swallowed: the pane it lands on receives it before the menu's frame
+    hears the `blur`, so the click acts there (places a caret, focuses a pane) and the menu closes.
+  - Surfaces holding typed text survive by controlling `open` without `onOpenChange` or by preventing
+    the outside press (the first-run overlay and the editor's comment and footnote popovers already
+    do). Pickers with a search box close; a half-typed filter is not lost work.
+  - A popover portaled into a dialog through `PopoverPortalContainerProvider` closes on blur while the
+    dialog stays open.
+  - Escape still does not work across frames, and scroll inside a web view still cannot dismiss a
+    Light surface.
+  - Alt-tab and keyboard users: in the main document an unfocused document can only mean the OS
+    window was deactivated, so the shared wrappers focus the trigger themselves and prevent Radix's
+    default. After an outside interaction (which the synthetic press is) the non-modal `Popover` and
+    the `Menubar` would skip their own restore, while a modal `DropdownMenu` would restore anyway, so
+    the outcome is the same for all three: a keyboard user returning from another application keeps
+    their place. The trigger is the element whose `aria-controls` names the content's `id`, or the
+    element the content's `aria-labelledby` names; a context menu has neither and restores nothing.
+    The restore happens only while nothing else holds focus. Inside a web view the same signal is
+    ambiguous (alt-tab versus a click into another frame), so web views do not restore focus there.
+  - The synthetic press is untrusted and carries a window-blur marker. The focus modality tracker
+    and the overlay service's press recorder skip it, and the overlay service's own surfaces ignore
+    it and keep their own blur rule and creation grace period. Window service gesture tracking, the
+    content-zoom bootstrap and the editor's selection snapshot see it and were judged benign. A
+    listener in the library that must ignore it uses the internal `isWindowBlurPress`; the renderer
+    reads the same `Symbol.for` key through
+    `src/renderer/services/overlays/window-blur-press.util.ts`, pinned by a contract test.
+  - A modal menu opened inside a wired surface takes a blur alone: the outer surface stays open until
+    the next outside press or blur, as for a real click outside both.
+  - Inside a web view, a focus trap (a dialog or a modal menu) does not take focus back from another
+    frame while its document is unfocused. Radix's trap focuses its container whenever the focused
+    node is removed, and a `focus()` in an unfocused iframe takes the frame's focus, so a nested
+    picker closing on blur would pull focus back from the pane the user clicked. A `patch-package`
+    patch (`patches/@radix-ui+react-focus-scope+1.1.7.patch`) makes that observer do nothing while
+    `document.hasFocus()` is false. A Radix upgrade must re-make the patch, and web views bundled by
+    other repositories carry their own Radix copy and need the same patch; an upstream Radix fix
+    would end both.
+  - The patch's guard applies in the main document too: if a trapped dialog's focused child is
+    removed while the OS window is deactivated, focus stays on `body` when the user comes back
+    instead of moving to the dialog. Accepted as rare.
+- **Amended 2026-10-30 (UX ruling, Sebastian and Ian for UX):** the non-modal `BookChapterControl`
+  in compact mode is an explicit-dismissal surface. Compact mode starts when a quick-nav arrow
+  (previous or next chapter or verse) hides the book list and ends when the list returns (the search
+  input takes focus, or the user types); a fresh open always starts with the full picker. While
+  compact it survives a window blur, a real press elsewhere in the document, focus leaving and other
+  menus opening, by calling `preventDefault()` in `onInteractOutside`; the press is not swallowed,
+  only the dismissal is prevented. Only a click on its trigger, or Escape with focus inside the
+  popover or on the trigger, closes it (`onEscapeKeyDown` declines Escape pressed with focus
+  elsewhere in the document, because Radix listens for it on the whole document). Closing with its
+  container, becoming disabled, unmounting and submitting a reference are unchanged. The reason: the
+  user steps through chapters with the arrows while working in another pane. With the list showing,
+  the picker follows the rule above (it closes). A modal picker makes everything outside inert, its
+  trigger included, so it never enters compact stay-open and closes on an outside press and on Escape
+  as before. A compact picker whose tab becomes hidden stays open on purpose (a UX decision); it
+  closes through its trigger once the tab is visible again, or on Escape with focus in it. The rule
+  lives in the component, so every non-modal instance gets it.
+- **Overlay focus restore:** the renderer's overlay service decides whether focus returns to the
+  opener from how the overlay closed, synchronously when it settles, without reading where focus
+  currently is (apart from the one containment check below). For the command palette (passive
+  included), the context menu (submenus included) and the popover: picking an item (a resolve
+  carrying a result) returns focus; Escape (reported by the component, or the app-window Escape
+  signal), the opener's own dismiss (`dismissPopover`, `dismissCommandPalette`) and app
+  deactivation (parent window blur while `document.hasFocus()` is false) return focus only if the
+  focused element is inside that overlay's own content (its content roots carry
+  `data-overlay-id`, so another overlay of the same type does not count) at that moment; a click elsewhere, a pane
+  or tab switch, a parent blur while the app keeps focus (a click into a pane), a replacement, a
+  timeout and a scroll never do. Modal dialogs return focus on every answer: any resolve, and any
+  reject other than the ABORTED one used for replacement and shutdown. The opener is the
+  requesting web view when its iframe exists; otherwise the last focused tab (modal dialogs; a
+  host-local tracker fed by the focus subscription and seeded from the focus read at open, because
+  importing the window service shard would pull it into the `papi.d.ts` build) or the focus subject
+  saved at open. A target that no longer exists is skipped; with multi-window routing the tracked
+  tab can belong to another window, in which case the lookup fails harmlessly. Closes that qualify are marked through
+  `markOverlayFocusReturnIfFocusInside` (`overlay-focus-return.util.ts`) before the overlay is
+  resolved. Rejected alternative: deferring the decision one task and guessing from the active
+  element, which could not tell a click elsewhere from Escape.
+- **Source:** PT-2989 (PR #2963); related PT-2205, PT-4627; prototype PR #2887.
+
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
 
 - **Date:** 2026-08-27
@@ -11438,6 +11981,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     - Deferred to a follow-up: each editor build adds a `getMetadataForProject` fan-out, and
       auto-open its own metadata lookup, rather than reusing lookups they already make.
 - **Source:** PT-4685.
+- **Amended 2026-11-03:** the C# refusal's `FAILED_PRECONDITION` code now reaches TypeScript too
+  (`adr-platform-error-code-crosses-json-rpc`), so "for C# callers only" above no longer holds. The
+  TypeScript callers still detect the sentinel, which also identifies this refusal among other
+  `FAILED_PRECONDITION` failures.
 
 ## adr-unsynced-changes-signal-is-backend-read: "Unsynced changes" is read from the project's local Mercurial state in the backend and pushed as a snapshot
 

@@ -1870,6 +1870,45 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   /**
+   * True when a match fails a word edge test at one of its ends. An end on a block change passes
+   * whatever the test says, because the text it would look at belongs to another block.
+   *
+   * @param match Match to inspect
+   * @param searchText Text the match was found in
+   * @param wordEdges Sticky word edge tests
+   * @param blockChangeOffsets Offsets into the original concatenated text where the block changes
+   * @param nfdToOriginalMap Position map when the search text was NFD-normalized, else `undefined`
+   */
+  private static failsWordEdgeTest(
+    match: RegExpExecArray,
+    searchText: string,
+    wordEdges: NonNullable<UsjSearchOptions['wordEdges']>,
+    blockChangeOffsets: Set<number>,
+    nfdToOriginalMap: number[] | undefined,
+  ): boolean {
+    const failsAt = (edgeTest: RegExp | undefined, index: number) => {
+      if (!edgeTest) return false;
+      if (blockChangeOffsets.has(nfdToOriginalMap ? nfdToOriginalMap[index] : index)) return false;
+      // A sticky regex is told where to test through its `lastIndex`
+      // eslint-disable-next-line no-param-reassign
+      edgeTest.lastIndex = index;
+      return !edgeTest.test(searchText);
+    };
+    return (
+      failsAt(wordEdges.start, match.index) || failsAt(wordEdges.end, match.index + match[0].length)
+    );
+  }
+
+  /**
+   * Returns a sticky copy of a zero-width test, so it runs at exactly the offset it is given.
+   *
+   * @param edgeTest The test as the caller supplied it, or `undefined`
+   */
+  private static toStickyEdgeTest(edgeTest: RegExp | undefined): RegExp | undefined {
+    return edgeTest && new RegExp(edgeTest.source, `${edgeTest.flags.replace(/[gy]/g, '')}y`);
+  }
+
+  /**
    * True when `source` declares at least one whitespace capture group that
    * {@link hasWhitespaceGapAwayFromBoundary} would act on.
    *
@@ -1903,8 +1942,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    *   absent from the set is left out.
    * @param shouldRecordBoundaries When `true`, also records the offsets in the concatenated text
    *   where adjacent text nodes belong to different blocks.
-   * @returns The text chunks, a map from each chunk's offset to its document location, and the set
-   *   of block-boundary offsets (empty when `shouldRecordBoundaries` is `false`).
+   * @returns The text chunks, a map from each chunk's offset to its document location, the set of
+   *   block-boundary offsets at which a whitespace gap is tolerable, and the set of every offset
+   *   where the block changes (both empty when `shouldRecordBoundaries` is `false`).
    */
   private collectSearchText(
     markerStylesToInclude: Set<string> | undefined,
@@ -1913,6 +1953,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     textChunks: string[];
     fullTextIndexMap: SortedNumberMap<UsjNodeAndDocumentLocation<UsjTextContentLocation>>;
     blockBoundaryOffsets: Set<number>;
+    blockChangeOffsets: Set<number>;
   } {
     // Start searching from the first node in the USJ content tree
     const startingPoint: UsjNodeAndDocumentLocation = {
@@ -1930,6 +1971,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     >();
     // Offsets in the concatenated text where the adjacent text nodes belong to different blocks.
     const blockBoundaryOffsets = new Set<number>();
+    // The same, without the exceptions that make a boundary tolerable for a whitespace gap: a word
+    // ends at a chapter's last block or next to a dropped block just as it does anywhere else.
+    const blockChangeOffsets = new Set<number>();
 
     let previousBlockAncestor: MarkerObject | Usj | undefined;
     let hasPushedAChunk = false;
@@ -1998,10 +2042,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             }
           }
 
-          // Block-boundary bookkeeping is pure overhead for a caller that never asked for the
-          // filter, or whose pattern carries no whitespace group to relax, so skip it then. An empty
-          // text node puts no text between its neighbours, so it must not reset what was walked
-          // past since the last push — a chapter crossing would otherwise be forgotten.
+          // Block-boundary bookkeeping is pure overhead for a caller with neither word edges to
+          // test nor a whitespace group to relax, so skip it then. An empty text node puts no text
+          // between its neighbours, so it must not reset what was walked past since the last push —
+          // a chapter crossing would otherwise be forgotten.
           if (shouldRecordBoundaries && node.length > 0) {
             const blockAncestor = UsjReaderWriter.findNearestBlockAncestor(workingStack);
             // A filtered-out block of its own sits between these two chunks — a section heading, a
@@ -2013,6 +2057,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             const droppedOwnBlockSincePush = droppedBlockAncestorsSincePush.some(
               (dropped) => dropped !== previousBlockAncestor && dropped !== blockAncestor,
             );
+            if (hasPushedAChunk && blockAncestor !== previousBlockAncestor)
+              blockChangeOffsets.add(currentIndex);
             // A boundary is tolerable only when the block changed, no chapter was crossed, and no
             // block of dropped text stands between the two chunks.
             if (
@@ -2042,7 +2088,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       );
     }
 
-    return { textChunks, fullTextIndexMap, blockBoundaryOffsets };
+    return { textChunks, fullTextIndexMap, blockBoundaryOffsets, blockChangeOffsets };
   }
 
   /**
@@ -2107,7 +2153,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       markerStylesOrSearchOptions instanceof Set
         ? { markerStylesToInclude: markerStylesOrSearchOptions }
         : markerStylesOrSearchOptions;
-    const { markerStylesToInclude, normalizationForm } = searchOptions ?? {};
+    const { markerStylesToInclude, normalizationForm, wordEdges } = searchOptions ?? {};
     const isBoundaryFilterOn = !!(searchOptions &&
     'flexibleWhitespaceAtBlockBoundaries' in searchOptions
       ? searchOptions.flexibleWhitespaceAtBlockBoundaries
@@ -2119,13 +2165,15 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Group offsets require the `d` flag, but only a pattern that actually carries a whitespace
     // group can ever be rejected by the boundary filter. Computed before the walk so the
     // bookkeeping below is skipped for a pattern that could never benefit from it.
-    const shouldRecordBoundaries =
+    const shouldFilterWhitespaceGaps =
       isBoundaryFilterOn && UsjReaderWriter.hasSearchWhitespaceGroup(regex.source);
+    const stickyWordEdges = wordEdges && {
+      start: UsjReaderWriter.toStickyEdgeTest(wordEdges.start),
+      end: UsjReaderWriter.toStickyEdgeTest(wordEdges.end),
+    };
 
-    const { textChunks, fullTextIndexMap, blockBoundaryOffsets } = this.collectSearchText(
-      markerStylesToInclude,
-      shouldRecordBoundaries,
-    );
+    const { textChunks, fullTextIndexMap, blockBoundaryOffsets, blockChangeOffsets } =
+      this.collectSearchText(markerStylesToInclude, shouldFilterWhitespaceGaps || !!wordEdges);
 
     // Connect all the text chunks together so we can search them all at once. Note that there are
     // no spaces between the text chunks. If we need spaces inserted between verses, chapters, etc.
@@ -2145,7 +2193,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // A plain pattern with no whitespace group would pay for a rebuild (and the `d`-flag
     // bookkeeping V8 does on every match) for nothing.
     const searchRegex =
-      shouldRecordBoundaries && !regex.flags.includes('d')
+      shouldFilterWhitespaceGaps && !regex.flags.includes('d')
         ? new RegExp(regex.source, `${regex.flags}d`)
         : regex;
     // When no rebuild happened, the loop below drives the caller's own object. Restore its cursor
@@ -2167,11 +2215,11 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           );
           match = searchRegex.exec(searchText);
         } else {
-          // Same condition as the bookkeeping above: with no whitespace group there is nothing to
-          // filter, and `hasWhitespaceGapAwayFromBoundary` would demand a `d` flag that was
-          // deliberately not added.
+          // With no whitespace group there is nothing to filter, and
+          // `hasWhitespaceGapAwayFromBoundary` would demand a `d` flag that was deliberately not
+          // added.
           const isWhitespaceGapRejected =
-            shouldRecordBoundaries &&
+            shouldFilterWhitespaceGaps &&
             UsjReaderWriter.hasWhitespaceGapAwayFromBoundary(
               match,
               blockBoundaryOffsets,
@@ -2186,12 +2234,22 @@ export class UsjReaderWriter implements IUsjReaderWriter {
               nfdToOriginalMap,
             );
 
-          if (isWhitespaceGapRejected || isInsideCharacter) {
+          const isWordEdgeRejected =
+            !!stickyWordEdges &&
+            UsjReaderWriter.failsWordEdgeTest(
+              match,
+              searchText,
+              stickyWordEdges,
+              blockChangeOffsets,
+              nfdToOriginalMap,
+            );
+
+          if (isWhitespaceGapRejected || isInsideCharacter || isWordEdgeRejected) {
             // Resume one code point on rather than at `lastIndex`, so a legitimate match that
             // overlaps this rejected one is still reachable, whether it was rejected for a
-            // whitespace gap or for starting or ending inside a character. Only rejected matches
-            // rewind: doing this for accepted matches would return overlapping duplicates, which
-            // Replace All refuses outright.
+            // whitespace gap, for starting or ending inside a character, or for an end inside a
+            // word. Only rejected matches rewind: doing this for accepted matches would return
+            // overlapping duplicates, which Replace All refuses outright.
             if (!searchRegex.global) break;
             searchRegex.lastIndex = UsjReaderWriter.advancePastCodePoint(searchText, match.index);
             match = searchRegex.exec(searchText);
@@ -3183,6 +3241,30 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       }
     }
 
+    // A character marker that directly follows a chapter marker (e.g. the second run in
+    // `\c 5 \ca 5a\ca* \ca 5b\ca*`) needs the space ParatextData writes after the chapter and its
+    // folded `\ca`/`\cp` attributes (`UsxFragmenter.AppendStartUsfm` ends every `\c` with a space).
+    // USJ has no whitespace node there, so without this the two runs fuse together. The output is
+    // tested for a trailing space only once the sibling is known to be a chapter: `usfmOutput` is
+    // the whole document so far, and testing it for every character marker slows a book down.
+    if (
+      typeof markerParentOrIsInsideMarkerWithSameType === 'object' &&
+      // A chapter is only ever a direct child of the document root.
+      markerParentOrIsInsideMarkerWithSameType.type === USJ_TYPE &&
+      !('isClosingMarker' in marker) &&
+      marker.type === 'char'
+    ) {
+      const siblings = markerParentOrIsInsideMarkerWithSameType.content;
+      const markerIndex = siblings?.indexOf(marker) ?? -1;
+      const previousSibling = markerIndex > 0 ? siblings?.[markerIndex - 1] : undefined;
+      if (
+        typeof previousSibling === 'object' &&
+        previousSibling.type === 'chapter' &&
+        !/\s$/.test(usfmOutput)
+      )
+        usfmOutput += ' ';
+    }
+
     // Add the marker fragments and USFM into the existing fragments and USFM
     if (fragmentsInfo)
       UsjReaderWriter.mergeFragmentsInfoIntoExistingArray(
@@ -3769,9 +3851,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           UsjReaderWriter.isTopLevelUsjMarker(nodeOrClosingFragment, workingStack) &&
           !topLevelUsjMarker
         ) {
-          // The USJ types aren't set up to know about 3.0 right now, but we should handle it anyway
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          if ((nodeOrClosingFragment.version as string) !== '3.0') {
+          if (nodeOrClosingFragment.version !== '3.0') {
             // Don't output the USJ marker if it is 3.0 (3.0 is assumed and should not appear in
             // the USFM)
             topLevelUsjMarker = nodeOrClosingFragment;
