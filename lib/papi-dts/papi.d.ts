@@ -2874,10 +2874,11 @@ declare module 'renderer/services/renderer-web-socket.service' {
   export const blockWebSocketsToPapiNetwork: () => void;
   /**
    * Runs `initialize`, then blocks web views from the PAPI network whether it resolved or rejected,
-   * so a renderer that failed to connect never runs with extension sandboxing off.
+   * so a renderer that failed to connect does not keep running with extension sandboxing off.
    *
    * The block cannot run before `initialize` settles: without an Electron bridge, the renderer's own
    * connection to main is a `PapiRendererWebSocket` to the PAPI port (see `web-socket.factory.ts`).
+   * Until it settles, web views are not blocked.
    *
    * @param initialize Starts the renderer's network service
    * @throws Whatever `initialize` threw or rejected with, after blocking

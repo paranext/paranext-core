@@ -23,10 +23,21 @@ describe('PapiRendererWebSocket blocking', () => {
     vi.unstubAllGlobals();
   });
 
-  it('allows the PAPI port before initialize settles', async () => {
-    const { PapiRendererWebSocket } = await importFresh();
+  it('allows the PAPI port while initialize is pending', async () => {
+    const mod = await importFresh();
+    let finishInitialize: () => void = () => {};
+    const initializing = mod.initializeNetworkThenBlockPapiWebSockets(
+      () =>
+        new Promise<void>((resolve) => {
+          finishInitialize = resolve;
+        }),
+    );
 
-    expect(new PapiRendererWebSocket(papiUrl)).toBeInstanceOf(FakeWebSocket);
+    expect(new mod.PapiRendererWebSocket(papiUrl)).toBeInstanceOf(FakeWebSocket);
+
+    finishInitialize();
+    await initializing;
+    expect(() => new mod.PapiRendererWebSocket(papiUrl)).toThrow(`Invalid URL: ${papiUrl}`);
   });
 
   it('blocks after initialize resolves', async () => {
