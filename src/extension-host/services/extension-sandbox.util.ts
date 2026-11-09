@@ -5,7 +5,11 @@ import vm from 'node:vm';
 /** Resolves a module name the way an extension's `require` call should. */
 export type ExtensionRequire = (moduleName: string) => unknown;
 
-/** Substring present in every error that refuses an extension access to a module or loader. */
+/**
+ * Substring present in the errors that the extension loader, the extension `require` resolver and
+ * the lockdowns in this file throw when they refuse an extension. Other refusals (such as the
+ * `XMLHttpRequest` and `WebSocket` stubs) do not include it.
+ */
 export const NOT_ALLOWED_IN_EXTENSIONS = 'not allowed in extensions';
 
 /**
@@ -44,13 +48,28 @@ export function loadExtensionModule(
   return extensionModule.exports;
 }
 
-/** `process` members that hand out Node modules or native code without going through `require` */
-const PROCESS_MODULE_ACCESS_MEMBERS = ['getBuiltinModule', 'binding', '_linkedBinding', 'dlopen'];
+/**
+ * `process` members that hand out Node modules, native code, the host's live handles (sockets,
+ * servers, timers) or file contents without going through `require`
+ */
+const PROCESS_MODULE_ACCESS_MEMBERS = [
+  'getBuiltinModule',
+  'binding',
+  '_linkedBinding',
+  'dlopen',
+  'loadEnvFile',
+  '_getActiveHandles',
+  '_getActiveRequests',
+];
 
 /**
- * Replaces the `process` members that load Node modules or native code outside `require` with
- * functions that throw, and hides `process.mainModule` (a handle on Node's module loader). Safe to
- * call more than once.
+ * Replaces the `process` members that load Node modules or native code outside `require`, read
+ * files into the environment, or hand out the host's live handles with functions that throw, and
+ * hides `process.mainModule` (a handle on Node's module loader). Safe to call more than once.
+ *
+ * This does not lock down the rest of `process`: members such as `kill`, `send`, `chdir`, `env`,
+ * `report.writeReport` and the `net.Socket` constructor behind `process.stdout` and
+ * `process.stderr` stay reachable.
  */
 export function blockProcessModuleAccess(): void {
   PROCESS_MODULE_ACCESS_MEMBERS.forEach((memberName) => {
