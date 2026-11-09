@@ -15,6 +15,7 @@
  * tests/isolated/dynamic-menus/`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { tabButton } from '../../../fixtures/dock-tab-helpers';
 import {
   EDITOR_HAMBURGER_SELECTOR,
   getEditorFrame,
@@ -85,8 +86,38 @@ test.describe('Dynamic menu items', () => {
 
     await test.step('Insert items stay disabled in the read-only tab once the project becomes editable', async () => {
       await makeSampleProjectEditable();
-      // Give the project-editable key time to reach the tab; the tab's own read-only state wins.
-      await mainPage.waitForTimeout(5_000);
+      // Positive control: a tab opened after the change is an editable editor, and its Insert items
+      // enable once the project's editable key has arrived. Only then does the first tab's disabled
+      // state show that its own read-only state is what holds it.
+      const secondEditorId = await openEditableScriptureEditorForProject(
+        mainPage,
+        SAMPLE_WEB_PROJECT_ID,
+      );
+      expect(secondEditorId).not.toBe(editorId);
+      const secondFrame = await getEditorFrame(mainPage, secondEditorId);
+      await secondFrame.locator('.editor-container').first().waitFor({ timeout: 60_000 });
+      const secondHamburger = secondFrame.locator(EDITOR_HAMBURGER_SELECTOR);
+      const secondFootnoteItem = secondFrame.getByRole('menuitem', {
+        name: /^Insert footnote(\s|$)/,
+      });
+      await expect
+        .poll(
+          async () => {
+            try {
+              await expect(secondHamburger).toBeVisible({ timeout: 15_000 });
+              await secondHamburger.click();
+              await expect(secondFrame.getByRole('menu').first()).toBeVisible({ timeout: 5_000 });
+              return await secondFootnoteItem.getAttribute('aria-disabled');
+            } finally {
+              await mainPage.keyboard.press('Escape');
+              await expect(secondFrame.getByRole('menu')).toHaveCount(0, { timeout: 5_000 });
+            }
+          },
+          { timeout: 30_000 },
+        )
+        .not.toBe('true');
+
+      await tabButton(mainPage, editorId).click();
       await openMenu();
       await Promise.all(
         INSERT_NOTE_ITEM_NAMES.map((name) =>

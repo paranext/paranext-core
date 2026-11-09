@@ -269,6 +269,18 @@ export async function makeSampleProjectEditable(): Promise<void> {
 }
 
 /**
+ * Make the installed sample WEB project read-only again (`Editable=F`), the reverse of
+ * {@link makeSampleProjectEditable}. An editor tab opened while the project was editable stays an
+ * editor tab, so its menu then follows the project's live editable state.
+ *
+ * Writes project data, so it refuses to run unless the app was launched with `isolatedProjectRoot:
+ * true`, for the reason {@link makeSampleProjectEditable} gives.
+ */
+export async function makeSampleProjectReadOnly(): Promise<void> {
+  await sendSampleProjectPdpRequest('setSetting', ['platform.isEditable', false]);
+}
+
+/**
  * Turn off the current user's paragraph-structure lock on the installed sample WEB project. Simple
  * mode treats an unset preference as locked, which disables the toolbar's paragraph-style dropdown
  * and refuses structural edits, so a Simple-mode spec that changes paragraph markers needs this.

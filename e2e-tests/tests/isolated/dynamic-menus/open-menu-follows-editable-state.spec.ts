@@ -1,14 +1,13 @@
 /**
- * An editor tab's hamburger menu keeps Insert footnote disabled after the project becomes editable:
- * the tab's read-only state is fixed when the tab opens (the editor itself stays read-only until
- * the tab is reopened), so the menu must not offer an item that would do nothing.
- * `makeSampleProjectEditable()` writes over PAPI rather than through the UI, so the menu stays open
- * across the change.
+ * The Scripture editor's hamburger menu re-evaluates while it is open: when the project stops being
+ * editable, Insert footnote disables in the same open menu, without closing and reopening it.
+ * `makeSampleProjectReadOnly()` writes over PAPI rather than through the UI, so the menu can stay
+ * open across the change.
  *
- * The sample WEB project ships `<Editable>F</Editable>`, so the tab opens read-only. The
- * "re-evaluates while open" behavior for items that follow live state is covered by the unit tests
- * over the real menu expressions; no menu item in this tab both follows live state and can be
- * flipped from PAPI here.
+ * The sample WEB project ships `<Editable>F</Editable>`, and a tab opened on a read-only project
+ * stays read-only for its life, so the project is made editable BEFORE the tab opens: the tab is an
+ * editable editor, and its menu follows the project's live editable state. The tab-opened-read-only
+ * case is in `insert-items-follow-editable-state.spec.ts`.
  *
  * ONE test() per spec file (isolated-fixture constraint — see
  * scripture-editor/standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated
@@ -19,6 +18,7 @@ import {
   EDITOR_HAMBURGER_SELECTOR,
   getEditorFrame,
   makeSampleProjectEditable,
+  makeSampleProjectReadOnly,
   openEditableScriptureEditorForProject,
   SAMPLE_WEB_PROJECT_ID,
   waitForHomeTab,
@@ -30,13 +30,14 @@ test.use({
 });
 
 test.describe('Dynamic menu items', () => {
-  test('an open editor menu keeps Insert footnote disabled in a tab opened read-only when the project becomes editable', async ({
+  test('an open editor menu disables Insert footnote when the project stops being editable', async ({
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates).
     test.slow();
 
     await waitForHomeTab(mainPage);
+    await makeSampleProjectEditable();
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = await getEditorFrame(mainPage, editorId);
     await editorFrame.locator('.editor-container').first().waitFor({ timeout: 60_000 });
@@ -51,20 +52,18 @@ test.describe('Dynamic menu items', () => {
     await hamburger.click();
     await expect(editorFrame.getByRole('menu').first()).toBeVisible({ timeout: 5_000 });
 
-    // Positive control: Insert comment depends on the comment permission, not editability. It runs
-    // first because the disabled assertion below proves nothing until the project's keys arrived.
-    await expect(insertItem('Insert comment')).toBeVisible({ timeout: 10_000 });
-    await expect(insertItem('Insert comment')).not.toHaveAttribute('aria-disabled', 'true');
-    await expect(insertItem('Insert footnote')).toHaveAttribute('aria-disabled', 'true');
+    // Enabled once the project's keys have arrived; this also proves the tab is not read-only.
+    await expect(insertItem('Insert footnote')).toBeVisible({ timeout: 10_000 });
+    await expect(insertItem('Insert footnote')).not.toHaveAttribute('aria-disabled', 'true', {
+      timeout: 30_000,
+    });
 
     // The menu stays open across the change.
-    await makeSampleProjectEditable();
+    await makeSampleProjectReadOnly();
 
-    // Give the project-editable key time to reach the open menu; the tab's own read-only state
-    // still wins, so the item stays disabled.
-    await mainPage.waitForTimeout(5_000);
-    await expect(insertItem('Insert footnote')).toBeVisible();
-    await expect(insertItem('Insert footnote')).toHaveAttribute('aria-disabled', 'true');
+    await expect(insertItem('Insert footnote')).toHaveAttribute('aria-disabled', 'true', {
+      timeout: 30_000,
+    });
     // Still the same open menu.
     await expect(editorFrame.getByRole('menu').first()).toBeVisible();
 
