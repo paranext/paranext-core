@@ -8175,14 +8175,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the full name would push the short name toward the truncation leading with it is meant to avoid.
   They show the short name alone, which `getTabTitleProjectName` now pins to the `platform.name`
   setting. How a title fills in that name, falling back to the project id, is
-  `adr-project-titles-from-one-formatter`. DBL resource labels follow the same rule even though a resource carries a
-  `displayName`/`fullName` pair rather than the `platform.name`/`platform.fullName` project
-  settings: `getRefLabel` and Share Layout's `formatResourceDisplayName` pass `displayName` in the
-  helper's `shortName` slot. Sites that merely fill a long-name slot the UI renders after the short
-  name compose no label and keep their own separator — View Options joins with an em dash. The
-  Simple-mode toolbar is the one surface that composes the pair from a localized format string
-  (`%projectPicker_toolbar_label_shortNameAndFullName%` and the trigger's `%..._trigger_label_2%`) rather
-  than calling `formatProjectName`: its label and its accessible name are already localized
+  `adr-project-titles-from-one-formatter`. DBL resource labels follow the same rule even though a
+  resource carries a `displayName`/`fullName` pair rather than the
+  `platform.name`/`platform.fullName` project settings: `getRefLabel` and Share Layout's
+  `formatResourceDisplayName` pass `displayName` in the helper's `shortName` slot. Sites that merely
+  fill a long-name slot the UI renders after the short name compose no label and keep their own
+  separator — View Options joins with an em dash. The Simple-mode toolbar is the one surface that
+  composes the pair from a localized format string
+  (`%projectPicker_toolbar_label_shortNameAndFullName%` and the trigger's `%..._trigger_label_2%`)
+  rather than calling `formatProjectName`: its label and its accessible name are already localized
   sentences, and a locale that needs to reorder or re-punctuate the pair can only do so in the
   string. It is an exempted sweep site, and the English strings render the same order the helper
   does, so the two cannot disagree about which name leads. `ProjectItem`, the renderer picker's row
