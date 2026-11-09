@@ -1261,6 +1261,26 @@ describe('opening a tab as a panel beside a tab', () => {
     });
   });
 
+  it('adds a tab group beside a target tab group of another rc-dock group instead of joining it', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('headless-group', ['headless-model'], { group: HEADLESS_GROUP })],
+      },
+    });
+
+    openPanel(dockLayout, 'find', {
+      type: 'panel',
+      direction: 'after-tab',
+      targetTabId: 'headless-model',
+    });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['headless-model'], ['find']],
+    });
+  });
+
   it('adds a tab group on the reading-start side when asked for before a tab it cannot join', () => {
     const dockLayout = renderDock(simpleShapedLayout());
 

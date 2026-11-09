@@ -1313,17 +1313,18 @@ function toSideDirection(direction: PanelDirection): PanelDirection {
  * Adds a new tab beside `targetTab` or beside the tab group holding it.
  *
  * - `before-tab` and `after-tab` put the new tab in the target's own tab group, just before or after
- *   the target tab, wherever that group is. A group that cannot take the tab gets it beside the
- *   group instead, as `left` or `right` would.
+ *   the target tab, wherever that group is. A group that cannot take the tab (see
+ *   {@link canJoinTargetTabGroup}) gets it beside the group instead, as `left` or `right` would.
  * - A target tab group that is not in the docked area (it is in rc-dock's floating, maximized or
  *   window layer) gets the new tab as a tab group of its own at the reading-end edge of the docked
- *   area, whichever side was asked for. rc-dock would otherwise wrap both groups in a new box
- *   inside that layer. Those layers draw only the tab groups directly inside them, so both groups
- *   would disappear while their tabs stayed open.
- * - A docked target whose `direction` side holds a tab group that can take the tab gets the new tab
- *   added to that group as its active tab, rather than a new group squeezed in between. Otherwise
- *   the new tab gets a tab group of its own beside the target's.
- * - `left` and `right` are mirrored in a right-to-left UI.
+ *   area, whichever side was asked for (see {@link dockAtReadingEndEdge}). rc-dock would otherwise
+ *   wrap both groups in a new box inside that layer. Those layers draw only the tab groups directly
+ *   inside them, so both groups would disappear while their tabs stayed open.
+ * - A docked target whose `direction` side holds a tab group that can take the tab (see
+ *   {@link findAdjacentTabGroup} and {@link canJoinAdjacentTabGroup}) gets the new tab added to that
+ *   group as its active tab, rather than a new group squeezed in between. Otherwise the new tab
+ *   gets a tab group of its own beside the target's.
+ * - `left` and `right` are mirrored in a right-to-left UI (see {@link resolvePanelDirection}).
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
