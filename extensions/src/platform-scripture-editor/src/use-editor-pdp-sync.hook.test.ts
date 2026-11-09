@@ -609,7 +609,8 @@ describe('useEditorPdpSync', () => {
       act(() => rerender({ usjFromPdp: externalChange }));
 
       expect(discardUnsavedEdits).toHaveBeenCalledOnce();
-      expect(discardUnsavedEdits).toHaveBeenCalledWith('replacedByUpdate');
+      // Judged against the chapter last delivered and the one replacing it.
+      expect(discardUnsavedEdits).toHaveBeenCalledWith('replacedByUpdate', levUsj, externalChange);
       // Before the replace, while the edits are still the editor's.
       expect(events).toEqual(['discard', 'replace']);
       expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
@@ -737,7 +738,7 @@ describe('useEditorPdpSync', () => {
       act(() => harness.rerender({ usjFromPdp: lev15, documentSelector: lev15Selector }));
 
       // Another chapter arriving is navigation, not a change made outside the editor.
-      expect(harness.discardUnsavedEdits).toHaveBeenCalledWith('leftChapter');
+      expect(harness.discardUnsavedEdits).toHaveBeenCalledWith('leftChapter', levUsj, lev15);
       expect(seenDuringDiscard).toEqual([lev14Selector]);
       expect(harness.editorDocumentSelector.current).toBe(lev15Selector);
     });
@@ -2323,7 +2324,11 @@ describe('useEditorPdpSync', () => {
             await vi.advanceTimersByTimeAsync(1);
           });
           expect(discardUnsavedEdits).toHaveBeenCalledOnce();
-          expect(discardUnsavedEdits).toHaveBeenCalledWith('replacedByUpdate');
+          expect(discardUnsavedEdits).toHaveBeenCalledWith(
+            'replacedByUpdate',
+            levUsj,
+            externalChange,
+          );
           expect(setUsjSpy).toHaveBeenCalledOnce();
           expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
           expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
@@ -2444,7 +2449,11 @@ describe('useEditorPdpSync', () => {
         expect(setUsjSpy).toHaveBeenCalledOnce();
         expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
         expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
-        expect(discardUnsavedEdits).toHaveBeenCalledWith('replacedByUpdate');
+        expect(discardUnsavedEdits).toHaveBeenCalledWith(
+          'replacedByUpdate',
+          levUsj,
+          externalChange,
+        );
       });
 
       it('keeps one grace timer per held delivery and leaves none behind on unmount', () => {
@@ -2510,7 +2519,11 @@ describe('useEditorPdpSync', () => {
         update({ isSyncBlocked: true, usjFromPdp: externalChange });
 
         expect(discardUnsavedEdits).toHaveBeenCalledOnce();
-        expect(discardUnsavedEdits).toHaveBeenCalledWith('replacedByUpdate');
+        expect(discardUnsavedEdits).toHaveBeenCalledWith(
+          'replacedByUpdate',
+          levUsj,
+          externalChange,
+        );
         expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
         expect(setUsjSpy).toHaveBeenCalledOnce();
         expect(setUsjSpy).toHaveBeenCalledWith(externalChange);

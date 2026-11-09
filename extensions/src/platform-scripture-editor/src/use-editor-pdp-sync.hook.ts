@@ -192,9 +192,14 @@ export function useEditorPdpSync({
    * `editorDocumentSelector` still names the chapter the editor holds, which is the chapter the
    * edits belong to. `'replacedByUpdate'` when the incoming chapter is the same document (a change
    * made outside the editor), `'leftChapter'` when it is another one (navigation). A no-op when
-   * there is nothing unsaved.
+   * there is nothing unsaved. `lastKnownUsj` is the last chapter delivered to or sent from the
+   * editor before `incomingUsj`, so the edits can be judged against both.
    */
-  discardUnsavedEdits?: (cause: 'replacedByUpdate' | 'leftChapter') => void;
+  discardUnsavedEdits?: (
+    cause: 'replacedByUpdate' | 'leftChapter',
+    lastKnownUsj: Usj | undefined,
+    incomingUsj: Usj,
+  ) => void;
   /**
    * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing SESSION
    * owns the editor's content even though the editor itself is blurred — a marker-palette session
@@ -449,6 +454,7 @@ export function useEditorPdpSync({
     // has the best data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
     if (isNewFromPdp) {
+      const usjKnownBeforeDelivery = usjSentToPdp.current;
       usjSentToPdp.current = usjFromPdp;
       // The PDP round-trips USJ through USFM, so a save made
       // MID-marker-typing (a pending literal like `\q1` still in plain text) echoes back
@@ -646,7 +652,11 @@ export function useEditorPdpSync({
       //
       // The editor's document identity moves only AFTER the discard, together with the replace,
       // so the discard still names the chapter the edits were typed in.
-      discardUnsavedEdits?.(isSameDocument ? 'replacedByUpdate' : 'leftChapter');
+      discardUnsavedEdits?.(
+        isSameDocument ? 'replacedByUpdate' : 'leftChapter',
+        usjKnownBeforeDelivery,
+        usjFromPdp,
+      );
       lastAppliedDocumentSelector.current = documentSelector;
       setEditorUsj.current(usjFromPdp);
     }
