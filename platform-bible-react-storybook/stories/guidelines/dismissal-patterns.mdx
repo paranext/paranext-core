@@ -78,11 +78,11 @@ this page.
 
 Radix (shadcn) primitives expose the triggers as props on the content element:
 
-| Trigger            | How                                                                                                                                  |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Outside press      | `onPointerDownOutside` / `onInteractOutside` (portal-aware — see the iframe section)                                                 |
-| Escape             | `onEscapeKeyDown`                                                                                                                    |
-| Outside scroll     | **No Radix prop.** Add a `scroll`/`wheel` listener on the scroll container and close. `onInteractOutside` does *not* fire on scroll. |
+| Trigger            | How                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Outside press      | `onPointerDownOutside` / `onInteractOutside` (portal-aware — see the iframe section)                                                                                           |
+| Escape             | `onEscapeKeyDown`                                                                                                                                                              |
+| Outside scroll     | **No Radix prop.** Add a `scroll`/`wheel` listener on the scroll container and close. `onInteractOutside` does *not* fire on scroll.                                           |
 | Window loses focus | Nothing to wire — the shared wrappers turn it into an outside press (see the iframe section); controlled surfaces without `onOpenChange` need their own `window` blur listener |
 
 - **Light:** accept Radix's defaults (outside press + Escape), and add a scroll listener to close on
