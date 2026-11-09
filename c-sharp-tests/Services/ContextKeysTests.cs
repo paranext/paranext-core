@@ -57,20 +57,4 @@ public class ContextKeysTests
         Assert.Throws<ArgumentException>(() => _contextKeys.Set("singleSegment", true));
     }
 
-    [Test]
-    public void TryGetValue_RoundTripsThroughPrefix()
-    {
-        _contextKeys.Set("myExt.someFlag", true);
-        Assert.That(_contextKeys.TryGetValue<bool>("myExt.someFlag", out var value), Is.True);
-        Assert.That(value, Is.True);
-        Assert.That(_contextKeys.TryGetValue<bool>("myExt.missing", out _), Is.False);
-    }
-
-    [Test]
-    public void Remove_SetsUnderlyingValueToDefault()
-    {
-        _contextKeys.Set("myExt.someFlag", true);
-        _contextKeys.Remove("myExt.someFlag");
-        Assert.That(_fakeStore.Values["contextKeys.myExt.someFlag"], Is.Null);
-    }
 }

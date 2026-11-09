@@ -8,7 +8,8 @@ namespace Paranext.DataProvider.Services;
 /// Keep key format and semantics in sync with context-keys.service.ts.
 /// Values are constrained to string, int, double, and bool. Keys must have at least two
 /// dot-separated segments of word characters or hyphens; prefix keys with your component's name.
-/// A key first set in one process can only be updated from that same process.
+/// A key first set in one process can only be updated from that same process. The C# side only
+/// writes keys: it neither reads them back nor removes them.
 /// </summary>
 /// <remarks>
 /// Experimental: this surface is unstable and may change or disappear without notice.
@@ -51,18 +52,6 @@ internal sealed partial class ContextKeys(ISharedStore sharedStore)
     public void Set(string key, double value)
     {
         SetInternal(key, value);
-    }
-
-    public bool TryGetValue<T>(string key, out T? value)
-    {
-        AssertValidKey(key);
-        return _sharedStore.TryGetValue(STORE_PREFIX + key, out value);
-    }
-
-    public void Remove(string key)
-    {
-        AssertValidKey(key);
-        _sharedStore.Remove<object>(STORE_PREFIX + key);
     }
 
     private void SetInternal<T>(string key, T value)
