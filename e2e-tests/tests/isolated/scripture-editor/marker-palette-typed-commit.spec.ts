@@ -4,6 +4,9 @@
  * the marker as it settles, so this is the end-to-end check of that hand-off: unit tests cover the
  * editor and the key routing separately, and only the running app puts them together.
  *
+ * The same markers typed straight through, without waiting for the palette to appear, are covered
+ * by marker-palette-typed-through.spec.ts.
+ *
  * ONE test() per spec file (isolated-fixture / second-Electron-instance constraint — see
  * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
  */
@@ -85,16 +88,6 @@ test.describe('scripture editor marker palette typed commit', () => {
       await mainPage.keyboard.press('End');
       await typeMarker('v', '91 Z');
       await expect.poll(() => hasVerse('91'), { timeout: 20_000 }).toBe(true);
-    });
-
-    await test.step('typed straight through, without waiting for the palette', async () => {
-      await mainPage.keyboard.press('End');
-      await mainPage.keyboard.type('\\nd Rx');
-      await expect.poll(() => isInNdSpan('Rx'), { timeout: 20_000 }).toBe(true);
-      expect(await hasVerse('92')).toBe(false);
-      await mainPage.keyboard.press('End');
-      await mainPage.keyboard.type('\\v 92 Y');
-      await expect.poll(() => hasVerse('92'), { timeout: 20_000 }).toBe(true);
     });
   });
 });
