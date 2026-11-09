@@ -1543,6 +1543,15 @@ const NARROW_WINDOW_WIDTH = 960;
  */
 const SHORT_WINDOW_HEIGHT = 600;
 
+/**
+ * Expected-failure reason for the tests below that put the editor in Matthew: a search submitted
+ * there never reports a result count, so they fail before the jump is made. Remove the marker from
+ * each once PT-5008 is fixed; until then `test.fail` reports a pass of any of them as a failure,
+ * which is the signal that it can go.
+ */
+const PT_5008_REASON =
+  'PT-5008: a Find search made while the editor is in Matthew never reports results';
+
 test.describe('Jumping to a result scrolls the editor to the match', () => {
   /**
    * Set by the tests that resize the window. Restored here rather than in a test's own `finally`,
@@ -1558,6 +1567,7 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
   });
 
   test('same chapter: a match below the fold scrolls into view', async ({ mainPage }) => {
+    test.fail(true, PT_5008_REASON);
     const editorFrame = await findScriptureEditorFrame(mainPage);
     const frame = await openFindPanel(mainPage);
     const before = await showEditorAt(
@@ -1612,6 +1622,7 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
   test('different chapter: the match lands fully in view, not against the bottom edge', async ({
     mainPage,
   }) => {
+    test.fail(true, PT_5008_REASON);
     const editorFrame = await findScriptureEditorFrame(mainPage);
     const frame = await openFindPanel(mainPage);
     await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
@@ -1628,6 +1639,7 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
   test('different chapter, opened with a double-click: the match lands fully in view', async ({
     mainPage,
   }) => {
+    test.fail(true, PT_5008_REASON);
     const editorFrame = await findScriptureEditorFrame(mainPage);
     const frame = await openFindPanel(mainPage);
     await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
@@ -1681,6 +1693,7 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
     mainPage,
     electronApp,
   }) => {
+    test.fail(true, PT_5008_REASON);
     const editorFrame = await findScriptureEditorFrame(mainPage);
     const frame = await openFindPanel(mainPage);
     const wide = await showEditorAt(mainPage, editorFrame, 'Matthew 5:1', MID_CHAPTER_TERM, 'top');

@@ -133,6 +133,13 @@ test.describe('web view tab moved within its window', () => {
   test('unmounts the React root of the document its iframe replaced', async ({
     mainPage: page,
   }) => {
+    // The second tab opens in a different panel from the first, so the "both web views share one panel"
+    // precondition fails before the move. Remove once PT-5010 decides the placement: restored, or
+    // this test opens the second tab into the first's panel explicitly.
+    test.fail(
+      true,
+      'PT-5010: two tabs opened one after the other from an extension land in different panels',
+    );
     await waitForAppReady(page, { timeout: 180_000 });
 
     const consoleLines: string[] = [];

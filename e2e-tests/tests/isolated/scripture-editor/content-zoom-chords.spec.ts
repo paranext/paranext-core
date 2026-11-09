@@ -113,8 +113,8 @@ test.describe('scripture editor content zoom — keyboard chords', () => {
     await expect(footnotesList).toBeVisible({ timeout: 20_000 });
     // This covers the keyboard route onto a row: arrowing moves focus into the pane without
     // selecting a note, so the caret never leaves the pane and the chord resolves the area from
-    // focus alone. The click route, where selecting a note sends the caret back into the editor
-    // text, is covered separately below.
+    // focus alone. The click route, which opens the note in the pane's row editor, is covered
+    // separately below.
     await footnotesList.focus();
     await mainPage.keyboard.press('ArrowDown');
     await expect.poll(() => readFocusedAreaId(editorFrame)).toBe('footnotes');
@@ -127,7 +127,7 @@ test.describe('scripture editor content zoom — keyboard chords', () => {
     await expect.poll(() => readFactor(editorFrame, 'footnotes')).toBe(1);
   });
 
-  test('the chords follow a clicked footnote even though selecting it moves the caret back to the text', async ({
+  test('the chords follow a clicked footnote row into the row editor it opens', async ({
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance + backend-readiness gates). 3x "slow" budget.
@@ -151,11 +151,14 @@ test.describe('scripture editor content zoom — keyboard chords', () => {
     );
     await expect(footnotesList).toBeVisible({ timeout: 20_000 });
 
-    // Clicking the row selects the note, and selecting a note sends the caret back into the editor
-    // text (`handleFootnoteSelected` -> `selectNote` in `platform-scripture-editor.web-view.tsx`).
-    // The chords must still act on the pane the user clicked in.
+    // In an editable Power-mode view the pane is the note-editing surface, so clicking a row opens
+    // that note in the pane's row editor and moves the text to the note without taking focus out
+    // of the pane (`handleFootnoteEditRequested` -> `navigateToNote` in
+    // `platform-scripture-editor.web-view.tsx`). Focus is then in an editable surface inside the
+    // footnotes area rather than on the row list, which is what this case adds to the keyboard one
+    // above: the chords must act on the footnotes area, not on the text the caret was moved to.
     await footnotesList.locator('[role="option"]').first().click();
-    await expect.poll(() => readFocusedAreaId(editorFrame)).toBe('main');
+    await expect.poll(() => readFocusedAreaId(editorFrame)).toBe('footnotes');
 
     await mainPage.keyboard.press('Control+=');
     await expect.poll(() => readFactor(editorFrame, 'footnotes')).toBe(1.1);

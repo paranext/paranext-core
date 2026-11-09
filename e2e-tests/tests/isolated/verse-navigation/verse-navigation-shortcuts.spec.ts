@@ -89,46 +89,54 @@ test.describe('verse navigation keyboard shortcuts', () => {
   // is covered by unit tests in src/main/verse-navigation-shortcuts.util.test.ts, and the shortcuts
   // are covered by manual verification. Do NOT delete these assertions — they document the intended
   // end-to-end behavior and can be re-enabled if OS-level injection becomes available.
-  test.skip('F8/Ctrl+F8 and Ctrl+Down/Ctrl+Up navigate; F9/Ctrl+F9 change book; Ctrl+B opens the control', async ({
-    mainPage,
-  }) => {
-    await waitForAppReady(mainPage);
-    await openScriptureEditorForProject(mainPage, project.projectId);
+  test.skip(
+    'F8/Ctrl+F8 and Ctrl+Down/Ctrl+Up navigate; F9/Ctrl+F9 change book; Ctrl+B opens the control',
+    {
+      annotation: {
+        type: 'skip',
+        description:
+          "Harness limitation: the main process's before-input-event handles these keys, and CDP key events never reach it",
+      },
+    },
+    async ({ mainPage }) => {
+      await waitForAppReady(mainPage);
+      await openScriptureEditorForProject(mainPage, project.projectId);
 
-    const trigger = mainPage.locator(BCV_TRIGGER).first();
-    await expect(trigger).toBeVisible({ timeout: 15_000 });
-    // Same hard expectation as the enabled test above: with an editor open, the control enables
-    await expect(trigger).toBeEnabled({ timeout: 15_000 });
+      const trigger = mainPage.locator(BCV_TRIGGER).first();
+      await expect(trigger).toBeVisible({ timeout: 15_000 });
+      // Same hard expectation as the enabled test above: with an editor open, the control enables
+      await expect(trigger).toBeEnabled({ timeout: 15_000 });
 
-    // Normalize to a known reference via the UI so navigation targets are predictable
-    await navigateToolbarBcv(mainPage, 'Genesis 1:1');
-    await expect(trigger).toContainText('1:1');
-    const baseLabel = (await trigger.innerText()).trim();
+      // Normalize to a known reference via the UI so navigation targets are predictable
+      await navigateToolbarBcv(mainPage, 'Genesis 1:1');
+      await expect(trigger).toContainText('1:1');
+      const baseLabel = (await trigger.innerText()).trim();
 
-    // Next / previous chapter
-    await mainPage.keyboard.press('F8');
-    await expect(trigger).toContainText('2:1');
-    await mainPage.keyboard.press('Control+F8');
-    await expect(trigger).toHaveText(baseLabel);
+      // Next / previous chapter
+      await mainPage.keyboard.press('F8');
+      await expect(trigger).toContainText('2:1');
+      await mainPage.keyboard.press('Control+F8');
+      await expect(trigger).toHaveText(baseLabel);
 
-    // Next / previous verse
-    await mainPage.keyboard.press('Control+ArrowDown');
-    await expect(trigger).toContainText('1:2');
-    await mainPage.keyboard.press('Control+ArrowUp');
-    await expect(trigger).toHaveText(baseLabel);
+      // Next / previous verse
+      await mainPage.keyboard.press('Control+ArrowDown');
+      await expect(trigger).toContainText('1:2');
+      await mainPage.keyboard.press('Control+ArrowUp');
+      await expect(trigger).toHaveText(baseLabel);
 
-    // Next / previous book (GEN -> EXO 1:1 -> GEN 1:1)
-    await mainPage.keyboard.press('F9');
-    const afterNextBook = (await trigger.innerText()).trim();
-    expect(afterNextBook).not.toBe(baseLabel);
-    expect(parseChapterVerse(afterNextBook)).toEqual({ chapterNum: 1, verseNum: 1 });
-    await mainPage.keyboard.press('Control+F9');
-    await expect(trigger).toHaveText(baseLabel);
+      // Next / previous book (GEN -> EXO 1:1 -> GEN 1:1)
+      await mainPage.keyboard.press('F9');
+      const afterNextBook = (await trigger.innerText()).trim();
+      expect(afterNextBook).not.toBe(baseLabel);
+      expect(parseChapterVerse(afterNextBook)).toEqual({ chapterNum: 1, verseNum: 1 });
+      await mainPage.keyboard.press('Control+F9');
+      await expect(trigger).toHaveText(baseLabel);
 
-    // Ctrl+B opens the control with the search input focused
-    await mainPage.keyboard.press('Control+b');
-    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeVisible();
-    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeFocused();
-    await mainPage.keyboard.press('Escape');
-  });
+      // Ctrl+B opens the control with the search input focused
+      await mainPage.keyboard.press('Control+b');
+      await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeVisible();
+      await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeFocused();
+      await mainPage.keyboard.press('Escape');
+    },
+  );
 });
