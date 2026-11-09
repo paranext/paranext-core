@@ -373,7 +373,7 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
 
 describe('Simple-mode section headings in the compiled editor sheets', () => {
   // Compiled, so rules from every sheet a web view `@use`s, nested rules and Sass-generated
-  // properties are all seen as the browser sees them.
+  // properties are all seen as Sass emits them.
   const markerStylesDir = path.resolve(__dirname, 'marker-styles');
   const sheets: { file: string; root: Root }[] = [
     ...readdirSync(__dirname)
@@ -390,8 +390,9 @@ describe('Simple-mode section headings in the compiled editor sheets', () => {
     /\.usfm_s[1-3]?(?![\w-])[^\s>+~]*$/.test(selector.trim());
 
   it('only places the headings, leaving their size, weight and color to the base styles', () => {
-    // As upstream (eten-tech-foundation/scripture-editors#486), so a heading looks as it does in
+    // As upstream (eten-tech-foundation/scripture-editors#486), so a heading's type matches
     // Preview: the `.formatted-font .usfm_s…` rules give its size, weight and style.
+    const placementProperties = ['text-align', 'border-top', 'margin-top'];
     const placed: string[] = [];
     const styled: string[] = [];
     sheets.forEach(({ file, root }) =>
@@ -402,14 +403,16 @@ describe('Simple-mode section headings in the compiled editor sheets', () => {
             rule.selectors
               .filter(isGutterHeading)
               .forEach((selector) => placed.push(`${file}: ${selector}`));
-          if (/^(?:font|font-size|font-weight|color|letter-spacing)$/.test(declaration.prop))
+          if (!placementProperties.includes(declaration.prop))
             styled.push(`${file}: ${rule.selector} { ${declaration.toString()} }`);
         });
       }),
     );
     // Positive control, so a parser that finds no heading rule doesn't pass vacuously.
-    expect(placed).toContain(
-      'platform-scripture-editor.web-view.scss: .psc-gutter-markers .usfm_s1',
+    ['.usfm_s', '.usfm_s1', '.usfm_s2', '.usfm_s3'].forEach((heading) =>
+      expect(placed).toContain(
+        `platform-scripture-editor.web-view.scss: .psc-gutter-markers ${heading}`,
+      ),
     );
     expect(styled).toEqual([]);
   });
@@ -418,6 +421,8 @@ describe('Simple-mode section headings in the compiled editor sheets', () => {
     // Any text-transform hides the case the translator typed. The gutter marker glyph sits inside
     // its paragraph, so uppercase or capitalize would also show `\s1` as the invalid `\S1`. Only
     // `none` and `initial` are allowed: `revert`, `unset` and `inherit` keep an inherited transform.
+    // Positive control: the marker-style sheets are in the sweep, not just the web-view ones.
+    expect(sheets.map(({ file }) => file)).toContain('commentary-overrides.scss');
     const transforms: string[] = [];
     sheets.forEach(({ file, root }) =>
       root.walkDecls('text-transform', (declaration) => {
