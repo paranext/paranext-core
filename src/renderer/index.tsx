@@ -11,7 +11,10 @@ import {
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
-import { initConnectionLostService } from '@renderer/services/connection-lost-service';
+import {
+  initConnectionLostService,
+  initializeNetworkReportingFailure,
+} from '@renderer/services/connection-lost-service';
 import {
   catchUpExtensionHostStoppedState,
   initExtensionHostStoppedService,
@@ -137,8 +140,9 @@ initExtensionHostStoppedService();
 (async () => {
   try {
     // The network service has to start first, and it uses the shared store after initialization.
-    // Web views are blocked from the PAPI network here, before any of them can start running.
-    await initializeNetworkThenBlockPapiWebSockets(() => networkService.initialize());
+    // Web views are blocked from the PAPI network here, before any of them can start running. A
+    // failed connect shows the couldn't-start state, since nothing after this line runs.
+    await initializeNetworkThenBlockPapiWebSockets(initializeNetworkReportingFailure);
     markStartup('papi-connected');
     // Not awaited: nothing at startup needs the answer, and it never rejects.
     catchUpExtensionHostStoppedState();

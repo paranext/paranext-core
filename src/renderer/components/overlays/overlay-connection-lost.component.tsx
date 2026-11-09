@@ -22,7 +22,7 @@ import {
   ALARM_STRIP_ACTIONS_CLASS_NAME,
   ALARM_STRIP_ALERT_CLASS_NAME,
 } from '@renderer/components/alarm-strip.util';
-import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
+import { useConnectionFailure } from '@renderer/hooks/use-is-connection-lost.hook';
 
 // Declared without a `LocalizeKey` annotation so each keeps its literal type, which is what makes
 // `ConnectionLostKey` below a union of these exact keys rather than plain `string`.
@@ -43,12 +43,22 @@ export const CONNECTION_LOST_RELOAD_KEY = '%overlay_connectionLostReload%' satis
  * message rather than hardcoded for the same reason every other product-named string is.
  */
 export const PRODUCT_NAME_KEY = '%product_name%' satisfies LocalizeKey;
+/**
+ * Shown instead of the connection-lost text when the first connect at startup failed. Nothing was
+ * ever connected, so no work can be lost and the reload label carries no warning.
+ */
+export const COULD_NOT_START_TITLE_KEY = '%overlay_couldNotStartTitle%' satisfies LocalizeKey;
+export const COULD_NOT_START_MESSAGE_KEY = '%overlay_couldNotStart%' satisfies LocalizeKey;
+export const COULD_NOT_START_RELOAD_KEY = '%overlay_couldNotStartReload%' satisfies LocalizeKey;
 
 /** Every localization key this component requests. */
 export type ConnectionLostKey =
   | typeof CONNECTION_LOST_TITLE_KEY
   | typeof CONNECTION_LOST_MESSAGE_KEY
   | typeof CONNECTION_LOST_RELOAD_KEY
+  | typeof COULD_NOT_START_TITLE_KEY
+  | typeof COULD_NOT_START_MESSAGE_KEY
+  | typeof COULD_NOT_START_RELOAD_KEY
   | typeof PRODUCT_NAME_KEY;
 
 /**
@@ -60,6 +70,9 @@ export const LOCALIZED_STRING_KEYS: ConnectionLostKey[] = [
   CONNECTION_LOST_MESSAGE_KEY,
   CONNECTION_LOST_RELOAD_KEY,
   CONNECTION_LOST_TITLE_KEY,
+  COULD_NOT_START_MESSAGE_KEY,
+  COULD_NOT_START_RELOAD_KEY,
+  COULD_NOT_START_TITLE_KEY,
   PRODUCT_NAME_KEY,
 ];
 
@@ -80,6 +93,9 @@ export const ENGLISH_FALLBACKS: { [K in ConnectionLostKey]: string } = {
   [CONNECTION_LOST_MESSAGE_KEY]:
     "{%product_name%} can't reach the rest of the app. Anything you changed just now may not be saved.",
   [CONNECTION_LOST_RELOAD_KEY]: 'Reload anyway',
+  [COULD_NOT_START_TITLE_KEY]: "Couldn't start",
+  [COULD_NOT_START_MESSAGE_KEY]: "{%product_name%} couldn't connect to the rest of the app.",
+  [COULD_NOT_START_RELOAD_KEY]: 'Reload',
   [PRODUCT_NAME_KEY]: 'Platform.Bible',
 };
 
@@ -257,7 +273,8 @@ export function ConnectionLostOverlayPresentational({
  * `.context/standards/Architecture-Decisions.md`.
  */
 export function ConnectionLostOverlay() {
-  const isConnectionLost = useIsConnectionLost();
+  const connectionFailure = useConnectionFailure();
+  const isConnectionLost = connectionFailure !== undefined;
 
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
   const isPowerMode = useIsPowerMode();
@@ -273,19 +290,23 @@ export function ConnectionLostOverlay() {
 
   if (!isConnectionLost) return undefined;
 
+  const neverConnected = connectionFailure === 'neverConnected';
+  const titleKey = neverConnected ? COULD_NOT_START_TITLE_KEY : CONNECTION_LOST_TITLE_KEY;
+  const messageKey = neverConnected ? COULD_NOT_START_MESSAGE_KEY : CONNECTION_LOST_MESSAGE_KEY;
+  const reloadKey = neverConnected ? COULD_NOT_START_RELOAD_KEY : CONNECTION_LOST_RELOAD_KEY;
+
   // Bypasses OverlayHost intentionally, as WorkspaceUpdatingOverlay does: this state must cover the
   // whole window rather than take its place in the overlay stack.
   return createPortal(
     <ConnectionLostOverlayPresentational
-      title={localizedOrEnglish(localizedStrings, CONNECTION_LOST_TITLE_KEY)}
+      title={localizedOrEnglish(localizedStrings, titleKey)}
       // The message carries `{%product_name%}`; expanding it here means the app name comes from
       // localization in the resolved case and from the English fallback otherwise, so neither path
       // renders a raw placeholder.
-      message={formatReplacementString(
-        localizedOrEnglish(localizedStrings, CONNECTION_LOST_MESSAGE_KEY),
-        { [PRODUCT_NAME_KEY]: localizedOrEnglish(localizedStrings, PRODUCT_NAME_KEY) },
-      )}
-      reloadLabel={localizedOrEnglish(localizedStrings, CONNECTION_LOST_RELOAD_KEY)}
+      message={formatReplacementString(localizedOrEnglish(localizedStrings, messageKey), {
+        [PRODUCT_NAME_KEY]: localizedOrEnglish(localizedStrings, PRODUCT_NAME_KEY),
+      })}
+      reloadLabel={localizedOrEnglish(localizedStrings, reloadKey)}
       isPowerMode={isPowerMode}
       onReload={handleReload}
     />,
