@@ -109,8 +109,9 @@ the extension host process:
   also replaced with `requireForExtension` as defense in depth, for any module loaded the ordinary
   way after activation starts.
 - **Module helpers on `process` are disabled at activation.** `blockProcessModuleAccess` replaces
-  `process.getBuiltinModule`, `binding`, `_linkedBinding` and `dlopen` with functions that throw,
-  and sets `process.mainModule` to `undefined`.
+  `process.getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`, `loadEnvFile`,
+  `_getActiveHandles` and `_getActiveRequests` with functions that throw, and sets
+  `process.mainModule` to `undefined`.
 - **Code built from strings is disabled at activation.** `blockCodeGenerationFromStrings` deletes
   `globalThis.eval` and `globalThis.Function` and locks the `constructor` of the four function
   prototypes (plain, async, generator, async generator) to a function that throws.
@@ -122,10 +123,19 @@ which logs `Sandbox probes: <refused>/<total> refused` and a `<<BAD>>` line per 
 `src/extension-host/services/extension-sandbox.probes.test.ts`, which runs the same probes in a
 child Node process and fails if any route is open.
 
-This is an in-process sandbox: it closes the known routes, but every extension shares one
-JavaScript realm with the host, so it is not a hard security boundary. Process-level isolation
-(Node's permission model, a process per extension) is out of scope as of 2026-11-09; see
-`adr-extensions-load-through-sandbox-loader`.
+This is an in-process sandbox. It closes the module-loading and string-compilation routes listed
+above, and every extension still shares one JavaScript realm and one `process` with the host, so it
+is not a hard security boundary. As of 2026-11-09 these routes are known to remain open:
+
+- a `net.Socket` built from `process.stdout.constructor` or `process.stderr.constructor`;
+- the rest of the `process` surface, such as `kill`, `send`, `report.writeReport`, `chdir` and
+  `env`;
+- in dev builds, grabbing host functions from stack frames through `Error.prepareStackTrace` and
+  `CallSite.getFunction()`.
+
+A follow-up audit of the `process` surface is recommended but not filed as of 2026-11-09.
+Process-level isolation (Node's permission model, a process per extension) is out of scope as of
+2026-11-09; see `adr-extensions-load-through-sandbox-loader`.
 
 For the complete and up-to-date list, see the [Module Import Restrictions wiki](https://github.com/paranext/paranext/wiki/Module-import-restrictions).
 

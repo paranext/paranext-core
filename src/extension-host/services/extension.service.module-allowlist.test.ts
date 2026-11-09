@@ -19,7 +19,8 @@ import { WEB_VIEW_MODULE_SPECIFIERS } from '@renderer/data/web-view-modules.data
  * `globalThis.eval`/`Function` and replaces `fetch`/`XMLHttpRequest` - and `extension.service.ts`
  * cannot even be imported here, because it creates directories at module scope. So
  * `requireForExtension` dispatches from `EXTENSION_INTERFACE_MODULE_SPECIFIERS` instead, in a
- * module that imports nothing, and this compares that VALUE. Any admission has to add a specifier there, in any syntax, and fail this.
+ * module that imports nothing, and this compares that VALUE. Any admission has to add a specifier
+ * there, in any syntax, and fail this.
  *
  * The renderer half is read the same way, and for the same reason: `global-this-web-view.model.ts`
  * pulls in React and `platform-bible-react`, which do not load outside a browser environment, so its

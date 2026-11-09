@@ -328,6 +328,17 @@ async function runSandboxProbes() {
     // eslint-disable-next-line no-underscore-dangle
     probeThrowsRefusal('process-linkedBinding', () => process._linkedBinding('fs')),
     probeThrowsRefusal('process-dlopen', () => process.dlopen({}, '')),
+    // A file name that does not exist, so a host without the lockdown throws instead of reading a
+    // real `.env` file
+    probeThrowsRefusal('process-loadEnvFile', () =>
+      process.loadEnvFile('evil-sandbox-probe-does-not-exist.env'),
+    ),
+    // `_getActiveHandles` is Node's own name for this `process` member
+    // eslint-disable-next-line no-underscore-dangle
+    probeThrowsRefusal('process-getActiveHandles', () => process._getActiveHandles()),
+    // `_getActiveRequests` is Node's own name for this `process` member
+    // eslint-disable-next-line no-underscore-dangle
+    probeThrowsRefusal('process-getActiveRequests', () => process._getActiveRequests()),
     probeIsUndefined('process-mainModule', () => process.mainModule),
     // `_load` is Node's own name for its module loader's entry point
     // eslint-disable-next-line no-underscore-dangle

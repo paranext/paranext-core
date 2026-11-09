@@ -1391,7 +1391,8 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   // Note: node does not allow strings in setTimeout, setInterval, or setImmediate, so we don't need
   // to monkey-patch them https://nodejs.org/api/timers.html#scheduling-timers
   blockCodeGenerationFromStrings();
-  // Remove the `process` members that load Node modules or native code without `require`
+  // Remove the `process` members that hand out Node modules, native code or host handles without
+  // `require`
   blockProcessModuleAccess();
 
   // Replace fetch with papi.fetch.

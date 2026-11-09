@@ -3417,8 +3417,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `process.mainModule`, and the `process` helpers `getBuiltinModule`, `binding`, `_linkedBinding`
   and `dlopen`. Code could also be built from strings through the `constructor` of any function
   literal (plain, async, generator, async generator) even though `eval` and `Function` were
-  deleted from the global object. In a dev run before the change, the `evil` extension's sandbox
-  probes reported 4 of 16 routes refused.
+  deleted from the global object. Running this branch's `evil` extension (16 sandbox probes at the
+  time) against the extension host as it was before the change refused only 4 of the 16 probes.
 - **Decision:** (1) **Loader over hooks.** `loadExtensionModule`
   (`src/extension-host/services/extension-sandbox.util.ts`) reads the entry file and compiles it
   with `vm.compileFunction` without an `importModuleDynamically` callback, handing it a plain
@@ -3428,12 +3428,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   prototypes at activation** (`blockCodeGenerationFromStrings`): `eval` and `Function` are deleted
   and the four function prototypes' `constructor` is made a non-writable, non-configurable
   function that throws. (3) **`process` helpers are replaced with throwing stubs at activation**
-  (`blockProcessModuleAccess`), and `process.mainModule` is set to `undefined`. (4) **The
+  (`blockProcessModuleAccess`: `getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`,
+  `loadEnvFile`, `_getActiveHandles`, `_getActiveRequests`), and `process.mainModule` is set to
+  `undefined`. (4) **The
   `Module.prototype.require` shim stays** as defense in depth, reduced to "extension interface
-  module or throw", since entry files no longer go through it. Every refusal message contains
-  `not allowed in extensions`. The `evil` extension's probes and
+  module or throw", since entry files no longer go through it. Refusals from the loader and the
+  lockdowns contain `not allowed in extensions`. The `evil` extension's probes and
   `extension-sandbox.probes.test.ts` (which runs them in a child Node process with and without the
-  lockdowns) are the regression guard.
+  lockdowns) are the regression guard, and `extension.service.sandbox-wiring.test.ts` fails if
+  `extension.service.ts` stops calling the loader or the lockdowns.
 - **Alternatives:** (A) An ESM loader hook (`module.register`) plus caller detection to refuse
   dynamic imports from extension files — rejected: it closes only `import()`, leaves the loader
   and cache reachable, and identifying the caller from a resolve hook is fragile. (B) Starting the
@@ -3442,8 +3445,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   later with `v8.setFlagsFromString` has no effect (checked in plain Node 22). (C) Process-level
   isolation (Node's `--permission` model, or a process per extension) — deferred as out of scope:
   it is the only route to a hard boundary but changes how extensions are hosted.
-- **Consequences:** This is an in-process sandbox. It closes the known routes; it is not a hard
-  security boundary, because every extension shares one JavaScript realm with the host. Extensions
+- **Consequences:** This is an in-process sandbox. It closes the module-loading and
+  string-compilation routes listed above; it is not a hard security boundary, because every
+  extension shares one JavaScript realm and one `process` with the host. Known to remain open as of
+  2026-11-09: a `net.Socket` built from `process.stdout.constructor` or
+  `process.stderr.constructor`; the rest of the `process` surface (`kill`, `send`,
+  `report.writeReport`, `chdir`, `env`); and, in dev builds, grabbing host functions from stack
+  frames through `Error.prepareStackTrace` and `CallSite.getFunction()`. A follow-up audit of the
+  `process` surface is recommended (not filed as of 2026-11-09). Extensions
   that relied on string-built code or on Node's `module` beyond `exports` break; neither was
   supported. The extension module cache is no longer involved: a reloaded extension re-reads its
   file, and nothing deletes `require.cache` entries. Only CommonJS-shaped entry files load (an ES
@@ -3456,7 +3465,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   built `main.js` rather than source-mapped `.ts`, because scripts compiled with
   `vm.compileFunction` do not get Node's source-map rewriting (debugger breakpoints are expected
   to still resolve); restoring source-mapped stacks is a candidate follow-up. Packaged builds are
-  checked by hand with the `evil` extension (`Sandbox probes: 16/16 refused`); there is no
+  checked by hand with the `evil` extension (`Sandbox probes: 19/19 refused`); there is no
   automated packaged test. Revisit if process isolation is taken up. Supersedes in part the
   mechanism described in `adr-licensing-boundary` ("shimming `Module.prototype.require`"); the
   licensing decision there is unchanged.
