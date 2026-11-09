@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EvaluatableMenu, getErrorMessage } from 'platform-bible-utils';
 import { contextKeysService } from '@shared/services/context-keys.service';
 import { evaluateMenuRecordingReads } from '@shared/utils/evaluate-menu-recording-reads.util';
 import { logger } from '@shared/services/logger.service';
+
+const NO_READ_KEYS: ReadonlySet<string> = new Set();
 
 /**
  * Evaluates the when-expressions (`when`, `enabledWhen`, `checkedWhen`) in a menu document against
@@ -24,20 +26,20 @@ export function useEvaluatedMenu<T extends EvaluatableMenu>(
 ): T | undefined {
   const [contextKeysVersion, setContextKeysVersion] = useState(0);
 
-  // The change sequence the committed evaluation saw; written only inside the memo so a render that
-  // reuses the memoized result cannot advance it past that evaluation
+  // The change sequence the shown evaluation saw; written only in the layout effect, so a render
+  // React discards (a suspended transition, for example) cannot advance it past what is shown
   const evaluatedChangeSequenceRef = useRef(0);
 
-  // The context keys the committed evaluation read; only a change to one of them can change the
-  // result, so only those changes re-evaluate
+  // The context keys the shown evaluation read; only a change to one of them can change the result,
+  // so only those changes re-evaluate. Written only in the layout effect, for the reason above
   const readKeysRef = useRef<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     const unsubscribe = contextKeysService.onDidChange((event) => {
       if (readKeysRef.current.has(event.key)) setContextKeysVersion((version) => version + 1);
     });
-    // A key can change between the render that evaluated and this subscription (for example in a
-    // sibling effect); re-evaluate only in that case so a plain mount evaluates once
+    // A key can change between the layout effect and this subscription (for example in a sibling
+    // effect); re-evaluate only in that case so a plain mount evaluates once
     if (contextKeysService.getChangeSequence() !== evaluatedChangeSequenceRef.current)
       setContextKeysVersion((version) => version + 1);
     return () => {
@@ -45,12 +47,9 @@ export function useEvaluatedMenu<T extends EvaluatableMenu>(
     };
   }, []);
 
-  return useMemo(() => {
-    evaluatedChangeSequenceRef.current = contextKeysService.getChangeSequence();
-    if (!menuData) {
-      readKeysRef.current = new Set();
-      return undefined;
-    }
+  const evaluation = useMemo(() => {
+    const changeSequence = contextKeysService.getChangeSequence();
+    if (!menuData) return { evaluatedMenu: undefined, readKeys: NO_READ_KEYS, changeSequence };
     const { evaluatedMenu, readKeys } = evaluateMenuRecordingReads(
       menuData,
       templateVars,
@@ -60,11 +59,21 @@ export function useEvaluatedMenu<T extends EvaluatableMenu>(
         );
       },
     );
-    readKeysRef.current = readKeys;
-    return evaluatedMenu;
+    return { evaluatedMenu, readKeys, changeSequence };
     // contextKeysVersion intentionally triggers re-evaluation when a context key it read changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuData, templateVars, contextKeysVersion]);
+
+  // Runs only for a render React shows. A key that changed after the evaluation read it (before the
+  // subscription existed, or between a discarded render and this one) is caught here.
+  useLayoutEffect(() => {
+    readKeysRef.current = evaluation.readKeys;
+    evaluatedChangeSequenceRef.current = evaluation.changeSequence;
+    if (contextKeysService.getChangeSequence() !== evaluation.changeSequence)
+      setContextKeysVersion((version) => version + 1);
+  }, [evaluation]);
+
+  return evaluation.evaluatedMenu;
 }
 
 export default useEvaluatedMenu;

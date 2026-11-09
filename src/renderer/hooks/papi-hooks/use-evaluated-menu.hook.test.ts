@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, renderHook } from '@testing-library/react';
-import { useEffect, useState } from 'react';
+import { act, render, renderHook } from '@testing-library/react';
+import { createElement, startTransition, Suspense, useEffect, useState } from 'react';
 import { vi } from 'vitest';
 import { PlatformEventEmitter, SingleColumnMenu } from 'platform-bible-utils';
 
@@ -155,6 +155,60 @@ describe('useEvaluatedMenu', () => {
       mockOnDidChangeEmitter.emit({ key: 'test.a', value: true });
     });
     expect(result.current?.items.map((item) => item.label)).toEqual(['%conditional%']);
+  });
+
+  it('keeps the shown evaluation subscribed when a render that evaluated is discarded', async () => {
+    const menuReadingA: SingleColumnMenu = {
+      ...menuData,
+      items: [{ ...menuData.items[1], when: 'test.a' }],
+    };
+    const menuReadingB: SingleColumnMenu = {
+      ...menuData,
+      items: [{ ...menuData.items[1], when: 'test.b' }],
+    };
+    const vars = {};
+    const neverResolves = new Promise<never>(() => {});
+    const shownLabels: (string[] | undefined)[] = [];
+    let startDiscardedRender = () => {};
+
+    function Probe({ menu, shouldSuspend }: { menu: SingleColumnMenu; shouldSuspend: boolean }) {
+      const evaluated = useEvaluatedMenu(menu, vars);
+      // Effects run only for a render React shows
+      useEffect(() => {
+        shownLabels.push(evaluated?.items.map((item) => item.label));
+      });
+      // Suspending after the hook evaluated discards this render: React never shows it
+      if (shouldSuspend) throw neverResolves;
+      return undefined;
+    }
+    function Harness() {
+      const [state, setState] = useState({ menu: menuReadingA, shouldSuspend: false });
+      startDiscardedRender = () =>
+        startTransition(() => setState({ menu: menuReadingB, shouldSuspend: true }));
+      return createElement(
+        Suspense,
+        { fallback: undefined },
+        createElement(Probe, { menu: state.menu, shouldSuspend: state.shouldSuspend }),
+      );
+    }
+
+    await act(async () => {
+      render(createElement(Harness));
+    });
+    expect(shownLabels.at(-1)).toEqual([]);
+
+    // The transition's render evaluates menuReadingB, then suspends: it is never shown
+    await act(async () => {
+      startDiscardedRender();
+    });
+
+    // The shown tree still has menuReadingA's result, so a change to the key it read must update it
+    await act(async () => {
+      mockContextKeyValues.set('test.a', true);
+      mockChangeSequence += 1;
+      mockOnDidChangeEmitter.emit({ key: 'test.a', value: true });
+    });
+    expect(shownLabels.at(-1)).toEqual(['%conditional%']);
   });
 
   it('should unsubscribe from context key changes on unmount', () => {
