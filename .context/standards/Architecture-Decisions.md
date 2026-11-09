@@ -3299,7 +3299,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   It is lost and reported either way: thrown away if the next chapter arrives first, or refused by
   the save if the debounce fires first (`isTypingLostToNavigation`); PT-5043 is to send it to the
   chapter it was made in.
-- **Source:** PT-5043; paranext-core PR #2998.
+- **Source:** PT-5048; paranext-core PR #2998.
 
 ## adr-editor-yields-to-window-focus-subject: The Scripture editor's typing hold yields to the window focus subject
 
