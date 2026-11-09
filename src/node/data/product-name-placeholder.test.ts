@@ -10,7 +10,7 @@ import {
 // Guards against a shipped locale re-hardcoding the literal product name where en.json uses the
 // {%product_name%} placeholder — formatReplacementString only substitutes the name where the
 // placeholder is present, so a hardcoded name in a translation never reflects a product rename and
-// stays wrong until someone notices it by eye. PT-4957 found and fixed exactly this in es.json.
+// stays wrong until someone notices it by eye.
 
 const PRODUCT_NAME_PLACEHOLDER = '{%product_name%}';
 
