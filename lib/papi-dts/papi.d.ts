@@ -2867,11 +2867,24 @@ declare module 'renderer/services/electron-papi-port-provider' {
 }
 declare module 'renderer/services/renderer-web-socket.service' {
   /**
-   * Once our network is running, run this so `PapiRendererWebSocket` (the `WebSocket` web views get)
-   * refuses connections to it. Web views can still reach the native `WebSocket` on `window.top`; see
-   * "The renderer's PAPI port" in `.context/standards/Security-Guide.md`.
+   * Makes `PapiRendererWebSocket` (the `WebSocket` web views get) refuse connections to the PAPI
+   * network. Web views can still reach the native `WebSocket` on `window.top`; see "The renderer's
+   * PAPI port" in `.context/standards/Security-Guide.md`.
    */
   export const blockWebSocketsToPapiNetwork: () => void;
+  /**
+   * Runs `initialize`, then blocks web views from the PAPI network whether it resolved or rejected,
+   * so a renderer that failed to connect never runs with extension sandboxing off.
+   *
+   * The block cannot run before `initialize` settles: without an Electron bridge, the renderer's own
+   * connection to main is a `PapiRendererWebSocket` to the PAPI port (see `web-socket.factory.ts`).
+   *
+   * @param initialize Starts the renderer's network service
+   * @throws Whatever `initialize` threw or rejected with, after blocking
+   */
+  export function initializeNetworkThenBlockPapiWebSockets(
+    initialize: () => Promise<void>,
+  ): Promise<void>;
   /** This wraps the browser's WebSocket implementation to provide
    * better control over internet access. It is isomorphic with the standard WebSocket, so it should
    * act as a drop-in replacement.

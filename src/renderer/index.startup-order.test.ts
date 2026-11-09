@@ -27,7 +27,9 @@ describe('renderer startup ordering', () => {
     expect(subscribeCalls).toHaveLength(1);
 
     const subscribeIndex = source.search(/^initConnectionLostService\(\);$/m);
-    const initializeIndex = source.search(/^\s*await networkService\.initialize\(\);$/m);
+    const initializeIndex = source.search(
+      /^\s*await initializeNetworkThenBlockPapiWebSockets\(\(\) => networkService\.initialize\(\)\);$/m,
+    );
 
     // Positive control: both call sites still exist in these shapes, so a rename cannot turn this
     // into a vacuous comparison of two -1s.

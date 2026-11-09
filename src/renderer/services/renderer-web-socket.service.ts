@@ -4,13 +4,33 @@ import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
 let allowWebSocketsBackToPapiNetwork: boolean = true;
 
 /**
- * Once our network is running, run this so `PapiRendererWebSocket` (the `WebSocket` web views get)
- * refuses connections to it. Web views can still reach the native `WebSocket` on `window.top`; see
- * "The renderer's PAPI port" in `.context/standards/Security-Guide.md`.
+ * Makes `PapiRendererWebSocket` (the `WebSocket` web views get) refuse connections to the PAPI
+ * network. Web views can still reach the native `WebSocket` on `window.top`; see "The renderer's
+ * PAPI port" in `.context/standards/Security-Guide.md`.
  */
 export const blockWebSocketsToPapiNetwork = (): void => {
   allowWebSocketsBackToPapiNetwork = false;
 };
+
+/**
+ * Runs `initialize`, then blocks web views from the PAPI network whether it resolved or rejected,
+ * so a renderer that failed to connect never runs with extension sandboxing off.
+ *
+ * The block cannot run before `initialize` settles: without an Electron bridge, the renderer's own
+ * connection to main is a `PapiRendererWebSocket` to the PAPI port (see `web-socket.factory.ts`).
+ *
+ * @param initialize Starts the renderer's network service
+ * @throws Whatever `initialize` threw or rejected with, after blocking
+ */
+export async function initializeNetworkThenBlockPapiWebSockets(
+  initialize: () => Promise<void>,
+): Promise<void> {
+  try {
+    await initialize();
+  } finally {
+    blockWebSocketsToPapiNetwork();
+  }
+}
 
 // We are just filtering by port number on purpose to allow other connections to localhost
 function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
