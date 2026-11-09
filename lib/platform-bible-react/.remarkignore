@@ -1,5 +1,6 @@
 # remark's MDX serializer reformats JSX inside attribute values (e.g. preview={...} props),
-# removing intentional indentation. Files listed here are excluded from remark --output.
+# removing intentional indentation, and puts a JSX element's multi-line attributes on one line.
+# Files listed here are excluded from remark --output and from format:mdx:check.
 src/stories/guidelines/providing-help.mdx
 src/stories/guidelines/theming.mdx
 src/stories/guidelines/tooltips.mdx
