@@ -226,27 +226,142 @@ const evilFileWebViewProvider = {
   },
 };
 
-async function tryImports() {
-  logger.info('Evil is importing! Mwahahaha');
+/** Substring of every error the extension host throws when it refuses an extension access */
+const NOT_ALLOWED_IN_EXTENSIONS = 'not allowed in extensions';
 
+/**
+ * @typedef {object} SandboxProbeResult
+ * @property {string} name Which way out of the sandbox the probe tried
+ * @property {'refused' | 'escaped'} outcome Whether the sandbox stopped it
+ * @property {string} detail The refusal's message, or what the probe got instead
+ */
+
+function describeValue(value) {
+  if (typeof value === 'function') return `a function ${value.name || '(anonymous)'}`;
+  if (value && typeof value === 'object') return 'an object';
+  return String(value);
+}
+
+function errorMessage(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Refused only if `attempt` throws an error that says it is not allowed in extensions */
+function probeThrowsRefusal(name, attempt) {
   try {
-    // This will be blocked and will suggest the papi.storage api.
-    const fs = require('fs');
-    logger.error(`Evil: <<BAD>> Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`);
-  } catch {
-    // No need to log good stuff unless we're testing
-    // logger.info(`Evil: Good error on require fs: ${e.message}`);
+    return { name, outcome: 'escaped', detail: `returned ${describeValue(attempt())}` };
+  } catch (e) {
+    const message = errorMessage(e);
+    return {
+      name,
+      outcome: message.includes(NOT_ALLOWED_IN_EXTENSIONS) ? 'refused' : 'escaped',
+      detail: message,
+    };
   }
+}
 
+/** Refused only if `read` returns `undefined` */
+function probeIsUndefined(name, read) {
   try {
-    // This will be blocked and will suggest the papi.fetch api.
-    const https = require('https');
-    logger.error(`Evil: <<BAD>> Successfully imported https! ${JSON.stringify(https)}`);
-  } catch {
-    // No need to log good stuff unless we're testing
-    // logger.info(`Evil: Good error on require https: ${e.message}`);
+    const value = read();
+    if (value === undefined) return { name, outcome: 'refused', detail: 'is undefined' };
+    return { name, outcome: 'escaped', detail: `is ${describeValue(value)}` };
+  } catch (e) {
+    return { name, outcome: 'escaped', detail: `threw ${errorMessage(e)}` };
   }
+}
 
+/** Refused only if `read` returns something other than a function */
+function probeIsNotFunction(name, read) {
+  try {
+    const value = read();
+    if (typeof value !== 'function')
+      return { name, outcome: 'refused', detail: `is ${describeValue(value)}` };
+    return { name, outcome: 'escaped', detail: `is ${describeValue(value)}` };
+  } catch (e) {
+    return { name, outcome: 'escaped', detail: `threw ${errorMessage(e)}` };
+  }
+}
+
+/** Refused only if `attempt` rejects */
+async function probeRejects(name, attempt) {
+  try {
+    return { name, outcome: 'escaped', detail: `resolved ${describeValue(await attempt())}` };
+  } catch (e) {
+    return { name, outcome: 'refused', detail: errorMessage(e) };
+  }
+}
+
+/** Gives the generator function-constructor probe a generator function to start from */
+function* generatorFunction() {
+  yield undefined;
+}
+
+/** Gives the async generator function-constructor probe an async generator function to start from */
+async function* asyncGeneratorFunction() {
+  yield undefined;
+}
+
+/**
+ * Tries each way Node code could reach the file system, native code or a string compiler from an
+ * extension, and reports whether the sandbox stopped it.
+ *
+ * @returns {Promise<SandboxProbeResult[]>} One result per probe
+ */
+async function runSandboxProbes() {
+  return [
+    // These will be blocked and will suggest the papi.storage api.
+    probeThrowsRefusal('require-fs', () => require('fs')),
+    probeThrowsRefusal('require-node-fs', () => require('node:fs')),
+    typeof process.getBuiltinModule === 'function'
+      ? probeThrowsRefusal('process-getBuiltinModule', () => process.getBuiltinModule('fs'))
+      : { name: 'process-getBuiltinModule', outcome: 'refused', detail: 'is not a function' },
+    probeThrowsRefusal('process-binding', () => process.binding('fs')),
+    // `_linkedBinding` is Node's own name for this `process` member
+    // eslint-disable-next-line no-underscore-dangle
+    probeThrowsRefusal('process-linkedBinding', () => process._linkedBinding('fs')),
+    probeThrowsRefusal('process-dlopen', () => process.dlopen({}, '')),
+    probeIsUndefined('process-mainModule', () => process.mainModule),
+    // `_load` is Node's own name for its module loader's entry point
+    // eslint-disable-next-line no-underscore-dangle
+    probeIsNotFunction('module-loader', () => module.constructor._load),
+    probeIsUndefined('require-cache', () => require.cache),
+    await probeRejects('dynamic-import', () => import('fs')),
+    probeThrowsRefusal('function-constructor', () => (() => {}).constructor('return 1')),
+    probeThrowsRefusal('async-function-constructor', () =>
+      (async () => {}).constructor('return 1'),
+    ),
+    probeThrowsRefusal('generator-function-constructor', () =>
+      generatorFunction.constructor('yield 1'),
+    ),
+    probeThrowsRefusal('async-generator-function-constructor', () =>
+      asyncGeneratorFunction.constructor('yield 1'),
+    ),
+    // Only reads `eval` to see whether it is still there; never calls it
+    // eslint-disable-next-line no-eval
+    probeIsUndefined('global-eval', () => globalThis.eval),
+    probeIsUndefined('global-Function', () => globalThis.Function),
+  ];
+}
+
+async function reportSandboxProbes() {
+  try {
+    const results = await runSandboxProbes();
+    const refusedCount = results.filter((result) => result.outcome === 'refused').length;
+    logger.info(`Sandbox probes: ${refusedCount}/${results.length} refused`);
+    results
+      .filter((result) => result.outcome === 'escaped')
+      .forEach((result) =>
+        logger.error(`<<BAD>> Sandbox probe escaped: ${result.name} — ${result.detail}`),
+      );
+  } catch (e) {
+    logger.error(`<<BAD>> Sandbox probes failed to run: ${errorMessage(e)}`);
+  }
+}
+
+reportSandboxProbes();
+
+async function tryNetworkAccess() {
   try {
     // This should always work because `fetch` is replaced with `papi.fetch`.
     await fetch('https://www.example.com');
@@ -277,17 +392,6 @@ async function tryImports() {
   }
 
   try {
-    // This will be blocked and will suggest the papi.storage api.
-    const fs = await import('fs');
-    logger.error(
-      `Evil: <<BAD>> Successfully dynamically imported fs! fs.readFileSync = ${fs.readFileSync}`,
-    );
-  } catch {
-    // No need to log good stuff unless we're testing
-    // logger.info(`Evil: Good error on dynamic import! ${e.message}`);
-  }
-
-  try {
     // This should always work.
     /* const genericFetch =  */ await (await papi.fetch('https://www.example.com')).text();
     // No need to log good stuff unless we're testing
@@ -299,13 +403,11 @@ async function tryImports() {
   }
 }
 
-tryImports();
-
 async function activate(context) {
   logger.info('Evil is activating...');
-  tryImports();
+  tryNetworkAccess();
   // 3 secs is timed to be after the extension service has finished initializing.
-  setTimeout(tryImports, 3000);
+  setTimeout(tryNetworkAccess, 3000);
 
   const evilWebViewProviderPromise = papi.webViewProviders.register(
     evilWebViewProvider.webViewType,
@@ -340,3 +442,4 @@ function deactivate() {
 
 exports.activate = activate;
 exports.deactivate = deactivate;
+exports.runSandboxProbes = runSandboxProbes;
