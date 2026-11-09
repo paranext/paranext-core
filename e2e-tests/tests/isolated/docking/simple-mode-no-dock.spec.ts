@@ -31,6 +31,7 @@ import {
   tabCountOf,
   tabPaddingPoint,
   visibleCenterOf,
+  waitForFirstLayoutLoad,
 } from '../../../fixtures/dock-tab-helpers';
 import {
   SIMPLE_PANEL_ID_PROJECT,
@@ -62,6 +63,8 @@ test.setTimeout(300_000);
 
 test.beforeEach(async ({ mainPage: page }) => {
   await waitForAppReady(page, { timeout: 180_000 });
+  // The floats and drags below would otherwise race the startup layout load, which replaces them
+  await waitForFirstLayoutLoad(page);
 });
 
 /**
