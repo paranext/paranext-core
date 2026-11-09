@@ -64,7 +64,13 @@ type MockProject = {
 };
 type MockOpenTab = { projectId: string; scrollGroupId: number; webViewType: string };
 
-const { mockChecklistService, mockRecentProjects, mockProjects, mockOpenTabs } = vi.hoisted(() => {
+const {
+  mockChecklistService,
+  mockRecentProjects,
+  mockProjects,
+  mockOpenTabs,
+  mockUseLocalizedProjectTitle,
+} = vi.hoisted(() => {
   const projects: { value: MockProject[] } = { value: [] };
   const openTabs: {
     value: { projectId: string; scrollGroupId: number; webViewType: string }[];
@@ -74,6 +80,7 @@ const { mockChecklistService, mockRecentProjects, mockProjects, mockOpenTabs } =
     mockRecentProjects: { value: undefined as unknown },
     mockProjects: projects,
     mockOpenTabs: openTabs,
+    mockUseLocalizedProjectTitle: vi.fn((): string | undefined => undefined),
   };
 });
 
@@ -147,6 +154,7 @@ vi.mock('@papi/frontend/react', async () => {
     );
   return {
     useLocalizedStrings: (keys: string[]) => [localize(keys), false],
+    useLocalizedProjectTitle: mockUseLocalizedProjectTitle,
     useProjectDataProvider: vi.fn(() => undefined),
     useData: vi.fn(() => ({
       RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
@@ -258,6 +266,41 @@ afterEach(() => {
   mockRecentProjects.value = undefined;
   mockProjects.value = [];
   mockOpenTabs.value = [];
+  mockUseLocalizedProjectTitle.mockReturnValue(undefined);
+});
+
+describe('ChecklistWebView tab title', () => {
+  it("sets the tab title from the project's localized title", async () => {
+    mockRecentProjects.value = [];
+    mockUseLocalizedProjectTitle.mockReturnValue('Markers Checklist - P1');
+
+    const ChecklistWebView = getChecklistWebView();
+    const props = makeProps();
+    render(<ChecklistWebView {...props} />);
+
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenCalledWith({
+        title: 'Markers Checklist - P1',
+      }),
+    );
+    expect(mockUseLocalizedProjectTitle).toHaveBeenCalledWith(
+      'project-1',
+      '%markersChecklist_windowTitle%',
+    );
+  });
+
+  it('leaves the tab title alone while the title is loading', async () => {
+    mockRecentProjects.value = [];
+
+    const ChecklistWebView = getChecklistWebView();
+    const props = makeProps();
+    render(<ChecklistWebView {...props} />);
+
+    expect(await screen.findByTestId('checklist-primary-project-trigger')).toBeInTheDocument();
+    expect(props.updateWebViewDefinition).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.anything() }),
+    );
+  });
 });
 
 describe('ChecklistWebView recently-opened-projects wiring', () => {

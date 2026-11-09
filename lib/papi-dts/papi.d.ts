@@ -14106,6 +14106,7 @@ declare module '@papi/core' {
     LocalizationData,
     LocalizationSelector,
     LocalizationSelectors,
+    LocalizedProjectTitleOptions,
   } from 'shared/services/localization.service-model';
   export type {
     SimultaneousProjectSettingsChanges,

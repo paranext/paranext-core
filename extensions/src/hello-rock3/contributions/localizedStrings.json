@@ -101,6 +101,8 @@
       "%helloRock3_overlay_popover_unknown%": "Desconocido",
       "%helloRock3_overlay_sayHello%": "Saludar",
       "%helloRock3_overlay_showAlert%": "Mostrar Alerta",
+      "%helloRock3_project_titleWithProject%": "Proyecto Hola Planeta3: {projectName}",
+      "%helloRock3_projectViewer_titleWithProject%": "Visor de Proyecto Hola Planeta3: {projectName}",
       "%helloRock3_react%": "React",
       "%helloRock3_select_project%": "Seleccionar Proyecto",
       "%helloRock3_select_projects%": "Seleccione Proyectos",

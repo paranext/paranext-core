@@ -1,6 +1,11 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
-import { useData, useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
+import {
+  useData,
+  useLocalizedProjectTitle,
+  useLocalizedStrings,
+  useProjectDataProvider,
+} from '@papi/frontend/react';
 import {
   useEvent,
   ScopeSelector,
@@ -225,6 +230,13 @@ global.webViewComponent = function ChecklistWebView({
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
 }: WebViewProps) {
+  // The provider titles the tab only when it opens; the project picker retargets the tab without
+  // reopening it. Same localize key as `checklist.web-view-provider.ts`, so the title keeps its shape.
+  const tabTitle = useLocalizedProjectTitle(projectId, '%markersChecklist_windowTitle%');
+  useEffect(() => {
+    if (tabTitle !== undefined) updateWebViewDefinition({ title: tabTitle });
+  }, [tabTitle, updateWebViewDefinition]);
+
   // ─── UI-PKG-004: persisted state slots ────────────────────────────────────
 
   // ─── Scroll group binding (drives currentScrRef + goto setter) ────────

@@ -124,6 +124,7 @@ export type {
   LocalizationData,
   LocalizationSelector,
   LocalizationSelectors,
+  LocalizedProjectTitleOptions,
 } from '@shared/services/localization.service-model';
 export type {
   SimultaneousProjectSettingsChanges,

@@ -8141,15 +8141,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** Wherever a surface shows both names, the short name leads, joined to the full name
   by a non-localized `" - "`. Five helpers live in `platform-bible-utils` — the one package every
   consumer already depends on: `formatProjectName`, `hasDistinctFullName`, `PROJECT_NAME_SEPARATOR`,
-  `compareProjectsByName` (plus its string-level `compareProjectShortNames`), and
-  `normalizeFullName` for reading the raw setting. Every formatting and sorting site calls them.
-  Lists sort by `shortName` at `sensitivity: 'base'`; a site with its own tie-break layers it on
-  top. Two surfaces deliberately show the short name ALONE rather than the pair — tab titles (see
-  Consequences) and `home.component.tsx`'s resource cards — so "short name first" is a rule about
-  order, not a requirement that every surface show both. A sweep test
-  (`project-name-adoption.test.ts`) fails the build when the FORMATTING/de-dup rule is re-inlined;
-  it is line- and identifier-based and does not see a re-inlined sort at all, so the sort half rests
-  on review and the helper's own tests.
+  `compareProjectsByName` (plus its string-level `compareProjectShortNames`), and `normalizeFullName`
+  for reading the raw setting. Every formatting and sorting site calls them. Lists sort by
+  `shortName` at `sensitivity: 'base'`; a site with its own tie-break layers it on top. Two surfaces
+  deliberately show the short name ALONE rather than the pair — tab titles (see Consequences) and
+  `home.component.tsx`'s resource cards — so "short name first" is a rule about order, not a
+  requirement that every surface show both. A sweep test (`project-name-adoption.test.ts`) fails the
+  build when the FORMATTING/de-dup rule is re-inlined; it is line- and identifier-based and does not
+  see a re-inlined sort at all, so the sort half rests on review and the helper's own tests.
 - **Alternatives:** **Keep long-name-first and change `ProjectSelector` instead** — rejected: the
   short name is what a Paratext user identifies a project by and the field that must survive
   truncation, so leading with it means the identifying half is never the half that is clipped.
@@ -8158,14 +8157,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   **Per-consumer tests alone, without the sweep** — rejected: they pin today's consumers and say
   nothing about the next surface added, which is the failure this exists to prevent.
 - **Consequences:** Supersedes the toolbar's documented long-name-first rationale. Three sort sites
-  now share one comparator: `ProjectSelector`'s own `compareRows`, the renderer picker's "More
-  projects" list, and the sync-status popover. Only two of those change what a user sees — the
+  now share one comparator: `ProjectSelector`'s own `compareRows`, the renderer picker's
+  "More projects" list, and the sync-status popover. Only two of those change what a user sees — the
   renderer picker, which sorted by `fullName` before, and the sync-status popover, which gains the
   case-insensitivity it lacked. Find and the checks side panel look like a third and fourth: they
   hand `ProjectSelector` a list, and it re-sorts every section it renders, so their own order was
   never observable and they pass their rows through unsorted. `secondaryFirst` on
-  `ToolbarCompoundLabel` loses its only in-repo consumer but is retained, because the component is
-  in the stable barrel and removing a documented prop is a breaking change.
+  `ToolbarCompoundLabel` loses its only in-repo consumer but is retained, because the component is in
+  the stable barrel and removing a documented prop is a breaking change.
   `ProjectSelectorProject.fullName` — and the extension-side `FindProject`/`ProjectOption` rows that
   feed it — became optional so a project with no full name stops mirroring its short name into that
   field. Surfaces that name a project read `fullName` from project metadata rather than
@@ -8176,15 +8175,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the full name would push the short name toward the truncation leading with it is meant to avoid.
   They show the short name alone, which `getTabTitleProjectName` now pins to the `platform.name`
   setting. How a title fills in that name, falling back to the project id, is
-  `adr-project-titles-from-one-formatter`. DBL resource labels follow the same rule even though a
-  resource carries a `displayName`/`fullName` pair rather than the
-  `platform.name`/`platform.fullName` project settings: `getRefLabel` and Share Layout's
-  `formatResourceDisplayName` pass `displayName` in the helper's `shortName` slot. Sites that merely
-  fill a long-name slot the UI renders after the short name compose no label and keep their own
-  separator — View Options joins with an em dash. The Simple-mode toolbar is the one surface that
-  composes the pair from a localized format string
-  (`%projectPicker_toolbar_label_shortNameAndFullName%` and the trigger's `%..._trigger_label_2%`)
-  rather than calling `formatProjectName`: its label and its accessible name are already localized
+  `adr-project-titles-from-one-formatter`. DBL resource labels follow the same rule even though a resource carries a
+  `displayName`/`fullName` pair rather than the `platform.name`/`platform.fullName` project
+  settings: `getRefLabel` and Share Layout's `formatResourceDisplayName` pass `displayName` in the
+  helper's `shortName` slot. Sites that merely fill a long-name slot the UI renders after the short
+  name compose no label and keep their own separator — View Options joins with an em dash. The
+  Simple-mode toolbar is the one surface that composes the pair from a localized format string
+  (`%projectPicker_toolbar_label_shortNameAndFullName%` and the trigger's `%..._trigger_label_2%`) rather
+  than calling `formatProjectName`: its label and its accessible name are already localized
   sentences, and a locale that needs to reorder or re-punctuate the pair can only do so in the
   string. It is an exempted sweep site, and the English strings render the same order the helper
   does, so the two cannot disagree about which name leads. `ProjectItem`, the renderer picker's row

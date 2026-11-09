@@ -3,6 +3,7 @@ import { ExecutionToken, SavedWebViewDefinition, WebViewDefinition } from '@papi
 import {
   formatReplacementString,
   getErrorMessage,
+  getProjectDisplayName,
   Mutex,
   MutexMap,
   Unsubscriber,
@@ -174,7 +175,7 @@ export class ReadOnlyViewNotifier {
         let projectName = projectId;
         try {
           const pdp = await this.papiInstance.projectDataProviders.get('platform.base', projectId);
-          projectName = (await pdp.getSetting('platform.name')) ?? projectId;
+          projectName = getProjectDisplayName(projectId, await pdp.getSetting('platform.name'));
         } catch (e) {
           // fall back to id
           logger.warn(
