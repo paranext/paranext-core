@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { vi } from 'vitest';
 import { loadExtensionModule } from './extension-sandbox.util';
 
 let tempDir = '';
@@ -64,7 +65,9 @@ describe('loadExtensionModule', () => {
   it('refuses dynamic import', async () => {
     const file = writeFixture('dynamic.js', "module.exports = import('node:fs');");
     const result = loadExtensionModule(file, unusedRequire);
-    await expect(result).rejects.toBeDefined();
+    await expect(result).rejects.toMatchObject({
+      code: 'ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING',
+    });
   });
 
   it('stack trace names the extension file', () => {
