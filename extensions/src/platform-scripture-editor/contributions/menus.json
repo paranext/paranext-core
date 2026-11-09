@@ -29,7 +29,8 @@
           },
           "platformScriptureEditor.tools": {
             "label": "%webView_platformScriptureEditor_tools%",
-            "order": 5.5
+            "order": 5.5,
+            "isExtensible": true
           },
           "platformScriptureEditor.simpleTools": {
             "label": "%webView_platformScriptureEditor_toolsAndResources%",
