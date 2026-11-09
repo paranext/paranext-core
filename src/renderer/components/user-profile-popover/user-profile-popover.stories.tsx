@@ -7,6 +7,10 @@ import {
   resetCommandServiceMock,
   setCommandServiceMock,
 } from '../../../../.storybook/mocks/command-service-mock-channel';
+import {
+  DEFAULT_INTERNET_SETTINGS,
+  withInternetSettings,
+} from '../../../../.storybook/mocks/internet-settings-mock-channel';
 import { UserProfilePopover } from './user-profile-popover.component';
 
 const REGISTERED_PROFILE = {
@@ -42,6 +46,7 @@ function withRegistration(
         // Answer them so clicking around a story stays inert instead of throwing.
         case 'paratextRegistration.showParatextRegistration':
         case 'paratextRegistration.showInternetSettings':
+        case 'paratextRegistration.showInternetSettingsWithServerSelection':
           return undefined;
         default:
           // The throw alone is invisible here: the resolver turns a rejected probe into
@@ -94,14 +99,14 @@ const meta: Meta<typeof UserProfilePopover> = {
 export default meta;
 type Story = StoryObj<typeof UserProfilePopover>;
 
-/** A validly registered user: no dot, and the trigger keeps its plain "User profile" label. */
+/** A validly registered user: no dot, and the trigger keeps its plain "User menu" label. */
 export const Registered: Story = {
   beforeEach: withRegistration(true),
 };
 
 /**
  * Registration missing or invalid — the state this feature exists for. The dot sits on the trigger,
- * and the trigger's accessible label and tooltip become "User profile — registration needed" so the
+ * and the trigger's accessible label and tooltip become "User menu — registration needed" so the
  * signal is never carried by color alone.
  */
 export const RegistrationNeeded: Story = {
@@ -111,7 +116,7 @@ export const RegistrationNeeded: Story = {
 /**
  * The same invalid registration with the popover opened, so the rest of the reminder is visible:
  * the header's "Registration needed" line beneath the name and email, and a matching dot on the
- * "Profile & registration" row (which also carries screen-reader-only text in its accessible
+ * "Registration information" row (which also carries screen-reader-only text in its accessible
  * name).
  */
 export const RegistrationNeededPopoverOpen: Story = {
@@ -167,5 +172,46 @@ export const ValidityUnknown: Story = {
       resetCommandServiceMock();
       resetRegistrationValidityStore();
     };
+  },
+};
+
+/**
+ * The selected server is not Production — the only other state the toolbar-trigger dot exists for,
+ * visible before the popover is ever opened. Decorative, so `aria-hidden` and carries no accessible
+ * name of its own; the equivalent text is on the "Internet connectivity" row's badge and tooltip
+ * once the popover is open.
+ */
+export const NonProductionServer: Story = {
+  beforeEach: withRegistration(true),
+  decorators: [
+    withInternetSettings({
+      value: { ...DEFAULT_INTERNET_SETTINGS, selectedServer: 'Development' },
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dot = await canvas.findByTestId('user-profile-non-production-dot');
+    await expect(dot).toBeInTheDocument();
+    await expect(dot).toHaveAttribute('aria-hidden', 'true');
+  },
+};
+
+/**
+ * Both conditions at once: registration missing or invalid, and the selected server is not
+ * Production. The registration reminder dot wins — the server dot stays hidden rather than showing
+ * alongside it (see `NonProductionServerDot`'s doc comment) — since the registration reminder needs
+ * the user's attention and the server indicator is merely informational.
+ */
+export const NonProductionServerWithRegistrationNeeded: Story = {
+  beforeEach: withRegistration(false),
+  decorators: [
+    withInternetSettings({
+      value: { ...DEFAULT_INTERNET_SETTINGS, selectedServer: 'Development' },
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByTestId('user-profile-registration-dot')).toBeInTheDocument();
+    await expect(canvas.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
   },
 };

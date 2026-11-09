@@ -1,4 +1,6 @@
 import { type Frame, type Locator, type Page } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
   requireIsolatedProjectRoot,
@@ -23,6 +25,12 @@ export interface OpenScriptureEditorOptions {
    * over, which is what this guard exists to prove in the first place.
    */
   skipInitialLayoutGuard?: boolean;
+  /**
+   * The `OpenEditorOptions` passed to the open command as its second argument, e.g. `{ viewType:
+   * 'formatted' }` to open a view other than the interface mode's default. A view type passed here
+   * is persisted in the web view's state, so it wins over the power-mode Standard default.
+   */
+  editorOptions?: Record<string, unknown>;
 }
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
@@ -39,6 +47,53 @@ export const CONTENT_ZOOM_COMMANDS = {
   out: 'platform.webViewContentZoomOut',
   reset: 'platform.webViewContentZoomReset',
 } as const;
+
+/**
+ * Path to the Scripture editor's persisted "Don't show again today" choices for the read-only
+ * Preview notice. `papi.storage`'s user-data files are named for the base64url of the storage key,
+ * so this is `platformScriptureEditor.markerViewNotificationDisabled` encoded — see
+ * `disabledMapUserDataKey` in
+ * `extensions/src/platform-scripture-editor/src/read-only-view-notifier.model.ts`.
+ */
+const DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH = path.resolve(
+  __dirname,
+  '../../dev-appdata/extensions/platformScriptureEditor/user-data/cGxhdGZvcm1TY3JpcHR1cmVFZGl0b3IubWFya2VyVmlld05vdGlmaWNhdGlvbkRpc2FibGVk',
+);
+
+/**
+ * Replaces the persisted "Don't show again today" choices for the read-only Preview notice before
+ * the app launches. The notifier reads them once at startup and stays silent for a project for 24
+ * hours after its dismiss is clicked, and the file lives in the shared `dev-appdata`, so a click in
+ * any earlier run or in the developer's own dev app would otherwise hide the notice a spec waits
+ * for.
+ *
+ * Must be called BEFORE the app launches (in `test.beforeAll` for the isolated fixture's
+ * test-scoped app).
+ *
+ * @param dismissedAtByProjectId When each project's notice was dismissed, in epoch milliseconds, as
+ *   the notifier stores it. `{}` means no project's notice is dismissed.
+ * @returns A restore function that writes the file back to its exact pre-call contents (or deletes
+ *   it if it did not exist). Call it AFTER the app has closed — clicking the dismiss rewrites it.
+ */
+export function preConfigurePreviewNoticeDismissals(
+  dismissedAtByProjectId: Record<string, number>,
+): () => void {
+  let originalContents: string | undefined;
+  if (fs.existsSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH))
+    originalContents = fs.readFileSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH, 'utf-8');
+
+  fs.mkdirSync(path.dirname(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH), { recursive: true });
+  fs.writeFileSync(
+    DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH,
+    JSON.stringify(dismissedAtByProjectId),
+  );
+
+  return () => {
+    if (originalContents !== undefined)
+      fs.writeFileSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH, originalContents);
+    else fs.rmSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH, { force: true });
+  };
+}
 
 /**
  * The `<iframe data-web-view-id>` element's content frame — a real `Frame`, not a `FrameLocator`,
@@ -111,6 +166,38 @@ export async function ensureFootnotesVisible(
   }
   await footnotesRoot.waitFor({ state: 'attached', timeout: 20_000 });
 }
+
+const BUNDLED_SAMPLE_WEB_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
+
+/**
+ * Builds a `prepareProjectRoot` callback that puts a copy of the bundled sample WEB project into
+ * the isolated project root with `DefaultFont` and `DefaultFontSize` rewritten in its
+ * `Settings.xml`. The copy keeps the sample's project id, so every sample-project helper works
+ * unchanged, and the backend skips its sample install because the root is no longer empty. The font
+ * has to be on disk before the app starts: nothing writes it through PAPI, and the project's style
+ * info is read from the loaded project. The font need not be installed; computed styles report the
+ * declared family.
+ */
+export function installSampleProjectWithFont(options: {
+  fontName: string;
+  fontSize: number;
+}): (projectRoot: string) => void {
+  return (projectRoot) => {
+    const target = path.join(projectRoot, 'WEB');
+    fs.cpSync(BUNDLED_SAMPLE_WEB_DIR, target, { recursive: true });
+    const settingsPath = path.join(target, 'Settings.xml');
+    let settings = fs.readFileSync(settingsPath, 'utf-8');
+    const fontTag = /<DefaultFont>[^<]*<\/DefaultFont>/;
+    const sizeTag = /<DefaultFontSize>[^<]*<\/DefaultFontSize>/;
+    if (!fontTag.test(settings) || !sizeTag.test(settings))
+      throw new Error('The sample project Settings.xml has no DefaultFont or DefaultFontSize tag.');
+    settings = settings
+      .replace(fontTag, () => `<DefaultFont>${options.fontName}</DefaultFont>`)
+      .replace(sizeTag, () => `<DefaultFontSize>${options.fontSize}</DefaultFontSize>`);
+    fs.writeFileSync(settingsPath, settings);
+  };
+}
+
 /**
  * Poll until the ProjectLookupService advertises the bundled sample WEB project. The generic
  * `waitForAtLeastOneProjectMetadata` is NOT sufficient here: other PDP factories (e.g. the lexical
@@ -118,7 +205,9 @@ export async function ensureFootnotesVisible(
  * registered or finished installing the sample project into an empty isolated root — observed as a
  * `-32601 'object:platform.Paratext-pdpf.…' not found` failure on cold first launches.
  */
-async function waitForSampleProjectMetadata(timeoutMs = LAUNCH_PHASE_TIMEOUT_MS): Promise<void> {
+export async function waitForSampleProjectMetadata(
+  timeoutMs = LAUNCH_PHASE_TIMEOUT_MS,
+): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -176,11 +265,33 @@ export async function sendPapiCommandWhenRegistered(
  * developer's real project root too.
  */
 export async function makeSampleProjectEditable(): Promise<void> {
+  await sendSampleProjectPdpRequest('setSetting', ['platform.isEditable', true]);
+}
+
+/**
+ * Turn off the current user's paragraph-structure lock on the installed sample WEB project. Simple
+ * mode treats an unset preference as locked, which disables the toolbar's paragraph-style dropdown
+ * and refuses structural edits, so a Simple-mode spec that changes paragraph markers needs this.
+ * Writes through the same PDP method the editor's lock toggle uses.
+ *
+ * Writes project data, so it refuses to run unless the app was launched with `isolatedProjectRoot:
+ * true`, for the reason {@link makeSampleProjectEditable} gives.
+ */
+export async function unlockSampleProjectStructure(): Promise<void> {
+  await sendSampleProjectPdpRequest('setUserStructureProtected', [false]);
+}
+
+/**
+ * Calls a write method on the installed sample WEB project's data provider and returns what it
+ * answered. Refuses to run unless the app was launched with `isolatedProjectRoot: true`, for the
+ * reason {@link makeSampleProjectEditable} gives.
+ */
+async function sendSampleProjectPdpRequest<T>(method: string, args: unknown[]): Promise<T> {
   requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
-  await sendPapiRequestOnce<boolean>(
-    `object:${pdpId}.setSetting`,
-    ['platform.isEditable', true],
+  return sendPapiRequestOnce<T>(
+    `object:${pdpId}.${method}`,
+    args,
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
@@ -214,6 +325,19 @@ export interface SampleChapterRef {
   verseNum: number;
 }
 
+/** Reads one chapter's USFM from a data provider whose id the caller already resolved. */
+function requestSampleChapterUsfm(
+  pdpId: string,
+  chapter: SampleChapterRef,
+): Promise<string | undefined> {
+  return sendPapiRequestOnce<string | undefined>(
+    `object:${pdpId}.getChapterUSFM`,
+    [chapter],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+}
+
 /**
  * Rewrites one chapter of the sample WEB project through its data provider — read the chapter's
  * USFM, pass it through `transform`, write the result back — so a spec can put markers the sample
@@ -230,12 +354,7 @@ export async function rewriteSampleProjectChapterUsfm(
 ): Promise<void> {
   requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
-  const usfm = await sendPapiRequestOnce<string | undefined>(
-    `object:${pdpId}.getChapterUSFM`,
-    [chapter],
-    WEBSOCKET_PORT,
-    COMMAND_TIMEOUT_MS,
-  );
+  const usfm = await requestSampleChapterUsfm(pdpId, chapter);
   if (!usfm)
     throw new Error(`Sample project has no USFM for ${chapter.book} ${chapter.chapterNum}`);
   await sendPapiRequestOnce(
@@ -244,6 +363,52 @@ export async function rewriteSampleProjectChapterUsfm(
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
+}
+
+/** One chapter of the sample WEB project as saved, read through its data provider. */
+export async function getSampleProjectChapterUsfm(
+  chapter: SampleChapterRef,
+): Promise<string | undefined> {
+  return requestSampleChapterUsfm(await getSampleProjectDataProviderId(), chapter);
+}
+
+/**
+ * Replaces a whole book of the sample WEB project through its data provider. A book write skips the
+ * chapter-marker correction a chapter write gets, so this can set up a book with no chapters at
+ * all. Writes project data, so it refuses to run unless the app was launched with
+ * `isolatedProjectRoot: true`, for the same reason as {@link rewriteSampleProjectChapterUsfm}.
+ *
+ * @param book Any reference in the book; only `book` is read.
+ * @param usfm The book's complete new USFM.
+ */
+export async function setSampleProjectBookUsfm(
+  book: SampleChapterRef,
+  usfm: string,
+): Promise<void> {
+  const isWritten = await sendSampleProjectPdpRequest<boolean>('setBookUSFM', [book, usfm]);
+  if (!isWritten) throw new Error(`Sample project did not accept USFM for ${book.book}`);
+}
+
+/** The text after the book code on the `\id` line {@link prepareEmptySampleBook} writes. */
+export const EMPTY_BOOK_ID_TEXT = 'empty book';
+
+/**
+ * Makes the sample WEB project editable and cuts one of its books down to its `\id` line, as a
+ * newly created book is, then reads it back so a failed write fails here rather than as a later
+ * timeout. Writes project data, so it needs `isolatedProjectRoot: true` like
+ * {@link setSampleProjectBookUsfm}.
+ *
+ * @param book Any reference in the book; only `book` is read.
+ * @returns The book's USFM as written, which is also all of its chapter 1.
+ */
+export async function prepareEmptySampleBook(book: SampleChapterRef): Promise<string> {
+  const usfm = `\\id ${book.book} - ${EMPTY_BOOK_ID_TEXT}\r\n`;
+  await makeSampleProjectEditable();
+  await setSampleProjectBookUsfm(book, usfm);
+  const chapterOne = await getSampleProjectChapterUsfm({ ...book, chapterNum: 1 });
+  if (chapterOne !== usfm)
+    throw new Error(`Sample project did not empty ${book.book}; chapter 1 reads ${chapterOne}`);
+  return usfm;
 }
 
 /**
@@ -303,7 +468,7 @@ async function openEditorViaCommand(
 
     const editorId = await sendPapiRequestOnce<string | undefined>(
       `command:${commandName}`,
-      [projectId],
+      options.editorOptions ? [projectId, options.editorOptions] : [projectId],
       WEBSOCKET_PORT,
       60_000,
     );
@@ -327,17 +492,20 @@ async function openEditorViaCommand(
  *
  * @param mainPage The Electron main window page
  * @param projectId The id of the project to open the editable Scripture editor for
+ * @param options Caller overrides — see {@link OpenScriptureEditorOptions}
  * @returns The editor's webViewId
  */
 export async function openEditableScriptureEditorForProject(
   mainPage: Page,
   projectId: string,
+  options: OpenScriptureEditorOptions = {},
 ): Promise<string> {
   return openEditorViaCommand(
     mainPage,
     'platformScriptureEditor.openScriptureEditor',
     projectId,
     'an editable Scripture editor',
+    options,
   );
 }
 

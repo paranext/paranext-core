@@ -45,10 +45,10 @@ export type PickerResource = {
 };
 
 /**
- * Enumerate every locally-installed read-only reference resource and resolve its display metadata.
- * Filters to `isEditable === false` to exclude the user's own editable translation projects while
- * including both DBL-published resources and locally-installed read-only resources (e.g. VULGP83,
- * TNN, TND, HBK) that have `isPublished === false` but `isEditable === false`.
+ * Enumerate every locally-installed project that is not editable and resolve its display metadata:
+ * every resource, DBL-published or locally installed (e.g. VULGP83, TNN, TND, HBK), and any plain
+ * project marked `Editable=F`, such as the WEB sample. Filters to `isEditable === false`, which
+ * excludes the user's own editable translation projects.
  *
  * Note: the renderer uses a similar enumerate-and-resolve pattern in
  * `src/renderer/hooks/use-project-picker-data.hook.ts`. A shared utility isn't possible here
@@ -58,15 +58,16 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
   try {
     // Filter to `platform.base` rather than `platformScripture.USJ_Chapter` so that
     // commentary/notes resources that do not implement USJ are included.
-    // Then filter to `isEditable === false`: DBL resources always have this flag; locally-installed
-    // read-only resources (VULGP83, TNN, TND, HBK) have `Editable=F` in their Settings.xml and
-    // therefore also get `isEditable: false`, even though `isPublished` is `false` for them.
+    // Then filter to `isEditable === false`: every resource project reports it, DBL-published or a
+    // locally installed `.p8z` (VULGP83, TNN, TND, HBK), whatever its Settings.xml says, and
+    // reports `isPublished: true` too. A plain project marked `Editable=F`, such as the WEB
+    // sample, also passes this filter.
     // The user's own editable translation projects have `isEditable: true` and are excluded.
     // Per the project-metadata model: absence means editable, so the test MUST be `=== false`.
     const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
       includeProjectInterfaces: ['platform.base'],
     });
-    const metadata = allMetadata.filter((m) => m.isEditable === false);
+    const metadata = allMetadata.filter((m) => m.isEditable === false && !m.unsupportedReason);
     return metadata.map((data) => ({
       projectId: data.id,
       name: data.name ?? data.id,
@@ -239,4 +240,81 @@ export function buildPickerResources(
     )
     .map((project) => downloadedToRow(project, dblResources));
   return [...referenced, ...extras];
+}
+
+/**
+ * What a panel opens the resource picker dialog with, and what removing a resource there takes off
+ * the user's list.
+ */
+export type PickerDialogSelection = {
+  /** For the dialog's `selectedResourceIds`: the team's ids, then the removable ones */
+  selectedResourceIds: string[];
+  /** For the dialog's `teamResourceIds` */
+  teamResourceIds: string[];
+  /**
+   * For each removable id, the ids the user's list stores that resource under: usually one, and
+   * more when the list names the same resource twice (by its DBL entry and by its project)
+   */
+  listIdsByRemovableId: ReadonlyMap<string, string[]>;
+};
+
+/**
+ * The id the resource picker dialog knows a reference by: the `dblEntryUid` of the catalog row it
+ * resolves to, or its own id when no row matches. The dialog matches ids exactly, while a DBL entry
+ * uid is cased differently by different sources and a list can name a DBL resource by its project,
+ * so either would otherwise list a resource the user already has under "Installed". A project
+ * reference prefers the row whose `projectId` is that project over one that only covers it by uid
+ * prefix. References that name neither a DBL entry nor a project have no row, and no id.
+ */
+function toPickerDialogId(
+  reference: ResourceReference,
+  dblResources: DblResourceData[],
+  dblResourcesByUid: ReadonlyMap<string, DblResourceData>,
+): string | undefined {
+  if (isDblResourceReference(reference))
+    return dblResourcesByUid.get(reference.id.toLowerCase())?.dblEntryUid ?? reference.id;
+  if (isProjectReference(reference)) {
+    const row =
+      dblResources.find((candidate) => candidate.projectId === reference.id) ??
+      dblResources.find((candidate) => doesCatalogRowCoverProject(candidate, reference.id));
+    return row?.dblEntryUid ?? reference.id;
+  }
+  return undefined;
+}
+
+/**
+ * Builds what the resource picker dialog is opened with from the references a panel lists: the
+ * team's, which the dialog locks, and the user's own, which it lets the user remove. A resource in
+ * both is the team's.
+ *
+ * @param teamReferences References the team shared, which the user cannot remove
+ * @param removableReferences References from the user's own list
+ * @param dblResources The catalog rows, DBL and locally-installed non-DBL alike
+ * @returns The dialog's ids, and the list ids behind each removable one
+ */
+export function getPickerDialogSelection(
+  teamReferences: ResourceReference[],
+  removableReferences: ResourceReference[],
+  dblResources: DblResourceData[],
+): PickerDialogSelection {
+  const dblResourcesByUid = indexDblResourcesByUid(dblResources);
+  const teamIds = new Set<string>();
+  teamReferences.forEach((reference) => {
+    const id = toPickerDialogId(reference, dblResources, dblResourcesByUid);
+    if (id !== undefined) teamIds.add(id);
+  });
+
+  const listIdsByRemovableId = new Map<string, string[]>();
+  removableReferences.forEach((reference) => {
+    const id = toPickerDialogId(reference, dblResources, dblResourcesByUid);
+    if (id === undefined || teamIds.has(id)) return;
+    if (!isDblResourceReference(reference) && !isProjectReference(reference)) return;
+    listIdsByRemovableId.set(id, [...(listIdsByRemovableId.get(id) ?? []), reference.id]);
+  });
+
+  return {
+    selectedResourceIds: [...teamIds, ...listIdsByRemovableId.keys()],
+    teamResourceIds: [...teamIds],
+    listIdsByRemovableId,
+  };
 }

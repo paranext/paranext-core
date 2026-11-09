@@ -13,8 +13,9 @@ function readJson(fileName: string) {
 }
 const english: { [key: string]: unknown } = readJson('en.json');
 const spanish: { [key: string]: unknown } = readJson('es.json');
-const metadata: { [key: string]: { deprecationInfo?: { date: string; message: string } } } =
-  readJson('metadata.json');
+const metadata: {
+  [key: string]: { fallbackKey?: string; deprecationInfo?: { date: string; message: string } };
+} = readJson('metadata.json');
 
 // en and es are the two languages maintained in this repo, and nothing in the build enforces parity
 // between them, so every key a tour stop requests is checked in both. A missing or echoed value
@@ -25,6 +26,41 @@ describe.each(STEP_LOCALIZE_KEYS)('onboarding tour stop string %s', (key) => {
     expect(spanish[key]).toEqual(expect.stringMatching(/\S/));
     expect(english[key]).not.toBe(key);
     expect(spanish[key]).not.toBe(english[key]);
+  });
+});
+
+// The profile stop also teaches the Simple / Power switch that lives in the same menu. Its retired
+// description keeps its shipped values (Localization-Guide.md, "Existing Strings Are Immutable").
+describe('onboarding tour profile stop', () => {
+  it('asks for the profile description that names the Simple / Power switch', () => {
+    expect(STEP_LOCALIZE_KEYS).toContain('%onboardingTour_step_profile_description_2%');
+    expect(STEP_LOCALIZE_KEYS).not.toContain('%onboardingTour_step_profile_description%');
+  });
+
+  it('has the agreed English text', () => {
+    expect(english['%onboardingTour_step_profile_description_2%']).toBe(
+      "Need to switch between Simple and Power mode, control your internet connection or change your registration? It's here, in the User menu.",
+    );
+  });
+
+  it('retires the shipped description with a deprecation notice and its shipped values', () => {
+    expect(metadata['%onboardingTour_step_profile_description%']?.deprecationInfo?.message).toMatch(
+      /\S/,
+    );
+    expect(english['%onboardingTour_step_profile_description%']).toBe(
+      "Need to change your internet connection or registration? They're here, under the Profile button.",
+    );
+    expect(spanish['%onboardingTour_step_profile_description%']).toBe(
+      '¿Necesita cambiar su conexión a internet o su registro? Están aquí, bajo el botón Perfil.',
+    );
+  });
+
+  // A language that has translated the retired description but not its replacement keeps showing
+  // its own translation instead of falling back to English.
+  it('falls back to the retired description where the new one is not translated', () => {
+    expect(metadata['%onboardingTour_step_profile_description_2%']?.fallbackKey).toBe(
+      '%onboardingTour_step_profile_description%',
+    );
   });
 });
 

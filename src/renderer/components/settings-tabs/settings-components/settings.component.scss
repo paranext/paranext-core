@@ -3,9 +3,9 @@
   gap: calc(var(--spacing) * 2); // tw:gap-2
   display: flex;
   flex-direction: column;
-  // Shares the row with `.setting-label` at the same basis, and drops below it once the row cannot
-  // hold both. `min-width: 0` lets it shrink below its content's natural width instead of pushing
-  // the row wider than its card.
+  // Shares the row with `.setting-label-wrapper` at the same basis, and drops below it once the row
+  // cannot hold both. `min-width: 0` lets it shrink below its content's natural width instead of
+  // pushing the row wider than its card.
   flex: 1 1 12rem;
   min-width: 0;
 }
@@ -33,9 +33,17 @@
   align-items: center;
 }
 
-.setting-label {
+// Takes the label's share of the row and puts the info button, when there is one, beside the label.
+.setting-label-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   padding-inline-end: 1rem;
   flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.setting-label {
   min-width: 0;
 }
 

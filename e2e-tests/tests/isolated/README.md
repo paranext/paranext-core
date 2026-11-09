@@ -33,11 +33,13 @@ These belong to no subset; run them by path (see "How to run").
 - `comments-tab.spec.ts` (one Electron per worker)
 - `first-run-wizard.spec.ts` (one Electron per test)
 - `internet-settings.spec.ts` (one Electron per test)
+- `no-projects-without-sample.spec.ts` (one Electron per test) — an empty projects folder with the
+  sample project turned off resolves to the editor's no-projects guidance and Home's empty state
 
 ## Subdirectories
 
 - `comment-assignment/` (one Electron per worker) — tests for assigning comments to users
-- `docking/` (one Electron per test) — tests for dropping dragged tabs onto a tab bar's empty space, for tab-row stability while a drag starts, and for closing a tab with a middle click on its header
+- `docking/` (one Electron per test) — tests for dropping dragged tabs onto a tab bar's empty space, for tab-row stability while a drag starts, for closing a tab with a middle click on its header, and for Simple mode never docking, merging or moving anything by a drag
 - `find/` (one Electron per worker) — tests for the find/replace flow
 - `first-run/` (one Electron per test) — tests for the first-run wizard (PT-4175 / PT-4179)
 - `multi-window/` (one Electron per test, except `window-layout-persistence.spec.ts` and two tests

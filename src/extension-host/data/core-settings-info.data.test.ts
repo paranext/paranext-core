@@ -92,6 +92,32 @@ describe('platform.firstRunComplete setting', () => {
   });
 });
 
+describe('platform.firstSyncState setting', () => {
+  it('is declared as a hidden setting defaulting to unknown', () => {
+    const group = Array.isArray(platformSettings) ? platformSettings[0] : platformSettings;
+    const setting = group.properties['platform.firstSyncState'];
+    expect(setting).toBeDefined();
+    expect(setting?.default).toBe('unknown');
+    expect(setting?.isHidden).toBe(true);
+  });
+
+  it('accepts only the three known states', async () => {
+    const validator = coreSettingsValidators['platform.firstSyncState'];
+    expect(validator).toBeDefined();
+    await expect(validator?.('unknown', 'unknown', {})).resolves.toBe(true);
+    await expect(validator?.('pending', 'unknown', {})).resolves.toBe(true);
+    await expect(validator?.('synced', 'unknown', {})).resolves.toBe(true);
+    // Feed values outside the compile-time union past the validator to prove the runtime guard rejects them.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion -- deliberately violating the compile-time type to exercise the runtime type guard
+    const valuesOutsideTheUnion = ['done', true, undefined] as never[];
+    await Promise.all(
+      valuesOutsideTheUnion.map((value) =>
+        expect(validator?.(value, 'unknown', {})).resolves.toBe(false),
+      ),
+    );
+  });
+});
+
 describe('content zoom settings', () => {
   it('declares webViewContentZoom visible with the memory setting hidden', () => {
     const group = groups[0];
@@ -192,14 +218,14 @@ describe('settings layout', () => {
     ]);
   });
 
-  it("keeps the moved settings' keys, labels and defaults unchanged", () => {
+  it('declares the supporter settings with their keys, labels and defaults', () => {
     expect(groups[1].properties['platform.requestTimeout']).toMatchObject({
       label: '%settings_platform_requestTimeout_label%',
       description: '%settings_platform_requestTimeout_description%',
       default: 30,
     });
     expect(groups[1].properties['platform.showRegistrationReminderOnStartup']).toMatchObject({
-      label: '%settings_platform_showRegistrationReminderOnStartup_label%',
+      label: '%settings_platform_showRegistrationReminderOnStartup_label_2%',
       description: '%settings_platform_showRegistrationReminderOnStartup_description%',
       default: true,
     });
@@ -231,6 +257,7 @@ describe('settings layout', () => {
       'platform.firstRunComplete',
       'platform.syncOnStartup',
       'platform.internetUseChoiceAsked',
+      'platform.firstSyncState',
       'platform.requestTimeout',
       'platform.showRegistrationReminderOnStartup',
     ];

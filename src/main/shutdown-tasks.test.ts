@@ -10,8 +10,21 @@ import { logger } from '@shared/services/logger.service';
 import { RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE } from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
 import {
+  markQuitRequested,
+  resetShutdownLatchesForNewSession,
+} from '@main/services/shutdown-latch.service';
+import { getJsonRpcRequestErrorMessagePrefix } from '@shared/data/rpc.model';
+import { FAILED_PRECONDITION, INTERNAL, newPlatformError } from 'platform-bible-utils';
+import {
+  CANCELLED_SYNC_POLL_INTERVAL_MS,
+  CANCELLED_SYNC_STOP_WAIT_MS,
+  DROP_SYNC_QUEUE_TIMEOUT_MS,
+  SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS,
+  SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS,
   performShutdownTasks,
   performWindowCloseTasks,
+  resumeSyncQueue,
+  shouldResumeSyncQueue,
   startWindowCloseTasksWithoutWaiting,
 } from './shutdown-tasks';
 import { createSettingsStub, READ_THROWS } from './settings-stub.test-util';
@@ -19,6 +32,19 @@ import {
   deferAutomaticSyncForSession,
   resetAutomaticSyncDeferralForTesting,
 } from './first-run-consent.util';
+
+// A test can shorten the overall quit bound below the busy retry budget to reach the case where the
+// quit gives up on the sync while a busy retry is still pending; every other test keeps the real one
+const quitBound = vi.hoisted((): { overrideMs: number | undefined } => ({ overrideMs: undefined }));
+vi.mock('@shared/data/platform.data', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@shared/data/platform.data')>();
+  return {
+    ...original,
+    get AUTO_SYNC_MAX_DURATION_MS() {
+      return quitBound.overrideMs ?? original.AUTO_SYNC_MAX_DURATION_MS;
+    },
+  };
+});
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -144,13 +170,394 @@ describe('performShutdownTasks', () => {
     vi.useFakeTimers();
     try {
       const shutdownPromise = performShutdownTasks();
-      await vi.advanceTimersByTimeAsync(AUTO_SYNC_MAX_DURATION_MS);
+      // The queue drop never answers either, so it gives up first
+      await vi.advanceTimersByTimeAsync(DROP_SYNC_QUEUE_TIMEOUT_MS + AUTO_SYNC_MAX_DURATION_MS);
       await expect(shutdownPromise).resolves.toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
     expect(mockLoggerInfo).not.toHaveBeenCalledWith(expect.stringContaining('complete'));
+  });
+
+  describe('the sync queue at quit', () => {
+    const commandsSent = () => mockRequestNoRetry.mock.calls.map(([command]) => String(command));
+    const indexOfCommand = (name: string) =>
+      commandsSent().findIndex((command) => command.endsWith(`.${name}`));
+
+    it('drops the sync queue before cancelling the running sync', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(
+        openWebViews([
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'p1',
+          },
+        ]),
+      );
+
+      await performShutdownTasks();
+
+      expect(indexOfCommand('dropSyncQueue')).toBe(0);
+      expect(indexOfCommand('cancelSync')).toBeGreaterThan(0);
+      expect(indexOfCommand('sendReceiveProjects')).toBeGreaterThan(indexOfCommand('cancelSync'));
+    });
+
+    it('drops the sync queue before the power-mode session sync', async () => {
+      mockSettingsGet.mockResolvedValue('power');
+
+      await performShutdownTasks();
+
+      expect(indexOfCommand('dropSyncQueue')).toBe(0);
+      expect(commandsSent()[1]).toBe(RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE);
+    });
+
+    it('a missing Send/Receive extension does not block quit', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(
+        openWebViews([
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'p1',
+          },
+        ]),
+      );
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue'))
+          throw new Error(`${getJsonRpcRequestErrorMessagePrefix(-32601)}: Method not found`);
+        return undefined;
+      });
+
+      await expect(performShutdownTasks()).resolves.toBeUndefined();
+
+      expect(indexOfCommand('sendReceiveProjects')).toBeGreaterThan(0);
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('Could not drop the sync queue'),
+      );
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
+    it('a method-not-found drop is logged at debug, not warn', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue'))
+          throw new Error(
+            `${getJsonRpcRequestErrorMessagePrefix(-32601)}: Method not found command:paratextBibleSendReceive.dropSyncQueue`,
+          );
+        return undefined;
+      });
+
+      await performShutdownTasks();
+
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('Could not drop the sync queue'),
+      );
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
+    it('a drop that throws is logged at warn', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue')) throw new Error('drop exploded');
+        return undefined;
+      });
+
+      await expect(performShutdownTasks()).resolves.toBeUndefined();
+
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not drop the sync queue'),
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('drop exploded'));
+    });
+
+    it('an extension host that does not answer the drop does not hold quit open', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue')) return new Promise(() => {});
+        return undefined;
+      });
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(DROP_SYNC_QUEUE_TIMEOUT_MS - 1);
+        expect(indexOfCommand('cancelSync')).toBe(-1);
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(indexOfCommand('cancelSync')).toBeGreaterThan(0);
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Dropping the sync queue did not answer'),
+      );
+    });
+
+    it('a drop that rejects after quit stopped waiting for it is not an unhandled rejection', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+      let rejectDrop: (reason: Error) => void = () => {};
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue'))
+          return new Promise((_resolve, reject) => {
+            rejectDrop = reject;
+          });
+        return undefined;
+      });
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(DROP_SYNC_QUEUE_TIMEOUT_MS);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+        rejectDrop(new Error('late failure'));
+        await vi.advanceTimersByTimeAsync(0);
+      } finally {
+        vi.useRealTimers();
+        // Unhandled rejections are reported on a later turn of the real event loop
+        await new Promise((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        process.off('unhandledRejection', unhandled);
+      }
+      expect(unhandled).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a sync running at quit', () => {
+    const commandsSent = () => mockRequestNoRetry.mock.calls.map(([command]) => String(command));
+    const indexOfCommand = (name: string) =>
+      commandsSent().findIndex((command) => command.endsWith(`.${name}`));
+    const countOfCommand = (name: string) =>
+      commandsSent().filter((command) => command.endsWith(`.${name}`)).length;
+
+    /**
+     * A writable editor is open, and the extension answers `getSyncActivity` from `isSyncing()` —
+     * or throws when that is `'throws'`. Every other command resolves.
+     */
+    function stubSyncActivity(isSyncing: () => boolean | 'throws') {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(
+        openWebViews([
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'p1',
+          },
+        ]),
+      );
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (!command.endsWith('.getSyncActivity')) return undefined;
+        const answer = isSyncing();
+        if (answer === 'throws') throw new Error('Method not found');
+        return { isSyncing: answer, projectIds: answer ? ['p1'] : [] };
+      });
+    }
+
+    it('waits for a cancelled sync to stop before the quit sync', async () => {
+      // The cancelled run still holds the Send/Receive lock while it unwinds, so a quit sync sent
+      // right after the cancel is refused as already in progress and the newest edits stay unsent
+      let isSyncing = true;
+      stubSyncActivity(() => isSyncing);
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(CANCELLED_SYNC_POLL_INTERVAL_MS * 4);
+        expect(indexOfCommand('cancelSync')).toBeGreaterThan(indexOfCommand('getSyncActivity'));
+        expect(indexOfCommand('sendReceiveProjects')).toBe(-1);
+
+        isSyncing = false;
+        await vi.advanceTimersByTimeAsync(CANCELLED_SYNC_POLL_INTERVAL_MS);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      );
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
+    });
+
+    it('goes ahead after the wait budget when the sync never stops (and warns)', async () => {
+      stubSyncActivity(() => true);
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(CANCELLED_SYNC_STOP_WAIT_MS - 1);
+        expect(indexOfCommand('cancelSync')).toBeGreaterThan(0);
+        expect(indexOfCommand('sendReceiveProjects')).toBe(-1);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+      // Sent anyway: it may still be refused, but nothing is lost by trying
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining(`did not stop within ${CANCELLED_SYNC_STOP_WAIT_MS} ms`),
+      );
+    });
+
+    it('does not wait when no sync was running', async () => {
+      stubSyncActivity(() => false);
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        // No timer has to fire for the quit sync to go out
+        await vi.advanceTimersByTimeAsync(0);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+      // Asked once, before the cancel — the control showing the activity was read and found idle
+      expect(countOfCommand('getSyncActivity')).toBe(1);
+      expect(indexOfCommand('getSyncActivity')).toBeLessThan(indexOfCommand('cancelSync'));
+      expect(indexOfCommand('sendReceiveProjects')).toBeGreaterThan(indexOfCommand('cancelSync'));
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
+    it("does not wait when the sync activity can't be read", async () => {
+      // Without the Send/Receive extension (or Paratext 10) there is nothing to wait for
+      stubSyncActivity(() => 'throws');
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(0);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(countOfCommand('getSyncActivity')).toBe(1);
+      expect(indexOfCommand('getSyncActivity')).toBeLessThan(indexOfCommand('cancelSync'));
+      expect(indexOfCommand('sendReceiveProjects')).toBeGreaterThan(indexOfCommand('cancelSync'));
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the quit sync while the backend reports busy', () => {
+    const commandsSent = () => mockRequestNoRetry.mock.calls.map(([command]) => String(command));
+    const sendCount = () =>
+      commandsSent().filter((command) => command.endsWith('.sendReceiveProjects')).length;
+
+    /**
+     * A writable editor is open; `getSyncActivity` reads `isSyncing`; each `sendReceiveProjects`
+     * call runs the next outcome (the last one repeats). An outcome is an error to reject with, or
+     * `undefined` to resolve.
+     */
+    function stubSendOutcomes(outcomes: unknown[], isSyncing = false) {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(
+        openWebViews([
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'p1',
+          },
+        ]),
+      );
+      let sends = 0;
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.getSyncActivity')) return { isSyncing, projectIds: [] };
+        if (!command.endsWith('.sendReceiveProjects')) return undefined;
+        const outcome = outcomes[Math.min(sends, outcomes.length - 1)];
+        sends += 1;
+        if (outcome) throw outcome;
+        return undefined;
+      });
+    }
+
+    async function runQuit(advanceMs: number) {
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(advanceMs);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+
+    it('retries while the backend reports busy and ends synced', async () => {
+      stubSendOutcomes([new Error('Sync is busy (SYNC_BUSY)'), undefined]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS);
+      expect(sendCount()).toBe(2);
+      expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('busy'));
+    });
+
+    it('retries a busy refusal after the stop wait for a never-stopping sync runs out', async () => {
+      stubSendOutcomes([new Error('Sync is busy (SYNC_BUSY)'), undefined], true);
+      // The activity keeps reading as syncing, so the stop wait runs out before the quit sync is sent
+      await runQuit(CANCELLED_SYNC_STOP_WAIT_MS + SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS);
+      expect(sendCount()).toBe(2);
+    });
+
+    it('stops retrying at the busy budget and ends unreachable', async () => {
+      stubSendOutcomes([new Error('Sync is busy (SYNC_BUSY)')]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS * 2);
+      const sentAtBudget = sendCount();
+      expect(sentAtBudget).toBeGreaterThan(1);
+      expect(sentAtBudget).toBeLessThanOrEqual(
+        SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS / SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS + 1,
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('quit sync could not run: backend busy; unsent changes stay local'),
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('p1'));
+      expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+    });
+
+    it('sends nothing more once the quit has stopped waiting for the sync', async () => {
+      stubSendOutcomes([new Error('Sync is busy (SYNC_BUSY)')]);
+      const shortQuitBoundMs = SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS / 3;
+      quitBound.overrideMs = shortQuitBoundMs;
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(shortQuitBoundMs);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+        expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
+        const sentAtSettlement = sendCount();
+        expect(sentAtSettlement).toBeGreaterThan(1);
+
+        // The retry pending at settlement wakes up inside this window and must not send
+        await vi.advanceTimersByTimeAsync(SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS * 4);
+        expect(sendCount()).toBe(sentAtSettlement);
+      } finally {
+        quitBound.overrideMs = undefined;
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not retry an INTERNAL "not responding" failure', async () => {
+      stubSendOutcomes([newPlatformError('Sync is not responding', INTERNAL)]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS);
+      expect(sendCount()).toBe(1);
+    });
+
+    it('does not retry a plain failure', async () => {
+      stubSendOutcomes([new Error('x')]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS);
+      expect(sendCount()).toBe(1);
+    });
+
+    it('does not retry a FAILED_PRECONDITION failure without the marker', async () => {
+      stubSendOutcomes([newPlatformError('Project is locked', FAILED_PRECONDITION)]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS);
+      expect(sendCount()).toBe(1);
+    });
   });
 
   it('cancels sync but skips S/R when no Scripture Editor is open', async () => {
@@ -419,7 +826,10 @@ describe('performShutdownTasks', () => {
       ]),
     );
     await performShutdownTasks();
-    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    // Only the queue drop, which runs in every mode and starts no sync
+    expect(mockRequestNoRetry.mock.calls.map(([command]) => command)).toEqual([
+      expect.stringMatching(/\.dropSyncQueue$/),
+    ]);
     expect(mockGetOpenWebViews).not.toHaveBeenCalled();
     expect(mockLoggerWarn).toHaveBeenCalledWith(
       expect.stringContaining('Could not read platform.interfaceMode'),
@@ -482,6 +892,9 @@ describe('performShutdownTasks', () => {
       expect(mockLoggerWarn).toHaveBeenCalledWith(
         expect.stringContaining('Could not read platform.firstRunComplete'),
       );
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringContaining('first-run sync consent could not be read'),
+      );
       // The gate handled the failed read itself; it never escaped to the outer catch-all.
       expect(mockLoggerError).not.toHaveBeenCalled();
     });
@@ -513,6 +926,20 @@ describe('performShutdownTasks', () => {
       );
       expect(mockLoggerInfo).toHaveBeenCalledWith(
         expect.stringContaining('automatic sync deferred for this session'),
+      );
+    });
+
+    it('does NOT S/R on shutdown while the first successful sync is pending', async () => {
+      stubSettings({ mode: 'simple', firstRunComplete: true, firstSyncState: 'pending' });
+      stubWritableEditorOpen();
+
+      await performShutdownTasks();
+
+      expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+        expect.stringContaining('sendReceiveProjects'),
+      );
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringContaining('Sync on shutdown skipped: no successful sync yet'),
       );
     });
 
@@ -792,6 +1219,16 @@ describe('performWindowCloseTasks', () => {
     );
   });
 
+  it('does NOT sync a closing window while the first successful sync is pending', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true, firstSyncState: 'pending' });
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledWith(expect.stringContaining('no successful sync yet'));
+  });
+
   it('skips the sync and warns when the interface mode cannot be read', async () => {
     mockSettingsGet.mockRejectedValue(new Error('extension host is going away'));
 
@@ -894,6 +1331,7 @@ describe('startWindowCloseTasksWithoutWaiting', () => {
     let resolveModeRead: (mode: SettingTypes['platform.interfaceMode']) => void = () => {};
     mockSettingsGet.mockImplementation(async (key: string) => {
       if (key === 'platform.firstRunComplete') return true;
+      if (key === 'platform.firstSyncState') return 'synced';
       return new Promise((resolve) => {
         resolveModeRead = resolve;
       });
@@ -1289,5 +1727,103 @@ describe('startWindowCloseTasksWithoutWaiting with several windows', () => {
     expect(mockLoggerInfo).not.toHaveBeenCalledWith(
       expect.stringContaining('closing window sync(s) before the shutdown'),
     );
+  });
+});
+
+describe('shouldResumeSyncQueue', () => {
+  it('does not resume for the first window of the process', () => {
+    expect(shouldResumeSyncQueue(true, false)).toBe(false);
+  });
+
+  it('resumes for the first window after an earlier window closed in the same process', () => {
+    expect(shouldResumeSyncQueue(true, true)).toBe(true);
+  });
+
+  it('does not resume for an additional window', () => {
+    expect(shouldResumeSyncQueue(false, true)).toBe(false);
+    expect(shouldResumeSyncQueue(false, false)).toBe(false);
+  });
+});
+
+describe('resumeSyncQueue', () => {
+  const RESUME_REQUEST = 'command:paratextBibleSendReceive.resumeSyncQueue';
+  const methodNotFound = () =>
+    new Error(`${getJsonRpcRequestErrorMessagePrefix(-32601)}: Method not found ${RESUME_REQUEST}`);
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetShutdownLatchesForNewSession();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    resetShutdownLatchesForNewSession();
+  });
+
+  it('sends the resume command once on success', async () => {
+    await resumeSyncQueue();
+
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(RESUME_REQUEST);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('treats method-not-found as nothing to resume: one call, debug log, no retry', async () => {
+    mockRequestNoRetry.mockRejectedValue(methodNotFound());
+
+    await resumeSyncQueue();
+
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    expect(mockLoggerDebug).toHaveBeenCalled();
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('retries a transient failure one second later without warning', async () => {
+    mockRequestNoRetry.mockRejectedValueOnce(new Error('socket hiccup'));
+
+    const done = resumeSyncQueue();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await done;
+
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(2);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('warns once and resolves after three failed attempts', async () => {
+    mockRequestNoRetry.mockRejectedValue(new Error('socket hiccup'));
+
+    const done = resumeSyncQueue();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await done;
+
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(3);
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry once a quit has begun', async () => {
+    mockRequestNoRetry.mockRejectedValue(new Error('socket hiccup'));
+
+    const done = resumeSyncQueue();
+    await vi.advanceTimersByTimeAsync(0);
+    markQuitRequested();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await done;
+
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('leaves its caller unblocked: a request that never settles keeps only the returned promise pending', async () => {
+    mockRequestNoRetry.mockReturnValue(new Promise(() => {}));
+    let settled = false;
+
+    const pending = resumeSyncQueue().finally(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(settled).toBe(false);
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    expect(pending).toBeInstanceOf(Promise);
   });
 });

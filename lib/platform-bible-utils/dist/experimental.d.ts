@@ -315,5 +315,262 @@ export declare const NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY = "navigableProjec
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function isNavigableProjectIds(value: unknown): value is string[];
+/**
+ * What a consumer knows about the backend's sync activity, and the pieces every reader of the
+ * `paratextBibleSendReceive.getSyncActivity` command and `onSyncActivityChanged` event shares: the
+ * check of the payload, the mapping to what a consumer reads, and the recheck rule. Free of React
+ * and PAPI, so the renderer, the extension host and web views can all use it.
+ */
+/**
+ * The part of a sync-activity snapshot a consumer relies on, as it arrives on the wire.
+ * `projectIds` may be absent (a build that predates it) or `null` (the backend cannot name the
+ * projects yet); both mean "no project is named".
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type SyncActivityValue = {
+	/**
+	 * Whether a sync is running, whichever path started it
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	isSyncing: boolean;
+	/**
+	 * IDs of the projects being synced, when the backend names them
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	projectIds?: readonly string[] | null;
+	/**
+	 * Entry uids of the resources the running sync will update, when the backend names them
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	resourceIds?: readonly string[] | null;
+};
+/**
+ * What a consumer knows about the backend sync activity.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type SyncActivity = {
+	/**
+	 * Whether a sync is running. `false` while the answer is not known: unknown never disables
+	 * anything.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	isSyncing: boolean;
+	/**
+	 * IDs of the projects being synced. Empty when no sync runs or the backend does not name them.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	projectIds: readonly string[];
+	/**
+	 * Entry uids of the resources the running sync will update. Empty when no sync runs or the
+	 * backend does not name them.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	resourceIds: readonly string[];
+};
+/**
+ * Whether a value read from the wire is a usable sync-activity snapshot. Checked rather than
+ * trusted: the payload comes from another process, and a build may send another shape. `isSyncing`
+ * must be a boolean; `projectIds` and `resourceIds` may each be absent, `undefined`, `null` or a
+ * list of strings, and anything else makes the whole snapshot unusable.
+ *
+ * @param value The raw payload of the command or event
+ * @returns `true` if the value is a {@link SyncActivityValue}
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isSyncActivitySnapshot(value: unknown): value is SyncActivityValue;
+/**
+ * The activity a consumer reads while nothing is known: no sync, no projects. A constant, so a
+ * consumer that memoizes on it does not re-render.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const IDLE_SYNC_ACTIVITY: SyncActivity;
+/**
+ * Maps the latest snapshot to what a consumer reads. Falls back to {@link IDLE_SYNC_ACTIVITY} while
+ * no snapshot is known, so a missing, rejected or malformed answer never disables anything. The
+ * project ids are only carried while a sync runs.
+ *
+ * @param value The latest valid snapshot, or `undefined` while none is known
+ * @returns The activity to show
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function toSyncActivity(value: SyncActivityValue | undefined): SyncActivity;
+/**
+ * How often to re-read the sync activity while a sync is reported as running. The events that
+ * forward `onSyncActivityChanged` are fire-and-forget, so a lost closing event would otherwise
+ * leave a finished sync reported as running.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30000;
+/**
+ * Whether the sync activity needs re-reading on a timer: only while a known snapshot says a sync is
+ * running. Never while idle or unknown.
+ *
+ * @param value The latest valid snapshot, or `undefined` while none is known
+ * @returns `true` while a sync is reported as running
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function shouldRecheckSyncActivity(value: SyncActivityValue | undefined): boolean;
+/**
+ * What a consumer knows about the backend's sync queue, and the pieces every reader of the
+ * `paratextBibleSendReceive.getSyncQueue` command and `onSyncQueueChanged` event shares: the check
+ * of the payload and the mapping to what a consumer reads. Free of React and PAPI, so the renderer,
+ * the extension host and web views can all use it.
+ */
+/**
+ * Id of the command that asks the sync queue for a sync
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const REQUEST_SYNC_COMMAND = "paratextBibleSendReceive.requestSync";
+/**
+ * Id of the command that asks the user whether to cancel the sync that is running
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CANCEL_SYNC_PROMPT_COMMAND = "paratextBibleSendReceive.cancelSyncPrompt";
+/**
+ * Ends the message of a `paratextBibleSendReceive.requestSync` rejection for a request that never
+ * ran because it was removed from the sync queue, or dropped when the queue was disposed at quit.
+ * An error that crosses papi arrives as a plain error carrying only its message, so this stable
+ * token is how a caller recognizes that outcome.
+ *
+ * @experimental This is unstable and may change or disappear without notice
+ */
+export declare const SYNC_REQUEST_REMOVED_MARKER = " (SR_REMOVED)";
+/**
+ * Ends the message of a `paratextBibleSendReceive` refusal that only says the sync queue could not
+ * take the work right now because a sync is busy. An error that crosses papi arrives with only its
+ * message, sometimes behind a JSON-RPC prefix, so this stable token is how a caller recognizes a
+ * busy refusal; the error code alone does not say so.
+ *
+ * @experimental This is unstable and may change or disappear without notice
+ */
+export declare const SYNC_BUSY_MARKER = "(SYNC_BUSY)";
+/**
+ * Whether a rejection is a busy refusal: its message, trimmed at the end, ends with
+ * {@link SYNC_BUSY_MARKER}. The error code is ignored, and anything that carries no such message
+ * (including a non-error value) is not a busy refusal.
+ *
+ * @param error What the call rejected with
+ * @returns `true` if the message ends with the busy marker
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isSyncBusyError(error: unknown): boolean;
+/**
+ * Removes {@link SYNC_BUSY_MARKER} and the whitespace around it from the end of a message, leaving
+ * the readable text. Only the end is touched, so a message without the marker (or with it in the
+ * middle) comes back unchanged, and applying it twice gives the same result as applying it once.
+ *
+ * @param message A message that may end with the busy marker
+ * @returns The message without a trailing busy marker
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function withoutSyncBusyMarker(message: string): string;
+/**
+ * Whether a `paratextBibleSendReceive.requestSync` rejection only says the request was taken out of
+ * the queue. That is the outcome of a user action, not a failure to report. It matches the marker
+ * anywhere in the message, so an error rebuilt from the removed error's message still matches.
+ *
+ * @param error What the request rejected with
+ * @returns `true` if the rejection carries {@link SYNC_REQUEST_REMOVED_MARKER}
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isSyncRequestRemovedError(error: unknown): boolean;
+/**
+ * The part of a sync-queue snapshot a consumer relies on, as it arrives on the wire.
+ * `waitingProjectIds` may be absent or `null`; both mean "no project is waiting".
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type SyncQueueValue = {
+	/**
+	 * IDs of the projects waiting for a later sync run, in the order they will run
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	waitingProjectIds?: readonly string[] | null;
+	/**
+	 * IDs of the projects of the run the queue has sent to the backend that the backend has not yet
+	 * accepted. Absent and `null` both mean "none is being sent".
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	sendingProjectIds?: readonly string[] | null;
+	/**
+	 * IDs of the projects in the sync run under way. Absent from a build that predates the field;
+	 * absent and `null` both mean "none is known to be running".
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	runningProjectIds?: readonly string[] | null;
+};
+/**
+ * What a consumer knows about the backend sync queue.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type SyncQueue = {
+	/**
+	 * IDs of the projects waiting for a later sync run. Empty when nothing waits or the answer is not
+	 * known: unknown never disables anything. The projects of the run being sent are in
+	 * `sendingProjectIds` instead, unless they were also asked for again for a later run.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	waitingProjectIds: readonly string[];
+	/**
+	 * IDs of the projects of the run the queue has sent to the backend that the backend has not yet
+	 * accepted: about to run, unless the backend refuses the run as busy, which puts them back among
+	 * the waiting. A run sent again after a busy refusal is not listed: its projects stay waiting
+	 * until the backend accepts it. Empty when none is being sent or the answer is not known.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	sendingProjectIds: readonly string[];
+	/**
+	 * IDs of the projects in the sync run under way. Empty when none runs or the answer is not known.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	runningProjectIds: readonly string[];
+};
+/**
+ * Whether a value read from the wire is a usable sync-queue snapshot. Checked rather than trusted:
+ * the payload comes from another process, and a build may send another shape. `waitingProjectIds`,
+ * `sendingProjectIds` and `runningProjectIds` are each checked on their own: any of them may be
+ * absent, `undefined`, `null` or a list of strings, and anything else makes the whole snapshot
+ * unusable.
+ *
+ * @param value The raw payload of the command or event
+ * @returns `true` if the value is a {@link SyncQueueValue}
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isSyncQueueSnapshot(value: unknown): value is SyncQueueValue;
+/**
+ * The queue a consumer reads while nothing is known: nothing waits. A constant, so a consumer that
+ * memoizes on it does not re-render.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const IDLE_SYNC_QUEUE: SyncQueue;
+/**
+ * Maps the latest snapshot to what a consumer reads. Falls back to {@link IDLE_SYNC_QUEUE} while no
+ * snapshot is known, so a missing, rejected or malformed answer never disables anything.
+ *
+ * @param value The latest valid snapshot, or `undefined` while none is known
+ * @returns The queue to show
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function toSyncQueue(value: SyncQueueValue | undefined): SyncQueue;
 
 export {};

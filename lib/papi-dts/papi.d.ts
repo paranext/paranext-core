@@ -442,6 +442,16 @@ declare module 'shared/models/web-view.model' {
      */
     iconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab. The
+     * icon follows the tab's text colour, so it suits every theme and tab state. Takes precedence
+     * over {@link WebViewDefinitionBase.iconUrl}. The icons the platform can show are listed in
+     * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). If the name is not one
+     * of them, `iconUrl` is used instead (and then the software's standard logo).
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    iconName?: string;
+    /**
      * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
      * WebView
      */
@@ -776,6 +786,7 @@ declare module 'shared/models/web-view.model' {
    */
   export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS: readonly [
     'iconUrl',
+    'iconName',
     'title',
     'tooltip',
     'projectId',
@@ -1706,11 +1717,10 @@ declare module 'shared/data/rpc.model' {
    *
    * The code has to be read back out of the message because `doRequest` flattens every RPC-level
    * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
-   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker: a "no
-   * handler yet" response has no `error.data` at all, and the `platformErrorCode` field is no help
-   * either, because it is never populated from C#. `JsonRpc.ExceptionStrategy` is left at its
-   * `CommonErrorData` default, which serializes no `Exception.Data`, so `error.data.data` is always
-   * absent whatever `PlatformErrorCodes.WithCode` set. Deriving the format from
+   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker for this
+   * case: a "no handler yet" response has no `error.data` at all, so the thrown error has no platform
+   * error `code` either. (That `code` is set only when a handler that did run threw one, as the .NET
+   * data provider's `PlatformErrorCodes.WithCode` does.) Deriving the format from
    * {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
    * with, keeps this matcher in lockstep with any reformat there.
    *
@@ -2444,6 +2454,24 @@ declare module 'shared/models/rpc.interface' {
      * @experimental
      */
     acceptLocalClient(socket: ServerSocketLike, name: string): void;
+  }
+  /**
+   * An RPC handler that can close the connections of the clients its websocket server accepted. Only
+   * the process that owns the server (main) implements this.
+   *
+   * @experimental
+   */
+  export interface IRpcWebSocketClientCloser {
+    /**
+     * Close every client connection accepted from the websocket server, telling each why. Clients
+     * served through {@link IRpcLocalClientAcceptor.acceptLocalClient} are left open: whoever handed
+     * their sockets over owns closing them.
+     *
+     * @param code WebSocket close code to send to each client
+     * @param reason Human-readable reason to send to each client
+     * @experimental
+     */
+    closeWebSocketClients(code: number, reason: string): void;
   }
 }
 declare module 'shared/data/papi-port.model' {
@@ -3238,6 +3266,7 @@ declare module 'main/services/rpc-websocket-listener' {
   import {
     IRpcLocalClientAcceptor,
     IRpcMethodRegistrar,
+    IRpcWebSocketClientCloser,
     RpcClientDisconnectEvent,
   } from 'shared/models/rpc.interface';
   import {
@@ -3261,7 +3290,9 @@ declare module 'main/services/rpc-websocket-listener' {
    *
    * Created by the main process on start up when the network service initializes
    */
-  export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClientAcceptor {
+  export class RpcWebSocketListener
+    implements IRpcMethodRegistrar, IRpcLocalClientAcceptor, IRpcWebSocketClientCloser
+  {
     private readonly port;
     connectionStatus: ConnectionStatus;
     /**
@@ -3333,6 +3364,13 @@ declare module 'main/services/rpc-websocket-listener' {
      * @experimental
      */
     acceptLocalClient(socket: ServerSocketLike, name: string): void;
+    /**
+     * Close every client the websocket server accepted. See
+     * {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+     *
+     * @experimental
+     */
+    closeWebSocketClients(code: number, reason: string): void;
     generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
@@ -3457,6 +3495,20 @@ declare module 'shared/services/network.service' {
    * @experimental
    */
   export function acceptLocalClient(socket: ServerSocketLike, name: string): void;
+  /**
+   * Close every client connected to this process's PAPI websocket server on port 8876, telling each
+   * why. Main-process only. A client such as the .NET data provider runs until its connection drops,
+   * so this is how main asks it to finish up and exit. Renderers' local connections are left open;
+   * see {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+   *
+   * Does nothing when the network service is not initialized, since then no client is connected.
+   *
+   * @param code WebSocket close code to send to each client
+   * @param reason Human-readable reason to send to each client
+   * @throws If this is not the main process, or its handler cannot close websocket clients
+   * @experimental
+   */
+  export function closeWebSocketClients(code: number, reason: string): void;
   /** Set the number of seconds that network requests in this process should wait before timing out */
   export function setRequestTimeout(timeoutSeconds: number): void;
   /**
@@ -4797,6 +4849,15 @@ declare module 'shared/models/docking-framework.model' {
      */
     tabIconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab
+     * instead of {@link tabIconUrl}. The icons the platform can show are listed in `LUCIDE_ICON_NAMES`
+     * (exported from `platform-bible-react/experimental`). An unknown name is ignored, so
+     * {@link tabIconUrl} (and then the standard logo) is shown instead.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    tabIconName?: string;
+    /**
      * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
      * tab
      */
@@ -5387,7 +5448,9 @@ declare module 'shared/services/window.service-model' {
    *
    * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
    * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
-   * focus subject shapes change.
+   * focus subject shapes change. Extensions cannot import this at runtime, so the Scripture editor
+   * keeps its own copy (`getEditorFocusLocation` in `platform-scripture-editor.web-view.utils.ts`):
+   * update it too.
    */
   export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
   /**
@@ -5704,9 +5767,10 @@ declare module 'shared/models/network-object-status.service-model' {
      * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
      *   indefinitely
      * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
-     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-     *   reached before the network object is registered, or if the current set of network objects
-     *   could not be read. Rejections carry a reason string, not an `Error`
+     *   once the network object is registered, or rejects with a {@link PlatformError} (not an
+     *   `Error`) if a timeout is provided and the timeout is reached before the network object is
+     *   registered (`code` is {@link DEADLINE_EXCEEDED}), or if the current set of network objects
+     *   could not be read (`code` is {@link UNKNOWN})
      */
     waitForNetworkObject: (
       objectDetailsToMatch: Partial<NetworkObjectDetails>,
@@ -6044,9 +6108,17 @@ declare module 'shared/services/web-view-provider.service' {
    * Get a web view provider that has previously been set up
    *
    * @param webViewType Type of webview provider to get
+   * @param shouldWaitPatiently Whether to keep re-arming the wait, allowing much longer overall for
+   *   the provider's extension to finish activating, instead of failing after the default timeout.
+   *   Set this for `retrieveWebViewContent`'s callers — a tab-restore request and the
+   *   extension-reload re-fetch; leave it `false` (the default) for a fresh `openWebView()` request.
+   *   Defaults to `false`
    * @returns Web view provider with the given name if one exists, undefined otherwise
    */
-  function getWebViewProvider(webViewType: string): Promise<IRegisteredWebViewProvider | undefined>;
+  function getWebViewProvider(
+    webViewType: string,
+    shouldWaitPatiently?: boolean,
+  ): Promise<IRegisteredWebViewProvider | undefined>;
   /**
    * Register a web view controller to represent a web view. It is expected that a web view provider
    * calls this to register a web view controller for a web view that is being created. If a web view
@@ -6374,14 +6446,18 @@ declare module 'papi-shared-types' {
     'platform.isFullScreen': () => Promise<boolean>;
     /**
      * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
-     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered or its
-     * completion flag could not be read; or `deferred` when the user chose "Don't sync yet" earlier
-     * in this app session. Only meaningful in Simple mode: the completion flag is never written in
-     * Power mode, so a Power-mode sync must not consult this.
+     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered; `unreadable`
+     * when its completion flag or the first-sync state could not be read; `deferred` when the user
+     * chose "Don't sync yet" earlier in this app session; or `notYetSynced` when the first
+     * Send/Receive (`platform.firstSyncState` is `pending`) has not succeeded yet. Only meaningful
+     * in Simple mode: the completion flag is never written in Power mode, so a Power-mode sync must
+     * not consult this.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'platform.getAutomaticSyncConsent': () => Promise<'granted' | 'unconfirmed' | 'deferred'>;
+    'platform.getAutomaticSyncConsent': () => Promise<
+      'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | 'notYetSynced'
+    >;
     /**
      * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
      * user chooses "Don't sync yet" in the first-run wizard; the next launch syncs as usual.
@@ -6500,6 +6576,16 @@ declare module 'papi-shared-types' {
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     /**
+     * Open a Settings tab limited to the project shown in the given web view — the same as
+     * `platform.openSettings`, under a name of its own so a web view's Project settings menu item
+     * can show its keyboard shortcut without the main menu's Settings item, which runs
+     * `platform.openSettings`, showing it too.
+     *
+     * @param webViewId Web view whose project the Settings tab should be limited to, if any
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openProjectSettingsForWebView': (webViewId?: WebViewId) => Promise<void>;
+    /**
      * Move a web view to a window created for it.
      *
      * A move closes the web view in the window that holds it and reopens it — same
@@ -6592,9 +6678,14 @@ declare module 'papi-shared-types' {
      * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
      * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
      * clears the orientation tour's completion and whether the user was asked for an internet-use
-     * choice (`platform.internetUseChoiceAsked`), and turns `platform.syncOnStartup` and
-     * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
-     * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     * choice (`platform.internetUseChoiceAsked`), sets `platform.firstSyncState` to `pending` so
+     * the wizard's Sync step returns and automatic syncs wait until a sync succeeds again (a later
+     * successful Send/Receive sets it back to `synced`), and turns `platform.syncOnStartup` and
+     * `platform.showRegistrationReminderOnStartup` back on. It writes `pending` even in a build
+     * without Send/Receive, where no sync can clear it, so afterwards
+     * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
+     * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
+     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice
@@ -6688,6 +6779,8 @@ declare module 'papi-shared-types' {
    * @example 'platform.quit';
    */
   type CommandNames = keyof CommandHandlers;
+  /** Whether the user's first Send/Receive has succeeded. See `platform.firstSyncState`. */
+  type FirstSyncState = 'unknown' | 'pending' | 'synced';
   /**
    * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
    * and values are setting data types. Extensions can add more user setting types with
@@ -6792,6 +6885,18 @@ declare module 'papi-shared-types' {
      * finished and the wizard should gate the app on the next simple-mode startup.
      */
     'platform.firstRunComplete': boolean;
+    /**
+     * Whether the user's first Send/Receive has succeeded, so the first-run wizard knows whether to
+     * keep reopening its Sync step. Hidden; managed by the first-run flow and the Send/Receive
+     * backend, not user-configurable.
+     *
+     * - `'unknown'` (default): never written. This setup predates the state or no wizard has run.
+     * - `'pending'`: a first run started and no sync has succeeded yet.
+     * - `'synced'`: a sync has succeeded at least once.
+     *
+     * Treat anything other than `'pending'` as "has synced".
+     */
+    'platform.firstSyncState': FirstSyncState;
     /**
      * Whether to perform automatic startup sync. Hidden; not exposed in the settings UI. Read on
      * each launch by the Simple-mode startup sync only — Power mode never reads it. Absent or
@@ -6950,6 +7055,27 @@ declare module 'papi-shared-types' {
      * Defaults to `false`.
      */
     'platform.isPublished': boolean;
+    /**
+     * Whether this project is registered with the Paratext Registry. A registered project's
+     * {@link ProjectSettingTypes['platform.name'] | `platform.name`} and
+     * {@link ProjectSettingTypes['platform.fullName'] | `platform.fullName`} can be changed only
+     * through the registry. A project can be shared through Send/Receive without being registered.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `false`.
+     */
+    'platform.isRegistered': boolean;
+    /**
+     * Whether the current user has the administrator role on this project. Unlike most project
+     * settings, the answer depends on who is asking. A project with no notion of roles counts its
+     * user as its administrator.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `true`.
+     */
+    'platform.isCurrentUserAdministrator': boolean;
     /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is
@@ -8287,6 +8413,23 @@ declare module 'shared/models/project-metadata.model' {
      * @experimental Recently added; may change as we learn how it is used.
      */
     isPublished?: boolean;
+    /**
+     * Localize key explaining why Platform.Bible cannot open the project (e.g. a Study Bible
+     * Additions project). **Absent or empty means the project can be opened**, and so does a failed
+     * metadata lookup, so an error never locks a user out of a real project.
+     *
+     * - Tool pickers leave such a project out. Surfaces where users open projects (Home, New Tab, the
+     *   Simple-mode project picker) show it disabled with the localized reason.
+     * - Platform.Bible refuses the project's Scripture text with an error containing
+     *   `(PROJECT_OPEN_BLOCKED)`. A web view of your own that opens projects must check this field.
+     * - The project's data stays available for Send/Receive, settings and metadata.
+     * - For producers: the value must be a registered localize key; omit the field rather than setting
+     *   `''`. When several factories serve a project, the first non-empty reason wins, and no factory
+     *   can clear it.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    unsupportedReason?: string;
   };
   export type ProjectDataProviderFactoryMetadataInfo = {
     /**
@@ -9423,6 +9566,15 @@ declare module 'shared/models/dialog-options.model' {
     /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
     iconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to display in the header. Takes
+     * precedence over {@link DialogOptions.iconUrl}. The icons the platform can show are listed in
+     * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). An unknown name is
+     * ignored and {@link DialogOptions.iconUrl} is used instead.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    iconName?: string;
+    /**
      * The message to show the user in the dialog. If you provide a {@link LocalizeKey}, it will be
      * localized before displaying.
      *
@@ -9602,7 +9754,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    */
   export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
   /**
-   * The tabType for the project picker dialog in `project-picker.dialog.tsx`
+   * The tabType for the project picker dialog in `project-picker.dialog.tsx`. Lists the user's
+   * projects only — editable and read-only — never published resources.
    *
    * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
    *   It is not yet a stable contract.
@@ -9617,11 +9770,21 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    */
   export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
-  /** Options to provide when showing the Select Project dialog */
+  /**
+   * Options to provide when showing the Select Project dialog. Projects that cannot be opened (see
+   * `ProjectMetadata.unsupportedReason`) are never listed, even when named in `includeProjectIds`.
+   */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
-  /** Options to provide when showing the Select Multiple Project dialog */
+  /**
+   * Options to provide when showing the Select Multiple Project dialog. Projects that cannot be
+   * opened (see `ProjectMetadata.unsupportedReason`) are never listed, even when named in
+   * `includeProjectIds`.
+   */
   export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
-    /** Project IDs that should start selected in the dialog */
+    /**
+     * Project IDs that should start selected in the dialog. The id of a project that cannot be opened
+     * has no row to unselect, so it is returned unchanged on submit.
+     */
     selectedProjectIds?: string[];
   };
   /**
@@ -9654,6 +9817,19 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** IDs of resources already selected in the calling panel */
     selectedResourceIds?: string[];
     /**
+     * IDs among `selectedResourceIds` that belong to the team: the resources a project administrator
+     * shared, which the user cannot remove. When provided, the selected resources are listed as "Team
+     * resources", locked, and "User resources"; when omitted, they are all listed as "Included". An
+     * ID that is not also in `selectedResourceIds` is ignored.
+     */
+    teamResourceIds?: string[];
+    /**
+     * When true, and `teamResourceIds` is provided, each row under "User resources" gets a remove
+     * button, and pressing it returns that resource with the action `'remove'`. Defaults to false:
+     * selected resources cannot be picked or removed.
+     */
+    allowRemove?: boolean;
+    /**
      * Already-localized sentence shown above the resource list explaining something the caller knows
      * that limits what picking a resource will do. Shown ahead of any explanation the dialog itself
      * has for an incomplete list.
@@ -9665,9 +9841,27 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      * one that is already on disk. Defaults to true.
      */
     allowSelectingInstalled?: boolean;
+    /**
+     * When true, texts whose licensing terms prohibit their use as a model or base for a new
+     * translation are shown greyed out, with the reason, and cannot be picked. Set it when picking a
+     * model text, not a reference text. Defaults to false.
+     */
+    disableRestrictedModelTexts?: boolean;
   };
   /**
-   * Options to provide when showing the Project Picker dialog (no extra options needed)
+   * What the Resource Picker dialog returns: the resource the user chose, and whether they chose to
+   * add it or to remove it from their list (see `allowRemove`)
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
+  export type ResourcePickerDialogResult = {
+    resource: DblResourceData;
+    action: 'add' | 'remove';
+  };
+  /**
+   * Options to provide when showing the Project Picker dialog (no extra options needed). The dialog
+   * lists the user's projects only — editable and read-only — never published resources.
    *
    * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
    *   It is not yet a stable contract.
@@ -9713,7 +9907,10 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      * @experimental This dialog was recently added, and its shape may change as we learn how it is
      *   used. It is not yet a stable contract.
      */
-    [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
+    [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<
+      ResourcePickerDialogOptions,
+      ResourcePickerDialogResult
+    >;
     /**
      * @experimental This dialog was recently added, and its shape may change as we learn how it is
      *   used. It is not yet a stable contract.
@@ -10340,9 +10537,8 @@ declare module 'shared/models/request-registry-tokens-privilege.model' {
      * - `INVALID_ARGUMENT`: a scope is not allowed, or the Registry rejected the request (for example,
      *   the resource is not registered with this Registry)
      * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it
-     * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
-     *   off, or "Disable access to some Bible translation services" is selected and this computer's
-     *   location is restricted or could not be determined
+     * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: "Disable access to
+     *   some Bible translation services" or "Block internet when in sensitive locations" is selected
      * - `UNAVAILABLE`: there is no internet connection, reading the registration or the Internet &
      *   connectivity settings failed or took too long, or the Registry could not be reached or did
      *   not return a usable token; retrying later may help
@@ -11149,7 +11345,7 @@ declare module 'shared/data/platform.data' {
    * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
    * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
    * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
-   * when the backend says so rather than on a renderer-side timer.
+   * only once the backend says so rather than on a renderer-side timeout.
    *
    * @experimental
    */
@@ -12304,6 +12500,22 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
   export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
 }
+declare module 'renderer/services/overlays/window-blur-press.util' {
+  /**
+   * Property key under which the library's `useDismissOnWindowBlur` marks the `pointerdown` it
+   * dispatches for a window blur. It must equal the library's key; `window-blur-press.util.test.tsx`
+   * fails if the two differ.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const WINDOW_BLUR_PRESS_MARKER: unique symbol;
+  /**
+   * Whether this event is the press `useDismissOnWindowBlur` dispatches for a window blur.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function isWindowBlurPress(event: Event): boolean;
+}
 declare module 'renderer/services/overlays/overlay-store' {
   /**
    * Simple overlay store using a Map and listeners pattern. Manages active overlay entries (context
@@ -12416,6 +12628,31 @@ declare module 'renderer/services/overlays/overlay-store' {
     },
   ): boolean;
 }
+declare module 'renderer/services/overlays/overlay-focus-return.util' {
+  /**
+   * Marks an overlay's coming close as one that returns focus to the opener, provided focus is inside
+   * the overlay's own content when the overlay settles. Call it right before resolving the overlay.
+   *
+   * @param overlayId Id of the overlay about to close
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function markOverlayFocusReturnIfFocusInside(overlayId: string): void;
+  /**
+   * Clears every mark. For tests, so one test's mark cannot reach the next.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   * @internal
+   */
+  export function resetOverlayFocusReturnMarks(): void;
+  /**
+   * Reads and clears an overlay's mark set by {@link markOverlayFocusReturnIfFocusInside}.
+   *
+   * @param overlayId Id of the overlay that is settling
+   * @returns Whether the overlay was marked
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function takeOverlayFocusReturnMark(overlayId: string): boolean;
+}
 declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
   import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
@@ -12503,6 +12740,20 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
     onSelect: (result: OverlayContextMenuResult) => void;
     /** Called when the menu is dismissed without a selection */
     onDismiss: () => void;
+    /**
+     * Called when the user presses Escape in the menu or one of its submenus, just before
+     * {@link onDismiss}. Lets the owner tell an Escape close apart from a click away.
+     *
+     * @experimental This property is unstable and may change or disappear without notice
+     */
+    onEscape?: () => void;
+    /**
+     * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+     * service can tell whether focus is inside this overlay's own content rather than another's.
+     *
+     * @experimental This property is unstable and may change or disappear without notice
+     */
+    overlayId?: string;
   };
   /**
    * Pure presentational context menu component. Renders a context menu at a fixed position using
@@ -12517,6 +12768,8 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
     position,
     onSelect,
     onDismiss,
+    onEscape,
+    overlayId,
   }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
   type OverlayContextMenuProps = {
     overlay: Extract<
@@ -15426,8 +15679,11 @@ declare module 'renderer/services/overlays/overlay.service-host' {
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
   /**
-   * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
-   * recorded click cannot correlate with the next test's input signal. @internal
+   * Resets the parent-document pointerdown record and the focus-return state (open overlays' focus
+   * records and the last focused tab). Exported for use in tests only, so one test's recorded click
+   * cannot correlate with the next test's input signal and no test inherits another's focus state.
+   *
+   * @internal
    */
   export function resetAppWindowInputState(): void;
   /** Initialize the overlay service. Called during renderer startup. */

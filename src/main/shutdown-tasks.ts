@@ -1,5 +1,6 @@
 import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
-import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
+import { isAppShuttingDown } from '@main/services/shutdown-latch.service';
+import { CATEGORY_COMMAND, isJsonRpcMethodNotFoundError } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
@@ -22,7 +23,8 @@ import {
   type SessionSyncBoundary,
 } from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
-import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
+import { AsyncVariable, getErrorMessage, wait } from 'platform-bible-utils';
+import { isSyncBusyError } from 'platform-bible-utils/experimental';
 
 /**
  * Behaviour-driving outcome of a bounded shutdown sync. The extension reports its own result, so
@@ -41,10 +43,11 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
  *   was caught. Warned.
  * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`), or
  *   every window answered and nothing writable was open anywhere (Simple).
- * - `skipped-consent-unconfirmed` / `skipped-consent-deferred`: the Simple-mode consent gate withheld
- *   the sync (see {@link getAutomaticSyncConsent}) — the wizard is unanswered or its flag could not
- *   be read, or the user chose "Don't sync yet" this session. Separate from `skipped` so the log
- *   never reads a withheld sync as "nothing was open".
+ * - `skipped-consent-unconfirmed` / `skipped-consent-unreadable` / `skipped-consent-deferred` /
+ *   `skipped-consent-notYetSynced`: the Simple-mode consent gate withheld the sync (see
+ *   {@link getAutomaticSyncConsent}) — the wizard is unanswered, its flag could not be read, the
+ *   user chose "Don't sync yet" this session, or no sync has succeeded yet. Separate from `skipped`
+ *   so the log never reads a withheld sync as "nothing was open".
  * - `unreachable`: the S/R call rejected before the timeout (e.g. the command isn't registered). The
  *   failure detail was already warned inside {@link runBoundedShutdownSync}.
  * - `timed-out`: neither settled within {@link AUTO_SYNC_MAX_DURATION_MS} (also already warned there).
@@ -56,7 +59,9 @@ type ShutdownSyncOutcome =
   | 'selection-failed'
   | 'skipped'
   | 'skipped-consent-unconfirmed'
+  | 'skipped-consent-unreadable'
   | 'skipped-consent-deferred'
+  | 'skipped-consent-notYetSynced'
   | 'unreachable'
   | 'timed-out';
 
@@ -73,10 +78,14 @@ type BoundedSyncSettlement<T> =
 /**
  * Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.
  *
+ * First, in every mode: drops the projects waiting in the Send/Receive extension's sync queue, so
+ * none of them starts a run while the app quits.
+ *
  * In Simple mode: cancels any in-progress sync, then — if the first-run sync consent gate allows it
  * (see {@link getAutomaticSyncConsent}) — S/Rs the projects of all open writable Scripture Editors
- * across every window. All errors are swallowed — extension may not be installed, or may fail —
- * shutdown must never be permanently blocked.
+ * across every window, once the cancelled sync has stopped (bounded by
+ * {@link CANCELLED_SYNC_STOP_WAIT_MS}). All errors are swallowed — extension may not be installed,
+ * or may fail — shutdown must never be permanently blocked.
  *
  * In Power mode: S/Rs the projects scheduled "On startup/shutdown" via the S/R extension's
  * `runScheduledSessionSync` command. Same error-swallowing contract — if the command isn't
@@ -100,6 +109,13 @@ export async function performShutdownTasks(): Promise<void> {
 }
 
 async function performShutdownTasksInternal(): Promise<void> {
+  // First, so nothing waiting in the queue starts a run while the app quits, and a run started now
+  // would make the shutdown sync below fail as busy. On quit the extension host is killed without
+  // deactivating. On macOS a last-window close also runs these tasks but the app stays resident:
+  // the queue is paused here and resumed when the next session's first window opens (see
+  // resumeSyncQueue).
+  await dropSyncQueue();
+
   // Drained before the mode is even read, not just before either branch: a closing window's sync
   // belongs to no mode, since it was started under whichever mode was in force when that window
   // closed and the mode can have changed since. An unreadable mode must not skip this wait either —
@@ -130,6 +146,66 @@ async function performShutdownTasksInternal(): Promise<void> {
   // is the only value left here — Simple mode is the fall-through, not a checked branch. A future
   // third mode would be a compile error here, not a silent no-S/R.
   await performSimpleModeShutdownSync();
+}
+
+/** Resolution value of {@link settleWithinOrTimeOut} meaning the time ran out first */
+const TIMED_OUT = Symbol('timed out');
+
+/**
+ * Awaits `promise` for at most `timeoutMs`, resolving to {@link TIMED_OUT} when it has not settled
+ * by then. A rejection before the bound rejects the result. The timer is always cleared.
+ *
+ * Giving up only stops the wait: the abandoned request keeps running, so a no-op rejection handler
+ * is attached to it first and a late failure can never surface as an unhandled rejection.
+ */
+async function settleWithinOrTimeOut<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | typeof TIMED_OUT> {
+  promise.catch(() => {});
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<typeof TIMED_OUT>((resolve) => {
+    timeout = setTimeout(() => resolve(TIMED_OUT), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timedOut]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * How long a quit waits for the Send/Receive extension to drop its sync queue. The drop is an
+ * in-memory change in the extension, so this only bounds an extension host that stopped answering.
+ */
+export const DROP_SYNC_QUEUE_TIMEOUT_MS = 5_000;
+
+/**
+ * Drops everything waiting in the Send/Receive extension's sync queue, so no queued run starts
+ * while the app quits (the queue is in memory only). A run already in progress is left to the
+ * shutdown sync's own cancel. Never throws and never waits longer than
+ * {@link DROP_SYNC_QUEUE_TIMEOUT_MS}: without the extension the command is missing, which only means
+ * there is no queue to drop.
+ */
+async function dropSyncQueue(): Promise<void> {
+  try {
+    const outcome = await settleWithinOrTimeOut(
+      networkService.requestNoRetry(
+        serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.dropSyncQueue'),
+      ),
+      DROP_SYNC_QUEUE_TIMEOUT_MS,
+    );
+    if (outcome === TIMED_OUT)
+      logger.warn(
+        `Dropping the sync queue did not answer within ${DROP_SYNC_QUEUE_TIMEOUT_MS} ms; continuing shutdown`,
+      );
+  } catch (e) {
+    // A missing command only means the extension is absent, so there is no queue to drop; any other
+    // failure may leave queued runs alive, which a support log should show.
+    if (isJsonRpcMethodNotFoundError(e))
+      logger.debug(`Could not drop the sync queue at quit: ${getErrorMessage(e)}`);
+    else logger.warn(`Could not drop the sync queue at quit: ${getErrorMessage(e)}`);
+  }
 }
 
 /**
@@ -397,8 +473,120 @@ async function drainInFlightWindowCloseSyncs(): Promise<void> {
   }
 }
 
+/**
+ * How long a quit waits for a sync it cancelled to stop before sending its own. Cancelling only
+ * signals the running sync: until it has unwound it still holds the Send/Receive lock, and a quit
+ * sync sent meanwhile is refused as already in progress. Also bounds the read that tells whether a
+ * sync was running at all. A few seconds next to the {@link AUTO_SYNC_MAX_DURATION_MS} the quit sync
+ * itself may take, so it adds at most this much (twice in the pathological case of a read that
+ * hangs and then a sync that never stops) to the longest quit there already is.
+ */
+export const CANCELLED_SYNC_STOP_WAIT_MS = 5_000;
+
+/** How long the quit sync waits between attempts while the backend refuses it as busy */
+export const SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS = 250;
+
+/**
+ * How long the quit sync keeps retrying a busy refusal before giving up. Its own budget, inside the
+ * {@link AUTO_SYNC_MAX_DURATION_MS} that bounds the whole quit sync.
+ */
+export const SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS = 30_000;
+
+/** How often a quit asks whether the sync it cancelled has stopped yet */
+export const CANCELLED_SYNC_POLL_INTERVAL_MS = 250;
+
+/**
+ * Whether the Send/Receive extension reports a sync in progress. Never throws and never takes
+ * longer than `timeoutMs`: an activity that cannot be read in time — the extension is missing, or
+ * Paratext 10 is not running — counts as no sync, because there is then nothing a quit could wait
+ * for.
+ */
+async function isSyncInProgress(timeoutMs: number): Promise<boolean> {
+  try {
+    const activity = await settleWithinOrTimeOut(
+      networkService.requestNoRetry<[], { isSyncing: boolean } | undefined>(
+        serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.getSyncActivity'),
+      ),
+      timeoutMs,
+    );
+    return activity !== TIMED_OUT && activity?.isSyncing === true;
+  } catch (e) {
+    logger.debug(`Could not read the sync activity at quit: ${getErrorMessage(e)}`);
+    return false;
+  }
+}
+
+/**
+ * Waits until the sync just cancelled has stopped, or {@link CANCELLED_SYNC_STOP_WAIT_MS} has passed
+ * — then the quit sync goes ahead anyway, as it would without this wait.
+ *
+ * The backend can keep its lock for a moment after the activity reads idle, so even a stopped sync
+ * does not guarantee the quit sync is accepted; {@link sendQuitSyncWhileBusy} retries on the busy
+ * marker.
+ *
+ * Nothing can start a new run during this wait: the sync queue was dropped before the cancel (see
+ * {@link dropSyncQueue}), so no other run competes for the lock with the quit sync.
+ */
+async function waitForCancelledSyncToStop(): Promise<void> {
+  let isWaitOver = false;
+  const pollUntilStopped = async (): Promise<'stopped' | 'budgetSpent'> => {
+    if (isWaitOver) return 'budgetSpent';
+    if (!(await isSyncInProgress(CANCELLED_SYNC_STOP_WAIT_MS))) return 'stopped';
+    await wait(CANCELLED_SYNC_POLL_INTERVAL_MS);
+    return pollUntilStopped();
+  };
+  try {
+    if (
+      (await settleWithinOrTimeOut(pollUntilStopped(), CANCELLED_SYNC_STOP_WAIT_MS)) === TIMED_OUT
+    )
+      logger.warn(
+        `The cancelled sync did not stop within ${CANCELLED_SYNC_STOP_WAIT_MS} ms; sending the shutdown sync anyway, which may be refused as already in progress`,
+      );
+  } finally {
+    isWaitOver = true;
+  }
+}
+
+/**
+ * Sends the quit sync, retrying every {@link SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS} while the backend
+ * refuses it with the busy marker, for at most {@link SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS}. Any other
+ * failure rejects at once. Stops without sending again once `isAbandoned` reports that the quit
+ * stopped waiting for this sync.
+ */
+async function sendQuitSyncWhileBusy(
+  projectIds: string[],
+  isAbandoned: () => boolean,
+): Promise<unknown> {
+  const deadline = Date.now() + SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS;
+  const attempt = async (): Promise<unknown> => {
+    try {
+      return await networkService.requestNoRetry(
+        serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
+        projectIds,
+      );
+    } catch (e) {
+      if (!isSyncBusyError(e)) throw e;
+      if (Date.now() + SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS > deadline) {
+        logger.warn(
+          `quit sync could not run: backend busy; unsent changes stay local (projects ${projectIds.join(', ')})`,
+        );
+        throw e;
+      }
+      logger.debug(
+        `The backend is busy; retrying the quit sync in ${SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS} ms`,
+      );
+      await wait(SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS);
+      if (isAbandoned()) throw e;
+      return attempt();
+    }
+  };
+  return attempt();
+}
+
 async function performSimpleModeShutdownSync(): Promise<void> {
   // Cancel any in-progress sync first (e.g. a first-sync on startup), then S/R the active project.
+  // Read before the cancel, so the quit only waits when there was something to cancel.
+  const wasSyncing = await isSyncInProgress(CANCELLED_SYNC_STOP_WAIT_MS);
   try {
     await networkService.requestNoRetry(
       serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
@@ -412,9 +600,7 @@ async function performSimpleModeShutdownSync(): Promise<void> {
   // the app open. The gate only suppresses STARTING a new one.
   const consent = await getAutomaticSyncConsent();
   if (consent !== 'granted') {
-    logShutdownSyncOutcome(
-      consent === 'deferred' ? 'skipped-consent-deferred' : 'skipped-consent-unconfirmed',
-    );
+    logShutdownSyncOutcome(`skipped-consent-${consent}`);
     return;
   }
 
@@ -477,15 +663,18 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     return;
   }
 
+  // Only now, with a sync about to be sent: a quit that sends nothing has no reason to wait.
+  if (wasSyncing) await waitForCancelledSyncToStop();
+
   logger.info(`Syncing projects on shutdown: ${projectIds.join(', ')}`);
   // `sendReceiveProjects` takes the whole list in one call, so every open editor's project goes out
   // as a single S/R under one bounded wait rather than N serial syncs racing the shutdown timeout.
+  /** Set once the bounded wait has settled, so a retry still pending never sends a late sync */
+  let isQuitSyncAbandoned = false;
   const settlement = await runBoundedShutdownSync('shutdown sync', () =>
-    networkService.requestNoRetry(
-      serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
-      projectIds,
-    ),
+    sendQuitSyncWhileBusy(projectIds, () => isQuitSyncAbandoned),
   );
+  isQuitSyncAbandoned = true;
   // The nothing-to-do states already returned above, so reaching here means at least one writable
   // project was selected and a resolution is a completed S/R — of the projects that were found. A
   // window that never answered keeps this from being reported as a clean, complete sync.
@@ -566,8 +755,14 @@ function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
     case 'skipped-consent-unconfirmed':
       logger.info(`Sync on shutdown skipped: ${WITHHELD_SYNC_CONSENT_REASONS.unconfirmed}`);
       break;
+    case 'skipped-consent-unreadable':
+      logger.info(`Sync on shutdown skipped: ${WITHHELD_SYNC_CONSENT_REASONS.unreadable}`);
+      break;
     case 'skipped-consent-deferred':
       logger.info(`Sync on shutdown skipped: ${WITHHELD_SYNC_CONSENT_REASONS.deferred}`);
+      break;
+    case 'skipped-consent-notYetSynced':
+      logger.info(`Sync on shutdown skipped: ${WITHHELD_SYNC_CONSENT_REASONS.notYetSynced}`);
       break;
     case 'unreachable':
     case 'timed-out':
@@ -627,5 +822,62 @@ async function runBoundedShutdownSync<T>(
     }
     logger.warn(`${variableName} did not complete: ${getErrorMessage(e)}`);
     return { status: 'failed' };
+  }
+}
+
+/** Attempts `resumeSyncQueue` makes before giving up on a failure other than method-not-found. */
+const RESUME_SYNC_QUEUE_ATTEMPTS = 3;
+/** Delay between `resumeSyncQueue` attempts. */
+const RESUME_SYNC_QUEUE_RETRY_DELAY_MS = 1_000;
+
+/**
+ * Whether a window being created starts a new session in a process that already ran one: the first
+ * window of a new session (no windows tracked) after an earlier window existed in this process. On
+ * macOS the app stays resident after its last window closes, so that is the dock-reopen case.
+ */
+export function shouldResumeSyncQueue(
+  isFirstWindow: boolean,
+  hasCreatedWindowThisProcess: boolean,
+): boolean {
+  return isFirstWindow && hasCreatedWindowThisProcess;
+}
+
+/**
+ * Tells the Send/Receive extension to resume the sync queue that shutdown tasks paused. A missing
+ * command (no extension) means there is nothing to resume. Any other failure is retried
+ * {@link RESUME_SYNC_QUEUE_ATTEMPTS} times in total, then warned about. Never throws; callers do not
+ * await it.
+ */
+export async function resumeSyncQueue(): Promise<void> {
+  const requestType = serializeRequestType(
+    CATEGORY_COMMAND,
+    'paratextBibleSendReceive.resumeSyncQueue',
+  );
+  for (let attempt = 1; attempt <= RESUME_SYNC_QUEUE_ATTEMPTS; attempt++) {
+    try {
+      // A retry after a quit began would un-pause the queue the quit just dropped
+      if (isAppShuttingDown()) {
+        logger.debug('Not retrying the sync queue resume: the app is shutting down');
+        return;
+      }
+      // Attempts are serial by design: each one only happens if the previous failed
+      // eslint-disable-next-line no-await-in-loop
+      await networkService.requestNoRetry(requestType);
+      return;
+    } catch (e) {
+      if (isJsonRpcMethodNotFoundError(e)) {
+        logger.debug('No sync queue to resume: the Send/Receive extension is not available');
+        return;
+      }
+      if (attempt === RESUME_SYNC_QUEUE_ATTEMPTS) {
+        logger.warn(
+          `Could not resume the sync queue after ${attempt} attempts: ${getErrorMessage(e)}`,
+        );
+        return;
+      }
+      // Attempts are serial by design: each one only happens if the previous failed
+      // eslint-disable-next-line no-await-in-loop
+      await wait(RESUME_SYNC_QUEUE_RETRY_DELAY_MS);
+    }
   }
 }

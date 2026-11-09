@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType } from 'react';
+import { useLocalProjects } from './use-local-projects.hook';
 
 /*
  * Whether Home may claim the list is complete is decided here, not in the component: the web view
@@ -11,15 +12,45 @@ import type { ComponentType } from 'react';
  * made; these cover the decision.
  */
 
-const { mockSendCommand } = vi.hoisted(() => ({
-  mockSendCommand: vi.fn(async (): Promise<unknown> => undefined),
-}));
+const { mockSendCommand, mockSendNotification, syncActivityEvents, syncQueueEvents } = vi.hoisted(
+  () => {
+    const createEvents = (): { handlers: ((payload: unknown) => void)[] } => ({
+      handlers: [],
+    });
+    return {
+      mockSendCommand: vi.fn(async (): Promise<unknown> => undefined),
+      mockSendNotification: vi.fn(),
+      // Handlers that subscribed to `onSyncActivityChanged`, so a test can emit the event.
+      syncActivityEvents: createEvents(),
+      // Handlers that subscribed to `onSyncQueueChanged`, so a test can emit the event.
+      syncQueueEvents: createEvents(),
+    };
+  },
+);
+
+/** A subscribe function that records its handlers in `events`, as a network event would. */
+function subscribeInto(events: { handlers: ((payload: unknown) => void)[] }) {
+  return vi.fn((handler: (payload: unknown) => void) => {
+    events.handlers.push(handler);
+    return vi.fn(() => {
+      events.handlers = events.handlers.filter((h) => h !== handler);
+    });
+  });
+}
 
 vi.mock('@papi/frontend', () => ({
   default: {
     commands: { sendCommand: mockSendCommand },
-    notifications: { send: vi.fn() },
-    network: { getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())) },
+    notifications: { send: mockSendNotification },
+    network: {
+      getNetworkEvent: vi.fn((eventName: string) => {
+        if (eventName === 'paratextBibleSendReceive.onSyncActivityChanged')
+          return subscribeInto(syncActivityEvents);
+        if (eventName === 'paratextBibleSendReceive.onSyncQueueChanged')
+          return subscribeInto(syncQueueEvents);
+        return vi.fn(() => vi.fn());
+      }),
+    },
   },
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -54,22 +85,68 @@ vi.mock('./use-local-projects.hook', () => ({
  */
 vi.mock('./home.component', async (importOriginal) => {
   const original = await importOriginal<typeof import('./home.component')>();
+  const { useState } = await import('react');
   return {
     // The real key list, so the web view still requests what Home actually renders.
     HOME_STRING_KEYS: original.HOME_STRING_KEYS,
     Home: ({
       remoteProjectsState,
-      shouldShowProjectsOnly,
+      isServerListExpectedAfterSync,
+      initialProjectResourceFilter,
+      onProjectResourceFilterChange,
+      onSendReceiveProject,
+      onRemoveFromQueue,
+      isSendReceiveInProgress,
+      activeSendReceiveProjects,
+      waitingProjectIds,
     }: {
       remoteProjectsState?: string;
-      shouldShowProjectsOnly?: boolean;
-    }) => (
-      <div
-        data-testid="home"
-        data-remote-state={String(remoteProjectsState)}
-        data-projects-only={String(shouldShowProjectsOnly)}
-      />
-    ),
+      isServerListExpectedAfterSync?: boolean;
+      initialProjectResourceFilter?: string;
+      onProjectResourceFilterChange?: (filter: string) => void;
+      onSendReceiveProject?: (projectId: string) => void | Promise<void>;
+      onRemoveFromQueue?: (projectId: string) => void | Promise<void>;
+      isSendReceiveInProgress?: boolean;
+      activeSendReceiveProjects?: string[];
+      waitingProjectIds?: readonly string[];
+    }) => {
+      // The real Home reads its initial filter once, into state, so a value that only arrives after
+      // the first render never reaches it. Kept the same way here, or a regression that delivers
+      // the preset late would pass.
+      const [filterAtMount] = useState(initialProjectResourceFilter);
+      // The real Home shows a rejection in its "Sync failed" alert; the stub records it instead.
+      const [sendReceiveError, setSendReceiveError] = useState('');
+      return (
+        <div
+          data-testid="home"
+          data-remote-state={String(remoteProjectsState)}
+          data-server-list-expected={String(!!isServerListExpectedAfterSync)}
+          data-initial-filter={String(filterAtMount)}
+          data-send-receive-in-progress={String(!!isSendReceiveInProgress)}
+          data-active-projects={JSON.stringify(activeSendReceiveProjects ?? [])}
+          data-waiting-projects={JSON.stringify(waitingProjectIds ?? [])}
+          data-send-receive-error={sendReceiveError}
+        >
+          <button type="button" onClick={() => onProjectResourceFilterChange?.('resource')}>
+            filter to resources
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSendReceiveError('');
+              Promise.resolve(onSendReceiveProject?.('RH2')).catch((e) =>
+                setSendReceiveError(e instanceof Error ? e.message : String(e)),
+              );
+            }}
+          >
+            send/receive
+          </button>
+          <button type="button" onClick={() => onRemoveFromQueue?.('RH2')}>
+            remove from queue
+          </button>
+        </div>
+      );
+    },
   };
 });
 
@@ -116,12 +193,15 @@ import './home.web-view';
  * `state` and falls back to the caller's default. `state` is what the provider seeds from the open
  * options, so this is the seam the launch path travels through.
  */
-function makeUseWebViewState(state: Record<string, unknown>) {
+function makeUseWebViewState(
+  state: Record<string, unknown>,
+  setState: (stateKey: string, value: unknown) => void = () => {},
+) {
   return <T,>(stateKey: string, defaultStateValue: T): [T, (value: T) => void, () => void] => [
     // The state bag is untyped by nature — the hook's own signature is what assigns it a type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     stateKey in state ? (state[stateKey] as T) : defaultStateValue,
-    vi.fn(),
+    (value: T) => setState(stateKey, value),
     vi.fn(),
   ];
 }
@@ -271,34 +351,946 @@ describe('HomeWebView shared project fetch', () => {
 });
 
 /*
- * The title bar's "More projects…" is asking "get me to one of my projects", so the read-only
- * resources that share Home's list are noise on that path alone. The flag rides in the web view's
- * `state`, which the provider seeds from the open options and scrubs on every other open — so this
- * pair is what keeps the scoping tied to the launch path rather than to Home itself.
+ * Every Get and Sync click is handed to the Send/Receive extension's sync queue, which starts it
+ * right away or keeps it waiting for the next run. Nothing is refused because another sync runs.
  */
-describe('HomeWebView projects-only launch', () => {
+describe('HomeWebView requests through the sync queue', () => {
+  const REQUEST_SYNC = 'paratextBibleSendReceive.requestSync';
+  const REMOVE_FROM_SYNC_QUEUE = 'paratextBibleSendReceive.removeFromSyncQueue';
+  const GET_SYNC_ACTIVITY = 'paratextBibleSendReceive.getSyncActivity';
+  const GET_SYNC_QUEUE = 'paratextBibleSendReceive.getSyncQueue';
+  const REMOVED_MESSAGE =
+    'JSON-RPC Request error (-32000): Removed from the sync queue before it ran (SR_REMOVED)';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    syncActivityEvents.handlers = [];
+    syncQueueEvents.handlers = [];
+  });
+
+  /** Answers availability `true` and hands each `requestSync` call to the given behavior. */
+  function mockAvailableQueue(
+    requestSync: () => Promise<unknown>,
+    {
+      waitingProjectIds = [],
+      removeFromSyncQueue = async () => undefined,
+    }: { waitingProjectIds?: string[]; removeFromSyncQueue?: () => Promise<unknown> } = {},
+  ) {
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS) return {};
+      if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+      if (commandName === GET_SYNC_QUEUE) return { waitingProjectIds };
+      if (commandName === REQUEST_SYNC) return requestSync();
+      if (commandName === REMOVE_FROM_SYNC_QUEUE) return removeFromSyncQueue();
+      return undefined;
+    });
+  }
+
+  const requestSyncCalls = () =>
+    mockSendCommand.mock.calls.filter(([name]) => name === REQUEST_SYNC);
+
+  /** Renders the web view settled and subscribed to both the activity and the queue events. */
+  async function renderSubscribed() {
+    const home = await renderAndWaitForRemoteState();
+    await waitFor(() => {
+      expect(syncActivityEvents.handlers.length).toBeGreaterThan(0);
+      expect(syncQueueEvents.handlers.length).toBeGreaterThan(0);
+    });
+    return home;
+  }
+
+  async function emit(events: { handlers: ((payload: unknown) => void)[] }, payload: unknown) {
+    await act(async () => {
+      events.handlers.forEach((handler) => handler(payload));
+    });
+  }
+
+  it('clicking Sync while another project syncs requests through the queue (no refusal)', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH3'] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+
+    await waitFor(() => {
+      expect(requestSyncCalls()).toEqual([
+        [REQUEST_SYNC, ['RH2'], 'home', { includeConnected: false }],
+      ]);
+    });
+    // Nothing reaches the sync service directly any more.
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([name]) => name === 'paratextBibleSendReceive.sendReceiveProjects',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('a project in the running run can be clicked again and is requested', async () => {
+    const resolvers: ((value: unknown) => void)[] = [];
+    mockAvailableQueue(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const home = await renderSubscribed();
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    expect(JSON.parse(home.getAttribute('data-active-projects') ?? '[]')).toEqual(['RH2']);
+
+    fireEvent.click(button);
+
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
+    await act(async () => {
+      resolvers.forEach((resolve) => resolve({}));
+    });
+    await emit(syncActivityEvents, { isSyncing: false, projectIds: [] });
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-active-projects', '[]');
+      expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+    });
+  });
+
+  it("passes the queue's waiting projects to Home and follows the queue's changes", async () => {
+    mockAvailableQueue(async () => ({}), { waitingProjectIds: ['RH4'] });
+    const home = await renderSubscribed();
+    await waitFor(() => expect(home).toHaveAttribute('data-waiting-projects', '["RH4"]'));
+
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH4', 'RH5'] });
+
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH4","RH5"]');
+  });
+
+  it('clicking a waiting row calls removeFromSyncQueue', async () => {
+    mockAvailableQueue(async () => ({}), { waitingProjectIds: ['RH2'] });
+    await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'remove from queue' }));
+
+    await waitFor(() => {
+      expect(mockSendCommand).toHaveBeenCalledWith(REMOVE_FROM_SYNC_QUEUE, ['RH2']);
+    });
+  });
+
+  it('holds the server list fetch while a project waits in the queue, and refetches once when it clears', async () => {
+    mockAvailableQueue(async () => ({}), { waitingProjectIds: ['RH4'] });
+    const home = await renderAndWaitForRemoteState();
+    await waitFor(() => expect(home).toHaveAttribute('data-waiting-projects', '["RH4"]'));
+    await waitFor(() => expect(syncQueueEvents.handlers.length).toBeGreaterThan(0));
+    const sharedProjectsCalls = () =>
+      mockSendCommand.mock.calls.filter(([name]) => name === GET_SHARED_PROJECTS).length;
+    // Activity is idle, so only the waiting project can be what holds the list fetch.
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    const callsWhileWaiting = sharedProjectsCalls();
+
+    await act(async () => {});
+    expect(sharedProjectsCalls()).toBe(callsWhileWaiting);
+
+    await emit(syncQueueEvents, { waitingProjectIds: [] });
+    await waitFor(() => expect(sharedProjectsCalls()).toBe(callsWhileWaiting + 1));
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+  });
+
+  it('reads the sync queue only once Send/Receive is known to be available', async () => {
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return false;
+      return undefined;
+    });
+
+    await renderAndWaitForRemoteState();
+    await act(async () => {});
+
+    expect(mockSendCommand).not.toHaveBeenCalledWith(GET_SYNC_QUEUE);
+  });
+
+  it('shows a project the queue reports as running even when the activity is idle', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['rh7'] });
+
+    expect(home).toHaveAttribute('data-active-projects', '["RH7"]');
+  });
+
+  it('shows Waiting, not a spinner, for a request the queue only reports as waiting', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: ['RH3'] });
+
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+  });
+
+  it('shows the spinner at once for a click on an idle queue, then follows the queue', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    // Optimistic: the queue has nothing running or waiting, so the click is expected to start.
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['RH2'] });
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+  });
+
+  it('shows Waiting instead of the optimistic spinner when the queue reports the project waiting behind another run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+
+    // Another surface's run got to the backend first; the queue holds the project for the next one.
+    await emit(syncQueueEvents, {
+      waitingProjectIds: ['RH2'],
+      sendingProjectIds: [],
+      runningProjectIds: ['RH3'],
+    });
+
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+  });
+
+  it('keeps the spinner for its own click on an idle queue while the queue sends the run, until it runs', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: ['RH2'],
+      runningProjectIds: [],
+    });
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-waiting-projects', '[]');
+
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: [],
+      runningProjectIds: ['RH2'],
+    });
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-waiting-projects', '[]');
+  });
+
+  it('shows Waiting at once when the backend refuses the run being sent as busy', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: ['RH2'],
+      runningProjectIds: [],
+    });
+
+    // Refused: the queue puts the project back among the waiting until it retries
+    await emit(syncQueueEvents, {
+      waitingProjectIds: ['RH2'],
+      sendingProjectIds: [],
+      runningProjectIds: [],
+    });
+
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+  });
+
+  it('shows the spinner for a project the queue reports sending, without a click of its own', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: ['rh7'],
+      runningProjectIds: [],
+    });
+
+    expect(home).toHaveAttribute('data-active-projects', '["RH7"]');
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+  });
+
+  it('shows no spinner for a click while the queue is sending another run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: ['RH3'],
+      runningProjectIds: [],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+  });
+
+  it('a project both sending and asked for again shows Waiting for its follow-up', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+
+    await emit(syncQueueEvents, {
+      waitingProjectIds: ['RH2'],
+      sendingProjectIds: ['RH2'],
+      runningProjectIds: [],
+    });
+
+    // Home's row puts waiting before running, as it does for a running project with a follow-up
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+  });
+
+  it('shows no spinner for a click while the queue already has a run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['RH3'] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: ['RH3'] });
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+  });
+
+  it('shows no spinner for a click while the queue has a project waiting', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH4'], runningProjectIds: [] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+  });
+
+  it('drops the optimistic spinner when its request ends', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+
+    await waitFor(() => expect(home).toHaveAttribute('data-active-projects', '[]'));
+  });
+
+  it('merges the queue and the activity running sets once each', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['RH2'] });
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['rh2', 'RH3'] });
+
+    expect(JSON.parse(home.getAttribute('data-active-projects') ?? '[]').sort()).toEqual([
+      'RH2',
+      'RH3',
+    ]);
+  });
+
+  it('shows no spinner for a request that only waits behind an outside run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH3'] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await act(async () => {});
+
+    // Only the run the backend reports is running; Home's request waits behind it.
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+
+    // Positive control: once the backend's run names the project, it is running.
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['rh2'] });
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+  });
+
+  it("keeps the local list loading while Home's request waits behind an outside run", async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH3'] });
+    const lastLocalProjectsOptions = () => vi.mocked(useLocalProjects).mock.calls.at(-1)?.[0];
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await act(async () => {});
+
+    expect(lastLocalProjectsOptions()).toEqual(expect.objectContaining({ enabled: true }));
+
+    // Positive control: the run that includes Home's own request pauses it.
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    expect(lastLocalProjectsOptions()).toEqual(expect.objectContaining({ enabled: false }));
+  });
+
+  it('pauses the local list for its own request before the backend reports the run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await act(async () => {});
+
+    expect(vi.mocked(useLocalProjects).mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ enabled: false }),
+    );
+  });
+
+  // The queue names a request as waiting until the backend accepts its run, and as running only
+  // once it has. The backend's activity can open first, before it has resolved the run's projects,
+  // and Home's own run is already writing then.
+  it('keeps the local list paused while its own run opens with no projects named yet', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+    const enabledStates: boolean[] = [];
+    const recordEnabled = () => {
+      const options = vi.mocked(useLocalProjects).mock.calls.at(-1)?.[0];
+      if (options) enabledStates.push(options.enabled !== false);
+    };
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: [] });
+    recordEnabled();
+    // The backend accepts the run: its activity opens before it names the projects, and before
+    // the queue reports the run as running.
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: [] });
+    recordEnabled();
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['RH2'] });
+    recordEnabled();
+
+    expect(enabledStates).toEqual([false, false, false]);
+  });
+
+  it('says so when taking a project out of the queue fails', async () => {
+    mockAvailableQueue(async () => ({}), {
+      waitingProjectIds: ['RH2'],
+      removeFromSyncQueue: async () => {
+        throw new Error('not registered');
+      },
+    });
+    await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'remove from queue' }));
+
+    await waitFor(() => {
+      expect(mockSendNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'warning',
+          message: '%resources_syncQueueRemoveFailed%',
+        }),
+      );
+    });
+    const removeFailure = mockSendNotification.mock.calls
+      .map(([notification]) => notification)
+      .find((n) => n.message === '%resources_syncQueueRemoveFailed%');
+    expect(removeFailure.notificationId).toEqual(expect.any(String));
+  });
+
+  it('reports a failed removal under its own notification id, apart from the sync error id', async () => {
+    mockAvailableQueue(
+      async () => {
+        throw new Error('401 Unauthorized error while getting shared projects.');
+      },
+      {
+        waitingProjectIds: ['RH2'],
+        removeFromSyncQueue: async () => {
+          throw new Error('not registered');
+        },
+      },
+    );
+    await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => {
+      expect(mockSendNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%data_loading_error_paratextData_auth_failure%',
+        }),
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'remove from queue' }));
+    await waitFor(() => {
+      expect(mockSendNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ message: '%resources_syncQueueRemoveFailed%' }),
+      );
+    });
+
+    const sent = mockSendNotification.mock.calls.map(([notification]) => notification);
+    const syncFailure = sent.find(
+      (n) => n.message === '%data_loading_error_paratextData_auth_failure%',
+    );
+    const removeFailure = sent.find((n) => n.message === '%resources_syncQueueRemoveFailed%');
+    expect(syncFailure.notificationId).toEqual(expect.any(String));
+    expect(removeFailure.notificationId).toEqual(expect.any(String));
+    expect(removeFailure.notificationId).not.toEqual(syncFailure.notificationId);
+  });
+
+  it('a double-click requests once, and a click after the queue reports the run requests again', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await act(async () => {});
+    expect(requestSyncCalls()).toHaveLength(1);
+
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
+  });
+
+  it('a repeat click on a project an outside run already names requests once, across a progress report', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    // The outside run reports again (a progress tick), naming the same project. That says nothing
+    // about Home's own request, which the queue has not reported yet.
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    fireEvent.click(button);
+    await act(async () => {});
+    expect(requestSyncCalls()).toHaveLength(1);
+
+    // Positive control: once the queue reports the request waiting, a later click is Home's again.
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: [] });
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
+  });
+
+  // The double-click itself is exercised against the real Home in
+  // `home.web-view.double-click.test.tsx`; Home is a stub here.
+  it('reports the waiting state to Home and issues no removal or second request by itself', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    // The queue answers the first click before the second arrives.
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: [] });
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+
+    expect(
+      mockSendCommand.mock.calls.filter(([name]) => name === REMOVE_FROM_SYNC_QUEUE),
+    ).toHaveLength(0);
+    expect(requestSyncCalls()).toHaveLength(1);
+  });
+
+  it('reports a missing sync queue command as a failed request, with no second command', async () => {
+    const message = `JSON-RPC Request error (-32601): Method not found: ${REQUEST_SYNC}`;
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS) return {};
+      if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+      if (commandName === GET_SYNC_QUEUE) return { waitingProjectIds: [] };
+      if (commandName === REQUEST_SYNC) throw new Error(message);
+      return undefined;
+    });
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-send-receive-error', message);
+    });
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'paratextBibleSendReceive.sendReceiveProjects',
+      expect.anything(),
+    );
+  });
+
+  it('a failed request shows the Home-wide error as before', async () => {
+    mockAvailableQueue(async () => {
+      throw new Error('Project is locked by another user');
+    });
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-send-receive-error', 'Project is locked by another user');
+    });
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+  });
+
+  it('a removed request ends quietly without the Sync failed alert', async () => {
+    let rejectRequest: (reason: unknown) => void = () => {};
+    mockAvailableQueue(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectRequest = reject;
+        }),
+    );
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await waitFor(() => expect(home).toHaveAttribute('data-send-receive-in-progress', 'true'));
+
+    await act(async () => {
+      rejectRequest(new Error(REMOVED_MESSAGE));
+    });
+
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+    });
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+    expect(home).toHaveAttribute('data-send-receive-error', '');
+    expect(mockSendNotification).not.toHaveBeenCalled();
+  });
+
+  it('accepts a new request after the previous one failed', async () => {
+    mockAvailableQueue(async () => {
+      throw new Error('socket hang up');
+    });
+    const home = await renderSubscribed();
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(requestSyncCalls()).toHaveLength(1);
+      expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+    });
+
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
+  });
+});
+
+describe('HomeWebView server list expected after a sync', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('expects the list only once availability is answered and the fetch is pending', async () => {
+    let answerAvailability: (value: boolean) => void = () => {};
+    let answerSharedProjects: (value: unknown) => void = () => {};
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE)
+        return new Promise<boolean>((resolve) => {
+          answerAvailability = resolve;
+        });
+      if (commandName === GET_SHARED_PROJECTS)
+        return new Promise((resolve) => {
+          answerSharedProjects = resolve;
+        });
+      return undefined;
+    });
+    const HomeWebView = getHomeWebView();
+    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
+    const home = await screen.findByTestId('home');
+
+    // Loading, but only because Send/Receive has not said whether it is available.
+    expect(home).toHaveAttribute('data-remote-state', 'loading');
+    expect(home).toHaveAttribute('data-server-list-expected', 'false');
+
+    await act(async () => {
+      answerAvailability(true);
+    });
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-server-list-expected', 'true');
+    });
+
+    await act(async () => {
+      answerSharedProjects({});
+    });
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-remote-state', 'loaded');
+    });
+    expect(home).toHaveAttribute('data-server-list-expected', 'false');
+  });
+});
+
+/*
+ * A sync can be started somewhere other than Home (the Sync dialog, startup). Home learns of it from
+ * the backend's sync activity and shows it, but it must not reload its lists for it: only Home's own
+ * sync completing does that.
+ */
+describe('HomeWebView sync started elsewhere', () => {
+  const REQUEST_SYNC = 'paratextBibleSendReceive.requestSync';
+  const GET_SYNC_ACTIVITY = 'paratextBibleSendReceive.getSyncActivity';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    syncActivityEvents.handlers = [];
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS) return {};
+      if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+      return undefined;
+    });
+  });
+
+  const getSharedProjectsCallCount = () =>
+    mockSendCommand.mock.calls.filter(([name]) => name === GET_SHARED_PROJECTS).length;
+
+  const activeProjects = (home: HTMLElement): string[] =>
+    JSON.parse(home.getAttribute('data-active-projects') ?? '[]');
+
+  /** Emits a sync activity event to every subscriber, as the backend would. */
+  async function emitSyncActivity(payload: unknown) {
+    await act(async () => {
+      syncActivityEvents.handlers.forEach((handler) => handler(payload));
+    });
+  }
+
+  /** Renders the web view settled and subscribed to the sync activity event. */
+  async function renderSubscribed() {
+    const home = await renderAndWaitForRemoteState();
+    await waitFor(() => {
+      expect(syncActivityEvents.handlers.length).toBeGreaterThan(0);
+    });
+    return home;
+  }
+
+  it('reports a sync started elsewhere as in progress', async () => {
+    const home = await renderSubscribed();
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+
+    await emitSyncActivity({ isSyncing: true, projectIds: [] });
+
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    expect(activeProjects(home)).toEqual([]);
+  });
+
+  it('marks the rows the outside sync names', async () => {
+    const home = await renderSubscribed();
+
+    await emitSyncActivity({ isSyncing: true, projectIds: ['RH3'] });
+
+    expect(activeProjects(home)).toContain('RH3');
+  });
+
+  it('passes the outside project ids in their normalized form', async () => {
+    const home = await renderSubscribed();
+
+    await emitSyncActivity({ isSyncing: true, projectIds: ['rh3'] });
+
+    expect(activeProjects(home)).toEqual(['RH3']);
+  });
+
+  it("merges the outside project ids with Home's own, once each", async () => {
+    let resolveSync: (value: unknown) => void = () => {};
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS) return {};
+      if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+      if (commandName === REQUEST_SYNC)
+        return new Promise((resolve) => {
+          resolveSync = resolve;
+        });
+      return undefined;
+    });
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    });
+    await emitSyncActivity({ isSyncing: true, projectIds: ['RH3', 'RH2'] });
+
+    expect([...activeProjects(home)].sort()).toEqual(['RH2', 'RH3']);
+
+    await act(async () => {
+      resolveSync(undefined);
+    });
+  });
+
+  it('holds the shared-projects fetch while an outside sync runs and refetches once when it ends', async () => {
+    const home = await renderSubscribed();
+    const callsBefore = getSharedProjectsCallCount();
+    expect(callsBefore).toBeGreaterThan(0);
+
+    await emitSyncActivity({ isSyncing: true, projectIds: ['RH3'] });
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    // The request queues behind the sync, so none is made until it ends.
+    expect(getSharedProjectsCallCount()).toBe(callsBefore);
+
+    // Only the activity event announces the end: a startup or project-switch sync never emits
+    // `onSyncStateChanged`.
+    await emitSyncActivity({ isSyncing: false, projectIds: [] });
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+    await waitFor(() => {
+      expect(getSharedProjectsCallCount()).toBe(callsBefore + 1);
+    });
+    // The local list keeps loading: only Home's own sync pauses it.
+    expect(vi.mocked(useLocalProjects)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false }),
+    );
+  });
+
+  it('does not retry a failing shared-projects fetch into an outside sync', async () => {
+    vi.useFakeTimers();
+    try {
+      mockSendCommand.mockImplementation(async (commandName: string) => {
+        if (commandName === IS_AVAILABLE) return true;
+        if (commandName === GET_SHARED_PROJECTS) throw new Error('socket hang up');
+        if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+        return undefined;
+      });
+      const HomeWebView = getHomeWebView();
+      render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(getSharedProjectsCallCount()).toBe(1);
+
+      // A sync starts while the first attempt's retry is pending.
+      await emitSyncActivity({ isSyncing: true, projectIds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SEND_RECEIVE_RETRY_MS * SEND_RECEIVE_ATTEMPTS);
+      });
+      expect(getSharedProjectsCallCount()).toBe(1);
+      expect(screen.getByTestId('home')).not.toHaveAttribute('data-remote-state', 'unreachable');
+
+      mockSendCommand.mockImplementation(async (commandName: string) => {
+        if (commandName === IS_AVAILABLE) return true;
+        if (commandName === GET_SHARED_PROJECTS) return {};
+        return undefined;
+      });
+      await emitSyncActivity({ isSyncing: false, projectIds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(getSharedProjectsCallCount()).toBe(2);
+      expect(screen.getByTestId('home')).toHaveAttribute('data-remote-state', 'loaded');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-enables when the activity event says idle', async () => {
+    const home = await renderSubscribed();
+    await emitSyncActivity({ isSyncing: true, projectIds: ['RH3'] });
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+
+    await emitSyncActivity({ isSyncing: false, projectIds: [] });
+
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+    expect(activeProjects(home)).toEqual([]);
+  });
+
+  it('keeps the list loading through an outside sync that began mid-fetch, then loads it', async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS)
+        return new Promise((resolve) => {
+          resolveFetch = resolve;
+        });
+      if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+      return undefined;
+    });
+    const HomeWebView = getHomeWebView();
+    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
+    const home = screen.getByTestId('home');
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-remote-state', 'loading');
+      expect(syncActivityEvents.handlers.length).toBeGreaterThan(0);
+    });
+
+    await emitSyncActivity({ isSyncing: true, projectIds: [] });
+
+    expect(home).toHaveAttribute('data-remote-state', 'loading');
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+
+    // The answer of the request that began before the sync is dropped: the list is asked for again
+    // once the sync ends.
+    await act(async () => {
+      resolveFetch({});
+    });
+    expect(home).toHaveAttribute('data-remote-state', 'loading');
+
+    await emitSyncActivity({ isSyncing: false, projectIds: [] });
+    await waitFor(() => {
+      expect(getSharedProjectsCallCount()).toBe(2);
+    });
+    await act(async () => {
+      resolveFetch({});
+    });
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-remote-state', 'loaded');
+    });
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+  });
+});
+
+/*
+ * The title bar's "More projects…" is asking "get me to one of my projects", so Home starts filtered
+ * to projects on that path. The filter rides in the web view's `state`, which the provider sets from
+ * an opener's preset; these pin that the web view reads it, falls back safely, and writes the user's
+ * changes back.
+ */
+describe('HomeWebView filter preset', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSendCommand.mockImplementation(async () => undefined);
   });
 
-  it('scopes the list to projects when its state says it was launched that way', async () => {
+  it('starts Home on the filter its state says it was launched with', async () => {
     const HomeWebView = getHomeWebView();
-    render(<HomeWebView useWebViewState={makeUseWebViewState({ shouldShowProjectsOnly: true })} />);
+    render(
+      <HomeWebView
+        useWebViewState={makeUseWebViewState({ projectResourceFilter: 'paratextProject' })}
+      />,
+    );
 
     await waitFor(() => {
-      expect(screen.getByTestId('home')).toHaveAttribute('data-projects-only', 'true');
+      expect(screen.getByTestId('home')).toHaveAttribute('data-initial-filter', 'paratextProject');
     });
   });
 
-  it('lists resources too when nothing asked for a projects-only view', async () => {
+  it('starts Home on everything when nothing asked for a preset', async () => {
     const HomeWebView = getHomeWebView();
     render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
 
-    // Positive control: the web view rendered, so it had every chance to scope the list.
+    // Positive control: the web view rendered, so it had every chance to preset the filter.
     await waitFor(() => {
       expect(screen.getByTestId('home')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('home')).toHaveAttribute('data-projects-only', 'false');
+    expect(screen.getByTestId('home')).toHaveAttribute('data-initial-filter', 'all');
+  });
+
+  it('starts Home on everything when its state carries a filter this build does not know', async () => {
+    const HomeWebView = getHomeWebView();
+    render(
+      <HomeWebView
+        useWebViewState={makeUseWebViewState({ projectResourceFilter: 'dictionary' })}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('home')).toHaveAttribute('data-initial-filter', 'all');
+    });
+  });
+
+  it("writes the user's filter change back to its state", () => {
+    // `openHome` compares the filter in state with the one a later caller asks for, so a change
+    // that stayed inside Home would leave "More projects…" raising a widened list unreloaded.
+    const setState = vi.fn();
+    const HomeWebView = getHomeWebView();
+    render(<HomeWebView useWebViewState={makeUseWebViewState({}, setState)} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'filter to resources' }));
+
+    expect(setState).toHaveBeenCalledWith('projectResourceFilter', 'resource');
   });
 });

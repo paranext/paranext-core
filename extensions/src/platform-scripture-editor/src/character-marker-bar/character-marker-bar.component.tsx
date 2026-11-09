@@ -36,6 +36,12 @@ export type CharacterMarkerBarProps = {
    * removal still works, matching the insert-footnote path.
    */
   projectId?: string;
+  /**
+   * Reports whether another chapter is loading, during which the editor still shows the chapter
+   * being left and an edit would be dropped. Picking or removing a marker does nothing while it
+   * returns `true`. Omitting it never blocks.
+   */
+  isChapterLoading?: () => boolean;
 };
 
 /**
@@ -69,6 +75,7 @@ export function CharacterMarkerBar({
   textDirection,
   localizedStrings,
   projectId,
+  isChapterLoading,
 }: CharacterMarkerBarProps) {
   // Read for its re-render side effect; the value itself is not needed here.
   useEditorSelectionVersion();
@@ -78,6 +85,7 @@ export function CharacterMarkerBar({
     projectId,
     isSyncBlocked,
     localizedStrings,
+    isChapterLoading,
   });
 
   const characterMarkerState = useCharacterMarkerState({
@@ -87,6 +95,7 @@ export function CharacterMarkerBar({
     contextMarker,
     localizedStrings,
     removeCharacterMarker,
+    isChapterLoading,
   });
 
   // See the note above: the control's index signature is keyed by `string`, not `LocalizeKey`, so
@@ -112,17 +121,17 @@ export function CharacterMarkerBar({
         // for the full `bd - Bold`) and from the menu's tri-state rows.
         isLabelHidden
         // The trigger sits on the text column's trailing edge, so there is no room inline-end of it
-        // for a 200px menu — it opens inline-start instead, over the lines BELOW the caret's line,
+        // for the menu — it opens inline-start instead, over the lines BELOW the caret's line,
         // never over the current verse. This deliberately departs from the stated requirement
         // ("menu's leading edge at the trigger's centre"): at a 64px gutter the trigger's centre is
-        // ~32px from the iframe edge, so a 200px menu would overhang by ~168px and Radix's collision
-        // handling would shift it back to within a few pixels of this position anyway. `align="end"`
-        // makes that outcome deterministic instead of a function of window width.
+        // ~32px from the iframe edge, so the menu would overhang by nearly its full width and Radix's
+        // collision handling would shift it back to within a few pixels of this position anyway.
+        // `align="end"` makes that outcome deterministic instead of a function of window width.
         menuAlign="end"
         // The direction the menu's `align` is resolved against. Passed explicitly because the popover
         // content is portaled to `document.body`, which is OUTSIDE the editor's `dir` element — the
         // only place this app sets a direction — so without this the menu would align physically and
-        // an RTL project's 200px menu would run off the iframe's inline-start edge.
+        // an RTL project's menu would run off the iframe's inline-start edge.
         menuDirection={textDirection}
         // `tw:overflow-hidden` is the STRUCTURAL guarantee that the trigger's CONTENT can never paint
         // over project text. The 64px reservation fits the chrome with ZERO slack, so any future

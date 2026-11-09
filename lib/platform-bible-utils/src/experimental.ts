@@ -37,3 +37,26 @@ export {
   isNavigableProjectIds,
   NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
 } from './navigable-project-ids';
+export {
+  IDLE_SYNC_ACTIVITY,
+  isSyncActivitySnapshot,
+  shouldRecheckSyncActivity,
+  SYNC_ACTIVITY_RECHECK_INTERVAL_MS,
+  toSyncActivity,
+  type SyncActivity,
+  type SyncActivityValue,
+} from './sync-activity.util';
+export {
+  CANCEL_SYNC_PROMPT_COMMAND,
+  IDLE_SYNC_QUEUE,
+  isSyncBusyError,
+  isSyncQueueSnapshot,
+  isSyncRequestRemovedError,
+  REQUEST_SYNC_COMMAND,
+  SYNC_BUSY_MARKER,
+  SYNC_REQUEST_REMOVED_MARKER,
+  toSyncQueue,
+  withoutSyncBusyMarker,
+  type SyncQueue,
+  type SyncQueueValue,
+} from './sync-queue.util';

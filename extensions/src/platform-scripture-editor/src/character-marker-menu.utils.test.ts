@@ -71,6 +71,31 @@ describe('generateCharacterMarkerMenuListItems', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it('does nothing but close the menu while a chapter is loading', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const close = vi.fn();
+    const removeCharacterMarker = vi.fn();
+    const changeCharacterMarker = vi.fn();
+    const withNone = generateCharacterMarkerMenuListItems(ref, close, {}, PARENT, {
+      isChapterLoading: () => true,
+    });
+    const withApplied = generateCharacterMarkerMenuListItems(ref, close, {}, PARENT, {
+      currentCharacterMarker: 'nd',
+      removeCharacterMarker,
+      changeCharacterMarker,
+      isChapterLoading: () => true,
+    });
+
+    withNone.find((item) => item.marker === 'bd')?.action();
+    withApplied.find((item) => item.marker === 'bd')?.action();
+    withApplied[0].action();
+
+    expect(insertMarker).not.toHaveBeenCalled();
+    expect(changeCharacterMarker).not.toHaveBeenCalled();
+    expect(removeCharacterMarker).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(3);
+  });
+
   it('never disallows an item, so structure protection cannot block a character marker', () => {
     const { ref } = makeMockEditorRef();
     const items = generateCharacterMarkerMenuListItems(ref, noop, {}, PARENT);

@@ -2,7 +2,8 @@ import { logger } from '@papi/frontend';
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
-import { MutableRefObject, useEffect, useRef } from 'react';
+import { MutableRefObject, useEffect, useRef, useState } from 'react';
+import { withoutZeroWidthNoBreakSpaces } from './debounced-pdp-save.util';
 import {
   areUsjContentDivergencesEquivalent,
   describeUsjContentDivergence,
@@ -10,6 +11,7 @@ import {
   detectUsjContentDivergence,
   type UsjContentDivergence,
 } from './usj-content-divergence.util';
+import { useForgetEditsWhen } from './use-forget-edits-when.hook';
 
 /**
  * How many consecutive PDP updates may be deferred to the actively-edited chapter (kept unapplied)
@@ -42,6 +44,25 @@ export const NON_CONVERGENCE_WARN_THRESHOLD = 25;
 export const EDITOR_OWNERSHIP_WINDOW_MS = 15_000;
 
 /**
+ * Where keyboard focus is, as far as the focused-editor deferral is concerned.
+ *
+ * - `'thisEditor'`: focus is in this editor's web view, or somewhere that leaves its claim in place
+ *   (a menu, any dialog, or unknown).
+ * - `'anotherWebView'`: the user moved to another web view. The editor's own iframe still reports
+ *   focus, but nobody is typing here, so an incoming update is applied.
+ * - `'settling'`: focus may be moving and the focus subject has not caught up yet.
+ */
+export type EditorFocusLocation = 'thisEditor' | 'anotherWebView' | 'settling';
+
+/**
+ * How long, in milliseconds, a delivery is held while the focus location is `'settling'`. If focus
+ * is still settling when this elapses, the user has left the window and the update is applied.
+ * Sized well above the window service's focus-subject debounce (250 ms), so a click into another
+ * web view normally decides the hold long before this elapses.
+ */
+export const FOCUS_SETTLE_GRACE_MS = 1000;
+
+/**
  * The identity of the chapter document a `ChapterUSJ` subscription serves — the fields of the data
  * selector that determine WHICH document the data is (the selector's `verseNum` does not
  * participate in identity; it never changes which chapter the subscription delivers).
@@ -56,17 +77,21 @@ export interface EditorDocumentSelector {
  * Whether the editor's USJ holds the same content as a PDP document, IGNORING the `version` field.
  *
  * `areUsjContentsEqualExceptWhitespace` shallow-compares every top-level property except `content`
- * — `version` included — while the editor always reports its USJ as 3.1 and the PDP serves 3.0
- * (which is why every save path runs `correctEditorUsjVersion` on the way out). Comparing the two
- * documents raw is therefore FALSE whatever the content says, so an editor-vs-PDP equality check
- * that does not neutralize `version` can never report a converged round trip.
+ * — `version` included. Convergence is a question about content: the editor reports the version of
+ * the document it was loaded with, which normally is the PDP's, but a version-only difference must
+ * not keep a round trip that converged from being reported as converged. Nor must a stored
+ * zero-width no-break space, which the editor goes on holding after a save has dropped it (see
+ * {@link withoutZeroWidthNoBreakSpaces}).
  */
 function areUsjContentsEqualIgnoringVersion(
   editorUsj: Usj | undefined,
   pdpUsj: Usj | undefined,
 ): boolean {
   if (!editorUsj || !pdpUsj) return areUsjContentsEqualExceptWhitespace(editorUsj, pdpUsj);
-  return areUsjContentsEqualExceptWhitespace({ ...editorUsj, version: pdpUsj.version }, pdpUsj);
+  return areUsjContentsEqualExceptWhitespace(
+    withoutZeroWidthNoBreakSpaces({ ...editorUsj, version: pdpUsj.version }),
+    withoutZeroWidthNoBreakSpaces(pdpUsj),
+  );
 }
 
 /** Whether two selectors identify the same chapter document (see {@link EditorDocumentSelector}). */
@@ -78,6 +103,25 @@ function areSameDocumentSelectors(
   return (
     a.book === b.book && a.chapterNum === b.chapterNum && a.versificationStr === b.versificationStr
   );
+}
+
+/**
+ * A delivery held while focus settles: the delivery, the selector it was paired with when it was
+ * held, its pending grace-period re-run (`undefined` once that has fired), and whether its grace
+ * period has run out.
+ */
+interface HeldDelivery {
+  usj: Usj;
+  documentSelector: EditorDocumentSelector;
+  graceTimeout: ReturnType<typeof setTimeout> | undefined;
+  expired: boolean;
+}
+
+/** Forgets the held delivery, cancelling its grace-period re-run if it has not fired. */
+function releaseHeldDelivery(heldDelivery: MutableRefObject<HeldDelivery | undefined>): void {
+  if (heldDelivery.current?.graceTimeout !== undefined)
+    clearTimeout(heldDelivery.current.graceTimeout);
+  heldDelivery.current = undefined;
 }
 
 /**
@@ -99,7 +143,8 @@ export const LOSSY_WARN_MEMORY_LIMIT = 32;
  * reset so that the editor is properly re-initialized with content when it remounts. Without this
  * reset, returning to the same chapter after passing through a non-existent book would leave the
  * fresh editor empty because the stale `usjSentToPdp` value would match the incoming PDP data and
- * skip the `setEditorUsj` call.
+ * skip the `setEditorUsj` call. That holds whether or not a chapter is being delivered at the time:
+ * the web view gives this hook no chapter while it holds one back, and takes the editor down too.
  */
 export function useEditorPdpSync({
   usjFromPdp,
@@ -110,7 +155,13 @@ export function useEditorPdpSync({
   saveUsjToPdpIfUpdated,
   flushPendingDebouncedSave,
   isEditingSessionActive,
+  isFootnotesPaneOwner,
+  lastPaneEditTimestamp,
   lastLocalEditTimestamp,
+  editorDocumentSelector,
+  getFocusLocation,
+  focusLocationKey,
+  isSyncBlocked = false,
 }: {
   usjFromPdp: Usj | undefined;
   /**
@@ -154,15 +205,61 @@ export function useEditorPdpSync({
    */
   isEditingSessionActive?: () => boolean;
   /**
+   * Whether the footnotes pane owns the chapter's content: focus in the pane and an edit there
+   * within {@link EDITOR_OWNERSHIP_WINDOW_MS}. Its edits never stamp `lastLocalEditTimestamp`, and
+   * `editorRef` reports no focus while the pane has it, so without this the pane would not get the
+   * settle hold the Scripture text gets. Must be stable and free of side effects.
+   */
+  isFootnotesPaneOwner?: () => boolean;
+  /**
+   * `Date.now()` of the last edit in the footnotes pane, which `isFootnotesPaneOwner` reads. This
+   * hook clears it when it clears `lastLocalEditTimestamp`, so the pane gives up its claim with the
+   * Scripture text.
+   */
+  lastPaneEditTimestamp?: MutableRefObject<number | undefined>;
+  /**
    * `Date.now()` of the last LOCAL editor edit (a change the user originated in this editor —
    * stamped where the web view schedules the debounced PDP save for a `'local'`-source change), or
    * `undefined` when none has happened yet. Applying an incoming PDP update must NOT refresh this:
    * the editor loads external content under a change-suppression tag, so external applies never
    * reach the stamping path (see the web view's `handleEditorialUsjChange`). Drives the
    * {@link EDITOR_OWNERSHIP_WINDOW_MS} ownership contract — focus alone, with no local edit inside
-   * the window, no longer defers incoming updates.
+   * the window, no longer defers incoming updates. This hook clears it when `isSyncBlocked` turns
+   * true and when focus moves to another web view, so every reader of the ref sees no recent edit
+   * until the next local one.
    */
   lastLocalEditTimestamp: MutableRefObject<number | undefined>;
+  /**
+   * Where this hook records which chapter document the editor is holding, for a caller that has to
+   * know. That is not always `documentSelector`: after navigation the selector names the new
+   * chapter at once, while the editor goes on holding the old one, still editable, until the new
+   * chapter's content is delivered and applied. `undefined` until a delivery is applied, and again
+   * once the editor unmounts. Written only by this hook. The hook keeps its own record when this is
+   * omitted.
+   */
+  editorDocumentSelector?: MutableRefObject<EditorDocumentSelector | undefined>;
+  /**
+   * Where keyboard focus is right now, read on every render, to give up the claim to the chapter
+   * when focus moves to another web view, and when a focused editor or footnotes pane that edited
+   * recently receives a differing update. Omitted, focus is taken to be in this editor. See
+   * {@link EditorFocusLocation} and the CONTRACT comment in the effect.
+   */
+  getFocusLocation?: () => EditorFocusLocation;
+  /**
+   * Any value whose identity changes when focus moves (the web view passes its latest focus
+   * subject). In this hook, its only job is to re-run the decision for a delivery held while focus
+   * was `'settling'`.
+   */
+  focusLocationKey?: unknown;
+  /**
+   * True while a Send/Receive blocks this editor. When it turns true the editor gives up its claim
+   * to the chapter (the last local edit is forgotten), so the merge is applied unless the user has
+   * typed again since the block ended or a footnote popover is still open. While it is true, a
+   * pending debounced save is not flushed before an incoming update replaces the editor: it holds
+   * pre-merge text. The write gate would reject it, and the save-failure path would put that text
+   * back on screen; in the moment the block outlasts the gate, it would be written over the merge.
+   */
+  isSyncBlocked?: boolean;
 }): void {
   // Counts consecutive incoming updates deferred to the actively-edited chapter without the
   // round-trip converging (the editor's content matching the echo). Reset whenever an update is
@@ -208,8 +305,10 @@ export function useEditorPdpSync({
   // is already showing that document, and that branch can be the only one a chapter ever runs).
   // Local edits never change which document the editor shows, so nothing else moves it. Compared
   // against the current documentSelector to tell a same-document echo (defer while actively
-  // editing) from a different document arriving (navigation: always replace).
-  const lastAppliedDocumentSelector = useRef<EditorDocumentSelector | undefined>(undefined);
+  // editing) from a different document arriving (navigation: always replace). Kept in the caller's
+  // ref when it passes one (`editorDocumentSelector`), so the caller can read it too.
+  const ownAppliedDocumentSelector = useRef<EditorDocumentSelector | undefined>(undefined);
+  const lastAppliedDocumentSelector = editorDocumentSelector ?? ownAppliedDocumentSelector;
   // The `usjFromPdp` reference this effect has already acted on. Every decision below reads the
   // (usjFromPdp, documentSelector) PAIR, but the two do not move together: `documentSelector`
   // changes during the navigation render while `usjFromPdp` still holds the OLD chapter's data
@@ -218,11 +317,41 @@ export function useEditorPdpSync({
   // chapter's — saving them through the new chapter's save function and mis-pairing the real
   // delivery when it lands. Gating on a genuinely new delivery keeps the pair honest.
   const lastProcessedUsjFromPdp = useRef<Usj | undefined>(undefined);
+  // The delivery being held while focus is `'settling'`, if any. Released whenever a delivery is
+  // decided or dropped, replaced when a different delivery is held, and released on unmount, so its
+  // grace-period timer never outlives the hook or the delivery it waits on.
+  const heldDelivery = useRef<HeldDelivery | undefined>(undefined);
+  // Bumped when a held delivery's grace period runs out. State rather than a ref because setting it
+  // is what re-runs the effect.
+  const [graceExpiryCount, setGraceExpiryCount] = useState(0);
+  useEffect(() => () => releaseHeldDelivery(heldDelivery), []);
+
+  // A Send/Receive replaces the chapter on disk with its merge. Forget the last local edit as soon
+  // as it starts, so the merge is applied during the block or after it. Two exceptions push the
+  // pre-merge text over the merge once writes are accepted again: a footnote popover still open
+  // (`isEditingSessionActive`), and a merge delivered after the user has typed again. The block
+  // outlasts the write gate by the store's `HIDE_GRACE_MS` to make the second unlikely, but nothing
+  // here rules it out. Called before the sync effect so a block and a delivery in the same render
+  // are handled in that order.
+  useForgetEditsWhen(isSyncBlocked, lastLocalEditTimestamp, lastPaneEditTimestamp);
+  // Leaving for another web view ends the claim for good, rather than only while focus is away:
+  // an update from that web view (a Find replacement) can arrive after the user has clicked back,
+  // and the editor must not push its older copy over it. The next edit claims the chapter again.
+  //
+  // Hidden case: a hidden editor tab releases its claim the same way, since this reads the focus
+  // subject rather than anything laid out. A non-web-view tab (Settings, About) and a move to
+  // another window do not name another web view, so neither releases it.
+  useForgetEditsWhen(
+    getFocusLocation?.() === 'anotherWebView',
+    lastLocalEditTimestamp,
+    lastPaneEditTimestamp,
+  );
+
   useEffect(() => {
-    if (!usjFromPdp) return;
     if (!editorRef.current) {
       // Editor unmounted — reset so it re-initializes when it remounts (see TSDoc). The applied
       // identity describes the CURRENT editor instance's content, so it resets with it.
+      releaseHeldDelivery(heldDelivery);
       usjSentToPdp.current = undefined;
       lastEditorUsjPushedWhileDeferring.current = undefined;
       lastIncomingUsjDeferred.current = undefined;
@@ -231,17 +360,102 @@ export function useEditorPdpSync({
       lastProcessedUsjFromPdp.current = undefined;
       return;
     }
+    if (!usjFromPdp) return;
     // A re-run with no new delivery (the selector moved ahead of its data, or an unrelated dep
     // changed) carries no information to act on. Reference equality is the right test: each
     // delivery hands down a new object, and a re-delivery of identical content under
     // `whichUpdates: '*'` is a fresh object too, so genuine echoes still get through.
     if (usjFromPdp === lastProcessedUsjFromPdp.current) return;
+    // A held delivery is not yet recorded as processed, so the guard above does not cover it. If
+    // the selector moved on while it was held (navigation), it is the PREVIOUS chapter's data and
+    // must not be paired with the new selector: drop it and wait for the new chapter's delivery.
+    if (
+      heldDelivery.current?.usj === usjFromPdp &&
+      !areSameDocumentSelectors(heldDelivery.current.documentSelector, documentSelector)
+    ) {
+      releaseHeldDelivery(heldDelivery);
+      lastProcessedUsjFromPdp.current = usjFromPdp;
+      return;
+    }
+
+    // Whether the focused editor or footnotes pane claims this delivery, and where focus really is
+    // (see THE CONTRACT below). Worked out before anything is recorded, because a delivery held
+    // while focus settles must leave every piece of state as it was so it is decided again from
+    // scratch.
+    //
+    // Hidden case: this is data-driven, so a hidden editor tab decides deliveries the same way.
+    // Once another web view's tab is active, the focus subject names it, so the update is applied
+    // (at worst after FOCUS_SETTLE_GRACE_MS). A non-web-view tab such as Settings or About keeps the
+    // claim, but none of them write Scripture.
+    const isNewFromPdp = !areUsjContentsEqualExceptWhitespace(usjFromPdp, usjSentToPdp.current);
+    const lastLocalEditAt = lastLocalEditTimestamp.current;
+    const editorOwnsContent =
+      lastLocalEditAt !== undefined && Date.now() - lastLocalEditAt < EDITOR_OWNERSHIP_WINDOW_MS;
+    const isFocusedOwner =
+      isNewFromPdp &&
+      ((editorRef.current.isFocused() && editorOwnsContent) || (isFootnotesPaneOwner?.() ?? false));
+    let focusLocation: EditorFocusLocation = isFocusedOwner
+      ? (getFocusLocation?.() ?? 'thisEditor')
+      : 'thisEditor';
+    // Focus still settling once this delivery's grace period ran out means the user left the
+    // window, so the update is applied. Focus that came back to this editor keeps the claim.
+    if (
+      focusLocation === 'settling' &&
+      heldDelivery.current?.usj === usjFromPdp &&
+      heldDelivery.current.expired
+    ) {
+      logger.info(
+        `useEditorPdpSync: focus did not settle within ${FOCUS_SETTLE_GRACE_MS} ms, so the ` +
+          'incoming chapter is applied.',
+      );
+      focusLocation = 'anotherWebView';
+    }
+    // Same document when the incoming update's selector (== documentSelector, per the pairing
+    // invariant on that param) matches the selector whose data was last applied to the editor. A
+    // fresh editor with nothing applied yet is never "the same document", so it replaces rather
+    // than deferring.
+    const isSameDocument = areSameDocumentSelectors(
+      documentSelector,
+      lastAppliedDocumentSelector.current,
+    );
+    // `isEditingSessionActive` must stay the only predicate call on this path: it has side effects
+    // (it closes a stale note session). `isActivelyEditing` below skips it when this one ran.
+    if (
+      isFocusedOwner &&
+      focusLocation === 'settling' &&
+      isSameDocument &&
+      !(isEditingSessionActive?.() ?? false)
+    ) {
+      // Neither apply nor push back: wait for the focus subject to say where focus went
+      // (`focusLocationKey` re-runs this), or for the grace period to run out.
+      if (heldDelivery.current?.usj !== usjFromPdp) {
+        releaseHeldDelivery(heldDelivery);
+        const held: HeldDelivery = {
+          usj: usjFromPdp,
+          documentSelector,
+          graceTimeout: undefined,
+          expired: false,
+        };
+        held.graceTimeout = setTimeout(() => {
+          held.graceTimeout = undefined;
+          held.expired = true;
+          setGraceExpiryCount((count) => count + 1);
+        }, FOCUS_SETTLE_GRACE_MS);
+        heldDelivery.current = held;
+      }
+      logger.debug(
+        'useEditorPdpSync: holding an incoming PDP update until focus settles; neither applying ' +
+          'it nor pushing the editor content.',
+      );
+      return;
+    }
+    releaseHeldDelivery(heldDelivery);
     lastProcessedUsjFromPdp.current = usjFromPdp;
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
     // has the best data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
-    if (!areUsjContentsEqualExceptWhitespace(usjFromPdp, usjSentToPdp.current)) {
+    if (isNewFromPdp) {
       usjSentToPdp.current = usjFromPdp;
       // The PDP round-trips USJ through USFM, so a save made
       // MID-marker-typing (a pending literal like `\q1` still in plain text) echoes back
@@ -262,6 +476,15 @@ export function useEditorPdpSync({
       // editor's own content-editable root rather than a global
       // `document.querySelector('.editor-input')` that couples to the CSS class name and to DOM
       // order (a footnote-editor popover renders its own `.editor-input`).
+      //
+      // `isFocused()` alone overstates the claim: each web view's iframe keeps its own focused
+      // element, so the editor still reports focus after the user clicks into Find.
+      // `'anotherWebView'` applies the update. The focus subject lags a click by its debounce, so
+      // `'settling'` holds the delivery (above) until the subject moves; if it has not moved within
+      // FOCUS_SETTLE_GRACE_MS the user has left the window, and the update is applied. A
+      // Send/Receive (`isSyncBlocked`) ends the claim, and so does focus reaching another web view,
+      // even if it comes back before the update arrives. The footnotes pane claims on the same
+      // terms (`isFootnotesPaneOwner`).
       //
       // Once the last local edit is OLDER than the window, focus alone confers nothing: the
       // incoming update is applied exactly as if the editor were unfocused, and nothing is pushed
@@ -286,22 +509,11 @@ export function useEditorPdpSync({
       // focus sits in the editor), deferring would keep the editor on the OLD chapter forever —
       // and, worse, save-back would write the old chapter's content through the NEW chapter's
       // data selector. A different-document update always replaces.
-      const lastLocalEditAt = lastLocalEditTimestamp.current;
-      const editorOwnsContent =
-        lastLocalEditAt !== undefined && Date.now() - lastLocalEditAt < EDITOR_OWNERSHIP_WINDOW_MS;
       const isActivelyEditing =
-        (editorRef.current.isFocused() && editorOwnsContent) ||
+        (isFocusedOwner && focusLocation !== 'anotherWebView') ||
         (isEditingSessionActive?.() ?? false);
       if (isActivelyEditing) {
         const editorUsj = editorRef.current.getUsj();
-        // Same document when the incoming update's selector (== documentSelector, per the pairing
-        // invariant on that param) matches the selector whose data was last applied to the editor.
-        // A fresh editor with nothing applied yet is never "the same document", so it replaces
-        // rather than deferring.
-        const isSameDocument = areSameDocumentSelectors(
-          documentSelector,
-          lastAppliedDocumentSelector.current,
-        );
         if (isSameDocument) {
           // Every return below this point deliberately skips `setEditorUsj`, so `editorChapterKey`
           // (the web view's `useScrollToRange` gate — see `setEditorUsj`'s call site) does not
@@ -432,7 +644,6 @@ export function useEditorPdpSync({
       lastEditorUsjPushedWhileDeferring.current = undefined;
       lastIncomingUsjDeferred.current = undefined;
       warnedLossyDifferences.current = [];
-      lastAppliedDocumentSelector.current = documentSelector;
       // Recent typing wins: before this external update replaces the editor, flush any pending
       // debounced keystroke save so the final keystrokes are WRITTEN rather than silently
       // discarded. (The mirror case — focus still in the editor — pushes them via the deferral
@@ -445,7 +656,7 @@ export function useEditorPdpSync({
       //     returned promise settles when the invocation completes, not when the PDP write does,
       //     so awaiting it would only defer the replace to a microtask; the replace proceeds
       //     synchronously instead, closing any interleaving window.
-      //   - Any pending save here belongs to the CURRENT chapter: a cross-chapter pending save is
+      //   - Any pending save here was scheduled for the CURRENT chapter: a cross-chapter pending save is
       //     flushed by the web view's chapter-switch effect cleanup before a new chapter's first
       //     delivery can reach this effect.
       //   - After the flush, this incoming update is STALE relative to the flushed content. It is
@@ -455,7 +666,17 @@ export function useEditorPdpSync({
       //     echo here: the flushed write records its own newer content as last-sent, which would
       //     make the echo look identical-to-sent and take the push-back branch below — re-pushing
       //     this stale update's content over the just-flushed keystrokes.
-      if (flushPendingDebouncedSave?.() !== undefined) usjSentToPdp.current = usjFromPdp;
+      //   - The editor's document identity moves only AFTER the flush, together with the replace:
+      //     until then the editor still holds the previous document, and the flushed save must see
+      //     that. After navigation, a save pending here was scheduled for the NEW chapter while the
+      //     editor was still showing the old one, and the web view drops it rather than write one
+      //     chapter's content into another.
+      //   - Not while a Send/Receive blocks the editor: the save holds pre-merge text. The write
+      //     gate would reject it, and the save-failure path would put that text back on screen over
+      //     this update; in the moment the block outlasts the gate, it would overwrite the merge.
+      if (!isSyncBlocked && flushPendingDebouncedSave?.() !== undefined)
+        usjSentToPdp.current = usjFromPdp;
+      lastAppliedDocumentSelector.current = documentSelector;
       setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
@@ -481,13 +702,20 @@ export function useEditorPdpSync({
       saveUsjToPdpIfUpdated();
     }
   }, [
-    // usjFromPdp, documentSelector, and saveUsjToPdpIfUpdated are the only deps that actually
-    // change and trigger re-runs. The refs below are stable (their identities never change), but
-    // are listed to satisfy the exhaustive-deps lint rule.
+    // `usjFromPdp` and `documentSelector` carry the deliveries; `saveUsjToPdpIfUpdated` changes
+    // with the chapter. `focusLocationKey`, `graceExpiryCount` and `isSyncBlocked` re-decide a held
+    // delivery; a re-run with nothing new or held returns at the processed-delivery guard. The
+    // refs, `getFocusLocation` and `isFootnotesPaneOwner` are stable, listed for exhaustive-deps.
     documentSelector,
     editorRef,
     flushPendingDebouncedSave,
+    focusLocationKey,
+    getFocusLocation,
+    graceExpiryCount,
     isEditingSessionActive,
+    isFootnotesPaneOwner,
+    isSyncBlocked,
+    lastAppliedDocumentSelector,
     lastLocalEditTimestamp,
     nonConvergingDeferralCount,
     saveUsjToPdpIfUpdated,

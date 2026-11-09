@@ -217,6 +217,44 @@ describe('ManageBooksDialog project pickers', () => {
     await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Type']));
   });
 
+  it('shows a text whose license restricts it in the create reference picker, but not as a choice', async () => {
+    const user = setupUser();
+    const reason = 'Licensing prohibits using this text as a base.';
+    render(
+      dialog({
+        initialSection: 'create',
+        loadProjects: () => [
+          ...VERSIFIED_PROJECTS,
+          {
+            id: 'NIV11',
+            shortName: 'NIV11',
+            name: 'New International Version 2011',
+            versificationId: '4',
+            isRestrictedAsBase: true,
+          },
+        ],
+        localizedStrings: {
+          '%restrictedModelOrBaseText_disabledReason%': reason,
+        },
+      }),
+    );
+
+    await waitFor(() => expect(isSectionActive('create')).toBe(true));
+    const reference = await screen.findByTestId('manage-books-create-reference-trigger');
+    await user.click(within(reference).getByRole('combobox'));
+
+    const options = await screen.findAllByRole('option');
+    const niv = options.find((option) => option.textContent?.includes('NIV11'));
+    const kjv = options.find((option) => option.textContent?.includes('KJV'));
+    if (!niv || !kjv) throw new Error('Expected both projects in the picker');
+    expect(niv).toHaveAttribute('aria-disabled', 'true');
+    expect(kjv).not.toHaveAttribute('aria-disabled', 'true');
+
+    // The picker explains a disabled row in its tooltip
+    await user.hover(niv);
+    expect((await screen.findAllByText(reason)).length).toBeGreaterThan(0);
+  });
+
   it('locks the create reference picker to versification with no way to regroup it', async () => {
     const user = setupUser();
     render(
@@ -354,5 +392,52 @@ describe('ManageBooksDialog project pickers — dialog strings unresolved', () =
 
     expect(within(popover).queryAllByText(RAW_KEY)).toHaveLength(0);
     expect(within(popover).queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
+  });
+});
+
+describe('ManageBooksDialog entries that are not yet available', () => {
+  // Each entry's current key maps to a sentinel, and the "coming soon" key it replaced to another,
+  // so these tests tell a switched key apart from an English fallback that merely reads right.
+  const STRINGS: ManageBooksDialogLocalizedStrings = Object.fromEntries([
+    ['%manageBooks_view_disabledStub_notYetAvailable_2%', 'Toolbar entry is not yet available'],
+    ['%manageBooks_progressTracking_notYetAvailable_2%', 'Progress tracking is not yet available'],
+    ['%manageBooks_bookNames_notYetAvailable_2%', 'Book names is not yet available'],
+    ['%manageBooks_view_disabledStub_notYetAvailable%', 'Toolbar entry coming soon'],
+    ['%manageBooks_progressTracking_notYetAvailable%', 'Progress tracking coming soon'],
+    ['%manageBooks_bookNames_notYetAvailable%', 'Book names coming soon'],
+  ]);
+
+  const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+
+  it.each(['Project canons…', 'Registry', 'Compare versions…'])(
+    'describes the disabled %s toolbar button as not yet available',
+    async (name) => {
+      render(dialog({ localizedStrings: STRINGS }));
+
+      const button = await screen.findByRole('button', { name });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription('Toolbar entry is not yet available');
+      expect(screen.queryByText(/coming soon/i)).toBeNull();
+    },
+  );
+
+  it.each([
+    ['progress-tracking', 'Progress tracking is not yet available'],
+    ['book-names', 'Book names is not yet available'],
+  ])('explains the disabled %s sidebar row as not yet available', async (sectionId, message) => {
+    const user = setupUser();
+    render(dialog({ localizedStrings: STRINGS }));
+
+    const row = await screen.findByTestId(`manage-books-sidebar-section-${sectionId}`);
+    expect(row).toBeDisabled();
+    // The tooltip hangs off a wrapper, because a disabled button receives no pointer events.
+    const tooltipTrigger = row.parentElement;
+    if (!tooltipTrigger) throw new Error(`The ${sectionId} row has no tooltip wrapper`);
+    await user.hover(tooltipTrigger);
+
+    // Radix renders the text twice (visible and a hidden `role="tooltip"` copy), so read the role.
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent(message);
+    expect(tooltip).not.toHaveTextContent(/coming soon/i);
   });
 });

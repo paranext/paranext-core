@@ -17,7 +17,7 @@ const meta: Meta<typeof EmptyChapterView> = {
   tags: ['autodocs'],
   args: {
     localizedStrings: getLocalizedStrings([...EMPTY_CHAPTER_VIEW_STRING_KEYS]),
-    isStructureProtected: false,
+    isAddChapterNumberProtected: false,
     showButton: true,
     onAddChapterNumber: () => {},
   },
@@ -42,7 +42,7 @@ export const Editable: Story = {};
  * chapter and verse markers cannot be added.
  */
 export const StructureProtected: Story = {
-  args: { isStructureProtected: true },
+  args: { isAddChapterNumberProtected: true },
 };
 
 /**

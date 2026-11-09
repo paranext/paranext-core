@@ -5,6 +5,7 @@ import {
   isJSONRPCResponses,
   JSONRPCClient,
   JSONRPCErrorCode,
+  JSONRPCErrorResponse,
   JSONRPCRequest,
   JSONRPCResponse,
   JSONRPCServer,
@@ -42,6 +43,26 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
+
+/**
+ * Narrows a handler's error to what requesters need: its `code` and `message`, plus the platform
+ * error code the .NET data provider sends in `error.data.data.platformErrorCode` (read by
+ * `doRequest` in the network service). The rest of `error.data` (exception type names, stack, inner
+ * exceptions) can hold absolute paths and is never relayed, because browser pages connect to this
+ * server too.
+ */
+function relayableError(error: JSONRPCErrorResponse['error']): JSONRPCErrorResponse['error'] {
+  const { code, message } = error;
+  const outer: unknown = error.data;
+  const inner: unknown =
+    outer && typeof outer === 'object' && 'data' in outer ? outer.data : undefined;
+  const platformErrorCode: unknown =
+    inner && typeof inner === 'object' && 'platformErrorCode' in inner
+      ? inner.platformErrorCode
+      : undefined;
+  if (typeof platformErrorCode !== 'string') return { code, message };
+  return { code, message, data: { data: { platformErrorCode } } };
+}
 
 /**
  * Whether the app is on its way down, as {@link RpcServer.onWebSocketClose} needs to know to
@@ -183,11 +204,12 @@ export class RpcServer implements IRpcHandler {
   }
 
   // TODO(PT-4495): Nothing calls this. `RpcWebSocketListener.disconnect()` closes the WebSocket
-  // server without iterating its `RpcServer`s, so live client sockets are never closed and
-  // `IRpcHandler.disconnect`'s documented "on servers: disconnects from all clients" is unmet —
-  // which is also why `INTENTIONAL_CLOSE_CODE` never leaves main. Fixing it means changing what
-  // shutdown does to live sockets, so it belongs with the reconnect/teardown work rather than in a
-  // diagnosis-only change.
+  // server without iterating its `RpcServer`s, so `networkService.shutdown()` leaves live client
+  // sockets open and `IRpcHandler.disconnect`'s documented "on servers: disconnects from all
+  // clients" is unmet. The quit sequence closes the websocket clients itself beforehand, through
+  // `RpcWebSocketListener.closeWebSocketClients`, so the data provider can shut down; the network
+  // teardown still does not. Fixing it means changing what shutdown does to live sockets, so it
+  // belongs with the reconnect/teardown work rather than in a diagnosis-only change.
   async disconnect(): Promise<void> {
     if (this.connectionStatus === ConnectionStatus.Disconnected) return;
     if (!this.ws) {
@@ -345,8 +367,9 @@ export class RpcServer implements IRpcHandler {
     // A close with no completed handshake is the fingerprint this ticket exists to make greppable —
     // but on the way down it is also the ordinary case, not a fault. Main's server is still
     // listening while the extension host calls `process.exit()` and each renderer process is torn
-    // down, so every peer's socket dies with 1006 on a normal quit. Reporting those at `warn` would
-    // fire on every shutdown and bury the signal under the routine.
+    // down, so every peer's socket dies with 1006 on a normal quit — except the data provider's,
+    // which main closes with the intentional code first. Reporting those at `warn` would fire on
+    // every shutdown and bury the signal under the routine.
     const diedDuringShutdown = !isClean && isAppShuttingDown();
     const shutdownNote = diedDuringShutdown ? ', expected during app shutdown' : '';
     // No method count here on purpose: the number that belongs on a close line is what this socket
@@ -450,7 +473,11 @@ export class RpcServer implements IRpcHandler {
           const payload =
             'result' in response
               ? createSuccessResponse(response.result, request.id)
-              : createErrorResponse(response.error.message, response.error.code, request.id);
+              : {
+                  jsonrpc: response.jsonrpc,
+                  id: request.id,
+                  error: relayableError(response.error),
+                };
           sendPayloadToWebSocket(this.ws, payload);
         } catch (error) {
           this.handleError(`Error handling request: ${getErrorMessage(error)}`, request);

@@ -21,6 +21,15 @@ internal class LocalParatextProjects : IDisposable
     private bool _isInitialized = false;
     private readonly object _initializationLock = new();
 
+    /// <summary>Environment variable that opts into installing the sample WEB project</summary>
+    private const string SAMPLE_PROJECT_VARIABLE = "PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT";
+
+    /// <summary>
+    /// Whether <see cref="Initialize"/> installs the sample WEB project into a root with no
+    /// projects. Set from <see cref="SAMPLE_PROJECT_VARIABLE"/>.
+    /// </summary>
+    private readonly bool _shouldInstallSampleProject;
+
     /// <summary>
     /// PAPI client used to emit <see cref="PROJECTS_CHANGED_EVENT_TYPE"/>. Null in tests/tooling that
     /// construct this without one; <see cref="NotifyProjectsChanged"/> is then a no-op.
@@ -30,10 +39,10 @@ internal class LocalParatextProjects : IDisposable
     /// <summary>
     /// Network event fired when the set of available projects changes (a project is added or
     /// removed) or when a project's display metadata (name/fullName/language/languageTag/isEditable)
-    /// changes. Consumers (the project picker, Home, New Tab) refetch cheap project metadata when it
+    /// changes. Consumers (the project picker, Home, New Tab, the Scripture editor's no-projects
+    /// guidance and default-project picker) refetch project metadata or re-run their checks when it
     /// fires. Keep identical to the `platform.onDidChangeProjects` string the TS consumers subscribe
-    /// to via `getNetworkEvent` (renderer `use-project-picker-data.hook.ts` and the get-resources
-    /// `use-local-projects.hook.ts`).
+    /// to; search the TypeScript for `'platform.onDidChangeProjects'` to find them all.
     /// </summary>
     public const string PROJECTS_CHANGED_EVENT_TYPE = "platform.onDidChangeProjects";
 
@@ -77,7 +86,7 @@ internal class LocalParatextProjects : IDisposable
 
     /// <summary>
     /// Debounce window for coalescing a burst of <see cref="NotifyProjectsChanged"/> calls into a
-    /// single emitted event. Every consumer does a full metadata refetch per event, so collapsing a
+    /// single emitted event. Consumers refetch project metadata per event, so collapsing a
     /// burst (e.g. the inline setting-write notify plus the watcher catching that same on-disk write,
     /// or several display-setting writes in a row) avoids redundant refetch storms.
     /// </summary>
@@ -135,9 +144,18 @@ internal class LocalParatextProjects : IDisposable
         // is then a no-op). Production passes the real client from Program.cs.
         _papiClient = papiClient;
 
+        // The main process sets this for unpackaged (dev) runs, which include the E2E tests, so
+        // only they get the sample project; a packaged build opts in only if the variable is set
+        // in its environment.
+        _shouldInstallSampleProject =
+            bool.TryParse(
+                Environment.GetEnvironmentVariable(SAMPLE_PROJECT_VARIABLE)?.Trim(),
+                out bool shouldInstall
+            ) && shouldInstall;
+
         // E2E tests (and other tooling) can point the app at an isolated projects folder so runs
-        // don't touch the user's real projects; Initialize() installs the bundled sample WEB
-        // project into an empty root. See e2e-tests/fixtures/helpers.ts (isolatedProjectRoot).
+        // don't touch the user's real projects. When the sample is opted into, Initialize()
+        // installs it into an empty root. See e2e-tests/fixtures/helpers.ts (isolatedProjectRoot).
         string? projectRootOverride = Environment.GetEnvironmentVariable(
             "PLATFORM_BIBLE_PROJECT_ROOT_FOLDER"
         );
@@ -189,13 +207,22 @@ internal class LocalParatextProjects : IDisposable
                 $"Projects loaded from {ProjectRootFolder}: {string.Join(",", GetScrTexts().Select(scrText => scrText.Name))}"
             );
 
-            // If there are no projects available anywhere, throw in the sample WEB one
+            // If there are no projects available anywhere, throw in the sample WEB one if opted in
             if (!GetScrTexts().Any())
             {
-                Console.WriteLine("No projects found. Setting up sample WEB project");
-                SetUpSampleProject();
+                if (_shouldInstallSampleProject)
+                {
+                    Console.WriteLine("No projects found. Setting up sample WEB project");
+                    SetUpSampleProject();
 
-                ScrTextCollection.RefreshScrTexts();
+                    ScrTextCollection.RefreshScrTexts();
+                }
+                else
+                {
+                    Console.WriteLine(
+                        $"No projects found. Not installing the sample WEB project; set {SAMPLE_PROJECT_VARIABLE}=true to install it"
+                    );
+                }
             }
 
             _isInitialized = true;
@@ -568,9 +595,14 @@ internal class LocalParatextProjects : IDisposable
     /// <summary>
     /// Available unpublished Paratext projects (regular, editable scripture projects).
     /// Used by <see cref="ParatextProjectDataProviderFactory"/> to populate its project list.
+    /// Scans the projects folder first if that hasn't happened yet.
     /// </summary>
     public IEnumerable<ProjectDetails> GetAvailableUnpublishedProjectDetails()
     {
+        // The factories already scan before they register (StartFactoryAsync). This covers callers
+        // that read project details without one: UnsyncedChangesTracker, RemoteChangesPoller and
+        // InventoryDataProvider (through GetAllProjectDetails).
+        Initialize();
         // IsResourceProject is true for ResourceScrText and JoinedScrText (PT9's read-only
         // resource-backed project shapes); everything else is unpublished.
         return GetVisibleScrTexts()
@@ -582,9 +614,11 @@ internal class LocalParatextProjects : IDisposable
     /// <summary>
     /// Available published Paratext projects (read-only DBL / biblical resources).
     /// Used by <see cref="ParatextPublishedProjectDataProviderFactory"/> to populate its project list.
+    /// Scans the projects folder first if that hasn't happened yet.
     /// </summary>
     public IEnumerable<ProjectDetails> GetAvailablePublishedProjectDetails()
     {
+        Initialize();
         return GetAllResourceScrTexts().Select(TryGetProjectDetails).OfType<ProjectDetails>();
     }
 
@@ -734,6 +768,12 @@ internal class LocalParatextProjects : IDisposable
         }
     }
 
+    /// <summary>
+    /// Installs the sample WEB project. Only runs when opted in (see
+    /// <see cref="_shouldInstallSampleProject"/>), so a packaged build can have no projects at all.
+    /// The Scripture editor's `use-project-presence.hook.ts` relies on the sample's fixed ID (its
+    /// `assets/WEB/Settings.xml` GUID) to not count it as a project of the user's own.
+    /// </summary>
     private void SetUpSampleProject()
     {
         string projectName = "WEB";

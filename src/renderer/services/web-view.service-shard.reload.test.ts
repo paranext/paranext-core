@@ -85,7 +85,11 @@ const LIVE_DEFINITION: WebViewDefinition = {
 
 /** Narrow view of the published shard covering only the reload method under test */
 type ReloadShard = {
-  reloadWebView(webViewType: string, webViewId: WebViewId): Promise<WebViewId | undefined>;
+  reloadWebView(
+    webViewType: string,
+    webViewId: WebViewId,
+    options?: Record<string, unknown>,
+  ): Promise<WebViewId | undefined>;
 };
 
 /**
@@ -150,26 +154,32 @@ async function shardOverDockHoldingLiveView() {
   return { shard: shard as unknown as ReloadShard };
 }
 
-/** Stub the web view provider (and the theme it needs) so the reload's open path can run */
+/**
+ * Stub the web view provider (and the theme it needs) so the reload's open path can run
+ *
+ * @returns The stub provider's `getWebView`, to inspect what the reload asked it for
+ */
 async function primeProvider() {
   const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
   const { localThemeService } = await import('@renderer/services/theme.service');
   // `webViewProviderService` and `localThemeService` are mocked as `{}` (file-level mocks above);
   // attaching stub methods needs a type assertion because the plain-object mock type doesn't model
   // them — same reasoning as the equivalent stubs in `web-view.service-shard.test.ts`.
+  const getWebView = vi.fn<
+    (saved: SavedWebViewDefinition, ...rest: unknown[]) => Promise<WebViewDefinition>
+  >(async (saved) => ({
+    id: saved.id,
+    webViewType: saved.webViewType,
+    contentType: 'html',
+    content: '<p>reloaded</p>',
+  }));
   (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
-    async () => ({
-      getWebView: async (saved: SavedWebViewDefinition) => ({
-        id: saved.id,
-        webViewType: saved.webViewType,
-        contentType: 'html',
-        content: '<p>reloaded</p>',
-      }),
-    }),
+    async () => ({ getWebView }),
   );
   (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
     cssVariables: {},
   }));
+  return getWebView;
 }
 
 // Starting the shard deletes `globalThis.open` so web views cannot make popups. That is a one-way
@@ -221,6 +231,37 @@ describe('content arriving through a door that names no caller', () => {
   });
 });
 
+describe('waitForWebViewProviderToRegister', () => {
+  test('asks the provider lookup to wait patiently, not the shorter one-shot wait', async () => {
+    // This is what retrieveWebViewContent calls BEFORE reloadWebView for a tab restore — reloadWebView
+    // itself always takes the shorter, one-shot path; using a longer wait time to get the provider
+    // is exclusive to `waitForWebViewProviderToRegister`.
+    const { waitForWebViewProviderToRegister } = await import(
+      '@renderer/services/web-view.service-shard'
+    );
+    await primeProvider();
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+
+    await waitForWebViewProviderToRegister('test.type');
+
+    expect(webViewProviderService.getWebViewProvider).toHaveBeenCalledWith('test.type', true);
+  });
+});
+
+describe('reloadWebView always uses the shorter, one-shot provider wait', () => {
+  test('never asks the provider lookup to wait patiently, even for a plain reload', async () => {
+    // Only `waitForWebViewProviderToRegister` should call `getWebViewProvider` with a request for
+    // a more patient wait.
+    const { shard } = await shardOverDockRecordingAdds();
+    await primeProvider();
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+
+    await shard.reloadWebView('test.type', 'open-view');
+
+    expect(webViewProviderService.getWebViewProvider).toHaveBeenCalledWith('test.type', false);
+  });
+});
+
 describe('a failed reload of an open web view', () => {
   test('leaves the live view alone: no close event, state kept, error logged', async () => {
     const { shard } = await shardOverDockHoldingLiveView();
@@ -240,5 +281,24 @@ describe('a failed reload of an open web view', () => {
     if (!closeEmitter) throw new Error('close emitter was never created');
     expect(closeEmitter.emit).not.toHaveBeenCalled();
     expect(mocks.loggerError).toHaveBeenCalledWith(expect.stringContaining('open-view'));
+  });
+});
+
+describe('options a reload is given', () => {
+  test("reach the provider, including keys the reload options don't declare", async () => {
+    // Providers take data for the one build they are asked for through these options — the
+    // reference panels a resource to select, Home a filter to start on — so a reload that dropped
+    // the keys it does not know would leave them showing the wrong thing, with nothing failing.
+    const { shard } = await shardOverDockRecordingAdds();
+    const getWebView = await primeProvider();
+
+    await shard.reloadWebView('test.type', 'open-view', {
+      bringToFront: true,
+      selectedResourceId: 'dbl:uid-byz',
+    });
+
+    expect(getWebView.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ selectedResourceId: 'dbl:uid-byz' }),
+    );
   });
 });

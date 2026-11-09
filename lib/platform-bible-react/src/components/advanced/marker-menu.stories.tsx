@@ -263,7 +263,8 @@ export const AllItemsDisallowed: Story = {
 };
 
 export const NarrowWithLongTitles: Story = {
-  // 200px is the narrow end consumers pin the popover to, which is what makes truncation visible.
+  // Consumers can pin the popover narrower than its content wants; 200px is narrow enough to make
+  // truncation visible.
   decorators: [
     (Story) => (
       <div className="tw:w-[200px] tw:rounded-md tw:border tw:border-border">
@@ -301,7 +302,7 @@ export const NarrowWithLongTitles: Story = {
     docs: {
       description: {
         story:
-          'At the 200px width consumers pin the popover to, long titles and subtitles truncate ' +
+          'In a popover narrower than its content wants, long titles and subtitles truncate ' +
           'rather than wrap, per the Responsiveness guideline. Hover a row to see the full text.',
       },
     },
@@ -432,9 +433,9 @@ export const CodeStyledMarkersWithTrailingDetail: Story = {
 };
 
 export const NarrowPopover: Story = {
-  // Same 200px squeeze as `NarrowWithLongTitles`, on the other row shape: marker code plus trailing
-  // detail, rather than long titles with selection affordances. The two shapes give up their space
-  // differently, so both are worth seeing at the narrow end.
+  // Same narrow squeeze as `NarrowWithLongTitles`, on the other row shape: marker code plus
+  // trailing detail, rather than long titles with selection affordances. The two shapes give up
+  // their space differently, so both are worth seeing at the narrow end.
   decorators: [
     (Story) => (
       <div className="tw:w-[200px] tw:rounded-md tw:border tw:border-border">

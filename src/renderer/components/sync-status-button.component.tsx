@@ -32,7 +32,8 @@ import {
   isolateBidi,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { CANCEL_SYNC_PROMPT_COMMAND } from 'platform-bible-utils/experimental';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 /**
  * Message shown when Cancel is clicked but send/receive can't answer. Declared here rather than
@@ -76,8 +77,9 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_cancelling%',
   '%toolbar_sync_open_status%',
   '%toolbar_sync_popover_cancelled%',
-  '%toolbar_sync_popover_last_sync_unfinished%',
   '%toolbar_sync_popover_idle%',
+  '%toolbar_sync_popover_last_sync_unfinished%',
+  '%toolbar_sync_popover_no_details%',
   '%toolbar_sync_popover_synced%',
   '%toolbar_sync_popover_unknown%',
   '%toolbar_sync_popover_unsynced_receive%',
@@ -145,15 +147,24 @@ function ProjectList({
  * Deferred: two of the richer states in the design — "Connection problem" and "Unsaved changes" —
  * are not implemented, because neither is derivable from what Send/Receive currently emits; each
  * needs a new event from that extension, so showing them now would mean guessing at state, which is
- * precisely the untruthfulness this control exists to fix. Sync FAILURE is derivable (from the last
- * sync's per-project results) and is reported. See `adr-toolbar-sync-status-is-local` in
+ * precisely the untruthfulness this control exists to fix. Sync FAILURE is derivable — from the
+ * last sync's per-project results, or from the backend's own sync outcome for a sync send/receive
+ * never saw — and is reported. See `adr-toolbar-sync-status-is-local` in
  * `.context/standards/Architecture-Decisions.md`.
  */
 export function SyncStatusButton() {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
-  const { status, syncingProjects, unsyncedProjects, unsyncedDirection, syncProgress } =
-    useSyncStatus();
+  const {
+    status,
+    syncingProjects,
+    unsyncedProjects,
+    unsyncedDirection,
+    syncProgress,
+    isVerdictFromBackendOnly,
+    runEpoch,
+  } = useSyncStatus();
   const [isOpen, setIsOpen] = useState(false);
+  const noDetailsHintId = useId();
   const [isCancelEnabled, setIsCancelEnabled] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
   /**
@@ -163,14 +174,6 @@ export function SyncStatusButton() {
    * their own request back to them as an error.
    */
   const [wasCancelRequested, setWasCancelRequested] = useState(false);
-  /**
-   * The popover's rendered content node. Radix portals it to `document.body`, so it is NOT a
-   * descendant of the trigger — which is why {@link handleWindowBlur} measures containment against
-   * this rather than against the trigger.
-   */
-  // React's useRef requires null as the initial value for DOM refs
-  // eslint-disable-next-line no-null/no-null
-  const popoverContentRef = useRef<HTMLDivElement>(null);
   const {
     ref: labelRef,
     open: isTooltipTruncated,
@@ -201,11 +204,11 @@ export function SyncStatusButton() {
    *
    * Written during RENDER, deliberately, and unlike the effect-written refs below. React schedules
    * the passive-effect flush as its own task after commit, i.e. after pending microtasks — so a
-   * `cancelSync` rejection delivered between the commit that moved `status` to `failed` and that
-   * flush would read an effect-written ref as still `syncing`, and toast "Couldn't cancel the sync"
-   * beside a popover saying the sync finished. That is precisely what the guard exists to suppress.
-   * A render-phase write cannot lag the commit it belongs to, and for a SUPPRESSION guard being
-   * marginally ahead is the safe direction: it errs toward staying quiet.
+   * `cancelSyncPrompt` rejection delivered between the commit that moved `status` to `failed` and
+   * that flush would read an effect-written ref as still `syncing`, and toast "Couldn't cancel the
+   * sync" beside a popover saying the sync finished. That is precisely what the guard exists to
+   * suppress. A render-phase write cannot lag the commit it belongs to, and for a SUPPRESSION guard
+   * being marginally ahead is the safe direction: it errs toward staying quiet.
    */
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -215,14 +218,19 @@ export function SyncStatusButton() {
    * again whenever the status leaves `syncing` (see the settle effect below) — so an episode
    * boundary invalidates any request still in flight across it.
    *
-   * `cancelSync` can reject long after it was sent (an unregistered handler rejects only after the
-   * RPC layer's ~10s retry budget), by which time the sync it targeted may have ended and another
-   * begun. Without this, sync A's rejection re-enables Cancel and toasts "Couldn't cancel the sync"
-   * against sync B — and if the user had already cancelled B, it reverts B's "Cancelling…" while
-   * B's own request is still in flight, defeating the single-shot guard the whole handler is built
-   * around.
+   * `cancelSyncPrompt` can reject long after it was sent (an unregistered handler rejects only
+   * after the RPC layer's ~10s retry budget), by which time the sync it targeted may have ended and
+   * another begun. Without this, sync A's rejection re-enables Cancel and toasts "Couldn't cancel
+   * the sync" against sync B — and if the user had already cancelled B, it reverts B's
+   * "Cancelling…" while B's own request is still in flight, defeating the single-shot guard the
+   * whole handler is built around.
    */
   const cancelGenerationRef = useRef(0);
+  /**
+   * Whether the cancel prompt of the current sync is still open. Cancel stays disarmed while it is,
+   * including across a popover close and reopen, so one sync is never asked twice.
+   */
+  const isCancelPromptOpenRef = useRef(false);
 
   const handleCancel = useCallback(async () => {
     // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the
@@ -230,13 +238,10 @@ export function SyncStatusButton() {
     // other's click. See `adr-toolbar-sync-status-is-local` in
     // `.context/standards/Architecture-Decisions.md`.
     // Single-shot: one cancel request per click-through. Disabled immediately so a second click
-    // can't queue another request, and re-enabled only if this one is rejected while a sync is
-    // still running, so the user can retry.
+    // can't queue another request, and re-enabled only if this one is rejected or the user answers
+    // that the sync should go on (nothing was cancelled), so the user can retry.
     setIsCancelEnabled(false);
-    // A cancel takes effect whenever send/receive reaches a stopping point, so the sync keeps
-    // reporting `syncing` for a while yet. Saying "Cancelling…" is what distinguishes a request that
-    // was accepted from a button that has merely gone dim.
-    setIsCancelling(true);
+    isCancelPromptOpenRef.current = true;
     cancelGenerationRef.current += 1;
     const generation = cancelGenerationRef.current;
     try {
@@ -247,13 +252,32 @@ export function SyncStatusButton() {
       // ask for. If an implementation ever REQUIRES the id to act, this cancel would silently do
       // nothing while the button said "Cancelling…", so the contract commits to treating an absent
       // id as an unconditional cancel.
-      await sendCommand('paratextBibleSendReceive.cancelSync');
+      //
+      // The prompt variant, so a user with projects waiting behind this sync is asked whether to
+      // drop them too. It is served by the Send/Receive extension; a rejection (including the
+      // command not being registered) takes the error path below.
+      const isCancelSent = await sendCommand(CANCEL_SYNC_PROMPT_COMMAND);
+      // The prompt of a sync that is over says nothing about the sync that shows now.
+      if (generation !== cancelGenerationRef.current) return;
+      isCancelPromptOpenRef.current = false;
+      if (isCancelSent === false) {
+        // Nothing was cancelled (the user chose to keep syncing): nothing is pending, so Cancel is
+        // offered again and the sync's outcome is not reported as one they asked for.
+        setIsCancelEnabled(true);
+      } else {
+        // A cancel takes effect whenever send/receive reaches a stopping point, so the sync keeps
+        // reporting `syncing` for a while yet. Saying "Cancelling…" once the cancel is confirmed is
+        // what distinguishes a request that was accepted from a button that has merely gone dim; it
+        // is not said while the prompt is still open, since the user may yet keep syncing.
+        setIsCancelling(true);
+      }
     } catch (e) {
       logger.warn(`Toolbar could not cancel the running sync: ${getErrorMessage(e)}`);
       // The sync this request was for is over, and everything below would land on a later one's
       // state. Nothing to re-enable and nothing to report: whatever is showing now describes the
       // episode that is actually running.
       if (generation !== cancelGenerationRef.current) return;
+      isCancelPromptOpenRef.current = false;
       setIsCancelEnabled(true);
       setIsCancelling(false);
       // A rejected cancel does NOT prove the sync is still running — the declaration guarantees
@@ -326,6 +350,8 @@ export function SyncStatusButton() {
    * immediately overwrite the answer it just recorded.
    */
   const isCancellingRef = useRef(isCancelling);
+  /** The `runEpoch` the settle effect last saw, to tell a change of run from a re-render. */
+  const lastRunEpochRef = useRef(runEpoch);
   useEffect(() => {
     isCancellingRef.current = isCancelling;
   }, [isCancelling]);
@@ -339,16 +365,30 @@ export function SyncStatusButton() {
   // `isSyncing: true` window spans however many overlapping claims the sync paths take out — so a
   // project can release and re-claim without a new sync having started, and "an id this cancel did
   // not cover" is not evidence of a different sync. A pending cancel is therefore settled only by
-  // the status leaving `syncing` and by the popover being reopened, at the cost of a genuinely new
-  // overlapping sync keeping a dim "Cancelling…" until the whole union goes idle. That is the safe
-  // half of the trade: the alternative offers a live Cancel while a cancel is still in flight.
-  // Settling it positively needs a monotonic sync-episode id in `SyncState` (`adr-toolbar-sync-status-is-local` follow-up 4).
+  // the status leaving `syncing`, by the popover being reopened, and by a new run's epoch (below),
+  // at the cost of a genuinely new overlapping sync keeping a dim "Cancelling…" until the whole
+  // union goes idle or the backend opens a new run. That is the safe half of the trade: the
+  // alternative offers a live Cancel while a cancel is still in flight. Settling it positively needs
+  // a monotonic sync-episode id in `SyncState` (`adr-toolbar-sync-status-is-local` follow-up 4).
+  //
+  // The one positive signal available is `runEpoch`: the backend's run ended and another opened.
+  // When the queue starts the next run as soon as a cancelled one ends, `status` never leaves
+  // `syncing`, so the epoch is what hands the new run a live Cancel.
   useEffect(() => {
     if (status === 'syncing') {
       // A running sync has no settled outcome to attribute to a cancel yet.
       setWasCancelRequested(false);
+      // Only a change of run settles a cancel while `status` stays `syncing`.
+      if (lastRunEpochRef.current !== runEpoch) {
+        lastRunEpochRef.current = runEpoch;
+        setIsCancelling(false);
+        setIsCancelEnabled(true);
+        cancelGenerationRef.current += 1;
+        isCancelPromptOpenRef.current = false;
+      }
       return;
     }
+    lastRunEpochRef.current = runEpoch;
     // Recorded before `isCancelling` is cleared, because it is the only evidence that the non-success
     // outcome now being reported is one the user asked for.
     setWasCancelRequested(isCancellingRef.current);
@@ -356,58 +396,16 @@ export function SyncStatusButton() {
     setIsCancelEnabled(true);
     // This episode is over, so a cancel request still in flight from it must not reach the next one.
     cancelGenerationRef.current += 1;
-  }, [status]);
-
-  /**
-   * Dismiss when focus leaves the popover's content for a foreign browsing context — a
-   * scripture-editor WebView, say. Those WebViews are cross-origin sandboxed iframes, so a click
-   * into one delivers no `pointerdown` to this document at all: Radix's outside-press detection
-   * never fires and the popover would sit open over a view the user has already moved into. A
-   * `blur` on this window is the only signal that arrives.
-   *
-   * `document.hasFocus()` is what separates the two things that blur reports. It stays true while
-   * focus is anywhere in this top-level page — including inside a child iframe — and flips to false
-   * only when the OS window itself loses focus, so a plain alt-tab or a DevTools click leaves the
-   * popover open. Containment is measured against the portaled content node because Radix renders
-   * it under `document.body`; asking the trigger instead would read the popover's own content as
-   * "outside" and dismiss it the moment the user clicked inside it.
-   *
-   * Closing through the controlled `open` prop keeps Radix's own close lifecycle — and with it the
-   * focus restore — rather than tearing the surface down behind its back. See the
-   * `Guidelines/Dismissal Patterns` Storybook page; no shared hook for this exists yet, so each
-   * Click-away surface implements it itself.
-   *
-   * What the tests here pin is this handler's logic given the values it reads, by spying
-   * `document.activeElement` rather than moving focus into a real cross-origin iframe — which jsdom
-   * has no way to reproduce. So the load-bearing assumption, that Electron has already moved focus
-   * to the `<iframe>` element by the time `blur` fires on this window, is asserted from the spec
-   * and not observed. It needs one manual pass in a Paratext 10 build with a scripture-editor
-   * WebView open.
-   */
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const handleWindowBlur = () => {
-      // The whole window lost focus, not a crossing within the page.
-      if (!document.hasFocus()) return;
-      const contentEl = popoverContentRef.current;
-      const focusedEl = document.activeElement;
-      // Nothing to measure against, so there is no evidence focus went anywhere foreign.
-      if (!contentEl || !focusedEl) return;
-      // For a cross-origin WebView the element holding focus is the `<iframe>` itself.
-      if (contentEl.contains(focusedEl)) return;
-      setIsOpen(false);
-    };
-    window.addEventListener('blur', handleWindowBlur);
-    return () => window.removeEventListener('blur', handleWindowBlur);
-  }, [isOpen]);
+    isCancelPromptOpenRef.current = false;
+  }, [status, runEpoch]);
 
   // Re-arm Cancel each time the popover is reopened, so a rejected-then-abandoned attempt doesn't
-  // leave the button dead for the rest of the session. Not while a cancel is still pending, though:
-  // that would produce an enabled button reading "Cancelling…" which fires a second request.
+  // leave the button dead for the rest of the session. Not while a cancel is still pending or its
+  // prompt is still open, though: that would let a second click send a second request.
   const handleOpenChange = useCallback(
     (nextIsOpen: boolean) => {
       setIsOpen(nextIsOpen);
-      if (nextIsOpen && !isCancelling) setIsCancelEnabled(true);
+      if (nextIsOpen && !isCancelling && !isCancelPromptOpenRef.current) setIsCancelEnabled(true);
     },
     [isCancelling],
   );
@@ -788,7 +786,6 @@ export function SyncStatusButton() {
          */}
         <PopoverContent
           align="end"
-          ref={popoverContentRef}
           // Withheld until the strings load, for the same reason as `buttonAccessibleName`: an
           // `aria-label` of `%toolbar_sync_open_status%` would be spoken verbatim.
           aria-label={areStringsLoaded ? localizedStrings['%toolbar_sync_open_status%'] : undefined}
@@ -883,22 +880,50 @@ export function SyncStatusButton() {
               </>
             )}
             {status !== 'syncing' && status !== 'unsynced' && (
-              <p data-testid="toolbar-sync-popover-status" className="tw:text-sm">
-                {popoverStatusMessage}
-              </p>
+              <>
+                <p data-testid="toolbar-sync-popover-status" className="tw:text-sm">
+                  {popoverStatusMessage}
+                </p>
+                {/*
+                 * Says why the link below it is inert, rather than leaving the user to work out
+                 * that the one control on offer does nothing. The verdict above is still the whole
+                 * truth about the sync; what is missing is the per-project detail behind it.
+                 */}
+                {isVerdictFromBackendOnly && (
+                  <p
+                    id={noDetailsHintId}
+                    data-testid="toolbar-sync-popover-no-details"
+                    className="tw:text-xs tw:text-muted-foreground"
+                  >
+                    {localizedStrings['%toolbar_sync_popover_no_details%']}
+                  </p>
+                )}
+              </>
             )}
             {/*
              * The way through to per-project conflicts, failure messages and warnings. This compact
              * surface deliberately reports only whether a sync is running and whether it succeeded;
              * the sync status web view is the only place the detail behind a failure exists, so
              * without this link a failed sync would be reported with nowhere to go.
+             *
+             * Inert when the verdict came from the backend's own signal, because that view shows
+             * send/receive's last results — a DIFFERENT sync — so following it would answer "what
+             * happened?" with an unrelated sync's detail.
+             *
+             * `aria-disabled` rather than unmounting, for the same reason Cancel above uses it: this
+             * popover updates live, so a verdict arriving while the user is in it would otherwise
+             * remove the control under them and drop focus to `<body>`, and the next Tab would
+             * restart from the top of the document.
              */}
             <Button
               data-testid="toolbar-sync-view-details-button"
               variant="link"
               size="sm"
-              className="tw:h-6 tw:self-start tw:px-0"
-              onClick={handleViewDetails}
+              className="tw:h-6 tw:self-start tw:px-0 tw:aria-disabled:pointer-events-none tw:aria-disabled:opacity-50"
+              aria-disabled={isVerdictFromBackendOnly}
+              // A screen reader announces the link as disabled; this tells it why.
+              aria-describedby={isVerdictFromBackendOnly ? noDetailsHintId : undefined}
+              onClick={isVerdictFromBackendOnly ? undefined : handleViewDetails}
             >
               {localizedStrings['%toolbar_sync_view_details%']}
             </Button>

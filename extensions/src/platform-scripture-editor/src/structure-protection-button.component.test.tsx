@@ -28,6 +28,7 @@ const mockState: StructureProtectionState = {
   isProtectedByAdmin: false,
   adminSettingError: undefined,
   canAdminToggle: false,
+  isTeamLockBinding: false,
   isProtectionActive: true,
   isLoading: false,
   setUserProtection: vi.fn(),
@@ -68,6 +69,7 @@ afterEach(() => {
     isProtectedByAdmin: false,
     canAdminToggle: false,
     adminSettingError: undefined,
+    isTeamLockBinding: false,
     isProtectionActive: true,
     isLoading: false,
   });
@@ -111,7 +113,12 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('is disabled and a no-op for a non-admin on an admin-locked project', () => {
-    setState({ canAdminToggle: false, isProtectedByAdmin: true, isStructureProtected: true });
+    setState({
+      canAdminToggle: false,
+      isProtectedByAdmin: true,
+      isTeamLockBinding: true,
+      isStructureProtected: true,
+    });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PERSONAL });
     expect(button).toBeDisabled();
@@ -120,12 +127,24 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('is disabled with the error tooltip when the admin setting failed to load', () => {
-    setState({ canAdminToggle: false, isProtectedByAdmin: false, adminSettingError: ADMIN_ERROR });
+    setState({
+      canAdminToggle: false,
+      isProtectedByAdmin: false,
+      adminSettingError: ADMIN_ERROR,
+      isTeamLockBinding: true,
+    });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PERSONAL });
     expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
+  });
+
+  // The hook reports the team lock as binding while its setting loads, for every user.
+  it('stays enabled while the state is loading, rather than claiming an admin lock', () => {
+    setState({ isLoading: true, isTeamLockBinding: true, isProtectedByAdmin: false });
+    render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    expect(screen.getByRole('button', { name: PERSONAL })).toBeEnabled();
   });
 
   it('Ctrl+Shift+L toggles the personal user setting when enabled', () => {
@@ -136,7 +155,7 @@ describe('StructureProtectionButton — personal button', () => {
   });
 
   it('Ctrl+Shift+L is a no-op when the personal button is disabled', () => {
-    setState({ canAdminToggle: false, isProtectedByAdmin: true });
+    setState({ canAdminToggle: false, isProtectedByAdmin: true, isTeamLockBinding: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
@@ -340,7 +359,7 @@ describe('StructureProtectionButton — personal button', () => {
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
     expect(screen.queryByText('Structure locked by admin')).not.toBeInTheDocument();
-    setState({ isProtectedByAdmin: true });
+    setState({ isProtectedByAdmin: true, isTeamLockBinding: true });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     expect((await screen.findAllByText('Structure locked by admin')).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: PERSONAL })).toBeDisabled();
@@ -411,7 +430,12 @@ describe('StructureProtectionButton — no team lock', () => {
 
   // The admin lock governs what a non-admin may do, wherever it is set from.
   it('still disables the personal toggle for a non-admin while the team lock is on', () => {
-    setState({ canAdminToggle: false, isProtectedByAdmin: true, isStructureProtected: true });
+    setState({
+      canAdminToggle: false,
+      isProtectedByAdmin: true,
+      isTeamLockBinding: true,
+      isStructureProtected: true,
+    });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
 
     expect(screen.getByRole('button', { name: PERSONAL })).toBeDisabled();

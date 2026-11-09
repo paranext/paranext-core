@@ -311,6 +311,21 @@ export async function switchToGridView(frame: FrameLocator): Promise<void> {
 }
 
 /**
+ * The pane-wide default content zoom level (`platform.webViewContentZoom`), which a reset area
+ * returns to.
+ */
+export async function readSettingsDefaultZoom(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    // The renderer exposes `papi` on `globalThis`, untyped here.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as {
+      papi: { settings: { get: (key: string) => Promise<number> } };
+    };
+    return win.papi.settings.get('platform.webViewContentZoom');
+  });
+}
+
+/**
  * The content zoom area of one resource's row or column, read off the zoom scope the grid puts on
  * the container (`resource-<id>`, or `text-collection` for an id that yields none).
  */

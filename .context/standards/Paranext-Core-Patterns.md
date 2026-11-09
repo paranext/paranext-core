@@ -392,6 +392,10 @@ projectInterfaces.includes(scriptureInterfaceName);
 
 **One exception: telling a published resource from a translation project.** When the question really is "is this a published resource?" (for example, a resource has no Text Collection of its own), read the `platform.isPublished` project setting — see `isProjectPublished` in `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`. Do not use `platform.isEditable`: it is a project-wide switch on editing the Scripture text, so a translation project can have it off. And do not infer it from `projectInterfaces`: both Paratext factories advertise the same reading and text-connection interfaces, and the ones only unpublished projects add (comments, PT9 interlinear) describe capabilities that happen to coincide with being unpublished today, not the category itself. Rationale: `adr-column-3-panels-are-told-their-project` in [Architecture-Decisions.md](Architecture-Decisions.md).
 
+**Projects that cannot be opened.** A project whose metadata carries `unsupportedReason` (a localize key; today, Study Bible Additions) is enumerated but cannot be opened. A list for picking or opening a project must leave it out, or, where users open projects (Home, New Tab, the Simple-mode picker), show it disabled with the localized reason. Until Study Bible Additions projects are supported, Send/Receive lists still show it but greyed out and not selectable, and Home's Sync/Get is disabled for it (`adr-sba-not-syncable-from-dialog-or-home`); scheduled and automatic syncs are not blocked. Treat an absent or empty reason, or a failed lookup, as openable. C# refuses its text with an error containing `(PROJECT_OPEN_BLOCKED)`; turn that into the reason. Rationale: `adr-unsupported-project-reason` in [Architecture-Decisions.md](Architecture-Decisions.md).
+
+**A user may have no projects at all.** A packaged build installs no sample project, so an empty project list is a real, common state, not only "still loading". Do not assume at least one project exists, and do not read an empty lookup as "not loaded yet" without a way to tell the two apart. Today that is: after an empty answer, ask the C# Paratext factory (`platform.Paratext-pdpf`) directly with `getAvailableProjects({})` and trust the empty answer only if it also returns none (see `use-project-presence.hook.ts`). A factory being listed as registered is not enough, because the lookup silently skips a factory it cannot reach. Make the lookup through `getMetadataForAllProjectsWithoutRetries`, because the retrying lookup holds an empty answer for its 30 s startup grace period. Rationale: `adr-sample-project-dev-runs-only` in [Architecture-Decisions.md](Architecture-Decisions.md).
+
 ### Test Infrastructure
 
 - **Framework:** NUnit 4.0.1
@@ -477,7 +481,7 @@ Reserve `throw` (with `PlatformErrorCodes.WithCode`) for whole-operation precond
 
 When a C# exception crosses the PAPI wire boundary and the TS caller needs a machine-readable error code (`PERMISSION_DENIED`, `NOT_FOUND`, `UNAVAILABLE`, `INVALID_ARGUMENT`, `FAILED_PRECONDITION`, …), throw an exception built by `PlatformErrorCodes.WithCode(code, message)`.
 
-`WithCode` returns an `InvalidOperationException` and sets `ex.Data["platformErrorCode"] = code`. The exception *type* is informational only — the wire protocol keys solely off `Exception.Data`. On the TS side, `src/shared/services/network.service.ts` extracts `response.error.data?.data?.platformErrorCode` and forwards it to `newPlatformError(message, code)`, so the same string round-trips through JSON-RPC without re-encoding.
+`WithCode` returns an `InvalidOperationException` and sets `ex.Data["platformErrorCode"] = code`. The exception *type* is informational only — the wire protocol keys solely off `Exception.Data`, which `PapiJsonRpc` (`c-sharp/PapiJsonRpc.cs`, the `JsonRpc` that `PapiClient` uses) serializes as `error.data.data.platformErrorCode` next to StreamJsonRpc's usual error fields; main relays only the error's `code`, `message` and this platform code (see `adr-platform-error-code-crosses-json-rpc`). A consumer that must tell two refusals apart that share a code uses a message sentinel (`ProjectOpenBlockedException.Sentinel`, the `(SYNC_BUSY)` marker the sync queue keys on). On the TS side, `src/shared/services/network.service.ts` extracts `response.error.data?.data?.platformErrorCode` and forwards it to `newPlatformError(message, code)`, so the same string round-trips through JSON-RPC without re-encoding.
 
 The 16-value code set in `c-sharp/PlatformErrorCodes.cs` (`ABORTED`, `ALREADY_EXISTS`, `CANCELLED`, `DATA_LOSS`, `DEADLINE_EXCEEDED`, `FAILED_PRECONDITION`, `INTERNAL`, `INVALID_ARGUMENT`, `NOT_FOUND`, `OUT_OF_RANGE`, `PERMISSION_DENIED`, `RESOURCE_EXHAUSTED`, `UNAUTHENTICATED`, `UNAVAILABLE`, `UNIMPLEMENTED`, `UNKNOWN`) mirrors the TS `PlatformErrorCode` union in `lib/platform-bible-utils/src/platform-error.ts`. (`PlatformErrorCodes` also exposes `Throw(code, message)` — marked `[DoesNotReturn]` — and `TryGetCode(ex, out code)` for the catch side.)
 
@@ -1181,6 +1185,9 @@ export function setScrRefSync(/* ... */): boolean {
   `performance.getEntriesByType('navigation')[0].type === 'reload'` to choose between two seeds:
   seeds that are always fresh never disagree, and a `localStorage` key is profile-wide where the URL
   is per window.
+- Never key anything by a window's URL: the seed above rewrites it for as long as the window is
+  open. Chromium keys a `file://` page's zoom by its URL, which is why interface scaling does not
+  use that zoom (`adr-interface-scaling-is-per-window-zoom`).
 - Make `papi.{service}` in the renderer resolve to the cache rather than to the shared network proxy.
   Web views take `window.papi` from the window hosting them, so two authorities in one window means
   the hook and `papi` can disagree about the same instant.
@@ -1432,6 +1439,52 @@ versification**. Never assume two projects share a versification.
 `platformScripture.versification` setting.** That setting is only the base `ScrVersType` and does not
 capture `custom.vrs`, so two projects can report the same base type yet map differently. Let the
 hook or command decide with the real `ScrVers`; a genuinely identical versification is a cheap no-op.
+
+---
+
+## Writes Paratext Refuses Outright (Repair at the Save Boundary)
+
+Some project writes are not partially accepted or coerced — `ParatextData` refuses the whole write.
+Refusals of that kind are **self-perpetuating** whenever the content that caused them lives in a
+surface that goes on holding it: the refusal changes nothing on screen, so the next save sends the
+same refused content, and the feature appears to stop working with nothing to tell the user why.
+
+**Repair the content on the way out; do not prevent the edit that produced it.** A refused write is
+a writer constraint, not a typing rule, and policing it at the keystroke changes how the editing
+surface behaves — and diverges from Paratext 9, which lets the typing happen and fixes the content
+in its own save path.
+
+**Repair in EVERY layer that can originate the write, not just the backend.** A correction made only
+in C# is invisible to a focused editor: `useEditorPdpSync`
+(`extensions/src/platform-scripture-editor/src/use-editor-pdp-sync.hook.ts`) defers an incoming PDP
+update for up to `EDITOR_OWNERSHIP_WINDOW_MS` while the editor is focused and recently edited, so
+the editor keeps its own uncorrected document and writes it back over the correction. Concretely:
+
+- **The originating surface repairs its own content**, pushes the repaired document back into
+  itself, and tells the user. The push-back is what breaks the loop — without it the same repair
+  fires again on every later save.
+- **The backend repairs as a backstop**, silently, for writers that do not correct their own
+  content. A backstop that fires on traffic from an already-repairing surface means that surface's
+  repair has a gap, so keep the two in agreement.
+- **Scope the repair to the write that knows the answer.** Only a write aimed at a single chapter
+  knows which `\c` is the right one; a book-level write legitimately carries one per chapter and
+  must be left alone.
+- **Check what else the refusal was catching.** A repair makes every write of that shape succeed,
+  including ones the refusal was stopping for a different reason. The chapter-number refusal also
+  stopped one chapter's content being written into another, which the editor attempts after
+  navigation while it still holds the chapter it is leaving. The editor guards that
+  separately (`isEditorContentForChapter`).
+
+**Chapter markers — the invariant both ports must hold.** A restored `\c` for any chapter after the
+first goes at **position 0**. Nothing may precede it, not even an `\id` book node typed into the
+chapter, because `ScrText.ValidateChapterNumber` refuses a later chapter carrying any content ahead
+of its marker ("Text present before chapter marker."). Chapter 1 is the sole exception: its marker
+stays behind the author's introduction and may legitimately be absent altogether. The two
+implementations — `extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts` (USJ)
+and `c-sharp/Projects/ChapterMarkerCorrection.cs` (USFM) — must agree, and both are pinned to
+Paratext 9's `UsfmEditorTextLoader.FixChapterNumbers` test table.
+
+See `adr-chapter-marker-repair-at-the-save-boundary` for the why and the alternatives rejected.
 
 ---
 

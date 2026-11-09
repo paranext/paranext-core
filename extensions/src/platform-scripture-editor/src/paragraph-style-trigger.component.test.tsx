@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { SHRINK_STEP, ShrinkStepOverride } from 'platform-bible-react';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { SHRINK_STEP, ShrinkStepOverride, type MarkerMenuItem } from 'platform-bible-react';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { ParagraphStyleTrigger } from './paragraph-style-trigger.component';
+import { useParagraphMenuOpenState } from './use-paragraph-menu-open-state.hook';
 
 // jsdom doesn't ship ResizeObserver. Radix's Popper positioning, used by the popover and by the
 // tooltip inside ToolbarCompoundLabel, instantiates one on mount. Same stub as
@@ -28,6 +29,8 @@ beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
   }
+  // cmdk scrolls the highlighted row into view when the menu opens; jsdom does not implement it.
+  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 });
 
 function renderTrigger(shrinkStep?: number) {
@@ -38,6 +41,9 @@ function renderTrigger(shrinkStep?: number) {
       isStructureProtected={false}
       markerMenuItems={[]}
       localizedStrings={{}}
+      isMenuOpen={false}
+      onMenuOpenChange={() => {}}
+      onReturnFocusToEditor={() => {}}
     />
   );
   return render(
@@ -135,10 +141,327 @@ describe('ParagraphStyleTrigger', () => {
           isStructureProtected={false}
           markerMenuItems={[]}
           localizedStrings={{}}
+          isMenuOpen={false}
+          onMenuOpenChange={() => {}}
+          onReturnFocusToEditor={() => {}}
         />,
       );
 
       expect(container).toBeEmptyDOMElement();
     });
+  });
+});
+
+const BLANK_LINE_ITEM_ACTION = vi.fn();
+const PARAGRAPH_ITEM_ACTION = vi.fn();
+// Alphabetical, as the real paragraph menu is, so the first row is `b` and not the paragraph's own.
+const MENU_ITEMS: MarkerMenuItem[] = [
+  { marker: 'b', title: 'Blank line', action: () => BLANK_LINE_ITEM_ACTION() },
+  { marker: 'p', title: 'Paragraph', action: () => PARAGRAPH_ITEM_ACTION() },
+  { marker: 'q1', title: 'Poetic Line Level 1', action: () => {} },
+];
+
+/**
+ * Plays the web view's part through the same open-state hook it uses, and offers a stand-in for the
+ * editor's `onParaMarkerMenuRequest` so a test can open the menu the way Enter on a selected marker
+ * does.
+ */
+function MenuHarness({
+  onReturnFocusToEditor,
+  isStructureProtected = false,
+  notifyStructureProtected = () => {},
+}: {
+  onReturnFocusToEditor: () => void;
+  isStructureProtected?: boolean;
+  notifyStructureProtected?: () => void;
+}) {
+  const { isMenuOpen, setIsMenuOpen, requestMenuFromEditor } = useParagraphMenuOpenState({
+    isReadOnly: false,
+    isStructureProtected,
+    hasBlockMarker: true,
+    notifyStructureProtected,
+  });
+  return (
+    <>
+      <button type="button" onClick={requestMenuFromEditor}>
+        Editor asks for the menu
+      </button>
+      <button type="button">Somewhere else</button>
+      <ParagraphStyleTrigger
+        blockMarker="p"
+        styleName="Paragraph"
+        isStructureProtected={isStructureProtected}
+        markerMenuItems={MENU_ITEMS}
+        localizedStrings={{}}
+        isMenuOpen={isMenuOpen}
+        onMenuOpenChange={setIsMenuOpen}
+        onReturnFocusToEditor={onReturnFocusToEditor}
+      />
+    </>
+  );
+}
+
+const TRIGGER_NAME = '%webView_platformScriptureEditor_paragraphSelection_ariaLabel%';
+const queryMenu = () => screen.queryByRole('dialog');
+const pressEscape = () =>
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+/** Radix arms its outside-pointer listener, and runs its unmount auto-focus, on zero-delay timers. */
+const flushZeroDelayTimers = () =>
+  act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+const askFromEditor = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'Editor asks for the menu' }));
+
+describe('ParagraphStyleTrigger menu', () => {
+  it('opens when the editor asks for it', async () => {
+    render(<MenuHarness onReturnFocusToEditor={vi.fn()} />);
+
+    askFromEditor();
+
+    expect(queryMenu()).toBeInTheDocument();
+    // Usable by keyboard alone the instant it opens, same as the character-marker menu beside it.
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
+  });
+
+  it('shows the lock notification and stays closed when the editor asks while the structure is protected', () => {
+    const notifyStructureProtected = vi.fn();
+    render(
+      <MenuHarness
+        onReturnFocusToEditor={vi.fn()}
+        isStructureProtected
+        notifyStructureProtected={notifyStructureProtected}
+      />,
+    );
+
+    askFromEditor();
+
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(notifyStructureProtected).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not spring open when protection lifts after a refused request', () => {
+    const { rerender } = render(
+      <MenuHarness onReturnFocusToEditor={vi.fn()} isStructureProtected />,
+    );
+    askFromEditor();
+
+    rerender(<MenuHarness onReturnFocusToEditor={vi.fn()} />);
+
+    expect(queryMenu()).not.toBeInTheDocument();
+  });
+
+  it('closes and returns focus to the editor when an item is picked', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    PARAGRAPH_ITEM_ACTION.mockClear();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    askFromEditor();
+
+    fireEvent.click(screen.getByRole('option', { name: /Paragraph/ }));
+
+    expect(PARAGRAPH_ITEM_ACTION).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: TRIGGER_NAME })).not.toHaveFocus();
+  });
+
+  it('opens on the paragraph’s own marker, so Enter re-applies it rather than picking the first row', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    PARAGRAPH_ITEM_ACTION.mockClear();
+    BLANK_LINE_ITEM_ACTION.mockClear();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    askFromEditor();
+    const search = screen.getByRole('combobox');
+    await waitFor(() => expect(search).toHaveFocus());
+    expect(screen.getByRole('option', { name: /Paragraph/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(PARAGRAPH_ITEM_ACTION).toHaveBeenCalledTimes(1);
+    expect(BLANK_LINE_ITEM_ACTION).not.toHaveBeenCalled();
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: TRIGGER_NAME })).not.toHaveFocus();
+  });
+
+  it('ignores the auto-repeat of a held Enter, which must not pick a row', async () => {
+    PARAGRAPH_ITEM_ACTION.mockClear();
+    render(<MenuHarness onReturnFocusToEditor={vi.fn()} />);
+    askFromEditor();
+    const search = screen.getByRole('combobox');
+    await waitFor(() => expect(search).toHaveFocus());
+
+    fireEvent.keyDown(search, { key: 'Enter', repeat: true });
+
+    expect(PARAGRAPH_ITEM_ACTION).not.toHaveBeenCalled();
+    expect(queryMenu()).toBeInTheDocument();
+  });
+
+  it('ignores the auto-repeat of a held Space in the empty search box, which would pick a row', async () => {
+    PARAGRAPH_ITEM_ACTION.mockClear();
+    render(<MenuHarness onReturnFocusToEditor={vi.fn()} />);
+    askFromEditor();
+    const search = screen.getByRole('combobox');
+    await waitFor(() => expect(search).toHaveFocus());
+
+    fireEvent.keyDown(search, { key: ' ', repeat: true });
+    expect(PARAGRAPH_ITEM_ACTION).not.toHaveBeenCalled();
+
+    // A fresh Space still picks, so the guard is what stopped the repeat.
+    fireEvent.keyDown(search, { key: ' ' });
+    expect(PARAGRAPH_ITEM_ACTION).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes on a pick from a menu the toolbar button opened, and returns focus to the editor', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    fireEvent.click(screen.getByRole('button', { name: TRIGGER_NAME }));
+    expect(queryMenu()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('option', { name: /Poetic Line Level 1/ }));
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+  });
+
+  it('returns focus to the button when Escape dismisses a menu the button opened', async () => {
+    // A dismissal goes back to the opener; only a pick, which acted on the text, goes to the text.
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    const trigger = screen.getByRole('button', { name: TRIGGER_NAME });
+    fireEvent.click(trigger);
+
+    pressEscape();
+
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(onReturnFocusToEditor).not.toHaveBeenCalled();
+  });
+
+  it('returns focus to the editor when Escape dismisses a menu the editor opened', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    askFromEditor();
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
+
+    pressEscape();
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+  });
+
+  it('returns focus to the editor when an editor-opened menu follows a button-opened one', async () => {
+    // Who opened the menu belongs to one opening; a stale "opened by the button" would send this
+    // Escape to the button.
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    fireEvent.click(screen.getByRole('button', { name: TRIGGER_NAME }));
+    pressEscape();
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+
+    askFromEditor();
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
+    pressEscape();
+
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+  });
+
+  it('returns focus to the editor when structure protection turns on while the menu is open', async () => {
+    // The menu closes because it stopped being available, not because the user went elsewhere, so
+    // focus must not be left in a menu that no longer exists.
+    const onReturnFocusToEditor = vi.fn();
+    const { rerender } = render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    askFromEditor();
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
+
+    rerender(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} isStructureProtected />);
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await flushZeroDelayTimers();
+    expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns focus to the editor, not the now-disabled button, when protection closes a button-opened menu', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    const { rerender } = render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    fireEvent.click(screen.getByRole('button', { name: TRIGGER_NAME }));
+    expect(queryMenu()).toBeInTheDocument();
+
+    rerender(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} isStructureProtected />);
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await flushZeroDelayTimers();
+    expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves focus where the user put it when the menu closes because they interacted outside it', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    askFromEditor();
+    expect(queryMenu()).toBeInTheDocument();
+    await flushZeroDelayTimers();
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Somewhere else' }));
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await flushZeroDelayTimers();
+    expect(onReturnFocusToEditor).not.toHaveBeenCalled();
+  });
+
+  it('returns focus to the editor when an editor-opened menu is closed by clicking the trigger', async () => {
+    // Radix reports a pointer-down on the trigger itself as an outside interaction, which would
+    // otherwise leave focus on the button instead of returning it to the editor that opened the menu.
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    const trigger = screen.getByRole('button', { name: TRIGGER_NAME });
+    askFromEditor();
+    expect(queryMenu()).toBeInTheDocument();
+    await flushZeroDelayTimers();
+
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await flushZeroDelayTimers();
+    expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns focus to the button when a button-opened menu is closed by clicking it again', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    const trigger = screen.getByRole('button', { name: TRIGGER_NAME });
+    fireEvent.click(trigger);
+    expect(queryMenu()).toBeInTheDocument();
+    await flushZeroDelayTimers();
+
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(onReturnFocusToEditor).not.toHaveBeenCalled();
+  });
+
+  it('refocuses the editor again on the next close after an outside interaction', async () => {
+    // The outside-interaction flag belongs to one opening; a stale flag would strand focus on the
+    // next Escape.
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    askFromEditor();
+    await flushZeroDelayTimers();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Somewhere else' }));
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await flushZeroDelayTimers();
+
+    askFromEditor();
+    expect(queryMenu()).toBeInTheDocument();
+    pressEscape();
+
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
   });
 });

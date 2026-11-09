@@ -86,6 +86,7 @@ function renderFootnoteEditor(onNoteEdit: () => void) {
     applyUpdate: vi.fn(),
     replaceEmbedUpdate: vi.fn(),
     getSelection: vi.fn(),
+    getSelectedParaMarker: vi.fn(),
     setSelection: vi.fn(),
     getElementByKey: vi.fn(),
     commitPendingMarkerEdits: vi.fn(),

@@ -58,6 +58,39 @@ internal class ParatextDataRegistryUserContextTests
         Assert.That(snapshot.IsVpnRequired, Is.EqualTo(expectedVpnRequired));
     }
 
+    // Reading InternetAccess.Status for a saved VpnRequired looks up the computer's location over the
+    // network, and the token refusal does not depend on it, so a slow lookup must not delay it.
+    [Test]
+    public void ReadStatusFor_VpnRequired_DoesNotReadTheStatus()
+    {
+        var status = ParatextDataRegistryUserContext.ReadStatusFor(
+            InternetUse.VpnRequired,
+            () => throw new AssertionException("InternetAccess.Status was read")
+        );
+
+        Assert.That(status, Is.Not.EqualTo(InternetUse.Disabled));
+    }
+
+    [TestCase(InternetUse.Enabled)]
+    [TestCase(InternetUse.Disabled)]
+    [TestCase(InternetUse.ProxyOnly)]
+    public void ReadStatusFor_AnyOtherRawStatus_ReadsTheStatus(InternetUse rawStatus)
+    {
+        int reads = 0;
+
+        var status = ParatextDataRegistryUserContext.ReadStatusFor(
+            rawStatus,
+            () =>
+            {
+                reads++;
+                return InternetUse.Disabled;
+            }
+        );
+
+        Assert.That(status, Is.EqualTo(InternetUse.Disabled));
+        Assert.That(reads, Is.EqualTo(1));
+    }
+
     [Test]
     public async Task GetSnapshotAsync_WaitsForAReadInProgressBeforeStartingAnother()
     {

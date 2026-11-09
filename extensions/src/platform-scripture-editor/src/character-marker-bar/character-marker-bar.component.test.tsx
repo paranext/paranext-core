@@ -179,7 +179,7 @@ describe('CharacterMarkerBar', () => {
     await user.click(screen.getByRole('button', { name: /Character marker/ }));
 
     // The menu portals to `document.body`, outside the only element this app gives a `dir`, so it
-    // inherits no direction and `align="end"` would resolve PHYSICALLY — pinning a 200px menu to the
+    // inherits no direction and `align="end"` would resolve PHYSICALLY — pinning the menu to the
     // right in an RTL project, off the iframe's inline-start edge. Only an explicit `dir` mirrors it.
     expect(await screen.findByRole('dialog')).toHaveAttribute('dir', 'rtl');
   });

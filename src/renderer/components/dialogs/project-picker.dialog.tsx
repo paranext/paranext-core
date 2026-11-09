@@ -9,6 +9,7 @@ import {
   PROJECT_PICKER_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
+import { useMemo } from 'react';
 
 const STRING_KEYS = [...PROJECT_PICKER_STRING_KEYS];
 
@@ -22,11 +23,22 @@ function ProjectPickerWrapper({
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
   const { currentSimpleProject, recentProjects, allProjects, isLoading } = useProjectPickerData();
 
+  // Filtered here, not in the hook: the Simple toolbar picker shares the hook and disables such
+  // rows instead.
+  const openableRecentProjects = useMemo(
+    () => recentProjects.filter((project) => !project.unsupportedReason),
+    [recentProjects],
+  );
+  const openableAllProjects = useMemo(
+    () => allProjects.filter((project) => !project.unsupportedReason),
+    [allProjects],
+  );
+
   return (
     <ProjectPicker
       currentProject={currentSimpleProject}
-      recentProjects={recentProjects}
-      allProjects={allProjects}
+      recentProjects={openableRecentProjects}
+      allProjects={openableAllProjects}
       isLoading={isLoading}
       onSelect={submitDialog}
       localizedStrings={localizedStrings}

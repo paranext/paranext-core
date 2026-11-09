@@ -2,17 +2,19 @@ import { expect, type Page } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import { type CommentTestProject } from './comment-test-helpers';
+import { readBars, type TabBar } from './dock-tab-helpers';
 import { getOpenWebViewDefinitions, sendPapiRequestOnce } from './helpers';
 
 /**
  * Page-object helpers for SIMPLE interface mode's fixed columns: opening a project into the Column
- * 2 editor slot and reading what the Column 3 panels are bound to afterwards.
+ * 2 editor slot, reading what the Column 3 panels are bound to afterwards, and reading the columns'
+ * tabs.
  *
- * Serves `find-follows-read-only-project-simple.spec.ts`, `bcv-open-resource-books-simple.spec.ts`
- * and `comments-tab.spec.ts`. For simple-mode specs {@link openSimpleModeEditor} supersedes the
- * non-retrying `openScriptureEditor` in `find.fixture.ts` and
- * `openEditableScriptureEditorForProject` in `scripture-editor-helpers.ts`: neither of those
- * recovers from the dock race that a simple-mode open provokes.
+ * Serves `find-follows-read-only-project-simple.spec.ts`, `bcv-open-resource-books-simple.spec.ts`,
+ * `comments-tab.spec.ts` and `docking/simple-mode-no-dock.spec.ts`. For simple-mode specs
+ * {@link openSimpleModeEditor} supersedes the non-retrying `openScriptureEditor` in
+ * `find.fixture.ts` and `openEditableScriptureEditorForProject` in `scripture-editor-helpers.ts`:
+ * neither of those recovers from the dock race that a simple-mode open provokes.
  */
 
 /**
@@ -26,6 +28,38 @@ export const SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE = 'platformScriptureEditor.react
 
 /** Web view type of the permanent Find tab in Column 3 of the simple layout. */
 export const FIND_WEBVIEW_TYPE = 'platformScripture.find';
+
+/**
+ * The rc-dock panel ids of the simple layout's three columns: copies of the constants of the same
+ * names in `src/renderer/components/docking/simple-layout.data.ts`, which e2e code cannot import.
+ */
+export const SIMPLE_PANEL_ID_MODEL_TEXT = 'simple-panel-model-text';
+export const SIMPLE_PANEL_ID_PROJECT = 'simple-panel-project';
+export const SIMPLE_PANEL_ID_RESOURCES = 'simple-panel-resources';
+const SIMPLE_COLUMN_IDS = [
+  SIMPLE_PANEL_ID_MODEL_TEXT,
+  SIMPLE_PANEL_ID_PROJECT,
+  SIMPLE_PANEL_ID_RESOURCES,
+];
+
+/** The tab bars of the simple layout's three columns, in DOM order. */
+export async function readSimpleColumns(page: Page): Promise<TabBar[]> {
+  return (await readBars(page)).filter((bar) => SIMPLE_COLUMN_IDS.includes(bar.panelId));
+}
+
+/**
+ * Waits until all three columns are in the dock with at least one tab each, and answers their tab
+ * bars.
+ */
+export async function waitForSimpleColumns(page: Page): Promise<TabBar[]> {
+  let columns: TabBar[] = [];
+  await expect(async () => {
+    columns = await readSimpleColumns(page);
+    expect(columns.map((column) => column.panelId).sort()).toEqual([...SIMPLE_COLUMN_IDS].sort());
+    columns.forEach((column) => expect(column.tabIds.length).toBeGreaterThan(0));
+  }).toPass({ timeout: 60_000 });
+  return columns;
+}
 
 /**
  * The open command sequentially awaits every related-panel step — the Column 3 panels, the Column 1

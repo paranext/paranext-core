@@ -336,14 +336,12 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public void SendReceiveBlockState_SerializesToTheCamelCaseWireShape()
         {
-            // The renderer consumes exactly { isBlocking, projectIds }. Serialize with the same
-            // options the PAPI JSON-RPC formatter uses (PropertyNamingPolicy = CamelCase) to pin that
-            // contract at the C# boundary.
-            var options = SerializationOptions.CreateSerializationOptions();
-
+            // The renderer consumes exactly { isBlocking, projectIds }. Serialized with the options
+            // the PAPI JSON-RPC formatter really uses, so this pins the wire shape rather than one
+            // only the shared options produce (see PapiTestBase.WireSerializerOptions).
             var json = JsonSerializer.Serialize(
                 new SendReceiveBlockState(true, new[] { "projectA" }),
-                options
+                WireSerializerOptions()
             );
 
             Assert.Multiple(() =>

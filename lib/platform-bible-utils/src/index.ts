@@ -52,7 +52,11 @@ export {
   aggregateUnsubscribers,
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
-export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
+export {
+  CHAPTER_TYPE,
+  SEARCH_WHITESPACE_GROUP_PREFIX,
+  VERSE_TYPE,
+} from './scripture/usj-reader-writer.model';
 export {
   usfmMarkers,
   isBlockMarker,
@@ -162,6 +166,14 @@ export {
 export { createCachedInitializer } from './promises/cached-initializer';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
+export {
+  getProjectOpenBlockedReasonKey,
+  notifyProjectOpenBlocked,
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+  PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
+  toProjectOpenBlockedReasonKey,
+  type NotifyProjectOpenBlockedDependencies,
+} from './project-open-blocked-util';
 export { computeEffectiveStructureProtection } from './structure-protection.util';
 export { clampZoom, roundZoom, adjustZoomFactor } from './content-zoom.util';
 

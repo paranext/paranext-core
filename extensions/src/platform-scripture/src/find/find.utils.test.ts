@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { newPlatformError } from 'platform-bible-utils';
-import { FindJobStatusReport } from 'platform-scripture';
+import { newPlatformError, SEARCH_WHITESPACE_GROUP_PREFIX } from 'platform-bible-utils';
+import { FindJobStatusReport, FindOptions, ReplaceOutcome } from 'platform-scripture';
 import {
   CharacterCategorizer,
   FIND_AVAILABLE_SCOPES,
@@ -8,10 +8,14 @@ import {
   OpenScrollGroupTab,
   applyPreserveCase,
   armBoundedWait,
+  buildReplacedAllMessage,
   buildSearchRegex,
+  buildSkippedMatchMessage,
+  buildWordEdgeTests,
   callControllerSafely,
   classifyPollAttempt,
   gateStartSearch,
+  getChangedResults,
   isDifferentProjectSelection,
   isFindQueryValid,
   isScopeBlockedByExtraMaterial,
@@ -22,6 +26,8 @@ import {
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
   resolveTargetReferencePanelWebViewId,
+  selectWrittenBookSnapshots,
+  shouldSearchAgainAfterReplaceAll,
   shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
@@ -79,6 +85,48 @@ describe('applyPreserveCase', () => {
 
   it('upper-cases a multi-word replacement when match is all-caps', () => {
     expect(applyPreserveCase('FOO BAR', 'hello world')).toBe('HELLO WORLD');
+  });
+
+  it('upper-cases only the text of a replacement holding markers', () => {
+    expect(applyPreserveCase('ABRAHAM. ABRAHAM', 'Abram. \\p \\v 2 Abram')).toBe(
+      'ABRAM. \\p \\v 2 ABRAM',
+    );
+  });
+
+  it('leaves a verse letter, a closer, and an attribute as typed', () => {
+    expect(applyPreserveCase('LORD', '\\v 2a \\w lord|lemma="adon"\\w* x')).toBe(
+      '\\v 2a \\w LORD|lemma="adon"\\w* X',
+    );
+  });
+
+  it('title-cases the first text of a replacement that starts with a marker', () => {
+    expect(applyPreserveCase('Lord', '\\nd lord\\nd* god')).toBe('\\nd Lord\\nd* god');
+  });
+
+  // Adlam's letters are outside the Basic Multilingual Plane, so each is two UTF-16 code units
+  describe('in a cased script outside the Basic Multilingual Plane', () => {
+    const CAPITAL_ALIF = '\u{1E900}';
+    const CAPITAL_DAALI = '\u{1E901}';
+    const SMALL_ALIF = '\u{1E922}';
+    const SMALL_DAALI = '\u{1E923}';
+
+    it('title-cases the replacement when the match starts with a capital', () => {
+      expect(applyPreserveCase(`${CAPITAL_ALIF}${SMALL_ALIF}`, `${SMALL_DAALI}${SMALL_ALIF}`)).toBe(
+        `${CAPITAL_DAALI}${SMALL_ALIF}`,
+      );
+    });
+
+    it('upper-cases the replacement when the match is all capitals', () => {
+      expect(
+        applyPreserveCase(`${CAPITAL_ALIF}${CAPITAL_DAALI}`, `${SMALL_DAALI}${SMALL_ALIF}`),
+      ).toBe(`${CAPITAL_DAALI}${CAPITAL_ALIF}`);
+    });
+
+    it('leaves the replacement as typed when the match starts with a small letter', () => {
+      expect(applyPreserveCase(`${SMALL_ALIF}${CAPITAL_ALIF}`, `${SMALL_DAALI}${SMALL_ALIF}`)).toBe(
+        `${SMALL_DAALI}${SMALL_ALIF}`,
+      );
+    });
   });
 });
 
@@ -334,6 +382,95 @@ describe('buildSearchRegex – word restrictions', () => {
   });
 });
 
+describe('buildSkippedMatchMessage', () => {
+  const STRINGS = {
+    '%webView_find_replace_skippedOneEndedMarker%': 'one-ended {reference} ("{text}")',
+    '%webView_find_replace_skippedChapterMarker%': 'chapter {reference} ("{text}")',
+    '%webView_find_replace_skippedStructureProtected%': 'structure {reference} ("{text}")',
+  };
+  const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 3 };
+  const result = { text: 'Lord God', start: { verseRef } };
+  const BOOKS = new Map([['GEN', { localizedId: 'GÉN', localizedName: 'Génesis' }]]);
+
+  it.each([
+    ['oneEndedMarker', 'one-ended Génesis 1:3 ("Lord God")'],
+    ['chapterMarker', 'chapter Génesis 1:3 ("Lord God")'],
+    ['structureProtected', 'structure Génesis 1:3 ("Lord God")'],
+  ] as const)('says where and what for %s', (action, expected) => {
+    expect(buildSkippedMatchMessage(action, result, STRINGS, BOOKS)).toBe(expected);
+  });
+
+  it('uses the verse as written when the reference has one', () => {
+    const start = { verseRef: { ...verseRef, verse: '3-4' } };
+    expect(buildSkippedMatchMessage('chapterMarker', { ...result, start }, STRINGS, BOOKS)).toBe(
+      'chapter Génesis 1:3-4 ("Lord God")',
+    );
+  });
+
+  it('falls back to the book ID for a book with no localized data', () => {
+    expect(buildSkippedMatchMessage('chapterMarker', result, STRINGS, new Map())).toBe(
+      'chapter GEN 1:3 ("Lord God")',
+    );
+  });
+});
+
+describe('buildWordEdgeTests', () => {
+  const options = (searchString: string, wordRestriction: FindOptions['wordRestriction']) => ({
+    searchString,
+    wordRestriction,
+  });
+
+  it('tests both ends of a whole word', () => {
+    const { start, end } = buildWordEdgeTests(options('Isaac', 'wholeWord'), DEFAULT_CATEGORIZER);
+    expect(start).toBeDefined();
+    expect(end).toBeDefined();
+  });
+
+  it('tests only the start for startOfWord, and only the end for endOfWord', () => {
+    expect(
+      buildWordEdgeTests(options('a', 'startOfWord'), DEFAULT_CATEGORIZER).end,
+    ).toBeUndefined();
+    expect(
+      buildWordEdgeTests(options('a', 'endOfWord'), DEFAULT_CATEGORIZER).start,
+    ).toBeUndefined();
+  });
+
+  it('tests nothing with no word restriction', () => {
+    expect(buildWordEdgeTests(options('a', 'none'), DEFAULT_CATEGORIZER)).toEqual({});
+    expect(buildWordEdgeTests(options('a', undefined), DEFAULT_CATEGORIZER)).toEqual({});
+  });
+
+  it('tests nothing for a script that does not delimit words with spaces', () => {
+    expect(buildWordEdgeTests(options('神', 'wholeWord'), DEFAULT_CATEGORIZER)).toEqual({});
+  });
+
+  it('builds tests that agree with the lookarounds the regex would carry', () => {
+    const { end } = buildWordEdgeTests(options('Isaac', 'wholeWord'), DEFAULT_CATEGORIZER);
+    if (!end) throw new Error('Expected an end test');
+    const inWord = new RegExp(end.source, 'uy');
+    inWord.lastIndex = 5;
+    expect(inWord.test('IsaacAnd')).toBe(false);
+    const atWordEnd = new RegExp(end.source, 'uy');
+    atWordEnd.lastIndex = 5;
+    expect(atWordEnd.test('Isaac And')).toBe(true);
+  });
+
+  it('leaves the assertions out of a regex told not to carry them, and keeps its flags', () => {
+    const findOptions: FindOptions = {
+      searchString: 'Isaac',
+      scope: [{ bookId: 'GEN' }],
+      caseInsensitive: false,
+      wordRestriction: 'wholeWord',
+    };
+    const asserted = buildSearchRegex(findOptions, DEFAULT_CATEGORIZER);
+    const unasserted = buildSearchRegex(findOptions, DEFAULT_CATEGORIZER, false);
+
+    expect('xIsaacx'.match(asserted)).toBeNull();
+    expect('xIsaacx'.match(unasserted)).not.toBeNull();
+    expect(unasserted.flags).toBe(asserted.flags);
+  });
+});
+
 describe('buildSearchRegex – trailing space', () => {
   it('matches a word followed by a space', () => {
     const regex = buildSearchRegex(
@@ -400,6 +537,43 @@ describe('buildSearchRegex – trailing space', () => {
     );
     // "Abraham." ends the sentence — no space follows
     expect(matchAll(regex, 'the son of Abraham.')).toEqual([]);
+  });
+});
+
+describe('buildSearchRegex – leading space', () => {
+  it('does not match a word when no whitespace precedes it', () => {
+    const regex = buildSearchRegex(
+      { scope: [], searchString: ' Abraham', caseInsensitive: false, wordRestriction: 'none' },
+      DEFAULT_CATEGORIZER,
+    );
+    // "Abraham" here is not preceded by whitespace — must not match
+    expect(matchAll(regex, 'Abraham begot Isaac')).toEqual([]);
+  });
+
+  it('matches a word only where whitespace actually precedes it', () => {
+    const regex = buildSearchRegex(
+      { scope: [], searchString: ' Isaac', caseInsensitive: false, wordRestriction: 'none' },
+      DEFAULT_CATEGORIZER,
+    );
+    expect(matchAll(regex, 'Isaac begot Isaac')).toEqual([' Isaac']);
+  });
+
+  it('keeps a leading whitespace run mandatory when only a stripped diacritic precedes it', () => {
+    // A search string opening with a bare combining mark, once ignoreDiacritics normalizes and
+    // strips it, leaves only the leading space before "a" — the space must stay a leading run
+    // (mandatory), not be reclassified as interior just because a code point preceded it.
+    const regex = buildSearchRegex(
+      {
+        scope: [],
+        searchString: '́ a',
+        caseInsensitive: false,
+        wordRestriction: 'none',
+        ignoreDiacritics: true,
+      },
+      DEFAULT_CATEGORIZER,
+    );
+    expect(regex.source).not.toContain('(?<ws');
+    expect('a'.match(regex)).toBeNull();
   });
 });
 
@@ -1285,5 +1459,432 @@ describe('resolveTargetReferencePanelWebViewId', () => {
         REVEALABLE,
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('buildSearchRegex – block-boundary whitespace groups', () => {
+  const categorizer: CharacterCategorizer = {
+    baseCharacterClassRegex: '\\p{L}',
+    diacriticCharacterClassRegex: '\\p{Mn}',
+    wordMedialCharacterRegex: '',
+    wordBreakRegex: '\\s+',
+    allowInvisibleCharacters: false,
+  };
+  const baseOptions: FindOptions = {
+    scope: [{ bookId: 'MAT' }],
+    searchString: '',
+    caseInsensitive: true,
+    useRegex: false,
+    verseTextOnly: false,
+    wordRestriction: 'none',
+    ignoreWhitespaceDifferences: false,
+    ignoreDiacritics: false,
+  };
+
+  it('names each interior whitespace run uniquely so a multi-run query compiles', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'of Abraham. Abraham became' },
+      categorizer,
+    );
+    expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}0>`);
+    expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}1>`);
+    expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}2>`);
+    // The group name is also asserted literally, alongside every SEARCH_WHITESPACE_GROUP_PREFIX
+    // interpolation in this suite: an interpolated-only assertion can pass on a falsy imported
+    // constant.
+    expect(regex.source).toContain('(?<ws0>');
+    expect(regex.source).toContain('(?<ws1>');
+    expect(regex.source).toContain('(?<ws2>');
+    expect(regex.flags).toContain('d');
+  });
+
+  it('lets an interior run match zero characters', () => {
+    const regex = buildSearchRegex({ ...baseOptions, searchString: 'a b' }, categorizer);
+    expect(regex.test('ab')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('a b')).toBe(true);
+  });
+
+  it('keeps a whitespace-only query matching whitespace', () => {
+    const regex = buildSearchRegex({ ...baseOptions, searchString: ' ' }, categorizer);
+    expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    expect(regex.source).not.toContain('(?<ws');
+    expect('a b'.match(regex)?.length).toBe(1);
+  });
+
+  it('collapses an interior run when ignoring whitespace differences', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'a b', ignoreWhitespaceDifferences: true },
+      categorizer,
+    );
+    expect(regex.test('a   b')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('ab')).toBe(true);
+  });
+
+  it('treats ~ as whitespace inside the group when invisible characters are not allowed', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'a b', ignoreWhitespaceDifferences: true },
+      categorizer,
+    );
+    expect(regex.test('a~b')).toBe(true);
+  });
+
+  it('emits no groups and no d flag in regex mode', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'a\\s+b', useRegex: true },
+      categorizer,
+    );
+    expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    expect(regex.source).not.toContain('(?<ws');
+    expect(regex.flags).not.toContain('d');
+  });
+
+  it('tolerates a diacritic inside an interior whitespace run when whitespace is collapsed', () => {
+    // Collapsing whitespace must not match less than matching it exactly does: the diacritic class
+    // sits inside the run's repetition, so a combining mark between two spaces is tolerated under
+    // both settings of ignoreWhitespaceDifferences (see the sibling test below for the other one).
+    const regex = buildSearchRegex(
+      {
+        ...baseOptions,
+        searchString: 'a \u0301 b',
+        ignoreDiacritics: true,
+        ignoreWhitespaceDifferences: true,
+      },
+      categorizer,
+    );
+    regex.lastIndex = 0;
+    expect(regex.test('a   b')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('a \u0301 b')).toBe(true);
+  });
+
+  it('tolerates a diacritic between two whitespace code points when whitespace is matched exactly', () => {
+    // With ignoreWhitespaceDifferences off, an interior run compiles as a literal sequence of its
+    // code points. The diacritic class has to follow *each* of them: one class after the whole run
+    // would require the two spaces to be adjacent, so text carrying a combining mark between them
+    // would stop matching.
+    const regex = buildSearchRegex(
+      {
+        ...baseOptions,
+        searchString: 'a  b',
+        ignoreDiacritics: true,
+        ignoreWhitespaceDifferences: false,
+      },
+      categorizer,
+    );
+    regex.lastIndex = 0;
+    expect(regex.test('a  b')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('a \u0301 b')).toBe(true);
+  });
+});
+
+describe('buildReplacedAllMessage', () => {
+  // The real English templates, so the assertions below read as the sentences a user sees and a
+  // wording change that reintroduces a concatenation seam shows up here.
+  const STRINGS = {
+    '%webView_find_replacedOneOccurrence%': 'Replaced 1 occurrence',
+    '%webView_find_replacedNOccurrences%': 'Replaced {count} occurrences',
+    '%webView_find_replacedOneOccurrenceSkippedOneResult%':
+      'Replaced 1 occurrence. Skipped 1 result that would delete a marker.',
+    '%webView_find_replacedOneOccurrenceSkippedNResults%':
+      'Replaced 1 occurrence. Skipped {skippedCount} results that would delete a marker.',
+    '%webView_find_replacedNOccurrencesSkippedOneResult%':
+      'Replaced {replacedCount} occurrences. Skipped 1 result that would delete a marker.',
+    '%webView_find_replacedNOccurrencesSkippedNResults%':
+      'Replaced {replacedCount} occurrences. Skipped {skippedCount} results that would delete a marker.',
+  };
+
+  it('reports the plain replaced count when nothing was skipped', () => {
+    expect(buildReplacedAllMessage(STRINGS, 1, 0)).toBe('Replaced 1 occurrence');
+    expect(buildReplacedAllMessage(STRINGS, 3, 0)).toBe('Replaced 3 occurrences');
+  });
+
+  it('uses the singular skipped form for one skipped result', () => {
+    // One skipped result is the ordinary case, and a shared plural template renders it as
+    // "Skipped 1 results".
+    expect(buildReplacedAllMessage(STRINGS, 3, 1)).toBe(
+      'Replaced 3 occurrences. Skipped 1 result that would delete a marker.',
+    );
+    expect(buildReplacedAllMessage(STRINGS, 1, 1)).toBe(
+      'Replaced 1 occurrence. Skipped 1 result that would delete a marker.',
+    );
+  });
+
+  it('inflects both counts independently', () => {
+    expect(buildReplacedAllMessage(STRINGS, 1, 2)).toBe(
+      'Replaced 1 occurrence. Skipped 2 results that would delete a marker.',
+    );
+    expect(buildReplacedAllMessage(STRINGS, 3, 2)).toBe(
+      'Replaced 3 occurrences. Skipped 2 results that would delete a marker.',
+    );
+  });
+
+  it('leaves no placeholder unresolved and no clause seam in any outcome', () => {
+    [0, 1, 2].forEach((skippedCount) =>
+      [1, 2].forEach((replacedCount) => {
+        const message = buildReplacedAllMessage(STRINGS, replacedCount, skippedCount);
+        expect(message).not.toMatch(/[{}]/);
+        // A sentence joined in code shows up as ". " with no preceding period, or as two
+        // sentences run together — the template owns the punctuation instead.
+        expect(message).not.toMatch(/\woccurrences? Skipped/);
+      }),
+    );
+  });
+});
+
+describe('selectWrittenBookSnapshots', () => {
+  const SNAPSHOTS = new Map([
+    ['GEN', 'gen usfm'],
+    ['EXO', 'exo usfm'],
+    ['LEV', 'lev usfm'],
+  ]);
+  const BOOK_ORDER = ['GEN', 'EXO', 'LEV'];
+
+  function outcomes(
+    ...statuses: ('fulfilled' | 'rejected')[]
+  ): PromiseSettledResult<ReplaceOutcome | undefined>[] {
+    return statuses.map((status) =>
+      status === 'fulfilled'
+        ? { status, value: undefined }
+        : { status, reason: new Error('refused') },
+    );
+  }
+
+  it('drops the book whose replace was refused, since it never wrote', () => {
+    // Restoring a refused book's snapshot would overwrite whatever changed in it since the
+    // snapshot was taken — and a cache-invalidation rejection means something did.
+    const { writtenBookSnapshots } = selectWrittenBookSnapshots(
+      SNAPSHOTS,
+      BOOK_ORDER,
+      outcomes('fulfilled', 'rejected', 'fulfilled'),
+    );
+
+    expect([...writtenBookSnapshots.keys()]).toEqual(['GEN', 'LEV']);
+  });
+
+  it('returns nothing to roll back when the first book is the one that failed', () => {
+    const selection = selectWrittenBookSnapshots(
+      SNAPSHOTS,
+      BOOK_ORDER,
+      outcomes('rejected', 'rejected', 'rejected'),
+    );
+
+    expect(selection.writtenBookSnapshots.size).toBe(0);
+    expect(selection.writtenBookIdsWithoutSnapshot).toEqual([]);
+  });
+
+  it('keeps every book when all of them wrote', () => {
+    expect([
+      ...selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        outcomes('fulfilled', 'fulfilled', 'fulfilled'),
+      ).writtenBookSnapshots.keys(),
+    ]).toEqual(BOOK_ORDER);
+  });
+
+  it('pairs each snapshot with its own outcome rather than by position in the snapshot map', () => {
+    // The snapshots are gathered per unique book id and the replace calls are issued per book
+    // group; nothing guarantees the two iterate in the same order, so the book id is what has to
+    // carry the pairing.
+    const { writtenBookSnapshots } = selectWrittenBookSnapshots(
+      SNAPSHOTS,
+      ['LEV', 'GEN', 'EXO'],
+      outcomes('rejected', 'fulfilled', 'fulfilled'),
+    );
+
+    expect([...writtenBookSnapshots.keys()]).toEqual(['GEN', 'EXO']);
+  });
+
+  it('drops a book that has no outcome at all rather than restoring it blindly', () => {
+    expect([
+      ...selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        ['GEN'],
+        outcomes('fulfilled'),
+      ).writtenBookSnapshots.keys(),
+    ]).toEqual(['GEN']);
+  });
+
+  it('reports a book that wrote but has no snapshot, since nothing can roll it back', () => {
+    // A book whose snapshot could not be read still holds its replacements after a partial
+    // failure. Dropping it silently would tell the user the project was left unchanged.
+    const selection = selectWrittenBookSnapshots(
+      new Map([['GEN', 'gen usfm']]),
+      BOOK_ORDER,
+      outcomes('fulfilled', 'fulfilled', 'rejected'),
+    );
+
+    expect([...selection.writtenBookSnapshots.keys()]).toEqual(['GEN']);
+    expect(selection.writtenBookIdsWithoutSnapshot).toEqual(['EXO']);
+  });
+
+  describe('given how many ranges each call sent', () => {
+    /** GEN sent two ranges, EXO one, LEV three */
+    const RANGE_COUNTS = [2, 1, 3];
+
+    it('drops a fulfilled book whose every range was skipped as changed, since it wrote nothing', () => {
+      const selection = selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        [
+          { status: 'fulfilled', value: { changedIndexes: [] } },
+          { status: 'fulfilled', value: { changedIndexes: [0] } },
+          { status: 'fulfilled', value: { changedIndexes: [0, 1, 2] } },
+        ],
+        RANGE_COUNTS,
+      );
+
+      expect([...selection.writtenBookSnapshots.keys()]).toEqual(['GEN']);
+      expect(selection.writtenBookIdsWithoutSnapshot).toEqual([]);
+    });
+
+    it('keeps a fulfilled book that wrote some of its ranges', () => {
+      const { writtenBookSnapshots } = selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        [
+          { status: 'fulfilled', value: { changedIndexes: [1] } },
+          { status: 'fulfilled', value: { changedIndexes: [0] } },
+          { status: 'fulfilled', value: { changedIndexes: [0, 2] } },
+        ],
+        RANGE_COUNTS,
+      );
+
+      expect([...writtenBookSnapshots.keys()]).toEqual(['GEN', 'LEV']);
+    });
+
+    it('still drops a rejected book', () => {
+      const { writtenBookSnapshots } = selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        [
+          { status: 'fulfilled', value: { changedIndexes: [] } },
+          { status: 'rejected', reason: new Error('refused') },
+          { status: 'fulfilled', value: { changedIndexes: [] } },
+        ],
+        RANGE_COUNTS,
+      );
+
+      expect([...writtenBookSnapshots.keys()]).toEqual(['GEN', 'LEV']);
+    });
+  });
+});
+
+describe('shouldSearchAgainAfterReplaceAll', () => {
+  it('keeps the list after a successful revert when no result was skipped as changed', () => {
+    expect(
+      shouldSearchAgainAfterReplaceAll({
+        isCancelled: true,
+        isRevertSuccessful: true,
+        changedCount: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it('searches again after a successful revert when some results were skipped as changed', () => {
+    expect(
+      shouldSearchAgainAfterReplaceAll({
+        isCancelled: true,
+        isRevertSuccessful: true,
+        changedCount: 2,
+      }),
+    ).toBe(true);
+  });
+
+  it('searches again when the revert failed', () => {
+    expect(
+      shouldSearchAgainAfterReplaceAll({
+        isCancelled: true,
+        isRevertSuccessful: false,
+        changedCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it('searches again when the replacement was kept', () => {
+    expect(
+      shouldSearchAgainAfterReplaceAll({
+        isCancelled: false,
+        isRevertSuccessful: false,
+        changedCount: 0,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('getChangedResults', () => {
+  const a = { name: 'a' };
+  const b = { name: 'b' };
+  const c = { name: 'c' };
+  const groups = [{ results: [a, b] }, { results: [c] }];
+
+  it("maps each group's changed indexes onto that group's results", () => {
+    expect(getChangedResults(groups, [{ changedIndexes: [1] }, { changedIndexes: [] }])).toEqual(
+      new Set([b]),
+    );
+  });
+
+  it('collects every skipped result across groups', () => {
+    expect(
+      getChangedResults(groups, [{ changedIndexes: [0, 1] }, { changedIndexes: [0] }]),
+    ).toEqual(new Set([a, b, c]));
+  });
+
+  it('is empty when nothing was skipped', () => {
+    expect(getChangedResults(groups, [{ changedIndexes: [] }, { changedIndexes: [] }]).size).toBe(
+      0,
+    );
+  });
+});
+
+describe('buildReplacedAllMessage with results that changed after the search', () => {
+  const STRINGS = {
+    '%webView_find_replacedOneOccurrence%': 'Replaced 1 occurrence',
+    '%webView_find_replacedNOccurrences%': 'Replaced {count} occurrences',
+    '%webView_find_replacedOneOccurrenceSkippedOneResult%':
+      'Replaced 1 occurrence. Skipped 1 result that would delete a marker.',
+    '%webView_find_replacedNOccurrencesSkippedOneResult%':
+      'Replaced {replacedCount} occurrences. Skipped 1 result that would delete a marker.',
+    '%webView_find_replace_textChangedAllResults%':
+      'Nothing was replaced. The text changed after the search.',
+    '%webView_find_replace_textChangedOrMarkerAllResults%':
+      'Nothing was replaced. Each result either changed after the search or would delete a marker.',
+    '%webView_find_replacedNOfMResultsTextChanged%':
+      'Replaced {replacedCount} of {totalCount} results. The rest changed after the search and were skipped.',
+    '%webView_find_replacedNOfMResultsTextChangedOrMarker%':
+      'Replaced {replacedCount} of {totalCount} results. The rest changed after the search or would delete a marker, and were skipped.',
+  };
+
+  it('reports replaced of total when some results changed', () => {
+    expect(buildReplacedAllMessage(STRINGS, 2, 0, 1)).toBe(
+      'Replaced 2 of 3 results. The rest changed after the search and were skipped.',
+    );
+  });
+
+  it('reports replaced of total when results changed or would delete a marker', () => {
+    expect(buildReplacedAllMessage(STRINGS, 1, 1, 1)).toBe(
+      'Replaced 1 of 3 results. The rest changed after the search or would delete a marker, and were skipped.',
+    );
+  });
+
+  it('reports that nothing was replaced when every result changed', () => {
+    expect(buildReplacedAllMessage(STRINGS, 0, 0, 2)).toBe(
+      STRINGS['%webView_find_replace_textChangedAllResults%'],
+    );
+  });
+
+  it('reports that nothing was replaced when the rest would delete a marker', () => {
+    expect(buildReplacedAllMessage(STRINGS, 0, 1, 1)).toBe(
+      STRINGS['%webView_find_replace_textChangedOrMarkerAllResults%'],
+    );
+  });
+
+  it('reports replaced and marker-skipped counts when no result changed', () => {
+    expect(buildReplacedAllMessage(STRINGS, 2, 1)).toBe(
+      'Replaced 2 occurrences. Skipped 1 result that would delete a marker.',
+    );
   });
 });

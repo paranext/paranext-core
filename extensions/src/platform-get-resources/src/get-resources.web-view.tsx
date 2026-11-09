@@ -12,8 +12,12 @@ import {
   newResourceActionDidNotTakeEffectError,
   newResourceActionProviderNotReadyError,
   ResourceAction,
+  RESOURCE_TYPES,
 } from './get-resources.component';
 import { getInternetBlockedNotification } from './internet-block-notification.utils';
+import { openResourceFrom } from './open-home-item';
+import { getIdsWaitingForSync } from './resources-waiting-for-sync.utils';
+import { useSyncActivity } from './use-sync-activity.hook';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -30,7 +34,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
   // The dialog reports the failure itself; this notification is what carries the action that opens
-  // the Internet & connectivity setting responsible for it.
+  // the Internet connectivity setting responsible for it.
   const notifyIfInternetBlocked = useCallback((error: unknown) => {
     const notification = getInternetBlockedNotification(error);
     if (notification) papi.notifications.send(notification);
@@ -93,47 +97,28 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     resolvedResources.length > 0,
   );
 
-  const [isInitialized, setIsInitialized] = useState<boolean>(false);
-
-  const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', [
-    'ScriptureResource',
-  ]);
+  // A dialog restored with a saved layout keeps any selection saved in its state, which can differ
+  // from the defaults below. A saved language selection may have been filled in automatically from
+  // the installed resources rather than chosen; it cannot be told apart from a choice, so it is
+  // kept. Reopening the dialog starts from the defaults, since it gets a new web view id and so
+  // empty state.
+  const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', RESOURCE_TYPES);
 
   const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
 
-  const openResource = useCallback(
-    (projectId: string) =>
-      papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId),
-    [],
-  );
-
-  // When no languages are selected on the first render of this component, set default selection to
-  // languages that have resources installed
-  useEffect(() => {
-    if (isInitialized) return;
-    if (selectedLanguages.length > 0) {
-      setIsInitialized(true);
-      return;
+  // The same as Home's Open: in Simple mode the middle column keeps the project, and the resource
+  // goes to its reference tab instead. Repeat opens of a resource still opening are ignored, as in
+  // Home: each would queue another show behind it.
+  const openingResourceIdsRef = useRef(new Set<string>());
+  const openResource = useCallback(async (projectId: string) => {
+    if (openingResourceIdsRef.current.has(projectId)) return;
+    openingResourceIdsRef.current.add(projectId);
+    try {
+      await openResourceFrom('Get Resources', projectId);
+    } finally {
+      openingResourceIdsRef.current.delete(projectId);
     }
-    if (resolvedResources.length > 0 && selectedLanguages.length === 0) {
-      setSelectedLanguages(
-        Array.from(
-          new Set(
-            resolvedResources
-              .filter((resource) => resource.installed === true)
-              .map((resource) => resource.bestLanguageName),
-          ),
-        ),
-      );
-      setIsInitialized(true);
-    }
-  }, [
-    selectedLanguages.length,
-    setSelectedLanguages,
-    isInitialized,
-    setIsInitialized,
-    resolvedResources,
-  ]);
+  }, []);
 
   const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 
@@ -289,6 +274,16 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const idsBeingHandled = useMemo(() => installInfo.map((info) => info.dblEntryUid), [installInfo]);
 
+  // The data provider holds a resource's action until the running sync releases that resource; the
+  // row says so while it waits, then returns to its ordinary progress state. Hidden case: nothing
+  // to defer or catch up on — the waiting label is data, so a hidden tab shows the current state
+  // when it is next shown.
+  const syncActivity = useSyncActivity();
+  const idsWaitingForSync = useMemo(
+    () => getIdsWaitingForSync(idsBeingHandled, syncActivity.resourceIds),
+    [idsBeingHandled, syncActivity.resourceIds],
+  );
+
   return (
     <GetResources
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
@@ -298,6 +293,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       onRetryResources={refetchResources}
       areDownloadsUnavailable={areDownloadsUnavailable}
       idsBeingHandled={idsBeingHandled}
+      idsWaitingForSync={idsWaitingForSync}
       selectedTypes={selectedTypes}
       selectedLanguages={selectedLanguages}
       onSelectedTypesChange={setSelectedTypes}

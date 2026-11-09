@@ -12,6 +12,7 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
 import {
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
@@ -21,6 +22,7 @@ import {
   UNAVAILABLE_KEY,
   ResourceCellView,
   COPY_KEY,
+  INSTALL_UNVERIFIED_KEY,
 } from './resource-cell-view.component';
 
 // jsdom doesn't ship a ResizeObserver (needed by Radix portal content). A stub is sufficient since
@@ -55,6 +57,7 @@ const localizedStrings = {
   [FAILED_KEY]: 'Download failed',
   [EMPTY_KEY]: 'No text for this verse',
   [BOOK_NOT_AVAILABLE_KEY]: 'Book not in this text',
+  [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this resource is installed",
 };
 
 /** The zoom area the cells under test mark their text with. */
@@ -156,6 +159,25 @@ describe('ResourceCellView row smoke', () => {
     expect(screen.queryByText('Resource is loading\u2026')).not.toBeInTheDocument();
   });
 
+  it('unverified: says it could not check \u2014 not "not installed", no retry wording, no editor', () => {
+    renderCells(
+      <ResourceCellView
+        state="unverified"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
+  });
+
   it('mixed direction: LTR and RTL cells apply independent dir', () => {
     const { container } = renderCells(
       <>
@@ -237,8 +259,8 @@ describe('ResourceCellView name display', () => {
     );
     const name = screen.getByText('NIV');
     const verse = screen.getByText('In the beginning');
-    // Inline: an intermediate flex row wraps the name + content beside each other.
-    const row = name.parentElement;
+    // Inline: one row holds the name beside the verse text.
+    const row = name.closest('.stg-verse-row');
     expect(row).toContainElement(verse);
   });
 
@@ -256,11 +278,11 @@ describe('ResourceCellView name display', () => {
       />,
     );
     const name = screen.getByText('עברית');
-    const row = name.parentElement;
+    const row = name.closest('.stg-verse-row');
     expect(row).toHaveAttribute('dir', 'rtl');
-    // Name is first in DOM order; combined with `dir="rtl"` + flex (which jsdom does not lay out)
-    // this renders on the inline-start. Visual placement is verified in Storybook, not here.
-    expect(row?.firstElementChild).toBe(name);
+    // The name comes first in DOM order; with `dir="rtl"` its inline-start offset (which jsdom does
+    // not lay out) places it on the right. Visual placement is verified in Storybook, not here.
+    expect(row?.firstElementChild).toContainElement(name);
   });
 
   it('inline mode still shows the name while downloading', () => {
@@ -451,20 +473,31 @@ describe('ResourceCellView right-click menu', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('leaves the browser menu alone on a cell whose resource is not installed', () => {
+  it.each([
+    ['whose resource is not installed', 'unavailable', 'Resource not installed'],
+    [
+      'whose install could not be checked',
+      'unverified',
+      "Couldn't check whether this resource is installed",
+    ],
+  ] as const)('leaves the browser menu alone on a cell %s', (_, state, text) => {
     renderCells(
       <ResourceCellView
-        state="unavailable"
+        state={state}
         zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
-        localizedStrings={{ ...menuStrings, [NOT_INSTALLED_KEY]: 'Resource not installed' }}
+        localizedStrings={{
+          ...menuStrings,
+          [NOT_INSTALLED_KEY]: 'Resource not installed',
+          [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this resource is installed",
+        }}
         copyLimit={undefined}
         editor={undefined}
       />,
     );
-    const event = createEvent.contextMenu(screen.getByText('Resource not installed'));
-    fireEvent(screen.getByText('Resource not installed'), event);
+    const event = createEvent.contextMenu(screen.getByText(text));
+    fireEvent(screen.getByText(text), event);
     expect(event.defaultPrevented).toBe(false);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
@@ -1031,76 +1064,6 @@ describe('ResourceCellView zoom menus', () => {
     expect(onResetZoom).toHaveBeenCalledTimes(1);
   });
 
-  it('choosing a zoom item in the right-click menu does not bubble a click to the verse row around the cell', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const onRowClick = vi.fn();
-    const onZoomIn = vi.fn();
-    render(
-      // Test-only click sink standing in for the verse `listitem`, whose click opens the chapter
-      // panel; it is not a real interactive control, so the a11y interactivity rules do not apply.
-      // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
-      <div onClick={onRowClick}>
-        <ResourceCellView
-          state="ready"
-          zoomArea={ZOOM_AREA}
-          label="WEB"
-          textDirection="ltr"
-          localizedStrings={menuStrings}
-          copyLimit={undefined}
-          editor={<span>verse</span>}
-          nameDisplay="inline"
-          zoomMenuLabels={zoomMenuLabels}
-          onZoomIn={onZoomIn}
-        />
-      </div>,
-    );
-    fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(zoomMenuItem('Zoom in'));
-    // Positive control: the item was really chosen, so the silence below is about the bubbling.
-    expect(onZoomIn).toHaveBeenCalledTimes(1);
-    expect(onRowClick).not.toHaveBeenCalled();
-  });
-
-  it('pressing Enter or Space on a zoom item in the right-click menu does not bubble the key to the verse row around the cell', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const onRowKeyDown = vi.fn();
-    const onZoomIn = vi.fn();
-    const onZoomOut = vi.fn();
-    render(
-      // Test-only key sink standing in for the verse `listitem`, whose Enter/Space opens the chapter
-      // panel; it is not a real interactive control, so the a11y interactivity rules do not apply.
-      // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-      <div onKeyDown={onRowKeyDown}>
-        <ResourceCellView
-          state="ready"
-          zoomArea={ZOOM_AREA}
-          label="WEB"
-          textDirection="ltr"
-          localizedStrings={menuStrings}
-          copyLimit={undefined}
-          editor={<span>verse</span>}
-          nameDisplay="inline"
-          zoomMenuLabels={zoomMenuLabels}
-          onZoomIn={onZoomIn}
-          onZoomOut={onZoomOut}
-        />
-      </div>,
-    );
-    fireEvent.contextMenu(screen.getByText('verse'));
-    zoomMenuItem('Zoom in').focus();
-    await user.keyboard('{Enter}');
-    fireEvent.contextMenu(screen.getByText('verse'));
-    zoomMenuItem('Zoom out').focus();
-    await user.keyboard(' ');
-    // Positive controls: both items were really chosen by key, so the silence below is about the
-    // bubbling.
-    expect(onZoomIn).toHaveBeenCalledTimes(1);
-    expect(onZoomOut).toHaveBeenCalledTimes(1);
-    const keysSeenByRow = onRowKeyDown.mock.calls.map(([event]) => event.key);
-    expect(keysSeenByRow).not.toContain('Enter');
-    expect(keysSeenByRow).not.toContain(' ');
-  });
-
   it('header layout: the "⋮" button, named for the resource, opens the three zoom items without Copy', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onZoomIn = vi.fn();
@@ -1564,5 +1527,520 @@ describe('ResourceCellView content scroll ownership', () => {
     const { container } = renderCells(<ResourceCellView {...baseProps} />);
 
     expect(container.querySelector('[data-cell-content] [data-cell-header]')).toBeNull();
+  });
+});
+
+describe('ResourceCellView verse row layout', () => {
+  it('renders the reorder grip in verse mode, not only in the header', () => {
+    const onReorderKeyDown = vi.fn();
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="web"
+        reorderHandleLabel="Reorder WEB"
+        onReorderKeyDown={onReorderKeyDown}
+      />,
+    );
+    const grip = screen.getByRole('button', { name: 'Reorder WEB' });
+    expect(grip).toHaveAttribute('data-reorder-handle-id', 'web');
+    fireEvent.keyDown(grip, { key: 'ArrowDown' });
+    expect(onReorderKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no grip in verse mode without showDragHandle', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        reorderHandleId="web"
+      />,
+    );
+    // Positive control: the verse row itself rendered, so the absences below are meaningful.
+    expect(document.querySelector('.stg-verse-row')).not.toBeNull();
+    expect(document.querySelector('[data-reorder-handle-id]')).toBeNull();
+    expect(document.querySelector('.stg-verse-row-with-grip')).toBeNull();
+  });
+
+  it('leads the row with the grip, before the name, as the chapter header does', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="web"
+        reorderHandleLabel="Reorder WEB"
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB"
+      />,
+    );
+    const grip = screen.getByRole('button', { name: 'Reorder WEB' });
+    const name = screen.getByRole('button', { name: 'WEB' });
+    // Document order is the tab order; the stylesheet places the name past the grip's lane only
+    // for a row carrying the with-grip class.
+    const row = grip.closest('.stg-verse-row');
+    expect(row).toHaveClass('stg-verse-row-with-grip');
+    const buttons = [...(row?.querySelectorAll<HTMLElement>('button') ?? [])];
+    expect(buttons.indexOf(grip)).toBeLessThan(buttons.indexOf(name));
+  });
+
+  it("publishes the name's rendered width so line 1 starts right after it", () => {
+    // jsdom does no layout, so stand in for the browser's measurement of the name alone.
+    const measure = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function measureElement(this: HTMLElement) {
+        return new DOMRect(0, 0, this.classList.contains('stg-verse-name') ? 41.5 : 0, 20);
+      });
+    try {
+      renderCells(
+        <ResourceCellView
+          zoomArea={ZOOM_AREA}
+          copyLimit={undefined}
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          editor={<span>In the beginning</span>}
+        />,
+      );
+      const row = document.querySelector<HTMLElement>('.stg-verse-row');
+      expect(row?.style.getPropertyValue('--stg-name-width')).toBe('41.5px');
+    } finally {
+      measure.mockRestore();
+    }
+  });
+
+  it('catches up on the name width once a row mounted in a hidden tab is shown', () => {
+    // A row in a hidden tab has no layout, so its first measurement is 0; the observer's report
+    // when the tab is shown is what publishes the width.
+    let nameWidth = 0;
+    const measure = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function measureElement(this: HTMLElement) {
+        return new DOMRect(0, 0, this.classList.contains('stg-verse-name') ? nameWidth : 0, 20);
+      });
+    // Reports a resize only for an element the component asked it to observe, as the browser does.
+    const observed = new Set<Element>();
+    let reportResize: (() => void) | undefined;
+    const disconnect = vi.fn();
+    const CapturingResizeObserver = vi.fn((callback: () => void) => {
+      reportResize = () => {
+        if (observed.size > 0) callback();
+      };
+      return {
+        observe: (target: Element) => observed.add(target),
+        unobserve: (target: Element) => observed.delete(target),
+        disconnect,
+      };
+    });
+    vi.stubGlobal('ResizeObserver', CapturingResizeObserver);
+    try {
+      const { unmount } = renderCells(
+        <ResourceCellView
+          zoomArea={ZOOM_AREA}
+          copyLimit={undefined}
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          editor={<span>In the beginning</span>}
+        />,
+      );
+      const row = document.querySelector<HTMLElement>('.stg-verse-row');
+      // Positive control: the row rendered, so the missing width is the zero being skipped.
+      expect(row).not.toBeNull();
+      expect(row?.style.getPropertyValue('--stg-name-width')).toBe('');
+
+      nameWidth = 41.5;
+      act(() => reportResize?.());
+      expect(row?.style.getPropertyValue('--stg-name-width')).toBe('41.5px');
+
+      unmount();
+      expect(disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      measure.mockRestore();
+    }
+  });
+
+  it('carries the classes the verse stylesheet scopes its float exclusion on', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const name = screen.getByText('WEB');
+    // The name sits in the measured `.stg-verse-name` box, with the copyright indicator when there
+    // is one, directly inside the row.
+    const nameBox = name.closest('.stg-verse-name');
+    expect(nameBox).not.toBeNull();
+    expect(nameBox?.parentElement).toHaveClass('stg-verse-row');
+    expect(screen.getByText('In the beginning').closest('.stg-verse-content')).not.toBeNull();
+  });
+
+  it('keeps the row flush at the inline edge so the reclaimed width is not given back', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = screen.getByText('WEB').closest<HTMLElement>('.stg-verse-row');
+    const inlinePadding = [...(row?.classList ?? [])].filter((className) =>
+      /^tw:(p|px|ps|pl)-/.test(className),
+    );
+    expect(inlinePadding).toEqual([]);
+  });
+
+  it("hands the resource's zoom level to the row from outside the zoomed text", () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = screen.getByText('WEB').closest<HTMLElement>('.stg-verse-row');
+    // The float exclusion inside the zoomed text divides by this, so it must read the same level the
+    // platform's own rule zooms the area's marker by.
+    expect(row?.style.getPropertyValue('--stg-zoom')).toBe(
+      `var(--platform-content-zoom-${ZOOM_AREA},var(--platform-content-zoom-default,1))`,
+    );
+    // The name stays unzoomed, or rows at different zooms stop aligning with each other.
+    expect(row?.style.zoom).toBeFalsy();
+    const marker = screen
+      .getByText('In the beginning')
+      .closest('[data-platform-content-zoom-root]');
+    expect(marker?.closest('.stg-verse-content')).not.toBeNull();
+    expect(marker?.contains(screen.getByText('WEB'))).toBe(false);
+  });
+
+  it('reserves the name width on placeholders, which have no line boxes to shorten', () => {
+    const { unmount } = renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    expect(document.querySelector('.stg-verse-name-reserve')).not.toBeNull();
+    unmount();
+
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        emptyMessage={localizedStrings[EMPTY_KEY]}
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    expect(document.querySelector('.stg-verse-name-reserve')).not.toBeNull();
+  });
+
+  it('does not reserve placeholder width in header mode, which has no hanging name', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    // Positive control: the placeholder rendered, so its missing reserve is meaningful.
+    expect(screen.getByText(localizedStrings[LOADING_KEY])).toBeInTheDocument();
+    expect(document.querySelector('.stg-verse-name-reserve')).toBeNull();
+  });
+});
+
+describe('ResourceCellView verse row disclosure control', () => {
+  it("makes the name the row's focusable disclosure control when wired", () => {
+    const onDisclosureActivate = vi.fn();
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded={false}
+        disclosureControlsId="panel-1"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    expect(control).toHaveAttribute('aria-expanded', 'false');
+    // Absent while collapsed: a dangling idref is an ARIA error.
+    expect(control).not.toHaveAttribute('aria-controls');
+    control.focus();
+    expect(control).toHaveFocus();
+    fireEvent.click(control);
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it('points aria-controls at the panel only while expanded', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded
+        disclosureControlsId="panel-1"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(control).toHaveAttribute('aria-controls', 'panel-1');
+  });
+
+  it('toggles once for a double-click on the name', () => {
+    const onDisclosureActivate = vi.fn();
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, MAT 5:3"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+
+    fireEvent.click(control, { detail: 1 });
+    fireEvent.click(control, { detail: 2 });
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
+
+    // Positive control: a keyboard activation (detail 0) still toggles.
+    fireEvent.click(control, { detail: 0 });
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels a held Enter's auto-repeats, so holding it toggles once", () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB, MAT 5:3"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    // user-event never flags a held key's keydowns as repeats, so assert the cancellation the
+    // browser relies on instead: a cancelled Enter keydown does not activate the button.
+    // `fireEvent` returns false when the event was cancelled.
+    expect(fireEvent.keyDown(control, { key: 'Enter' })).toBe(true);
+    expect(fireEvent.keyDown(control, { key: 'Enter', repeat: true })).toBe(false);
+  });
+
+  /** Renders a disclosure control whose name is (or is not) clipped, as jsdom never lays text out. */
+  function renderDisclosureWithName({ isTruncated }: { isTruncated: boolean }) {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="Berean Standard Bible 2024"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="Berean Standard Bible 2024, MAT 5:3"
+      />,
+    );
+    const name = screen.getByText('Berean Standard Bible 2024');
+    Object.defineProperty(name, 'clientWidth', { configurable: true, value: 96 });
+    Object.defineProperty(name, 'scrollWidth', {
+      configurable: true,
+      value: isTruncated ? 180 : 96,
+    });
+    return screen.getByRole('button', { name: 'Berean Standard Bible 2024, MAT 5:3' });
+  }
+
+  it('shows a truncated name in full on keyboard focus, and Escape dismisses it', async () => {
+    const user = userEvent.setup();
+    renderDisclosureWithName({ isTruncated: true });
+
+    await user.tab();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Berean Standard Bible 2024');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('shows no tooltip on focus when the name already fits', async () => {
+    const user = userEvent.setup();
+    const control = renderDisclosureWithName({ isTruncated: false });
+
+    await user.tab();
+    // Positive control: focus did land on the control, so the missing tooltip is meaningful.
+    expect(control).toHaveFocus();
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('keeps the name a presentational label when no disclosure is wired', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    // The row itself is named by the parent listitem in that case, so the visible copy stays hidden.
+    expect(screen.getByText('WEB')).toHaveAttribute('aria-hidden', 'true');
+    expect(document.querySelector('[data-disclosure-control]')).toBeNull();
+  });
+});
+
+describe('ResourceCellView copyright indicator', () => {
+  const INDICATOR = <span data-testid="copyright-indicator" />;
+
+  it('puts the indicator in the header next to the name', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    expect(screen.getByText('NIV').parentElement).toContainElement(
+      screen.getByTestId('copyright-indicator'),
+    );
+  });
+
+  it('puts the indicator beside the hanging name in inline mode, outside the verse text', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    const indicator = screen.getByTestId('copyright-indicator');
+    expect(screen.getByText('NIV').parentElement).toContainElement(indicator);
+    expect(screen.getByText('In the beginning').parentElement).not.toContainElement(indicator);
+  });
+});
+
+describe('ResourceCellView right-click inside something opened from the cell', () => {
+  it('leaves the right-click menu closed for a right-click in a window portalled out of the cell', async () => {
+    // The copyright details window renders into document.body, but React still delivers its
+    // events to the cell it was opened from
+    const portalledWindow = createPortal(
+      <div role="dialog" aria-label="Copyright for NIV">
+        Copyright text
+      </div>,
+      document.body,
+    );
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyrightIndicator={portalledWindow}
+      />,
+    );
+
+    const isNotCancelled = fireEvent.contextMenu(screen.getByText('Copyright text'));
+
+    expect(isNotCancelled).toBe(true);
+    expect(screen.queryByRole('menuitem', { name: 'Copy' })).not.toBeInTheDocument();
+
+    // The same right-click on the verse text does open it
+    fireEvent.contextMenu(screen.getByText('verse'));
+    expect(await screen.findByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
   });
 });

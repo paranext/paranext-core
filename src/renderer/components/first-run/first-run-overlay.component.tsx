@@ -249,6 +249,7 @@ export function FirstRunGate({
               allowContinueWithoutRegistration={status.allowContinueWithoutRegistration}
               registrationValidAtStart={status.registrationValidAtStart}
               registrationPreexisting={status.registrationPreexisting}
+              firstSyncRequired={status.firstSyncRequired}
             />
           )}
         </TooltipPortalContainerProvider>

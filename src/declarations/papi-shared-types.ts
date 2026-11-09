@@ -135,14 +135,18 @@ declare module 'papi-shared-types' {
     'platform.isFullScreen': () => Promise<boolean>;
     /**
      * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
-     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered or its
-     * completion flag could not be read; or `deferred` when the user chose "Don't sync yet" earlier
-     * in this app session. Only meaningful in Simple mode: the completion flag is never written in
-     * Power mode, so a Power-mode sync must not consult this.
+     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered; `unreadable`
+     * when its completion flag or the first-sync state could not be read; `deferred` when the user
+     * chose "Don't sync yet" earlier in this app session; or `notYetSynced` when the first
+     * Send/Receive (`platform.firstSyncState` is `pending`) has not succeeded yet. Only meaningful
+     * in Simple mode: the completion flag is never written in Power mode, so a Power-mode sync must
+     * not consult this.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'platform.getAutomaticSyncConsent': () => Promise<'granted' | 'unconfirmed' | 'deferred'>;
+    'platform.getAutomaticSyncConsent': () => Promise<
+      'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | 'notYetSynced'
+    >;
     /**
      * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
      * user chooses "Don't sync yet" in the first-run wizard; the next launch syncs as usual.
@@ -262,6 +266,16 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /**
+     * Open a Settings tab limited to the project shown in the given web view — the same as
+     * `platform.openSettings`, under a name of its own so a web view's Project settings menu item
+     * can show its keyboard shortcut without the main menu's Settings item, which runs
+     * `platform.openSettings`, showing it too.
+     *
+     * @param webViewId Web view whose project the Settings tab should be limited to, if any
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openProjectSettingsForWebView': (webViewId?: WebViewId) => Promise<void>;
 
     // These commands are provided in `web-view.service-router.ts` (main)
     /**
@@ -362,9 +376,14 @@ declare module 'papi-shared-types' {
      * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
      * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
      * clears the orientation tour's completion and whether the user was asked for an internet-use
-     * choice (`platform.internetUseChoiceAsked`), and turns `platform.syncOnStartup` and
-     * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
-     * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     * choice (`platform.internetUseChoiceAsked`), sets `platform.firstSyncState` to `pending` so
+     * the wizard's Sync step returns and automatic syncs wait until a sync succeeds again (a later
+     * successful Send/Receive sets it back to `synced`), and turns `platform.syncOnStartup` and
+     * `platform.showRegistrationReminderOnStartup` back on. It writes `pending` even in a build
+     * without Send/Receive, where no sync can clear it, so afterwards
+     * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
+     * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
+     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice
@@ -469,6 +488,9 @@ declare module 'papi-shared-types' {
 
   // #region User Settings
 
+  /** Whether the user's first Send/Receive has succeeded. See `platform.firstSyncState`. */
+  export type FirstSyncState = 'unknown' | 'pending' | 'synced';
+
   /**
    * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
    * and values are setting data types. Extensions can add more user setting types with
@@ -567,6 +589,18 @@ declare module 'papi-shared-types' {
      * finished and the wizard should gate the app on the next simple-mode startup.
      */
     'platform.firstRunComplete': boolean;
+    /**
+     * Whether the user's first Send/Receive has succeeded, so the first-run wizard knows whether to
+     * keep reopening its Sync step. Hidden; managed by the first-run flow and the Send/Receive
+     * backend, not user-configurable.
+     *
+     * - `'unknown'` (default): never written. This setup predates the state or no wizard has run.
+     * - `'pending'`: a first run started and no sync has succeeded yet.
+     * - `'synced'`: a sync has succeeded at least once.
+     *
+     * Treat anything other than `'pending'` as "has synced".
+     */
+    'platform.firstSyncState': FirstSyncState;
     /**
      * Whether to perform automatic startup sync. Hidden; not exposed in the settings UI. Read on
      * each launch by the Simple-mode startup sync only — Power mode never reads it. Absent or
@@ -731,6 +765,27 @@ declare module 'papi-shared-types' {
      * Defaults to `false`.
      */
     'platform.isPublished': boolean;
+    /**
+     * Whether this project is registered with the Paratext Registry. A registered project's
+     * {@link ProjectSettingTypes['platform.name'] | `platform.name`} and
+     * {@link ProjectSettingTypes['platform.fullName'] | `platform.fullName`} can be changed only
+     * through the registry. A project can be shared through Send/Receive without being registered.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `false`.
+     */
+    'platform.isRegistered': boolean;
+    /**
+     * Whether the current user has the administrator role on this project. Unlike most project
+     * settings, the answer depends on who is asking. A project with no notion of roles counts its
+     * user as its administrator.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `true`.
+     */
+    'platform.isCurrentUserAdministrator': boolean;
     /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is

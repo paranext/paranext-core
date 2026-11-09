@@ -219,6 +219,25 @@ describe('TabDropdownMenu', () => {
     expect(screen.queryByText('Edit')).not.toBeInTheDocument();
   });
 
+  it('puts no separator between two groups of one column', async () => {
+    await openMenu({
+      columns: { 'test.project': { label: 'Project', order: 1 } },
+      groups: {
+        'test.first': { column: 'test.project', order: 1 },
+        'test.second': { column: 'test.project', order: 2 },
+      },
+      items: [
+        { label: 'First', localizeNotes: '', group: 'test.first', order: 1, command: 'test.a' },
+        { label: 'Second', localizeNotes: '', group: 'test.second', order: 1, command: 'test.b' },
+      ],
+    });
+
+    // Positive control: both groups render, so there is something a separator could divide
+    expect(screen.getByRole('menuitem', { name: 'First' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Second' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('separator')).toHaveLength(0);
+  });
+
   it('shows no heading when only one section has items', async () => {
     await openMenu({
       ...EDITOR_MENU,
@@ -363,6 +382,187 @@ describe('TabDropdownMenu', () => {
   });
 });
 
+describe('TabDropdownMenu submenu groups', () => {
+  /** Two groups point at the Edit submenu; Find's group is stored first but ordered second */
+  const TWO_GROUP_MENU: Localized<MultiColumnMenu> = {
+    columns: { 'test.project': { label: 'Project', order: 1 } },
+    groups: {
+      'test.top': { column: 'test.project', order: 1 },
+      'test.editFind': { menuItem: 'test.editSubmenu', order: 2 },
+      'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+    },
+    items: [
+      { id: 'test.editSubmenu', label: 'Edit', localizeNotes: '', group: 'test.top', order: 1 },
+      {
+        label: 'Undo',
+        localizeNotes: '',
+        group: 'test.editActions',
+        order: 1,
+        command: 'test.undo',
+      },
+      {
+        label: 'Redo',
+        localizeNotes: '',
+        group: 'test.editActions',
+        order: 2,
+        command: 'test.redo',
+      },
+      { label: 'Find', localizeNotes: '', group: 'test.editFind', order: 1, command: 'test.find' },
+    ],
+  };
+
+  async function openEditFlyout(menuData: Localized<MultiColumnMenu>) {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<TabDropdownMenu menuData={menuData} onSelectMenuItem={() => {}} tabLabel="Project" />);
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    editTrigger.focus();
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() => expect(screen.getAllByRole('menu')).toHaveLength(2));
+    const menus = screen.getAllByRole('menu');
+    return menus[menus.length - 1];
+  }
+
+  it('shows the items of every group, in group order, with one separator between the groups', async () => {
+    const flyout = await openEditFlyout(TWO_GROUP_MENU);
+
+    expect(
+      within(flyout)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Undo', 'Redo', 'Find']);
+    const separators = within(flyout).getAllByRole('separator');
+    expect(separators).toHaveLength(1);
+    // The separator sits between Redo and Find
+    expect(
+      Array.from(flyout.querySelectorAll('[role="menuitem"], [role="separator"]')).map((element) =>
+        element.getAttribute('role') === 'separator' ? '---' : element.textContent,
+      ),
+    ).toEqual(['Undo', 'Redo', '---', 'Find']);
+  });
+
+  it('adds no separator for a group that has no items', async () => {
+    const flyout = await openEditFlyout({
+      ...TWO_GROUP_MENU,
+      items: TWO_GROUP_MENU.items.filter((item) => item.group !== 'test.editFind'),
+    });
+
+    expect(within(flyout).getAllByRole('menuitem')).toHaveLength(2);
+    expect(within(flyout).queryAllByRole('separator')).toHaveLength(0);
+  });
+
+  it('adds no separator for an empty group between two groups that have items', async () => {
+    const flyout = await openEditFlyout({
+      ...TWO_GROUP_MENU,
+      groups: {
+        ...TWO_GROUP_MENU.groups,
+        'test.editEmpty': { menuItem: 'test.editSubmenu', order: 1.5 },
+      },
+    });
+
+    expect(within(flyout).getAllByRole('menuitem')).toHaveLength(3);
+    expect(within(flyout).getAllByRole('separator')).toHaveLength(1);
+  });
+});
+
+describe('TabDropdownMenu icons', () => {
+  const ICON_MENU: Localized<MultiColumnMenu> = {
+    columns: { 'test.project': { label: 'Project', order: 1 } },
+    groups: {
+      'test.top': { column: 'test.project', order: 1 },
+      'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+    },
+    items: [
+      {
+        label: 'Before',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 1,
+        command: 'test.before',
+        iconNameBefore: 'search',
+      },
+      {
+        label: 'After',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 2,
+        command: 'test.after',
+        iconNameAfter: 'external-link',
+      },
+      {
+        label: 'PathOnly',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 3,
+        command: 'test.pathOnly',
+        iconPathBefore: 'https://example.test/icon.svg',
+      },
+      {
+        label: 'Both',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 4,
+        command: 'test.both',
+        iconNameBefore: 'search',
+        iconPathBefore: 'https://example.test/icon.svg',
+      },
+      {
+        id: 'test.editSubmenu',
+        label: 'Edit',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 5,
+        iconNameBefore: 'pencil',
+      },
+      {
+        label: 'Undo',
+        localizeNotes: '',
+        group: 'test.editActions',
+        order: 1,
+        command: 'test.undo',
+      },
+    ],
+  };
+
+  it('shows a lucide icon before the label for iconNameBefore', async () => {
+    await openMenu(ICON_MENU);
+    const item = screen.getByRole('menuitem', { name: /^Before/ });
+    const svg = item.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(item.firstElementChild).toBe(svg);
+  });
+
+  it('shows a lucide icon after the label for iconNameAfter', async () => {
+    await openMenu(ICON_MENU);
+    const item = screen.getByRole('menuitem', { name: /^After/ });
+    const svg = item.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(item.lastElementChild).toBe(svg);
+    expect(item.querySelector('img')).toBeNull();
+  });
+
+  it('still shows an image for an item that only has iconPathBefore', async () => {
+    await openMenu(ICON_MENU);
+    const item = screen.getByRole('menuitem', { name: /PathOnly/ });
+    expect(item.querySelector('img')).not.toBeNull();
+    expect(item.querySelector('svg')).toBeNull();
+  });
+
+  it('shows only the lucide icon when both a name and a path are set', async () => {
+    await openMenu(ICON_MENU);
+    const item = screen.getByRole('menuitem', { name: /^Both/ });
+    expect(item.querySelector('svg')).not.toBeNull();
+    expect(item.querySelector('img')).toBeNull();
+  });
+
+  it('shows the icon of a submenu root', async () => {
+    await openMenu(ICON_MENU);
+    const root = screen.getByRole('menuitem', { name: /^Edit/ });
+    // The sub-trigger also carries a tabler chevron, so look for the lucide pencil specifically
+    expect(root.querySelector('svg.lucide-pencil')).not.toBeNull();
+  });
+});
+
 const ITEM_LABEL = 'Show footnotes';
 
 const MENU_DATA: Localized<MultiColumnMenu> = {
@@ -501,5 +701,93 @@ describe('TabDropdownMenu focus after the menu closes', () => {
     } finally {
       matchMedia.mockRestore();
     }
+  });
+});
+
+describe('TabDropdownMenu label alignment and shortcut spacing', () => {
+  const MIXED: Localized<MultiColumnMenu> = {
+    columns: { 'test.project': { label: 'Project', order: 1 } },
+    groups: {
+      'test.top': { column: 'test.project', order: 1 },
+      'test.sub': { menuItem: 'test.submenu', order: 1 },
+    },
+    items: [
+      {
+        label: 'With icon',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 1,
+        command: 'test.a',
+        iconNameBefore: 'search',
+      },
+      {
+        label: 'Plain',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 2,
+        command: 'test.b',
+        shortcut: 'Ctrl+Shift+T',
+      },
+      { id: 'test.submenu', label: 'Sub', localizeNotes: '', group: 'test.top', order: 3 },
+      { label: 'Inner', localizeNotes: '', group: 'test.sub', order: 1, command: 'test.c' },
+    ],
+  };
+  const spacerOf = (el: HTMLElement) => el.querySelector('[data-slot="menu-icon-spacer"]');
+
+  it('gives each icon-less item an aria-hidden spacer when another item has a leading icon', async () => {
+    await openMenu(MIXED);
+    expect(spacerOf(screen.getByRole('menuitem', { name: /^With icon/ }))).toBeNull();
+    const plain = spacerOf(screen.getByRole('menuitem', { name: /^Plain/ }));
+    expect(plain).not.toBeNull();
+    expect(plain).toHaveAttribute('aria-hidden', 'true');
+    expect(spacerOf(screen.getByRole('menuitem', { name: /^Sub/ }))).not.toBeNull();
+  });
+
+  it('decides the slot per submenu content, not for the whole menu', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<TabDropdownMenu menuData={MIXED} onSelectMenuItem={() => {}} tabLabel="Tab menu" />);
+    await user.click(screen.getByRole('button', { name: 'Tab menu' }));
+    const trigger = await screen.findByRole('menuitem', { name: /^Sub/ });
+    trigger.focus();
+    await user.keyboard('{ArrowRight}');
+    const inner = await screen.findByRole('menuitem', { name: 'Inner' });
+    expect(spacerOf(inner)).toBeNull();
+  });
+
+  it('sizes an image icon like a named icon and the icon-less spacer, so all labels line up', async () => {
+    await openMenu({
+      ...MIXED,
+      items: [
+        ...MIXED.items,
+        {
+          label: 'With image',
+          localizeNotes: '',
+          group: 'test.top',
+          order: 4,
+          command: 'test.e',
+          iconPathBefore: 'image.png',
+        },
+      ],
+    });
+    const imageBox = screen
+      .getByRole('menuitem', { name: /With image/ })
+      .querySelector('[data-slot="menu-icon-image-box"]');
+    expect(imageBox).toHaveClass('tw:w-4');
+    expect(imageBox?.querySelector('img')).toHaveClass('tw:max-h-4', 'tw:max-w-4');
+    expect(spacerOf(screen.getByRole('menuitem', { name: /^Plain/ }))).toHaveClass('tw:w-4');
+  });
+
+  it('renders no spacer when no item has a leading icon', async () => {
+    await openMenu({ ...MIXED, items: MIXED.items.filter((item) => !item.iconNameBefore) });
+    expect(screen.getByRole('menuitem', { name: /^Plain/ })).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-slot="menu-icon-spacer"]')).toHaveLength(0);
+  });
+
+  it('keeps a minimum gap between the label and the shortcut', async () => {
+    await openMenu(MIXED);
+    const shortcut = screen
+      .getByRole('menuitem', { name: /^Plain/ })
+      .querySelector('[data-slot="dropdown-menu-shortcut"]');
+    expect(shortcut).toHaveClass('tw:ps-4');
   });
 });

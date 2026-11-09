@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
 import { render } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
@@ -20,7 +20,21 @@ const {
   mockUseChapterCopyLimit,
   capturedGetResourceChapter,
   capturedResourceCopyLimit,
+  capturedSetUserModelTexts,
+  capturedAllowInvisibleCharacters,
+  allowInvisibleCharactersSetting,
 } = vi.hoisted(() => ({
+  /** Collects the `allowInvisibleCharacters` prop the web view passes on each render. */
+  capturedAllowInvisibleCharacters: vi.fn(),
+  /** The project's `allowInvisibleCharacters` setting, as each test wants it read. */
+  allowInvisibleCharactersSetting: (() => {
+    const current: { value: boolean | undefined; isLoading: boolean; isUnreadable: boolean } = {
+      value: false,
+      isLoading: false,
+      isUnreadable: false,
+    };
+    return { current };
+  })(),
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockGetProjectDataProvider: vi.fn(),
   mockLoggerWarn: vi.fn(),
@@ -32,6 +46,8 @@ const {
   capturedGetResourceChapter: vi.fn(),
   /** Collects the `resourceCopyLimit` prop the web view passes on each render. */
   capturedResourceCopyLimit: vi.fn(),
+  /** Collects the `setUserModelTexts` callback the web view builds. */
+  capturedSetUserModelTexts: vi.fn(),
 }));
 
 // @papi/frontend — papi default export used for projectDataProviders.get
@@ -89,23 +105,34 @@ vi.mock('./copy-limit/use-chapter-copy-limit.hook', () => ({
   useChapterCopyLimit: (...args: unknown[]) => mockUseChapterCopyLimit(...args),
 }));
 
+vi.mock('./use-allow-invisible-characters.hook', () => ({
+  useAllowInvisibleCharacters: () => allowInvisibleCharactersSetting.current,
+}));
+
 vi.mock('./use-open-find-shortcut.hook', () => ({
   useOpenFindShortcut: vi.fn(),
   default: vi.fn(),
 }));
 
-// Captures the `getResourceChapter` callback and the `resourceCopyLimit` the web view hands to
+// Captures the `getResourceChapter` and `setUserModelTexts` callbacks and the `resourceCopyLimit`
+// the web view hands to
 // `ModelTextPanel`, without rendering the real (editor-dependent) component.
 vi.mock('./model-text-panel.component', () => ({
   ModelTextPanel: ({
     getResourceChapter,
     resourceCopyLimit,
+    allowInvisibleCharacters,
+    setUserModelTexts,
   }: {
     getResourceChapter: unknown;
     resourceCopyLimit: unknown;
+    allowInvisibleCharacters: unknown;
+    setUserModelTexts: unknown;
   }) => {
     capturedGetResourceChapter(getResourceChapter);
     capturedResourceCopyLimit(resourceCopyLimit);
+    capturedAllowInvisibleCharacters(allowInvisibleCharacters);
+    capturedSetUserModelTexts(setUserModelTexts);
     return React.createElement('div', { 'data-testid': 'model-text-panel-stub' });
   },
   MODEL_TEXT_PANEL_STRING_KEYS: [],
@@ -283,5 +310,63 @@ describe('ModelTextPanelWebView — copy limit', () => {
       'applied-by-caller',
     );
     expect(capturedResourceCopyLimit).toHaveBeenLastCalledWith(8);
+  });
+});
+
+describe('ModelTextPanelWebView — allowInvisibleCharacters', () => {
+  afterEach(() => {
+    allowInvisibleCharactersSetting.current = {
+      value: false,
+      isLoading: false,
+      isUnreadable: false,
+    };
+  });
+
+  it.each([
+    { name: 'on', setting: { value: true, isLoading: false, isUnreadable: false }, expected: true },
+    {
+      name: 'off',
+      setting: { value: false, isLoading: false, isUnreadable: false },
+      expected: false,
+    },
+    {
+      name: 'still loading',
+      setting: { value: undefined, isLoading: true, isUnreadable: false },
+      expected: false,
+    },
+    {
+      name: 'unreadable',
+      setting: { value: undefined, isLoading: false, isUnreadable: true },
+      expected: false,
+    },
+  ])('hands the panel $expected while the project setting is $name', ({ setting, expected }) => {
+    allowInvisibleCharactersSetting.current = setting;
+    renderWithModelText(
+      {
+        dataVersion: '1.0.0',
+        items: [{ type: 'dblResource', id: 'uid-web', name: 'WEB', source: 'admin' }],
+      },
+      [INSTALLED_RESOURCE],
+    );
+
+    expect(capturedAllowInvisibleCharacters).toHaveBeenLastCalledWith(expected);
+  });
+});
+
+describe('ModelTextPanelWebView setUserModelTexts', () => {
+  it('fails a write while the settings provider is unavailable, instead of reporting it saved', async () => {
+    // The panel waits for the written list to come back. A write that silently did nothing would
+    // leave it showing "Selecting…" with no update ever coming; a failed write ends the pick.
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.0.0', items: [] },
+    });
+    mockUseChapterCopyLimit.mockReturnValue(undefined);
+    const ModelTextPanelWebView = getWebViewComponent();
+    render(<ModelTextPanelWebView {...makeProps()} />);
+    const [setUserModelTexts] = capturedSetUserModelTexts.mock.lastCall ?? [];
+    expect(setUserModelTexts).toBeInstanceOf(Function);
+
+    await expect(setUserModelTexts({ dataVersion: '1.0.0', items: [] })).rejects.toThrow();
   });
 });

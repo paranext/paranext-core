@@ -7,11 +7,13 @@ import { getErrorMessage } from 'platform-bible-utils';
  * Whether an automatic Simple-mode Send/Receive may start, as answered by
  * {@link getAutomaticSyncConsent}:
  *
- * - `granted`: the first-run wizard has been answered, and the user has not deferred sync this
- *   session.
- * - `unconfirmed`: the wizard has not been answered yet, or `platform.firstRunComplete` could not be
- *   read.
+ * - `granted`: the first-run wizard has been answered, the user has not deferred sync this session,
+ *   and no first sync is still awaited.
+ * - `unconfirmed`: the wizard has not been answered yet.
+ * - `unreadable`: `platform.firstRunComplete` or `platform.firstSyncState` could not be read.
  * - `deferred`: the user chose "Don't sync yet" in the wizard earlier in this app session.
+ * - `notYetSynced`: the user has not completed a first successful sync (`platform.firstSyncState` is
+ *   `pending`); automatic syncs wait for it.
  *
  * Derived from the `platform.getAutomaticSyncConsent` command's declaration, which exposes the same
  * answer to the extension host, so the two cannot drift.
@@ -26,7 +28,9 @@ export const WITHHELD_SYNC_CONSENT_REASONS: Record<
   string
 > = {
   unconfirmed: 'first-run sync consent not confirmed',
+  unreadable: 'first-run sync consent could not be read',
   deferred: `automatic sync deferred for this session ("Don't sync yet")`,
+  notYetSynced: 'no successful sync yet',
 };
 
 // Main-process memory rather than a setting, so the deferral lasts exactly one app session: every
@@ -50,33 +54,45 @@ export function deferAutomaticSyncForSession(): void {
  * Simple-mode sync must get `granted` from this before it starts: the startup, shutdown and
  * window-close syncs call it directly, and the extension host reaches it through the
  * `platform.getAutomaticSyncConsent` command. The rationale and rejected alternatives are in
- * `adr-first-run-sync-consent` (`.context/standards/Architecture-Decisions.md`).
+ * `adr-first-run-sync-consent` (`.context/standards/Architecture-Decisions.md`). The sync on a
+ * switch from Simple to Power asks too, but lets `unconfirmed` and `notYetSynced` through: see
+ * `adr-switch-to-power-sends-unsent-changes`.
  *
  * TODO(PT-4605): the Send/Receive extension's `paratextBibleSendReceive.syncOpenProjects` can start
  * an automatic sync that never asks this gate; core has no call site to gate it at.
  *
  * Fails CLOSED: only a literal `true` in `platform.firstRunComplete` counts as answered, and an
- * unreadable flag reads as `unconfirmed`. Never rejects, so callers need no try/catch of their
- * own.
+ * unreadable flag reads as `unreadable`, which withholds the sync like every answer but `granted`.
+ * Only a literal `'pending'` in `platform.firstSyncState` withholds as `notYetSynced`; any other
+ * value, including one missing from an older settings file, counts as synced. Never rejects, so
+ * callers need no try/catch of their own.
  *
- * Precondition: the caller has already established that the app is in Simple mode.
- * `platform.firstRunComplete` is only ever written by the Simple-mode wizard, so in Power mode it
- * stays `false` forever, and consulting this there would permanently disable Power mode's scheduled
- * sync. An interface mode that cannot be read must not become a way past this gate: treat it as
- * Simple, or skip the sync.
+ * Precondition: the caller has already established that the app is in Simple mode (except the
+ * switch-to-Power sync above, which does not act on `unconfirmed`). `platform.firstRunComplete` is
+ * only ever written by the Simple-mode wizard, so in Power mode it stays `false` forever, and
+ * consulting this there would permanently disable Power mode's scheduled sync. An interface mode
+ * that cannot be read must not become a way past this gate: treat it as Simple, or skip the sync.
  */
 export async function getAutomaticSyncConsent(): Promise<AutomaticSyncConsent> {
   if (isAutomaticSyncDeferred) return 'deferred';
   try {
     const firstRunComplete = await settingsService.get('platform.firstRunComplete');
-    return firstRunComplete === true ? 'granted' : 'unconfirmed';
+    if (firstRunComplete !== true) return 'unconfirmed';
   } catch (e) {
-    // The call site's skip line cannot tell an unreadable flag from an unfinished wizard, so this
-    // warn is the only record of which one closed the gate.
+    // The call site's skip line names the answer; this warn carries the error behind it
     logger.warn(
-      `Could not read platform.firstRunComplete; skipping the automatic sync: ${getErrorMessage(e)}`,
+      `Could not read platform.firstRunComplete; answering unreadable: ${getErrorMessage(e)}`,
     );
-    return 'unconfirmed';
+    return 'unreadable';
+  }
+  try {
+    const firstSyncState = await settingsService.get('platform.firstSyncState');
+    return firstSyncState === 'pending' ? 'notYetSynced' : 'granted';
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.firstSyncState; answering unreadable: ${getErrorMessage(e)}`,
+    );
+    return 'unreadable';
   }
 }
 

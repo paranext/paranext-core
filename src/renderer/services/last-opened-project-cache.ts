@@ -1,21 +1,40 @@
 /**
  * Renderer-side cache of the most-recently-opened project's id.
  *
- * Populated reactively from `web-view.service-host.ts` whenever the Simple-mode Scripture Editor
- * tab's project resolves (see the fixed-tab-id event subscription there). Read synchronously by
- * `handleSwitchToSimpleMode` to avoid the async recents-provider + PDP chain on the critical path
- * of a power → simple switch — letting the overlay paint immediately, and the project-bound layout
- * be built without yielding to the network.
+ * Written by `web-view.service-shard.ts` when the Simple-mode Scripture Editor tab's project
+ * resolves, and by a Power → Simple switch's recents lookup. Both write only a project whose
+ * metadata lookup succeeded and showed it usable in Simple mode (not a published resource, no
+ * `unsupportedReason`). `handleSwitchToSimpleMode` reads it synchronously and trusts it without
+ * another lookup, so the overlay paints immediately and the project-bound layout is built without
+ * yielding to the network.
  *
  * Deliberately carries no editability/read-only information — see
- * `web-view.service-host.ts`/`simple-layout.builder.ts` for why that's resolved by the Scripture
+ * `web-view.service-shard.ts`/`simple-layout.builder.ts` for why that's resolved by the Scripture
  * Editor webview itself, not baked into this cache or the layout.
  *
  * Best-effort: localStorage failures (private-mode browsers, sandboxed test envs) silently no-op
  * and callers fall back to the slow path.
  */
 
-const STORAGE_KEY = 'platform-bible.lastOpenedProject';
+const STORAGE_KEY = 'platform-bible.lastOpenedProject.v2';
+
+/**
+ * Entries under this key were written without the usability checks above, so one may name a project
+ * Simple mode cannot open. It is never read, and is removed on this module's first use.
+ */
+const EARLIER_STORAGE_KEY = 'platform-bible.lastOpenedProject';
+
+let isEarlierEntryRemoved = false;
+
+function removeEarlierEntryOnce(): void {
+  if (isEarlierEntryRemoved) return;
+  isEarlierEntryRemoved = true;
+  try {
+    localStorage.removeItem(EARLIER_STORAGE_KEY);
+  } catch {
+    // best-effort; a leftover entry is never read
+  }
+}
 
 /** Shape persisted by {@link setLastOpenedProject} and read back by {@link getLastOpenedProject}. */
 export type LastOpenedProject = { id: string };
@@ -34,6 +53,7 @@ function isLastOpenedProject(value: unknown): value is LastOpenedProject {
  *   (e.g. left over from an older cache shape) or unreadable (storage unavailable).
  */
 export function getLastOpenedProject(): LastOpenedProject | undefined {
+  removeEarlierEntryOnce();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return undefined;
@@ -54,6 +74,7 @@ export function getLastOpenedProject(): LastOpenedProject | undefined {
  */
 export function setLastOpenedProject(project: LastOpenedProject): void {
   if (!project.id) return;
+  removeEarlierEntryOnce();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: project.id }));
   } catch {

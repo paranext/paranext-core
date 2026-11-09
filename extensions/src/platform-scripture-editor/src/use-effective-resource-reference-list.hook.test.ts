@@ -214,6 +214,7 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(readyList(result.current).items).toEqual([
       expect.objectContaining({ id: 'admin-001', source: 'admin' }),
     ]);
+    expect(result.current).toMatchObject({ isUserLayerMissing: true });
   });
 
   it('logs a failed unsubscribe after unmount as a warning, not a subscribe error', async () => {
@@ -289,6 +290,8 @@ describe('useEffectiveResourceReferenceList', () => {
       id: 'abc123',
       source: 'admin',
     });
+    // An empty personal list is an answer, not a failed read.
+    expect(result.current).toMatchObject({ isUserLayerMissing: false });
   });
 
   it('returns user-only list when project list is empty', () => {
@@ -489,6 +492,7 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(result.current.status).toBe('ready');
     expect(readyList(result.current).items).toHaveLength(1);
     expect(readyList(result.current).items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
+    expect(result.current).toMatchObject({ isUserLayerMissing: true });
   });
 
   it('reports error when the project setting cannot be read', () => {
@@ -593,6 +597,7 @@ describe('useEffectiveResourceReferenceList', () => {
 
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(readyList(result.current).items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
+    expect(result.current).toMatchObject({ isUserLayerMissing: true });
   });
 
   it('survives a malformed items field rather than crashing the panel', () => {

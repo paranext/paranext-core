@@ -1723,6 +1723,26 @@ export type MenuItemBase = OrderedItem & {
 	 * items that should show in every mode — most items need no value here at all.
 	 */
 	hiddenInterfaceModes?: InterfaceMode[];
+	/**
+	 * Lucide icon name (kebab-case, e.g. `refresh-cw`) identifying the icon to display before the
+	 * menu text. The icon takes the text colour of the item. The curated names are listed in
+	 * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over
+	 * `iconPathBefore` when both are set, unless the name is not in that set: then `iconPathBefore`
+	 * is shown if set, else no icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconNameBefore?: string;
+	/**
+	 * Lucide icon name (kebab-case, e.g. `external-link`) identifying the icon to display after the
+	 * menu text. The icon takes the text colour of the item. The curated names are listed in
+	 * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over
+	 * `iconPathAfter` when both are set, unless the name is not in that set: then `iconPathAfter` is
+	 * shown if set, else no icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconNameAfter?: string;
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1734,13 +1754,13 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	/** Name of the PAPI command to run when this menu item is selected. */
 	command: ReferencedItem;
 	/**
-	 * Uri path to the icon to display after the menu text. Ex:
-	 * `papi-extension://helloWorld/assets/icon.png`
+	 * Uri path to the icon to display after the menu text, shown at up to 16px wide and tall (the
+	 * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathAfter?: string;
 	/**
-	 * Uri path to the icon to display before the menu text. Ex:
-	 * `papi-extension://helloWorld/assets/icon.png`
+	 * Uri path to the icon to display before the menu text, shown at up to 16px wide and tall (the
+	 * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathBefore?: string;
 	/**
@@ -2093,6 +2113,14 @@ export declare const menuDocumentSchema: {
 					};
 					uniqueItems: boolean;
 				};
+				iconNameBefore: {
+					description: string;
+					type: string;
+				};
+				iconNameAfter: {
+					description: string;
+					type: string;
+				};
 			};
 			required: string[];
 			unevaluatedProperties: boolean;
@@ -2439,8 +2467,15 @@ export declare function normalizeScriptureSpaces(str: string): string;
  * Note that this will not work properly if there ever exist any properties of USJ document or USJ
  * markers other than `content` that are complex objects like arrays or objects as the properties
  * are shallow equaled.
+ *
+ * @param options `ignoreDirectionMarks`: also treat text that differs only by left-to-right
+ *   (U+200E) or right-to-left (U+200F) marks as equal, as Paratext 9 does when deciding whether a
+ *   save changed anything. Off by default because a sync that adopts incoming text must still see
+ *   an added direction mark.
  */
-export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
+export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined, options?: {
+	ignoreDirectionMarks?: boolean;
+}): boolean;
 /**
  * Collects the distinct markers actually present in a USJ document.
  *
@@ -3497,8 +3532,29 @@ export type UsjNodeAndDocumentLocation<TDocumentLocation extends UsjDocumentLoca
 	node: TDocumentLocation extends UsjTextContentLocation ? string : MarkerObject | Usj;
 	documentLocation: TDocumentLocation;
 };
+/**
+ * Prefix identifying the capture groups that
+ * {@link UsjSearchOptions.flexibleWhitespaceAtBlockBoundaries} applies to. A regex built for such a
+ * search names each whitespace run `${SEARCH_WHITESPACE_GROUP_PREFIX}${n}` — names must be unique,
+ * because a duplicate capture group name is a `SyntaxError`.
+ */
+export declare const SEARCH_WHITESPACE_GROUP_PREFIX = "ws";
 /** Options controlling how {@link IUsjReaderWriter.search} performs its search */
 export type UsjSearchOptions = {
+	/**
+	 * Zero-width tests that a match's start and end must each pass, unless that end sits where the
+	 * block changes: an offset in the concatenated text where the adjacent text nodes belong to
+	 * different block-level markers. A match failing one is discarded.
+	 *
+	 * This is how a word restriction reaches a word at a block's edge. The regex itself sees
+	 * neighboring blocks joined with nothing between them, so a lookaround in it reads `Isaac` at the
+	 * end of a paragraph and `And` at the start of the next as `IsaacAnd`, which is no word boundary.
+	 * Unlike a lookaround, a test here cannot make the regex try a different length of match.
+	 */
+	wordEdges?: {
+		start?: RegExp;
+		end?: RegExp;
+	};
 	/**
 	 * Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include in the search. When provided,
 	 * only text within markers whose style is in this set will be searched. Text inside markers not
@@ -3511,9 +3567,42 @@ export type UsjSearchOptions = {
 	 * positions are mapped back to the original string. This is required for correct
 	 * `ignoreDiacritics` behaviour on NFC source text: a pre-composed character such as `é` (U+00E9)
 	 * will not match `e[combining]*` unless the text is first decomposed. Returned `text` values are
-	 * always slices of the original (non-NFD) string.
+	 * always slices of the original (non-NFD) string. A match that starts or ends inside an original
+	 * character (for example part of a Hangul syllable, stored precomposed or decomposed) is not
+	 * returned.
 	 */
 	normalizationForm?: "NFD";
+	/**
+	 * When `true`, a capture group named `${SEARCH_WHITESPACE_GROUP_PREFIX}${n}` — the prefix
+	 * followed by one or more digits, and nothing else — may match zero characters, but only at a
+	 * block boundary: an offset in the concatenated text where the adjacent text nodes belong to
+	 * different block-level markers, which is where the editor renders a block break. A match whose
+	 * whitespace group matched zero characters anywhere else is discarded.
+	 *
+	 * The name is matched exactly, so a caller's own group keeps its ordinary meaning even when its
+	 * name begins with the same letters (`(?<wsGap>…)` is left alone).
+	 *
+	 * This lets a phrase copied out of an editor match across a rendered block break: the clipboard
+	 * supplies a space where the concatenated text has nothing between the two words. Most such
+	 * breaks render as a line break; adjacent cells in one table row are the exception, rendering
+	 * side by side.
+	 *
+	 * A chapter transition never counts as a boundary — the gap there is not something the editor
+	 * renders as a break, and a match spanning one would put a `\c` marker inside a replacement's
+	 * removed span.
+	 *
+	 * When `markerStylesToInclude` drops text, what was dropped decides whether a boundary survives
+	 * it. Dropped text that belongs to one of the two adjacent blocks — a note at the end of the
+	 * first paragraph or the start of the next — leaves the boundary in place. Dropped text that is a
+	 * block of its own — a section heading, a list, a table standing between the two — removes it,
+	 * because that block is on screen between them and the two are not adjacent lines.
+	 *
+	 * The filter needs capture-group offsets, so when the pattern carries such a group and lacks the
+	 * `d` flag, `search` runs a **rebuilt copy** of it. Either way the caller's own `RegExp` object
+	 * is left as they compiled it, `lastIndex` included — note that this means a search never
+	 * advances a global regex's cursor for the caller.
+	 */
+	flexibleWhitespaceAtBlockBoundaries?: boolean;
 };
 /** Result of a search for text within a USJ object */
 export type UsjSearchResult = {
@@ -3550,8 +3639,31 @@ export type UsjReaderWriterOptions = {
 	 */
 	markersMap?: MarkersMap;
 	/**
-	 * Whether the transformations should preserve invisible characters as in Paratext 9
-	 * (`ScrText.Settings.AllowInvisibleChars`).
+	 * The Paratext project setting "Allow invisible characters" (`AllowInvisibleChars` in
+	 * `Settings.xml`, `ScrText.Settings.AllowInvisibleChars` in ParatextData) of the project this USJ
+	 * belongs to. Pass the value of the project setting `platformScripture.allowInvisibleCharacters`
+	 * for that project — `useProjectSetting(projectId, 'platformScripture.allowInvisibleCharacters',
+	 * false)` in a web view, `getSetting('platformScripture.allowInvisibleCharacters')` on the
+	 * project's `platform.base` PDP elsewhere. It can be left unset for USJ that belongs to no
+	 * Paratext project, or when nothing reads USFM text from this instance.
+	 *
+	 * It decides how a no-break space (U+00A0) in the USJ text is spelled in the USFM this class
+	 * writes ({@link IUsjReaderWriter.toUsfm}), matching what Paratext reads and writes for that
+	 * project. It covers text content and the values of attribute markers such as `\ca`, `\va` and
+	 * `\cat`; a value in a marker's `|` attribute list (`lemma`, a milestone's `who`, a figure's
+	 * `src`) is written exactly as the USJ holds it, as ParatextData writes one:
+	 *
+	 * - `false`: the project's USFM spells a no-break space `~`, so U+00A0 in text is written as `~`.
+	 *   The USJ text Platform.Bible gets for such a project never contains `~` (an attribute value
+	 *   can: ParatextData keeps a `~` in most attribute values as written); a `~` that is in the text
+	 *   anyway is written as `~` too, so Paratext saves it as a no-break space. A literal tilde
+	 *   cannot be represented in text.
+	 * - `true`: `~` is an ordinary character (a literal tilde) and U+00A0 is written as itself, so the
+	 *   two stay distinct. Writing this project's USJ with `false` would turn every no-break space
+	 *   into a literal tilde when the USFM is saved.
+	 *
+	 * Nothing else depends on it: searching and every location and index conversion read the USJ, and
+	 * `~` and U+00A0 are each one UTF-16 code unit, so USFM indices are the same either way.
 	 *
 	 * Defaults to `false`
 	 */
@@ -4901,29 +5013,6 @@ export type NameablePhysicalKey = "Backspace" | "Delete";
  * use this without an extension having to declare its own copy of the string.
  */
 export declare function getLocalizeKeyForPhysicalKey(key: NameablePhysicalKey): LocalizeKey;
-/** Inputs to {@link computeEffectiveStructureProtection}. */
-export type EffectiveStructureProtectionInputs = {
-	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
-	interfaceMode: string | undefined;
-	/** Project-level `platformScripture.structureProtected` admin setting. */
-	isAdminProtected: boolean;
-	/** Whether the current user can toggle the admin/project lock. */
-	canAdminToggle: boolean;
-	/** The user's personal preference; `undefined` when never set. */
-	userSetting: boolean | undefined;
-};
-/**
- * Computes whether structure protection (a.k.a. structure locking) is effectively active.
- *
- * This is the single source of truth for the effective-protection algebra, shared across extensions
- * that cannot import each other directly: the `platform-scripture-editor` structure-protection hook
- * and the `platform-scripture` Scripture Finder PDP both call it.
- *
- * The feature applies in simple interface mode only; in power mode it is always inactive. Within
- * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
- * the user's own preference governs (defaulting to on when never set).
- */
-export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
@@ -5088,6 +5177,77 @@ export declare const localizedStringsDocumentSchema: {
 	};
 };
 /**
+ * Shown instead of a project's `unsupportedReason` when that reason could not be read or has no
+ * translation, so the user never sees a raw key or message.
+ */
+export declare const PROJECT_OPEN_BLOCKED_FALLBACK_KEY: "%project_unsupported_generic%";
+/** Shown when not even {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} can be localized. */
+export declare const PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE = "This project can't be opened.";
+/**
+ * A project's `unsupportedReason` as a key that can be localized. The field is always a localize
+ * key; anything else is replaced by {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} rather than shown
+ * raw.
+ *
+ * @param unsupportedReason The project's `unsupportedReason`
+ * @returns `unsupportedReason` if it is a localize key, otherwise the generic reason's key
+ */
+export declare function toProjectOpenBlockedReasonKey(unsupportedReason: string): LocalizeKey;
+/**
+ * The localize key explaining why the project was refused, when `error` is paranext-core's C#
+ * refusing a request on a project that cannot be opened (the message ends with the
+ * `(PROJECT_OPEN_BLOCKED)` sentinel).
+ *
+ * @param error Error, thrown value, or message string to inspect
+ * @returns The reason's localize key, {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} if the refusal names
+ *   no readable reason, or `undefined` if `error` is not such a refusal
+ */
+export declare function getProjectOpenBlockedReasonKey(error: unknown): LocalizeKey | undefined;
+/** What {@link notifyProjectOpenBlocked} needs from PAPI, passed in so it runs in any process. */
+export type NotifyProjectOpenBlockedDependencies = {
+	/** Looks up the translations of `localizeKeys`, e.g. `papi.localization.getLocalizedStrings` */
+	getLocalizedStrings: (localizeKeys: LocalizeKey[]) => Promise<LanguageStrings>;
+	/** Shows `notification` to the user, e.g. `papi.notifications.send` */
+	sendNotification: (notification: {
+		message: LocalizeKey;
+		severity: "warning";
+	}) => Promise<unknown>;
+	/** Logs `message` as a warning, e.g. `logger.warn` */
+	logWarning: (message: string) => void;
+};
+/**
+ * Tells the user why a project was refused, as a warning notification (the notification service
+ * localizes the key). A key with no translation is replaced by the generic reason, so the
+ * notification never shows a raw key. Self-catching, so fire-and-forget callers never leak a
+ * rejection.
+ *
+ * @param reasonKey Localize key explaining why the project was refused
+ * @param dependencies The PAPI services to localize with, notify through, and log to
+ */
+export declare function notifyProjectOpenBlocked(reasonKey: LocalizeKey, { getLocalizedStrings, sendNotification, logWarning }: NotifyProjectOpenBlockedDependencies): Promise<void>;
+/** Inputs to {@link computeEffectiveStructureProtection}. */
+export type EffectiveStructureProtectionInputs = {
+	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
+	interfaceMode: string | undefined;
+	/** Project-level `platformScripture.structureProtected` admin setting. */
+	isAdminProtected: boolean;
+	/** Whether the current user can toggle the admin/project lock. */
+	canAdminToggle: boolean;
+	/** The user's personal preference; `undefined` when never set. */
+	userSetting: boolean | undefined;
+};
+/**
+ * Computes whether structure protection (a.k.a. structure locking) is effectively active.
+ *
+ * This is the single source of truth for the effective-protection algebra, shared across extensions
+ * that cannot import each other directly: the `platform-scripture-editor` structure-protection hook
+ * and the `platform-scripture` Scripture Finder PDP both call it.
+ *
+ * The feature applies in simple interface mode only; in power mode it is always inactive. Within
+ * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
+ * the user's own preference governs (defaulting to on when never set).
+ */
+export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
+/**
  * One selectable item in a command/marker palette. The dependency-free shared shape consumed by
  * every layer that handles palette items — the renderer overlay service's `CommandPaletteItem`
  * extends it, `platform-bible-react`'s `FootnoteEditor` marker palette uses it directly, and
@@ -5217,6 +5377,12 @@ export type DblResourceData = {
 	installed: boolean;
 	updateAvailable: boolean;
 	projectId: string;
+	/**
+	 * Whether licensing terms prohibit using this resource as a model or base for a new translation,
+	 * so pickers for those must not offer it. Set by the platform-get-resources extension on the rows
+	 * it serves; absent when it could not tell.
+	 */
+	isRestrictedAsModelText?: boolean;
 };
 /**
  * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or,
@@ -5261,9 +5427,17 @@ export type SettingBase = StateBase & {
 	/**
 	 * Boolean that controls whether a setting should be hidden or not. If hidden, the setting will
 	 * not show up in the settings dialog in `paranext-core`, and thus will not be configurable by the
-	 * user unless an extension provides a way to interact with the setting.
+	 * user unless an extension provides a way to interact with the setting. If every setting in a
+	 * group is hidden, the group does not show up either.
 	 */
 	isHidden?: boolean;
+	/**
+	 * Boolean that controls whether a setting is read-only in the settings dialog. If read-only, the
+	 * setting still shows up in the settings dialog in `paranext-core`, but the user cannot change it
+	 * there. A read-only text field can still be selected and copied; controls with no read-only
+	 * state, such as switches, are disabled. Extensions can still change the setting's value.
+	 */
+	isReadOnly?: boolean;
 };
 /** The data an extension provides to inform Platform.Bible of the project settings it provides */
 export type ProjectSettingsContribution = ProjectSettingsGroup | ProjectSettingsGroup[];
@@ -5652,6 +5826,10 @@ export declare const projectSettingsDocumentSchema: {
 						description: string;
 						type: string;
 					};
+					isReadOnly: {
+						description: string;
+						type: string;
+					};
 				};
 				required: string[];
 				$ref?: undefined;
@@ -5945,6 +6123,10 @@ export declare const settingsDocumentSchema: {
 						$ref: string;
 					};
 					isHidden: {
+						description: string;
+						type: string;
+					};
+					isReadOnly: {
 						description: string;
 						type: string;
 					};
@@ -6802,6 +6984,101 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * string.
 	 */
 	private static buildNFDToOriginalPositionMap;
+	/**
+	 * Returns the innermost block-level ancestor for the node a working stack points at, or
+	 * `undefined` when the node has none. Reads `parent` only: the walk mutates each stack item's
+	 * `index` and pushes/pops the array, but never reassigns `parent`, so the returned object is
+	 * stable for as long as the caller needs it.
+	 */
+	private static findNearestBlockAncestor;
+	/**
+	 * Returns the next position at or after `index` that a `u`-flag regex can actually resume from:
+	 * one whole code point past `index`.
+	 *
+	 * Advancing a single UTF-16 code unit is not enough. Under the `u` flag a `lastIndex` that lands
+	 * between a surrogate pair's two halves is snapped back to the pair's start by the engine, so the
+	 * next `exec` returns the identical match and the loop makes no progress — an unbounded hang on
+	 * any text in a supplementary-plane script such as Adlam.
+	 *
+	 * @param text Text being searched
+	 * @param index Position to advance from
+	 */
+	private static advancePastCodePoint;
+	/**
+	 * True when either end of an NFD match falls inside a character: between two NFD code units that
+	 * came from the same original code point, or inside a Hangul syllable the source text stores
+	 * decomposed.
+	 *
+	 * The position map sends every part of a split character to that character's start, so such a
+	 * match would be shorter than, or shifted from, what Find displays, and Replace would insert
+	 * instead of replacing. A decomposed syllable has no single original code point to compare, and
+	 * Replace would leave its remaining jamo behind in the text. Widening the match to the whole
+	 * character is wrong: the leftover parts can be letters (Hangul jamo), not diacritics.
+	 *
+	 * @param matchStart Index of the match start in the NFD text
+	 * @param matchEnd Index just past the match end in the NFD text
+	 * @param searchText NFD text the match was found in
+	 * @param nfdToOriginalMap Position map from {@link buildNFDToOriginalPositionMap}
+	 */
+	private static isMatchInsideCharacter;
+	/**
+	 * True when a match must be discarded because one of its whitespace groups matched zero
+	 * characters somewhere other than a block boundary. A group that matched real whitespace is
+	 * always acceptable, and so is a group that did not participate in the match.
+	 *
+	 * @param match Match to inspect. Must come from a regex with the `d` flag so group offsets exist.
+	 * @param blockBoundaryOffsets Offsets into the original concatenated text that are block
+	 *   boundaries
+	 * @param nfdToOriginalMap Position map when the search text was NFD-normalized, else `undefined`
+	 * @throws If `match` carries no group offsets, which means the regex lacked the `d` flag. Failing
+	 *   closed matters: returning `false` here would accept every match, silently degrading Find to
+	 *   matching `into` for a query of `in to` across the whole Bible with no error anywhere.
+	 */
+	private static hasWhitespaceGapAwayFromBoundary;
+	/**
+	 * True when a match fails a word edge test at one of its ends. An end on a block change passes
+	 * whatever the test says, because the text it would look at belongs to another block.
+	 *
+	 * @param match Match to inspect
+	 * @param searchText Text the match was found in
+	 * @param wordEdges Sticky word edge tests
+	 * @param blockChangeOffsets Offsets into the original concatenated text where the block changes
+	 * @param nfdToOriginalMap Position map when the search text was NFD-normalized, else `undefined`
+	 */
+	private static failsWordEdgeTest;
+	/**
+	 * Returns a sticky copy of a zero-width test, so it runs at exactly the offset it is given.
+	 *
+	 * @param edgeTest The test as the caller supplied it, or `undefined`
+	 */
+	private static toStickyEdgeTest;
+	/**
+	 * True when `source` declares at least one whitespace capture group that
+	 * {@link hasWhitespaceGapAwayFromBoundary} would act on.
+	 *
+	 * Scans for an actual group declaration rather than testing for the substring `(?<ws`, which also
+	 * fires inside a character class (`/[(?<ws]b/`) and on a caller's own similarly-prefixed name
+	 * (`(?<wsGap>…)`). Either false positive would rebuild a caller's regex needlessly and could
+	 * reach the fail-closed throw below with no named groups present at all.
+	 */
+	private static hasSearchWhitespaceGroup;
+	/**
+	 * Walks the USJ content tree and concatenates every text node the search should see.
+	 *
+	 * @param markerStylesToInclude When provided, text under a `para`/`note` ancestor whose style is
+	 *   absent from the set is left out.
+	 * @param shouldRecordBoundaries When `true`, also records the offsets in the concatenated text
+	 *   where adjacent text nodes belong to different blocks.
+	 * @returns The text chunks, a map from each chunk's offset to its document location, the set of
+	 *   block-boundary offsets at which a whitespace gap is tolerable, and the set of every offset
+	 *   where the block changes (both empty when `shouldRecordBoundaries` is `false`).
+	 */
+	private collectSearchText;
+	/**
+	 * Converts one accepted regex match into a search result, resolving its start and end offsets to
+	 * document locations. Pure with respect to the search loop — it reads no loop state.
+	 */
+	private static buildSearchResult;
 	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
 	search(regex: RegExp, searchOptions?: UsjSearchOptions): UsjSearchResult[];
 	extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string;

@@ -1,10 +1,9 @@
-import type { WebViewProps } from '@papi/core';
+import type { DialogTypes, WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
   EmptyState,
-  pickTabIconUrl,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -15,14 +14,12 @@ import {
   RetryableErrorView,
   useRetryablePromise,
   useViewVisibility,
-  type TabIconUrls,
 } from 'platform-bible-react';
 import { CloudOff, Settings2 } from 'lucide-react';
 import {
   DblResourceData,
   formatReplacementString,
   getErrorMessage,
-  isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
 import type {
@@ -33,6 +30,7 @@ import type {
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
+import { getPickerDialogSelection } from './downloaded-resources.utils';
 import {
   getOrderedScriptureTextGridContents,
   reorderShownIds,
@@ -50,9 +48,12 @@ import {
   persistCellOrder,
   persistUserAddition,
   persistUserDisplay,
-  persistUserRemoval,
+  removeFromUserListAndNotify,
+  removeFromUserTextConnections,
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
 } from './scripture-text-grid-persistence.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import { useIsPowerMode } from './use-is-power-mode.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
@@ -68,11 +69,21 @@ import {
   ChapterContextResource,
   ScriptureTextGrid,
 } from './scripture-text-grid/scripture-text-grid.component';
-import { GridResource } from './scripture-text-grid/resource-cell.component';
-import { toGridResources } from './scripture-text-grid/grid-resources.utils';
-import { getGridBodyState } from './scripture-text-grid/grid-body-state.utils';
+import { toGridResources, type GridResource } from './scripture-text-grid/grid-resources.utils';
+import {
+  CATALOG_ERROR_KEY,
+  CATALOG_RETRY_KEY,
+} from './scripture-text-grid/catalog-retry-banner.const';
+import { useCatalogRetryState } from './scripture-text-grid/use-catalog-retry-state.hook';
+import {
+  getGridBodyState,
+  shouldShowCatalogRetryBanner,
+} from './scripture-text-grid/grid-body-state.utils';
+import { useDblInstallLookup } from './scripture-text-grid/use-dbl-install-lookup.hook';
+import { CatalogRetryBanner } from './scripture-text-grid/catalog-retry-banner.component';
 import { isNonDblResource } from './resource-reference.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
+import { isEscapeForChapterContext } from './scripture-text-grid/chapter-context-escape.utils';
 import {
   useResourceContentZoom,
   type ResourceZoomController,
@@ -100,8 +111,6 @@ const NOT_SUPPORTED_KEY = '%webView_scriptureTextGrid_viewOptions_notSupported%'
 const SETTINGS_UNAVAILABLE_KEY = '%webView_scriptureTextGrid_viewOptions_settingsUnavailable%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
-const CATALOG_ERROR_KEY = '%webView_scriptureTextGrid_catalogUnavailable%';
-const CATALOG_RETRY_KEY = '%webView_scriptureTextGrid_retry%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 // Screen-reader announcements for the chapter-context split opening/closing.
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
@@ -132,19 +141,10 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   REORDER_ANNOUNCEMENT_KEY,
   REORDER_HANDLE_KEY,
   REORDER_HINT_KEY,
+  // Formatted with the resource's name before it is sent, so it IS fetched here.
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
-
-// Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
-// `currentColor` SVG can't follow the theme. We swap the `iconUrl` based on both the current theme
-// and the tab's selected state (light theme: white when selected, near-black when unselected,
-// mid-slate fallback when selection state is unknown; dark theme: always light).
-const TAB_ICON_URLS: TabIconUrls = {
-  lightDefault: 'papi-extension://platformScriptureEditor/assets/library.svg',
-  dark: 'papi-extension://platformScriptureEditor/assets/library-dark.svg',
-  lightSelected: 'papi-extension://platformScriptureEditor/assets/library-selected.svg',
-  lightUnselected: 'papi-extension://platformScriptureEditor/assets/library-unselected.svg',
-};
 
 /** Props {@link ScriptureTextGridProjectView} takes from the web view that hosts it. */
 type ScriptureTextGridProjectViewProps = {
@@ -164,8 +164,12 @@ type ScriptureTextGridProjectViewProps = {
   /** The cached DBL resource catalog, or `undefined` until it has been delivered. */
   cachedResources: DblResourceData[] | undefined;
   isLoadingCachedResources: boolean;
+  /** Whether the catalog fetch has answered since it last started, successfully or not. */
+  hasCatalogSettled: boolean;
   hasCatalogError: boolean;
   refetchCatalog: () => void;
+  /** Bumped by each install from this web view, which changes what is on disk. */
+  refreshCounter: number;
   installingResourceNames: string[];
   /** Installs a picked resource; resolves whether the install succeeded. */
   installPickedResource: (resource: DblResourceData) => Promise<boolean>;
@@ -200,8 +204,10 @@ function ScriptureTextGridProjectView({
   setViewMode,
   cachedResources,
   isLoadingCachedResources,
+  hasCatalogSettled,
   hasCatalogError,
   refetchCatalog,
+  refreshCounter,
   installingResourceNames,
   installPickedResource,
   initializeOverlayOnce,
@@ -239,7 +245,13 @@ function ScriptureTextGridProjectView({
   }, [localizedStrings, onAnnounce]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || chapterContext === undefined || viewMode !== 'verse') return;
+      if (chapterContext === undefined || viewMode !== 'verse' || !isEscapeForChapterContext(event))
+        return;
+      // An open pop-up that holds no focus — a tooltip, or a popover whose trigger keeps focus — is
+      // still the innermost layer, so Escape is its to dismiss; this capture-phase listener would
+      // otherwise take the key before Radix sees it. Every Radix pop-up renders inside this wrapper
+      // while open.
+      if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
       event.preventDefault();
       event.stopPropagation();
       handleCloseChapterContext();
@@ -266,6 +278,17 @@ function ScriptureTextGridProjectView({
     };
   }, []);
 
+  // Keeps the retry banner (and the focused button) mounted through a retry it started: the
+  // refetch clears the error at once, which would otherwise remove the banner mid-click.
+  const { isRetrying: isRetryingCatalog, retry: retryCatalogFromBanner } = useCatalogRetryState(
+    hasCatalogSettled,
+    refetchCatalog,
+  );
+
+  // Only Simple mode has team resources. Undefined (still loading) lists them plainly too, so a
+  // Power session never shows the team grouping, even for a frame.
+  const isViewOptionsGrouped = useIsPowerMode() === false;
+
   const { top, bottom } = useMemo(
     () =>
       sources
@@ -276,16 +299,26 @@ function ScriptureTextGridProjectView({
     [sources, cachedResources],
   );
 
+  const orderedReferences = useMemo(
+    () => (sources ? getOrderedScriptureTextGridContents(sources) : []),
+    [sources],
+  );
+
+  const installLookup = useDblInstallLookup({
+    references: orderedReferences,
+    cachedResources,
+    isCatalogLoading: isLoadingCachedResources,
+    hasCatalogSettled,
+    refreshCounter,
+  });
+
   // The grid body's cells: the `getOrderedScriptureTextGridContents` selector over the Text
   // Collection sources, resolved to the row's `{ resourceId, projectId, label }` shape. The selector returns
   // already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
     () =>
-      toGridResources(
-        sources ? getOrderedScriptureTextGridContents(sources) : [],
-        cachedResources ?? [],
-      ),
-    [sources, cachedResources],
+      toGridResources(orderedReferences, cachedResources ?? [], { installLookup, hasCatalogError }),
+    [orderedReferences, cachedResources, installLookup, hasCatalogError],
   );
 
   // Ctrl+F opens Find for the resource the caret is in. Unlike the single-resource reference panels,
@@ -309,13 +342,13 @@ function ScriptureTextGridProjectView({
   });
 
   // The grid is one web view hosting many projects, so its members are invisible to global
-  // navigation UI unless declared here.
-  // `resources` — and so `displayedProjectIds` — is transiently empty until the sources and the
-  // cached DBL list have both loaded, which is indistinguishable from "every project was removed".
+  // navigation UI unless declared here. `resources` — and so `displayedProjectIds` — is incomplete
+  // until the sources, the cached DBL list and the disk lookup have all answered, which is
+  // indistinguishable from "those projects were removed".
   usePublishNavigableProjectIds(
     useWebViewState,
     displayedProjectIds,
-    sources !== undefined && !isLoadingCachedResources,
+    sources !== undefined && !isLoadingCachedResources && installLookup.status !== 'pending',
     // A project switch re-points this panel by reloading it, which reuses the web view id, so the
     // published list would otherwise outlive the project it was built for.
     projectId,
@@ -362,7 +395,11 @@ function ScriptureTextGridProjectView({
     (resourceId: string) => {
       const { current } = sourcesRef;
       if (!current || !textConnectionPdp) return;
-      persistUserRemoval(textConnectionPdp, resourceId, current.userReferenced)?.catch((e) => {
+      removeFromUserTextConnections(
+        [resourceId],
+        async () => current.userReferenced,
+        (list) => textConnectionPdp.setUserReferencedProjectsAndResources(list),
+      ).catch((e) => {
         papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
         logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`);
       });
@@ -432,6 +469,38 @@ function ScriptureTextGridProjectView({
     [top, bottom],
   );
 
+  // Every resource in the team layout is the team's, whether or not the administrator put it in the
+  // Text Collection, so the picker locks it as the Bible texts and Commentaries tabs do.
+  const pickerSelection = useMemo(
+    () =>
+      getPickerDialogSelection(
+        sources?.adminReferenced.items ?? [],
+        [...top, ...bottom].filter((row) => row.isUserRemovable).map((row) => row.reference),
+        cachedResources ?? [],
+      ),
+    [sources, top, bottom, cachedResources],
+  );
+
+  // What the user's list stores each removable resource under, as the picker showed it when it
+  // opened, since the rows can change while it is open.
+  const listIdsAtPickerOpenRef = useRef<ReadonlyMap<string, string[]>>(new Map());
+
+  // Removes exactly what the ✕ in View options would, as the Bible texts and Commentaries tabs do.
+  // The resource stays installed, and leaves those tabs too, since they read the same list.
+  const handleResourceRemove = useCallback(
+    (resource: DblResourceData) => {
+      const pdp = textConnectionPdp;
+      return removeFromUserListAndNotify(
+        resource,
+        listIdsAtPickerOpenRef.current.get(resource.dblEntryUid) ?? [],
+        async () => (pdp ? sourcesRef.current?.userReferenced : undefined),
+        async (list) => pdp?.setUserReferencedProjectsAndResources(list),
+        resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_FROM_USER_LIST_KEY),
+      );
+    },
+    [textConnectionPdp, localizedStrings],
+  );
+
   // Reconcile the saved order: drop ids that have left the user's world (X-removed, or an admin
   // entry no longer shared). `selectedResourceIds` is every resource the user still has (shown AND
   // hidden), so hidden-but-known ids keep their saved slots. Reads sourcesRef.current for freshness;
@@ -454,25 +523,40 @@ function ScriptureTextGridProjectView({
     useMemo(
       () => ({
         resourceType: ['ScriptureResource', 'CommentaryResource'] as const,
-        selectedResourceIds,
+        selectedResourceIds: pickerSelection.selectedResourceIds,
+        // Team resources exist only in Simple, so Power keeps the single "Included" section.
+        teamResourceIds: isViewOptionsGrouped ? pickerSelection.teamResourceIds : undefined,
+        allowRemove: isViewOptionsGrouped && !!textConnectionPdp,
         isModal: true,
         notice: resolvePickerNotice(localizedStrings, !!textConnectionPdp),
         // With no text collection to add to, installing is all a pick can accomplish — so an
         // already-installed resource would take the click and do nothing.
         allowSelectingInstalled: !!textConnectionPdp,
       }),
-      [selectedResourceIds, textConnectionPdp, localizedStrings],
+      [pickerSelection, isViewOptionsGrouped, textConnectionPdp, localizedStrings],
     ),
     useCallback(
-      (resource: DblResourceData | undefined) => {
-        if (!resource) return;
-        handleResourceSelect(resource).catch((e) =>
+      (result: DialogTypes['platform.resourcePicker']['responseType'] | undefined) => {
+        if (!result) return;
+        if (result.action === 'remove') {
+          handleResourceRemove(result.resource).catch((e) =>
+            logger.warn(`Could not report the resource removal: ${getErrorMessage(e)}`),
+          );
+          return;
+        }
+        handleResourceSelect(result.resource).catch((e) =>
           logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
         );
       },
-      [handleResourceSelect],
+      [handleResourceSelect, handleResourceRemove],
     ),
   );
+
+  // The picker is modal, so it cannot be opened again while open and replace the ids it is using.
+  const openResourcePicker = useCallback(() => {
+    listIdsAtPickerOpenRef.current = pickerSelection.listIdsByRemovableId;
+    return showResourcePicker();
+  }, [pickerSelection, showResourcePicker]);
 
   return (
     <>
@@ -505,10 +589,11 @@ function ScriptureTextGridProjectView({
               isChapterEnabled
               top={top}
               bottom={bottom}
+              isGrouped={isViewOptionsGrouped}
               installingResourceNames={installingResourceNames}
               onCheckedChange={handleCheckedChange}
               onRemoveFromList={handleRemoveFromList}
-              onGetResources={showResourcePicker}
+              onGetResources={openResourcePicker}
               // Disabled whenever `getViewOptionsAvailability` is not `ready` — no project, settings
               // still arriving, no settings provider, or settings that could not be read — since
               // every action would otherwise silently no-op.
@@ -521,11 +606,22 @@ function ScriptureTextGridProjectView({
           </PopoverContent>
         </Popover>
       </div>
+      {/* A persistent live region, so the banner is announced when it appears inside it. */}
+      <div role="status">
+        {gridBodyState === 'grid' &&
+          (isRetryingCatalog || shouldShowCatalogRetryBanner({ hasCatalogError, resources })) && (
+            <CatalogRetryBanner
+              message={localizedStrings[CATALOG_ERROR_KEY]}
+              retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
+              onRetry={retryCatalogFromBanner}
+              isRetrying={isRetryingCatalog}
+            />
+          )}
+      </div>
       {/* Grid body: a message when nothing is renderable, otherwise the verse-cell rows.
           Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
-          empty (a DBL ref resolves to a cell only once the cached list loads). The
-          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
+          empty. The `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
 
           The body itself is not a zoom area: each cell marks only its resource's text, with that
           resource's own area (`resource-<id>`, see `resource-zoom-area.utils.ts`), so the cells'
@@ -609,7 +705,6 @@ function ScriptureTextGridProjectView({
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   id: webViewId,
   projectId,
-  updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
@@ -629,12 +724,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   );
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
+  // TODO(PT-4897): this converts into the container project's versification, so a resource row
+  // whose versification differs shows the wrong verse; each row needs its own conversion frame.
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
   // Owned here for the same reason `scrRef` is: it is one fact about this web view, and the grid
   // renders a cell per resource. Subscribing per cell would build an `IntersectionObserver` each,
-  // all watching the same document for the same answer. The tab icon reads this answer too (via
-  // `pickTabIconUrl` rather than `useTabIconSelection`), so the web view holds exactly one.
+  // all watching the same document for the same answer, so the web view holds exactly one.
   const isViewVisible = useViewVisibility();
 
   // The project whose text collection the grid shows. Opened from the default layout the tab carries
@@ -678,7 +774,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // catalog's flags to be brought up to date — this read itself does not wait for them.
   const {
     data: catalog,
-    isLoading: isCatalogLoading,
+    isLoading: isCatalogFetchInFlight,
     hasError: hasCatalogFetchError,
     hasSettled: hasCatalogSettled,
     refetch: refetchCatalog,
@@ -705,7 +801,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // `!hasCatalogSettled` counts as loading, not just `isLoading`, so the render between a retry
   // click and the effect that restarts the fetch cannot paint a settled-looking empty grid.
-  const isLoadingCachedResources = isCatalogLoading || !hasCatalogSettled;
+  const isLoadingCachedResources = isCatalogFetchInFlight || !hasCatalogSettled;
 
   // An installation with no DBL credentials is a catalog with nothing in it — an answer this grid
   // can render, because it only reads the catalog to resolve long names and installed project ids.
@@ -718,7 +814,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   useEffect(() => {
     if (hasCatalogError)
       logger.warn(
-        'Scripture Text Grid: the DBL resource catalog is unavailable, so DBL references cannot be resolved',
+        'Scripture Text Grid: the DBL resource catalog is unavailable; resolving DBL references from disk',
       );
   }, [hasCatalogError]);
 
@@ -785,35 +881,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // the correct value. Setting it in the provider means the tab shows the right title/tooltip from
   // its very first render, independent of this web view's own mount timing.
 
-  // Pick the tab icon variant to match the current theme and selected state. The tab icon is
-  // painted by the platform as a static background-image, so a `currentColor` SVG can't follow the
-  // theme — subscribe to the theme here (PAPI-specific) and let the shared hook handle selection
-  // detection and variant picking.
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
-  useEffect(() => {
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
-    papi.themes
-      .subscribeCurrentTheme(undefined, (theme) => {
-        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
-      })
-      .then((unsub) => {
-        if (disposed) unsub();
-        else unsubscribe = unsub;
-        return undefined;
-      })
-      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
-    return () => {
-      disposed = true;
-      unsubscribe?.();
-    };
-  }, []);
-
-  const gridIconUrl = pickTabIconUrl(isDarkTheme, isViewVisible, TAB_ICON_URLS);
-  useEffect(() => {
-    updateWebViewDefinition({ iconUrl: gridIconUrl });
-  }, [gridIconUrl, updateWebViewDefinition]);
-
   const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 
   return (
@@ -843,8 +910,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         setViewMode={setViewMode}
         cachedResources={cachedResources}
         isLoadingCachedResources={isLoadingCachedResources}
+        hasCatalogSettled={hasCatalogSettled}
         hasCatalogError={hasCatalogError}
         refetchCatalog={refetchCatalog}
+        refreshCounter={refreshCounter}
         installingResourceNames={installingResourceNames}
         installPickedResource={installPickedResource}
         initializeOverlayOnce={initializeOverlayOnce}

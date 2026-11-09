@@ -1,6 +1,15 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import postcss, { type Rule } from 'postcss';
+import { compile } from 'sass';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import {
+  descendants,
+  parseSource,
+  parseWebViewSource,
+  propExpressions,
+} from './web-view-source.test-utils';
 
 /**
  * The marker classes that scope a rule to Simple mode. `_simple-mode.scss` explains why the scoping
@@ -9,25 +18,145 @@ import { describe, expect, it } from 'vitest';
 const SIMPLE_SCOPE_PREFIXES = ['.editor-container-simple', '.scripture-editor-tab-nav-simple'];
 
 const SIMPLE_MODE_SCSS_PATH = join(__dirname, '_simple-mode.scss');
+const USJ_NODES_SCSS_PATH = join(__dirname, '_usj-nodes.scss');
+/**
+ * The standard USFM stylesheet the data provider ships; it says which markers are character
+ * markers.
+ */
+const USFM_STY_PATH = join(__dirname, '../../../../c-sharp/assets/usfm.sty');
+
+/** Splits a comma-separated list on its top-level commas, not the ones inside `(…)`. */
+function splitTopLevelCommas(list: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  [...list].forEach((character) => {
+    if (character === '(') depth += 1;
+    if (character === ')') depth -= 1;
+    if (character === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+    } else current += character;
+  });
+  parts.push(current);
+  return parts;
+}
 
 /**
- * Every rule selector in a stylesheet: the text before each `{`, split on commas.
- *
- * Comments are stripped first so a selector-looking string inside a comment is not read as a rule.
- * This deliberately does NOT track nesting depth — a nested rule's or an at-rule's own head would
- * simply be reported as one more selector, which fails the assertion below. That is the safe
- * direction for a scope guard to fail in, and this file is flat today.
+ * `_simple-mode.scss` compiled, so nested rules are checked as the browser sees them: every rule
+ * with its full selector.
  */
-function ruleSelectors(scss: string): string[] {
-  const withoutComments = scss.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-
-  return [...withoutComments.matchAll(/([^{}]*)\{/g)].flatMap((match) =>
-    match[1]
-      .split(',')
-      .map((selector) => selector.trim())
-      .filter(Boolean),
-  );
+function compiledSimpleModeRules(): Rule[] {
+  const rules: Rule[] = [];
+  postcss.parse(compile(SIMPLE_MODE_SCSS_PATH).css).walkRules((rule) => {
+    rules.push(rule);
+  });
+  return rules;
 }
+
+/** The value a rule's own declaration of `prop` sets, if it has one. */
+function declarationValue(rule: Rule | undefined, prop: string): string | undefined {
+  return rule?.nodes.flatMap((node) =>
+    node.type === 'decl' && node.prop === prop ? [node.value] : [],
+  )[0];
+}
+
+/**
+ * Every transition delay a rule's own declarations set, in ms, from `transition-delay` or
+ * `transition`.
+ */
+function transitionDelaysMs(rule: Rule | undefined): number[] {
+  const toMs = (time: string) => parseFloat(time) * (time.endsWith('ms') ? 1 : 1000);
+  return (rule?.nodes ?? []).flatMap((node) => {
+    if (node.type !== 'decl') return [];
+    if (node.prop === 'transition-delay')
+      return splitTopLevelCommas(node.value).map((time) => toMs(time.trim()));
+    if (node.prop !== 'transition') return [];
+    // In the shorthand, a transition's second time is its delay.
+    return splitTopLevelCommas(node.value).map((transition) => {
+      const times = transition.match(/[\d.]+m?s\b/g) ?? [];
+      return times.length > 1 ? toMs(times[1]) : 0;
+    });
+  });
+}
+
+/** Declarations a character rule can carry without making its text look different. */
+const NON_VISUAL_DECLARATIONS = new Set(['font-size: 100%']);
+
+/**
+ * Character markers in `usfm.sty` that the editor does not render as a character span: `\fig` is a
+ * figure, and the table-cell markers (`\th1`, `\tcr2`, …) are real table cells.
+ */
+function isRenderedAsCharacterSpan(marker: string): boolean {
+  return marker !== 'fig' && !/^t[hc][cr]?\d+$/.test(marker);
+}
+
+/**
+ * Body-text character markers: `\StyleType Character` in `usfm.sty`, leaving out the footnote and
+ * cross-reference markers (`\TextType NoteText`).
+ */
+function bodyTextCharacterMarkers(): string[] {
+  const field = (block: string, name: string) =>
+    block
+      .split('\n')
+      .find((line) => line.startsWith(`\\${name} `))
+      ?.slice(name.length + 2)
+      .trim();
+
+  return readFileSync(USFM_STY_PATH, 'utf8')
+    .replace(/\r/g, '')
+    .split('\n\\Marker ')
+    .slice(1)
+    .filter(
+      (block) =>
+        field(block, 'StyleType')?.toLowerCase() === 'character' &&
+        field(block, 'TextType') !== 'NoteText',
+    )
+    .map((block) => block.split('\n')[0].trim())
+    .filter(isRenderedAsCharacterSpan);
+}
+
+/**
+ * The body-text character markers whose `_usj-nodes.scss` styling changes nothing visible. That
+ * file is all of Simple's character styling (the project stylesheet applies in Standard view only).
+ * Every rule naming a marker counts, wherever it sits and however its selector is grouped.
+ */
+function markersWithNoVisibleStyle(): string[] {
+  const declarationsByMarker = new Map<string, string[]>();
+  postcss.parse(readFileSync(USJ_NODES_SCSS_PATH, 'utf8')).walkRules((rule) => {
+    const declarations = rule.nodes.flatMap((node) =>
+      node.type === 'decl' ? [`${node.prop}: ${node.value}`] : [],
+    );
+    rule.selectors.forEach((selector) => {
+      [...selector.matchAll(/\.usfm_([\w-]+)/g)].forEach(([, marker]) => {
+        declarationsByMarker.set(marker, [
+          ...(declarationsByMarker.get(marker) ?? []),
+          ...declarations,
+        ]);
+      });
+    });
+  });
+
+  return bodyTextCharacterMarkers()
+    .filter((marker) =>
+      (declarationsByMarker.get(marker) ?? []).every((declaration) =>
+        NON_VISUAL_DECLARATIONS.has(declaration),
+      ),
+    )
+    .sort();
+}
+
+/** The `.usfm_*` markers named in a selector's `:is(…)` list. */
+function markersInIsList(selector: string): string[] {
+  const isList = /:is\(([^)]*)\)/.exec(selector);
+  if (!isList) throw new Error(`${selector} has no :is(…) marker list`);
+  return isList[1]
+    .split(',')
+    .map((marker) => marker.trim().replace(/^\.usfm_/, ''))
+    .sort();
+}
+
+const MARKER_INDICATOR_SCOPE = '.editor-container-simple.character-marker-indicators';
 
 describe('_simple-mode.scss', () => {
   it('scopes every rule to a Simple-mode marker class', () => {
@@ -35,7 +164,7 @@ describe('_simple-mode.scss', () => {
     // scope narrows the text column for every POWER-mode user too, silently, for a control they
     // cannot see. `_usj-nodes.scss` styles the editor in both modes and this file is compiled into
     // every web view's CSS, so the marker-class prefix is the only thing keeping Power untouched.
-    const selectors = ruleSelectors(readFileSync(SIMPLE_MODE_SCSS_PATH, 'utf8'));
+    const selectors = compiledSimpleModeRules().flatMap((rule) => rule.selectors);
 
     expect(selectors.length).toBeGreaterThan(0);
     const escaped = selectors.filter(
@@ -95,5 +224,74 @@ describe('_simple-mode.scss', () => {
     expect(scss).not.toMatch(
       /padding-(inline-end|left):\s*var\(--psc-character-marker-bar-width\);/,
     );
+  });
+
+  describe('character markers with no visible style', () => {
+    const indicatorRules = () =>
+      compiledSimpleModeRules().filter(({ selector }) =>
+        selector.startsWith(MARKER_INDICATOR_SCOPE),
+      );
+    const restingRule = () => indicatorRules().find(({ selector }) => !selector.endsWith(':hover'));
+    const hoverRule = () => indicatorRules().find(({ selector }) => selector.endsWith(':hover'));
+
+    it('finds the markers it is meant to find', () => {
+      // Guards the derivation itself, so the equality check below cannot pass vacuously.
+      const markers = markersWithNoVisibleStyle();
+
+      expect(markers).toEqual(expect.arrayContaining(['w', 'wg', 'wh', 'wa', 'rb', 'ior']));
+      ['bd', 'nd', 'wj', 'ft', 'xt', 'tc1', 'fig'].forEach((marker) =>
+        expect(markers).not.toContain(marker),
+      );
+    });
+
+    it('marks exactly the markers whose style is invisible, on hover too', () => {
+      // A marker that gains a visible style in `_usj-nodes.scss` must leave the list, or bold or
+      // underlined text picks up the tint; one that loses it must join, or users type inside it
+      // unawares again.
+      expect(indicatorRules()).toHaveLength(2);
+      indicatorRules().forEach(({ selector }) =>
+        expect(markersInIsList(selector)).toEqual(markersWithNoVisibleStyle()),
+      );
+    });
+
+    it('draws the hover line only after a delay and starts removing it at once', () => {
+      // The line is always drawn but transparent. Only the hover rule carries a delay, so the
+      // line fades in late and starts fading out as soon as the pointer leaves.
+      const resting = restingRule();
+      const hovered = hoverRule();
+      const hoverColor = declarationValue(hovered, 'text-decoration-color');
+
+      expect(declarationValue(resting, 'text-decoration-line')).toBe('underline');
+      expect(declarationValue(resting, 'text-decoration-color')).toBe('transparent');
+      expect(hoverColor).toBeDefined();
+      expect(hoverColor).not.toBe('transparent');
+      expect(Math.max(0, ...transitionDelaysMs(resting))).toBe(0);
+      expect(Math.max(0, ...transitionDelaysMs(hovered))).toBeGreaterThan(0);
+    });
+
+    it('is switched on from the Scripture editor root only, not the read-only Simple panels', () => {
+      // When the class applies is unit-tested on `getSimpleModeRootClassNames`; this checks the
+      // editor root uses it and the panels do not.
+      expect(
+        propExpressions(parseWebViewSource(), 'div', 'className').some((expression) =>
+          expression.includes('getSimpleModeRootClassNames('),
+        ),
+      ).toBe(true);
+      ['model-text-panel.component.tsx', 'resource-text-panel.component.tsx'].forEach((panel) => {
+        const nodes = descendants(parseSource(panel));
+        const strings = nodes.flatMap((node) =>
+          ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node) || ts.isJsxText(node)
+            ? [node.text]
+            : [],
+        );
+        expect(strings.some((text) => text.includes('editor-container-simple'))).toBe(true);
+        expect(strings.some((text) => text.includes('character-marker-indicators'))).toBe(false);
+        expect(
+          nodes.some(
+            (node) => ts.isIdentifier(node) && node.text === 'getSimpleModeRootClassNames',
+          ),
+        ).toBe(false);
+      });
+    });
   });
 });

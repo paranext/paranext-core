@@ -13,6 +13,7 @@ import {
   knobs,
   recordTourDoneElsewhere,
   resetTourHarness,
+  setHeldForFirstSync,
 } from './onboarding-tour.test-utils';
 import { readTourDone, requestTourReplay, writeTourDone } from './onboarding-tour.store';
 import { OnboardingTour } from './onboarding-tour.component';
@@ -38,6 +39,11 @@ vi.mock('./onboarding-tour.store', async () => {
 vi.mock('@renderer/hooks/use-is-power-mode.hook', async () => {
   const { powerModeMock } = await import('./onboarding-tour.test-utils');
   return powerModeMock();
+});
+
+vi.mock('@renderer/hooks/use-tour-held-for-first-sync.hook', async () => {
+  const { tourHeldForFirstSyncMock } = await import('./onboarding-tour.test-utils');
+  return tourHeldForFirstSyncMock();
 });
 
 vi.mock('@renderer/hooks/papi-hooks', async () => {
@@ -366,5 +372,55 @@ describe('OnboardingTour', () => {
     render(<OnboardingTour />);
 
     expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  describe('while the first sync is pending', () => {
+    it('does not open the tour while the first sync holds it', () => {
+      knobs.isHeldForFirstSync = true;
+      render(<OnboardingTour />);
+      expect(screen.queryByTestId('mock-tour')).toBeNull();
+    });
+
+    it('opens the tour as soon as the first sync is recorded, without spending the done flag', () => {
+      knobs.isHeldForFirstSync = true;
+      render(<OnboardingTour />);
+      expect(screen.queryByTestId('mock-tour')).toBeNull();
+      expect(readTourDone()).toBe(false);
+
+      act(() => {
+        setHeldForFirstSync(false);
+      });
+
+      expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+      expect(readTourDone()).toBe(false);
+    });
+
+    it('opens a replay even while the first sync holds the tour', () => {
+      knobs.tourDone = true;
+      knobs.isHeldForFirstSync = true;
+      render(<OnboardingTour />);
+      expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+      act(() => {
+        requestTourReplay();
+      });
+
+      expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+    });
+
+    it('stays unmounted for a completed tour whatever the first-sync state', () => {
+      knobs.tourDone = true;
+      render(<OnboardingTour />);
+      expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+      act(() => {
+        setHeldForFirstSync(true);
+      });
+      act(() => {
+        setHeldForFirstSync(false);
+      });
+
+      expect(screen.queryByTestId('mock-tour')).toBeNull();
+    });
   });
 });

@@ -38,6 +38,26 @@ editor behaviors exist only to satisfy these, so changing one changes the editor
 
 4. **End of file always gets a newline**, likely replacing a space.
 
+5. **A no-break space is spelled the way the project stores it.** The project setting
+   `platformScripture.allowInvisibleCharacters` (Paratext's `AllowInvisibleChars`) decides: off
+   (the default), the USFM spells U+00A0 as `~` and the project cannot hold a literal tilde; on, the
+   USFM holds U+00A0 itself and `~` is an ordinary character. Every `UsjReaderWriter` that writes a
+   project's USFM gets the setting as `shouldAllowInvisibleCharacters`, and every editor host puts
+   it in the editor's `ViewOptions.allowInvisibleCharacters` (`getEditorViewOptions` in the
+   scripture editor web view), so Standard view keeps `~` and U+00A0 apart (with the setting on it
+   holds a stored U+00A0 as an internal stand-in, U+001A, drawn as a blank the width of a space by
+   the editor's `NBSP_STAND_IN_FONT_FAMILY`, which must lead every Scripture `font-family` — the
+   vendored `_usj-nodes.scss` puts it first). Every op, clipboard flavor and callback text the
+   editor gives a host has U+00A0, but text a host reads from the editor's display (a DOM
+   selection, an element's `textContent`) still holds the stand-in, so it goes through the editor's
+   `toUsfmNbspSpelling` before it is copied or searched for. Attribute values follow Paratext 9,
+   which never converts `~` or U+00A0 inside a value: Standard and Unformatted views hold a value's
+   U+00A0 as the stand-in under either setting, and a value's `~` is always a tilde (`\periph`
+   attributes and a `\vp` not folded into its verse are body text, as in Paratext 9).
+
+   _Consequence:_ a writer or editor that does not get the setting rewrites every no-break space or
+   every tilde of such a project the next time it saves.
+
 ---
 
 ## 2. The markers map is the declared-property source
@@ -60,7 +80,9 @@ repo's half for the facts each side holds alone.
 `lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts` is the single
 forwarding table for all three consumers: the scripture editor web view, the footnote editor
 component (any host that runs it in editable marker mode), and the footnotes pane's inline row
-editor (Standard view — see `resolveNoteEditingSurface` in
+editor (a pane-model view — Standard view, or Simple's Formatted view, which gives the pane
+Standard's view options; Power's Preview is a pane-model view too, but read-only, so it opens no row
+editor; see `usesPaneNoteModel` and `resolveNoteEditingSurface` in
 `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). The
 per-consumer copies drifted once already; there is one table now.
 
@@ -131,7 +153,8 @@ consequences worth knowing here:
   editor half owns the rule that no offered entry is a silent no-op — see "A menu offers nothing it
   cannot insert" in `docs/standard-view-invariants.md` (`scripture-editors`), which also covers the
   `\id` line, where `\` offers the inline list and the Enter palette's paragraph pick splits the
-  line instead of retagging it.
+  line instead of retagging it. In a book with no chapters that list also offers `\c`, which the
+  host must not filter out: it is the only way to start chapter 1 in Standard view.
 
 **The editor's right-click menu outranks both palettes, and the hand-off rests on listener order
 across the two repos.** While `ContextMenuPlugin`'s menu is open it is the only keyboard mode on
@@ -258,6 +281,18 @@ Lexical's blur processing can NULL the editor-state selection; `focus()` then fa
 selecting the document END. So dismissals restore the caret from the focus-out capture exactly as
 commits do, before focusing. It is a no-op when the selection survived.
 
+A selected paragraph marker counts as a surviving selection. It has no text range, so
+`getSelection()` reports nothing, but the capture is a caret the user has since left: restoring it
+would send a paragraph retag (or any other apply) to whichever paragraph that caret was in. So:
+
+- `useMarkerPaletteFocusOutCapture` (`lib/platform-bible-react`) clears the capture when focus
+  leaves while a marker is selected, instead of keeping the older caret;
+- every restore — `restoreSelectionIfLost` in the editor web view's utils, and the footnote
+  editor's own copy — returns early when `getSelectedParaMarker()` reports a marker.
+
+The editor's `getSelectedParaMarker()` reports nothing while the editor is read-only, so neither
+check sees a marker selected then.
+
 ## 4. The footnote editor
 
 `lib/platform-bible-react/src/components/advanced/footnote-editor/`.
@@ -316,13 +351,15 @@ commits do, before focusing. It is a no-op when the selection survived.
   offset. Both skip the note's own marker, caller and closing marker, every NBSP separator, and
   attribute text. A change to what `FootnoteItem` renders as a `.marker` (or to what the editor
   renders as a glyph) has to change the other side too, or clicks land off by the difference.
-- **In Standard view, the same component runs `inline` inside the footnotes pane — there is no
-  popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
-  live-apply re-keys the note in the parent editor, so the host must re-sync its session key from
-  `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new `noteOps` identity
-  for its own live-apply — that reloads the editor mid-typing. An unclosed note (the one kind the text
-  shows the content of) is edited in place in the text as well, as PT9 does, and the row editor is
-  not opened on one typed or pasted there; see `adr-footnote-unclosed-note-edited-in-place`.
+- **In a pane-model view (Standard view, or Simple's Formatted view, where the pane and its row
+  editor get Standard's view options), the same component runs `inline` inside the footnotes pane
+  — there is no popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply
+  unchanged. Its live-apply re-keys the note in the parent editor, so the host must re-sync its
+  session key from `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new
+  `noteOps` identity for its own live-apply — that reloads the editor mid-typing. An unclosed note
+  (the one kind the text shows the content of) is edited in place in the text as well, as PT9 does,
+  and the row editor is not opened on one typed or pasted there; see
+  `adr-footnote-unclosed-note-edited-in-place`.
 - **The caller and note-type changes rebuild the note from `getNoteOps`, which reads the live tree
   unsettled.** Both must settle pending marker edits (`commitPendingMarkerEdits`, skipped while a
   marker-palette session is open) before reading — the same rule `closeAndSave` and

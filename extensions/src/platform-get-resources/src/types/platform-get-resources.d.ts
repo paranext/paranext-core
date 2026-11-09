@@ -4,7 +4,12 @@ declare module 'platform-get-resources' {
   import type { DblResourceData } from 'platform-bible-utils';
 
   export type GetResourcesDataTypes = {
-    /** List of information about resources that are available from the DBL */
+    /**
+     * List of information about resources that are available from the DBL.
+     *
+     * Rejects when the DBL cannot be reached (for example offline) or the user registration is not
+     * valid. An empty list never stands in for "offline".
+     */
     DblResources: DataProviderDataType<undefined, DblResourceData[], never>;
   };
 
@@ -28,6 +33,23 @@ declare module 'platform-get-resources' {
    * belongs to.
    */
   export type DblResourceInstallStatus = { [dblEntryUid: string]: string | undefined };
+
+  /**
+   * Which texts licensing terms prohibit using as a model or base for a new translation.
+   *
+   * Both halves are needed: a catalog row is matched by its DBL id, but an installed text that is
+   * restricted by its copyright statement rather than by being on the rights holder's list has no
+   * DBL id to match on, only a local project id.
+   */
+  export type ModelTextRestrictions = {
+    /** Lowercase DBL entry ids of the restricted texts on the rights holder's list. */
+    dblIds: string[];
+    /**
+     * Uppercase local project ids (the same format as `DblResourceData.projectId`) of the installed
+     * resources that are restricted, whether or not their DBL id is on the list.
+     */
+    projectIds: string[];
+  };
 
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
     /**
@@ -69,6 +91,21 @@ declare module 'platform-get-resources' {
      * @experimental
      */
     recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
+    /**
+     * Lists the texts that licensing terms prohibit using as a model or base for a new translation.
+     *
+     * Never contacts the DBL: the id list ships with the backend, and the installed resources are
+     * read from disk, so it answers offline and before the catalog has been fetched. Call it again
+     * after installing a resource, since a newly installed restricted text is only reported in
+     * `projectIds` once it is on disk.
+     *
+     * This is the only source of `DblResourceData.isRestrictedAsModelText`: the catalog rows the
+     * provider returns do not carry it, and `platformGetResources` stamps it on every row it
+     * serves.
+     *
+     * @returns The restricted DBL ids and installed project ids.
+     */
+    listModelTextRestrictions: () => Promise<ModelTextRestrictions>;
     /**
      * Installs or updates a DBL resource to the local filesystem.
      *
@@ -139,13 +176,16 @@ declare module 'papi-shared-types' {
     'platformGetResources.openGetResources': () => Promise<string | undefined>;
 
     /**
-     * Opens a new Home web view and returns the WebView id
+     * Opens Home, or raises it if it is already open, and returns its WebView id
      *
-     * @param shouldShowProjectsOnly Open Home scoped to editable projects, leaving out the
-     *   published resources that otherwise share its list. Set by entry points that are asking "get
-     *   me to one of my projects"; Home's own entry points omit it and list both. Applies to the
-     *   open it is passed on only — it does not stick to the tab.
-     * @returns WebView id for new Home WebView or `undefined` if not created
+     * @param shouldShowProjectsOnly `true` sets Home's type filter to Paratext projects, leaving
+     *   out the published resources that otherwise share its list, and reloads an already-open Home
+     *   that is showing another filter. Set by entry points that are asking "get me to one of my
+     *   projects". Omitted or any other value asks for Home as it is: a new Home starts on
+     *   everything, and an open one is raised showing whatever filter it last had. In Simple mode
+     *   Home always starts on Paratext projects, whatever this says. The user can change the filter
+     *   either way.
+     * @returns WebView id for the Home WebView or `undefined` if none was opened
      */
     'platformGetResources.openHome': (
       shouldShowProjectsOnly?: boolean,
@@ -173,14 +213,25 @@ declare module 'papi-shared-types' {
      * Returns DBL resources from memory cache.
      *
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
-     * existing cached data.
+     * existing cached data. Concurrent calls share one fetch.
      *
+     * Each row's `isRestrictedAsModelText` is set from the backend's model-text restrictions. Until
+     * the backend first answers, the rows are returned without the flag, and a later read carries
+     * it.
+     *
+     * @param shouldWaitForModelTextRestrictions Whether to wait, up to two seconds, for the
+     *   backend's first answer about model-text restrictions. Pass `true` only from a caller that
+     *   reads `isRestrictedAsModelText`, such as a model or base text picker; every other caller
+     *   would wait on a flag it ignores.
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
-     * @throws When the fetch itself fails. Callers that render an error state with a retry should
+     * @throws When the fetch itself fails — including when the DBL cannot be reached, for example
+     *   offline — and no catalog is cached. Callers that render an error state with a retry should
      *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
      *   change the answer.
      */
-    'platformGetResources.getCachedResources': () => Promise<DblResourceCatalog>;
+    'platformGetResources.getCachedResources': (
+      shouldWaitForModelTextRestrictions?: boolean,
+    ) => Promise<DblResourceCatalog>;
 
     /**
      * Brings the catalog's derived flags (`installed`, `projectId`, `updateAvailable`) up to date
@@ -208,14 +259,26 @@ declare module 'papi-shared-types' {
      *
      * Convention: each returned entry has `dblEntryUid === projectId`, marking it as non-DBL.
      * Callers (e.g. `selectTextConnection`) detect this and create a `ProjectReference` instead of
-     * a `DblResourceReference` so the resource is loadable without a catalog entry.
+     * a `DblResourceReference` so the resource is loadable without a catalog entry. Each entry's
+     * `isRestrictedAsModelText` is set the same way as in `getCachedResources`.
      *
+     * @param shouldWaitForModelTextRestrictions As in `getCachedResources`.
+     * @param catalogWaitMs The longest to wait for the DBL catalog, in milliseconds, before
+     *   building the list without it — in which case it can include installed DBL resources too.
+     *   Without one it waits for the catalog however long it takes; a caller that lists these
+     *   beside the catalog should leave it out.
      * @returns Synthetic resource entries for locally-installed non-DBL resources. Also returns
-     *   `[]` when the C# data provider has not registered its projects yet or the lookup threw —
-     *   callers cannot distinguish those from a genuine "no local non-DBL resources" result, so a
-     *   caller that needs a retry or loading affordance must get that signal from elsewhere.
+     *   `[]` when the C# data provider has not registered its projects yet — callers cannot
+     *   distinguish that from a genuine "no local non-DBL resources" result, so a caller that needs
+     *   a retry or loading affordance must get that signal from elsewhere.
+     * @throws When the local projects could not be read. A failed catalog does not throw: the list
+     *   is then built without it.
+     * @experimental The `catalogWaitMs` parameter may change or disappear without notice.
      */
-    'platformGetResources.getLocalNonDblResources': () => Promise<DblResourceData[]>;
+    'platformGetResources.getLocalNonDblResources': (
+      shouldWaitForModelTextRestrictions?: boolean,
+      catalogWaitMs?: number,
+    ) => Promise<DblResourceData[]>;
 
     // `paratextBibleSendReceive.*` commands are deliberately NOT declared here. This file is
     // auto-included (via `typeRoots`) into the TypeScript programs of extension repos developed

@@ -34,6 +34,8 @@ import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-s
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
+import { createInterfaceScaling } from '@main/interface-scaling.util';
+import { matchAppChord, runAppChord } from '@main/app-chords.util';
 import { openTermsOfServiceWindow } from '@main/terms-of-service-window';
 import chroma from 'chroma-js';
 import {
@@ -53,10 +55,12 @@ import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { registerDisplayMediaRequestHandler } from '@main/services/display-media-request.util';
+import { registerLeakedCertificateCheck } from '@main/services/leaked-certificate-check.util';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
 import { extensionHostService } from '@main/services/extension-host.service';
+import { stopChildProcessesInOrder } from '@main/services/process-shutdown-order.util';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
@@ -67,6 +71,8 @@ import {
 import {
   performShutdownTasks,
   performWindowCloseTasks,
+  resumeSyncQueue,
+  shouldResumeSyncQueue,
   startWindowCloseTasksWithoutWaiting,
 } from '@main/shutdown-tasks';
 import type { WindowCloseDecision } from '@main/services/window-close-decision.service';
@@ -220,9 +226,9 @@ import {
   getCommandLineArgument,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
+import { distrustLeakedCertificateRootsInNode } from '@node/utils/leaked-certificates.util';
 import { resolveHtmlPath } from '@node/utils/util';
 import {
-  DEFAULT_ZOOM_FACTOR,
   DEV_MODE_QUERY_PARAMETER,
   IS_MAIN_WINDOW_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
@@ -241,10 +247,14 @@ import * as commandService from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
-import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  networkObjectService,
+  onDidCreateNetworkObject,
+} from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
+import { settingsServiceDataProviderName } from '@shared/services/settings.service-model';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
@@ -262,21 +272,21 @@ import {
   waitForDuration,
 } from 'platform-bible-utils';
 
+// Before this process opens any TLS connection. The modules imported above open none when they
+// load.
+// TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
+distrustLeakedCertificateRootsInNode();
+
 // #region Helper functions
 
-/**
- * Get the zoom factor from settings or return the default value
- *
- * @returns The stored zoom factor or the default value
- */
-const getZoomFactor = async (): Promise<number> => {
-  try {
-    return await settingsService.get('platform.zoomFactor');
-  } catch (e) {
-    logger.warn(`Failed to get zoom factor from settings: ${getErrorMessage(e)}`);
-    return DEFAULT_ZOOM_FACTOR;
-  }
-};
+/** Keeps every window at the zoom factor setting (interface scaling) */
+const interfaceScaling = createInterfaceScaling({
+  get: () => settingsService.get('platform.zoomFactor'),
+  subscribe: (callback) =>
+    settingsService.subscribe('platform.zoomFactor', callback, { retrieveDataImmediately: false }),
+  onDidCreateNetworkObject,
+  settingsProviderName: settingsServiceDataProviderName,
+});
 
 /**
  * Save the zoom factor to settings
@@ -293,14 +303,14 @@ const setZoomFactor = async (factor: number): Promise<void> => {
 
 /** Increase the zoom factor of all application windows by one step (0.1), up to 3.0 */
 const zoomIn = async () => {
-  const currentZoom = await getZoomFactor();
+  const currentZoom = await interfaceScaling.read();
   const newZoom = adjustZoomFactor(currentZoom, 1);
   if (newZoom !== currentZoom) await setZoomFactor(newZoom);
 };
 
 /** Decrease the zoom factor of all application windows by one step (0.1), down to 0.5 */
 const zoomOut = async () => {
-  const currentZoom = await getZoomFactor();
+  const currentZoom = await interfaceScaling.read();
   const newZoom = adjustZoomFactor(currentZoom, -1);
   if (newZoom !== currentZoom) await setZoomFactor(newZoom);
 };
@@ -504,6 +514,13 @@ async function main() {
     throw new Error(
       `Could not start the app-global services in main: ${failedGlobalServiceNames.join(', ')}. Each failure is logged above.`,
     );
+
+  // Follow the zoom factor setting. Not awaited, as in the theme service host: resolving a provider
+  // that is not registered yet spends the whole RPC retry budget, and the extension host that
+  // registers this one is only spawned below.
+  // TODO(PT-4807): after an extension-host restart the settings service still holds the old
+  // provider, so re-subscribing fails and zoom changes stop until the app restarts.
+  interfaceScaling.startFollowingSetting();
 
   // Window layout persistence must register its request handlers before any window exists so a
   // renderer's layout load can never race the registration
@@ -860,6 +877,13 @@ async function main() {
     // with its latch set.
     if (isFirstWindow) resetShutdownLatchesForNewSession();
 
+    // Shutdown tasks paused the sync queue when the previous session's last window closed; the
+    // process outlived it (macOS), so the new session's first window resumes it. Not awaited.
+    // resumeSyncQueue logs its own failures and never rejects; the catch only guards the floating
+    // promise.
+    if (shouldResumeSyncQueue(isFirstWindow, hasCreatedWindowThisProcess))
+      resumeSyncQueue().catch(() => {});
+
     // The flags the process was launched with describe how to show the window that launch is
     // producing, and nothing after it. "No windows tracked" is not that window: on macOS the app
     // stays resident after its last window closes, so a dock click — a window the USER asked for —
@@ -910,6 +934,8 @@ async function main() {
     // against the renderer's own naming. Until the renderer's first title arrives, Electron answers
     // `getTitle()` with its own default, which is why `summarizeWindows` reads a window's readiness
     // rather than trusting its title.
+    // interface-scaling.spec.ts's `appWindowOptions` mirrors `show`, the title bar options and
+    // `webPreferences` here, so keep the two in step
     const newWindow = new BrowserWindow({
       show: activation.showOnCreate,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
@@ -962,6 +988,10 @@ async function main() {
     // clears it, because the old page's port has closed.
     registerWindowWithPapiPortBroker(newWindow.webContents, windowId, {
       onPortClosed: () => markWindowNotReady(windowId),
+    });
+    // A preload error otherwise shows only in that window's DevTools console
+    newWindow.webContents.on('preload-error', (_event, preloadPath, error) => {
+      logger.error(`Window ${windowId} preload ${preloadPath} failed: ${getErrorMessage(error)}`);
     });
 
     // Tie the window to its persisted identity so layout persistence can serve and save it. If the
@@ -1827,10 +1857,10 @@ async function main() {
       logger.error(`Window ${windowId} could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
-    // Window-chrome keyboard shortcuts: dev tools (F12), tab and tab-group navigation, and PT9-style
-    // verse/reference-history navigation. Content zoom is not among them — the window-chrome zoom
-    // chords live in `web-view-content-zoom.chrome-keys.ts`, and the in-view case in the bootstrap
-    // script it injects.
+    // Window-chrome keyboard shortcuts: dev tools (F12), tab and tab-group navigation, PT9-style
+    // verse/reference-history navigation, and Open and Project settings. Content zoom is not among
+    // them — the window-chrome zoom chords live in `web-view-content-zoom.chrome-keys.ts`, and the
+    // in-view case in the bootstrap script it injects.
     newWindow.webContents.on('before-input-event', (event, input) => {
       // Just act on keyDown and ignore keyUp. Could cause trouble if we need to preventDefault on keyUp
       if (input.type === 'keyUp') return;
@@ -1915,6 +1945,27 @@ async function main() {
         return;
       }
 
+      // Ctrl/Cmd+O opens Home (not in Simple mode, which hides Open) and Ctrl/Cmd+J opens Project
+      // settings for the web view whose tab has focus in this window. Both send the command their
+      // menu item runs, so the chord and the item cannot drift apart.
+      //
+      // TODO (PT-4143): claimed regardless of focus, like the chords above.
+      const appChord = matchAppChord(
+        input,
+        process.platform === 'darwin',
+        getCachedInterfaceMode(),
+      );
+      if (appChord) {
+        event.preventDefault();
+        runAppChord(appChord, {
+          getFocus: async () => (await getWindowServiceShard(windowId))?.getFocus(),
+          sendCommand: commandService.sendCommand,
+        }).catch((e) => {
+          logger.warn(`Failed to run the ${appChord} keyboard shortcut: ${getErrorMessage(e)}`);
+        });
+        return;
+      }
+
       if (process.platform !== 'darwin') {
         // Non-Mac shortcuts
 
@@ -1947,36 +1998,12 @@ async function main() {
       }
     });
 
-    // Set initial zoom factor from settings
-    newWindow.webContents.on('did-finish-load', async () => {
-      try {
-        const zoom = await getZoomFactor();
-        newWindow.webContents.setZoomFactor(zoom);
-      } catch (e) {
-        logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
-      }
+    // Keep this window at the zoom factor setting through every document it loads and every change
+    const stopInterfaceScaling = interfaceScaling.addWindow(newWindow);
+    windowCloseUnsubscribers.add(async () => {
+      stopInterfaceScaling();
+      return true;
     });
-
-    // Update zoom factor when the setting changes (per-window subscription with cleanup)
-    try {
-      windowCloseUnsubscribers.add(
-        await settingsService.subscribe('platform.zoomFactor', async (newZoomFactor) => {
-          const zoomFactor = isPlatformError(newZoomFactor)
-            ? (() => {
-                logger.error(`Error getting new zoom factor: ${getErrorMessage(newZoomFactor)}`);
-                return DEFAULT_ZOOM_FACTOR;
-              })()
-            : newZoomFactor;
-          try {
-            newWindow.webContents.setZoomFactor(zoomFactor);
-          } catch (e) {
-            logger.error(`Failed to update zoom factor: ${getErrorMessage(e)}`);
-          }
-        }),
-      );
-    } catch (e) {
-      logger.warn(`Failed to subscribe to zoom factor changes: ${getErrorMessage(e)}`);
-    }
 
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
@@ -2360,10 +2387,14 @@ async function main() {
         unsubscribeBounded('the macOS menubar', unsubscribeMenubar),
       ]);
 
-      await Promise.all([
-        dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
-        extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
-      ]);
+      await stopChildProcessesInOrder({
+        waitForExtensionHostToClose: () =>
+          extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
+        closeWebSocketClients: () =>
+          networkService.closeWebSocketClients(INTENTIONAL_CLOSE_CODE, 'app shutdown'),
+        waitForDataProviderToClose: () =>
+          dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
+      });
       // Windows are normally destroyed by now, so this closes nothing; it is the backstop for a
       // port still open when the network goes down, so it reads as an intentional close.
       closeAllPapiPorts(INTENTIONAL_CLOSE_CODE, 'app shutdown');
@@ -2414,6 +2445,9 @@ async function main() {
       // web views with `allowSameOrigin: false` and any other iframe are denied (see
       // `selectDisplayMediaSource`).
       registerDisplayMediaRequestHandler(session.defaultSession, USERSNAP_SPACE_API_KEY);
+
+      // TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
+      registerLeakedCertificateCheck(session.defaultSession);
 
       // Install Chromium devtools extensions once (not per-window)
       if (isDebug) {
@@ -2776,7 +2810,10 @@ async function main() {
       params: [],
       result: {
         name: 'return value',
-        schema: { type: 'string', enum: ['granted', 'unconfirmed', 'deferred'] },
+        schema: {
+          type: 'string',
+          enum: ['granted', 'unconfirmed', 'unreadable', 'deferred', 'notYetSynced'],
+        },
       },
     },
   });

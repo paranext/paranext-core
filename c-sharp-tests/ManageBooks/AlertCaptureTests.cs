@@ -367,6 +367,67 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // =====================================================================
+        // WriteCapturedToConsole — logging helper for a caller that captured
+        // alerts instead of letting them fall through to the console itself
+        // =====================================================================
+
+        [Test]
+        [Description("Writes one redacted '[Alert]' line per entry, in order.")]
+        public void WriteCapturedToConsole_WritesOneRedactedLinePerEntryInOrder()
+        {
+            using var output = new StringWriter();
+            TextWriter previousOut = Console.Out;
+            Console.SetOut(output);
+            try
+            {
+                AlertCapture.WriteCapturedToConsole(
+                    [
+                        new AlertEntry("first body", "first caption", AlertLevel.Information),
+                        new AlertEntry(
+                            @"Failed reading C:\Users\someone\secret\file.xml",
+                            "second caption",
+                            AlertLevel.Error
+                        ),
+                    ]
+                );
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            var lines = output
+                .ToString()
+                .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+            Assert.That(lines, Has.Length.EqualTo(2));
+            Assert.That(lines[0], Is.EqualTo("[Alert] first caption: first body"));
+            Assert.That(
+                lines[1],
+                Does.Contain("<path>").And.Not.Contain(@"C:\Users"),
+                "same redaction as the no-scope fallback"
+            );
+        }
+
+        [Test]
+        [Description("An empty entry list writes nothing.")]
+        public void WriteCapturedToConsole_WritesNothingForNoEntries()
+        {
+            using var output = new StringWriter();
+            TextWriter previousOut = Console.Out;
+            Console.SetOut(output);
+            try
+            {
+                AlertCapture.WriteCapturedToConsole([]);
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.That(output.ToString(), Is.Empty);
+        }
+
+        // =====================================================================
         // Nested scopes (CAP-010 v1: inner replaces outer; outer not restored)
         // =====================================================================
 

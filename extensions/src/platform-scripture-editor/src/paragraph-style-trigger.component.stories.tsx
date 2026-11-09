@@ -1,16 +1,18 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import {
+  Button,
   MARKER_MENU_STRING_KEYS,
   SHRINK_STEP,
   ShrinkStepOverride,
   type MarkerMenuItem,
 } from 'platform-bible-react';
-import type { ComponentProps, ReactNode } from 'react';
+import { useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import {
   ParagraphStyleTrigger,
   PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
 } from './paragraph-style-trigger.component';
+import { useParagraphMenuOpenState } from './use-paragraph-menu-open-state.hook';
 
 /**
  * The editor toolbar's paragraph-style control: a button showing the marker and style name of the
@@ -25,7 +27,8 @@ import {
  * `ShrinkStepOverride` so every step is reachable at any browser width.
  *
  * **Try it**: click the trigger to open the marker menu, and hover the disabled story to see why
- * the paragraph style cannot be changed.
+ * the paragraph style cannot be changed. The editor-request story opens the menu the way Enter or
+ * Alt+Down on a selected paragraph marker does, without a click on the trigger.
  */
 const meta: Meta<typeof ParagraphStyleTrigger> = {
   title: 'Bundled Extensions/platform-scripture-editor/ParagraphStyleTrigger',
@@ -81,16 +84,86 @@ const MARKERS: { blockMarker: string; styleName: string }[] = [
 
 type TriggerArgs = ComponentProps<typeof ParagraphStyleTrigger>;
 
-/** Renders the trigger with the story's args, the shared menu items, and the shared strings. */
+/**
+ * Renders the trigger with the story's args, the shared menu items, and the shared strings. There
+ * is no editor here, so the focus the app would return to the editor goes back to the trigger
+ * instead of being dropped on the page.
+ */
 function Trigger({ blockMarker, isStructureProtected = false, styleName }: Partial<TriggerArgs>) {
+  // The web view owns this state in the app, through the same hook; each story instance keeps its
+  // own so clicking opens it.
+  const { isMenuOpen, setIsMenuOpen } = useParagraphMenuOpenState({
+    isReadOnly: false,
+    isStructureProtected,
+    hasBlockMarker: !!blockMarker,
+    notifyStructureProtected: () => {},
+  });
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const wrapperRef = useRef<HTMLDivElement>(null);
   return (
-    <ParagraphStyleTrigger
-      blockMarker={blockMarker}
-      isStructureProtected={isStructureProtected}
-      localizedStrings={localizedStrings}
-      markerMenuItems={markerMenuItems}
-      styleName={styleName}
-    />
+    <div ref={wrapperRef} className="tw:contents">
+      <ParagraphStyleTrigger
+        blockMarker={blockMarker}
+        isStructureProtected={isStructureProtected}
+        localizedStrings={localizedStrings}
+        markerMenuItems={markerMenuItems}
+        styleName={styleName}
+        isMenuOpen={isMenuOpen}
+        onMenuOpenChange={setIsMenuOpen}
+        onReturnFocusToEditor={() => wrapperRef.current?.querySelector('button')?.focus()}
+      />
+    </div>
+  );
+}
+
+/**
+ * Renders the trigger beside a stand-in for the editor: a button that asks for the menu the way the
+ * editor's `onParaMarkerMenuRequest` does, through the same hook the web view uses, and a text box
+ * that takes focus back when the menu returns focus to the editor.
+ */
+function EditorRequestTrigger({
+  blockMarker,
+  isStructureProtected = false,
+  styleName,
+}: Partial<TriggerArgs>) {
+  const [lockNotificationCount, setLockNotificationCount] = useState(0);
+  const { isMenuOpen, setIsMenuOpen, requestMenuFromEditor } = useParagraphMenuOpenState({
+    isReadOnly: false,
+    isStructureProtected,
+    hasBlockMarker: !!blockMarker,
+    notifyStructureProtected: () => setLockNotificationCount((count) => count + 1),
+  });
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  return (
+    <div className="tw:flex tw:flex-col tw:items-start tw:gap-2">
+      <ParagraphStyleTrigger
+        blockMarker={blockMarker}
+        isStructureProtected={isStructureProtected}
+        localizedStrings={localizedStrings}
+        markerMenuItems={markerMenuItems}
+        styleName={styleName}
+        isMenuOpen={isMenuOpen}
+        onMenuOpenChange={setIsMenuOpen}
+        onReturnFocusToEditor={() => editorRef.current?.focus()}
+      />
+      <textarea
+        ref={editorRef}
+        aria-label="Stand-in editor"
+        className="tw:w-56 tw:rounded-sm tw:border tw:p-1 tw:text-sm"
+        defaultValue="Focus returns here when the menu closes."
+      />
+      <Button size="sm" variant="secondary" onClick={requestMenuFromEditor}>
+        Open from the editor
+      </Button>
+      {lockNotificationCount > 0 && (
+        <p role="status" className="tw:text-xs tw:text-muted-foreground">
+          Lock notification shown ({lockNotificationCount})
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -161,6 +234,18 @@ export const MarkerWidthsAtMinimum: Story = {
       </div>
     </ShrinkStepOverride>
   ),
+};
+
+/**
+ * The menu opened by the editor rather than by a click on the trigger, as happens on Enter or
+ * Alt+Down with a paragraph marker selected. The menu opens on the paragraph's own marker. Picking
+ * an item or pressing Escape returns focus to the stand-in editor; a menu opened by clicking the
+ * trigger returns focus to the trigger on Escape instead. With structure protected, the request
+ * shows the lock notification and the menu stays closed, and it does not open on its own when
+ * protection is turned off again.
+ */
+export const OpenedFromTheEditor: Story = {
+  render: (args) => <EditorRequestTrigger {...args} />,
 };
 
 /**

@@ -16,10 +16,13 @@
 // consumer's `?? fallback` into a lint-flagged unnecessary coalesce, and removing that coalesce
 // crashes an older Paratext 10 build on the missing value:
 //   * `SyncState.syncingProjectIds` — required in the upstream file above.
-//   * `SyncActivitySnapshot.projectIds` — no upstream declaration to diverge from yet; this whole
-//     type, `getSyncActivity` and `onSyncActivityChanged` are declared here ahead of the Paratext 10
-//     patch that raises the signal, the same way the write-gate seam (`getAutoSyncBlocking` /
-//     `onSyncWriteLockChanged`) is.
+//   * `SyncActivitySnapshot.projectIds` and `SyncActivitySnapshot.outcome` — no upstream declaration
+//     to diverge from yet; core registers `getSyncActivity` and `onSyncActivityChanged` in every
+//     build, but the shape may lag the Paratext 10 patch that reports real activity, and an older
+//     Paratext 10 build may omit these two fields, the same way as for the write-gate seam
+//     (`getAutoSyncBlocking` / `onSyncWriteLockChanged`).
+// Also declared here with no upstream counterpart yet, though not a divergence in optionality:
+//   * `isAvailable` — ahead of the Paratext 10 patch that overrides core's answer to it.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -258,6 +261,18 @@ declare module 'paratext-bible-send-receive' {
     errors?: string[];
   };
 
+  /**
+   * Event payload emitted by the `paratextBibleSendReceive.onDidRequestProjectSelection` network
+   * event
+   */
+  export type ProjectSelectionRequestEvent = {
+    /**
+     * The projects `openSendReceive` ensured are ticked in the sync projects dialog's saved
+     * selection, whether newly ticked or already ticked
+     */
+    projectIds: string[];
+  };
+
   /** Event payload emitted by the `paratextBibleSendReceive.onSyncStateChanged` network event */
   export type SyncProgressEvent = {
     /**
@@ -278,24 +293,12 @@ declare module 'paratext-bible-send-receive' {
    * consumer that mounts mid-sync (or after a renderer reload) seed its state instead of waiting
    * for the next `onSyncStateChanged` event, which may not arrive for the rest of the sync.
    *
-   * Reflects only syncs run through the Send/Receive extension's own wrappers (`runManualSync`,
-   * `syncOpenProjects`, `runScheduledSessionSync`, and the auto-sync engine), which claim through
-   * its state controller. Callers that reach the dotnet `syncProjects`/`sendReceiveProjects`
-   * commands directly are invisible here — nothing in `c-sharp/` emits `onSyncStateChanged` — so
-   * treat this as best-effort rather than ground truth. Making this authoritative would take a
-   * signal derived from the C# sync semaphore itself, which is upstream work in the Send/Receive
-   * extension; see `adr-toolbar-sync-status-is-local` in
+   * Reflects the syncs requested through `paratextBibleSendReceive.requestSync`. Syncs that call
+   * the dotnet `syncProjects`/`sendReceiveProjects` commands directly (core's Simple-mode startup
+   * and shutdown tasks) do not appear here, so treat this as best-effort rather than ground truth;
+   * use `paratextBibleSendReceive.onSyncActivityChanged` to see every path. See
+   * `adr-toolbar-sync-status-is-local` and `adr-sync-queue-one-run-at-a-time` in
    * `.context/standards/Architecture-Decisions.md`.
-   *
-   * Two core paths are on the invisible side today, both worth knowing before relying on this for a
-   * startup status:
-   *
-   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly, with its
-   *   progress toast suppressed — `onSyncActivityChanged` is its surface.
-   * - **The picker's per-project sync** (`syncOnProjectSwitch` in `platform-scripture-editor`) calls
-   *   `syncProjects`/`sendReceiveProjects` directly.
-   *
-   * Power mode's session-boundary sync IS visible: it goes through `runScheduledSessionSync`.
    */
   export type SyncState = {
     /** Whether any sync is running right now */
@@ -312,6 +315,13 @@ declare module 'paratext-bible-send-receive' {
      * PREVIOUS sync, so labelling an in-progress sync with it names the wrong projects.
      */
     lastRequestedProjectIds: string[];
+    /**
+     * The latest completed result for each project synced through this extension's wrappers this
+     * session. Syncs core runs directly (startup, shutdown) are not included. Keyed by
+     * `normalizeProjectId(projectId)`; a fresh object is built on every `getSyncState` call. Absent
+     * from older Send/Receive extension builds.
+     */
+    lastResultByProjectId?: Record<string, ResultInfo>;
     /**
      * Project ids of the sync(s) running RIGHT NOW. Empty exactly when `isSyncing` is `false`.
      * Overlapping syncs are unioned.
@@ -357,15 +367,16 @@ declare module 'paratext-bible-send-receive' {
    * `paratextBibleSendReceive.onSyncActivityChanged` and returned by
    * `paratextBibleSendReceive.getSyncActivity`.
    *
-   * Unlike {@link SyncState}, this is derived from the C# sync run marker rather than the
-   * Send/Receive extension's claim map, so it covers EVERY sync path — including callers that reach
-   * the dotnet `syncProjects`/`sendReceiveProjects` commands directly and raise no claim
-   * (`main/startup-tasks.ts` and `syncOnProjectSwitch`). That is what makes a Simple-mode startup
+   * Unlike {@link SyncState}, this is derived from the C# sync run marker rather than the state
+   * behind `getSyncState`, so it covers EVERY sync path — including callers that reach the dotnet
+   * `syncProjects`/`sendReceiveProjects` commands directly and do not appear in `SyncState`
+   * (`main/startup-tasks.ts`, `main/shutdown-tasks.ts`). That is what makes a Simple-mode startup
    * sync visible.
    *
-   * Only a Paratext 10 build emits this. Public Platform.Bible carries this declaration but no
-   * implementation behind it, so both surfaces are absent there and a consumer must fall back
-   * rather than assume idle.
+   * Every build registers both surfaces (`getSyncActivity` and `onSyncActivityChanged`), but only a
+   * Paratext 10 build carries the run bracket that reports real activity. A plain Platform.Bible
+   * build only ever reports the idle baseline, and an older Paratext 10 build may omit `projectIds`
+   * and `outcome`.
    *
    * @experimental This type is unstable and may change shape or disappear without notice
    */
@@ -386,6 +397,138 @@ declare module 'paratext-bible-send-receive' {
      * an array. See the DELIBERATE DIVERGENCE note at the top of this file.
      */
     projectIds?: string[];
+    /**
+     * DBL entry uids of the resources the running sync will update. Empty when no sync runs.
+     *
+     * Optional: an implementation that does not report it answers without it, so a consumer treats
+     * an absent value as "not named".
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    resourceIds?: string[];
+    /**
+     * How the most recently completed run in this backend process turned out.
+     *
+     * ABSENT means "cannot say" and must never be read as either verdict. Three situations produce
+     * it, and a consumer handles them identically: a run is in progress (it is always absent while
+     * `isSyncing` is `true`), no run has completed since the backend started, or the build predates
+     * this field. PRESENT on the snapshot that closes a run and on every later one — events and
+     * `getSyncActivity` reads alike — until the next run opens, so a consumer that seeds after a
+     * run ended still learns how it went.
+     *
+     * Optional for the same reason as {@link SyncActivitySnapshot.projectIds}; see the DELIBERATE
+     * DIVERGENCE note at the top of this file.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    outcome?: SyncOutcome;
+    /**
+     * The date of the run {@link SyncActivitySnapshot.outcome} describes, as an ISO 8601 string.
+     * Present exactly when `outcome` is.
+     *
+     * A consumer that also reads {@link SyncState.lastResults} holds two verdicts from different
+     * sources, and this is what orders them against that snapshot's `sendReceiveDate`: the newer
+     * one describes the sync that just finished, and the older one belongs to a sync it never saw.
+     * Without it a consumer can only guess, so treat its absence as "these cannot be ordered" and
+     * fall back on something other than a guess.
+     *
+     * Not necessarily when the run finished. What it guarantees is the ordering: a later run always
+     * has a later date, later too than the `sendReceiveDate` of any earlier run's `lastResults`,
+     * and for a run `lastResults` also describes it is never later than `sendReceiveDate` — so on a
+     * tie, keep `lastResults`, the richer of the two.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    completedAt?: string;
+  };
+
+  /**
+   * How a completed Send/Receive run turned out, as carried by {@link SyncActivitySnapshot.outcome}.
+   *
+   * - `succeeded` = the run succeeded for every project it covered, including a run that found
+   *   nothing to sync
+   * - `failed` = the run did not succeed for at least one project it covered. A run the user
+   *   cancelled reports this too, matching how {@link ResultInfo.resultStatus} reports a cancelled
+   *   sync as a non-success rather than as a status of its own
+   *
+   * Deliberately coarse: which projects did not succeed, and why, is in
+   * {@link SyncState.lastResults} and the sync status web view. See
+   * `adr-sync-activity-outcome-is-coarse` in `.context/standards/Architecture-Decisions.md`.
+   *
+   * @experimental The set of values in this type may change
+   */
+  export type SyncOutcome = 'succeeded' | 'failed';
+
+  /**
+   * The surface that asks for a sync through `paratextBibleSendReceive.requestSync`.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type SyncRequestSource =
+    | 'home'
+    | 'syncDialog'
+    | 'syncStatus'
+    | 'editor'
+    | 'autoSync'
+    | 'lockRetry';
+
+  /**
+   * Options of `paratextBibleSendReceive.requestSync`.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type SyncRequestOptions = {
+    /**
+     * Whether to suppress the progress notification of the run
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    suppressNotification?: boolean;
+    /**
+     * Whether the run also syncs connected projects and resources (`syncProjects` semantics) rather
+     * than only the requested projects (`sendReceiveProjects` semantics)
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    includeConnected?: boolean;
+  };
+
+  /**
+   * Snapshot of the sync queue, carried identically by the
+   * `paratextBibleSendReceive.onSyncQueueChanged` event and the
+   * `paratextBibleSendReceive.getSyncQueue` command return.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type SyncQueueSnapshot = {
+    /**
+     * Ids of the projects waiting for a later run, in the order they will run. The projects of the
+     * run being sent or running are not included, unless they were also asked for again for a later
+     * run.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    waitingProjectIds: string[];
+    /**
+     * Ids of the projects of the run the queue has sent to the backend that the backend has not yet
+     * accepted, empty when none. A project of a run moves from waiting to sending to running; a
+     * project asked for again while its run is being sent is also listed as waiting, for the later
+     * run. A busy refusal puts the run's projects back among the waiting (and the snapshot
+     * changes); acceptance makes them running. A run the queue sends again after a busy refusal is
+     * not listed here: its projects stay waiting until the backend accepts it, so a streak of
+     * retries does not flip them between waiting and sending.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    sendingProjectIds: string[];
+    /**
+     * Ids of the projects in the run in progress that was requested through the queue, empty when
+     * none. A project counts as running once its run is accepted by the backend, not while it is
+     * still sending.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    runningProjectIds: string[];
   };
 
   /**
@@ -449,10 +592,14 @@ declare module 'paratext-bible-send-receive' {
 
 declare module 'papi-shared-types' {
   import type {
+    ProjectSelectionRequestEvent,
     ResultsData,
     SyncActivitySnapshot,
     SyncProgressDetail,
     SyncProgressEvent,
+    SyncQueueSnapshot,
+    SyncRequestOptions,
+    SyncRequestSource,
     SyncState,
     SyncWriteLockSnapshot,
     UnsyncedChangesSnapshot,
@@ -492,10 +639,17 @@ declare module 'papi-shared-types' {
      *
      * Note: this command is served from the dotnet process.
      *
-     * The backend runs one Send/Receive at a time and rejects a concurrent call with a
-     * `FAILED_PRECONDITION` platform error before doing any work, so callers whose calls may
-     * overlap have to batch the projects into one call or serialize them rather than firing
-     * several.
+     * The backend runs one Send/Receive at a time and refuses a concurrent call (see the refusals
+     * below) before doing any work, so callers whose calls may overlap have to batch the projects
+     * into one call or serialize them rather than firing several.
+     *
+     * Refusals of the sync commands (this one, `paratextBibleSendReceive.syncProjects` and
+     * `paratextBibleSendReceive.requestSync`):
+     *
+     * - `FAILED_PRECONDITION` or `UNAVAILABLE` with a message ending ` (SYNC_BUSY)`: another sync or
+     *   backend operation holds the exclusive lock. Retry shortly.
+     * - `INTERNAL`: the previous run is not responding. Restart the application.
+     * - Any other error is a failure.
      *
      * @param projectIds Ids of projects to send/receive
      * @param suppressNotification When `true`, the caller owns all sync feedback: the dotnet
@@ -514,6 +668,19 @@ declare module 'papi-shared-types' {
      * @returns WebView id for the sync status WebView or `undefined` if not created
      */
     'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
+
+    /**
+     * Opens the Send/Receive web view (or brings the open one to the front) with the active project
+     * ticked in the sync projects dialog
+     *
+     * @param projectIdsToSelect Projects to tick instead of the active project. Unsupported
+     *   projects are skipped
+     * @returns WebView id for the Send/Receive WebView or `undefined` if not created
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.openSendReceive': (
+      projectIdsToSelect?: string[],
+    ) => Promise<string | undefined>;
 
     /**
      * Returns the current {@link SyncState} so a consumer can seed its sync status on mount rather
@@ -553,10 +720,132 @@ declare module 'papi-shared-types' {
      * on failure rather than reading a rejection as "no sync is running", and should retry rather
      * than treat one rejection as the final answer.
      *
-     * @returns The current {@link SyncActivitySnapshot}
+     * @returns The current {@link SyncActivitySnapshot}. Its `outcome`, when present, describes the
+     *   most recently completed run even though that run ended before this call — which is what
+     *   lets a consumer that seeds late still report how it went. ABSENT is never a verdict; see
+     *   {@link SyncActivitySnapshot.outcome}. Core's own implementation runs no syncs, so it always
+     *   answers without one.
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
+
+    /**
+     * Whether this build can run Send/Receive. Core's own implementation answers `false`, and the
+     * Paratext 10 patch answers `true`. Like `getSyncActivity`, it is registered by core's own
+     * service, so plain Platform.Bible answers it too.
+     *
+     * A rejection means the answer is unknown (for example, the command is not registered yet on a
+     * cold start). Do not treat it as `false`; ask again or stay conservative.
+     *
+     * @returns `true` if this build can run Send/Receive
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.isAvailable': () => Promise<boolean>;
+
+    /**
+     * Asks for the given projects to be synced through the sync queue. A run starts when the queue
+     * is idle and the backend accepts it; requests that arrive while a run is in progress wait for
+     * the following run or runs.
+     *
+     * An `autoSync` request never re-queues a project that is running or already waiting in the
+     * same or a fuller kind; the other sources do not carry that rule. Set
+     * `options.includeConnected` to run with `paratextBibleSendReceive.syncProjects` semantics
+     * (which also syncs connected projects and resources) rather than `sendReceiveProjects`
+     * semantics.
+     *
+     * @param projectIds Ids of the projects to sync
+     * @param source Which surface asks, so the queue can apply the source's rules
+     * @param options Optional {@link SyncRequestOptions}
+     * @returns The results for the requested ids only, once every one of them has run; if they run
+     *   in several runs, the results of all of them are combined. A run-level warning or error is
+     *   included only if the request covers the whole run. A project that any waiting connected
+     *   request also names runs as a connected run, which also satisfies plain requests for it; a
+     *   plain run never satisfies a connected request. An `autoSync` request resolves at once with
+     *   no entries for projects that are already running or waiting in the same or a fuller kind.
+     *   If only some of the requested ids were removed from the queue before they ran, the request
+     *   resolves with the results of the rest. It rejects with a message containing ` (SR_REMOVED)`
+     *   only when every requested id was removed before it ran, when the queue was dropped (the app
+     *   is quitting or its last window closed), or when the queue is paused (the error crosses the
+     *   network as its message only, so the marker is the contract, not the error's type). It
+     *   rejects with the run's own error when a run containing a requested id fails. The call can
+     *   take minutes: requests wait while another sync is running. A refusal whose message ends
+     *   with ` (SYNC_BUSY)` is retried by the queue itself; the caller sees it only after the queue
+     *   gave up. If the running sync stops responding the request rejects with the not-responding
+     *   error.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.requestSync': (
+      projectIds: string[],
+      source: SyncRequestSource,
+      options?: SyncRequestOptions,
+    ) => Promise<ResultsData>;
+
+    /**
+     * Removes projects that are waiting in the sync queue. A project that is already running is not
+     * affected; use `paratextBibleSendReceive.cancelSyncPrompt` to stop the running sync. A project
+     * of the run being sent (`sendingProjectIds`) is removed only if the backend refuses that run
+     * as busy; if the backend accepts it, the project runs. A request whose ids were all removed
+     * rejects with a message containing ` (SR_REMOVED)`; one with ids still queued resolves with
+     * the results of the rest (see `paratextBibleSendReceive.requestSync`).
+     *
+     * @param projectIds Ids of the waiting projects to remove
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.removeFromSyncQueue': (projectIds: string[]) => Promise<void>;
+
+    /**
+     * Rejects every request waiting in the sync queue and pauses the queue until
+     * `paratextBibleSendReceive.resumeSyncQueue`, so no further run starts from it. The promise
+     * returned to each dropped project's requester rejects (with the ` (SR_REMOVED)` marker; see
+     * `paratextBibleSendReceive.requestSync`), and so do requests made while the queue is paused. A
+     * run already in progress is not cancelled; use `paratextBibleSendReceive.cancelSync` for
+     * that.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.dropSyncQueue': () => Promise<void>;
+
+    /**
+     * Lifts the pause that `paratextBibleSendReceive.dropSyncQueue` leaves. Requests made after it
+     * are queued normally. A no-op when the queue is not paused.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.resumeSyncQueue': () => Promise<void>;
+
+    /**
+     * Re-shows the notification of the sync run in progress with its current text, as the same
+     * notification. A no-op when no run is in progress, and when this build has no sync
+     * notification.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.reshowSyncNotification': () => Promise<void>;
+
+    /**
+     * Returns the current {@link SyncQueueSnapshot} so a consumer can seed its view of the sync
+     * queue on mount rather than waiting for the next `paratextBibleSendReceive.onSyncQueueChanged`
+     * event. An in-memory read; a caller keeps its existing state when it rejects.
+     *
+     * @returns The projects currently waiting for a run, those of the run sent to the backend and
+     *   not yet accepted (`sendingProjectIds`), and those of the run in progress
+     *   (`runningProjectIds`).
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.getSyncQueue': () => Promise<SyncQueueSnapshot>;
+
+    /**
+     * Cancels the running sync. May first ask the user whether to stop it and whether to also drop
+     * the projects waiting in the sync queue, so a caller must not assume that a cancel follows.
+     *
+     * @param notificationId Id of the sync notification whose Cancel was clicked, if any, passed on
+     *   to `paratextBibleSendReceive.cancelSync`. Omit it to cancel whatever sync is running.
+     * @returns `false` when nothing was cancelled; otherwise `true` once the cancel has been sent
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.cancelSyncPrompt': (
+      notificationId?: string | number,
+    ) => Promise<boolean>;
 
     /**
      * Commits changes in the specified project to the version history. Unless `forceCommit` is
@@ -614,9 +903,9 @@ declare module 'papi-shared-types' {
      * @param suppressProgressNotification When `true`, the dotnet process does not show its
      *   persistent in-progress toast (the one carrying Cancel) for this sync. Its other
      *   notifications, such as failure and role-change toasts, still show: a caller that passes
-     *   this may raise no Send/Receive claim, so those toasts are its only failure surface.
-     *   Narrower than `sendReceiveProjects`' `suppressNotification`, which also hides the failure
-     *   and role-change toasts. Defaults to `false`.
+     *   this may not appear in `SyncState`, so those toasts are its only failure surface. Narrower
+     *   than `sendReceiveProjects`' `suppressNotification`, which also hides the failure and
+     *   role-change toasts. Defaults to `false`.
      *
      *   Pass it only when the caller knows the interface mode is `'simple'`: the toolbar sync
      *   indicator is then the sync's persistent surface, and the toast as well would give one sync
@@ -659,13 +948,15 @@ declare module 'papi-shared-types' {
       boundary: 'startup' | 'shutdown',
     ) => Promise<'synced' | 'failed' | 'skipped'>;
     /**
-     * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
-     * them.
+     * Gets all open webview project IDs (or exactly `projectIds` when given) and calls
+     * `paratextBibleSendReceive.syncProjects` with them.
      *
+     * @param projectIds Sync only these projects (deduplicated) instead of the open editors'
+     *   projects
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10)
      */
-    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
+    'paratextBibleSendReceive.syncOpenProjects': (projectIds?: string[]) => Promise<void>;
 
     /**
      * Cancels an in-progress sync operation if one is running. The process will finish dealing with
@@ -747,6 +1038,11 @@ declare module 'papi-shared-types' {
   }
 
   export interface NetworkEvents {
+    /**
+     * Fired after `openSendReceive` ensures projects are ticked in the saved selection (newly or
+     * already), so an open dialog can sort them to the top
+     */
+    'paratextBibleSendReceive.onDidRequestProjectSelection': ProjectSelectionRequestEvent;
     /** Emitted whenever a sync starts or ends */
     'paratextBibleSendReceive.onSyncStateChanged': SyncProgressEvent;
     /** Emitted repeatedly during a sync with the current project name or reconnect status */
@@ -766,7 +1062,7 @@ declare module 'papi-shared-types' {
      * backend's exclusive-sync state), carrying the current {@link SyncActivitySnapshot}. Fires for
      * ALL sync types (manual + scheduled + session + direct command callers). Unlike
      * `onSyncStateChanged`, this covers syncs that reach the dotnet `syncProjects`/
-     * `sendReceiveProjects` commands directly and raise no Send/Receive extension claim.
+     * `sendReceiveProjects` commands directly and do not appear in `SyncState`.
      *
      * Registered by core's own `SyncActivityNotifierService`, so EVERY build emits it — an idle
      * baseline once per backend (re)start, exactly like `onSyncWriteLockChanged`. Only Paratext 10
@@ -778,9 +1074,27 @@ declare module 'papi-shared-types' {
      * hears is the CLOSING snapshot. A consumer that needs to be correct from the moment it starts
      * must seed from `paratextBibleSendReceive.getSyncActivity` rather than subscribing alone.
      *
+     * The snapshot that closes a run carries that run's `outcome` on a build that reports one. The
+     * next event is the one opening the following run, which carries none — so a consumer wanting
+     * to know how the last run went reads it from the closing event or a later `getSyncActivity`
+     * call, and never reads the absence on an opening event as a verdict. See
+     * {@link SyncActivitySnapshot.outcome}.
+     *
      * @experimental This event is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.onSyncActivityChanged': SyncActivitySnapshot;
+    /**
+     * Emitted whenever the set of projects waiting, sending or running in the sync queue changes,
+     * carrying the full current {@link SyncQueueSnapshot}. A project of a run moves from
+     * `waitingProjectIds` to `sendingProjectIds` when the queue sends the run, and on to
+     * `runningProjectIds` when the backend accepts it, or back to `waitingProjectIds` when the
+     * backend refuses it as busy. A run retried after a busy refusal goes from `waitingProjectIds`
+     * straight to `runningProjectIds` once accepted. No replay: a subscriber that starts later
+     * seeds from `paratextBibleSendReceive.getSyncQueue`.
+     *
+     * @experimental This event is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.onSyncQueueChanged': SyncQueueSnapshot;
     /**
      * Emitted by the dotnet process whenever either list of out-of-step projects changes, carrying
      * the full current {@link UnsyncedChangesSnapshot}. Also emitted once as a baseline per backend

@@ -204,6 +204,7 @@ export const DIALOG_BASE: DialogDefinitionBase = {
     return {
       ...savedTabInfo,
       tabIconUrl: tabData?.iconUrl || this.defaultIconUrl,
+      tabIconName: tabData?.iconName,
       // dialogs must define their own tabType, so this should never hit 'Dialog Title Error'.
       tabTitle: tabData?.title || this.defaultTitle || this.tabType || 'Dialog Title Error',
       minWidth: this.minWidth,

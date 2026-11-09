@@ -191,6 +191,34 @@ public class NotificationServiceTests
         Assert.That(root.GetProperty("duration").GetInt32(), Is.EqualTo(5000));
     }
 
+    [Test]
+    public void PlatformNotification_WithDismissClickCommand_SerializesCamelCasedField()
+    {
+        PlatformNotification notification =
+            new("Syncing…", NotificationSeverity.Info)
+            {
+                DismissClickCommand = "paratextBibleSendReceive.cancelSync",
+            };
+        string json = JsonSerializer.Serialize(notification, _options);
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
+        Assert.That(
+            root.GetProperty("dismissClickCommand").GetString(),
+            Is.EqualTo("paratextBibleSendReceive.cancelSync")
+        );
+    }
+
+    [Test]
+    public void PlatformNotification_WithoutDismissClickCommand_OmitsTheField()
+    {
+        PlatformNotification notification = new("Plain", NotificationSeverity.Info);
+        string json = JsonSerializer.Serialize(notification, _options);
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.TryGetProperty("dismissClickCommand", out _), Is.False);
+    }
+
     // --- NotificationService ---
 
     [Test]

@@ -48,6 +48,7 @@ const editorRefMock = {
   selectNoteTextOffset: vi.fn(),
   commitPendingMarkerEdits: vi.fn(),
   getSelection: vi.fn(),
+  getSelectedParaMarker: vi.fn(),
   undo: vi.fn(),
   redo: vi.fn(),
 };

@@ -2,9 +2,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { PROJECT_SELECTOR_DEFAULT_STRINGS } from 'platform-bible-react/experimental';
+import type { WindowControlsOverlayInsets } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
+import type { ProjectItem } from './projects/project-picker.component';
 
 // The toolbar's unit tests replace `platform-bible-react/experimental` with a stub selector so they
 // can assert on the props the toolbar hands it. This file deliberately mocks neither
@@ -26,30 +29,32 @@ vi.mock('@renderer/components/user-profile-popover/user-profile-popover.componen
   UserProfilePopover: () => <div data-testid="user-profile-popover-stub" />,
 }));
 
+const { TOOLBAR_STRINGS } = vi.hoisted(() => ({
+  TOOLBAR_STRINGS: {
+    '%toolbar_sync%': 'Sync',
+    '%toolbar_sync_open_status%': 'Test Sync status',
+    '%toolbar_sync_status_synced%': 'Test Synced',
+    '%toolbar_sync_status_syncing%': 'Test Syncing',
+    '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
+    '%mainMenu_openHome%': 'Home',
+    '%projectPicker_no_results%': 'Test no projects found',
+    '%projectPicker_readOnly_label%': 'Test read-only',
+    '%projectPicker_search_placeholder%': 'Test search projects',
+    '%projectPicker_section_projects_localOnly%': 'Test your projects on this computer',
+    '%projectPicker_section_recent%': 'Test recent',
+    '%projectPicker_toolbar_more_projects%': 'Test more projects',
+    '%projectPicker_toolbar_no_projects%': 'Test no projects',
+    '%projectPicker_toolbar_select_project%': 'Test select a project',
+    '%projectPicker_toolbar_trigger_label_2%': 'Test select a project, {shortName}, {fullName}',
+    '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Test select a project, {shortName}',
+    '%projectPicker_toolbar_trigger_label_empty%': 'Test select a project, no projects here',
+    '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
+    '%projectPicker_toolbar_label_shortNameAndFullName%': '{shortName} :: {fullName}',
+  },
+}));
+
 vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useLocalizedStrings: vi.fn(() => [
-    {
-      '%toolbar_sync%': 'Sync',
-      '%toolbar_sync_open_status%': 'Test Sync status',
-      '%toolbar_sync_status_synced%': 'Test Synced',
-      '%toolbar_sync_status_syncing%': 'Test Syncing',
-      '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
-      '%mainMenu_openHome%': 'Home',
-      '%projectPicker_no_results%': 'Test no projects found',
-      '%projectPicker_readOnly_label%': 'Test read-only',
-      '%projectPicker_search_placeholder%': 'Test search projects',
-      '%projectPicker_section_projects_localOnly%': 'Test your projects on this computer',
-      '%projectPicker_section_recent%': 'Test recent',
-      '%projectPicker_toolbar_more_projects%': 'Test more projects',
-      '%projectPicker_toolbar_no_projects%': 'Test no projects',
-      '%projectPicker_toolbar_select_project%': 'Test select a project',
-      '%projectPicker_toolbar_trigger_label_2%': 'Test select a project, {shortName}, {fullName}',
-      '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Test select a project, {shortName}',
-      '%projectPicker_toolbar_trigger_label_empty%': 'Test select a project, no projects here',
-      '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
-      '%projectPicker_toolbar_label_shortNameAndFullName%': '{shortName} :: {fullName}',
-    },
-  ]),
+  useLocalizedStrings: vi.fn(() => [TOOLBAR_STRINGS]),
   useScrollGroupScrRef: vi.fn(() => [
     { book: 'GEN', chapterNum: 1, verseNum: 1 },
     vi.fn(),
@@ -89,7 +94,7 @@ vi.mock('@renderer/hooks/use-open-project-book-ids.hook', () => ({
 }));
 
 vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
-  useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
+  useWindowControlsOverlay: vi.fn((): WindowControlsOverlayInsets | undefined => undefined),
 }));
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({
@@ -155,7 +160,7 @@ vi.mock('@shared/services/notification.service', () => ({
   notificationService: { send: vi.fn(async () => 'notification-id') },
 }));
 
-const PROJECTS = [
+const PROJECTS: ProjectItem[] = [
   { id: 'p1', shortName: 'P1', fullName: 'Project One', isEditable: true },
   { id: 'p2', shortName: 'P2', fullName: 'Project Two', isEditable: false },
 ];
@@ -189,6 +194,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // `clearAllMocks()` keeps implementation overrides, so reset the strings here or a test that swaps
+  // them leaks.
+  vi.mocked(useLocalizedStrings).mockImplementation(() => [TOOLBAR_STRINGS, false]);
   globalThis.isMainWindow = true;
   // The real `useInterfaceMode` runs in these tests and caches the resolved mode, so without this a
   // previously resolved mode would leak between tests.
@@ -211,9 +219,9 @@ beforeEach(() => {
  * `pointerEventsCheck: 0` is the standard jsdom workaround.
  */
 async function renderSimpleToolbarWith(data: {
-  currentSimpleProject?: (typeof PROJECTS)[number];
-  recentProjects?: typeof PROJECTS;
-  allProjects?: typeof PROJECTS;
+  currentSimpleProject?: ProjectItem;
+  recentProjects?: ProjectItem[];
+  allProjects?: ProjectItem[];
   currentSimpleProjectError?: string;
   isLoading?: boolean;
 }) {
@@ -427,5 +435,100 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
       'Test more projects',
     );
     expect(screen.getByText('Test no projects found')).toBeInTheDocument();
+  });
+});
+
+describe('PlatformBibleToolbar — unsupported project rows', () => {
+  const SBA_UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
+  const SBA_UNSUPPORTED_REASON_TEXT = "Study Bible Additions projects aren't supported yet.";
+  /** The English fallback, since `TOOLBAR_STRINGS` does not localize the generic key. */
+  const GENERIC_UNSUPPORTED_REASON_TEXT = "This project can't be opened.";
+
+  const ROW_PROJECTS: ProjectItem[] = [
+    { id: 'p1', shortName: 'P1', fullName: 'Openable Project' },
+    {
+      id: 'sba',
+      shortName: 'SBA',
+      fullName: 'Unsupported Project',
+      unsupportedReason: SBA_UNSUPPORTED_REASON_KEY,
+    },
+  ];
+
+  /**
+   * Renders the toolbar over an openable and an unsupported project and opens the picker.
+   *
+   * @param localizedReason What the unsupported reason's key localizes to.
+   */
+  async function renderAndOpenPicker(localizedReason: string = SBA_UNSUPPORTED_REASON_TEXT) {
+    vi.mocked(useLocalizedStrings).mockImplementation((keys) =>
+      keys.includes(SBA_UNSUPPORTED_REASON_KEY)
+        ? [{ [SBA_UNSUPPORTED_REASON_KEY]: localizedReason }, false]
+        : [TOOLBAR_STRINGS, false],
+    );
+    const user = await renderSimpleToolbarWith({ allProjects: ROW_PROJECTS });
+    await user.click(await screen.findByRole('combobox', { name: /^Test select a project/ }));
+    return user;
+  }
+
+  it('marks the unsupported option aria-disabled and leaves the openable one enabled', async () => {
+    await renderAndOpenPicker();
+
+    expect(await screen.findByRole('option', { name: /P1/ })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(await screen.findByRole('option', { name: /SBA/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('does not open the unsupported project on click, and does open the openable one (positive control)', async () => {
+    const user = await renderAndOpenPicker();
+
+    await user.click(await screen.findByRole('option', { name: /SBA/ }));
+    expect(sendCommand).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'sba',
+    );
+
+    await user.click(await screen.findByRole('option', { name: /P1/ }));
+    expect(sendCommand).toHaveBeenCalledWith('platformScriptureEditor.openScriptureEditor', 'p1');
+  });
+
+  it('shows the localized reason on hover over the unsupported option', async () => {
+    const user = await renderAndOpenPicker();
+
+    await user.hover(await screen.findByRole('option', { name: /SBA/ }));
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(SBA_UNSUPPORTED_REASON_TEXT);
+  });
+
+  it('shows the generic reason, never the raw key, when the reason resolves to its own key', async () => {
+    // A failed lookup settles on the key-to-key seed with `isLoading` false.
+    const user = await renderAndOpenPicker(SBA_UNSUPPORTED_REASON_KEY);
+
+    await user.hover(await screen.findByRole('option', { name: /SBA/ }));
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(GENERIC_UNSUPPORTED_REASON_TEXT);
+    expect(screen.queryByText(SBA_UNSUPPORTED_REASON_KEY)).toBeNull();
+  });
+
+  it('shows the generic reason for a reason that is not a localize key', async () => {
+    vi.mocked(useLocalizedStrings).mockImplementation(() => [TOOLBAR_STRINGS, false]);
+    const user = await renderSimpleToolbarWith({
+      allProjects: [
+        { id: 'p1', shortName: 'P1', fullName: 'Openable Project' },
+        { id: 'bad', shortName: 'BAD', fullName: 'Odd Reason', unsupportedReason: 'oops' },
+      ],
+    });
+    await user.click(await screen.findByRole('combobox', { name: /^Test select a project/ }));
+
+    const badOption = await screen.findByRole('option', { name: /BAD/ });
+    expect(badOption).toHaveAttribute('aria-disabled', 'true');
+    await user.hover(badOption);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(GENERIC_UNSUPPORTED_REASON_TEXT);
+    expect(screen.queryByText('oops')).toBeNull();
   });
 });

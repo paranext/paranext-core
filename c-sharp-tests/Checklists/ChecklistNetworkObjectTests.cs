@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Paranext.DataProvider;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checklists.Markers;
 using Paranext.DataProvider.NetworkObjects;
@@ -570,6 +571,73 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
             Is.EqualTo(scrText.Guid.ToString()),
             "INV-C15 — registered project id must appear at column index 0"
         );
+    }
+
+    [Test]
+    public async Task BuildChecklistData_StudyBibleAdditionsProject_ReturnsProjectOpenBlockedError()
+    {
+        var scrText = RegisterDummyProjectWithPoetry(@"\id EXO \c 20 \p \v 1 one.");
+        MakeStudyBibleAdditions(scrText);
+
+        var (code, message) = await BuildChecklistErrorAsync(scrText.Guid.ToString(), []);
+
+        Assert.That(code, Is.EqualTo(ChecklistErrorCodes.ProjectOpenBlocked));
+        Assert.That(message, Does.EndWith(ProjectOpenBlockedException.Sentinel));
+    }
+
+    [Test]
+    public async Task BuildChecklistData_StudyBibleAdditionsComparativeText_ReturnsProjectOpenBlockedError()
+    {
+        var scrText = RegisterDummyProjectWithPoetry(@"\id EXO \c 20 \p \v 1 one.");
+        var comparative = RegisterDummyProjectWithPoetry(@"\id EXO \c 20 \p \v 1 uno.");
+        MakeStudyBibleAdditions(comparative);
+
+        var (code, message) = await BuildChecklistErrorAsync(
+            scrText.Guid.ToString(),
+            [comparative.Guid.ToString()]
+        );
+
+        Assert.That(code, Is.EqualTo(ChecklistErrorCodes.ProjectOpenBlocked));
+        Assert.That(message, Does.EndWith(ProjectOpenBlockedException.Sentinel));
+    }
+
+    /// <summary>
+    /// Runs <c>buildChecklistData</c> through the registered handler and returns the error
+    /// branch's code and message, or fails when the success branch comes back.
+    /// </summary>
+    private async Task<(string? Code, string? Message)> BuildChecklistErrorAsync(
+        string projectId,
+        List<string> comparativeTextIds
+    )
+    {
+        var networkObject = new ChecklistNetworkObject(Client);
+        await networkObject.InitializeAsync();
+        var request = new ChecklistRequest(
+            ProjectId: projectId,
+            ComparativeTextIds: comparativeTextIds,
+            MarkerSettings: new MarkerSettings(EquivalentMarkers: "", MarkerFilter: ""),
+            VerseRange: null,
+            HideMatches: false,
+            ShowVerseText: false
+        );
+
+        var result = await InvokeRegisteredHandlerAsync<object>(
+            $"{ObjectPrefix}.buildChecklistData",
+            request,
+            CancellationToken.None
+        );
+
+        return result switch
+        {
+            ChecklistResultError error => (error.Code, error.Message),
+            JsonElement json => (
+                json.GetProperty("code").GetString(),
+                json.GetProperty("message").GetString()
+            ),
+            _ => throw new AssertionException(
+                $"expected a ChecklistResultError; got {result?.GetType().Name ?? "null"}"
+            ),
+        };
     }
 
     // =====================================================================

@@ -472,7 +472,8 @@ async function internalGetMetadata(
           // nondeterministic). Display fields (name/fullName/language/languageTag/isEditable/
           // isPublished) are merged fill-if-absent below, so a factory that omits them cannot
           // strip values another factory provided; when multiple factories provide the same
-          // field, the first-resolved one wins.
+          // field, the first-resolved one wins. `unsupportedReason` is merged fill-if-empty: the
+          // first non-empty reason wins, and no factory can clear it.
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           const enrichedMd = allProjectsMetadata.get(projectIdKey) ?? (md as ProjectMetadata);
           if (!enrichedMd.pdpFactoryInfo) enrichedMd.pdpFactoryInfo = {};
@@ -509,6 +510,8 @@ async function internalGetMetadata(
             enrichedMd.languageTag ??= md.languageTag;
             enrichedMd.isEditable ??= md.isEditable;
             enrichedMd.isPublished ??= md.isPublished;
+            // `||=` rather than `??=`, so an empty reason never masks a real one.
+            enrichedMd.unsupportedReason ||= md.unsupportedReason;
           } else allProjectsMetadata.set(projectIdKey, enrichedMd);
         });
       }

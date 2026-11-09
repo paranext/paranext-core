@@ -15,6 +15,7 @@
  * graph from `main.ts` and enforces this.
  */
 
+import type { FocusSubject } from '@papi/core';
 import { logger } from '@papi/frontend';
 import {
   isBlockMarker,
@@ -24,7 +25,10 @@ import {
   usfmMarkers,
   type PaletteItem,
 } from 'platform-bible-utils';
-import type { EditorMessageInsertTextualNoteAtSelection } from 'platform-scripture-editor';
+import type {
+  EditorMessageInsertTextualNoteAtSelection,
+  ScriptureEditorViewType,
+} from 'platform-scripture-editor';
 import type { MutableRefObject } from 'react';
 import type {
   ContextMenuOptionConfig,
@@ -39,8 +43,11 @@ import {
   markerMenuItemToPaletteItem,
 } from 'platform-bible-react/experimental';
 import type { FlushableDebouncer } from './flushable-debouncer.util';
-import type { NoteSessionUpdateDecision } from './platform-scripture-editor.utils';
-import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
+import {
+  showsReadOnlyPreview,
+  type NoteSessionUpdateDecision,
+} from './platform-scripture-editor.utils';
+import { EDITOR_OWNERSHIP_WINDOW_MS, type EditorFocusLocation } from './use-editor-pdp-sync.hook';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
@@ -60,6 +67,9 @@ import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
  *   focus, run just before inserting. The menu focuses its own search input, so without this the
  *   insert can find no selection to act on
  * @param parentMarker The current parent marker which is used to determine which markers to include
+ * @param isChapterLoading Reports whether another chapter is loading, during which the editor still
+ *   shows the chapter being left and an edit would be dropped. A pick only closes the menu while it
+ *   returns `true`. Omitting it never blocks.
  * @returns The list of inline marker menu items
  */
 export function generateInlineMarkerMenuListItems(
@@ -70,6 +80,7 @@ export function generateInlineMarkerMenuListItems(
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
   parentMarker?: string,
+  isChapterLoading?: () => boolean,
 ): MarkerMenuItem[] {
   if (!parentMarker) return [];
 
@@ -87,6 +98,10 @@ export function generateInlineMarkerMenuListItems(
             localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
           isDisallowed,
           action: () => {
+            if (isChapterLoading?.()) {
+              closeMarkersMenu();
+              return;
+            }
             // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as
             // disabled `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a
             // second layer of protection in case that disabled rendering is ever loosened or the
@@ -144,17 +159,45 @@ export function getChapterKey(
  * A still-live selection is left completely alone, and with no snapshot there is nothing to restore
  * (`focus()` keeps its default behavior).
  *
+ * A selected paragraph marker counts as a live selection too. `getSelection()` reports `undefined`
+ * for it, because a USJ selection is a text range and cannot represent a selected node, so without
+ * asking `getSelectedParaMarker()` this would restore the last caret over it and the paragraph
+ * dropdown would retag whichever paragraph that caret was in.
+ *
  * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
  * @param lastFocusOutSelection The selection captured when focus last left the editor (a focusout
  *   listener reads it synchronously, ahead of the blur-path nulling), or `undefined` when none has
  *   been captured
  */
 export function restoreSelectionIfLost(
-  editor: Pick<EditorRef, 'getSelection' | 'setSelection'> | null,
+  editor: Pick<EditorRef, 'getSelection' | 'setSelection' | 'getSelectedParaMarker'> | null,
   lastFocusOutSelection: SelectionRange | undefined,
 ): void {
-  if (!editor || editor.getSelection()) return;
+  // TODO(PT-4905): Other selection consumers (insert comment among them) still read a selected
+  // paragraph marker as no selection; this is the only check that accounts for it.
+  if (!editor || editor.getSelection() || editor.getSelectedParaMarker()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
+}
+
+/**
+ * Forgets the caret captured at focus-out while a paragraph marker is the selection, so nothing can
+ * later restore that caret over it.
+ *
+ * The focus-out capture keeps its previous snapshot when there is no readable selection, and a
+ * selected marker reads as none (see {@link restoreSelectionIfLost}), so the snapshot is an older
+ * caret, possibly in another paragraph. Call this as the paragraph menu opens. If the marker
+ * selection is then lost under the open menu (the document is replaced, or the editor becomes
+ * read-only), a pick finds nothing to restore and `formatPara` refuses with a logged warning,
+ * instead of retagging the paragraph that older caret was in.
+ *
+ * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
+ * @param lastFocusOutSelectionRef The focus-out snapshot, cleared when a marker is selected
+ */
+export function forgetCaretSnapshotIfParaMarkerSelected(
+  editor: Pick<EditorRef, 'getSelectedParaMarker'> | null,
+  lastFocusOutSelectionRef: MutableRefObject<SelectionRange | undefined>,
+): void {
+  if (editor?.getSelectedParaMarker()) lastFocusOutSelectionRef.current = undefined;
 }
 
 /**
@@ -239,16 +282,46 @@ export interface EditingSessionActivityInput {
   /**
    * Set when the open note session is the footnotes pane's row editor; `undefined` for the popover.
    * The row editor applies each edit to the text as it is made, as the Scripture editor itself
-   * does, so it holds incoming updates back on the Scripture editor's terms: only while focus is in
-   * the pane and a note was edited there within {@link EDITOR_OWNERSHIP_WINDOW_MS}. The popover
-   * applies nothing until Save, so its session holds them back until it closes or goes stale.
+   * does, so it holds incoming updates back on the Scripture editor's terms (see
+   * {@link doesPaneSessionOwnContent}). The popover applies nothing until Save, so its session holds
+   * them back until it closes or goes stale.
    */
-  paneSession?: {
-    /** Whether DOM focus is inside the footnotes pane. */
-    hasFocus: boolean;
-    /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
-    lastEditAtMs: number | undefined;
-  };
+  paneSession?: PaneEditingSession;
+}
+
+/** An open note session in the footnotes pane's row editor. */
+export interface PaneEditingSession {
+  /** Whether DOM focus is inside the footnotes pane. */
+  hasFocus: boolean;
+  /**
+   * Where the window's focus is. DOM focus in the pane survives a click into another web view, so
+   * only `'thisEditor'` lets the pane claim the text. While focus is `'settling'`,
+   * `useEditorPdpSync` holds the delivery instead, as it does for the Scripture text.
+   */
+  focusLocation: EditorFocusLocation;
+  /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
+  lastEditAtMs: number | undefined;
+}
+
+/**
+ * Whether the footnotes pane owns the chapter's content, as the focused Scripture editor does: a
+ * note session is open in the pane, focus is in the pane, and a note was edited there within
+ * {@link EDITOR_OWNERSHIP_WINDOW_MS}. Says nothing about where the window's focus is;
+ * {@link resolveEditingSessionActivity} and `useEditorPdpSync` each decide what that means for an
+ * incoming update.
+ */
+export function doesPaneSessionOwnContent(
+  editingNoteKey: string | undefined,
+  paneSession: PaneEditingSession | undefined,
+  nowMs: number,
+): boolean {
+  return (
+    editingNoteKey !== undefined &&
+    paneSession !== undefined &&
+    paneSession.hasFocus &&
+    paneSession.lastEditAtMs !== undefined &&
+    nowMs - paneSession.lastEditAtMs < EDITOR_OWNERSHIP_WINDOW_MS
+  );
 }
 
 /**
@@ -302,11 +375,11 @@ export function resolveEditingSessionActivity({
 }: EditingSessionActivityInput): { isActive: boolean; isNoteSessionStale: boolean } {
   const isNoteSessionOpen = editingNoteKey !== undefined;
   if (isNoteSessionOpen && paneSession) {
-    const ownsContent =
-      paneSession.lastEditAtMs !== undefined &&
-      nowMs - paneSession.lastEditAtMs < EDITOR_OWNERSHIP_WINDOW_MS;
     return {
-      isActive: hasPaletteSession || (paneSession.hasFocus && ownsContent),
+      isActive:
+        hasPaletteSession ||
+        (paneSession.focusLocation === 'thisEditor' &&
+          doesPaneSessionOwnContent(editingNoteKey, paneSession, nowMs)),
       isNoteSessionStale: false,
     };
   }
@@ -465,6 +538,76 @@ export function shouldSkipNoteInsert(hasEditor: boolean, isReadOnlyEffective: bo
   return !hasEditor || isReadOnlyEffective;
 }
 
+/** Everything the read-only flags are derived from. */
+export type ReadOnlyInputs = {
+  /** The web view's own `isReadOnly` option */
+  isReadOnly: boolean;
+  /** Whether the project's `platform.isEditable` setting is still loading */
+  isProjectEditableLoading: boolean;
+  isProjectEditable: boolean;
+  /** Whether the user's Scripture-edit permission is genuinely still resolving */
+  isCanUserEditScriptureUnresolved: boolean;
+  canUserEditScripture: boolean;
+  /** Whether an automatic Send/Receive is freezing editing */
+  isSyncBlocked: boolean;
+  /** Whether `platform.interfaceMode` is still loading */
+  isInterfaceModeLoading: boolean;
+  /** The DISPLAYED view type (after the interface-mode fallback), not the saved one */
+  viewType: ScriptureEditorViewType;
+  isPowerMode: boolean;
+};
+
+/**
+ * Derives the three read-only flags the editor web view uses.
+ *
+ * - `isReadOnlyEffective`: whether the editor is effectively read-only: the `isReadOnly` option, the
+ *   project's `platform.isEditable` setting, the user's Scripture-edit permission, a sync block, or
+ *   the read-only Preview (the formatted view in Power mode). Fails CLOSED (read-only) while
+ *   editability or permission is genuinely still resolving and while `platform.interfaceMode` loads
+ *   (which decides whether the formatted view is Preview), rather than relying on the fail-open
+ *   default values during that window: a briefly-writable editor is worse than a briefly-read-only
+ *   one.
+ * - `isDurablyReadOnly`: the same reasons minus the loading states, minus `isSyncBlocked` (a
+ *   transient freeze during an automatic Send/Receive rather than a real read-only state). Used for
+ *   the tab title so it does not relabel "(Read-only)" and back on every scheduled sync; the
+ *   sync-blocked banner already communicates that transient state.
+ * - `isReadOnlyForTitle`: `isDurablyReadOnly`, or `undefined` while editability, permission or the
+ *   interface mode is still resolving, so the title effect skips its update and the
+ *   previously-persisted title stays showing.
+ */
+export function deriveReadOnlyFlags({
+  isReadOnly,
+  isProjectEditableLoading,
+  isProjectEditable,
+  isCanUserEditScriptureUnresolved,
+  canUserEditScripture,
+  isSyncBlocked,
+  isInterfaceModeLoading,
+  viewType,
+  isPowerMode,
+}: ReadOnlyInputs): {
+  isReadOnlyEffective: boolean;
+  isDurablyReadOnly: boolean;
+  isReadOnlyForTitle: boolean | undefined;
+} {
+  const isPreview = showsReadOnlyPreview(viewType, isPowerMode);
+  const isDurablyReadOnly = isReadOnly || !isProjectEditable || !canUserEditScripture || isPreview;
+  const isReadOnlyEffective =
+    isReadOnly ||
+    isProjectEditableLoading ||
+    !isProjectEditable ||
+    isCanUserEditScriptureUnresolved ||
+    !canUserEditScripture ||
+    isSyncBlocked ||
+    isInterfaceModeLoading ||
+    isPreview;
+  const isReadOnlyForTitle =
+    isProjectEditableLoading || isCanUserEditScriptureUnresolved || isInterfaceModeLoading
+      ? undefined
+      : isDurablyReadOnly;
+  return { isReadOnlyEffective, isDurablyReadOnly, isReadOnlyForTitle };
+}
+
 /**
  * Inserts a textual note (footnote, cross-reference, or endnote) at the current selection, per
  * {@link NOTE_INSERT_CONFIG}. The body of the web view's `insertNoteAtCurrentSelection` hook,
@@ -519,23 +662,6 @@ export const CONTEXT_MENU_ACTION_TO_NOTE_KIND: Record<
   insertEndnote: 'insertEndnoteAtSelection',
 };
 
-/**
- * Which {@link NOTE_INSERT_CONFIG} kind the Ctrl+T / Ctrl+Shift+T keyboard shortcut inserts: Ctrl+T
- * inserts a footnote, Ctrl+Shift+T inserts a cross-reference. One mapping shared by the shortcut
- * handler and its test, so swapping the two chords' kinds fails a test rather than only showing up
- * as Ctrl+T inserting the wrong note type.
- *
- * @param shiftKey Whether Shift was held (`KeyboardEvent.shiftKey`).
- */
-export function noteKindForCtrlTChord(
-  shiftKey: boolean,
-): Extract<
-  EditorMessageInsertTextualNoteAtSelection['method'],
-  'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection'
-> {
-  return shiftKey ? 'insertCrossReferenceAtSelection' : 'insertFootnoteAtSelection';
-}
-
 const INSERT_FOOTNOTE_TITLE_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%';
 const INSERT_CROSS_REFERENCE_TITLE_KEY: LocalizeKey =
@@ -554,10 +680,10 @@ const INSERT_COMMENT_TITLE_KEY: LocalizeKey =
  * independently.
  */
 export const INSERT_CONTEXT_MENU_STRING_KEYS = Object.freeze([
+  INSERT_COMMENT_TITLE_KEY,
   INSERT_FOOTNOTE_TITLE_KEY,
   INSERT_CROSS_REFERENCE_TITLE_KEY,
   INSERT_ENDNOTE_TITLE_KEY,
-  INSERT_COMMENT_TITLE_KEY,
 ] as const);
 
 /** Callbacks the editor context menu's insert items dispatch to. */
@@ -593,6 +719,12 @@ export function createInsertContextMenuItems(
   const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
   return [
     {
+      title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
+      onSelect: actions.insertComment,
+      // Disabled while sync-blocked too, so the menu reflects the frozen state.
+      isDisabled: !canUserCreateComments || isSyncBlocked,
+    },
+    {
       title: localizedStrings[INSERT_FOOTNOTE_TITLE_KEY],
       onSelect: actions.insertFootnote,
       isDisabled: isReadOnly,
@@ -606,12 +738,6 @@ export function createInsertContextMenuItems(
       title: localizedStrings[INSERT_ENDNOTE_TITLE_KEY],
       onSelect: actions.insertEndnote,
       isDisabled: isReadOnly,
-    },
-    {
-      title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
-      onSelect: actions.insertComment,
-      // Disabled while sync-blocked too, so the menu reflects the frozen state.
-      isDisabled: !canUserCreateComments || isSyncBlocked,
     },
   ];
 }
@@ -655,4 +781,34 @@ export function createInsertContextMenuItems(
  */
 export function isEditorContextMenuOpen(editorContainer: Element | null | undefined): boolean {
   return isEditorContextMenuOpenFor(editorContainer);
+}
+
+/**
+ * Where keyboard focus is, from this editor's point of view (see {@link EditorFocusLocation}).
+ * Projects the subject to a web view id as core's `getWebViewIdFromFocusSubject` does (extensions
+ * cannot import it at runtime).
+ *
+ * - Another web view, by its iframe or its tab: `'anotherWebView'`.
+ * - This editor's iframe while its document lacks focus: `'settling'` (the subject is stale).
+ * - Anything else is `'thisEditor'`, including `'other'` (menus outside the dock), dialog tabs and
+ *   unknown focus, so the editor's own menus and confirm dialogs never release its hold.
+ *
+ * @param focusSubject The window's current focus subject, `undefined` if unknown
+ * @param ownWebViewId This editor's web view id
+ * @param doesEditorDocumentHaveFocus Whether this editor's document currently has focus
+ */
+export function getEditorFocusLocation(
+  focusSubject: FocusSubject | undefined,
+  ownWebViewId: string,
+  doesEditorDocumentHaveFocus: boolean,
+): EditorFocusLocation {
+  let subjectWebViewId: string | undefined;
+  if (focusSubject?.focusType === 'webView') subjectWebViewId = focusSubject.id;
+  else if (focusSubject?.focusType === 'tab' && focusSubject.tabType === 'webView')
+    subjectWebViewId = focusSubject.id;
+
+  if (subjectWebViewId === undefined) return 'thisEditor';
+  if (subjectWebViewId !== ownWebViewId) return 'anotherWebView';
+  if (focusSubject?.focusType === 'webView' && !doesEditorDocumentHaveFocus) return 'settling';
+  return 'thisEditor';
 }

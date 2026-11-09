@@ -14,10 +14,11 @@ function isLastTabOfPanel(tab: TabData, panel: PanelData): boolean {
  * or `undefined` when the drop should be rejected.
  *
  * Mirrors the parts of two existing rc-dock call sites that apply to this app's own group
- * configuration — every group here sets `floatable: false` and never sets `disableDock` (see
- * `getGroups` in `platform-dock-layout-positioning.util.ts`) — rather than inventing new rules.
- * Both call sites also branch on `floatable: 'singleTab'`, and the second on `disableDock`; neither
- * branch is replicated here, since no group this app registers can trigger them:
+ * configuration — every group here sets `floatable: false`, and only Simple mode's groups set
+ * `disableDock` (see `getGroups` in `platform-dock-layout-positioning.util.ts`) — rather than
+ * inventing new rules. Both call sites also branch on `floatable: 'singleTab'`, and the second on
+ * `disableDock`; neither branch is replicated here, since no group this zone serves can trigger
+ * them: the zone renders only in Power mode, whose group sets neither.
  *
  * - `TabCache.onDragOver` (`node_modules/rc-dock/src/DockTabs.tsx`) for a single-tab drag: same
  *   `group` only. On top of that, a tab that already is the last tab of `targetPanel` is rejected:
@@ -26,8 +27,10 @@ function isLastTabOfPanel(tab: TabData, panel: PanelData): boolean {
  *   (`node_modules/rc-dock/src/DockDropLayer.tsx`) for a whole-panel drag (including a re-docked
  *   float — a single-tab float panel drags as a `panel`, not a `tab`; see `TabCache.onDragStart`'s
  *   single-tab-float branch): reject `panelLock`ed panels, reject a different group, and reject the
- *   panel dropping onto itself (rc-dock issue ticlo/rc-dock#226 — accepting that duplicates the
- *   panel).
+ *   panel dropping onto itself. Unpatched rc-dock duplicates the panel on that drop
+ *   (ticlo/rc-dock#226), and the patched `DockLayout.dockMove` ignores it (see `README.md` in this
+ *   folder). Rejecting it here as well keeps the zone from showing a drop indicator for a drop that
+ *   does nothing.
  *
  * A locked group's tab (`TabGroup.tabLocked`) is rejected here the same way `DockPanel.render`
  * gates whether any drop squares render at all for a locked source group

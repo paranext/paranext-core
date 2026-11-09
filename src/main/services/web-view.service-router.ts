@@ -1116,9 +1116,9 @@ async function openSettingsForWebView(webViewId?: WebViewId): Promise<void> {
 /**
  * Open a Settings tab that is not limited to any project, in the window the user is working in.
  *
- * Focus-routed, unlike the two above: this command is declared to take no arguments, so it names no
- * web view and has no owner to route by. It shares its implementation with them and must not share
- * their routing.
+ * Focus-routed, unlike the other settings commands: this command is declared to take no arguments,
+ * so it names no web view and has no owner to route by. It shares its implementation with them and
+ * must not share their routing.
  */
 async function openUserSettings(): Promise<void> {
   logger.debug(`openUserSettings is focus-routing to window ${getTargetWindowId()}`);
@@ -1129,6 +1129,7 @@ async function openUserSettings(): Promise<void> {
 type SettingsCommandName =
   | 'platform.openSettings'
   | 'platform.openProjectSettings'
+  | 'platform.openProjectSettingsForWebView'
   | 'platform.openUserSettings';
 
 /**
@@ -1169,6 +1170,24 @@ const SETTINGS_COMMAND_DOCS: Record<SettingsCommandName, SingleMethodDocumentati
       result: { name: 'return value', schema: { type: 'null' } },
     },
   },
+  'platform.openProjectSettingsForWebView': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Open a Settings tab limited to the project shown in a given web view. The same as ' +
+        'platform.openSettings, under a name of its own so a menu item that opens project ' +
+        'settings can show a keyboard shortcut the main menu Settings item does not',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'Web view whose project the Settings tab should be limited to, if any',
+          schema: { type: 'string' },
+        },
+      ],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
   'platform.openUserSettings': {
     method: {
       deprecated: true,
@@ -1186,7 +1205,7 @@ const SETTINGS_COMMAND_DOCS: Record<SettingsCommandName, SingleMethodDocumentati
  * renderer starts. Must be called during main process startup, before createWindow().
  */
 export async function startWebViewServiceRouter(): Promise<void> {
-  // Which of these three routes by ownership is decided in this module rather than derived from
+  // Which of these routes by ownership is decided in this module rather than derived from
   // their parameters, so nothing otherwise keeps the `webViewId` each one documents and the routing
   // it actually gets in agreement.
   assertCommandRoutingMatchesDocs('WebView service router', [
@@ -1198,6 +1217,11 @@ export async function startWebViewServiceRouter(): Promise<void> {
     {
       commandName: 'platform.openProjectSettings',
       docs: SETTINGS_COMMAND_DOCS['platform.openProjectSettings'],
+      routing: 'owner',
+    },
+    {
+      commandName: 'platform.openProjectSettingsForWebView',
+      docs: SETTINGS_COMMAND_DOCS['platform.openProjectSettingsForWebView'],
       routing: 'owner',
     },
     {
@@ -1254,6 +1278,11 @@ export async function startWebViewServiceRouter(): Promise<void> {
       serializeRequestType(CATEGORY_COMMAND, 'platform.openProjectSettings'),
       openSettingsForWebView,
       SETTINGS_COMMAND_DOCS['platform.openProjectSettings'],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, 'platform.openProjectSettingsForWebView'),
+      openSettingsForWebView,
+      SETTINGS_COMMAND_DOCS['platform.openProjectSettingsForWebView'],
     ),
     registerRequestHandler(
       serializeRequestType(CATEGORY_COMMAND, 'platform.openUserSettings'),

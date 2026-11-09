@@ -19,8 +19,9 @@ export const REGISTRY_TOKEN_REQUEST_TYPE = serializeRequestType(
 );
 
 /**
- * What the C# handler returns. Expected failures come back as data rather than as a rejection
- * because a code thrown from C# does not reach TypeScript today (PT-4750).
+ * What the C# handler returns. Expected failures come back as data rather than as a rejection, a
+ * contract set while a code thrown from C# could not reach TypeScript; moving them to thrown codes
+ * is PT-4884.
  */
 export type RegistryAccessTokenWireResult =
   | RegistryAccessToken

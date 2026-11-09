@@ -42,13 +42,13 @@ namespace TestParanextDataProvider.Projects.SendReceive
             InternetUse.Enabled,
             InternetUse.VpnRequired,
             ExpectedResult = false,
-            TestName = "SomeServicesDisabled_OutsideSensitiveLocation_Refuses"
+            TestName = "BlockInSensitiveLocations_OutsideSensitiveLocation_Refuses"
         )]
         [TestCase(
             InternetUse.Disabled,
             InternetUse.VpnRequired,
             ExpectedResult = false,
-            TestName = "SomeServicesDisabled_InSensitiveLocation_Refuses"
+            TestName = "BlockInSensitiveLocations_InSensitiveLocation_Refuses"
         )]
         [TestCase(
             InternetUse.Disabled,

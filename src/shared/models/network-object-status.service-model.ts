@@ -1,7 +1,7 @@
 import { NetworkObjectDetails } from '@shared/models/network-object.model';
 // Linked in TSDoc
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { isSubset } from 'platform-bible-utils';
+import { isSubset, DEADLINE_EXCEEDED, UNKNOWN, PlatformError } from 'platform-bible-utils';
 
 // Functions that are exposed through the network object
 export interface NetworkObjectStatusRemoteServiceType {
@@ -25,9 +25,10 @@ export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemot
    * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
    *   indefinitely
    * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
-   *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-   *   reached before the network object is registered, or if the current set of network objects
-   *   could not be read. Rejections carry a reason string, not an `Error`
+   *   once the network object is registered, or rejects with a {@link PlatformError} (not an
+   *   `Error`) if a timeout is provided and the timeout is reached before the network object is
+   *   registered (`code` is {@link DEADLINE_EXCEEDED}), or if the current set of network objects
+   *   could not be read (`code` is {@link UNKNOWN})
    */
   waitForNetworkObject: (
     objectDetailsToMatch: Partial<NetworkObjectDetails>,

@@ -255,9 +255,8 @@ export function StructureProtectionButton({
 }: StructureProtectionButtonProps) {
   const {
     isStructureProtected,
-    isProtectedByAdmin,
     adminSettingError,
-    canAdminToggle,
+    isTeamLockBinding,
     isProtectionActive,
     isLoading: isStateLoading,
     setUserProtection,
@@ -267,11 +266,14 @@ export function StructureProtectionButton({
   const isMac = isMacOs();
 
   // When the admin (project-level) setting failed to load, the protection values fall back to
-  // treating the admin layer as unset, so we can't trust them. Disable the toggle and surface the
-  // error via the tooltip rather than letting the user act on a possibly-wrong state.
+  // treating the admin layer as unset, so we can't trust them. `isTeamLockBinding` counts that as
+  // locked, so the toggle is disabled; the tooltip names the error rather than the team lock.
   const hasAdminError = adminSettingError !== undefined;
 
-  const personalDisabled = hasAdminError || (!canAdminToggle && isProtectedByAdmin);
+  // Not while loading, when `isTeamLockBinding` is `true` for every user: the toggle only writes the
+  // user's own preference, which cannot get past the team lock, so it need not wait, and a disabled
+  // button would say "locked by admin" on a project with no team lock.
+  const personalDisabled = !isStateLoading && isTeamLockBinding;
   const personalDisabledTooltipKey = hasAdminError ? ERROR_LOADING_KEY : LOCKED_BY_ADMIN_KEY;
 
   const handlePersonalToggle = useCallback(() => {

@@ -18,5 +18,5 @@ export const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
   '%toolbar_sync%',
   '%onboardingTour_step_sendReceive_description_2%',
   '%onboardingTour_step_profile_title%',
-  '%onboardingTour_step_profile_description%',
+  '%onboardingTour_step_profile_description_2%',
 ];

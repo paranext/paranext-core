@@ -535,6 +535,26 @@ declare module 'platform-scripture' {
      * locations
      */
     text: string;
+    /**
+     * The USFM between {@link FindResult.start} and {@link FindResult.end} at search time. Pass it
+     * back as the matching entry of `expectedUsfm` in `replace()` so a range whose USFM has since
+     * changed is skipped instead of overwritten.
+     */
+    matchedUsfm: string;
+    /**
+     * Every marker that lies inside this result's USFM span, and would therefore be deleted by
+     * replacing it with plain text. Absent when the span contains none, which is the common case.
+     *
+     * Markers with a backslash are listed in order. A closing marker keeps its `*` (`nd*`), and a
+     * verse or chapter marker keeps its number (`v:3`, `c:2`). A nested marker loses its `+`. A
+     * self-closed milestone keeps its empty closer (`zms\*`). Each optional line break (`//`) is
+     * listed after all of them, wherever it falls in the span.
+     *
+     * Unless the replacement USFM puts the same markers back, `replace()` refuses such a result;
+     * its `@throws` lists the refusals. Consumers should show the markers and get the user's
+     * agreement before passing {@link ReplaceOptions.allowMarkerDeletion}, or skip the result.
+     */
+    removedMarkers?: string[];
   };
 
   /**
@@ -755,7 +775,20 @@ declare module 'platform-scripture' {
        *   {@link UsfmVerseLocation}. Overlapping ranges will cause an error.
        * @param usfmToInsert - The USFM content to insert at each range. Can be a single string
        *   (used for all ranges) or an array of strings (one per range).
-       * @throws Error if `usfmToInsert` array length doesn't match `rangesToReplace` length
+       * @param expectedUsfm - Optional. The USFM each range is expected to currently contain, one
+       *   entry per range ({@link FindResult.matchedUsfm}). A range whose current USFM differs, or
+       *   whose location can no longer be found (including a chapter or book that no longer
+       *   exists), is never written and is reported in the returned
+       *   {@link ReplaceOutcome.changedIndexes}. When omitted, ranges are written as given and a
+       *   location that can no longer be found rejects.
+       * @param options - Optional. See {@link ReplaceOptions}.
+       * @returns A {@link ReplaceOutcome} whose `changedIndexes` lists, ascending, the ranges that
+       *   were not written.
+       * @throws Error if `usfmToInsert` or `expectedUsfm` array length doesn't match
+       *   `rangesToReplace` length
+       * @throws Error if {@link ReplaceOptions.allowMarkerDeletion} is set without `expectedUsfm`
+       * @throws Error if any range's start or end offset is negative, whether or not `expectedUsfm`
+       *   is given
        * @throws Error if any range spans multiple books
        * @throws Error if any ranges overlap
        * @throws Error whose message is the `STRUCTURE_PROTECTED_ERROR` sentinel
@@ -763,12 +796,45 @@ declare module 'platform-scripture' {
        *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or
        *   chapter marker. The Find web view substring-matches this sentinel to surface a localized
        *   message.
+       * @throws Error whose message is the `ONE_ENDED_MARKER_ERROR` sentinel
+       *   (`'platformScripture.replace.oneEndedMarker'`) when a replacement would delete only one
+       *   end of a marker pair. Checked in every interface mode, and
+       *   {@link ReplaceOptions.allowMarkerDeletion} does not lift it. Substring-matched by the Find
+       *   web view in the same way.
+       * @throws Error whose message is the `MARKER_DELETION_ERROR` sentinel
+       *   (`'platformScripture.replace.markerDeletion'`) when a replacement would delete a marker
+       *   that it does not put back, unless {@link ReplaceOptions.allowMarkerDeletion} is set.
+       *   Checked in every interface mode, independently of structure protection.
+       *   `allowMarkerDeletion` does not lift it for a chapter marker.
+       *   {@link FindResult.removedMarkers} reports in advance which results this applies to.
+       *   Substring-matched by the Find web view in the same way.
        */
       replace(
         rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
         usfmToInsert: string | string[],
-      ): Promise<void>;
+        expectedUsfm?: string[],
+        options?: ReplaceOptions,
+      ): Promise<ReplaceOutcome>;
     };
+
+  /** Options for a `replace()` call. */
+  export type ReplaceOptions = {
+    /**
+     * Set when the user has seen the markers in each range and agreed to delete them. Requires
+     * `expectedUsfm`, so that the agreement holds only for the text they saw. Does not lift the
+     * structure protection, one-ended marker, or chapter marker refusals.
+     */
+    allowMarkerDeletion?: boolean;
+  };
+
+  /** The result of a `replace()` call. */
+  export type ReplaceOutcome = {
+    /**
+     * Indexes into `rangesToReplace`, ascending, of ranges not written because their text changed
+     * after the search, or their location is gone.
+     */
+    changedIndexes: number[];
+  };
 
   // #endregion Replace Types
 
@@ -1826,9 +1892,9 @@ declare module 'platform-scripture' {
        * read over the ceiling throws with the message prefix `PT9 interlinear data is too large`; a
        * selector naming an unknown path throws with the prefix `Unknown PT9 interlinear paths`, and
        * one naming no paths at all throws with a message naming `Pt9InterlinearDataSelector.Paths`.
-       * Branch on the message rather than on a code: these carry `RESOURCE_EXHAUSTED` and
-       * `INVALID_ARGUMENT` on the provider side, but a C# platform error code does not reach a
-       * consumer across the RPC boundary today.
+       * The rejection is a `PlatformError` whose `code` is `RESOURCE_EXHAUSTED` for the ceiling and
+       * `INVALID_ARGUMENT` for a selector it cannot read; the message prefixes identify the same
+       * failures for a consumer that sees only the message.
        *
        * @param selector Which interlinear files to read; omit to read all of them. See
        *   {@link Pt9InterlinearDataSelector}.
@@ -2104,7 +2170,9 @@ declare module 'platform-scripture' {
    * - `running`: The job is currently running
    * - `stopped`: The job was stopped by the user
    * - `errored`: The job itself failed and is no longer running. A check that could not run does not
-   *   make the job errored; see {@link CheckJobStatusReport.checkErrors}.
+   *   make the job errored; see {@link CheckJobStatusReport.checkErrors}. A project that cannot be
+   *   opened in Platform.Bible does (see `ProjectMetadata.unsupportedReason`): the job stops there,
+   *   and its error message ends with the `(PROJECT_OPEN_BLOCKED)` sentinel.
    * - `completed`: The job finished. Checks that could not run are listed in
    *   {@link CheckJobStatusReport.checkErrors}
    */
@@ -2727,6 +2795,18 @@ declare module 'platform-scripture' {
     /** Names of admins on this project. Only filled if project is new */
     adminNames?: string[];
     warnings?: string[];
+    /**
+     * Localize key explaining why this project cannot be opened (see
+     * `ProjectMetadata.unsupportedReason`); omitted when it can be. Until Study Bible Additions
+     * projects are supported, a list that offers a manual sync or download for such a project
+     * (Home, the sync projects dialog) shows its row disabled with this reason instead of offering
+     * the action. Scheduled and automatic syncs are not blocked by this. Rationale:
+     * `adr-sba-not-syncable-from-dialog-or-home` in `Architecture-Decisions.md`.
+     *
+     * Producers set it for local and server-only projects alike. When it is absent, callers fall
+     * back to the local project's metadata.
+     */
+    unsupportedReason?: string;
   };
 
   /**
@@ -3100,6 +3180,27 @@ declare module 'platform-scripture' {
   }
 
   // #endregion Markers Checklist Types
+
+  /**
+   * The copyright notice to show when a project is opened: the value of the
+   * `platformScripture.copyrightNotice` project setting. Treat a `kind` not listed here as `none`,
+   * since a newer backend may add kinds.
+   *
+   * - `none`: no notice.
+   * - `notification`: any project whose copyright starts with "Notification:", as the ESV's does.
+   *   `bannerText` is the rest of that first paragraph and `details` the rest of the copyright.
+   * - `restrictedLicense`: a resource that is a traditionally licensed Biblica text, for reference
+   *   only and not to be used as the basis of a new translation. Only resources get it.
+   *   `copyrightYears` is the years in its copyright statement (e.g. "1973, 1978, 1984, 2011"), or
+   *   "" when it names none.
+   *
+   * `name` is the project's short name and `fullName` its full name, which is the short name when
+   * it has none. `details` is plain text with one paragraph per line (`\n`), never HTML.
+   */
+  export type CopyrightNotice =
+    | { kind: 'none' }
+    | { kind: 'notification'; name: string; fullName: string; bannerText: string; details: string }
+    | { kind: 'restrictedLicense'; name: string; fullName: string; copyrightYears: string };
 }
 
 declare module 'papi-shared-types' {
@@ -3137,6 +3238,7 @@ declare module 'papi-shared-types' {
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
     IFindHistoryDataProvider,
+    CopyrightNotice,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -3210,7 +3312,10 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened characters inventory web view, or `undefined` if no web view
-     *   id was provided or the web view has no project (nothing is opened in that case).
+     *   id was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openCharactersInventory': (
       webViewId?: string | undefined,
@@ -3223,7 +3328,10 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened repeated-words inventory web view, or `undefined` if no web
-     *   view id was provided or the web view has no project (nothing is opened in that case).
+     *   view id was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openRepeatedWordsInventory': (
       webViewId?: string | undefined,
@@ -3236,7 +3344,10 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened markers inventory web view, or `undefined` if no web view id
-     *   was provided or the web view has no project (nothing is opened in that case).
+     *   was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openMarkersInventory': (
       webViewId?: string | undefined,
@@ -3249,7 +3360,10 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened punctuation inventory web view, or `undefined` if no web view
-     *   id was provided or the web view has no project (nothing is opened in that case).
+     *   id was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openPunctuationInventory': (
       webViewId?: string | undefined,
@@ -3270,8 +3384,10 @@ declare module 'papi-shared-types' {
      *   `papi.webViews.getOpenWebViewDefinition`, and in Power mode the panel is placed relative to
      *   that editor tab.
      * @returns Id of the opened, re-pointed, or fronted checks side panel web view, or `undefined`
-     *   if no editor web view id was provided or the web view has no project (nothing is opened in
-     *   that case).
+     *   if no editor web view id was provided, the web view has no project, or the project cannot
+     *   be opened (see `ProjectMetadata.unsupportedReason`), in which case the user is told why.
+     *   Nothing is opened in those cases. If the project's metadata lookup fails or takes over 1.5
+     *   seconds, the tool opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openChecksSidePanel': (
       editorWebViewId?: string | undefined,
@@ -3365,8 +3481,11 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The target project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the opened markers checklist web view, or `undefined` if no web view id was
-     *   provided or the web view has no project (nothing is opened in that case), or if the
-     *   provider did not create one.
+     *   provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text. Also `undefined` if the provider
+     *   did not create one.
      * @experimental
      */
     'platformScripture.openMarkersChecklist': (
@@ -3397,7 +3516,10 @@ declare module 'papi-shared-types' {
      * @param intent Pass `'createMissingBook'` to open the dialog on its Create-books section with
      *   the calling editor's current book pre-selected, instead of the default view.
      * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
-     *   — or `undefined` if the provider did not create one.
+     *   — or `undefined` if the project cannot be opened (see `ProjectMetadata.unsupportedReason`;
+     *   the user is told why and nothing is opened) or the provider did not create one. If the
+     *   project's metadata lookup fails or takes over 1.5 seconds, the tool opens anyway and the
+     *   backend refuses the project's text.
      * @experimental
      */
     'platformScripture.openManageBooks': (
@@ -3607,6 +3729,14 @@ declare module 'papi-shared-types' {
      * `†` (ViewUsfmXhtmlConverter.cs:73-74).
      */
     'platformScripture.crossRefCallers': string;
+
+    /**
+     * The copyright notice to show when this project is opened: `restrictedLicense` only for
+     * resources; `notification` for any project whose copyright starts with "Notification:";
+     * otherwise `none`. Computed from its copyright, names and DBL id; read-only through the
+     * settings surface.
+     */
+    'platformScripture.copyrightNotice': CopyrightNotice;
   }
 
   export interface NetworkEvents {

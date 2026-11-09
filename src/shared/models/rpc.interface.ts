@@ -212,3 +212,22 @@ export interface IRpcLocalClientAcceptor {
    */
   acceptLocalClient(socket: ServerSocketLike, name: string): void;
 }
+
+/**
+ * An RPC handler that can close the connections of the clients its websocket server accepted. Only
+ * the process that owns the server (main) implements this.
+ *
+ * @experimental
+ */
+export interface IRpcWebSocketClientCloser {
+  /**
+   * Close every client connection accepted from the websocket server, telling each why. Clients
+   * served through {@link IRpcLocalClientAcceptor.acceptLocalClient} are left open: whoever handed
+   * their sockets over owns closing them.
+   *
+   * @param code WebSocket close code to send to each client
+   * @param reason Human-readable reason to send to each client
+   * @experimental
+   */
+  closeWebSocketClients(code: number, reason: string): void;
+}

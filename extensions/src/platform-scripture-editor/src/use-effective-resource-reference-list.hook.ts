@@ -92,7 +92,17 @@ function mergeResourceReferenceLists(
 export type EffectiveResourceReferenceListState =
   | { status: 'loading' }
   | { status: 'error' }
-  | { status: 'ready'; list: EffectiveResourceReferenceList };
+  | {
+      status: 'ready';
+      list: EffectiveResourceReferenceList;
+      /**
+       * Whether the user's own list could not be read, so `list` holds the project-level items
+       * alone. The user's items are then missing for now, not removed, so a caller must not make a
+       * lasting change — such as replacing a saved selection — on the strength of their absence.
+       * Absent means `false`.
+       */
+      isUserLayerMissing?: boolean;
+    };
 
 /**
  * Returns the effective resource reference list for a setting: the set-union of project-level
@@ -103,7 +113,8 @@ export type EffectiveResourceReferenceListState =
  * Reports `loading` until _both_ the project-level setting and the user-level subscription have
  * delivered. If the user setting cannot be retrieved — whether a {@link PlatformError} arrives
  * through the callback or the `subscribe` call itself rejects — the project-level items are
- * returned tagged as `'admin'` rather than leaving the panel waiting.
+ * returned tagged as `'admin'` rather than leaving the panel waiting, with `isUserLayerMissing`
+ * set.
  */
 export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
@@ -121,15 +132,17 @@ export function useEffectiveResourceReferenceList(
   const userPdp = userPdpState.status === 'ready' ? userPdpState.networkObject : undefined;
   const isUserPdpUnavailable = userPdpState.status === 'unavailable';
 
+  // `'unavailable'` when the user's list cannot be read: the merge then uses the project-level
+  // items alone, and says so (see `isUserLayerMissing`).
   const [userResourceReferenceList, setUserResourceReferenceList] = useState<
-    ResourceReferenceList | undefined
+    ResourceReferenceList | 'unavailable' | undefined
   >(undefined);
 
   useEffect(() => {
     if (!userPdp) {
       // A lookup that finished without a provider will not deliver a user layer, so the project-level
       // items are the answer (see the hook doc), not a reason to keep loading.
-      setUserResourceReferenceList(isUserPdpUnavailable ? DEFAULT_LIST : undefined);
+      setUserResourceReferenceList(isUserPdpUnavailable ? 'unavailable' : undefined);
       return;
     }
 
@@ -145,7 +158,7 @@ export function useEffectiveResourceReferenceList(
       // Unsubscribing is an async round trip, so the outgoing subscription stays live for a moment
       // after cleanup; a late delivery would reinstate a list this hook no longer reports on.
       if (disposed) return;
-      setUserResourceReferenceList(isPlatformError(value) ? DEFAULT_LIST : value);
+      setUserResourceReferenceList(isPlatformError(value) ? 'unavailable' : value);
     });
 
     subscribePromise
@@ -166,7 +179,7 @@ export function useEffectiveResourceReferenceList(
         // Fall back to an empty user layer so the merged list still resolves. Leaving it
         // `undefined` reported `loading` forever — an unresolvable spinner — and contradicted this
         // hook's own contract, which promises the project-level items in this case.
-        if (!disposed) setUserResourceReferenceList(DEFAULT_LIST);
+        if (!disposed) setUserResourceReferenceList('unavailable');
       });
 
     return () => {
@@ -191,9 +204,14 @@ export function useEffectiveResourceReferenceList(
 
     if (userResourceReferenceList === undefined) return { status: 'loading' };
 
+    const isUserLayerMissing = userResourceReferenceList === 'unavailable';
     return {
       status: 'ready',
-      list: mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList),
+      list: mergeResourceReferenceLists(
+        projectResourceReferenceList,
+        isUserLayerMissing ? DEFAULT_LIST : userResourceReferenceList,
+      ),
+      isUserLayerMissing,
     };
   }, [
     isProjectSettingLoading,

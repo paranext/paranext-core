@@ -793,6 +793,108 @@ describe('Metadata generation:', () => {
   });
 });
 
+describe('Merging unsupportedReason across factories', () => {
+  const testProjectId = 'test-project';
+  const testPDPFInfo: Record<string, Partial<NetworkObjectDetails>> = {
+    [getPDPFactoryNetworkObjectNameFromId('first')]: {
+      objectType: PDP_FACTORY_OBJECT_TYPE,
+    },
+    [getPDPFactoryNetworkObjectNameFromId('second')]: {
+      objectType: PDP_FACTORY_OBJECT_TYPE,
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => testPDPFInfo);
+  });
+
+  /**
+   * Registers two factories reporting the same project so the merge logic runs. Each argument is
+   * the `unsupportedReason` that factory reports; `undefined` leaves the field out.
+   */
+  function mockFactories(
+    firstFactoryReason: string | undefined,
+    secondFactoryReason: string | undefined,
+  ) {
+    const testPDPFs: Record<string, Partial<IProjectDataProviderFactory>> = {
+      [getPDPFactoryNetworkObjectNameFromId('first')]: {
+        async getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
+          return [
+            {
+              id: testProjectId,
+              projectInterfaces: ['platform.placeholder'],
+              ...(firstFactoryReason !== undefined
+                ? { unsupportedReason: firstFactoryReason }
+                : {}),
+            },
+          ];
+        },
+      },
+      [getPDPFactoryNetworkObjectNameFromId('second')]: {
+        async getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
+          return [
+            {
+              id: testProjectId,
+              projectInterfaces: ['platform.notesOnly'],
+              ...(secondFactoryReason !== undefined
+                ? { unsupportedReason: secondFactoryReason }
+                : {}),
+            },
+          ];
+        },
+      },
+    };
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectService.get.mockImplementation(
+      (networkObjectId: string) => testPDPFs[networkObjectId],
+    );
+  }
+
+  test('fills unsupportedReason from a second factory when the first leaves it unset', async () => {
+    mockFactories(undefined, '%project_unsupported_studyBibleAdditions%');
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+    const testProjectMetadata = projectsMetadata.find((md) => md.id === testProjectId);
+
+    expect(testProjectMetadata).toBeDefined();
+    expect(testProjectMetadata?.unsupportedReason).toBe(
+      '%project_unsupported_studyBibleAdditions%',
+    );
+  });
+
+  test('fills unsupportedReason from a second factory when the first reports an empty one', async () => {
+    mockFactories('', '%project_unsupported_studyBibleAdditions%');
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+    const testProjectMetadata = projectsMetadata.find((md) => md.id === testProjectId);
+
+    expect(testProjectMetadata?.unsupportedReason).toBe(
+      '%project_unsupported_studyBibleAdditions%',
+    );
+  });
+
+  test('keeps the first factory reason over a second one', async () => {
+    mockFactories('%project_unsupported_first%', '%project_unsupported_studyBibleAdditions%');
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+    const testProjectMetadata = projectsMetadata.find((md) => md.id === testProjectId);
+
+    expect(testProjectMetadata?.unsupportedReason).toBe('%project_unsupported_first%');
+  });
+
+  test('leaves unsupportedReason absent when no factory supplies it', async () => {
+    mockFactories(undefined, undefined);
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+    const testProjectMetadata = projectsMetadata.find((md) => md.id === testProjectId);
+
+    expect(testProjectMetadata).toBeDefined();
+    expect(testProjectMetadata?.unsupportedReason).toBeUndefined();
+  });
+});
+
 describe('logging an empty metadata result', () => {
   // `beforeAll` has already moved `performance` past the startup grace period, so an empty answer
   // is logged once rather than retried. Which level it is logged at is what these pin: a query for

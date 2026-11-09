@@ -28,10 +28,10 @@
  */
 import type { FrameLocator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { sendOpenMarkersChecklistCommand, waitForAppReady } from '../../fixtures/helpers';
 
-// Markers Checklist is opened from the scripture editor's hamburger menu, which hides that item
-// in Simple mode.
+// The suite's layout is written for Power mode, and the editor menu hides the Markers Checklist item
+// in both modes, so the checklist is opened by command.
 test.use({ requiredInterfaceMode: 'power' });
 
 // ---------------------------------------------------------------------------
@@ -84,23 +84,18 @@ async function openDefaultProject(page: Page): Promise<void> {
 }
 
 /**
- * Open the Markers Checklist web view via the scripture editor's hamburger menu. The menu item is
- * declared in `platform-scripture-editor/contributions/menus.json` under the inventory group. No-op
- * if the tab is already open (clicks back to activate instead).
+ * Open the Markers Checklist web view by sending its command with the open scripture editor's web
+ * view id (see `sendOpenMarkersChecklistCommand`); the editor's menu hides the item in both
+ * interface modes. No-op if the tab is already open (clicks back to activate instead).
  */
-async function openMarkersChecklistViaToolsMenu(page: Page): Promise<void> {
+async function openMarkersChecklistByCommand(page: Page): Promise<void> {
   const existing = page.locator('.dock-tab').filter({ hasText: WEBVIEW_IFRAME_TITLE_RE });
   if ((await existing.count()) > 0) {
     await existing.first().click();
     return;
   }
 
-  const editorFrame = page.frameLocator(`iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`);
-  await editorFrame.locator("button[aria-label='Project']").first().click();
-  await editorFrame
-    .getByRole('menuitem', { name: /Markers Checklist/i })
-    .first()
-    .click();
+  await sendOpenMarkersChecklistCommand(page);
 
   await expect(page.locator('.dock-tab').filter({ hasText: WEBVIEW_IFRAME_TITLE_RE })).toBeVisible({
     timeout: 15_000,
@@ -127,8 +122,8 @@ async function openMarkerSettingsDialog(page: Page): Promise<FrameLocator> {
   const frame = page.frameLocator('iframe[title*="Markers Checklist"]');
   await frame.locator("button[aria-label='View Info']").first().click();
 
-  // Settings... menu item — match exactly to disambiguate from "Open Project Settings..."
-  // injected by default contributions.
+  // Settings... menu item. Matched exactly so it cannot match the default contributions'
+  // "Project settings" item.
   await frame.getByRole('menuitem', { name: 'Settings...', exact: true }).click();
 
   await expect(
@@ -178,7 +173,7 @@ test.describe('markers-checklist Journey Tests (cross-WP)', () => {
   // UI-PKG-002 data refresh) still provides strong cross-WP coverage without persistence.
   test('adjust marker settings via Settings dialog, verify data refresh', async ({ mainPage }) => {
     // ── Step 1 (UI-PKG-001): Open Markers Checklist via the scripture-editor hamburger. ──
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
 
     // ── Step 2 (UI-PKG-002): Initial data load settles. ──
@@ -242,7 +237,7 @@ test.describe('markers-checklist Journey Tests (cross-WP)', () => {
   // functional tests prove the read/write round-trip).
   test('toggle Hide Matches and Show Verse Text in combination', async ({ mainPage }) => {
     // ── Step 1 (UI-PKG-001): Open Markers Checklist. ──
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 

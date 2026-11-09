@@ -1,6 +1,7 @@
 import papi, { logger } from '@papi/frontend';
 import { Button, Progress, useEvent } from 'platform-bible-react';
 import { getErrorMessage, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { CANCEL_SYNC_PROMPT_COMMAND } from 'platform-bible-utils/experimental';
 import { useCallback, useState } from 'react';
 
 const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner_2%';
@@ -32,7 +33,8 @@ type Props = {
  * Slim, non-covering banner shown across the top of the Scripture editor pane while an automatic
  * (scheduled) sync is running on this project. It states that editing is paused, shows live sync
  * progress, and offers a single-shot Cancel that requests the Send/Receive extension to cancel the
- * running sync (the bottom-right progress toast has its own Cancel too).
+ * running sync, asking first when projects are waiting in its sync queue (the bottom-right progress
+ * toast has its own Cancel too).
  *
  * This mounts only while blocking (the editor renders it conditionally), so its progress
  * subscription and single-shot Cancel state reset cleanly for each blocking episode — no explicit
@@ -53,7 +55,9 @@ export function SyncBlockedBanner({ localizedStrings }: Props) {
 
   const handleCancel = useCallback(() => {
     // Single-shot: one cancel request per blocking episode. Disable immediately; re-enable only if
-    // the request is rejected (the sync is still running, so the user can retry).
+    // nothing was cancelled (the user chose to keep syncing when asked about the projects waiting
+    // in the sync queue) or the request is rejected (the sync is still running, so the user can
+    // retry).
     // The toolbar's sync popover (`src/renderer/components/sync-status-button.component.tsx`) offers
     // the same cancel, and in Simple mode both can be on screen during a blocking scheduled sync.
     // Neither knows the other was clicked, so a cancel requested here still reads as armed there.
@@ -61,10 +65,16 @@ export function SyncBlockedBanner({ localizedStrings }: Props) {
     // `.context/standards/Architecture-Decisions.md` for why, and for the follow-up that gives them
     // one shared cancel-requested state.
     setIsCancelEnabled(false);
-    papi.commands.sendCommand('paratextBibleSendReceive.cancelSync').catch((e) => {
-      logger.warn(`Sync-blocked banner failed to cancel sync: ${getErrorMessage(e)}`);
-      setIsCancelEnabled(true);
-    });
+    papi.commands
+      .sendCommand(CANCEL_SYNC_PROMPT_COMMAND)
+      .then((isCancelSent) => {
+        if (isCancelSent === false) setIsCancelEnabled(true);
+        return undefined;
+      })
+      .catch((e) => {
+        logger.warn(`Sync-blocked banner failed to cancel sync: ${getErrorMessage(e)}`);
+        setIsCancelEnabled(true);
+      });
   }, []);
 
   return (

@@ -161,3 +161,8 @@ export {
 } from './components/advanced/developer-section/developer-section.component';
 export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
 export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';
+export {
+  LucideIcon,
+  LUCIDE_ICON_NAMES,
+  type LucideIconProps,
+} from './components/basics/lucide-icon.component';

@@ -263,7 +263,7 @@ test.describe('Onboarding tour', () => {
 test.describe('Onboarding tour in Power mode', () => {
   test.use({ interfaceMode: 'power', seedSettings: SEED_PAST_FIRST_RUN });
 
-  test('does not show on its own, and a Help replay reduces to the profile stop', async ({
+  test('does not show on its own, Help offers no replay, and the tour command reduces to the profile stop', async ({
     mainPage,
   }) => {
     await waitForAppReadyWithTour(mainPage);
@@ -273,8 +273,22 @@ test.describe('Onboarding tour in Power mode', () => {
     const dialog = getTourDialog(mainPage);
     await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 
+    // Power's Help menu leaves the tour out. The positive control proves the menu opened and
+    // filled before the absence is asserted.
     await mainPage.getByRole('menuitem', { name: /^Help$/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Show the tour/i }).click();
+    await expect(mainPage.getByRole('menuitem', { name: /^About/i })).toBeVisible();
+    await expect(mainPage.getByRole('menuitem', { name: /Show the tour/i })).toHaveCount(0);
+    await mainPage.keyboard.press('Escape');
+
+    // The command stays registered, so the tour's Power filtering is still reachable through it.
+    await mainPage.evaluate(async () => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: { commands: { sendCommand: (command: string) => Promise<unknown> } };
+      };
+      await win.papi.commands.sendCommand('platform.showOnboardingTour');
+    });
 
     await expect(dialog).toBeVisible({ timeout: 15_000 });
 

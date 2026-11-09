@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import {
   buildLocalNonDblResources,
   LOCAL_COMMENTARY_UIDS,
+  waitAtMost,
 } from './get-local-non-dbl-resources.utils';
 
 /** Minimal DblResourceData for use in the DBL catalog argument. */
@@ -42,6 +43,20 @@ describe('buildLocalNonDblResources — filtering', () => {
     expect(buildLocalNonDblResources([{ id: 'ambiguous-proj' }], [])).toHaveLength(0);
   });
 
+  it('excludes a read-only project that cannot be opened', () => {
+    const result = buildLocalNonDblResources(
+      [
+        readOnlyProject('local-abc'),
+        {
+          ...readOnlyProject('local-sba'),
+          unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+        },
+      ],
+      [],
+    );
+    expect(result.map((r) => r.projectId)).toEqual(['local-abc']);
+  });
+
   it('includes read-only projects not in the DBL catalog', () => {
     const result = buildLocalNonDblResources([readOnlyProject('local-abc')], []);
     expect(result).toHaveLength(1);
@@ -58,18 +73,17 @@ describe('buildLocalNonDblResources — filtering', () => {
 
   it('excludes projects matched by startsWith(dblEntryUid) when the entry is installed', () => {
     const result = buildLocalNonDblResources(
-      [readOnlyProject('72dd0b9b0f2b4024_some_suffix')],
-      [dblEntry({ dblEntryUid: '72dd0b9b0f2b4024', projectId: 'installed-proj', installed: true })],
+      [readOnlyProject('97196133a859179b_some_suffix')],
+      [dblEntry({ dblEntryUid: '97196133a859179b', projectId: 'installed-proj', installed: true })],
     );
     expect(result).toHaveLength(0);
   });
 
-  it('does NOT exclude via startsWith when the DBL entry is not installed (reassigned UID guard)', () => {
-    // A local resource installed under an old UID should not be hidden just because an uninstalled
-    // DBL entry has a UID that is a prefix of the local project ID (old UID reassigned to a different
-    // resource in the current catalog).
+  it('does NOT exclude via startsWith when the DBL entry is not installed (uninstalled-entry guard)', () => {
+    // A local resource should not be hidden just because an uninstalled DBL entry's UID is a prefix
+    // of the local project ID: only an installed entry stands for a local project.
     const result = buildLocalNonDblResources(
-      [readOnlyProject('090f7cbf7924b245_old_tnn_suffix')],
+      [readOnlyProject('090f7cbf7924b245_local_suffix')],
       [dblEntry({ dblEntryUid: '090f7cbf7924b245', projectId: '', installed: false })],
     );
     expect(result).toHaveLength(1);
@@ -125,12 +139,12 @@ describe('buildLocalNonDblResources — synthetic entry shape', () => {
 });
 
 describe('buildLocalNonDblResources — commentary classification', () => {
-  it('classifies TNN (current UID 72dd0b9b0f2b4024) as CommentaryResource', () => {
+  it('classifies North Tanna (72dd0b9b0f2b4024, a Scripture text) as ScriptureResource', () => {
     const [entry] = buildLocalNonDblResources([readOnlyProject('72dd0b9b0f2b4024_suffix')], []);
-    expect(entry.type).toBe('CommentaryResource');
+    expect(entry.type).toBe('ScriptureResource');
   });
 
-  it('classifies TNN (old UID 090f7cbf7924b245) as CommentaryResource', () => {
+  it('classifies TNN (090f7cbf7924b245) as CommentaryResource', () => {
     const [entry] = buildLocalNonDblResources([readOnlyProject('090f7cbf7924b245_suffix')], []);
     expect(entry.type).toBe('CommentaryResource');
   });
@@ -141,21 +155,59 @@ describe('buildLocalNonDblResources — commentary classification', () => {
   });
 
   it('is case-insensitive when matching commentary UIDs', () => {
-    const [entry] = buildLocalNonDblResources([readOnlyProject('72DD0B9B0F2B4024_uppercase')], []);
+    const [entry] = buildLocalNonDblResources([readOnlyProject('090F7CBF7924B245_uppercase')], []);
     expect(entry.type).toBe('CommentaryResource');
   });
 });
 
 describe('LOCAL_COMMENTARY_UIDS', () => {
-  it('contains the TNN current UID', () => {
-    expect(LOCAL_COMMENTARY_UIDS.has('72dd0b9b0f2b4024')).toBe(true);
-  });
-
-  it('contains the TNN legacy UID retained for pre-reassignment installs', () => {
+  it("contains TNN's UID", () => {
     expect(LOCAL_COMMENTARY_UIDS.has('090f7cbf7924b245')).toBe(true);
   });
 
-  it('has exactly 14 entries (13 from C# whitelist + 1 legacy TNN UID)', () => {
-    expect(LOCAL_COMMENTARY_UIDS.size).toBe(14);
+  it("does not contain North Tanna's UID, which is a Scripture text", () => {
+    expect(LOCAL_COMMENTARY_UIDS.has('72dd0b9b0f2b4024')).toBe(false);
+  });
+
+  it('has exactly 13 entries, one per commentary in the C# CommentariesWhiteList', () => {
+    expect(LOCAL_COMMENTARY_UIDS.size).toBe(13);
+  });
+});
+
+describe('waitAtMost', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reports work that finishes in time', async () => {
+    await expect(waitAtMost(Promise.resolve('done'), 1000)).resolves.toBe(true);
+  });
+
+  it('stops waiting at the limit for work that does not finish', async () => {
+    const waited = waitAtMost(new Promise(() => {}), 1000);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(waited).resolves.toBe(false);
+  });
+
+  it('passes on a rejection that comes before the limit', async () => {
+    await expect(waitAtMost(Promise.reject(new Error('offline')), 1000)).rejects.toThrow('offline');
+  });
+
+  it('ignores a rejection that comes after the limit', async () => {
+    let fail: (error: Error) => void = () => {};
+    const work = new Promise((_resolve, reject) => {
+      fail = reject;
+    });
+    const waited = waitAtMost(work, 1000);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(waited).resolves.toBe(false);
+
+    fail(new Error('too late'));
+    // Nothing is waiting for it, and it must not surface as an unhandled rejection.
+    await vi.advanceTimersByTimeAsync(0);
   });
 });

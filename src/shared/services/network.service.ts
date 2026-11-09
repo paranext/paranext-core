@@ -37,6 +37,7 @@ import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitt
 import {
   IRpcLocalClientAcceptor,
   IRpcMethodRegistrar,
+  IRpcWebSocketClientCloser,
   RpcClientDisconnectEvent,
 } from '@shared/models/rpc.interface';
 import { isServer } from '@shared/utils/internal-util';
@@ -310,6 +311,37 @@ export function acceptLocalClient(socket: ServerSocketLike, name: string): void 
   jsonRpc.acceptLocalClient(socket, name);
 }
 
+/**
+ * Whether an RPC handler can close its websocket clients. Only main's `RpcWebSocketListener` can;
+ * the client handlers do not implement the method.
+ */
+function isRpcWebSocketClientCloser(
+  handler: IRpcMethodRegistrar,
+): handler is IRpcMethodRegistrar & IRpcWebSocketClientCloser {
+  return 'closeWebSocketClients' in handler && typeof handler.closeWebSocketClients === 'function';
+}
+
+/**
+ * Close every client connected to this process's PAPI websocket server on port 8876, telling each
+ * why. Main-process only. A client such as the .NET data provider runs until its connection drops,
+ * so this is how main asks it to finish up and exit. Renderers' local connections are left open;
+ * see {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+ *
+ * Does nothing when the network service is not initialized, since then no client is connected.
+ *
+ * @param code WebSocket close code to send to each client
+ * @param reason Human-readable reason to send to each client
+ * @throws If this is not the main process, or its handler cannot close websocket clients
+ * @experimental
+ */
+export function closeWebSocketClients(code: number, reason: string): void {
+  if (!isServer()) throw new Error('Only the main process has PAPI websocket clients to close');
+  if (!jsonRpc) return;
+  if (!isRpcWebSocketClientCloser(jsonRpc))
+    throw new Error('The PAPI network handler in this process cannot close websocket clients');
+  jsonRpc.closeWebSocketClients(code, reason);
+}
+
 // #endregion
 
 // #region Request handling
@@ -425,20 +457,17 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
   // (see c-sharp/PlatformErrorCodes.cs), the code is serialized into
   // `error.data.data.platformErrorCode`. Extract it here so it survives the
   // rethrow as a PlatformError with a machine-readable `code` property.
-  // FN-002, Theme 7 — manage-books feature.
   //
-  // The double `.data?.data?` indirection mirrors StreamJsonRpc's wire shape
-  // (Theme 12, 2026-04-30):
+  // The double `.data?.data?` indirection mirrors the data provider's wire shape:
   //   - The OUTER `error.data` is the standard JSON-RPC 2.0 error envelope's
-  //     `data` field (where StreamJsonRpc places its serialized error payload
-  //     for thrown C# exceptions).
-  //   - The INNER `.data` is StreamJsonRpc's serialized representation of
-  //     the C# `Exception.Data` IDictionary, where
-  //     `PlatformErrorCodes.WithCode` writes
-  //     `ex.Data["platformErrorCode"] = code` (decision-registry.json
-  //     `patterns.errorHandling.platformErrorCodes`).
-  // Do NOT flatten this access unless StreamJsonRpc's serialization changes —
-  // both levels are intentional.
+  //     `data` field, where StreamJsonRpc places its `CommonErrorData` (type,
+  //     message, stack) for a thrown C# exception.
+  //   - The INNER `.data` is the `{ platformErrorCode }` object `PapiJsonRpc`
+  //     (c-sharp/PapiJsonRpc.cs) adds to that `CommonErrorData` when the
+  //     exception carries a code.
+  // Main relays only the error's code, message and this platform error code between clients
+  // (`RpcServer.processMessage`), so the code arrives the same in every process. Do NOT flatten
+  // this access without changing `PlatformCodedErrorData` to match — both levels are intentional.
   let platformErrorCode: PlatformErrorCode | undefined;
   if (isJsonRpcResponse(response)) {
     if (!response.error) return response.result;

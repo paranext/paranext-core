@@ -22,4 +22,11 @@ public static class ChecklistErrorCodes
     public const string InvalidMarkerSettings = "INVALID_MARKER_SETTINGS";
     public const string MaxRowsExceeded = "MAX_ROWS_EXCEEDED";
     public const string Cancelled = "CANCELLED";
+
+    /// <summary>
+    /// The main project or a comparative text is one Platform.Bible can't open. The message is
+    /// the <see cref="ProjectOpenBlockedException"/> message, so it carries that exception's
+    /// localize key and sentinel.
+    /// </summary>
+    public const string ProjectOpenBlocked = "PROJECT_OPEN_BLOCKED";
 }

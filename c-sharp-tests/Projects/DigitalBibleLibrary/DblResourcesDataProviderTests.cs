@@ -1,8 +1,13 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects.DigitalBibleLibrary;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
 using Paratext.Data.Archiving;
 using PtxUtils;
+using TestParanextDataProvider.Projects.SendReceive;
 
 namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 {
@@ -33,6 +38,12 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
     {
         private const string RecomputeUpdateStatusWireName =
             "object:platformGetResources.dblResourcesProvider-data.recomputeDblResourcesUpdateStatus";
+
+        // A uid on DblResourceWhiteList, so a fetched catalog keeps it after filtering.
+        private const string WhitelistedUid = "008ee554c0859eb6";
+
+        // A uid absent from DblResourceWhiteList, so filtering drops it.
+        private const string NotWhitelistedUid = "0123456789abcdef";
 
         /// <summary>
         /// A catalog entry whose <see cref="InstallableResource.ExistingScrText"/> throws. That
@@ -113,7 +124,10 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// An installed entry that reports an update available, via the name-mismatch branch of
         /// <c>IsNewerThanCurrentlyInstalled</c>.
         /// </summary>
-        private static InstallableResource OutOfDateResource(string dblEntryUid, ScrText existing) =>
+        private static InstallableResource OutOfDateResource(
+            string dblEntryUid,
+            ScrText existing
+        ) =>
             new InstalledResource(existing)
             {
                 DBLEntryUid = HexId.FromStr(dblEntryUid),
@@ -463,5 +477,524 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             // the suite would stay green, because every consumer test constructs the record itself.
             Assert.That(installedProjectIds.IsComplete, Is.False);
         }
+
+        private const string ListModelTextRestrictionsWireName =
+            "object:platformGetResources.dblResourcesProvider-data.listModelTextRestrictions";
+
+        private const string BiblicaCopyright =
+            "The Holy Bible, New International Version® NIV® Copyright © 2011 by Biblica, Inc.®";
+
+        private static string ProjectId(ScrText scrText) =>
+            scrText.Guid.ToString().ToUpperInvariant();
+
+        [Test]
+        public async Task ListModelTextRestrictions_IsRegisteredUnderItsContractName()
+        {
+            DblResourcesDataProvider provider = new(Client, ParatextProjects);
+
+            await provider.RegisterDataProviderAsync();
+
+            Assert.That(
+                Client.IsHandlerRegistered(ListModelTextRestrictionsWireName),
+                Is.True,
+                $"Expected '{ListModelTextRestrictionsWireName}' on the wire; "
+                    + $"registered: {string.Join(", ", Client.RegisteredRequestTypes)}"
+            );
+        }
+
+        [Test]
+        public async Task ListModelTextRestrictions_ListsBiblicasIdsAndTheRestrictedInstalledProjects()
+        {
+            // On Biblica's list (NIV11)
+            var listed = AddInstalledResourceProject("71c6eab17ae5b667");
+            // Not on the list, but its copyright says it is Biblica's
+            var byCopyright = AddInstalledResourceProject("0123456789abcdef");
+            byCopyright.Settings.Copyright = BiblicaCopyright;
+            // An ordinary resource (WEB)
+            AddInstalledResourceProject("97196133a859179b");
+            // A Biblica translation team's own project
+            DummyScrText teamProject = new();
+            teamProject.Settings.Copyright = BiblicaCopyright;
+            ScrTextCollection.Add(teamProject, true);
+            DblResourcesDataProvider provider = new(Client, ParatextProjects);
+
+            ModelTextRestrictions restrictions = await provider.ListModelTextRestrictions();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    restrictions.DblIds,
+                    Is.EquivalentTo(BiblicaLicensing.RestrictedTextIds)
+                );
+                Assert.That(
+                    restrictions.ProjectIds,
+                    Is.EquivalentTo(new[] { ProjectId(listed), ProjectId(byCopyright) })
+                );
+            });
+        }
+
+        [Test]
+        public async Task ListModelTextRestrictions_SkipsAnUnreadableProjectAndKeepsTheRest()
+        {
+            UnreadableScrText unreadable = new();
+            ScrTextCollection.Add(unreadable, true);
+            unreadable.IsUnreadable = true;
+            var listed = AddInstalledResourceProject("71c6eab17ae5b667");
+            DblResourcesDataProvider provider = new(Client, ParatextProjects);
+
+            ModelTextRestrictions restrictions = await provider.ListModelTextRestrictions();
+
+            Assert.That(restrictions.ProjectIds, Is.EquivalentTo(new[] { ProjectId(listed) }));
+        }
+
+        [Test]
+        public void ModelTextRestrictions_SerializesToTheShapeTheFrontEndReads()
+        {
+            string json = JsonSerializer.Serialize(
+                new ModelTextRestrictions(["71c6eab17ae5b667"], ["ABC123"]),
+                SerializationOptions.CreateSerializationOptions()
+            );
+
+            Assert.That(
+                json,
+                Is.EqualTo("""{"dblIds":["71c6eab17ae5b667"],"projectIds":["ABC123"]}""")
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_ThrowsWhenTheDblCouldNotBeReached()
+        {
+            // What ParatextData hands back offline: no resources, and the alert it raised instead
+            // of throwing.
+            var alerts = new List<AlertEntry>
+            {
+                new(
+                    "Paratext was not able to connect to the DBL server to retrieve available resources.",
+                    "Paratext",
+                    AlertLevel.Information
+                ),
+            };
+
+            var exception = Assert.Throws<Exception>(
+                () => DblResourcesDataProvider.RequireFetchedCatalog([], false, alerts)
+            );
+
+            Assert.That(
+                exception!.Message,
+                Does.Contain("Could not retrieve the resource list from the DBL.")
+                    .And.Contain("not able to connect to the DBL server")
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_ThrowsForAnEmptyCatalogEvenWithoutAnAlert()
+        {
+            var exception = Assert.Throws<Exception>(
+                () => DblResourcesDataProvider.RequireFetchedCatalog([], false, [])
+            );
+
+            Assert.That(
+                exception!.Message,
+                Is.EqualTo("Could not retrieve the resource list from the DBL.")
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_ReportsAnInvalidRegistrationAheadOfAnEmptyCatalog()
+        {
+            // A 401 also comes back as an empty list. The TypeScript side matches this exact text
+            // (`isErrorMessageAboutRegistryAuthFailure`), so it must win over the generic failure.
+            var exception = Assert.Throws<Exception>(
+                () => DblResourcesDataProvider.RequireFetchedCatalog([], true, [])
+            );
+
+            Assert.That(
+                exception!.Message,
+                Is.EqualTo("User registration is not valid. Cannot retrieve resources from DBL.")
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_ReturnsADeliveredCatalog()
+        {
+            List<InstallableResource> fetched = [ResourceWithUid(WhitelistedUid)];
+
+            Assert.That(
+                DblResourcesDataProvider.RequireFetchedCatalog(fetched, false, []),
+                Is.SameAs(fetched)
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_RedactsPathsFromAlertText()
+        {
+            var alerts = new List<AlertEntry>
+            {
+                new(
+                    @"Failed reading C:\Users\someone\secret\file.xml",
+                    "Paratext",
+                    AlertLevel.Error
+                ),
+            };
+
+            var exception = Assert.Throws<Exception>(
+                () => DblResourcesDataProvider.RequireFetchedCatalog([], false, alerts)
+            );
+
+            // Positive control: proves the redactor actually ran over this text (and did not,
+            // say, drop the whole alert), not merely that the raw path happens to be absent.
+            Assert.That(
+                exception!.Message,
+                Does.Contain("Failed reading").And.Contain("<path>").And.Not.Contain(@"C:\Users")
+            );
+        }
+
+        /// <summary>
+        /// The state half of the contract: an offline first fetch must leave the provider in its
+        /// never-fetched state, so install status keeps answering from disk.
+        /// </summary>
+        [Test]
+        public async Task GetDblResources_AnUnreachableFirstFetchLeavesInstallStatusAnsweringFromDisk()
+        {
+            DblResourcesDataProvider provider = new(Client, ParatextProjects, () => []);
+            var installed = AddInstalledResourceProject(WhitelistedUid);
+
+            Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
+            var installStatus = await provider.RecomputeDblResourcesInstallStatus();
+
+            Assert.That(
+                installStatus[WhitelistedUid],
+                Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
+            );
+        }
+
+        /// <summary>
+        /// A catalog the whitelist empties is rejected like an unreachable one, so the provider
+        /// stays in its never-fetched state and install status keeps answering from disk.
+        /// </summary>
+        [Test]
+        public async Task GetDblResources_ACatalogWithNoWhitelistedResourceLeavesInstallStatusAnsweringFromDisk()
+        {
+            DblResourcesDataProvider provider =
+                new(Client, ParatextProjects, () => [ResourceWithUid(NotWhitelistedUid)]);
+            var installed = AddInstalledResourceProject(WhitelistedUid);
+
+            var exception = Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
+            var installStatus = await provider.RecomputeDblResourcesInstallStatus();
+
+            Assert.That(exception!.Message, Does.Contain("no compatible resources"));
+            Assert.That(
+                installStatus[WhitelistedUid],
+                Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
+            );
+        }
+
+        /// <summary>
+        /// A catalog loaded earlier in the session survives a later fetch that could not reach the
+        /// DBL: the 12-hour refresh after the network drops.
+        /// </summary>
+        [Test]
+        public async Task GetDblResources_AnUnreachableLaterFetchKeepsTheLoadedCatalog()
+        {
+            using DummyScrText existing = new();
+            var fetches = new Queue<List<InstallableResource>>(
+                [
+                    [UpToDateResource(WhitelistedUid, existing)],
+                    [],
+                ]
+            );
+            DblResourcesDataProvider provider = new(Client, ParatextProjects, fetches.Dequeue);
+
+            await provider.GetDblResources(default);
+            Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
+            var updateStatus = await provider.RecomputeDblResourcesUpdateStatus();
+
+            Assert.That(updateStatus.Keys, Does.Contain(WhitelistedUid));
+        }
+
+        /// <summary>
+        /// End-to-end version of <c>RequireFetchedCatalog_ThrowsWhenTheDblCouldNotBeReached</c>: an
+        /// alert a fetcher raises through the real <c>Alert.Show</c> reaches the thrown exception,
+        /// not just an <see cref="AlertEntry"/> list built by hand.
+        /// </summary>
+        [Test]
+        public void GetDblResources_CapturesAnAlertRaisedDuringTheFetchIntoTheThrownException()
+        {
+            DblResourcesDataProvider provider =
+                new(
+                    Client,
+                    ParatextProjects,
+                    () =>
+                    {
+                        Alert.Show(
+                            "Paratext was not able to connect to the DBL server to retrieve available resources.",
+                            "Paratext"
+                        );
+                        return [];
+                    }
+                );
+
+            var exception = Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
+
+            Assert.That(exception!.Message, Does.Contain("not able to connect"));
+        }
+
+        /// <summary>
+        /// A captured alert must reach the console even when the fetch never gets far enough to
+        /// build a catalog to accept or reject — the capture scope suppresses AlertCapture's own
+        /// console fallback, so nothing else will log it.
+        /// </summary>
+        [Test]
+        public void GetDblResources_LogsACapturedAlertEvenWhenTheFetcherThrows()
+        {
+            DblResourcesDataProvider provider =
+                new(
+                    Client,
+                    ParatextProjects,
+                    () =>
+                    {
+                        Alert.Show("alert raised before the fetcher failed", "Paratext");
+                        throw new InvalidOperationException("network exploded");
+                    }
+                );
+
+            using var output = new StringWriter();
+            TextWriter previousOut = Console.Out;
+            Console.SetOut(output);
+            try
+            {
+                Assert.ThrowsAsync<InvalidOperationException>(
+                    () => provider.GetDblResources(default)
+                );
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.That(output.ToString(), Does.Contain("alert raised before the fetcher failed"));
+        }
+
+        /// <summary>
+        /// A captured alert from a fetch that succeeds anyway must still reach the console — the
+        /// capture scope exists to route the alert into an exception message on failure, but a
+        /// success has no exception to carry it, so logging is its only way out.
+        /// </summary>
+        [Test]
+        public void GetDblResources_LogsACapturedAlertFromASuccessfulFetch()
+        {
+            using DummyScrText existing = new();
+            DblResourcesDataProvider provider =
+                new(
+                    Client,
+                    ParatextProjects,
+                    () =>
+                    {
+                        Alert.Show("non-fatal warning during a successful fetch", "Paratext");
+                        return [UpToDateResource(WhitelistedUid, existing)];
+                    }
+                );
+
+            using var output = new StringWriter();
+            TextWriter previousOut = Console.Out;
+            Console.SetOut(output);
+            try
+            {
+                Assert.DoesNotThrowAsync(() => provider.GetDblResources(default));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.That(
+                output.ToString(),
+                Does.Contain("non-fatal warning during a successful fetch")
+            );
+        }
+
+        #region Interaction with a sync that updates the same resource
+
+        // The guard is process-wide; end any run a test left open so it cannot hold the next test.
+        [TearDown]
+        public void EndSyncRunResourceGuardRun() => SyncRunResourceGuard.ResetForTests();
+
+        private static readonly TimeSpan s_stillBlockedWindow = TimeSpan.FromMilliseconds(300);
+        private static readonly TimeSpan s_shouldFinishBound = TimeSpan.FromSeconds(10);
+
+        /// <summary>
+        /// A provider whose catalog holds one installed, up-to-date resource, so an install of it
+        /// succeeds without touching the DBL or the disk.
+        /// </summary>
+        private DblResourcesDataProvider ProviderWithInstalledResource(ScrText existing) =>
+            new(Client, ParatextProjects, () => [UpToDateResource(WhitelistedUid, existing)]);
+
+        private static async Task<bool> FinishesWithin(Task task, TimeSpan bound) =>
+            await Task.WhenAny(task, Task.Delay(bound)) == task;
+
+        [Test]
+        public async Task InstallDblResource_WaitsForARunningSyncThatUpdatesTheResource()
+        {
+            using DummyScrText existing = new();
+            var provider = ProviderWithInstalledResource(existing);
+            var run = SyncRunResourceGuardTestHelpers.StartRun([WhitelistedUid]);
+
+            var install = provider.InstallDblResource(WhitelistedUid);
+
+            Assert.That(
+                await FinishesWithin(install, s_stillBlockedWindow),
+                Is.False,
+                "the install must wait while the sync run holds the resource"
+            );
+
+            run.Dispose();
+
+            Assert.That(
+                await FinishesWithin(install, s_shouldFinishBound),
+                Is.True,
+                "the install must proceed once the run ends"
+            );
+            await install; // surfaces a fault, so "finished" cannot mean "failed"
+        }
+
+        [Test]
+        public async Task InstallDblResource_DoesNotWaitForARunThatUpdatesOtherResources()
+        {
+            using DummyScrText existing = new();
+            var provider = ProviderWithInstalledResource(existing);
+            using var run = SyncRunResourceGuardTestHelpers.StartRun(["6c21e835eb8ca3b2"]);
+
+            var install = provider.InstallDblResource(WhitelistedUid);
+
+            Assert.That(await FinishesWithin(install, s_shouldFinishBound), Is.True);
+            await install;
+        }
+
+        [Test]
+        public async Task InstallDblResource_AWaitingInstallDoesNotBlockOtherResourceOperations()
+        {
+            using DummyScrText existing = new();
+            var provider = ProviderWithInstalledResource(existing);
+            var run = SyncRunResourceGuardTestHelpers.StartRun([WhitelistedUid]);
+            var install = provider.InstallDblResource(WhitelistedUid);
+            Assert.That(await FinishesWithin(install, s_stillBlockedWindow), Is.False);
+
+            // GetDblResources takes the provider's lock, so it finishes only if the waiting install
+            // is not holding that lock while it waits.
+            var list = provider.GetDblResources(default);
+
+            Assert.That(await FinishesWithin(list, s_shouldFinishBound), Is.True);
+            Assert.That(install.IsCompleted, Is.False, "the install is still waiting for the run");
+
+            // Finish the install inside the test, while the objects it uses are still alive.
+            run.Dispose();
+            Assert.That(await FinishesWithin(install, s_shouldFinishBound), Is.True);
+            await install;
+        }
+
+        [Test]
+        public async Task InstallDblResource_ProceedsWithAWarningWhenTheWaitTimesOut()
+        {
+            using DummyScrText existing = new();
+            var provider = ProviderWithInstalledResource(existing);
+            SyncRunResourceGuard.WaitTimeout = TimeSpan.FromMilliseconds(50);
+            using var run = SyncRunResourceGuardTestHelpers.StartRun([WhitelistedUid]);
+
+            using var output = new StringWriter();
+            TextWriter previousOut = Console.Out;
+            Console.SetOut(output);
+            try
+            {
+                var install = provider.InstallDblResource(WhitelistedUid);
+                Assert.That(await FinishesWithin(install, s_shouldFinishBound), Is.True);
+                await install;
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.That(
+                output.ToString(),
+                Does.Contain("Warning").And.Contain(WhitelistedUid).And.Contain("anyway")
+            );
+        }
+
+        [Test]
+        public async Task UninstallDblResource_WaitsForARunningSyncThatUpdatesTheResource()
+        {
+            // Not installed, so the removal fails at once when it does run — without touching the
+            // disk. What this pins is that it does not run while the sync holds the resource.
+            var provider = new DblResourcesDataProvider(
+                Client,
+                ParatextProjects,
+                () => [new InstalledResource(null!) { DBLEntryUid = HexId.FromStr(WhitelistedUid) }]
+            );
+            var run = SyncRunResourceGuardTestHelpers.StartRun([WhitelistedUid]);
+
+            var uninstall = provider.UninstallDblResource(WhitelistedUid);
+
+            Assert.That(
+                await FinishesWithin(uninstall, s_stillBlockedWindow),
+                Is.False,
+                "the removal must wait while the sync run holds the resource"
+            );
+
+            run.Dispose();
+
+            Assert.That(
+                await FinishesWithin(uninstall, s_shouldFinishBound),
+                Is.True,
+                "the removal must proceed once the run ends"
+            );
+            var exception = Assert.ThrowsAsync<Exception>(() => uninstall);
+            Assert.That(exception!.Message, Does.Contain("not currently installed"));
+        }
+
+        [Test]
+        public async Task InstallDblResource_ASyncRunSkipsAResourceWhoseInstallIsInFlight()
+        {
+            // The catalog fetch runs inside the install's write, so blocking it holds the install
+            // mid-write for as long as the test needs.
+            using DummyScrText existing = new();
+            using var fetchEntered = new ManualResetEventSlim(false);
+            using var releaseFetch = new ManualResetEventSlim(false);
+            var provider = new DblResourcesDataProvider(
+                Client,
+                ParatextProjects,
+                () =>
+                {
+                    fetchEntered.Set();
+                    releaseFetch.Wait(s_shouldFinishBound);
+                    return [UpToDateResource(WhitelistedUid, existing)];
+                }
+            );
+            var install = provider.InstallDblResource(WhitelistedUid);
+            Assert.That(fetchEntered.Wait(s_shouldFinishBound), Is.True, "install never started");
+
+            var registration = SyncRunResourceGuard.RegisterRunSkippingOpenWrites([WhitelistedUid]);
+
+            Assert.That(
+                registration.SkippedIds,
+                Is.EquivalentTo(new[] { WhitelistedUid }),
+                "the sync run must skip a resource whose install is writing it, not wait for it"
+            );
+            Assert.That(install.IsCompleted, Is.False, "the install is still in flight");
+            registration.Run.Dispose();
+
+            releaseFetch.Set();
+
+            Assert.That(await FinishesWithin(install, s_shouldFinishBound), Is.True);
+            await install;
+            var afterInstall = SyncRunResourceGuard.RegisterRunSkippingOpenWrites([WhitelistedUid]);
+            Assert.That(
+                afterInstall.SkippedIds,
+                Is.Empty,
+                "a later sync run holds the resource once the install has finished"
+            );
+            afterInstall.Run.Dispose();
+        }
+
+        #endregion
     }
 }

@@ -65,6 +65,11 @@ export const platformSettings: SettingsContribution = [
         default: false,
         isHidden: true,
       },
+      'platform.firstSyncState': {
+        label: '%settings_platform_firstSyncState_label%',
+        default: 'unknown',
+        isHidden: true,
+      },
     },
   },
   // Settings a support person adjusts when helping a user troubleshoot, rather than settings a
@@ -79,7 +84,7 @@ export const platformSettings: SettingsContribution = [
         default: 30,
       },
       'platform.showRegistrationReminderOnStartup': {
-        label: '%settings_platform_showRegistrationReminderOnStartup_label%',
+        label: '%settings_platform_showRegistrationReminderOnStartup_label_2%',
         description: '%settings_platform_showRegistrationReminderOnStartup_description%',
         default: true,
       },
@@ -191,6 +196,12 @@ const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async
   return true;
 };
 
+const firstSyncStateValidator: SettingValidator<'platform.firstSyncState'> = async (
+  newValue,
+): Promise<boolean> => {
+  return newValue === 'unknown' || newValue === 'pending' || newValue === 'synced';
+};
+
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.webViewContentZoom': webViewContentZoomValidator,
   'platform.webViewContentZoomMemory': webViewContentZoomMemoryValidator,
@@ -205,4 +216,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.syncOnStartup': booleanValidator,
   'platform.showRegistrationReminderOnStartup': booleanValidator,
   'platform.internetUseChoiceAsked': booleanValidator,
+  'platform.firstSyncState': firstSyncStateValidator,
 };

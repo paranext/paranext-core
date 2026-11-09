@@ -18,7 +18,7 @@ import { SaveState } from './utils';
 const localizedStrings = getLocalizedStrings(INTERNET_SETTINGS_STRING_KEYS);
 
 const defaultSettings: InternetSettings = {
-  permittedInternetUse: 'VpnRequired',
+  permittedInternetUse: 'Disabled',
   selectedServer: 'Production',
   proxyPort: 0,
 };
@@ -38,6 +38,7 @@ type DecoratorConfig = {
   isFormDisabled?: boolean;
   saveState?: SaveState;
   saveError?: string;
+  canEditServer?: boolean;
 };
 
 /** Wraps the form in state so the radio list and developer toggle remain interactive. */
@@ -61,6 +62,7 @@ function createDecorator(config: DecoratorConfig) {
           isFormDisabled: config.isFormDisabled ?? false,
           saveState: config.saveState ?? SaveState.HasNotSaved,
           saveError: config.saveError ?? '',
+          canEditServer: config.canEditServer ?? true,
           onSaveAndRestart: () =>
             alertCommand(
               'paratextRegistration.internetSettingsDataProvider → setInternetSettings',
@@ -72,7 +74,10 @@ function createDecorator(config: DecoratorConfig) {
   };
 }
 
-/** Default: VPN-required selected, Reset and Save buttons disabled (no changes yet). */
+/**
+ * Default: "Disable access to some Bible translation services" selected, Reset and Save buttons
+ * disabled (no changes yet).
+ */
 export const Default: Story = {
   decorators: [createDecorator({})],
 };
@@ -86,16 +91,8 @@ export const Default: Story = {
 export const UnsupportedStoredValue: Story = {
   decorators: [
     createDecorator({
-      initialSettings: {
-        permittedInternetUse: 'Disabled',
-        selectedServer: 'Production',
-        proxyPort: 0,
-      },
-      savedInternetSettings: {
-        permittedInternetUse: 'Disabled',
-        selectedServer: 'Production',
-        proxyPort: 0,
-      },
+      initialSettings: { ...defaultSettings, permittedInternetUse: 'ProxyOnly' },
+      savedInternetSettings: { ...defaultSettings, permittedInternetUse: 'ProxyOnly' },
     }),
   ],
 };
@@ -106,7 +103,7 @@ export const Loading: Story = {
 };
 
 /**
- * User has changed the selection (Unrestricted vs the saved VPN-required). Reset and Save and
+ * User has changed the selection (Unrestricted vs the saved "Disable access…"). Reset and Save and
  * restart are enabled.
  */
 export const UnsavedChanges: Story = {
@@ -120,6 +117,15 @@ export const UnsavedChanges: Story = {
       savedInternetSettings: defaultSettings,
     }),
   ],
+};
+
+/**
+ * Server selection hidden — the default state for everyone except a Shift-click/Shift-Enter on
+ * "Internet & connectivity" (or an already non-Production server). No locked label, no hint of any
+ * kind: the control is simply absent.
+ */
+export const ServerSelectionHidden: Story = {
+  decorators: [createDecorator({ canEditServer: false })],
 };
 
 /** Developer section expanded — Production/Development toggle visible. */

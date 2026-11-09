@@ -194,6 +194,7 @@ function renderFootnoteEditor(
     applyUpdate: vi.fn(),
     replaceEmbedUpdate: vi.fn(),
     getSelection: vi.fn(),
+    getSelectedParaMarker: vi.fn(),
     setSelection: vi.fn(),
     setAnnotation: vi.fn(),
     removeAnnotation: vi.fn(),
@@ -272,53 +273,220 @@ describe('FootnoteEditor width lock', () => {
 });
 
 describe('FootnoteEditor Copy button', () => {
-  function clickCopy(
-    copyLimit: number | undefined,
-    writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined),
-  ) {
+  const NOTE_USJ = {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      {
+        type: 'para',
+        content: [
+          {
+            type: 'note',
+            marker: 'fe',
+            caller: '+',
+            content: [{ type: 'char', marker: 'ft', content: ['note text'] }],
+          },
+        ],
+      },
+    ],
+  };
+  const WHOLE_NOTE: SelectionRange = {
+    start: { jsonPath: '$.content[0].content[0]' },
+    end: { jsonPath: '$.content[0].content[0]', closingMarkerOffset: '\\fe*'.length },
+  };
+  const USER_SELECTION: SelectionRange = {
+    start: { jsonPath: '$.content[0].content[0].content[0].content[0]', offset: 1 },
+    end: { jsonPath: '$.content[0].content[0].content[0].content[0]', offset: 4 },
+  };
+
+  /**
+   * Renders the editor holding a note and clicks Copy from the button the way a pointer does, the
+   * button taking focus first.
+   */
+  function renderAndClickCopy({
+    selection = USER_SELECTION,
+    usj = NOTE_USJ,
+    copy,
+  }: {
+    selection?: SelectionRange | undefined;
+    usj?: unknown;
+    copy?: () => void;
+  } = {}) {
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText },
       writable: true,
       configurable: true,
     });
-    const { editorInput, getByRole } = renderFootnoteEditor({
-      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
-      copyLimit,
-    });
-    editorInput.textContent = 'note text';
+    const rendered = renderFootnoteEditor({ view: editableView, copyLimit: 5 });
+    const { editorRef } = rendered;
+    vi.mocked(editorRef.getUsj).mockReturnValue(
+      // The mock document is a plain object shaped like the USJ the real editor returns.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      usj as ReturnType<EditorRef['getUsj']>,
+    );
+    vi.mocked(editorRef.getSelection).mockReturnValue(selection);
+    if (copy) vi.mocked(editorRef.copy).mockImplementation(copy);
+    const button = rendered.getByRole('button', { name: '%footnoteEditor_copyButton_tooltip%' });
     act(() => {
-      getByRole('button', { name: '%footnoteEditor_copyButton_tooltip%' }).click();
+      button.focus();
+      button.click();
     });
-    return writeText;
+    return { ...rendered, button, writeText };
   }
 
-  it('copies the whole note when there is no copy limit', () => {
-    expect(clickCopy(undefined)).toHaveBeenCalledWith('note text');
+  /** The calls the Copy button made that move the selection or copy, in the order it made them. */
+  function selectionAndCopyCalls(editorRef: EditorRef) {
+    const calls = [
+      ...vi.mocked(editorRef.setSelection).mock.calls.map((args, index) => ({
+        call: ['setSelection', args[0]] as const,
+        order: vi.mocked(editorRef.setSelection).mock.invocationCallOrder[index],
+      })),
+      ...vi.mocked(editorRef.copy).mock.calls.map((_, index) => ({
+        call: ['copy'] as const,
+        order: vi.mocked(editorRef.copy).mock.invocationCallOrder[index],
+      })),
+      ...vi.mocked(editorRef.selectNote).mock.calls.map((args, index) => ({
+        call: ['selectNote', args[0]] as const,
+        order: vi.mocked(editorRef.selectNote).mock.invocationCallOrder[index],
+      })),
+    ];
+    return calls.sort((a, b) => a.order - b.order).map(({ call }) => call);
+  }
+
+  it("selects the whole note, copies it with the editor's own copy, then puts the selection back", () => {
+    const { editorRef, writeText } = renderAndClickCopy();
+
+    expect(selectionAndCopyCalls(editorRef)).toEqual([
+      ['setSelection', WHOLE_NOTE],
+      ['copy'],
+      ['setSelection', USER_SELECTION],
+    ]);
+    // The editor writes the clipboard and applies the copy limit itself.
+    expect(writeText).not.toHaveBeenCalled();
   });
 
-  it('copies only as much of the note as the copy limit allows', () => {
-    const writeText = clickCopy(4);
-    expect(writeText).toHaveBeenCalledTimes(1);
-    expect(writeText).toHaveBeenCalledWith('note');
+  it('puts back the selection focus last left the editor with when the click dropped it', () => {
+    const rendered = renderFootnoteEditor({ view: editableView });
+    const { editorRef, editorInput } = rendered;
+    vi.mocked(editorRef.getUsj).mockReturnValue(
+      // The mock document is a plain object shaped like the USJ the real editor returns.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      NOTE_USJ as ReturnType<EditorRef['getUsj']>,
+    );
+    vi.mocked(editorRef.getSelection).mockReturnValue(USER_SELECTION);
+    const button = rendered.getByRole('button', { name: '%footnoteEditor_copyButton_tooltip%' });
+    act(() => {
+      button.focus();
+    });
+    // A positive control: focus really left the editor, which is what records the selection.
+    expect(editorInput).not.toHaveFocus();
+    vi.mocked(editorRef.getSelection).mockReturnValue(undefined);
+
+    act(() => {
+      button.click();
+    });
+
+    expect(selectionAndCopyCalls(editorRef)).toEqual([
+      ['setSelection', WHOLE_NOTE],
+      ['copy'],
+      ['setSelection', USER_SELECTION],
+    ]);
   });
 
-  it('copies nothing while the copy limit is 0', () => {
-    expect(clickCopy(0)).not.toHaveBeenCalled();
+  it("puts the caret in the note's text when there is no selection to put back", () => {
+    const rendered = renderFootnoteEditor({ view: editableView });
+    const { editorRef } = rendered;
+    vi.mocked(editorRef.getUsj).mockReturnValue(
+      // The mock document is a plain object shaped like the USJ the real editor returns.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      NOTE_USJ as ReturnType<EditorRef['getUsj']>,
+    );
+    vi.mocked(editorRef.getSelection).mockReturnValue(undefined);
+
+    act(() => {
+      rendered.getByRole('button', { name: '%footnoteEditor_copyButton_tooltip%' }).click();
+    });
+
+    expect(selectionAndCopyCalls(editorRef)).toEqual([
+      ['setSelection', WHOLE_NOTE],
+      ['copy'],
+      ['selectNote', 0],
+    ]);
   });
 
-  it('reports a clipboard write that fails rather than leaving it unhandled', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('copies nothing while the editor holds no note', () => {
+    const { editorRef } = renderAndClickCopy({
+      usj: { type: 'USJ', version: '3.1', content: [{ type: 'para', content: [] }] },
+    });
+
+    expect(editorRef.copy).not.toHaveBeenCalled();
+    expect(editorRef.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('hands focus back to the Copy button when the copy moves it into the editor', () => {
+    const { button, editorRef } = renderAndClickCopy({
+      // The real editor's copy points the DOM selection into the editor, which focuses it.
+      copy: () =>
+        document.querySelector<HTMLElement>('[data-testid="popover-editor-input"]')?.focus(),
+    });
+
+    // A positive control: the copy ran, so focus did go into the editor and come back.
+    expect(editorRef.copy).toHaveBeenCalledTimes(1);
+    expect(button).toHaveFocus();
+  });
+
+  it('puts the selection and focus back when the editor copy throws', () => {
+    // React reports an error thrown in an event handler to the window rather than to the caller.
+    const reported: unknown[] = [];
+    const onWindowError = (event: ErrorEvent) => {
+      reported.push(event.error);
+      event.preventDefault();
+    };
+    window.addEventListener('error', onWindowError);
+    let rendered: ReturnType<typeof renderAndClickCopy>;
     try {
-      const writeText = clickCopy(
-        undefined,
-        vi.fn<(text: string) => Promise<void>>().mockRejectedValue(new Error('denied')),
-      );
-      expect(writeText).toHaveBeenCalledWith('note text');
-      await act(async () => {});
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('denied'));
+      rendered = renderAndClickCopy({
+        copy: () => {
+          document.querySelector<HTMLElement>('[data-testid="popover-editor-input"]')?.focus();
+          throw new Error('copy failed');
+        },
+      });
     } finally {
-      warn.mockRestore();
+      window.removeEventListener('error', onWindowError);
     }
+    const { button, editorRef } = rendered;
+
+    // The failure is not swallowed.
+    expect(reported).toEqual([expect.objectContaining({ message: 'copy failed' })]);
+    expect(selectionAndCopyCalls(editorRef)).toEqual([
+      ['setSelection', expect.anything()],
+      ['copy'],
+      ['setSelection', USER_SELECTION],
+    ]);
+    expect(button).toHaveFocus();
+  });
+
+  it('leaves focus where it is when the copy does not move it', () => {
+    const { editorInput, editorRef } = renderFootnoteEditor({ view: editableView });
+    vi.mocked(editorRef.getUsj).mockReturnValue(
+      // The mock document is a plain object shaped like the USJ the real editor returns.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      NOTE_USJ as ReturnType<EditorRef['getUsj']>,
+    );
+    const focusSpy = vi.spyOn(editorInput, 'focus');
+    // A keyboard shortcut or a programmatic click leaves focus in the editor.
+    expect(editorInput).toHaveFocus();
+
+    act(() => {
+      editorInput.ownerDocument
+        .querySelector<HTMLElement>('[aria-label="%footnoteEditor_copyButton_tooltip%"]')
+        ?.click();
+    });
+
+    expect(editorRef.copy).toHaveBeenCalledTimes(1);
+    expect(editorInput).toHaveFocus();
+    expect(focusSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -758,6 +926,22 @@ describe('FootnoteEditor marker palette wiring', () => {
       // probe — even though a focusout captured a snapshot earlier.
       mocks.getSelection.mockReturnValue(sampleSelection);
       editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+
+      await commit('fq');
+
+      expect(mocks.setSelection).not.toHaveBeenCalled();
+      expect(mocks.selectNote).not.toHaveBeenCalled();
+      expect(mocks.apply).toHaveBeenCalledOnce();
+    });
+
+    it('leaves a selected paragraph marker alone on commit', async () => {
+      const { editorInput, editorRef, mocks, commit } = setUpCommitScenario();
+
+      // A caret captured earlier, then a paragraph marker selected: it has no text range, so
+      // `getSelection` reports nothing, yet restoring the older caret would move the selection off it.
+      mocks.getSelection.mockReturnValueOnce(sampleSelection);
+      editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      vi.mocked(editorRef.getSelectedParaMarker).mockReturnValue('q1');
 
       await commit('fq');
 

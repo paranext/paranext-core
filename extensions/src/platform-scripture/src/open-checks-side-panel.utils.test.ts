@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   openWebView: vi.fn(),
   getOpenWebViewDefinition: vi.fn(),
   reloadWebView: vi.fn(),
+  getMetadataForProject: vi.fn(),
+  loggerWarn: vi.fn(),
 }));
 
 vi.mock('@papi/backend', () => ({
@@ -24,8 +26,9 @@ vi.mock('@papi/backend', () => ({
       getOpenWebViewDefinition: mocks.getOpenWebViewDefinition,
       reloadWebView: mocks.reloadWebView,
     },
+    projectLookup: { getMetadataForProject: mocks.getMetadataForProject },
   },
-  logger: { debug: vi.fn() },
+  logger: { debug: vi.fn(), warn: mocks.loggerWarn },
 }));
 
 const EDITOR_TAB_ID = 'editor-tab-1';
@@ -190,6 +193,54 @@ describe('updateChecksSidePanelProject', () => {
   beforeEach(() => {
     // Reset, not clear: a `mockResolvedValueOnce` left unconsumed by one test must not leak into the next.
     vi.resetAllMocks();
+    mocks.getMetadataForProject.mockResolvedValue({});
+  });
+
+  const openPanelOnOldProject = () => {
+    mocks.openWebView.mockResolvedValue('checks-1');
+    mocks.getOpenWebViewDefinition.mockResolvedValue({
+      id: 'checks-1',
+      webViewType: checksSidePanelWebViewType,
+      projectId: 'project-old',
+      state: { editorWebViewId: 'editor-old' },
+    });
+    mocks.reloadWebView.mockResolvedValue('checks-1');
+  };
+
+  it('leaves the open panel on its project when the new project cannot be opened', async () => {
+    openPanelOnOldProject();
+    mocks.getMetadataForProject.mockResolvedValue({
+      unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+    });
+
+    const result = await updateChecksSidePanelProject('project-sba', 'editor-new');
+
+    expect(result).toBeUndefined();
+    expect(mocks.getMetadataForProject).toHaveBeenCalledWith('project-sba');
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('follows the switch when the lookup fails, treating the project as openable', async () => {
+    openPanelOnOldProject();
+    mocks.getMetadataForProject.mockRejectedValue(new Error('lookup down'));
+
+    const result = await updateChecksSidePanelProject('project-new', 'editor-new');
+
+    expect(result).toBe('checks-1');
+    expect(mocks.reloadWebView).toHaveBeenCalledWith(
+      checksSidePanelWebViewType,
+      'checks-1',
+      expect.objectContaining({ projectId: 'project-new' }),
+    );
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining('lookup down'));
+  });
+
+  it('does not look the project up when no Checks side panel is open', async () => {
+    mocks.openWebView.mockResolvedValue(undefined);
+
+    await updateChecksSidePanelProject('project-new', 'editor-new');
+
+    expect(mocks.getMetadataForProject).not.toHaveBeenCalled();
   });
 
   it('creates nothing when no Checks side panel is open', async () => {

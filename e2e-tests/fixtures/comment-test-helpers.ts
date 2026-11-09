@@ -369,11 +369,11 @@ export const REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION = '1.1.0';
  *
  * The Bible-texts panel (`resource-text-panel.web-view.tsx`) falls back to the first row of this
  * project's own list unioned with every locally-installed read-only project
- * (`resolveResourceSelection`'s `rows[0]` fallback in `resource-selection.utils.ts`) whenever the
- * project's own list is empty. On a machine with a downloaded read-only resource (e.g. WEB), that
- * fallback silently selects it instead of showing nothing — so a test that reasons about which
- * books the toolbar's book/chapter/verse control can reach through this project must pin its own
- * list rather than leave it empty, or the assertion only holds on machines with none installed.
+ * (`resolveResourceSelection`'s fallback in `resource-selection.utils.ts`) whenever the project's
+ * own list is empty. On a machine with a downloaded read-only resource (e.g. WEB), that fallback
+ * shows it instead of nothing — so a test that reasons about which books the toolbar's
+ * book/chapter/verse control can reach through this project must pin its own list rather than leave
+ * it empty, or the assertion only holds on machines with none installed.
  *
  * Must run before the app launches, like {@link removeRevelationFromProject} — ParatextData loads
  * `Settings.xml` during the app's startup scan and keeps the loaded copy for the session.

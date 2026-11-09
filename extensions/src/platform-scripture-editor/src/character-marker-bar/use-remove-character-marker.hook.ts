@@ -35,6 +35,13 @@ export type UseRemoveCharacterMarkerOptions = {
   isSyncBlocked: boolean;
   /** Localized strings for the snapshot message and the three notifications. */
   localizedStrings: LanguageStrings;
+  /**
+   * Reports whether another chapter is loading, during which the editor still shows the chapter
+   * being left and a removal would be dropped. Removal does nothing, and takes no snapshot, while
+   * it returns `true`; it is read again after the snapshot, since a load can start meanwhile.
+   * Omitting it never blocks.
+   */
+  isChapterLoading?: () => boolean;
 };
 
 /**
@@ -53,9 +60,12 @@ export function useRemoveCharacterMarker({
   projectId,
   isSyncBlocked,
   localizedStrings,
+  isChapterLoading,
 }: UseRemoveCharacterMarkerOptions): (marker?: string) => Promise<void> {
   return useCallback(
     async (marker?: string) => {
+      if (isChapterLoading?.()) return;
+
       // The trigger is already disabled while sync-blocked, so this guards the race where a sync
       // starts while the menu is open — the same belt-and-braces the comment path uses.
       if (isSyncBlocked) {
@@ -86,6 +96,8 @@ export function useRemoveCharacterMarker({
         localizedStrings[COMMIT_MESSAGE_KEY] ?? COMMIT_MESSAGE_KEY,
         'removing a character marker',
       );
+      // A chapter load can start while the snapshot is being committed.
+      if (isChapterLoading?.()) return;
 
       try {
         editor.removeCharacterMarker(marker);
@@ -111,7 +123,7 @@ export function useRemoveCharacterMarker({
       // call (or rolling it back), so it is a restructure of this handler, not a one-line change.
       // TODO(PT-4394): consume the outcome and skip/undo the empty restore point.
     },
-    [editorRef, projectId, isSyncBlocked, localizedStrings],
+    [editorRef, projectId, isSyncBlocked, localizedStrings, isChapterLoading],
   );
 }
 

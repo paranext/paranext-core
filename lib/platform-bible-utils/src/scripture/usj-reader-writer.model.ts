@@ -337,8 +337,27 @@ export type UsjNodeAndDocumentLocation<
   documentLocation: TDocumentLocation;
 };
 
+/**
+ * Prefix identifying the capture groups that
+ * {@link UsjSearchOptions.flexibleWhitespaceAtBlockBoundaries} applies to. A regex built for such a
+ * search names each whitespace run `${SEARCH_WHITESPACE_GROUP_PREFIX}${n}` — names must be unique,
+ * because a duplicate capture group name is a `SyntaxError`.
+ */
+export const SEARCH_WHITESPACE_GROUP_PREFIX = 'ws';
+
 /** Options controlling how {@link IUsjReaderWriter.search} performs its search */
 export type UsjSearchOptions = {
+  /**
+   * Zero-width tests that a match's start and end must each pass, unless that end sits where the
+   * block changes: an offset in the concatenated text where the adjacent text nodes belong to
+   * different block-level markers. A match failing one is discarded.
+   *
+   * This is how a word restriction reaches a word at a block's edge. The regex itself sees
+   * neighboring blocks joined with nothing between them, so a lookaround in it reads `Isaac` at the
+   * end of a paragraph and `And` at the start of the next as `IsaacAnd`, which is no word boundary.
+   * Unlike a lookaround, a test here cannot make the regex try a different length of match.
+   */
+  wordEdges?: { start?: RegExp; end?: RegExp };
   /**
    * Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include in the search. When provided,
    * only text within markers whose style is in this set will be searched. Text inside markers not
@@ -351,9 +370,42 @@ export type UsjSearchOptions = {
    * positions are mapped back to the original string. This is required for correct
    * `ignoreDiacritics` behaviour on NFC source text: a pre-composed character such as `é` (U+00E9)
    * will not match `e[combining]*` unless the text is first decomposed. Returned `text` values are
-   * always slices of the original (non-NFD) string.
+   * always slices of the original (non-NFD) string. A match that starts or ends inside an original
+   * character (for example part of a Hangul syllable, stored precomposed or decomposed) is not
+   * returned.
    */
   normalizationForm?: 'NFD';
+  /**
+   * When `true`, a capture group named `${SEARCH_WHITESPACE_GROUP_PREFIX}${n}` — the prefix
+   * followed by one or more digits, and nothing else — may match zero characters, but only at a
+   * block boundary: an offset in the concatenated text where the adjacent text nodes belong to
+   * different block-level markers, which is where the editor renders a block break. A match whose
+   * whitespace group matched zero characters anywhere else is discarded.
+   *
+   * The name is matched exactly, so a caller's own group keeps its ordinary meaning even when its
+   * name begins with the same letters (`(?<wsGap>…)` is left alone).
+   *
+   * This lets a phrase copied out of an editor match across a rendered block break: the clipboard
+   * supplies a space where the concatenated text has nothing between the two words. Most such
+   * breaks render as a line break; adjacent cells in one table row are the exception, rendering
+   * side by side.
+   *
+   * A chapter transition never counts as a boundary — the gap there is not something the editor
+   * renders as a break, and a match spanning one would put a `\c` marker inside a replacement's
+   * removed span.
+   *
+   * When `markerStylesToInclude` drops text, what was dropped decides whether a boundary survives
+   * it. Dropped text that belongs to one of the two adjacent blocks — a note at the end of the
+   * first paragraph or the start of the next — leaves the boundary in place. Dropped text that is a
+   * block of its own — a section heading, a list, a table standing between the two — removes it,
+   * because that block is on screen between them and the two are not adjacent lines.
+   *
+   * The filter needs capture-group offsets, so when the pattern carries such a group and lacks the
+   * `d` flag, `search` runs a **rebuilt copy** of it. Either way the caller's own `RegExp` object
+   * is left as they compiled it, `lastIndex` included — note that this means a search never
+   * advances a global regex's cursor for the caller.
+   */
+  flexibleWhitespaceAtBlockBoundaries?: boolean;
 };
 
 /** Result of a search for text within a USJ object */
@@ -392,8 +444,31 @@ export type UsjReaderWriterOptions = {
    */
   markersMap?: MarkersMap;
   /**
-   * Whether the transformations should preserve invisible characters as in Paratext 9
-   * (`ScrText.Settings.AllowInvisibleChars`).
+   * The Paratext project setting "Allow invisible characters" (`AllowInvisibleChars` in
+   * `Settings.xml`, `ScrText.Settings.AllowInvisibleChars` in ParatextData) of the project this USJ
+   * belongs to. Pass the value of the project setting `platformScripture.allowInvisibleCharacters`
+   * for that project — `useProjectSetting(projectId, 'platformScripture.allowInvisibleCharacters',
+   * false)` in a web view, `getSetting('platformScripture.allowInvisibleCharacters')` on the
+   * project's `platform.base` PDP elsewhere. It can be left unset for USJ that belongs to no
+   * Paratext project, or when nothing reads USFM text from this instance.
+   *
+   * It decides how a no-break space (U+00A0) in the USJ text is spelled in the USFM this class
+   * writes ({@link IUsjReaderWriter.toUsfm}), matching what Paratext reads and writes for that
+   * project. It covers text content and the values of attribute markers such as `\ca`, `\va` and
+   * `\cat`; a value in a marker's `|` attribute list (`lemma`, a milestone's `who`, a figure's
+   * `src`) is written exactly as the USJ holds it, as ParatextData writes one:
+   *
+   * - `false`: the project's USFM spells a no-break space `~`, so U+00A0 in text is written as `~`.
+   *   The USJ text Platform.Bible gets for such a project never contains `~` (an attribute value
+   *   can: ParatextData keeps a `~` in most attribute values as written); a `~` that is in the text
+   *   anyway is written as `~` too, so Paratext saves it as a no-break space. A literal tilde
+   *   cannot be represented in text.
+   * - `true`: `~` is an ordinary character (a literal tilde) and U+00A0 is written as itself, so the
+   *   two stay distinct. Writing this project's USJ with `false` would turn every no-break space
+   *   into a literal tilde when the USFM is saved.
+   *
+   * Nothing else depends on it: searching and every location and index conversion read the USJ, and
+   * `~` and U+00A0 are each one UTF-16 code unit, so USFM indices are the same either way.
    *
    * Defaults to `false`
    */

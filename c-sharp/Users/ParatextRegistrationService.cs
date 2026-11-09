@@ -54,6 +54,10 @@ internal class ParatextRegistrationService(
             "command:paratextRegistration.isRegistrationCopiedFromParatext9",
             IsRegistrationCopiedFromParatext9
         );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.getParatext9InternetUse",
+            GetParatext9InternetUse
+        );
 
         // Deprecated: retained as thin wrappers that delegate to InternetSettingsDataProvider so
         // out-of-repo extensions still calling these commands keep working. New code should use the
@@ -246,6 +250,15 @@ internal class ParatextRegistrationService(
     internal static bool IsRegistrationCopiedFromParatext9() =>
         ParatextInfo.Default is PlatformParatextInfo platformParatextInfo
         && platformParatextInfo.IsRegistrationCopiedFromParatext9;
+
+    /// <summary>
+    /// The internet use Paratext 9 currently has saved (<c>"Enabled"</c>, <c>"VpnRequired"</c>,
+    /// <c>"Disabled"</c> or <c>"ProxyOnly"</c>), or null when Paratext 9 is not installed or its
+    /// setting cannot be read. Paratext 9's own setting, not Platform.Bible's copy of it; see
+    /// <see cref="PlatformParatextInfo.ReadParatext9InternetUse"/>.
+    /// </summary>
+    internal static string? GetParatext9InternetUse() =>
+        (ParatextInfo.Default as PlatformParatextInfo)?.ReadParatext9InternetUse()?.ToString();
 
     /// <summary>
     /// Developer reset: puts Platform.Bible's own registration into the state a Paratext 9 user has

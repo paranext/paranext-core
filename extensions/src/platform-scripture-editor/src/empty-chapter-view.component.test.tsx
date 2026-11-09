@@ -23,7 +23,7 @@ describe('EmptyChapterView', () => {
     render(
       <EmptyChapterView
         localizedStrings={STRINGS}
-        isStructureProtected={false}
+        isAddChapterNumberProtected={false}
         showButton
         onAddChapterNumber={vi.fn()}
       />,
@@ -37,7 +37,7 @@ describe('EmptyChapterView', () => {
     render(
       <EmptyChapterView
         localizedStrings={STRINGS}
-        isStructureProtected={false}
+        isAddChapterNumberProtected={false}
         isResource
         showButton={false}
         onAddChapterNumber={vi.fn()}
@@ -54,7 +54,7 @@ describe('EmptyChapterView', () => {
     render(
       <EmptyChapterView
         localizedStrings={STRINGS}
-        isStructureProtected={false}
+        isAddChapterNumberProtected={false}
         showButton={false}
         onAddChapterNumber={vi.fn()}
       />,
@@ -71,7 +71,7 @@ describe('EmptyChapterView', () => {
     render(
       <EmptyChapterView
         localizedStrings={STRINGS}
-        isStructureProtected={false}
+        isAddChapterNumberProtected={false}
         showButton
         onAddChapterNumber={onAddChapterNumber}
       />,
@@ -87,7 +87,7 @@ describe('EmptyChapterView', () => {
       render(
         <EmptyChapterView
           localizedStrings={STRINGS}
-          isStructureProtected
+          isAddChapterNumberProtected
           showButton
           onAddChapterNumber={vi.fn()}
         />,
@@ -105,7 +105,7 @@ describe('EmptyChapterView', () => {
       render(
         <EmptyChapterView
           localizedStrings={STRINGS}
-          isStructureProtected
+          isAddChapterNumberProtected
           showButton
           onAddChapterNumber={onAddChapterNumber}
         />,
@@ -130,7 +130,7 @@ describe('EmptyChapterView', () => {
       render(
         <EmptyChapterView
           localizedStrings={STRINGS}
-          isStructureProtected={false}
+          isAddChapterNumberProtected={false}
           showButton
           onAddChapterNumber={vi.fn()}
         />,
@@ -149,7 +149,7 @@ describe('EmptyChapterView', () => {
       render(
         <EmptyChapterView
           localizedStrings={STRINGS}
-          isStructureProtected={false}
+          isAddChapterNumberProtected={false}
           showButton
           onAddChapterNumber={vi.fn()}
         />,
@@ -169,7 +169,7 @@ describe('EmptyChapterView', () => {
       render(
         <EmptyChapterView
           localizedStrings={STRINGS}
-          isStructureProtected={false}
+          isAddChapterNumberProtected={false}
           showButton
           onAddChapterNumber={vi.fn()}
         />,
@@ -187,7 +187,7 @@ describe('EmptyChapterView', () => {
       const { rerender } = render(
         <EmptyChapterView
           localizedStrings={STRINGS}
-          isStructureProtected={false}
+          isAddChapterNumberProtected={false}
           showButton
           onAddChapterNumber={vi.fn()}
           announcementKey="projA:GEN 1"
@@ -199,7 +199,7 @@ describe('EmptyChapterView', () => {
       rerender(
         <EmptyChapterView
           localizedStrings={STRINGS}
-          isStructureProtected={false}
+          isAddChapterNumberProtected={false}
           showButton
           onAddChapterNumber={vi.fn()}
           announcementKey="projA:GEN 2"
@@ -225,7 +225,7 @@ describe('EmptyChapterView', () => {
       const { rerender } = render(
         <EmptyChapterView
           localizedStrings={STRINGS}
-          isStructureProtected={false}
+          isAddChapterNumberProtected={false}
           showButton
           onAddChapterNumber={vi.fn()}
           announcementKey="projA:GEN 1"
@@ -237,7 +237,7 @@ describe('EmptyChapterView', () => {
       rerender(
         <EmptyChapterView
           localizedStrings={STRINGS}
-          isStructureProtected={false}
+          isAddChapterNumberProtected={false}
           showButton
           onAddChapterNumber={vi.fn()}
           announcementKey="projA:GEN 2"
@@ -254,7 +254,11 @@ describe('EmptyChapterView', () => {
 
   it('falls back to the raw key when a string is missing', () => {
     render(
-      <EmptyChapterView isStructureProtected={false} showButton onAddChapterNumber={vi.fn()} />,
+      <EmptyChapterView
+        isAddChapterNumberProtected={false}
+        showButton
+        onAddChapterNumber={vi.fn()}
+      />,
     );
 
     expect(

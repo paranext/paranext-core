@@ -106,6 +106,7 @@ const RESULT: HidableFindResult = {
   text: RESULT_MATCH_TEXT,
   start: { verseRef: VERSE_REF, offset: 0 },
   end: { verseRef: VERSE_REF, offset: RESULT_MATCH_TEXT.length },
+  matchedUsfm: RESULT_MATCH_TEXT,
 };
 
 const RESULTS_BY_BOOK = new Map<string, BookResultEntry[]>([
@@ -669,7 +670,60 @@ const FAKE_RESULT = {
   start: { verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, offset: 0 },
   end: { verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, offset: 3 },
   text: 'God',
+  matchedUsfm: 'God',
 };
+
+describe('Find — search errors', () => {
+  it('shows why a project cannot be searched on its own, without the generic error wording', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          searchStatus: 'errored',
+          openBlockedMessage: "Study Bible Additions projects aren't supported yet.",
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText("Study Bible Additions projects aren't supported yet."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/An error occurred/)).toBeNull();
+  });
+
+  it('wraps any other error in the generic error wording (positive control)', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          searchStatus: 'errored',
+          searchError: 'Invalid regular expression',
+        })}
+      />,
+    );
+
+    expect(screen.getByText('An error occurred: Invalid regular expression')).toBeInTheDocument();
+  });
+});
+
+describe('Find — Replace All availability', () => {
+  const replaceModeProps = {
+    activeMode: 'replace',
+    searchTerm: 'God',
+    searchStatus: 'completed',
+    results: [FAKE_RESULT],
+    focusedResultIndex: 0,
+  } satisfies Partial<FindProps>;
+
+  it('shows Replace All when given a handler for it', () => {
+    render(<Find {...buildLifecycleProps(replaceModeProps)} />);
+    expect(screen.getByRole('button', { name: 'Replace all' })).toBeInTheDocument();
+  });
+
+  it('hides Replace All but keeps Replace when no handler for it is given', () => {
+    render(<Find {...buildLifecycleProps({ ...replaceModeProps, onReplaceAll: undefined })} />);
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Replace all' })).toBeNull();
+  });
+});
 
 describe('Find — permission-blocked Replace', () => {
   function buildReplaceProps(overrides: Partial<FindProps>): FindProps {
@@ -1568,5 +1622,83 @@ describe('Find — recent searches menu', () => {
     await user.click(screen.getByRole('button', { name: 'Mostrar búsquedas recientes' }));
 
     expect(await screen.findByRole('menu', { name: 'Recientes' })).toBeInTheDocument();
+  });
+});
+
+describe('Find — Replace on a result whose span holds markers', () => {
+  // Replace asks before deleting a marker, which the web view owns. This component's part is to
+  // leave Replace clickable so that the question can be asked.
+  const BOUNDARY_RESULT: HidableFindResult = {
+    ...RESULT,
+    removedMarkers: ['p', 'v:2'],
+  };
+
+  // The toolbar's Replace button and the card's carry the same localized key, so a render that
+  // stubs both to their key gives the two buttons the same accessible name and `name: 'Replace'`
+  // silently resolves to the toolbar one. Relabelling the card's, as the per-result permission
+  // suite above does, is what keeps an assertion about the card an assertion about the card.
+  const CARD_REPLACE_LABEL = 'Replace card';
+
+  function buildReplaceProps(overrides: Partial<FindProps> = {}): FindProps {
+    return buildLifecycleProps({
+      results: [BOUNDARY_RESULT],
+      resultsByBook: new Map<string, BookResultEntry[]>([
+        ['GEN', [{ result: BOUNDARY_RESULT, originalIndex: 0 }]],
+      ]),
+      searchStatus: 'completed',
+      totalNumberOfResults: 1,
+      activeMode: 'replace',
+      replaceTerm: 'replacement',
+      isEditable: true,
+      focusedResultIndex: 0,
+      searchResultLocalizedStrings: { '%webView_find_replace%': CARD_REPLACE_LABEL },
+      ...overrides,
+    });
+  }
+
+  it('reports a click on the card’s Replace, for the web view to ask about', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onReplace = vi.fn();
+    render(<Find {...buildReplaceProps({ onReplace })} />);
+
+    await user.click(screen.getByRole('button', { name: CARD_REPLACE_LABEL }));
+
+    expect(onReplace).toHaveBeenCalledWith(0);
+  });
+
+  it('reports a click on the toolbar’s Replace, which acts on the focused result', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onReplace = vi.fn();
+    render(<Find {...buildReplaceProps({ onReplace })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Replace' }));
+
+    expect(onReplace).toHaveBeenCalledWith();
+  });
+
+  it('shows the result’s markers only when asked to', () => {
+    // A span that holds a marker; `matchedUsfm` is what the chips are built from.
+    const withMarker = { ...BOUNDARY_RESULT, matchedUsfm: 'b\n\\p And' };
+    const props = {
+      results: [withMarker],
+      resultsByBook: new Map<string, BookResultEntry[]>([
+        ['GEN', [{ result: withMarker, originalIndex: 0 }]],
+      ]),
+    };
+    const { unmount } = render(
+      <Find {...buildReplaceProps({ ...props, shouldShowMarkers: true })} />,
+    );
+    expect(screen.getAllByText('\\p').length).toBeGreaterThan(0);
+    unmount();
+
+    render(<Find {...buildReplaceProps(props)} />);
+    expect(screen.queryByText('\\p')).toBeNull();
+  });
+
+  it('still disables Replace on a result when the project is read-only', () => {
+    render(<Find {...buildReplaceProps({ isEditable: false })} />);
+
+    expect(screen.getByRole('button', { name: CARD_REPLACE_LABEL })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeDisabled();
   });
 });

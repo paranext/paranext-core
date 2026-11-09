@@ -6,9 +6,9 @@ namespace TestParanextDataProvider.Users;
 [TestFixture]
 public class InternetServicesGateTests
 {
-    // "Disable access to some Bible translation services" must block wherever the user is.
-    // ParatextData only blocks VpnRequired where the location is flagged as sensitive, so the gate
-    // keys off the saved value.
+    // Both must block wherever the user is: Disabled is "Disable access to some Bible translation
+    // services", and VpnRequired is not implemented yet, so it fails closed. ParatextData only blocks
+    // VpnRequired where the location is flagged as sensitive, so the gate keys off the saved value.
     [TestCase(InternetUse.VpnRequired, ExpectedResult = true)]
     [TestCase(InternetUse.Disabled, ExpectedResult = true)]
     [TestCase(InternetUse.Enabled, ExpectedResult = false)]

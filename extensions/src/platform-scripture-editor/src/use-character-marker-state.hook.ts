@@ -11,7 +11,6 @@ import {
 } from './character-marker-coverage.utils';
 import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
 import { CharacterMarkerControlProps } from './character-marker-control/character-marker-control.component';
-import { correctEditorUsjVersion } from './platform-scripture-editor.utils';
 
 export type UseCharacterMarkerStateOptions = {
   /** The editor, used to insert markers and to read USJ when the menu opens. */
@@ -44,6 +43,12 @@ export type UseCharacterMarkerStateOptions = {
    * TODO(PT-4394): wire this to `EditorRef.replaceCharacterMarker`.
    */
   changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
+  /**
+   * Reports whether another chapter is loading, during which the editor still shows the chapter
+   * being left and an edit would be dropped. Picking a marker does nothing while it returns `true`.
+   * Omitting it never blocks.
+   */
+  isChapterLoading?: () => boolean;
 };
 
 /** The control props this hook derives. Placement and sync state stay the caller's business. */
@@ -76,7 +81,7 @@ function computeCoverage(
   const editorUsj = editorRef.current?.getUsj();
   if (!selection || !editorUsj) return undefined;
 
-  const computed = computeCharacterMarkerCoverage(correctEditorUsjVersion(editorUsj), selection);
+  const computed = computeCharacterMarkerCoverage(editorUsj, selection);
   return isEmptyCoverage(computed) ? undefined : computed;
 }
 
@@ -106,6 +111,7 @@ function buildMarkerMenuItems(
     | 'blockMarker'
     | 'changeCharacterMarker'
     | 'removeCharacterMarker'
+    | 'isChapterLoading'
   > & {
     currentMarker: string | undefined;
     coverage: CharacterMarkerCoverage | undefined;
@@ -117,6 +123,7 @@ function buildMarkerMenuItems(
     blockMarker,
     changeCharacterMarker,
     removeCharacterMarker,
+    isChapterLoading,
     currentMarker,
     coverage,
   } = options;
@@ -133,6 +140,7 @@ function buildMarkerMenuItems(
       coverage,
       changeCharacterMarker,
       removeCharacterMarker,
+      isChapterLoading,
     },
   );
 }
@@ -152,6 +160,7 @@ export function useCharacterMarkerState({
   localizedStrings,
   removeCharacterMarker,
   changeCharacterMarker,
+  isChapterLoading,
 }: UseCharacterMarkerStateOptions): CharacterMarkerState {
   const [coverage, setCoverage] = useState<CharacterMarkerCoverage | undefined>(undefined);
 
@@ -168,6 +177,8 @@ export function useCharacterMarkerState({
 
   const onClose = useCallback(() => {
     setCoverage(undefined);
+    // TODO(PT-4764): Restore the caret before focusing, as `returnFocusToScriptureText` does. A
+    // bare `focus()` after the blur nulled the selection can put the caret at the chapter end.
     editorRef.current?.focus();
   }, [editorRef]);
 
@@ -220,6 +231,7 @@ export function useCharacterMarkerState({
         blockMarker,
         changeCharacterMarker,
         removeCharacterMarker,
+        isChapterLoading,
         currentMarker,
         coverage,
       }),
@@ -230,6 +242,7 @@ export function useCharacterMarkerState({
       currentMarker,
       changeCharacterMarker,
       removeCharacterMarker,
+      isChapterLoading,
       coverage,
     ],
   );

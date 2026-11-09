@@ -10,6 +10,7 @@ import { DIALOGS } from '@renderer/components/dialogs/index';
 import { TEAM_LAYOUT_DIALOG } from '@renderer/components/dialogs/team-layout.dialog';
 import { sendCommand } from '@shared/services/command.service';
 import { useLocalizedStrings, useProjectDataProvider } from '@renderer/hooks/papi-hooks';
+import { MODEL_TEXT_RESTRICTIONS_RECHECK_MS } from '@renderer/hooks/use-model-text-restrictions-catch-up.hook';
 import {
   TEAM_LAYOUT_PANEL_STRING_KEYS,
   TEAM_LAYOUT_DIALOG_STRING_KEYS,
@@ -167,6 +168,8 @@ function makeDblResource(overrides: Partial<DblResourceData>): DblResourceData {
     installed: true,
     updateAvailable: false,
     projectId: 'proj',
+    // platformGetResources sets it on every row once the backend has answered
+    isRestrictedAsModelText: false,
     ...overrides,
   };
 }
@@ -1106,6 +1109,99 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     expect(mockState.setModelTexts).not.toHaveBeenCalled();
     expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
   });
+
+  it('does not let a catalog text restricted as a model text be picked or saved as the model text', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    vi.mocked(sendCommand).mockImplementation(async (commandName: unknown) => {
+      if (commandName === 'platformGetResources.getCachedResources')
+        return {
+          status: 'available',
+          resources: [
+            makeDblResource({
+              dblEntryUid: 'niv-uid',
+              displayName: 'NIV11',
+              fullName: 'New International Version 2011',
+              isRestrictedAsModelText: true,
+            }),
+            makeDblResource({
+              dblEntryUid: 'esv-uid',
+              displayName: 'ESV',
+              fullName: 'English Standard Version',
+            }),
+          ],
+        };
+      return undefined;
+    });
+
+    const { submitDialog } = renderWrapper();
+    await screen.findByText(BODY_MOUNTED_TEXT);
+
+    // A real edit elsewhere, so Save writes and the assertion below has something to be absent from.
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+    act(() => {
+      screen.getByText('%shareLayoutDialog_modelText_none%').click();
+    });
+    const rowFor = (fullName: string) => {
+      const row = screen.getByText(fullName).closest('tr');
+      if (!row) throw new Error(`${fullName} row not found`);
+      return row;
+    };
+    const restrictedRow = rowFor('New International Version 2011');
+    expect(restrictedRow).toHaveAttribute('aria-disabled', 'true');
+    // The flag, not the picker, is what disables the row: an unflagged text stays selectable.
+    expect(rowFor('English Standard Version')).not.toHaveAttribute('aria-disabled');
+    act(() => {
+      restrictedRow.click();
+    });
+    await confirmDialog();
+
+    expect(submitDialog).toHaveBeenCalledWith(true);
+    expect(mockState.setStructureProtected).toHaveBeenCalledWith(true);
+    expect(mockState.setModelTexts).not.toHaveBeenCalled();
+  });
+
+  it('greys out model texts still being checked until the backend answers', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    let catalogReads = 0;
+    vi.mocked(sendCommand).mockImplementation(async (commandName: unknown) => {
+      if (commandName !== 'platformGetResources.getCachedResources') return undefined;
+      catalogReads += 1;
+      // The first read lands before the backend said which texts are restricted
+      const isRestrictedAsModelText = catalogReads === 1 ? undefined : false;
+      return {
+        status: 'available',
+        resources: [
+          makeDblResource({
+            dblEntryUid: 'esv-uid',
+            displayName: 'ESV',
+            fullName: 'English Standard Version',
+            isRestrictedAsModelText,
+          }),
+        ],
+      };
+    });
+
+    renderWrapper();
+    await screen.findByText(BODY_MOUNTED_TEXT);
+    act(() => {
+      screen.getByText('%shareLayoutDialog_modelText_none%').click();
+    });
+    const rowFor = (fullName: string) => {
+      const row = screen.getByText(fullName).closest('tr');
+      if (!row) throw new Error(`${fullName} row not found`);
+      return row;
+    };
+    expect(rowFor('English Standard Version')).toHaveAttribute('aria-disabled', 'true');
+    expect(sendCommand).toHaveBeenCalledWith('platformGetResources.getCachedResources', true);
+
+    // Real timers: the re-check is a real wait of MODEL_TEXT_RESTRICTIONS_RECHECK_MS
+    await waitFor(
+      () => expect(rowFor('English Standard Version')).not.toHaveAttribute('aria-disabled'),
+      { timeout: MODEL_TEXT_RESTRICTIONS_RECHECK_MS + 2000 },
+    );
+  }, 15_000);
 
   // On a project that has never shared a layout, `seedResourceList` seeds the resource lists from
   // the ADMIN'S PERSONAL selections — so writing them unconditionally would publish one person's

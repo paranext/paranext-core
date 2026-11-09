@@ -21,9 +21,12 @@ import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { getModelResourceProjectId, isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
+import { useAllowInvisibleCharacters } from './use-allow-invisible-characters.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.utils';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -39,6 +42,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...MODEL_TEXT_PANEL_STRING_KEYS,
   '%webView_modelTextPanel_title%',
   '%webView_modelTextPanel_title_withResource%',
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
 ];
 
 /**
@@ -134,6 +138,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     projectId,
   );
 
+  // The project on screen, whichever kind of reference chose it, for its copyright notice
+  const displayedProjectId = getModelResourceProjectId(effectiveModelText, dblResources);
+
   // --- Operation callbacks ---
 
   // Re-resolve the cached resource list once an install completes so the resource flips to
@@ -146,9 +153,13 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     refetchCatalog,
   );
 
+  // Rejects rather than resolving when there is no provider yet: the panel treats a resolved write
+  // as saved and waits for the new list, which would then never come.
   const setUserModelTexts = useCallback(
     async (list: ResourceReferenceList) => {
-      await textConnectionsProvider?.setUserModelTexts(list);
+      if (!textConnectionsProvider)
+        throw new Error('Text connection settings are not available yet');
+      await textConnectionsProvider.setUserModelTexts(list);
     },
     [textConnectionsProvider],
   );
@@ -158,13 +169,17 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     [textConnectionsProvider],
   );
 
+  // Opened without `allowRemove`, so every pick is an add.
   const showResourcePicker = useCallback(
-    (selectedResourceIds: string[]) =>
-      papi.dialogs.showDialog('platform.resourcePicker', {
-        selectedResourceIds,
-        isModal: true,
-        resourceType: 'ScriptureResource',
-      }),
+    async (selectedResourceIds: string[]) =>
+      (
+        await papi.dialogs.showDialog('platform.resourcePicker', {
+          selectedResourceIds,
+          isModal: true,
+          resourceType: 'ScriptureResource',
+          disableRestrictedModelTexts: true,
+        })
+      )?.resource,
     [],
   );
 
@@ -204,11 +219,11 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // `ModelTextPanel` reads its text from the project `getModelResourceProjectId` resolves.
   // `ModelTextPanel` blocks copying while its chapter text loads.
-  const resourceCopyLimit = useChapterCopyLimit(
-    getModelResourceProjectId(effectiveModelText, dblResources),
-    scrRef,
-    'applied-by-caller',
-  );
+  const resourceProjectId = getModelResourceProjectId(effectiveModelText, dblResources);
+  const resourceCopyLimit = useChapterCopyLimit(resourceProjectId, scrRef, 'applied-by-caller');
+  // The panel is read-only, so a pending or failed read of the setting is treated as off rather
+  // than withholding the text.
+  const allowInvisibleCharacters = useAllowInvisibleCharacters(resourceProjectId).value === true;
 
   return (
     <ModelTextPanel
@@ -227,7 +242,15 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       showResourcePicker={showResourcePicker}
       getResourceChapter={getResourceChapter}
       resourceCopyLimit={resourceCopyLimit}
+      allowInvisibleCharacters={allowInvisibleCharacters}
       logger={logger}
+      copyrightNotice={
+        <ProjectCopyrightNotice
+          projectId={displayedProjectId}
+          localizedStrings={localizedStrings}
+          useWebViewState={useWebViewState}
+        />
+      }
     />
   );
 };

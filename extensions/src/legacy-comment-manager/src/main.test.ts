@@ -26,8 +26,15 @@ const mocks = vi.hoisted(() => {
     registeredCommands,
     openWebView: vi.fn(async () => 'wv-1'),
     onDidCloseWebView: vi.fn(() => () => {}),
-    getOpenWebViewDefinition: vi.fn(async () => undefined),
-    reloadWebView: vi.fn(async () => undefined),
+    getOpenWebViewDefinition: vi.fn<
+      (webViewId: string) => Promise<{ projectId?: string } | undefined>
+    >(async () => undefined),
+    reloadWebView: vi.fn(async (): Promise<string | undefined> => undefined),
+    getWebViewController: vi.fn(
+      async (): Promise<{ selectThread: (threadId: string) => Promise<void> } | undefined> =>
+        undefined,
+    ),
+    setPendingCommentListPanelProjectId: vi.fn(),
     registerCommand: vi.fn(registerCommandImpl),
     registerCommandImpl,
     PapiBackendStubBase,
@@ -45,7 +52,7 @@ vi.mock('@papi/backend', () => ({
       openWebView: mocks.openWebView,
       onDidCloseWebView: mocks.onDidCloseWebView,
       getOpenWebViewDefinition: mocks.getOpenWebViewDefinition,
-      getWebViewController: vi.fn(async () => undefined),
+      getWebViewController: mocks.getWebViewController,
       reloadWebView: mocks.reloadWebView,
     },
     projectDataProviders: {
@@ -59,6 +66,13 @@ vi.mock('@papi/backend', () => ({
   WebViewFactory: mocks.PapiBackendStubBase,
   LayeringProjectDataProviderEngineFactory: mocks.PapiBackendStubBase,
   ProjectDataProviderEngine: mocks.PapiBackendStubBase,
+}));
+
+// Spied so the tests can check that re-pointing the panel never writes the module-level pending
+// project slot, which other callers share; the rest of the factory module stays real.
+vi.mock('./comment-list-panel-web-view.factory', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./comment-list-panel-web-view.factory')>()),
+  setPendingCommentListPanelProjectId: mocks.setPendingCommentListPanelProjectId,
 }));
 
 // vi.mock declarations above are hoisted, so the imports below must come after to ensure the
@@ -166,5 +180,98 @@ describe('legacy comment manager main.ts activation', () => {
     // Distinguishes this from the plain not-found path, which degrades to the same "no project id"
     // outcome without logging anything.
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+  });
+
+  describe('selectCommentThreadInPanel', () => {
+    const selectThread = vi.fn(async () => {});
+
+    /**
+     * Panel `comments-tab` is open and shows `panelProjectId`; editor `editor-1` shows
+     * `editorProjectId`.
+     */
+    function arrange(panelProjectId: string | undefined, editorProjectId: string | undefined) {
+      mocks.openWebView.mockResolvedValue('comments-tab');
+      // A successful reload resolves to the reloaded web view's ID
+      mocks.reloadWebView.mockResolvedValue('comments-tab');
+      mocks.getWebViewController.mockResolvedValue({ selectThread });
+      mocks.getOpenWebViewDefinition.mockImplementation(async (id: string) => {
+        if (id === 'comments-tab') return { projectId: panelProjectId };
+        if (id === 'editor-1') return { projectId: editorProjectId };
+        return undefined;
+      });
+    }
+
+    async function select(...args: unknown[]) {
+      await activate(makeContext());
+      const handler = mocks.registeredCommands.get(
+        'legacyCommentManager.selectCommentThreadInPanel',
+      );
+      return handler?.(...args);
+    }
+
+    it("re-points a panel showing another project at the editor's project before selecting", async () => {
+      arrange('project-A', 'project-B');
+
+      await expect(select('thread-1', true, 'editor-1')).resolves.toBe('comments-tab');
+
+      // The project travels in the reload's options, which the panel's provider reads, rather than
+      // through the pending slot that a concurrent project switch also writes.
+      expect(mocks.reloadWebView).toHaveBeenCalledWith(
+        'legacyCommentManager.commentListPanel',
+        'comments-tab',
+        expect.objectContaining({ projectId: 'project-B', bringToFront: false }),
+      );
+      expect(mocks.setPendingCommentListPanelProjectId).not.toHaveBeenCalled();
+      expect(selectThread).toHaveBeenCalledWith('thread-1');
+      // The reload must be issued before the selection, or the selection lands in the old project.
+      expect(mocks.reloadWebView.mock.invocationCallOrder[0]).toBeLessThan(
+        selectThread.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("selects without reloading when the panel already shows the editor's project", async () => {
+      arrange('project-A', 'project-A');
+
+      await select('thread-1', true, 'editor-1');
+
+      expect(mocks.reloadWebView).not.toHaveBeenCalled();
+      expect(mocks.setPendingCommentListPanelProjectId).not.toHaveBeenCalled();
+      expect(selectThread).toHaveBeenCalledWith('thread-1');
+    });
+
+    it('selects without reloading when no editor is given', async () => {
+      arrange('project-A', 'project-B');
+
+      await select('thread-1', false);
+
+      expect(mocks.getOpenWebViewDefinition).not.toHaveBeenCalled();
+      expect(mocks.reloadWebView).not.toHaveBeenCalled();
+      expect(selectThread).toHaveBeenCalledWith('thread-1');
+    });
+
+    it.each([
+      ['rejects', () => mocks.reloadWebView.mockRejectedValueOnce(new Error('window closing'))],
+      ['returns no web view', () => mocks.reloadWebView.mockResolvedValueOnce(undefined)],
+    ])('rejects without selecting when the panel reload %s', async (_outcome, arrangeReload) => {
+      arrange('project-A', 'project-B');
+      arrangeReload();
+
+      await expect(select('thread-1', true, 'editor-1')).rejects.toThrow('project-B');
+
+      // The panel is known to show another project, where the thread can't be found; selecting
+      // it there would leave the list's pending selection stuck.
+      expect(selectThread).not.toHaveBeenCalled();
+    });
+
+    it("selects without reloading when the editor's project cannot be resolved", async () => {
+      arrange('project-A', undefined);
+      mocks.getOpenWebViewDefinition.mockRejectedValueOnce(new Error('no window answered'));
+
+      await select('thread-1', true, 'editor-1');
+
+      expect(mocks.reloadWebView).not.toHaveBeenCalled();
+      expect(selectThread).toHaveBeenCalledWith('thread-1');
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+    });
   });
 });

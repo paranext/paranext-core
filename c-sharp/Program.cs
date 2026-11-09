@@ -125,6 +125,9 @@ public static class Program
             // Initializes the versioning manager
             VersioningManager.Initialize();
 
+            // Before the project scan below reads the effective internet status
+            InternetSettingsDataProvider.MigrateVpnRequiredToDisabled();
+
             SettingsService.Initialize(papi);
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var paratextPublishedFactory = new ParatextPublishedProjectDataProviderFactory(
@@ -211,6 +214,9 @@ public static class Program
                 paratextProjects
             );
             unsyncedChangesTracker.Start();
+
+            // Record the first successful sync so the first-run wizard's Sync step stops coming back.
+            new FirstSyncRecorder(papi, paratextSendReceiveService).Start();
             var remoteChangesPoller = new RemoteChangesPoller(
                 paratextSendReceiveService,
                 paratextProjects

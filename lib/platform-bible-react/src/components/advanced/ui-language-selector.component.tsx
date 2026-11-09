@@ -81,6 +81,8 @@ export type UiLanguageSelectorProps = {
   className?: string;
   /** Optional id for the root element */
   id?: string;
+  /** When true, the language cannot be changed. Defaults to `false`. */
+  disabled?: boolean;
 };
 
 /**
@@ -99,6 +101,7 @@ export function UiLanguageSelector({
   localizedStrings,
   className,
   id,
+  disabled = false,
 }: UiLanguageSelectorProps) {
   const fallbackLanguagesText = localizeString(
     localizedStrings,
@@ -147,6 +150,7 @@ export function UiLanguageSelector({
         onValueChange={handleLanguageChange}
         open={isOpen}
         onOpenChange={(open) => setIsOpen(open)}
+        disabled={disabled}
       >
         <SelectTrigger>
           <SelectValue />

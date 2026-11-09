@@ -17,6 +17,7 @@ import {
   SettingTypes,
 } from 'papi-shared-types';
 import {
+  Button,
   ERROR_POPOVER_STRING_KEYS,
   ErrorPopover,
   Input,
@@ -28,9 +29,11 @@ import {
   TooltipTrigger,
   UiLanguageSelector,
 } from 'platform-bible-react';
+import { Info } from 'lucide-react';
 import {
   debounce,
   DebouncedFunction,
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -42,6 +45,9 @@ import './settings.component.scss';
 
 /** What the language selector offers while the offered languages load, or if they cannot be read. */
 const OFFERED_LANGUAGE_DEFAULTS = getOfferedLanguageDefaults();
+
+/** A read-only text field otherwise looks editable, so it gets the muted fill and an arrow cursor. */
+const READ_ONLY_INPUT_CLASS_NAME = 'tw:bg-muted tw:dark:bg-muted tw:cursor-default';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -61,6 +67,15 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
    * to `false`.
    */
   disabled?: boolean;
+  /**
+   * When true, the user can read but not change the setting: text stays focusable, selectable and
+   * scrollable, and controls with no read-only state (switches, steppers, selects) are disabled.
+   * Used for settings contributed with `isReadOnly` and for project settings the project's locks
+   * forbid changing (see `getSettingLock`). Defaults to `false`.
+   */
+  readOnly?: boolean;
+  /** Localized line shown under the control, saying why it is locked, while `readOnly` is true */
+  lockReason?: string;
 };
 
 /**
@@ -200,6 +215,7 @@ class SettingWriterUnavailableError extends Error {}
 const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
+  '%settings_infoButton_ariaLabel%',
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
   '%settings_platform_webViewContentZoom_atDefault%',
@@ -241,6 +257,8 @@ export function Setting({
   className,
   description,
   disabled = false,
+  readOnly = false,
+  lockReason,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -268,6 +286,7 @@ export function Setting({
   const controlId = useId();
   const labelId = useId();
   const descriptionId = useId();
+  const lockReasonId = useId();
   const isUiLanguageSelector =
     Array.isArray(setting) && settingKey === 'platform.interfaceLanguage';
 
@@ -411,7 +430,10 @@ export function Setting({
   const debouncedHandleChange = debouncedHandleChangeRef.current;
   const debouncedHandleStepperChange = debouncedHandleStepperChangeRef.current;
 
-  const ariaDescribedBy = description ? descriptionId : undefined;
+  const shownLockReason = readOnly ? lockReason : undefined;
+  const ariaDescribedBy =
+    [description && descriptionId, shownLockReason && lockReasonId].filter(Boolean).join(' ') ||
+    undefined;
   const ariaInvalid = errorMessage ? true : undefined;
 
   // The control and the id the label points at are derived together so `htmlFor` cannot drift from
@@ -431,7 +453,7 @@ export function Setting({
             // Without a writer the stepper has nothing to send a press to, and its readout moves the
             // moment a button is pressed. Gating the control keeps the number on screen honest
             // instead of reporting a percentage that was never written.
-            disabled={disabled || !setSetting}
+            disabled={disabled || readOnly || !setSetting}
             groupLabel={label}
             labels={{
               increase: localizedStrings[labelKeys.increase],
@@ -459,6 +481,8 @@ export function Setting({
             onChange={debouncedHandleChange}
             defaultValue={setting}
             disabled={disabled}
+            readOnly={readOnly}
+            className={readOnly ? READ_ONLY_INPUT_CLASS_NAME : undefined}
             aria-describedby={ariaDescribedBy}
             aria-invalid={ariaInvalid}
           />
@@ -474,7 +498,7 @@ export function Setting({
             id={controlId}
             onCheckedChange={debouncedHandleChange}
             defaultChecked={setting}
-            disabled={disabled}
+            disabled={disabled || readOnly}
             aria-describedby={ariaDescribedBy}
             aria-invalid={ariaInvalid}
           />
@@ -494,11 +518,9 @@ export function Setting({
               aria-labelledby={labelId}
               aria-describedby={ariaDescribedBy}
             >
-              {/* interfaceLanguage is a user (not project) setting, so it is never subject to
-                  per-project Send/Receive edit-blocking; UiLanguageSelector exposes no `disabled`
-                  prop, so none is passed. */}
               <UiLanguageSelector
                 className="language-selector"
+                disabled={disabled || readOnly}
                 knownUiLanguages={knownUiLanguages}
                 primaryLanguage={setting[0]}
                 fallbackLanguages={setting.slice(1)}
@@ -518,6 +540,8 @@ export function Setting({
             onChange={debouncedHandleChange}
             defaultValue={JSON.stringify(setting, undefined, 2)}
             disabled={disabled}
+            readOnly={readOnly}
+            className={readOnly ? READ_ONLY_INPUT_CLASS_NAME : undefined}
             aria-describedby={ariaDescribedBy}
             aria-invalid={ariaInvalid}
           />
@@ -540,6 +564,7 @@ export function Setting({
     debouncedHandleStepperChange,
     knownUiLanguages,
     disabled,
+    readOnly,
     setSetting,
     controlId,
     labelId,
@@ -556,17 +581,32 @@ export function Setting({
         </Label>
       ) : (
         <div className="setting-label-container">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label id={labelId} htmlFor={labelFor} className="setting-label">
-                  {label}
-                </Label>
-              </TooltipTrigger>
-              {description && <TooltipContent>{description}</TooltipContent>}
-            </Tooltip>
-          </TooltipProvider>
-          {/* The tooltip is hover-only; this copy is what the control's `aria-describedby` reads. */}
+          <div className="setting-label-wrapper">
+            <Label id={labelId} htmlFor={labelFor} className="setting-label">
+              {label}
+            </Label>
+            {description && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={formatReplacementString(
+                        localizedStrings['%settings_infoButton_ariaLabel%'],
+                        { settingLabel: label },
+                      )}
+                    >
+                      <Info />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent align="start">{description}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+          {/* The tooltip opens only from the info button; this copy is what the control's
+              `aria-describedby` reads. */}
           {description && (
             <span id={descriptionId} className="tw:sr-only">
               {description}
@@ -574,6 +614,11 @@ export function Setting({
           )}
           <div className="setting-container">
             {control}
+            {shownLockReason && (
+              <p id={lockReasonId} className="tw:text-xs tw:text-muted-foreground">
+                {shownLockReason}
+              </p>
+            )}
             {errorMessage && (
               // Mounted only while there is an error, so the alert announces when one appears. The
               // flex column repeats `.setting-container`'s so the error rows keep their spacing.

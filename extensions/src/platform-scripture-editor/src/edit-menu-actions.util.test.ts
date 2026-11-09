@@ -1,18 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
 import {
   EDIT_MENU_COMMANDS,
   handleEditMenuCommand,
   isEditMenuCommand,
   runEditMenuAction,
 } from './edit-menu-actions.util';
+import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
 function makeEditor() {
   return { undo: vi.fn(), redo: vi.fn(), cut: vi.fn(), copy: vi.fn(), paste: vi.fn() };
 }
 
 describe('Edit menu actions', () => {
-  it('recognizes only the Edit flyout commands', () => {
+  it('intercepts only the clipboard commands, which need the click’s user activation', () => {
     EDIT_MENU_COMMANDS.forEach((command) => expect(isEditMenuCommand(command)).toBe(true));
+    expect([...EDIT_MENU_COMMANDS]).toEqual([
+      'platformScriptureEditor.cutSelection',
+      'platformScriptureEditor.copySelection',
+      'platformScriptureEditor.pasteAtSelection',
+    ]);
+    expect(isEditMenuCommand('platformScriptureEditor.undo')).toBe(false);
+    expect(isEditMenuCommand('platformScriptureEditor.redo')).toBe(false);
     expect(isEditMenuCommand('platformScripture.openFind')).toBe(false);
   });
 
@@ -73,6 +82,30 @@ describe('handleEditMenuCommand', () => {
     expect(effects.notifySyncEditBlocked).not.toHaveBeenCalled();
   });
 
+  it('does not restore an older caret while a paragraph marker is selected', () => {
+    // Wired as the web view wires it: the real restore, over an editor whose gutter marker is
+    // selected. A selected marker has no text range, and the caret captured before it was selected
+    // is in another paragraph — restoring it would paste the text there instead.
+    const olderCaret: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[1]', offset: 5 },
+    };
+    const editor = {
+      ...makeEditor(),
+      getSelection: () => undefined,
+      getSelectedParaMarker: () => 'q1',
+      setSelection: vi.fn(),
+    };
+    const effects = {
+      ...makeEffects(),
+      restoreSelectionIfLost: (target: typeof editor) => restoreSelectionIfLost(target, olderCaret),
+    };
+
+    handleEditMenuCommand(PASTE, editor, EDITABLE, effects);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+    expect(editor.paste).toHaveBeenCalledTimes(1);
+  });
+
   it('names Send/Receive when a sync is the only reason editing is blocked', () => {
     const editor = makeEditor();
     const effects = makeEffects();
@@ -98,6 +131,46 @@ describe('handleEditMenuCommand', () => {
     );
     expect(effects.notifyActionBlocked).toHaveBeenCalledTimes(1);
     expect(effects.notifySyncEditBlocked).not.toHaveBeenCalled();
+  });
+
+  it.each(['platformScriptureEditor.undo', 'platformScriptureEditor.redo'] as const)(
+    '%s is refused and the user told while the editor is read-only',
+    (command) => {
+      const editor = makeEditor();
+      const effects = makeEffects();
+      handleEditMenuCommand(
+        command,
+        editor,
+        { isReadOnly: true, isDurablyReadOnly: true, isSyncBlocked: false },
+        effects,
+      );
+      Object.values(editor).forEach((method) => expect(method).not.toHaveBeenCalled());
+      expect(effects.notifyActionBlocked).toHaveBeenCalledTimes(1);
+      expect(effects.focusEditor).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('names Send/Receive when a sync is the only reason undo is blocked', () => {
+    const editor = makeEditor();
+    const effects = makeEffects();
+    handleEditMenuCommand(
+      'platformScriptureEditor.undo',
+      editor,
+      { isReadOnly: true, isDurablyReadOnly: false, isSyncBlocked: true },
+      effects,
+    );
+    expect(editor.undo).not.toHaveBeenCalled();
+    expect(effects.notifySyncEditBlocked).toHaveBeenCalledTimes(1);
+    expect(effects.notifyActionBlocked).not.toHaveBeenCalled();
+  });
+
+  it('runs redo on an editable editor after restoring the selection', () => {
+    const editor = makeEditor();
+    const effects = makeEffects();
+    handleEditMenuCommand('platformScriptureEditor.redo', editor, EDITABLE, effects);
+    expect(effects.restoreSelectionIfLost).toHaveBeenCalledWith(editor);
+    expect(editor.redo).toHaveBeenCalledTimes(1);
+    expect(effects.notifyActionBlocked).not.toHaveBeenCalled();
   });
 
   it('gives the generic notice and touches nothing else when no editor is loaded', () => {

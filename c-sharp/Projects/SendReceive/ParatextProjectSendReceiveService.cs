@@ -189,6 +189,17 @@ internal class ParatextProjectSendReceiveService(
                 CancelSync
             ),
             PapiClient.RegisterRequestHandlerAsync(
+                "command:paratextBibleSendReceive.isAvailable",
+                IsSendReceiveAvailable,
+                documentation: Create(
+                    "Whether this build can run Send/Receive. A rejection means the answer is "
+                        + "unknown (for example, the command is not registered yet on a cold "
+                        + "start). Do not treat it as false; ask again or stay conservative.",
+                    [],
+                    ResultOf("boolean", "True when this build can run Send/Receive")
+                )
+            ),
+            PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.breakSyncLock",
                 BreakSyncLock,
                 s_sendReceiveTimeout,
@@ -211,6 +222,16 @@ internal class ParatextProjectSendReceiveService(
                         "Map of (upper-cased) project id → whether that project's lock was broken"
                     )
                 )
+            ),
+            PapiClient.RegisterRequestHandlerAsync(
+                "command:paratextBibleSendReceive.reshowSyncNotification",
+                ReshowSyncNotification,
+                documentation: Create(
+                    "Shows the current Send/Receive progress notification again, with its latest "
+                        + "text, under the same id. Does nothing when no sync notification is active.",
+                    [],
+                    ResultOf("null", "No return value")
+                )
             )
         );
     }
@@ -220,6 +241,25 @@ internal class ParatextProjectSendReceiveService(
     #region Protected properties and methods
 
     protected PapiClient PapiClient { get; } = papiClient;
+
+    /// <summary>
+    /// Whether this build can run Send/Receive.
+    /// <para>
+    /// Scaffolding: public Platform.Bible runs no Send/Receive, so this stub answers
+    /// <see langword="false"/> in Platform.Bible. The Paratext 10 patch replaces the body to answer
+    /// <see langword="true"/>. Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal virtual bool IsSendReceiveAvailable() => false;
+
+    /// <summary>
+    /// Shows the current Send/Receive progress notification again.
+    /// <para>
+    /// Scaffolding: public Platform.Bible shows no sync notification, so this stub does nothing.
+    /// The Paratext 10 patch replaces the body. Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal virtual Task ReshowSyncNotification() => Task.CompletedTask;
 
     /// <summary>
     /// The local Mercurial tip id recorded after this project's last successful Send/Receive, or
@@ -264,8 +304,8 @@ internal class ParatextProjectSendReceiveService(
     /// Whether internet use resolves to enabled (<paramref name="effectiveInternetUse"/>, ParatextData's
     /// <c>InternetAccess.Status</c>) and the saved setting (<paramref name="savedInternetUse"/>,
     /// <c>InternetAccess.RawStatus</c>) does not turn off Send/Receive. Both are needed:
-    /// ParatextData resolves the saved "Disable access to some Bible translation services" to enabled
-    /// outside sensitive locations, but <see cref="InternetServicesGate"/> refuses Send/Receive for it.
+    /// ParatextData resolves a saved <see cref="InternetUse.VpnRequired"/> to enabled outside
+    /// sensitive locations, but <see cref="InternetServicesGate"/> refuses Send/Receive for it.
     /// </summary>
     internal static bool AllowsServerLookup(
         InternetUse effectiveInternetUse,

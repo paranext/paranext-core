@@ -116,7 +116,7 @@ describe('resolveTabBarDropZoneSource', () => {
     ).toBeUndefined();
   });
 
-  // Accepting this would duplicate the panel — rc-dock issue ticlo/rc-dock#226.
+  // See `resolveTabBarDropZoneSource`'s TSDoc for why a panel dropped onto itself is rejected.
   it('rejects a whole-panel drag over its own bar', () => {
     const panel = createPanel();
     createDragState({ panel }, DOCK_ID);

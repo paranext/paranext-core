@@ -189,3 +189,53 @@ describe('menus.model — shortcut field', () => {
     );
   });
 });
+
+describe('menus.model — icon name fields', () => {
+  const compileValidator = () => new Ajv2019({ allErrors: true }).compile(menuDocumentSchema);
+
+  const makeDoc = (item: object) => ({
+    mainMenu: {
+      columns: { 'test.column': { label: '%test_column%', order: 1 } },
+      groups: { 'test.group': { column: 'test.column', order: 1 } },
+      items: [item],
+    },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    defaultWebViewTabMenu: { groups: {}, items: [] },
+    webViewMenus: {},
+  });
+
+  const baseItem = { label: '%test_item%', localizeNotes: 'test', group: 'test.group', order: 1 };
+
+  it('accepts a command item with iconNameBefore and iconNameAfter', () => {
+    const doc = makeDoc({
+      ...baseItem,
+      command: 'test.run',
+      iconNameBefore: 'refresh-cw',
+      iconNameAfter: 'external-link',
+    });
+    expect(compileValidator()(doc)).toBe(true);
+  });
+
+  it('accepts a submenu item with iconNameBefore', () => {
+    const doc = makeDoc({ ...baseItem, id: 'test.submenu', iconNameBefore: 'pencil' });
+    expect(compileValidator()(doc)).toBe(true);
+  });
+
+  it('rejects a non-string icon name', () => {
+    const doc = makeDoc({ ...baseItem, command: 'test.run', iconNameBefore: 5 });
+    expect(compileValidator()(doc)).toBe(false);
+  });
+
+  it('still rejects an unknown property', () => {
+    const validate = compileValidator();
+    const doc = makeDoc({ ...baseItem, command: 'test.run', iconNameBeforee: 'pencil' });
+    expect(validate(doc)).toBe(false);
+    expect(validate.errors).toContainEqual(
+      expect.objectContaining({
+        keyword: 'unevaluatedProperties',
+        params: { unevaluatedProperty: 'iconNameBeforee' },
+      }),
+    );
+  });
+});

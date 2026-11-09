@@ -33,10 +33,20 @@ export const SYNC_EDIT_BLOCKED_KEY: LocalizeKey =
  * @param message The already-localized message to show.
  * @param context Named in the log line when the notification itself fails, so a swallowed failure
  *   is still attributable to the edit that tried to report it.
+ * @param notificationId Optional fixed id, so repeated sends update one notification instead of
+ *   stacking a new one each time.
  */
-export async function notifyEditorWarning(message: string, context: string): Promise<void> {
+export async function notifyEditorWarning(
+  message: string,
+  context: string,
+  notificationId?: string,
+): Promise<void> {
   try {
-    await papi.notifications.send({ message, severity: 'warning' });
+    await papi.notifications.send({
+      message,
+      severity: 'warning',
+      ...(notificationId !== undefined && { notificationId }),
+    });
   } catch (e) {
     logger.warn(`Failed to send the ${context} notification: ${getErrorMessage(e)}`);
   }
@@ -60,7 +70,7 @@ export async function notifySyncEditBlocked(localizedStrings: LanguageStrings): 
 }
 
 /**
- * The one definition of the Edit flyout's blocked-action message key.
+ * The one definition of the blocked-edit-action message key.
  *
  * Owned here for the same reason as {@link SYNC_EDIT_BLOCKED_KEY}: the key and the "warning"
  * severity it drives cannot drift apart across call sites.
@@ -69,10 +79,11 @@ export const EDIT_ACTION_BLOCKED_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_error_editActionBlocked%';
 
 /**
- * Show the standard "editing isn't available" warning notification for the Project menu's Edit
- * flyout, for when `runEditMenuAction` reports that the chosen action did not run. One message
- * covers every reason the editor can be read-only here (no permission, permission still loading, an
- * automatic sync in progress, or the markers view) rather than naming which.
+ * Show the standard "editing isn't available" warning notification, for an edit action the user
+ * chose that did not run: an action from the Project menu's Edit flyout that `runEditMenuAction`
+ * reports as not run, or an "Add chapter number" click the editor could not carry out. One message
+ * covers every reason (no permission, permission still loading, an automatic sync in progress,
+ * Preview in Power mode, or an editor that refused) rather than naming which.
  *
  * Takes `localizedStrings` rather than a resolved message so {@link EDIT_ACTION_BLOCKED_KEY} is
  * named exactly once in the codebase.
@@ -80,12 +91,28 @@ export const EDIT_ACTION_BLOCKED_KEY: LocalizeKey =
  * @param localizedStrings The web view's resolved strings. Must include
  *   {@link EDIT_ACTION_BLOCKED_KEY}; the key itself is shown if it is missing.
  */
-export async function notifyEditMenuActionBlocked(
-  localizedStrings: LanguageStrings,
-): Promise<void> {
+export async function notifyEditActionBlocked(localizedStrings: LanguageStrings): Promise<void> {
   await notifyEditorWarning(
     localizedStrings[EDIT_ACTION_BLOCKED_KEY] ?? EDIT_ACTION_BLOCKED_KEY,
-    'edit-menu-action-blocked',
+    'edit-action-blocked',
+  );
+}
+
+/** The fixed id of the structure-locked notification; see {@link notifyStructureProtected}. */
+export const STRUCTURE_PROTECTED_NOTIFICATION_ID = 'platformScriptureEditor.structureProtected';
+
+/**
+ * Show the "structure is protected" warning, for a paragraph or marker change the structure lock
+ * refuses.
+ *
+ * Always under {@link STRUCTURE_PROTECTED_NOTIFICATION_ID}: a held key repeats the refused request
+ * many times a second, and each repeat updates the one notification instead of stacking another.
+ */
+export async function notifyStructureProtected(): Promise<void> {
+  await notifyEditorWarning(
+    '%webView_platformScriptureEditor_error_structureProtected%',
+    'structure-protected',
+    STRUCTURE_PROTECTED_NOTIFICATION_ID,
   );
 }
 

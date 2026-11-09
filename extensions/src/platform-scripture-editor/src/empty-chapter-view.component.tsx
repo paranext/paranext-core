@@ -22,8 +22,8 @@ const localize = (strings: EmptyChapterViewLocalizedStrings, key: EmptyChapterVi
 export type EmptyChapterViewProps = {
   /** Localized strings for the message, button label, and disabled tooltip. */
   localizedStrings?: EmptyChapterViewLocalizedStrings;
-  /** Whether structure protection is active — disables the button and shows an explanatory tooltip. */
-  isStructureProtected: boolean;
+  /** Whether structure protection disables the button, which then shows an explanatory tooltip. */
+  isAddChapterNumberProtected: boolean;
   /**
    * Whether the text being displayed is a published resource. Resources get a message naming the
    * resource, since "this chapter is empty" reads as an invitation to fill it in a text the reader
@@ -68,7 +68,7 @@ export type EmptyChapterViewProps = {
  */
 export function EmptyChapterView({
   localizedStrings = {},
-  isStructureProtected,
+  isAddChapterNumberProtected,
   isResource = false,
   showButton,
   onAddChapterNumber,
@@ -90,10 +90,14 @@ export function EmptyChapterView({
         <span>{localize(localizedStrings, isResource ? MESSAGE_RESOURCE_KEY : MESSAGE_KEY)}</span>
         {showButton && (
           <DisabledActionTooltip
-            disabled={isStructureProtected}
+            disabled={isAddChapterNumberProtected}
             tooltipText={localize(localizedStrings, PROTECTED_TOOLTIP_KEY)}
           >
-            <Button className="tw:h-8" disabled={isStructureProtected} onClick={onAddChapterNumber}>
+            <Button
+              className="tw:h-8"
+              disabled={isAddChapterNumberProtected}
+              onClick={onAddChapterNumber}
+            >
               {localize(localizedStrings, ADD_CHAPTER_NUMBER_BUTTON_KEY)}
             </Button>
           </DisabledActionTooltip>

@@ -89,7 +89,6 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@papi/frontend', () => ({
   default: {
-    themes: { subscribeCurrentTheme: vi.fn(async () => vi.fn()) },
     commands: { sendCommand: vi.fn(async () => ({ name: 'Tester' })) },
     window: { setFocus: vi.fn() },
   },
@@ -137,7 +136,6 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     sonner: { error: vi.fn(), warning: vi.fn(), info: vi.fn() },
     usePromise: vi.fn((_factory: unknown, defaultValue: unknown) => [defaultValue, false]),
     useRunWhenVisible: actual.useRunWhenVisible,
-    useTabIconSelection: vi.fn(() => undefined),
     useViewVisibility: vi.fn(() => true),
   };
 });

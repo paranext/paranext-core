@@ -20,6 +20,7 @@ import {
 import {
   IRpcLocalClientAcceptor,
   IRpcMethodRegistrar,
+  IRpcWebSocketClientCloser,
   RegisteredRpcMethodDetails,
   RpcClientDisconnectEvent,
 } from '@shared/models/rpc.interface';
@@ -76,7 +77,9 @@ function onServerError(error: unknown): void {
  *
  * Created by the main process on start up when the network service initializes
  */
-export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClientAcceptor {
+export class RpcWebSocketListener
+  implements IRpcMethodRegistrar, IRpcLocalClientAcceptor, IRpcWebSocketClientCloser
+{
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
   /**
    * Event that fires when a connected process goes away, carrying the method names its departure
@@ -368,6 +371,29 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClien
     // Only renderers connect this way, and a web view can drive its renderer's connection
     this.serveClient(socket, name, false);
     logger.info(`PAPI client ${name} connected over a local port`);
+  }
+
+  /**
+   * Close every client the websocket server accepted. See
+   * {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+   *
+   * @experimental
+   */
+  closeWebSocketClients(code: number, reason: string): void {
+    // `WebSocketServer.clients` holds exactly the sockets the server accepted; local clients never
+    // enter it. It is unreachable once `disconnect()` has cleared the server, so this has to run
+    // first. Copied before iterating because a socket's close handler removes it from the set.
+    const sockets = [...(this.webSocketServer?.clients ?? [])];
+    if (sockets.length === 0) return;
+    logger.info(`Closing ${sockets.length} PAPI websocket clients (${reason})`);
+    sockets.forEach((socket) => {
+      // One socket failing to close must not leave the others, possibly the data provider, open
+      try {
+        socket.close(code, reason);
+      } catch (error) {
+        logger.warn(`Could not close a PAPI websocket client: ${getErrorMessage(error)}`);
+      }
+    });
   }
 
   generateOpenRpcSchema(): OpenRpc {

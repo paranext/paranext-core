@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getGridBodyState, type ScriptureTextGridBodyStateInput } from './grid-body-state.utils';
+import {
+  getGridBodyState,
+  shouldShowCatalogRetryBanner,
+  type ScriptureTextGridBodyStateInput,
+} from './grid-body-state.utils';
+import type { GridResource } from './grid-resources.utils';
 
 const SETTLED_EMPTY: ScriptureTextGridBodyStateInput = {
   hasRows: false,
@@ -38,6 +43,42 @@ describe('getGridBodyState', () => {
   it('does not report a catalog failure once rows resolved from it are on screen', () => {
     expect(getGridBodyState({ ...SETTLED_EMPTY, hasRows: true, hasCatalogError: true })).toBe(
       'grid',
+    );
+  });
+});
+
+describe('shouldShowCatalogRetryBanner', () => {
+  const unverified: GridResource = {
+    resourceId: 'u',
+    projectId: undefined,
+    label: 'U',
+    unresolvedReason: 'unverified',
+  };
+  const resolved: GridResource = { resourceId: 'r', projectId: 'P', label: 'R' };
+
+  it('shows when the catalog failed and a cell could not be checked', () => {
+    expect(
+      shouldShowCatalogRetryBanner({ hasCatalogError: true, resources: [resolved, unverified] }),
+    ).toBe(true);
+  });
+
+  it('hides when the catalog failed but every cell resolved', () => {
+    expect(shouldShowCatalogRetryBanner({ hasCatalogError: true, resources: [resolved] })).toBe(
+      false,
+    );
+  });
+
+  it('hides when the catalog failed but no cell says "couldn\'t check"', () => {
+    const notInstalled: GridResource = { ...unverified, unresolvedReason: 'notInstalled' };
+    const checking: GridResource = { ...unverified, unresolvedReason: 'checking' };
+    expect(
+      shouldShowCatalogRetryBanner({ hasCatalogError: true, resources: [notInstalled, checking] }),
+    ).toBe(false);
+  });
+
+  it('hides when the catalog did not fail', () => {
+    expect(shouldShowCatalogRetryBanner({ hasCatalogError: false, resources: [unverified] })).toBe(
+      false,
     );
   });
 });

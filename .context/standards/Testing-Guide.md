@@ -1295,7 +1295,7 @@ Where a spec lives is decided by how it gets its app, and that choice also picks
   standard run (see their READMEs for what collects each and why), so put new work in one of the
   three directories above rather than extending them.
 - `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
-  tests.
+  tests, apart from the bare-Electron checks its README describes.
 
 ```
 e2e-tests/

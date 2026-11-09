@@ -189,7 +189,7 @@ export const ExistingRegistration: Story = {
 
 const INTERNET_SETTINGS_AT_START = {
   selectedServer: 'Production',
-  permittedInternetUse: 'VpnRequired',
+  permittedInternetUse: 'Disabled',
   proxyPort: 0,
 } as const;
 
