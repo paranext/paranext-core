@@ -166,6 +166,7 @@ import {
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import {
   editorHoldsUnsavedChanges,
+  isDiscardingEditsALoss,
   isEditorContentForChapter,
   isTypingLostToNavigation,
   performDebouncedPdpSave,
@@ -4884,8 +4885,9 @@ function PlatformScriptureEditor({
     // Focus moving to a toolbar or another control in this web view leaves the window focused, so
     // `blur` does not fire, but the editor no longer has focus and so no longer claims the chapter.
     // Scoped to the editor itself, not `editorContainerRef`, which also holds the footnotes pane:
-    // focus moving into the pane ends the editor's claim too, and the pane claims the chapter only
-    // once it is edited.
+    // the editor's claim rests on the editor having focus, so focus moving into the pane can end it
+    // too, whenever the pane does not hold the claim itself. Sending the save there costs nothing
+    // when the pane does hold it.
     const flushOnLeavingEditor = (event: FocusEvent) => {
       if (
         isFocusLeavingContainer(
@@ -4916,15 +4918,24 @@ function PlatformScriptureEditor({
    * sync effect.
    */
   const discardUnsavedEdits = useCallback(
-    (cause: 'replacedByUpdate' | 'leftChapter') => {
+    (
+      cause: 'replacedByUpdate' | 'leftChapter',
+      lastKnownUsj: Usj | undefined,
+      incomingUsj: Usj,
+    ) => {
       const discarded = discardRowEditsAndPendingSave(
         paneEditingIndexRef.current !== undefined ? paneNoteEditorRef.current : undefined,
         saveUsjToPdpDebounced,
       );
+      // Read after the row's edits have landed, so they count.
+      const editorUsj = editorRef.current?.getUsj();
       const editorDocument = editorDocumentSelector.current;
       reportLostEdits(
         cause,
-        discarded && editorDocument
+        discarded &&
+          editorDocument &&
+          editorUsj &&
+          isDiscardingEditsALoss(editorUsj, lastKnownUsj, incomingUsj)
           ? describeChapterWithLostEdits(editorDocument, localizedBookNames.current)
           : undefined,
       );

@@ -2,6 +2,7 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { describe, expect, it, vi } from 'vitest';
 import {
   editorHoldsUnsavedChanges,
+  isDiscardingEditsALoss,
   isEditorContentForChapter,
   isTypingLostToNavigation,
   performDebouncedPdpSave,
@@ -456,5 +457,38 @@ describe('isTypingLostToNavigation', () => {
     expect(
       isTypingLostToNavigation('JON|1|', 'JON|2|', usjWith('In the\uFEFF beginning'), lastSaved),
     ).toBe(false);
+  });
+});
+
+describe('isDiscardingEditsALoss', () => {
+  const lastKnown = usjWith('In the beginning');
+  const incoming = usjWith('In the beginning, Find replaced this');
+
+  it('is a loss when the editor differs from both the last known chapter and the incoming one', () => {
+    expect(isDiscardingEditsALoss(usjWith('In the beginning God'), lastKnown, incoming)).toBe(true);
+  });
+
+  it('is not a loss when the editor equals the last known chapter, the edit having been undone', () => {
+    expect(isDiscardingEditsALoss(usjWith('In the beginning'), lastKnown, incoming)).toBe(false);
+  });
+
+  it('is not a loss when the incoming chapter already holds what the editor does', () => {
+    expect(
+      isDiscardingEditsALoss(
+        usjWith('In the beginning God'),
+        lastKnown,
+        usjWith('In the beginning God'),
+      ),
+    ).toBe(false);
+  });
+
+  it('is not a loss when the only difference from the last known chapter is a zero-width no-break space', () => {
+    expect(isDiscardingEditsALoss(usjWith('In the\uFEFF beginning'), lastKnown, incoming)).toBe(
+      false,
+    );
+  });
+
+  it('is a loss when there is no last known chapter and the editor differs from the incoming one', () => {
+    expect(isDiscardingEditsALoss(usjWith('In the beginning God'), undefined, incoming)).toBe(true);
   });
 });

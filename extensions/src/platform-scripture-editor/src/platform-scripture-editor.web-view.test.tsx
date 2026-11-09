@@ -601,6 +601,23 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
   /** Longer than the editor's save debounce, so a pending save has fired after it. */
   const LONGER_THAN_SAVE_DEBOUNCE_MS = 800;
 
+  // The save debounce and the ownership window are timer and clock driven; faking them runs a
+  // debounce out without waiting for it. Promises and microtasks stay real.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Runs the clock past the save debounce, so a pending save has fired. */
+  async function waitForSaveDebounce() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LONGER_THAN_SAVE_DEBOUNCE_MS);
+    });
+  }
+
   function chapterText(chapterNum: number, text: string) {
     return {
       type: 'USJ',
@@ -877,16 +894,37 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
 
     // An unfocused editor has no claim, so this change made outside it replaces the editor.
     await editor.deliver(1, chapterText(1, 'In the beginning, Find replaced this'));
-    await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, LONGER_THAN_SAVE_DEBOUNCE_MS);
-      });
-    });
+    await waitForSaveDebounce();
 
     expect(editor.saves).toHaveLength(0);
     expect(lostEditsNotices()).toEqual([
       expect.objectContaining({ message: 'Changed outside: GEN 1' }),
     ]);
+  });
+
+  it('says nothing when the user types and then types back the original text before the save fires, and an update arrives without the claim', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.type('In the beginning');
+
+    await editor.deliver(1, chapterText(1, 'In the beginning, Find replaced this'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('says nothing when an update arrives without the claim that already holds exactly what the user typed', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
   });
 
   // The editor holds off typing, pasting and the like while the next chapter loads, but an edit
@@ -896,11 +934,7 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     await editor.goToChapter(2);
     editor.type('In the beginning God');
 
-    await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, LONGER_THAN_SAVE_DEBOUNCE_MS);
-      });
-    });
+    await waitForSaveDebounce();
     await editor.deliver(2, chapterText(2, 'Thus the heavens'));
 
     expect(editor.saves).toHaveLength(0);
@@ -908,14 +942,6 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
       expect.objectContaining({ message: 'Not saved: GEN 1', severity: 'error', duration: 0 }),
     ]);
   });
-
-  async function waitForSaveDebounce() {
-    await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, LONGER_THAN_SAVE_DEBOUNCE_MS);
-      });
-    });
-  }
 
   it('reports once when edits keep reaching the chapter being left, each save refused', async () => {
     const editor = await setUp();

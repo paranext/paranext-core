@@ -186,6 +186,28 @@ export function isTypingLostToNavigation(
 }
 
 /**
+ * Whether throwing away a waiting save, for an incoming chapter that replaces the editor, loses the
+ * user's edits, so the loss is reported. Not when the editor holds nothing the backend lacked
+ * before that chapter arrived (the edits were undone before the save fired), nor when the incoming
+ * chapter already holds what the editor does. Each is judged as {@link resolveUsjToSaveToPdp} judges
+ * a save.
+ *
+ * @param editorUsj What the editor holds, the waiting edits included
+ * @param lastKnownUsj The last chapter delivered to or sent from the editor before the incoming one
+ * @param incomingUsj The chapter replacing the editor
+ */
+export function isDiscardingEditsALoss(
+  editorUsj: Usj,
+  lastKnownUsj: Usj | undefined,
+  incomingUsj: Usj,
+): boolean {
+  return (
+    resolveUsjToSaveToPdp(editorUsj, lastKnownUsj) !== undefined &&
+    resolveUsjToSaveToPdp(editorUsj, incomingUsj) !== undefined
+  );
+}
+
+/**
  * Runs one fire of the debounced keystroke-driven PDP save, choosing the correct save target so a
  * pending trailing save can NEVER be written to the wrong chapter document (a different chapter, or
  * the same chapter re-selected under a different versification — the chapter keys carry both; see
