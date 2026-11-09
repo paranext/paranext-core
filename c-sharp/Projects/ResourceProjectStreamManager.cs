@@ -118,9 +118,9 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
         // using, so data found corrupt partway through still releases the lock. The entry is
         // therefore decrypted and inflated twice; the returned bytes still come from the file
         // manager's read so its decryption rule stays the only one applied to them.
-        // TODO: once we consume a ParatextData with ubsicap/Paratext#678, which releases the lock,
-        // read through the file manager first and CRC-check the bytes it returns, so each entry is
-        // decrypted once. The CRC check itself stays: nothing else makes it. See
+        // TODO(PT-4388): once we consume a ParatextData with ubsicap/Paratext#678, which releases
+        // the lock, read through the file manager first and CRC-check the bytes it returns, so
+        // each entry is decrypted once. The CRC check itself stays: nothing else makes it. See
         // ResourceProjectStreamManagerTests.ParatextDataUpgrade_ReadEachEntryOnceIfTheLockFixShipped
         using (ZipFile archive = OpenArchive())
         {
@@ -138,8 +138,11 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
             // Data decrypted with the wrong password fails to inflate in more ways than
             // ZipException, such as an IndexOutOfRangeException, so this converts any exception
             // except those that say nothing about the entry's data: a failure to read the archive
-            // file may pass on a retry, and running out of memory is not bad data
-            catch (Exception e) when (e is not IOException and not OutOfMemoryException)
+            // file may pass on a retry, and running out of memory is not bad data. An
+            // EndOfStreamException is an IOException but is converted: SharpZipLib throws it for an
+            // entry whose data ends early, which no retry reads back
+            catch (Exception e)
+                when (e is not OutOfMemoryException and (not IOException or EndOfStreamException))
             {
                 throw new InvalidDataException($"'{streamName}' cannot be read: {e.Message}", e);
             }

@@ -250,6 +250,57 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetDataStream_AesEntryWhoseDataWasAltered_Throws()
+        {
+            // Stored, so the altered byte reaches the AES stream's authentication check unchanged
+            const string Contents = "sealed contents that are long enough";
+            WriteArchive(
+                [($"{ExtensionPath}/sealed.json", Contents, ArchivePassword)],
+                CompressionMethod.Stored,
+                aesKeySize: 256
+            );
+            var archiveBytes = File.ReadAllBytes(ArchivePath);
+            // The local header, then the AES-256 salt and its 2-byte password verifier
+            var dataStart =
+                30
+                + BitConverter.ToUInt16(archiveBytes, 26)
+                + BitConverter.ToUInt16(archiveBytes, 28)
+                + 16
+                + 2;
+            archiveBytes[dataStart + 3] ^= 0xFF;
+            File.WriteAllBytes(ArchivePath, archiveBytes);
+            var streamManager = CreateStreamManager(passwordProtected: true);
+
+            Assert.Throws<InvalidDataException>(
+                () => streamManager.GetDataStream($"{ExtensionPath}/sealed.json")
+            );
+        }
+
+        [Test]
+        public void GetDataStream_EncryptedEntryShorterThanItsEncryptionHeader_Throws()
+        {
+            WriteArchive(
+                [($"{ExtensionPath}/short.json", "intact contents", ArchivePassword)],
+                CompressionMethod.Stored,
+                useZip64: UseZip64.Off
+            );
+            // Cut the entry's recorded size to less than ZipCrypto's 12-byte header, in both the
+            // local header and the central directory
+            var archiveBytes = File.ReadAllBytes(ArchivePath);
+            BitConverter.TryWriteBytes(archiveBytes.AsSpan(18, 4), 5u);
+            var centralDirectoryStart = archiveBytes.AsSpan().IndexOf("PK\x01\x02"u8);
+            BitConverter.TryWriteBytes(archiveBytes.AsSpan(centralDirectoryStart + 20, 4), 5u);
+            File.WriteAllBytes(ArchivePath, archiveBytes);
+            var streamManager = CreateStreamManager(passwordProtected: true);
+
+            // Reported as bad data, though SharpZipLib throws an EndOfStreamException, which is an
+            // IOException: data that ends early does not read back on a retry
+            Assert.Throws<InvalidDataException>(
+                () => streamManager.GetDataStream($"{ExtensionPath}/short.json")
+            );
+        }
+
+        [Test]
         public void GetDataStream_ArchiveFileFailsPartwayThroughTheEntry_ThrowsTheIOException()
         {
             WriteArchive(
@@ -308,7 +359,9 @@ namespace TestParanextDataProvider.Projects
                     + "entry's recorded CRC. Keep the CRC check: ZipCrypto's header check accepts "
                     + "about 1 wrong password in 256, and neither ParatextData nor SharpZipLib's "
                     + "ZipFile checks the CRC. Then delete this test. If the upgrade does not "
-                    + "include #678, change the version here."
+                    + "include #678, confirm that first against the ParatextData release notes or "
+                    + "the 9.5 branch history (merge commit 3ea2cf56c3 is not in it), and only then "
+                    + "change the version here."
             );
         }
 
@@ -502,13 +555,18 @@ namespace TestParanextDataProvider.Projects
         /// <param name="aesKeySize">
         /// The AES key size to encrypt entries with, or 0 for ZipCrypto, which real resources use
         /// </param>
+        /// <param name="useZip64">
+        /// Whether entries may record their sizes in Zip64 extra fields; Off keeps them in the
+        /// headers' fixed fields, where a test can change them
+        /// </param>
         private void WriteArchive(
             IEnumerable<(string Name, string Contents, string? Password)> entries,
             CompressionMethod compression,
-            int aesKeySize = 0
+            int aesKeySize = 0,
+            UseZip64 useZip64 = UseZip64.Dynamic
         )
         {
-            using ZipOutputStream archive = new(File.Create(ArchivePath));
+            using ZipOutputStream archive = new(File.Create(ArchivePath)) { UseZip64 = useZip64 };
             // Each entry is encrypted with its own password, or not at all when it has none
             foreach (var (name, contents, password) in entries)
             {
