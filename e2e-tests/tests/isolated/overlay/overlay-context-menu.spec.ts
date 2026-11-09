@@ -6,10 +6,11 @@ import { findHelloRock3Frame } from './overlay-helpers';
 /**
  * Right-click the .title element and wait for the context menu to appear in the parent doc.
  *
- * Every step opens a fresh menu right after the previous step pressed Escape on one, so this first
- * waits for that menu to be gone. Without the wait, the right-click can land while the previous
- * menu is still being dismissed, and whether a new menu then opens depends on how that dismissal
- * and the new request interleave — a race the test has no business taking part in.
+ * Every step opens a fresh menu right after the previous step dismissed one, so this first waits
+ * for that menu to be gone from the DOM — not merely hidden, which is all a step's own
+ * `not.toBeVisible()` cleanup proves. A right-click that lands while the closing menu is still
+ * mounted often opens no new menu: without this wait, about one run in three failed at a reopen
+ * that followed such a cleanup.
  */
 async function openContextMenu(mainPage: Page, frame: Frame) {
   const menu = mainPage.locator('[role="menu"]');
