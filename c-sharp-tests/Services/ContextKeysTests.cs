@@ -56,5 +56,4 @@ public class ContextKeysTests
     {
         Assert.Throws<ArgumentException>(() => _contextKeys.Set("singleSegment", true));
     }
-
 }
