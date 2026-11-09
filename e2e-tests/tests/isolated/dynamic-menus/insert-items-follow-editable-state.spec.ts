@@ -87,8 +87,10 @@ test.describe('Dynamic menu items', () => {
     await test.step('Insert items stay disabled in the read-only tab once the project becomes editable', async () => {
       await makeSampleProjectEditable();
       // Positive control: a tab opened after the change is an editable editor, and its Insert items
-      // enable once the project's editable key has arrived. Only then does the first tab's disabled
-      // state show that its own read-only state is what holds it.
+      // enable once the project's editable key has arrived (an absent key evaluates as not
+      // editable, so "enabled" cannot show early). Only then does the first tab's disabled state
+      // show that its own read-only state is what holds it. The evidence is indirect: the two tabs
+      // receive the key through separate subscriptions.
       const secondEditorId = await openEditableScriptureEditorForProject(
         mainPage,
         SAMPLE_WEB_PROJECT_ID,
