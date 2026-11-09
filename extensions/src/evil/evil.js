@@ -283,12 +283,19 @@ function probeIsNotFunction(name, read) {
   }
 }
 
-/** Refused only if `attempt` rejects */
-async function probeRejects(name, attempt) {
+/**
+ * Refused only if `attempt` rejects because there is no dynamic import handler or because the
+ * extension host says it is not allowed in extensions
+ */
+async function probeImportRefused(name, attempt) {
   try {
     return { name, outcome: 'escaped', detail: `resolved ${describeValue(await attempt())}` };
   } catch (e) {
-    return { name, outcome: 'refused', detail: errorMessage(e) };
+    const message = errorMessage(e);
+    const isRefusal =
+      (e && e.code === 'ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING') ||
+      message.includes(NOT_ALLOWED_IN_EXTENSIONS);
+    return { name, outcome: isRefusal ? 'refused' : 'escaped', detail: message };
   }
 }
 
@@ -326,7 +333,7 @@ async function runSandboxProbes() {
     // eslint-disable-next-line no-underscore-dangle
     probeIsNotFunction('module-loader', () => module.constructor._load),
     probeIsUndefined('require-cache', () => require.cache),
-    await probeRejects('dynamic-import', () => import('fs')),
+    await probeImportRefused('dynamic-import', () => import('fs')),
     probeThrowsRefusal('function-constructor', () => (() => {}).constructor('return 1')),
     probeThrowsRefusal('async-function-constructor', () =>
       (async () => {}).constructor('return 1'),
