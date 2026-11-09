@@ -20,6 +20,7 @@ import {
   DictionaryOccurrenceView,
 } from '../../utils/dictionary.utils';
 import { collapseToLexicalSenses } from '../../utils/lexical-senses.utils';
+import { DefinitionText } from './definition-text.component';
 import { DomainsDisplay } from './domains-display.component';
 import { BackToListButton } from './back-to-list-button.component';
 
@@ -232,7 +233,7 @@ export function DictionaryEntryDisplay({
                     as="div"
                     className="tw:mt-1 tw:max-w-lg tw:text-start tw:text-sm tw:text-muted-foreground"
                   >
-                    {sense.definition}
+                    <DefinitionText definition={sense.definition} />
                   </ContentZoomRoot>
                 )}
                 <DomainsDisplay
