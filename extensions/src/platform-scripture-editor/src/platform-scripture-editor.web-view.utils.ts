@@ -620,9 +620,10 @@ export function deriveReadOnlyFlags({
  * insert — is directly unit-testable against injected fakes rather than only observable end to
  * end.
  *
- * Checks read-only BEFORE calling `commitSnapshot`: a read-only top-menu click (which reaches this
- * with no prior gate — the menu item itself has no enablement) must not write a forced, empty
- * version-history commit. The refusal is logged, not shown to the user.
+ * Checks read-only BEFORE calling `commitSnapshot`: a click that reaches this while the editor is
+ * read-only (a stale menu state, a shortcut or a direct command call, which the menu's enablement
+ * does not cover) must not write a forced, empty version-history commit. The refusal is logged, not
+ * shown to the user.
  *
  * @param kind Which textual note to insert.
  * @param hasEditor Whether the editor is currently mounted.
