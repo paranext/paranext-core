@@ -1,4 +1,4 @@
-import { ForwardedRef, forwardRef, useImperativeHandle } from 'react';
+import { ForwardedRef, StrictMode, forwardRef, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import DockLayout from 'rc-dock';
@@ -102,6 +102,25 @@ describe('PlatformDockLayout marks its root once the initial layout load has fin
 
     rerender(<PlatformDockLayout />);
 
+    expect(dockRoot.getAttribute(LAYOUT_LOADED_ATTRIBUTE)).toBe('true');
+  });
+
+  it('does not mark the root for a report from a registration that has been replaced', () => {
+    // StrictMode registers, unregisters and registers again, so the first registration's load is
+    // the one still in flight for a registration that no longer exists
+    render(
+      <StrictMode>
+        <PlatformDockLayout />
+      </StrictMode>,
+    );
+    const [replacedRegistration, currentRegistration] = mocks.registerDockLayout.mock.calls;
+    // Positive control: there really were two registrations
+    expect(currentRegistration).toBeDefined();
+
+    act(() => replacedRegistration[1]?.());
+    expect(dockRoot.hasAttribute(LAYOUT_LOADED_ATTRIBUTE)).toBe(false);
+
+    act(() => currentRegistration[1]?.());
     expect(dockRoot.getAttribute(LAYOUT_LOADED_ATTRIBUTE)).toBe('true');
   });
 });
