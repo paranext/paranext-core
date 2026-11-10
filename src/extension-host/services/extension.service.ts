@@ -1378,8 +1378,9 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
       : extensions;
 
   // Shim out require so extensions can use it only as prescribed. Extension entry files get
-  // `requireForExtension` from the sandbox loader; this shim covers any other module loaded after
-  // activation starts.
+  // `requireForExtension` from the sandbox loader and never reach Node's module loader, so this shim
+  // is a backstop in case extension code ever obtains a real `require`. It also applies to host
+  // modules loaded after activation starts, which then get this shim's refusal.
   // WARNING: This code should not be edited without serious review. For more information,
   // see https://github.com/paranext/paranext/wiki/Module-import-restrictions
   //

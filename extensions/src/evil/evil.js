@@ -325,6 +325,7 @@ async function runSandboxProbes() {
     // These will be blocked and will suggest the papi.storage api.
     probeThrowsRefusal('require-fs', () => require('fs')),
     probeThrowsRefusal('require-node-fs', () => require('node:fs')),
+    probeThrowsRefusal('require-https', () => require('https')),
     typeof process.getBuiltinModule === 'function'
       ? probeThrowsRefusal('process-getBuiltinModule', () => process.getBuiltinModule('fs'))
       : { name: 'process-getBuiltinModule', outcome: 'refused', detail: 'is not a function' },
@@ -344,6 +345,11 @@ async function runSandboxProbes() {
     // `_getActiveRequests` is Node's own name for this `process` member
     // eslint-disable-next-line no-underscore-dangle
     probeThrowsRefusal('process-getActiveRequests', () => process._getActiveRequests()),
+    // An argument `execve` rejects before it replaces the process, so a host without the lockdown
+    // throws instead of being replaced. Not present on Windows or Node before 22.15.
+    typeof process.execve === 'function'
+      ? probeThrowsRefusal('process-execve', () => process.execve(undefined))
+      : { name: 'process-execve', outcome: 'refused', detail: 'is not a function' },
     probeIsUndefined('process-mainModule', () => process.mainModule),
     // `_load` is Node's own name for its module loader's entry point
     // eslint-disable-next-line no-underscore-dangle
@@ -367,22 +373,28 @@ async function runSandboxProbes() {
   ];
 }
 
-async function reportSandboxProbes() {
+/**
+ * Runs the sandbox probes and logs the results
+ *
+ * @param {string} phase When the probes ran, so a route the host reopens later shows up in the log
+ *   as escaped in a later phase only
+ */
+async function reportSandboxProbes(phase) {
   try {
     const results = await runSandboxProbes();
     const refusedCount = results.filter((result) => result.outcome === 'refused').length;
-    logger.info(`Sandbox probes: ${refusedCount}/${results.length} refused`);
+    logger.info(`Sandbox probes (${phase}): ${refusedCount}/${results.length} refused`);
     results
       .filter((result) => result.outcome === 'escaped')
       .forEach((result) =>
-        logger.error(`<<BAD>> Sandbox probe escaped: ${result.name} — ${result.detail}`),
+        logger.error(`<<BAD>> Sandbox probe escaped (${phase}): ${result.name} — ${result.detail}`),
       );
   } catch (e) {
-    logger.error(`<<BAD>> Sandbox probes failed to run: ${errorMessage(e)}`);
+    logger.error(`<<BAD>> Sandbox probes failed to run (${phase}): ${errorMessage(e)}`);
   }
 }
 
-reportSandboxProbes();
+reportSandboxProbes('load');
 
 async function tryNetworkAccess() {
   try {
@@ -428,9 +440,13 @@ async function tryNetworkAccess() {
 
 async function activate(context) {
   logger.info('Evil is activating...');
+  reportSandboxProbes('activate');
   tryNetworkAccess();
   // 3 secs is timed to be after the extension service has finished initializing.
-  setTimeout(tryNetworkAccess, 3000);
+  setTimeout(() => {
+    reportSandboxProbes('after init');
+    tryNetworkAccess();
+  }, 3000);
 
   const evilWebViewProviderPromise = papi.webViewProviders.register(
     evilWebViewProvider.webViewType,

@@ -3427,9 +3427,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   dynamic-import machinery, and `import()` rejects. (2) **String-built code is blocked by locking
   prototypes at activation** (`blockCodeGenerationFromStrings`): `eval` and `Function` are deleted
   and the four function prototypes' `constructor` is made a non-writable, non-configurable
-  function that throws. (3) **`process` helpers are replaced with throwing stubs at activation**
+  function that throws. Each kind gets its own throwing function carrying the original's `name` and
+  `prototype`, so `.constructor.name`, `instanceof` and `util.inspect` still tell function kinds
+  apart; only a reference to an original constructor taken before the lockdown stops matching
+  `fn.constructor`. (3) **`process` helpers are replaced with throwing stubs at activation**
   (`blockProcessModuleAccess`: `getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`,
-  `loadEnvFile`, `_getActiveHandles`, `_getActiveRequests`), and `process.mainModule` is set to
+  `loadEnvFile`, `_getActiveHandles`, `_getActiveRequests`, `execve`), and `process.mainModule` is set to
   `undefined`. (4) **The
   `Module.prototype.require` shim stays** as defense in depth, reduced to "extension interface
   module or throw", since entry files no longer go through it. Refusals from the loader and the
@@ -3461,11 +3464,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   not by Node's `require(dir)` through the directory's `package.json` `main` or `index.js`: every
   core extension agrees as of 2026-11-09, but a third-party extension whose `package.json` `main`
   differs from its manifest `main`, or whose manifest `main` has no file extension or names a
-  directory, now fails to load. In dev, stack traces for errors inside extensions point at the
+  directory, now fails to load, with an error saying that `main` must name the built `.js` file
+  exactly. In dev, stack traces for errors inside extensions point at the
   built `main.js` rather than source-mapped `.ts`, because scripts compiled with
   `vm.compileFunction` do not get Node's source-map rewriting (debugger breakpoints are expected
   to still resolve); restoring source-mapped stacks is a candidate follow-up. Packaged builds are
-  checked by hand with the `evil` extension (`Sandbox probes: 19/19 refused`); there is no
+  checked by hand with the `evil` extension (`Sandbox probes (<phase>): 21/21 refused` for each phase); there is no
   automated packaged test. Revisit if process isolation is taken up. Supersedes in part the
   mechanism described in `adr-licensing-boundary` ("shimming `Module.prototype.require`"); the
   licensing decision there is unchanged.

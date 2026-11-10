@@ -28,7 +28,19 @@ export function loadExtensionModule(
   entryFilePath: string,
   extensionRequire: ExtensionRequire,
 ): unknown {
-  const source = fs.readFileSync(entryFilePath, 'utf8');
+  let source: string;
+  try {
+    source = fs.readFileSync(entryFilePath, 'utf8');
+  } catch (e) {
+    // The path is used as given, with none of Node's `require` resolution, so a manifest `main`
+    // without `.js` or naming a directory lands here
+    throw new Error(
+      `Extension entry file '${entryFilePath}' (the manifest's "main") could not be read. "main" ` +
+        'must name the built .js file exactly: missing file extensions, directories and ' +
+        `package.json "main" are not resolved. ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
+    );
+  }
   const compiled = vm.compileFunction(
     source,
     ['exports', 'require', 'module', '__filename', '__dirname'],
@@ -52,7 +64,8 @@ export function loadExtensionModule(
 
 /**
  * `process` members that hand out Node modules, native code, the host's live handles (sockets,
- * servers, timers) or file contents without going through `require`
+ * servers, timers) or file contents without going through `require`, or that replace the host
+ * process with another executable (`execve`, POSIX only)
  */
 const PROCESS_MODULE_ACCESS_MEMBERS = [
   'getBuiltinModule',
@@ -62,12 +75,14 @@ const PROCESS_MODULE_ACCESS_MEMBERS = [
   'loadEnvFile',
   '_getActiveHandles',
   '_getActiveRequests',
+  'execve',
 ];
 
 /**
  * Replaces the `process` members that load Node modules or native code outside `require`, read
- * files into the environment, or hand out the host's live handles with functions that throw, and
- * hides `process.mainModule` (a handle on Node's module loader). Safe to call more than once.
+ * files into the environment, hand out the host's live handles, or replace the host process with
+ * functions that throw, and hides `process.mainModule` (a handle on Node's module loader). Safe to
+ * call more than once.
  *
  * This does not lock down the rest of `process`: members such as `kill`, `send`, `chdir`, `env`,
  * `report.writeReport` and the `net.Socket` constructor behind `process.stdout` and
@@ -90,8 +105,19 @@ export function blockProcessModuleAccess(): void {
   });
 }
 
-function refuseCodeGenerationFromStrings(): never {
-  throw new Error(`Generating code from strings is ${NOT_ALLOWED_IN_EXTENSIONS}`);
+/**
+ * Creates the throwing stand-in for one function kind's constructor. It carries the original's
+ * `name` and `prototype`, so `fn.constructor.name`, `fn instanceof fn.constructor` and
+ * `util.inspect` still tell the function kinds apart, and each kind gets its own stand-in so
+ * `.constructor` identity checks taken after the lockdown do too.
+ */
+function createCodeGenerationRefuser(name: string, functionPrototype: object): () => never {
+  const refuse = (): never => {
+    throw new Error(`Generating code from strings is ${NOT_ALLOWED_IN_EXTENSIONS}`);
+  };
+  Object.defineProperty(refuse, 'name', { value: name });
+  Object.defineProperty(refuse, 'prototype', { value: functionPrototype });
+  return refuse;
 }
 
 /**
@@ -99,6 +125,10 @@ function refuseCodeGenerationFromStrings(): never {
  * function kind's prototype (`Function`, `AsyncFunction`, `GeneratorFunction`,
  * `AsyncGeneratorFunction`) to a function that throws, so code cannot compile strings by calling
  * the `constructor` of any function it can write as a literal. Safe to call more than once.
+ *
+ * Each stand-in keeps its constructor's name and `prototype`. A reference to an original
+ * constructor taken before the lockdown no longer equals `fn.constructor`, so identity checks
+ * against it fail; `instanceof` against it still works.
  *
  * The prototypes are reached through `Object.getPrototypeOf` on function literals rather than
  * through `.constructor`, so a repeat call still finds them after the first call has replaced
@@ -122,8 +152,10 @@ export function blockCodeGenerationFromStrings(): void {
     // Already locked: redefining a non-configurable property throws
     if (Object.getOwnPropertyDescriptor(functionPrototype, 'constructor')?.configurable === false)
       return;
+    const originalConstructor: unknown = Reflect.get(functionPrototype, 'constructor');
+    const name = typeof originalConstructor === 'function' ? originalConstructor.name : 'Function';
     Object.defineProperty(functionPrototype, 'constructor', {
-      value: refuseCodeGenerationFromStrings,
+      value: createCodeGenerationRefuser(name, functionPrototype),
       writable: false,
       configurable: false,
     });

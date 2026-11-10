@@ -110,7 +110,7 @@ the extension host process:
   way after activation starts.
 - **Module helpers on `process` are disabled at activation.** `blockProcessModuleAccess` replaces
   `process.getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`, `loadEnvFile`,
-  `_getActiveHandles` and `_getActiveRequests` with functions that throw, and sets
+  `_getActiveHandles`, `_getActiveRequests` and `execve` with functions that throw, and sets
   `process.mainModule` to `undefined`.
 - **Code built from strings is disabled at activation.** `blockCodeGenerationFromStrings` deletes
   `globalThis.eval` and `globalThis.Function` and locks the `constructor` of the four function
@@ -119,7 +119,8 @@ the extension host process:
 - Refusals from the loader and the lockdowns contain the text `not allowed in extensions`.
 
 The regression guard is the `evil` extension's sandbox probes (`extensions/src/evil/evil.js`,
-which logs `Sandbox probes: <refused>/<total> refused` and a `<<BAD>>` line per escape) and
+which logs `Sandbox probes (<phase>): <refused>/<total> refused` and a `<<BAD>>` line per escape,
+at load, at activation and again 3 seconds later to catch a route the host reopens after startup) and
 `src/extension-host/services/extension-sandbox.probes.test.ts`, which runs the same probes in a
 child Node process and fails if any route is open.
 
