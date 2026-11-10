@@ -262,8 +262,8 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
     } catch {
       // Sequential polling: each attempt must finish (or time out) before the next;
       // parallelizing would defeat the retry/backoff.
-      // eslint-disable-next-line no-await-in-loop
       // A refused connect fails immediately, so this is the real retry cadence while the app boots.
+      // eslint-disable-next-line no-await-in-loop
       await sleep(WEBSOCKET_READY_RETRY_MS);
     }
   }
@@ -1208,33 +1208,7 @@ export async function waitForPapiMethodRegistered(
   port: number = DEFAULT_WEBSOCKET_PORT,
   timeoutMs = PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
 ): Promise<void> {
-  const isMatch = (name: string) =>
-    typeof methodName === 'string' ? name === methodName : methodName.test(name);
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const remaining = timeoutMs - (Date.now() - start);
-    try {
-      // Sequential polling: each attempt must finish (or time out) before the next;
-      // parallelizing would defeat the retry/backoff.
-      // eslint-disable-next-line no-await-in-loop
-      const result = await sendPapiRequestOnce<RpcDiscoverResult>(
-        GET_METHODS,
-        [],
-        port,
-        singleAttemptBudgetMs(remaining),
-      );
-      if (result.methods?.some((m) => isMatch(m.name))) return;
-    } catch {
-      /* next poll */
-    }
-    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
-    if (sleepMs <= 0) break;
-    // Sequential polling: each attempt must finish (or time out) before the next;
-    // parallelizing would defeat the retry/backoff.
-    // eslint-disable-next-line no-await-in-loop
-    await sleep(sleepMs);
-  }
-  throw new Error(`PAPI method "${methodName}" not listed in rpc.discover within ${timeoutMs}ms`);
+  await waitForPapiMethodsRegistered([methodName], port, timeoutMs, RPC_DISCOVER_POLL_INTERVAL_MS);
 }
 
 /**
@@ -1244,11 +1218,13 @@ export async function waitForPapiMethodRegistered(
  * still missing at the last successful fetch.
  *
  * @param methodNames Exact method names or patterns (see {@link waitForPapiMethodRegistered})
+ * @param pollIntervalMs Pause between rounds
  */
 export async function waitForPapiMethodsRegistered(
   methodNames: ReadonlyArray<string | RegExp>,
   port: number = DEFAULT_WEBSOCKET_PORT,
   timeoutMs = PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  pollIntervalMs = RPC_DISCOVER_SET_POLL_INTERVAL_MS,
 ): Promise<void> {
   const isMatch = (methodName: string | RegExp, name: string) =>
     typeof methodName === 'string' ? name === methodName : methodName.test(name);
@@ -1274,7 +1250,7 @@ export async function waitForPapiMethodsRegistered(
     } catch {
       /* next poll */
     }
-    const sleepMs = Math.min(RPC_DISCOVER_SET_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    const sleepMs = Math.min(pollIntervalMs, timeoutMs - (Date.now() - start));
     if (sleepMs <= 0) break;
     // Sequential polling: each attempt must finish (or time out) before the next;
     // parallelizing would defeat the retry/backoff.
@@ -1282,7 +1258,7 @@ export async function waitForPapiMethodsRegistered(
     await sleep(sleepMs);
   }
   throw new Error(
-    `PAPI method(s) ${missing.map((m) => `"${m}"`).join(', ')} not listed in rpc.discover within ${timeoutMs}ms`,
+    `PAPI method(s) ${missing.map((m) => (typeof m === 'string' ? `"${m}"` : String(m))).join(', ')} not listed in rpc.discover within ${timeoutMs}ms`,
   );
 }
 
