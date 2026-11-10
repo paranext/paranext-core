@@ -189,7 +189,10 @@ function readEditorSaveDebounceMs(): number {
  * sooner: the editor saves at once when a write's echo comes back while it holds newer edits, and
  * flushes a pending save on a window blur, a chapter switch or an incoming update about to replace
  * the text. A write that lands sooner is therefore taken as the step's save only when no other
- * write to the file follows it in the step ({@link describeUnaskedWrites}).
+ * write to the file follows it in the step ({@link describeUnaskedWrites}). The cutoff is
+ * approximate to within one recorder poll ({@link RECORDER_POLL_MS}): a write is timed by the sample
+ * that saw it, so one that landed just under the debounce can be timed just over it — the lenient
+ * side, so it cannot cause a false failure.
  */
 const EDITOR_SAVE_DEBOUNCE_MS = readEditorSaveDebounceMs();
 
@@ -201,19 +204,25 @@ const EDITOR_SAVE_DEBOUNCE_MS = readEditorSaveDebounceMs();
 const SAVE_ROUND_TRIP_MS = 500;
 
 /**
- * How long a freshly opened chapter is left alone before the first gesture: one editor save
- * debounce plus two round trips, the longest a load-triggered save takes to reach disk. Without it
- * such a save could be coalesced into the first typing save and go unnoticed.
+ * The longest an editor-caused write takes to reach disk after what caused it: one editor save
+ * debounce plus two round trips.
  */
-const LOAD_WRITE_WINDOW_MS = EDITOR_SAVE_DEBOUNCE_MS + 2 * SAVE_ROUND_TRIP_MS;
+const SAVE_PATH_MS = EDITOR_SAVE_DEBOUNCE_MS + 2 * SAVE_ROUND_TRIP_MS;
 
 /**
- * How long after a step has acted its own save has to land: one editor save debounce plus two round
- * trips. {@link ProjectWriteRecorder.waitForSave} gives a write that landed too soon to be the
- * step's save (see {@link EDITOR_SAVE_DEBOUNCE_MS}) this long to be followed by the save it may
- * stand in front of, before taking it as the step's save itself.
+ * How long a freshly opened chapter is left alone before the first gesture ({@link SAVE_PATH_MS}),
+ * so a save the load triggers reaches disk before typing starts. Without it such a save could be
+ * coalesced into the first typing save and go unnoticed.
  */
-const OWN_SAVE_WINDOW_MS = EDITOR_SAVE_DEBOUNCE_MS + 2 * SAVE_ROUND_TRIP_MS;
+const LOAD_WRITE_WINDOW_MS = SAVE_PATH_MS;
+
+/**
+ * How long after a step has acted its own save has to land ({@link SAVE_PATH_MS}).
+ * {@link ProjectWriteRecorder.waitForSave} gives a write that landed too soon to be the step's save
+ * (see {@link EDITOR_SAVE_DEBOUNCE_MS}) this long to be followed by the save it may stand in front
+ * of, before taking it as the step's save itself.
+ */
+const OWN_SAVE_WINDOW_MS = SAVE_PATH_MS;
 
 /**
  * How long a run leaves the editor alone once a save has landed, before the next gesture: one round
@@ -1070,7 +1079,10 @@ class ProjectWriteRecorder {
    * them: until then the phase's own save may still land after them ({@link WriteRule}). Once it has
    * landed, leaves the editor alone for `pauseAfterMs` ({@link ECHO_ARRIVAL_MS} unless given).
    * Returns what landed, the latest bytes if only a partway state did within
-   * {@link SAVE_LANDED_TIMEOUT_MS}, or `undefined` if no write changed the file at all.
+   * {@link SAVE_LANDED_TIMEOUT_MS}, or `undefined` if no write changed the file at all. The bytes
+   * returned can come from a write an earlier phase made after `from` was taken; that write is
+   * still judged in the phase it landed in by {@link ProjectWriteRecorder.finishAndVerify}, so the
+   * run fails naming that phase, though the caller's own check may fail first, less precisely.
    */
   async waitForSave(
     page: Page,
