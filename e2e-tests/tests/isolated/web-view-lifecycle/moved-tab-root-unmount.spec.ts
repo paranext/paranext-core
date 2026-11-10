@@ -135,9 +135,8 @@ test.describe('web view tab moved within its window', () => {
     mainPage: page,
   }) => {
     await waitForAppReady(page, { timeout: 180_000 });
-    // The window's first layout load lands after `waitForAppReady` and replaces the dock, so a tab
-    // opened before it ends up in a different panel from one opened after it, failing the "both web
-    // views share one panel" precondition below
+    // The drag below targets positions measured from the tab bar, which shifts when `%key%` tab
+    // titles are localized
     await waitForFirstLayoutLoad(page);
 
     const consoleLines: string[] = [];

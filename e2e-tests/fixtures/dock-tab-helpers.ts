@@ -1,5 +1,6 @@
 /** Helpers shared by the e2e specs that read rc-dock's tab bars and drag its tabs in a real window. */
 import { type Locator, type Page, expect } from '@playwright/test';
+import { waitForDockLayoutLoaded } from './helpers';
 
 /** The global overlay rc-dock positions over whatever drop target the pointer is on. */
 export const DROP_INDICATOR = '.dock-layout > .dock-drop-indicator';
@@ -41,30 +42,38 @@ export function panelLocator(page: Page, panelId: string): Locator {
 }
 
 /**
- * Waits until the window's first layout load has reached the dock and its tab titles have been
- * localized: some docked tab shows a title with no `%key%` left in it.
+ * Waits until the window's first layout load has finished and its tab titles have been localized:
+ * the dock is marked loaded (see {@link waitForDockLayoutLoaded}), and some tab shows a title with
+ * no `%key%` left in it — or the load left the dock with no tab at all.
  *
- * `waitForAppReady` returns before that load lands, and when it does land it replaces the whole
- * dock, closing what the test opened in the meantime (a floating panel, a drag in progress). Wait
- * on this before acting on the dock right after launch. The product side of this is PT-4755 (tabs
- * opened while a window starts up can be silently lost). A toolbar popover needs more than this:
- * later re-renders can still close it, so reopen it until it reads right, as `openInternetSettings`
- * in `tests/isolated/internet-settings.page.ts` does.
+ * The first half is what `waitForAppReady` already waits for: that load replaces the whole dock
+ * when it lands, closing what the test opened in the meantime (a floating panel, a drag in
+ * progress). The product side of this is PT-4755 (tabs opened while a window starts up can be
+ * silently lost). The second half matters to a test that reads tab geometry: a `%key%` placeholder
+ * is wider than the title that replaces it, so a tab bar measured before then shifts under the
+ * pointer. A toolbar popover needs more than this: later re-renders can still close it, so reopen
+ * it until it reads right, as `openInternetSettings` in `tests/isolated/internet-settings.page.ts`
+ * does.
  *
- * A heuristic, not the renderer's own load state, which tests cannot see: it needs at least one
- * docked tab, so it does not fit a layout that starts empty. A floating panel's tabs count too, so
- * call it before the test opens one.
+ * A floating panel's tabs count too, so call it before the test opens one.
  */
 export async function waitForFirstLayoutLoad(page: Page, timeout = 60_000): Promise<void> {
+  const start = Date.now();
+  await waitForDockLayoutLoaded(page, timeout);
   await expect
     .poll(
       () =>
         page
           .locator('.dock-tab')
-          .evaluateAll((tabs) =>
-            tabs.some((tab) => !!tab.textContent?.trim() && !tab.textContent.includes('%')),
+          .evaluateAll(
+            (tabs) =>
+              tabs.length === 0 ||
+              tabs.some((tab) => !!tab.textContent?.trim() && !tab.textContent.includes('%')),
           ),
-      { message: 'a docked tab with a localized title (the first layout load landed)', timeout },
+      {
+        message: 'a docked tab with a localized title, or no tab at all',
+        timeout: Math.max(1000, timeout - (Date.now() - start)),
+      },
     )
     .toBe(true);
 }

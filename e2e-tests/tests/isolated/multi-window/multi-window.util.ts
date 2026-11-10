@@ -13,6 +13,7 @@ import { ElectronApplication, Page, expect } from '@playwright/test';
 import {
   killProcessTree,
   sendPapiRequestOnce,
+  waitForDockLayoutLoaded,
   waitForOverlayGone,
   waitForPapiMethodRegistered,
 } from '../../../fixtures/helpers';
@@ -728,13 +729,14 @@ export async function getHeldWebViewIds(page: Page): Promise<string[]> {
 export const MOVE_COMMAND_TIMEOUT_MS = 180_000;
 
 /**
- * How long {@link expectWindowDockHasOnlyHomeTab} waits after the Home tab attaches before asserting
- * it is the ONLY thing docked. A dock that is about to receive more than Home — e.g. a
- * wrongly-cloned copy of another window's layout landing alongside the docked Home tab — can look
- * identical to a Home-only dock for a moment, since the extra content can arrive after Home does;
- * this settle gives a wrongly-added tab time to appear before the count assertions below.
+ * How long {@link expectWindowDockHasOnlyHomeTab} requires the dock to hold exactly the Home tab
+ * before it passes. Anything the window's own layout load brings is already in the DOM by then (the
+ * helper waits for that load first), so what this leaves time for is a tab the main process routes
+ * in alongside Home. The dock-Home decision and a wrongly-routed extra would both start in main's
+ * handling of the same emptiness report, so they arrive close together. Two seconds covers that
+ * gap, as {@link WINDOW_COUNT_STABLE_MS} does for a window starting or closing.
  */
-const HOME_ONLY_SETTLE_MS = 5_000;
+const HOME_ONLY_STABLE_MS = 2_000;
 
 /**
  * Assert that a window's dock UI is genuinely up and renders EXACTLY the Home tab: one dock tab,
@@ -753,20 +755,39 @@ const HOME_ONLY_SETTLE_MS = 5_000;
  */
 export async function expectWindowDockHasOnlyHomeTab(page: Page): Promise<void> {
   // The dock container itself must render — "no tabs because the UI never came up" must fail, not
-  // pass. Then the startup overlay must clear, signalling async initialization (settings, theme,
-  // layout load) finished.
+  // pass. Then the startup overlay must clear, signalling async initialization (settings, theme)
+  // finished.
   await expect(page.locator('div[class*="dock-layout"]')).toBeAttached({ timeout: 120_000 });
   await waitForOverlayGone(page, 120_000);
+  // The window's own layout load is where a default or cloned layout would come from, and it can
+  // land after the overlay clears. Once it has finished, everything it brought is in the DOM.
+  await waitForDockLayoutLoaded(page, 120_000);
   // Wait for Home itself as the readiness signal, rather than a blind settle before asserting
   // content: the dock-Home decision and the tab's own load both happen asynchronously after the
   // dock container first renders.
   await expect(page.locator('.dock-tab', { hasText: 'Home' })).toHaveCount(1, {
     timeout: 60_000,
   });
-  // Give a wrongly-added extra tab time to become observable before asserting Home is the ONLY one.
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, HOME_ONLY_SETTLE_MS);
-  });
+  // A tab routed in alongside Home can arrive just after it, so Home must hold the dock alone for a
+  // while — on every poll, since any poll that sees more restarts the clock
+  let homeAloneSince: number | undefined;
+  await pollUntil(
+    async () => {
+      const counts = {
+        tabs: await page.locator('.dock-tab').count(),
+        titles: await page.locator('.platform-tab-title').count(),
+        iframes: await page.locator('iframe[data-web-view-id]').count(),
+      };
+      const now = Date.now();
+      if (counts.tabs === 1 && counts.titles === 1 && counts.iframes === 1) homeAloneSince ??= now;
+      else homeAloneSince = undefined;
+      return { ...counts, heldMs: homeAloneSince === undefined ? -1 : now - homeAloneSince };
+    },
+    ({ heldMs }) => heldMs >= HOME_ONLY_STABLE_MS,
+    60_000,
+    'the dock to hold exactly one tab, one title and one web view iframe',
+    250,
+  );
   await expect(page.locator('.dock-tab')).toHaveCount(1);
   await expect(page.locator('.platform-tab-title')).toHaveCount(1);
   await expect(page.locator('iframe[data-web-view-id]')).toHaveCount(1);

@@ -564,10 +564,15 @@ test.describe('window layout persistence', () => {
       // with just that: neither a copy of the main window's layout nor any default layout may
       // appear in it.
       await expectWindowDockHasOnlyHomeTab(secondPage2);
-      // The restore created exactly the saved windows — no duplicates
-      // (expectWindowDockHasOnlyHomeTab's settle has already given a straggler window time to
-      // appear).
-      expect(getAppPages(ctx.electronApp)).toHaveLength(2);
+      // The restore created exactly the saved windows — no duplicates. Both are already up, so a
+      // straggler would come from the same restore; the count has to hold to give one time to appear.
+      await waitForAppWindowCount(
+        ctx.electronApp,
+        2,
+        60_000,
+        'exactly the two saved windows after the restore',
+        { stableForMs: RESTORE_QUIET_MS },
+      );
       logStep(
         'phase 2: main window has its Home tab; second window restored with just its own Home tab',
       );
@@ -792,9 +797,15 @@ test.describe('window layout persistence', () => {
       const secondaryPages2 = pages2.filter((_, index) => index !== mainIndex2);
       await expectWindowDockHasOnlyHomeTab(secondaryPages2[0]);
       await expectWindowDockHasOnlyHomeTab(secondaryPages2[1]);
-      // Exactly three — no duplicates, and none of the restored windows closed itself again
-      // (expectWindowDockHasOnlyHomeTab's settle has already given both time to happen).
-      expect(getAppPages(ctx.electronApp)).toHaveLength(3);
+      // Exactly three — no duplicates, and none of the restored windows closed itself again. The
+      // count has to hold to give either time to happen.
+      await waitForAppWindowCount(
+        ctx.electronApp,
+        3,
+        60_000,
+        'exactly the three saved windows after the restore',
+        { stableForMs: RESTORE_QUIET_MS },
+      );
       logStep('phase 2: all three windows restored with their own Home tab');
 
       const app2 = ctx.electronApp;
