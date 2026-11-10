@@ -1284,4 +1284,57 @@ describe('registerDockLayout reports when the initial layout load has finished',
     await settle();
     expect(onInitialLayoutLoadFinished).not.toHaveBeenCalled();
   });
+
+  test('leaves the report to the load that superseded the initial one', async () => {
+    // An interface-mode switch at startup starts a newer load while the initial one still reads the
+    // mode. The initial load then returns without touching the dock, so it must not report: the
+    // newer load is the one that settles the dock.
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    let readInitialMode: (mode: string) => void = () => {};
+    let modeReads = 0;
+    mocks.settingsGet.mockImplementation(async (key: string) => {
+      if (key !== 'platform.interfaceMode') return false;
+      modeReads += 1;
+      if (modeReads > 1) return 'power';
+      return new Promise((resolve) => {
+        readInitialMode = resolve;
+      });
+    });
+    let answerSwitchLayoutGet: (response: unknown) => void = () => {};
+    let layoutGetCount = 0;
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:emptied') return { action: 'stay' };
+      if (requestType !== 'windowLayout:get') return undefined;
+      layoutGetCount += 1;
+      return new Promise((resolve) => {
+        answerSwitchLayoutGet = resolve;
+      });
+    });
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout, loadedLayouts } = makeLiveDockLayout();
+    const onInitialLayoutLoadFinished = vi.fn();
+    module.registerDockLayout(dockLayout, onInitialLayoutLoadFinished);
+    await vi.waitFor(() => expect(interfaceModeCallback).toBeDefined());
+
+    const switching = interfaceModeCallback?.('power');
+    await vi.waitFor(() => expect(layoutGetCount).toBe(1));
+    readInitialMode('power');
+    await settle();
+
+    // The initial load has returned, superseded, with the dock still empty
+    expect(onInitialLayoutLoadFinished).not.toHaveBeenCalled();
+    expect(loadedLayouts).toEqual([]);
+
+    answerSwitchLayoutGet({ kind: 'empty' });
+    await switching;
+
+    expect(loadedLayouts.length).toBe(1);
+    expect(onInitialLayoutLoadFinished).toHaveBeenCalledTimes(1);
+  });
 });
