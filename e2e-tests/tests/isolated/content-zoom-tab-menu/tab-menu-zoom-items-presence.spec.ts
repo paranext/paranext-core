@@ -15,6 +15,7 @@
  */
 import { type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { CONTENT_ZOOM_MEMORY_SETTING } from '../../../fixtures/content-zoom-helpers';
 import { waitForAppReady, waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
 import {
   getEditorFrame,
@@ -55,7 +56,12 @@ async function hostZoomOf(page: Page, webViewId: string): Promise<string> {
 test.describe('Power mode', () => {
   test.use({
     interfaceMode: 'power',
-    seedSettings: { 'platform.webViewContentZoom': SEEDED_DEFAULT },
+    // An emptied zoom memory, because a level the developer's own app remembered for the sample
+    // project's text area would win over the seeded default
+    seedSettings: {
+      'platform.webViewContentZoom': SEEDED_DEFAULT,
+      [CONTENT_ZOOM_MEMORY_SETTING]: {},
+    },
     electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
   });
   test.setTimeout(300_000);
@@ -130,6 +136,8 @@ test.describe('Simple mode', () => {
     // Past first run, so Simple mode starts in the app rather than the setup wizard.
     seedSettings: {
       'platform.webViewContentZoom': SEEDED_DEFAULT,
+      // Emptied for the same reason as in Power mode above
+      [CONTENT_ZOOM_MEMORY_SETTING]: {},
       'platform.firstRunComplete': true,
     },
     electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
