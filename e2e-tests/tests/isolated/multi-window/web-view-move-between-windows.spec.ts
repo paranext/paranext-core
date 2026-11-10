@@ -255,6 +255,8 @@ test.describe('moving a web view between windows', () => {
     const window1Id = getWindowIdOfPage(mainPage);
     await expect(homeTabTitle(mainPage)).toBeVisible({ timeout: 60_000 });
     const webViewId = await getHomeTabWebViewId(mainPage);
+    // No hold for this count: each launch gets a fresh user data folder with no saved window
+    // layouts, so the startup restore has no second window to bring back.
     await waitForAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
 
     // Establish the routing target first, so "focus did not move" is a change that could have been
@@ -264,7 +266,14 @@ test.describe('moving a web view between windows', () => {
     logStep(`window ${window1Id} holds focus before the move`);
 
     await moveWebViewToNewWindow(webViewId);
-    await waitForAppWindowCount(electronApp, 2, 60_000, 'the moved web view to get its own window');
+    // Held, so a second window created for the same move cannot pass as the one expected
+    await waitForAppWindowCount(
+      electronApp,
+      2,
+      60_000,
+      'the moved web view to get its own window',
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
+    );
 
     // Matched by the platform's own windowId query parameter, not Electron's numeric
     // `BrowserWindow.id` — see `withPlatformWindow`'s doc comment in `multi-window.util.ts`.
@@ -312,6 +321,8 @@ test.describe('moving a web view between windows', () => {
     await expect(
       mainPage.locator(`iframe[data-web-view-id="${webViewIdBeforeMove}"]`),
     ).toBeAttached({ timeout: 60_000 });
+    // No hold for this count: each launch gets a fresh user data folder with no saved window
+    // layouts, so the startup restore has no second window to bring back.
     await waitForAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
     logStep(`window ${window1Id} holds web view ${webViewIdBeforeMove}`);
 
@@ -631,6 +642,7 @@ test.describe('moving a web view between windows', () => {
       2,
       120_000,
       `window ${window3Id} to close after the submenu move emptied it, leaving the other two`,
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
     );
     expect(page3.isClosed()).toBe(true);
     logStep(`window ${window3Id} closed after the submenu move emptied it`);
