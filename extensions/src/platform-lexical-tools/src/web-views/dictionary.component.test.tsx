@@ -87,6 +87,28 @@ describe('Dictionary entry links', () => {
     expect(Element.prototype.scrollTo).toHaveBeenCalledWith({ top: 0 });
   });
 
+  it('opens a link that still spells its target with the holam before the vav', async () => {
+    const holamFirst = 'מֹואָב';
+    const vavFirst = 'מוֹאָב';
+    const moab = entry('000777', vavFirst, 'a country east of the Dead Sea');
+    const fromMoab = entry('000421', 'אֱלִימֶלֶךְ', `went to {L:Moab<SDBH:${holamFirst}>}`);
+    const getEntryByLemma = vi.fn(async (_dictionaryId: string, lemma: string) =>
+      lemma === vavFirst ? moab : undefined,
+    );
+    render(
+      <Dictionary
+        localizedStrings={LOCALIZED_STRINGS}
+        scrRef={SCR_REF}
+        onSelectOccurrence={vi.fn()}
+        getEntries={vi.fn().mockResolvedValue({ entriesById: { [fromMoab.id]: [fromMoab] } })}
+        getFullEntry={vi.fn().mockResolvedValue(fromMoab)}
+        getEntryByLemma={getEntryByLemma}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('link', { name: 'Moab' }));
+    expect(await screen.findByText('a country east of the Dead Sea')).toBeInTheDocument();
+  });
+
   it('leaves the linked view when an occurrence is selected', async () => {
     const onSelectOccurrence = vi.fn();
     renderDictionary(onSelectOccurrence);

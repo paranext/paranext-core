@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDefinitionMarkup } from './definition-markup.utils';
+import { parseDefinitionMarkup, toVavHolamOrder } from './definition-markup.utils';
 
 describe('parseDefinitionMarkup', () => {
   it('parses a link', () => {
@@ -67,5 +67,19 @@ describe('parseDefinitionMarkup', () => {
 
   it('returns nothing for an empty string', () => {
     expect(parseDefinitionMarkup('')).toEqual([]);
+  });
+});
+
+describe('toVavHolamOrder', () => {
+  // Moab, spelled with the holam before the vav and then after it
+  const HOLAM_FIRST = '\u05DE\u05B9\u05D5\u05D0\u05B8\u05D1';
+  const VAV_FIRST = '\u05DE\u05D5\u05B9\u05D0\u05B8\u05D1';
+
+  it('moves a holam written before its vav to after it', () => {
+    expect(toVavHolamOrder(HOLAM_FIRST)).toBe(VAV_FIRST);
+  });
+
+  it('leaves a lemma already in vav-then-holam order unchanged', () => {
+    expect(toVavHolamOrder(VAV_FIRST)).toBe(VAV_FIRST);
   });
 });
