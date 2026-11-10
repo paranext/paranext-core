@@ -199,7 +199,8 @@ describe('LICENSING.md agrees with what the packages declare', () => {
     // The MIT side of the rule rests on runtime linking, and for platform-bible-utils the mechanism
     // IS the externals list - the table says so in as many words. Dropping it from `externals` would
     // bundle it instead: the license answer is unchanged, but the table's stated reason would stop
-    // describing what actually happens.
+    // describing what actually happens. The whole list, in every copy, is pinned against what the
+    // hosts supply in `src/extension-host/services/extension.service.module-allowlist.test.ts`.
     const externals = fs.readFileSync(
       path.join(REPO, 'extensions', 'webpack', 'webpack.config.base.ts'),
       'utf8',
