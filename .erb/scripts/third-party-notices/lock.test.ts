@@ -59,8 +59,8 @@ describe('buildLock', () => {
 
   it('sorts by version when only version differs', () => {
     // Every other fixture in this file hardcodes version: '1.0.0' (verdict()'s default), so a
-    // broken version tie-break term would still pass every other test. Not hypothetical: the real
-    // artifact carries lucide-react at both 0.475.0 and 1.8.0.
+    // broken version tie-break term would still pass every other test. Not hypothetical: a lockfile
+    // can hold the same package at two versions, and the artifact then lists both.
     const result = buildLock(
       {
         verdicts: [
