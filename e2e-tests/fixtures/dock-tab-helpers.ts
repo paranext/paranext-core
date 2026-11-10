@@ -52,7 +52,8 @@ export function panelLocator(page: Page, panelId: string): Locator {
  * in `tests/isolated/internet-settings.page.ts` does.
  *
  * A heuristic, not the renderer's own load state, which tests cannot see: it needs at least one
- * docked tab, so it does not fit a layout that starts empty.
+ * docked tab, so it does not fit a layout that starts empty. A floating panel's tabs count too, so
+ * call it before the test opens one.
  */
 export async function waitForFirstLayoutLoad(page: Page, timeout = 60_000): Promise<void> {
   await expect
