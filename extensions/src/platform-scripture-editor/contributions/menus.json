@@ -93,6 +93,11 @@
             "menuItem": "platformScriptureEditor.editSubmenu",
             "order": 1
           },
+          "platformScriptureEditor.resourceEditActions": {
+            "column": "platformScriptureEditor.edit",
+            "order": 1,
+            "isExperimental": true
+          },
           "platformScriptureEditor.editFind": {
             "menuItem": "platformScriptureEditor.editSubmenu",
             "order": 2,
@@ -117,10 +122,11 @@
           {
             "id": "platformScriptureEditor.editSubmenu",
             "label": "%webView_platformScriptureEditor_edit%",
-            "localizeNotes": "Scripture editor top menu > Edit ▸ — opens the Undo/Redo/Cut/Copy/Paste flyout (plus Find in Power), in its own section with no heading between Project and View",
+            "localizeNotes": "Scripture editor top menu > Edit ▸ — opens the Undo/Redo/Cut/Copy/Paste flyout (plus Find in Power), in its own section with no heading between Project and View. Not shown on a resource, where the Edit section (Copy, plus Find in Power) replaces it",
             "iconNameBefore": "pencil",
             "group": "platformScriptureEditor.simpleEditMenu",
-            "order": 1
+            "order": 1,
+            "when": "!platform.project.{projectId}.isResource"
           },
           {
             "label": "%webView_platformScriptureEditor_undo%",
@@ -151,10 +157,11 @@
           },
           {
             "label": "%webView_platformScriptureEditor_copy%",
-            "localizeNotes": "Scripture editor top menu > Edit > Copy (the selected text)",
+            "localizeNotes": "Scripture editor top menu > Edit > Copy (the selected text). Not shown on a resource, which has its own Copy in the Edit section",
             "group": "platformScriptureEditor.editActions",
             "order": 4,
-            "command": "platformScriptureEditor.copySelection"
+            "command": "platformScriptureEditor.copySelection",
+            "when": "!platform.project.{projectId}.isResource"
           },
           {
             "label": "%webView_platformScriptureEditor_paste%",
@@ -168,11 +175,30 @@
           {
             "label": "%webView_platformScriptureEditor_openFind%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > Edit > Find. Simple offers Find under Tools and resources instead",
+            "localizeNotes": "Scripture editor top menu (Power) > Edit > Find. Simple offers Find under Tools and resources instead. Not shown on a resource, which has its own Find in the Edit section",
             "iconNameBefore": "search",
             "group": "platformScriptureEditor.editFind",
             "order": 1,
-            "command": "platformScripture.openFind"
+            "command": "platformScripture.openFind",
+            "when": "!platform.project.{projectId}.isResource"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_copy%",
+            "localizeNotes": "Scripture editor top menu > Edit (section, resources only) > Copy (the selected text). Other projects have Copy in the Edit ▸ flyout",
+            "group": "platformScriptureEditor.resourceEditActions",
+            "order": 1,
+            "command": "platformScriptureEditor.copySelection",
+            "when": "platform.project.{projectId}.isResource"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_openFind%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > Edit (section, resources only) > Find. Simple offers Find under Tools and resources instead; other projects have Find in the Edit ▸ flyout",
+            "iconNameBefore": "search",
+            "group": "platformScriptureEditor.resourceEditActions",
+            "order": 2,
+            "command": "platformScripture.openFind",
+            "when": "platform.project.{projectId}.isResource"
           },
           {
             "id": "platformScriptureEditor.viewSubmenu",
@@ -378,7 +404,7 @@
           {
             "label": "%webView_platformScriptureEditor_openFind%",
             "hiddenInterfaceModes": ["power"],
-            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Find — brings the Find tab in the third column to the front. Power offers Find under Edit instead",
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Find — brings the Find tab in the third column to the front. Power offers Find under Edit instead (in the Edit ▸ flyout, or in the Edit section on a resource)",
             "iconNameBefore": "search",
             "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 5,

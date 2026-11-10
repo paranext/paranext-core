@@ -124,7 +124,9 @@ A menu item can state when it is shown, enabled or checked with three optional p
 - `enabledWhen` greys the item out while the expression is false. Prefer this over `when`: a
   disabled item tells the user the feature exists. Use `when` instead when the item can never
   become enabled for that kind of target (the Scripture editor's Insert footnote, Undo and Comments
-  items on a resource, `!platform.project.{projectId}.isResource`).
+  items on a resource, `!platform.project.{projectId}.isResource`). On a resource the editor hides
+  the whole Edit ▸ flyout this way and shows an "Edit" section instead, holding Copy (and Find in
+  Power): items with the opposite `when`, in a group of the existing Edit column.
 - `checkedWhen` shows a check mark on a command item while the expression is true.
 
 **Hiding by interface mode.** `hiddenInterfaceModes` on an item still hides it in the named

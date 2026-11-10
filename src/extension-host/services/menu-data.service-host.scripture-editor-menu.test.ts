@@ -183,6 +183,10 @@ describe("The scripture editor's Project menu, per mode", () => {
         ],
       ],
       [
+        'platformScriptureEditor.edit',
+        ['platformScriptureEditor.copySelection', 'platformScripture.openFind'],
+      ],
+      [
         'platformScriptureEditor.options',
         [
           'platformScriptureEditor.viewSubmenu ▸ platformScriptureEditor.setViewStandard, platformScriptureEditor.setViewPreview',
@@ -215,6 +219,7 @@ describe("The scripture editor's Project menu, per mode", () => {
           'platformScriptureEditor.editSubmenu ▸ platformScriptureEditor.undo, platformScriptureEditor.redo, platformScriptureEditor.cutSelection, platformScriptureEditor.copySelection, platformScriptureEditor.pasteAtSelection',
         ],
       ],
+      ['platformScriptureEditor.edit', ['platformScriptureEditor.copySelection']],
       [
         'platformScriptureEditor.options',
         [
@@ -250,8 +255,8 @@ describe("The scripture editor's Project menu, per mode", () => {
 
   /** The section headings, in order, each mode serves: the View and Tools renames live here. */
   test.each([
-    ['power', ['Project', 'View', 'Insert', 'Tools']],
-    ['simple', ['Project', 'View', 'Insert', 'Tools and resources']],
+    ['power', ['Project', 'Edit', 'View', 'Insert', 'Tools']],
+    ['simple', ['Project', 'Edit', 'View', 'Insert', 'Tools and resources']],
   ] as const)('%s labels its sections', async (mode, expectedHeadings) => {
     const menu = await getEditorTopMenuInMode(mode);
     const served = describeSections(menu).map(([columnKey]) => columnKey);
@@ -264,8 +269,8 @@ describe("The scripture editor's Project menu, per mode", () => {
 
   /**
    * The renderer draws only the sections `getMenuSectionsWithItems` returns, so a column that holds
-   * no served item must not be among them: the emptied Edit column, the Info column and the other
-   * mode's Tools column would otherwise render as bare headings.
+   * no served item must not be among them: the Info column and the other mode's Tools column would
+   * otherwise render as bare headings.
    */
   test.each([
     ['power', 'platformScriptureEditor.simpleTools'],
@@ -276,7 +281,8 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(rendered).toEqual(describeSections(menu).map(([columnKey]) => columnKey));
     // Positive control: sections do render, so the exclusions below are not vacuous
     expect(rendered).toContain('platformScriptureEditor.insert');
-    expect(rendered).not.toContain('platformScriptureEditor.edit');
+    // The served menu is unevaluated, so the Edit section (shown on resources only) is present
+    expect(rendered).toContain('platformScriptureEditor.edit');
     expect(rendered).not.toContain('platformScriptureEditor.info');
     expect(rendered).not.toContain(otherModeToolsColumn);
   });
@@ -288,6 +294,8 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['platformScriptureEditor.undo', undefined],
     ['platformScriptureEditor.redo', undefined],
     ['platformScriptureEditor.cutSelection', undefined],
+    ['platformScriptureEditor.copySelection', undefined],
+    // The Edit section's own Copy, shown on resources in place of the flyout's
     ['platformScriptureEditor.copySelection', undefined],
     ['platformScriptureEditor.pasteAtSelection', undefined],
     ['platform.webViewContentZoomIn', 'zoom-in'],
@@ -302,6 +310,8 @@ describe("The scripture editor's Project menu, per mode", () => {
   ];
   const ICONS_POWER_ONLY: [string, string | undefined][] = [
     ['platformScripture.openManageBooks', 'book-copy'],
+    ['platformScripture.openFind', 'search'],
+    // The Edit section's own Find, shown on resources in place of the flyout's
     ['platformScripture.openFind', 'search'],
     ['platformScriptureEditor.viewSubmenu', 'eye'],
     ['platformScriptureEditor.setViewStandard', undefined],

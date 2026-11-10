@@ -1458,6 +1458,88 @@ describe('menus.json dynamic conditions', () => {
     expect(resource).toContain('platformScripture.openFind');
   });
 
+  describe('the Edit section a resource shows instead of the Edit flyout', () => {
+    const EDIT_SUBMENU_ID = 'platformScriptureEditor.editSubmenu';
+    const EDIT_COLUMN = 'platformScriptureEditor.edit';
+    type EvaluatedItem = { id?: string; command?: string; group: string; order: number };
+    type EvaluatedMenu = {
+      groups: Record<string, { column?: string; order: number }>;
+      items: EvaluatedItem[];
+    };
+
+    /** The served top menu in an interface mode: items hidden in that mode are removed first. */
+    const evaluateInMode = (
+      mode: 'simple' | 'power',
+      overrides: Record<string, boolean>,
+    ): EvaluatedMenu => {
+      const modeMenu = {
+        ...topMenu,
+        items: topMenu.items.filter(
+          (item: { hiddenInterfaceModes?: string[] }) => !item.hiddenInterfaceModes?.includes(mode),
+        ),
+      };
+      const facts = { ...ALL_FACTS_ON, ...overrides };
+      return evaluateMenu(modeMenu, (key: string) => facts[key], TEMPLATE_VARS);
+    };
+
+    /** The commands of the items sitting in groups of the Edit column, in display order. */
+    const editSectionCommands = (menu: EvaluatedMenu): (string | undefined)[] => {
+      const groupOrder: Record<string, number> = {};
+      Object.entries(menu.groups).forEach(([key, group]) => {
+        if (group.column === EDIT_COLUMN) groupOrder[key] = group.order;
+      });
+      return menu.items
+        .filter((item) => item.group in groupOrder)
+        .sort((a, b) => groupOrder[a.group] - groupOrder[b.group] || a.order - b.order)
+        .map((item) => item.command);
+    };
+    const hasEditSubmenu = (menu: EvaluatedMenu) =>
+      menu.items.some((item) => item.id === EDIT_SUBMENU_ID);
+    const countOf = (menu: EvaluatedMenu, command: string) =>
+      menu.items.filter((item) => item.command === command).length;
+
+    it('replaces the Edit flyout with an Edit section holding Copy and Find on a resource in Power', () => {
+      const menu = evaluateInMode('power', { 'platform.project.p1.isResource': true });
+      expect(hasEditSubmenu(menu)).toBe(false);
+      expect(editSectionCommands(menu)).toEqual([
+        'platformScriptureEditor.copySelection',
+        'platformScripture.openFind',
+      ]);
+      expect(menu.columns).toHaveProperty([EDIT_COLUMN]);
+      // Each command is offered once: no copy of Copy or Find is left behind from the flyout
+      expect(countOf(menu, 'platformScriptureEditor.copySelection')).toBe(1);
+      expect(countOf(menu, 'platformScripture.openFind')).toBe(1);
+    });
+
+    it('shows only Copy in the Edit section on a resource in Simple', () => {
+      const menu = evaluateInMode('simple', { 'platform.project.p1.isResource': true });
+      expect(hasEditSubmenu(menu)).toBe(false);
+      expect(editSectionCommands(menu)).toEqual(['platformScriptureEditor.copySelection']);
+      // Simple's Find stays under Tools and resources
+      expect(countOf(menu, 'platformScripture.openFind')).toBe(1);
+    });
+
+    it.each([
+      ['an editable project', {}],
+      ['a read-only project that is not a resource', { 'platform.project.p1.isEditable': false }],
+    ])('keeps the Edit flyout and has no Edit section on %s', (_name, overrides) => {
+      (['power', 'simple'] as const).forEach((mode) => {
+        const menu = evaluateInMode(mode, overrides);
+        expect(hasEditSubmenu(menu)).toBe(true);
+        expect(editSectionCommands(menu)).toEqual([]);
+        expect(countOf(menu, 'platformScriptureEditor.copySelection')).toBe(1);
+      });
+    });
+
+    it('declares the Edit section group as experimental and no item as experimental', () => {
+      expect(topMenu.groups['platformScriptureEditor.resourceEditActions']).toMatchObject({
+        column: EDIT_COLUMN,
+        isExperimental: true,
+      });
+      topMenu.items.forEach((item: object) => expect(item).not.toHaveProperty('isExperimental'));
+    });
+  });
+
   it('disables Undo, Redo, Cut and Paste exactly when Insert footnote is disabled', () => {
     const FACTS_THAT_DISABLE = [
       { 'platform.project.p1.isEditable': false },
