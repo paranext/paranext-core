@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { EXTENSION_INTERFACE_MODULE_SPECIFIERS } from '@extension-host/data/extension-interface-modules.data';
 import { WEB_VIEW_MODULE_SPECIFIERS } from '@renderer/data/web-view-modules.data';
@@ -207,5 +208,121 @@ describe('the Extension Interface the license exception grants', () => {
       'react-dom/client',
       'react/jsx-runtime',
     ]);
+  });
+});
+
+/**
+ * Modules the hosts supply that extension builds bundle anyway instead of leaving to the host.
+ *
+ * The renderer supplies `platform-bible-react` to web views, but extensions built from the
+ * templates bundle their own copy. No permission depends on it: the library is also published under
+ * the MIT License. Making it an external is a product decision (smaller extensions, against tying
+ * every extension to the platform's copy and its styles), not something to change silently here.
+ */
+const SUPPLIED_BUT_BUNDLED_MODULES = ['platform-bible-react'];
+
+const EXTENSION_SOURCES_DIR = path.join(REPO, 'extensions', 'src');
+/** The base config of the combined build that packs every extension into the installer. */
+const COMBINED_BASE_CONFIG = path.join(REPO, 'extensions', 'webpack', 'webpack.config.base.ts');
+
+const CHANGING_THE_EXTERNALS = [
+  'The `externals` list decides which modules every extension built from the templates takes from',
+  'Platform.Bible at run time instead of carrying its own copy, and LICENSE-EXCEPTION.md grants its',
+  'additional permission to works that reach Platform.Bible only through the modules it supplies.',
+  'These lists come from the extension templates: change them there, merge the change into every',
+  'copy, and if a module the hosts supply is deliberately left out, update',
+  'SUPPLIED_BUT_BUNDLED_MODULES and say so in the review; do not update this test to make it pass.',
+].join(' ');
+
+/**
+ * Every copy of the extension build's shared base config: the combined build's and each extension's
+ * own. They all come from the extension templates, so each is where a template change takes
+ * effect.
+ */
+function extensionBaseConfigPaths(): string[] {
+  const perExtension = readdirSync(EXTENSION_SOURCES_DIR, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isDirectory() && existsSync(path.join(EXTENSION_SOURCES_DIR, entry.name, 'webpack')),
+    )
+    .map((entry) =>
+      path.join(EXTENSION_SOURCES_DIR, entry.name, 'webpack', 'webpack.config.base.ts'),
+    );
+  // An extension with its own webpack build but no base config has moved or renamed it; skipping
+  // it would quietly drop that copy from the comparison.
+  const missing = perExtension.filter((file) => !existsSync(file));
+  if (missing.length > 0)
+    throw new Error(
+      `These extensions have a webpack folder but no webpack.config.base.ts: ` +
+        `${missing.map((file) => path.relative(REPO, file)).join(', ')}. ${CHANGING_THE_EXTERNALS}`,
+    );
+  return [COMBINED_BASE_CONFIG, ...perExtension];
+}
+
+/**
+ * The entries of a config's `externals` array, read by parsing the file so comments and formatting
+ * cannot change the result. Anything other than a plain string literal (a regex, a function, a
+ * spread, a template string) is refused rather than skipped: each of those can change what
+ * extensions take from the hosts without naming a module this test could compare.
+ */
+function readExternals(file: string): string[] {
+  const source = ts.createSourceFile(
+    file,
+    readFileSync(file, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const arrays: ts.ArrayLiteralExpression[] = [];
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      node.name.getText(source) === 'externals' &&
+      ts.isArrayLiteralExpression(node.initializer)
+    )
+      arrays.push(node.initializer);
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  if (arrays.length !== 1)
+    throw new Error(
+      `Expected one \`externals: [...]\` array in ${file}, found ${arrays.length}. ` +
+        `${CHANGING_THE_EXTERNALS}`,
+    );
+  return arrays[0].elements
+    .map((element) => {
+      if (!ts.isStringLiteral(element))
+        throw new Error(
+          `\`externals\` in ${file} holds \`${element.getText(source)}\`, which is not a plain ` +
+            `string. ${CHANGING_THE_EXTERNALS}`,
+        );
+      return element.text;
+    })
+    .sort();
+}
+
+describe('the modules extension builds leave to the hosts (webpack `externals`)', () => {
+  it(`are the same in every copy of the extension base config — ${CHANGING_THE_EXTERNALS}`, () => {
+    const files = extensionBaseConfigPaths();
+    const [first, ...rest] = files.map((file) => ({
+      file: path.relative(REPO, file),
+      externals: readExternals(file),
+    }));
+
+    expect(files.length).toBeGreaterThan(1);
+    rest.forEach((copy) => expect(copy).toEqual({ ...first, file: copy.file }));
+  });
+
+  it(`are the modules either host supplies, apart from the ones extensions bundle — ${CHANGING_THE_EXTERNALS}`, () => {
+    // Adding an external makes every extension rely on the host's copy of that module instead of
+    // carrying one; removing one makes every extension carry its own. Either changes what extensions
+    // reach Platform.Bible through, and the license exception is defined by that.
+    const supplied = [
+      ...new Set([...readPermittedModuleSpecifiers(), ...readWebViewModuleSpecifiers()]),
+    ];
+
+    expect(readExternals(COMBINED_BASE_CONFIG)).toEqual(
+      supplied.filter((module) => !SUPPLIED_BUT_BUNDLED_MODULES.includes(module)).sort(),
+    );
+    expect(SUPPLIED_BUT_BUNDLED_MODULES.filter((module) => !supplied.includes(module))).toEqual([]);
   });
 });
