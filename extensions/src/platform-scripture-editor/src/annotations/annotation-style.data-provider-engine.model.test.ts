@@ -77,6 +77,12 @@ describe('AnnotationStyleDataProviderEngine stylesheet', () => {
     );
   });
 
+  it('splits a one-value radius that divides inside calc()', async () => {
+    const stylesheet = await stylesheetFor({ borderRadius: 'calc(8px / 2)' });
+    expect(stylesheet).toContain('  border-start-start-radius: calc(8px / 2);');
+    expect(stylesheet).not.toContain('  border-radius:');
+  });
+
   it('keeps an elliptical radius on every element', async () => {
     expect(await stylesheetFor({ borderRadius: '4px/8px' })).toBe(
       '.editor-typed-mark-external-check {\n  border-radius: 4px/8px;\n}',
