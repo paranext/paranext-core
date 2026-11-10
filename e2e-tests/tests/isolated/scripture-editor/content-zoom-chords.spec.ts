@@ -50,6 +50,14 @@ async function readFocusedAreaId(frame: Frame): Promise<string | undefined> {
   });
 }
 
+/** Whether the pane's focused element is an editable surface (a note's row editor, not a list row) */
+async function isFocusEditable(frame: Frame): Promise<boolean> {
+  return frame.evaluate(() => {
+    const focused = document.activeElement;
+    return focused instanceof HTMLElement && focused.isContentEditable;
+  });
+}
+
 test.describe('scripture editor content zoom — keyboard chords', () => {
   test('Ctrl+= zooms the text area in two steps, Ctrl+- zooms out, Ctrl+0 resets', async ({
     mainPage,
@@ -118,6 +126,8 @@ test.describe('scripture editor content zoom — keyboard chords', () => {
     await footnotesList.focus();
     await mainPage.keyboard.press('ArrowDown');
     await expect.poll(() => readFocusedAreaId(editorFrame)).toBe('footnotes');
+    // The row list holds focus here, which the click case below tells apart from its row editor
+    expect(await isFocusEditable(editorFrame)).toBe(false);
 
     await mainPage.keyboard.press('Control+=');
     await expect.poll(() => readFactor(editorFrame, 'footnotes')).toBe(1.1);
@@ -159,6 +169,9 @@ test.describe('scripture editor content zoom — keyboard chords', () => {
     // above: the chords must act on the footnotes area, not on the text the caret was moved to.
     await footnotesList.locator('[role="option"]').first().click();
     await expect.poll(() => readFocusedAreaId(editorFrame)).toBe('footnotes');
+    // A row that merely took focus would also read as the footnotes area; the row editor has to
+    // have it, or this case proves nothing the keyboard one does not
+    await expect.poll(() => isFocusEditable(editorFrame)).toBe(true);
 
     await mainPage.keyboard.press('Control+=');
     await expect.poll(() => readFactor(editorFrame, 'footnotes')).toBe(1.1);

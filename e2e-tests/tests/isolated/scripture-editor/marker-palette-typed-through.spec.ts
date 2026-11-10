@@ -8,7 +8,7 @@
  *
  * Marked `fixme` until PT-5050 is fixed: at this speed a second `\` can be dropped by the overlay
  * service's debounce, and a palette that mounts after its session ended takes focus from the keys
- * that follow. Each makes the test fail about one run in four.
+ * that follow.
  *
  * ONE test() per spec file (isolated-fixture / second-Electron-instance constraint — see
  * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
@@ -89,7 +89,7 @@ test.describe('scripture editor marker palette typed through', () => {
       };
 
       // First the two markers through a visible palette (see the file comment): typed straight
-      // through from a fresh caret, the markers below went in correctly in 10 runs of 10.
+      // through from a fresh caret, the markers below do not show the failures this test is after.
       await editorInput
         .getByText('word came to Jonah the son of Amittai', { exact: false })
         .click();

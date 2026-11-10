@@ -34,8 +34,7 @@ const JONAH_1 = { book: 'JON', chapterNum: 1, verseNum: 1 };
 
 test.describe('scripture editor chapter marker in an empty book', () => {
   // Skipped until PT-5053 is fixed: right after End, the editor can still report the caret the
-  // click left, so the palette's change guard sees a caret move and drops the `\c` pick (about one
-  // run in three).
+  // click left, so the palette's change guard sees a caret move and drops the `\c` pick.
   test.fixme(
     'the \\ palette offers \\c in an empty book, and chapter 1 saves',
     {

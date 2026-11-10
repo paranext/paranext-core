@@ -9,8 +9,7 @@ import { findHelloRock3Frame } from './overlay-helpers';
  * Every step opens a fresh menu right after the previous step dismissed one, so this first waits
  * for that menu to be gone from the DOM — not merely hidden, which is all a step's own
  * `not.toBeVisible()` cleanup proves. A right-click that lands while the closing menu is still
- * mounted often opens no new menu: without this wait, about one run in three failed at a reopen
- * that followed such a cleanup.
+ * mounted often opens no new menu.
  */
 async function openContextMenu(mainPage: Page, frame: Frame) {
   const menu = mainPage.locator('[role="menu"]');
