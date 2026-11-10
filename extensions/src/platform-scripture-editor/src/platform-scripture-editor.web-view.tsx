@@ -3224,11 +3224,11 @@ function PlatformScriptureEditor({
   }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
   // The localized name of the book on screen (e.g. "Jonah"), for the chapter-marker correction
-  // notice. One key rather than the whole canon: the only book this web view ever has to name is
-  // the one it is editing. `%Book.<id>%` resolves for every canonical id — the localization service
-  // backfills the English names into the backup language — but a web view renders before the
-  // strings arrive, so an unresolved lookup falls back to the 3-letter id rather than putting a raw
-  // `%Book.JON%` in a toast.
+  // notice, and recorded in `localizedBookNames` below for the lost-edits notice. One key rather
+  // than the whole canon: a book this web view names is always one it has shown. `%Book.<id>%`
+  // resolves for every canonical id — the localization service backfills the English names into the
+  // backup language — but a web view renders before the strings arrive, so an unresolved lookup
+  // falls back to the 3-letter id rather than putting a raw `%Book.JON%` in a toast.
   const bookNameLocalizeKeys = useMemo<LocalizeKey[]>(
     () => [`%Book.${scrRef.book}%`],
     [scrRef.book],
@@ -3863,6 +3863,9 @@ function PlatformScriptureEditor({
   const paneSelectedIndexRef = useRef<number | undefined>(undefined);
   /** Whether DOM focus is inside the footnotes pane (its row list or its inline row editor). */
   const paneHasFocusRef = useRef(false);
+  // Sends the waiting save when focus leaves the footnotes pane. Behind a ref because the save is
+  // declared after the pane's focus handlers; assigned with the other claim-loss flushes.
+  const flushOnLeavingPaneRef = useRef<() => void>(() => {});
   /** The footnotes pane row holding DOM focus (Tab or the arrow keys), if any. */
   const paneFocusedRowIndexRef = useRef<number | undefined>(undefined);
 
@@ -3918,6 +3921,9 @@ function PlatformScriptureEditor({
       // text while the user types in the pane. The settle writes no DOM selection into the text
       // while focus is elsewhere.
       if (hasFocus) editorRef.current?.commitPendingMarkerEdits();
+      // Leaving the pane ends its claim on the chapter, and its edits are not the text's to claim,
+      // so send them now rather than leave them to an update arriving before the debounce fires.
+      else flushOnLeavingPaneRef.current();
       applyCallerHighlight();
     },
     [applyCallerHighlight],
@@ -4266,9 +4272,9 @@ function PlatformScriptureEditor({
       // `useEditorPdpSync` sends whatever the editor holds by then. It is lost if the editor
       // leaves the chapter, closes, or is replaced by an update first, which
       // `reportLostEdits` warns about. If no update comes back (the write fails, or is declined
-      // while another update arrived during it), nothing sends it until the next edit. Checked here rather than left to the guard, whose verdict
-      // arrives only after an `await`, so the held chapter is recorded synchronously: a flush on
-      // leaving reads it straight after flushing.
+      // while another update arrived during it), nothing sends it until the next edit. Checked here
+      // rather than left to the guard, whose verdict arrives only after an `await`, so the held
+      // chapter is recorded synchronously: a flush on leaving reads it straight after flushing.
       if (currentlyWritingUsjToPdp.current) {
         // A save carrying exactly what the running write sends holds nothing back — a push-back
         // from an update that arrived mid-write, say, with the editor unchanged since — and it means
@@ -4902,11 +4908,13 @@ function PlatformScriptureEditor({
       )
         flushOnBlur();
     };
+    flushOnLeavingPaneRef.current = flushOnBlur;
     window.addEventListener('blur', flushOnBlur);
     window.addEventListener('focusout', flushOnLeavingEditor);
     window.addEventListener('pagehide', flushOnPageHide);
     window.addEventListener('beforeunload', flush);
     return () => {
+      flushOnLeavingPaneRef.current = () => {};
       window.removeEventListener('blur', flushOnBlur);
       window.removeEventListener('focusout', flushOnLeavingEditor);
       window.removeEventListener('pagehide', flushOnPageHide);
@@ -4931,18 +4939,18 @@ function PlatformScriptureEditor({
         paneEditingIndexRef.current !== undefined ? paneNoteEditorRef.current : undefined,
         saveUsjToPdpDebounced,
       );
-      // Read after the row's edits have landed, so they count.
-      const editorUsj = editorRef.current?.getUsj();
       const editorDocument = editorDocumentSelector.current;
-      reportLostEdits(
-        cause,
-        discarded &&
-          editorDocument &&
-          editorUsj &&
-          isDiscardingEditsALoss(editorUsj, lastKnownUsj, incomingUsj)
-          ? describeChapterWithLostEdits(editorDocument, localizedBookNames.current)
-          : undefined,
-      );
+      const lostIn = editorDocument
+        ? describeChapterWithLostEdits(editorDocument, localizedBookNames.current)
+        : undefined;
+      // Read only when edits were thrown away, and after the row's edits have landed, so they count.
+      const editorUsj = discarded ? editorRef.current?.getUsj() : undefined;
+      const isLoss = !!editorUsj && isDiscardingEditsALoss(editorUsj, lastKnownUsj, incomingUsj);
+      // Nothing is lost when the editor holds only what it last sent or received, even with a save
+      // held behind a running write: that held save carried edits the user has since undone.
+      if (discarded && !isLoss && lostIn)
+        forgetEditsHeldFor(chapterWithEditsHeldBehindWrite, lostIn.chapterKey);
+      reportLostEdits(cause, isLoss ? lostIn : undefined);
     },
     [saveUsjToPdpDebounced, reportLostEdits],
   );

@@ -3275,8 +3275,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     (`discardUnsavedEdits` in the web view, called by `useEditorPdpSync`'s replace path). A
     Send/Receive merge is treated the same way.
   - To keep that loss rare, the editor sends its waiting edits as soon as it loses the claim
-    instead of waiting out the debounce: on window blur, on focus leaving the editor for something
-    else in its web view, on a chapter switch, and on page teardown. A save already in flight
+    instead of waiting out the debounce: on window blur, on focus leaving the editor or the
+    footnotes pane for something else in its web view, on a chapter switch, and on page teardown. A save already in flight
     still holds the new one back; the held edits reach the backend when that save's update comes
     back to an editor still showing the chapter.
   - Edits lost because the editor left the chapter or closed while a save was in flight are
@@ -3297,10 +3297,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   per chapter left, however many edits reach it while the next one loads. While the next chapter
   loads after navigation, the editor holds off typing, pasting and the like (`usePauseEditing`), but
   an edit that does not come through its own keyboard (for example from the footnotes pane) can
-  still reach the chapter being left.
-  It is lost and reported either way: thrown away if the next chapter arrives first, or refused by
-  the save if the debounce fires first (`isTypingLostToNavigation`); PT-5043 is to send it to the
-  chapter it was made in.
+  still reach the chapter being left. It is lost and reported either way: thrown away if the next
+  chapter arrives first, or refused by the save if the debounce fires first
+  (`isTypingLostToNavigation`); PT-5043 is to send it to the chapter it was made in.
 - **Source:** PT-5048; paranext-core PR #2998.
 
 ## adr-editor-yields-to-window-focus-subject: The Scripture editor's typing hold yields to the window focus subject

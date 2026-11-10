@@ -641,7 +641,7 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
    * there yet, the subscription goes on delivering the last chapter it had, as the real data hook
    * does while the next one loads.
    */
-  async function setUp() {
+  async function setUp(state: Record<string, unknown> = {}) {
     mockUseLocalizedStrings.mockImplementation(
       localizeWith({
         ...TRANSLATIONS,
@@ -689,7 +689,7 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
       },
     );
 
-    const props = makeProps('', { isReadOnly: false });
+    const props = makeProps('', { isReadOnly: false, ...state });
     vi.mocked(props.useWebViewScrollGroupScrRef).mockImplementation(() => [
       { ...scrRef },
       vi.fn(),
@@ -888,6 +888,30 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     }
   });
 
+  it('sends waiting edits as soon as focus leaves the footnotes pane', async () => {
+    const editor = await setUp({ footnotesPaneVisible: true });
+    const pane = document.querySelector<HTMLElement>('[data-footnotes-pane]');
+    const paneButton = pane?.querySelector('button');
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    try {
+      if (!pane || !paneButton) throw new Error('The footnotes pane did not render');
+      fireEvent.focusIn(pane);
+      editor.type('In the beginning God');
+
+      // Control: focus moving within the pane sends nothing yet.
+      fireEvent.focusOut(pane, { relatedTarget: paneButton });
+      expect(editor.saves).toHaveLength(0);
+
+      fireEvent.focusOut(pane, { relatedTarget: outside });
+
+      expect(editor.saves).toHaveLength(1);
+      expect(verseText(editor.saves[0].usj)).toBe('In the beginning God');
+    } finally {
+      outside.remove();
+    }
+  });
+
   it('throws waiting edits away, saying the chapter was changed outside, when an update arrives without the claim', async () => {
     const editor = await setUp();
     editor.type('In the beginning God');
@@ -1070,6 +1094,20 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     expect(lostEditsNotices()).toEqual([
       expect.objectContaining({ message: 'Not saved: GEN 1', duration: 0 }),
     ]);
+  });
+
+  it('reports nothing when the editor is back to what the running save sent as that save comes back reformatted', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+    // Undone back to what the running save sent, before the save this schedules fires.
+    editor.type('In the beginning God');
+    await editor.finishSave(0);
+
+    await editor.deliver(1, chapterText(1, 'In the beginning God, reformatted'));
+    await waitForSaveDebounce();
+
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
   });
 
   it('reports nothing more on leaving the chapter once a refused save has put the stored chapter back over the held edits', async () => {
