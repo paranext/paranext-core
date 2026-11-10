@@ -16,7 +16,11 @@
 import { type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { CONTENT_ZOOM_MEMORY_SETTING } from '../../../fixtures/content-zoom-helpers';
-import { waitForAppReady, waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
+import {
+  waitForAppReady,
+  waitForOpenWebViewIdByType,
+  waitForOverlayGone,
+} from '../../../fixtures/helpers';
 import {
   getEditorFrame,
   openScriptureEditorForProject,
@@ -155,9 +159,17 @@ test.describe('Simple mode', () => {
     const findTab = mainPage.locator(`.platform-tab-title[data-web-view-id="${findId}"]`);
 
     await test.step('the declared Find tab opens a menu holding the zoom items (control)', async () => {
-      await findTab.click();
-      await findTab.click({ button: 'right' });
-      await expect(mainPage.getByRole('menuitem', { name: 'Zoom in' })).toBeVisible();
+      // Retried: on a checkout with projects of its own, Simple mode opens one of them at start-up,
+      // and its "Updating project view" overlay can come up after `waitForAppReady` and swallow
+      // the clicks
+      await expect(async () => {
+        await waitForOverlayGone(mainPage, 30_000);
+        await findTab.click();
+        await findTab.click({ button: 'right' });
+        await expect(mainPage.getByRole('menuitem', { name: 'Zoom in' })).toBeVisible({
+          timeout: 5_000,
+        });
+      }).toPass({ timeout: 90_000 });
       await mainPage.keyboard.press('Escape');
       await expect(mainPage.getByRole('menuitem', { name: 'Zoom in' })).toHaveCount(0);
     });
@@ -179,6 +191,8 @@ test.describe('Simple mode', () => {
     });
 
     await test.step('right-clicking the Home tab opens nothing', async () => {
+      // An overlay swallowing the click would make "nothing opens" pass without testing anything
+      await waitForOverlayGone(mainPage, 30_000);
       await homeTab.click({ button: 'right' });
       await expect(mainPage.getByRole('menu')).toHaveCount(0);
       await expect(mainPage.getByRole('menuitem', { name: 'Zoom in' })).toHaveCount(0);

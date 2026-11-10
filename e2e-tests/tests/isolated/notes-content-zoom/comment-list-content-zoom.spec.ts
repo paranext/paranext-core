@@ -32,7 +32,11 @@ import {
   waitForPopupAnimations,
   zoomAreaTo,
 } from '../../../fixtures/content-zoom-helpers';
-import { waitForAppReady, waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
+import {
+  getOpenWebViewDefinitions,
+  waitForAppReady,
+  waitForOpenWebViewIdByType,
+} from '../../../fixtures/helpers';
 import {
   CONTENT_ZOOM_COMMANDS,
   getEditorFrame,
@@ -192,7 +196,25 @@ test.describe('comment list content zoom', () => {
     );
     await openCommentList(mainPage, projectA, { scopeFilterToSet: 'all-books' });
     const listId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_WEBVIEW_TYPE);
-    const editorId = await waitForOpenWebViewIdByType(mainPage, SCRIPTURE_EDITOR_WEBVIEW_TYPE);
+    // Project A's own editor, not whichever editor is open first: Simple mode starts with the
+    // project last used on this checkout in its editor, and the switch to project A can land after
+    // the list has opened. That other project may have a remembered zoom level, so its editor
+    // would not read 1 below.
+    let editorId = '';
+    await expect
+      .poll(
+        async () => {
+          editorId =
+            (await getOpenWebViewDefinitions(mainPage)).find(
+              (definition) =>
+                definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE &&
+                definition.projectId?.toLowerCase() === projectA.projectId.toLowerCase(),
+            )?.id ?? '';
+          return editorId;
+        },
+        { message: "project A's editor is open", timeout: 60_000 },
+      )
+      .not.toBe('');
     const listFrame = await getEditorFrame(mainPage, listId);
     // Set by the "reopening" step below; closed by the next step before it opens project B's list,
     // so that list's own `waitForOpenWebViewIdByType` (a bare find by type) cannot resolve to this
