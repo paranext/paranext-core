@@ -115,7 +115,11 @@ export function sleep(ms: number): Promise<void> {
  * next `waitForWebSocketReady` connects to the dying extension host rather than the new one,
  * causing "Settings service undefined" errors.
  */
-async function waitForPortFree(port: number, timeout: number): Promise<boolean> {
+async function waitForPortFree(
+  port: number,
+  timeout: number,
+  pollIntervalMs = 250,
+): Promise<boolean> {
   const startTime = Date.now();
   while (Date.now() - startTime < timeout) {
     // Sequential polling: each probe must finish before starting the next.
@@ -143,12 +147,44 @@ async function waitForPortFree(port: number, timeout: number): Promise<boolean> 
     if (isFree) return true;
     // Sequential polling: each probe must complete before the next starts.
     // eslint-disable-next-line no-await-in-loop
-    await sleep(250);
+    await sleep(pollIntervalMs);
   }
   // Do not throw — if the port is never freed within the window, log and proceed; the next
   // launch will fail its own waitForWebSocketReady with a clearer error.
   console.warn(`[teardown] Port ${port} still in use after ${timeout}ms — proceeding anyway`);
   return false;
+}
+
+/**
+ * Resolves as soon as the launched process has exited or Playwright reports the app closed,
+ * whichever comes first, or after `capMs` if neither does. Never rejects.
+ *
+ * The `exit` event is the one that matters on Windows, where the launched pid is a `cmd.exe`
+ * wrapper that `taskkill /t` takes down with the rest of the tree; `appClosed` is Playwright's own
+ * `close` event and also covers a disposed handle. The cap only bounds a process that reports
+ * neither (the port poll that follows is the real readiness check), and its timer is cleared so it
+ * does not outlive the wait.
+ */
+async function waitForProcessGone(
+  proc: ReturnType<ElectronApplication['process']> | undefined,
+  appClosed: Promise<void>,
+  capMs: number,
+): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const exited = new Promise<void>((resolve) => {
+    // Node.js ChildProcess.exitCode/signalCode are null until the process exits
+    // eslint-disable-next-line no-null/no-null
+    if (!proc || proc.exitCode !== null || proc.signalCode !== null) resolve();
+    else proc.once('exit', () => resolve());
+  });
+  const capped = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, capMs);
+  });
+  try {
+    await Promise.race([appClosed, exited, capped]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Wait for the WebSocket server to be ready on the specified port. */
@@ -966,8 +1002,8 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
       );
     console.log('[teardown] Sending SIGKILL to process group...');
     if (pid) killProcessTree(pid, 'SIGKILL');
-    console.log('[teardown] Waiting for appClosed after SIGKILL (up to 3s)...');
-    await Promise.race([appClosed, sleep(3_000)]);
+    console.log('[teardown] Waiting for the process to exit after SIGKILL (up to 3s)...');
+    await waitForProcessGone(electronProcess, appClosed, 3_000);
     console.log('[teardown] Done waiting after SIGKILL');
   } else if (!electronProcess) {
     console.log('[teardown] Playwright handle already disposed and the OS process has exited.');
@@ -979,7 +1015,7 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
   // preserve-and-return path too, since a relaunch reuses the same fixed port 8876.
   console.log('[teardown] Waiting for port 8876 to be free...');
-  const portFreed = await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000);
+  const portFreed = await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000, 100);
   if (portFreed) console.log('[teardown] Port 8876 is free');
 
   // A preserved profile stays on disk so a later launch can relaunch into it (see
