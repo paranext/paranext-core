@@ -117,7 +117,7 @@ import {
   waitForAppPages,
   waitForAppWindowCount,
   waitForRendererRegistered,
-  waitForStartupRestoreToFinish,
+  waitForInterfaceModeRead,
   withPlatformWindow,
 } from './multi-window.util';
 
@@ -193,7 +193,8 @@ async function placeWindowAndSettle(
       },
       targetBounds,
     );
-    // The read-back below is retried until the compositor has applied the placement
+    // The whole attempt re-applies the placement, so a placement the compositor ignored is asked
+    // for again; the read-back then has to match the requested size to end the retries
     const readBack = await getWindowBounds(electronApp, windowId);
     expect(readBack.width, 'settled width').toBe(targetBounds.width);
     expect(readBack.height, 'settled height').toBe(targetBounds.height);
@@ -202,6 +203,13 @@ async function placeWindowAndSettle(
   if (!settled) throw new Error('placement settled without recording bounds');
   return settled;
 }
+
+/**
+ * How long the window count must hold at one after the interface-mode read answers before "no extra
+ * window came back" is believed. The restore creates its secondary windows right after that read,
+ * so three seconds is ample for the first of them to be reported.
+ */
+const RESTORE_QUIET_MS = 3_000;
 
 /**
  * The window size the app falls back to when a saved placement is unusable. Keep in sync with
@@ -626,13 +634,15 @@ test.describe('window layout persistence', () => {
 
       // Exactly ONE window: the deliberately closed window must not come back. Secondary windows
       // are created late in startup (once the interface mode becomes readable), so wait until the
-      // restore has had that read answered before asserting the count.
-      await waitForStartupRestoreToFinish();
+      // restore has had that read answered, then require one window to hold for a while: nothing
+      // observes the restore finishing.
+      await waitForInterfaceModeRead();
       await waitForAppWindowCount(
         ctx.electronApp,
         1,
-        30_000,
+        60_000,
         'exactly one window after the restore (the deliberately closed window must not return)',
+        { stableForMs: RESTORE_QUIET_MS },
       );
       logStep('phase 3: the deliberately closed window did not return');
 
@@ -950,12 +960,13 @@ test.describe('window layout persistence', () => {
       // Exactly ONE window: the upgrade rule is one window, not two, not zero. Wait until the
       // restore has had the interface-mode read answered (secondary windows are created only after
       // it) before asserting the count.
-      await waitForStartupRestoreToFinish();
+      await waitForInterfaceModeRead();
       await waitForAppWindowCount(
         ctx.electronApp,
         1,
-        30_000,
+        60_000,
         'exactly one window after the upgrade restore',
+        { stableForMs: RESTORE_QUIET_MS },
       );
       logStep('launch B: exactly one window restored');
 

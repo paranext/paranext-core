@@ -439,6 +439,14 @@ export async function getReportedWindows(): Promise<ReportedWindow[]> {
 }
 
 /**
+ * How long a count that must NOT change has to hold, for {@link waitForAppWindowCount}'s
+ * `stableForMs`. Whatever would change the count — a close or a new window — starts within main's
+ * handling of the command that came just before the check, so two seconds covers the gap between
+ * that handling and the first poll with room to spare, without the 5 s a blind pause needed.
+ */
+export const WINDOW_COUNT_STABLE_MS = 2_000;
+
+/**
  * Wait until the app has exactly `expectedCount` windows, as BOTH views of the window set agree:
  * Playwright's pages ({@link getAppPages}) and the main process's own window list
  * ({@link getReportedWindows}).
@@ -446,25 +454,31 @@ export async function getReportedWindows(): Promise<ReportedWindow[]> {
  * The two only agree once a window has really finished arriving or leaving: a window that is on its
  * way out drops out of the reported list the moment its close begins but stays a page until it is
  * destroyed, and a window that is being created is reported before its page is attached. So
- * agreement on the expected count is the positive signal that replaces a blind pause before
- * re-reading the count.
+ * agreement on the expected count is the positive signal that a window arrived or left.
  *
- * What this cannot prove is that no further window is about to be created by something that has not
- * started yet. Callers asserting a count right after a move rely on the move command having
- * returned, which only happens once its destination window is up.
+ * Agreement on the first poll cannot show that nothing is ABOUT to change, so a caller asserting
+ * that a count must not change passes `stableForMs`: the agreeing count must then hold on every
+ * poll for that long, and any poll that disagrees restarts the clock. `timeoutMs` bounds the whole
+ * wait, stability included.
  */
 export async function waitForAppWindowCount(
   electronApp: ElectronApplication,
   expectedCount: number,
   timeoutMs: number,
   label: string,
+  { stableForMs = 0 }: { stableForMs?: number } = {},
 ): Promise<void> {
+  let agreedSince: number | undefined;
   await pollUntil(
-    async () => ({
-      pages: getAppPages(electronApp).length,
-      reported: (await getReportedWindows()).length,
-    }),
-    ({ pages, reported }) => pages === expectedCount && reported === expectedCount,
+    async () => {
+      const pages = getAppPages(electronApp).length;
+      const reported = (await getReportedWindows()).length;
+      const now = Date.now();
+      if (pages === expectedCount && reported === expectedCount) agreedSince ??= now;
+      else agreedSince = undefined;
+      return { pages, reported, heldMs: agreedSince === undefined ? -1 : now - agreedSince };
+    },
+    ({ heldMs }) => heldMs >= stableForMs,
     timeoutMs,
     label,
     500,
@@ -472,21 +486,15 @@ export async function waitForAppWindowCount(
 }
 
 /**
- * How long main needs, once the settings store answers, to finish the interface-mode read its
- * startup window restore is blocked on: one network hop plus scheduling. Not an event a test can
- * observe, so it stays a short pause.
- */
-const RESTORE_INTERFACE_MODE_HOP_MS = 1_000;
-
-/**
- * Wait until the startup window restore has had everything it needs to create its secondary
- * windows. The restore creates the main window first and then blocks on reading
+ * Wait until the settings service answers the interface-mode read that main's startup window
+ * restore is blocked on. The restore creates the main window first and then blocks on reading
  * `platform.interfaceMode` (which waits on the extension host) before deciding whether to restore
- * the other saved windows (`restoreWindows` in `src/main/main.ts`) — so once the settings service
- * answers that read, no window is still waiting to be created. Callers use this to bound a "no
- * extra window came back" assertion instead of pausing for a fixed time.
+ * the other saved windows (`restoreWindows` in `src/main/main.ts`), so once this answers, the
+ * restore is about to create its secondary windows. Nothing observable says when it has finished,
+ * so callers asserting "no extra window came back" follow this with {@link waitForAppWindowCount}
+ * and `stableForMs`.
  */
-export async function waitForStartupRestoreToFinish(): Promise<void> {
+export async function waitForInterfaceModeRead(): Promise<void> {
   await pollUntil(
     async () =>
       sendPapiRequestOnce<string | undefined>(
@@ -499,9 +507,6 @@ export async function waitForStartupRestoreToFinish(): Promise<void> {
     120_000,
     'the settings service to report the interface mode',
   );
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, RESTORE_INTERFACE_MODE_HOP_MS);
-  });
 }
 
 /**
