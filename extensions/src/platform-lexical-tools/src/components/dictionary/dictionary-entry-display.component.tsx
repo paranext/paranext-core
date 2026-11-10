@@ -210,7 +210,19 @@ export function DictionaryEntryDisplay({
             <Button
               variant="link"
               className="tw:h-auto tw:p-0 tw:text-xs"
-              onClick={() => setAreLessRelevantSensesHidden((isHidden) => !isHidden)}
+              aria-expanded={!areLessRelevantSensesHidden}
+              onClick={() => {
+                // A sense that is about to be hidden can no longer be deselected, so deselect it now
+                if (
+                  !areLessRelevantSensesHidden &&
+                  selectedSense &&
+                  !isSenseInChapter(selectedSense)
+                ) {
+                  setSelectedSense(undefined);
+                  setSelectedSenseIndex(undefined);
+                }
+                setAreLessRelevantSensesHidden(!areLessRelevantSensesHidden);
+              }}
             >
               {formatReplacementString(
                 localizedStrings[

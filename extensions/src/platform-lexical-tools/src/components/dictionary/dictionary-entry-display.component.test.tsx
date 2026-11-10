@@ -104,6 +104,15 @@ describe('DictionaryEntryDisplay senses', () => {
     expect(screen.getByText('word')).toBeInTheDocument();
   });
 
+  it('deselects a selected sense when it is hidden', () => {
+    renderEntry(verseRef('GEN', 1), TWO_SENSE_ENTRY);
+    // Only the sense card shows this gloss; the header lists glosses of senses in the chapter
+    fireEvent.click(screen.getByText('word'));
+    expect(screen.getByText('Occurrences for 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide less-relevant senses (1)' }));
+    expect(screen.queryByText('Occurrences for 1')).not.toBeInTheDocument();
+  });
+
   it('offers no hide control when every sense is relevant', () => {
     renderEntry(undefined, TWO_SENSE_ENTRY);
     expect(senseCard('word')).toHaveAttribute('data-less-relevant', 'false');

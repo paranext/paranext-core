@@ -25,4 +25,14 @@ describe('DomainsDisplay', () => {
     );
     expect(screen.getByText('198')).toBeInTheDocument();
   });
+
+  it('falls back to the code when a domain has an empty name', () => {
+    render(
+      <DomainsDisplay
+        domains={[{ code: '198', label: '', taxonomy: 'SDBH-Contextual' }]}
+        domainText="{taxonomy} Domain"
+      />,
+    );
+    expect(screen.getByText('198')).toBeInTheDocument();
+  });
 });
