@@ -16,9 +16,9 @@ type DomainsDisplayProps = {
  *
  * The component displays each domain as a rounded, colored pill with a small icon (a book for
  * lexical domains, a land plot for contextual domains, and a box for any other kind of domain). The
- * text of the pill is the code of the domain, followed by the label if there is one. When the user
- * hovers over the pill, a tooltip is displayed with the domain taxonomy in the format specified by
- * `domainText`.
+ * text of the pill is the label of the domain, as in Paratext 9, or its code if it has no label.
+ * When the user hovers over the pill, a tooltip is displayed with the domain taxonomy in the format
+ * specified by `domainText`.
  */
 export function DomainsDisplay({ domains, domainText }: DomainsDisplayProps) {
   // Helper to choose icon based on taxonomy. Icons picked by UX. Only works with SDBH lexical reference text.
@@ -38,8 +38,7 @@ export function DomainsDisplay({ domains, domainText }: DomainsDisplayProps) {
             <TooltipTrigger asChild>
               <span className="tw:rounded tw:bg-accent tw:px-2 tw:py-0.5 tw:text-xs tw:text-accent-foreground tw:flex tw:items-center tw:gap-1">
                 {getDomainIcon(domain.taxonomy)}
-                <span>{domain.code}</span>
-                <span>{domain.label ?? ''}</span>
+                <span>{domain.label ?? domain.code}</span>
               </span>
             </TooltipTrigger>
             <TooltipContent>
