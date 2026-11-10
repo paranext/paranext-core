@@ -974,8 +974,8 @@ function watchFolder(dir: string, onChange: () => void): fs.FSWatcher | undefine
 
 /**
  * Records every write that lands on the installed project's files for the whole of a run, so a step
- * goes on as soon as its own save has landed instead of waiting out a quiet window to prove that
- * nothing else follows.
+ * goes on as soon as its own save has landed: any write that follows the save is judged by the step
+ * whose interval it lands in.
  *
  * It samples every file of the project folder every {@link RECORDER_POLL_MS} and whenever the folder
  * reports a change, reading a file again only when its stat fields moved, and logs each write with
