@@ -56,7 +56,9 @@
  * which writes it asks for. A step that saves goes on as soon as its save has landed; a step that
  * saves nothing goes on at once. A write that lands later than its step — a second write chained to
  * a save, or a load that writes after all — lands inside a later step's interval, where nothing
- * asked for it, and fails there; the step after the last one gets a single quiet window
+ * asked for it, and fails there — even in a step that asks for a save, since a write that lands
+ * sooner after the step began than the editor's save debounce, with another write to the file after
+ * it, is not that step's save; the step after the last one gets a single quiet window
  * ({@link BACKSTOP_QUIET_MS}) for the same purpose. The recording is judged at the end of the run
  * ({@link ProjectWriteRecorder.finishAndVerify}); what each save holds is judged the moment it
  * lands.
@@ -156,7 +158,8 @@ const EDITOR_WEB_VIEW_SOURCE = path.resolve(
  * Reads `PDP_SAVE_DEBOUNCE_MS` from the editor web view's source, which does not export it. Throws
  * if the declaration is missing or not a plain number, so a change to how the editor declares its
  * debounce fails loudly here instead of leaving {@link ECHO_SETTLED_MS}, the backstop's margin over
- * it and the recording's attribution of an early write to the step before all silently wrong.
+ * it and the recording's handling of a write that lands too early to be its step's save all
+ * silently wrong.
  */
 function readEditorSaveDebounceMs(): number {
   const source = fs.readFileSync(EDITOR_WEB_VIEW_SOURCE, 'utf8');
@@ -170,7 +173,12 @@ function readEditorSaveDebounceMs(): number {
 
 /**
  * The editor's trailing-edge save debounce, read from the editor's own source. It is the only
- * deliberate delay between an edit (or a load) and the write it causes.
+ * deliberate delay between an edit (or a load) and the write it causes, so a step's own save lands
+ * at least this long after the step begins — unless something other than the debounce sends it
+ * sooner: the editor saves at once when a write's echo comes back while it holds newer edits, and
+ * flushes a pending save on a window blur, a chapter switch or an incoming update about to replace
+ * the text. A write that lands sooner is therefore taken as the step's save only when no other
+ * write to the file follows it in the step ({@link describeUnaskedWrites}).
  */
 const EDITOR_SAVE_DEBOUNCE_MS = readEditorSaveDebounceMs();
 
@@ -187,6 +195,14 @@ const SAVE_ROUND_TRIP_MS = 500;
  * such a save could be coalesced into the first typing save and go unnoticed.
  */
 const LOAD_WRITE_WINDOW_MS = EDITOR_SAVE_DEBOUNCE_MS + 2 * SAVE_ROUND_TRIP_MS;
+
+/**
+ * How long after a step has acted its own save has to land: one editor save debounce plus two round
+ * trips. {@link ProjectWriteRecorder.waitForSave} gives a write that landed too soon to be the
+ * step's save (see {@link EDITOR_SAVE_DEBOUNCE_MS}) this long to be followed by the save it may
+ * stand in front of, before taking it as the step's save itself.
+ */
+const OWN_SAVE_WINDOW_MS = EDITOR_SAVE_DEBOUNCE_MS + 2 * SAVE_ROUND_TRIP_MS;
 
 /**
  * How long a run leaves the editor alone once a save has landed, before the next gesture: one round
@@ -936,7 +952,10 @@ interface RecordedWrite {
  * - With `result`, every write must be `result` or, before that lands, a state `isPartway` accepts (a
  *   save that lands while the gesture is still being made).
  * - Without it, the phase's first write is its save, which the caller judges as it lands; the phase
- *   then allows exactly that one write.
+ *   then allows exactly that one write. A write that lands sooner after the phase began than the
+ *   editor's save debounce ({@link EDITOR_SAVE_DEBOUNCE_MS}) is the save only if no other write to
+ *   the file follows it in the phase: followed, it is a late write of an earlier step that the
+ *   phase's own save lands after.
  *
  * Either way nothing may follow the save in the phase's interval, and a rewrite with the same bytes
  * never counts as one: the backend's chapter save (`SetChapterUsx`) writes only when the chapter's
@@ -1044,11 +1063,15 @@ const WRITE_KIND_DESCRIPTIONS: Record<RecordedWrite['kind'], string> = {
   removed: 'removed',
 };
 
-/** Why `write` is not one `rule` allows, given whether the phase's save has already landed. */
+/**
+ * Why `write` is not one `rule` allows, given whether the phase's save has already landed and
+ * whether `write` landed sooner after the phase began than the editor's save debounce with another
+ * write to the file after it in the phase (see {@link WriteRule}).
+ */
 function whyNotAsked(
   write: RecordedWrite,
   rule: WriteRule | undefined,
-  hasSaved: boolean,
+  { hasSaved, isEarlyAndFollowed }: { hasSaved: boolean; isEarlyAndFollowed: boolean },
 ): string | undefined {
   if (!rule) return 'this step may not write it';
   if (rule.kind === 'any') return undefined;
@@ -1056,6 +1079,8 @@ function whyNotAsked(
   if (write.kind === 'rewritten')
     return 'a save writes only when the chapter changed, so a same-bytes rewrite is no part of one';
   if (hasSaved) return "it came after this step's save had already landed";
+  if (!rule.result && isEarlyAndFollowed)
+    return `it landed too soon after the step began to hold the step's edit, and another write to the file followed it, so it is not this step's save`;
   const after = write.after ?? Buffer.alloc(0);
   if (!rule.result || after.equals(rule.result) || rule.isPartway?.(after)) return undefined;
   return 'it holds neither what this step saves nor a state on the way to that';
@@ -1063,9 +1088,9 @@ function whyNotAsked(
 
 /**
  * Every write of `writes` (the writes that landed in `phase`'s interval, in order) that `phase` did
- * not ask for, each described: which file, when, why it is not allowed, and how the bytes moved. A
- * write that lands sooner after the phase started than the editor's save debounce cannot be the
- * phase's own save, so its description names the phase before as its likely origin.
+ * not ask for, each described: which file, when, why it is not allowed, and how the bytes moved. An
+ * unasked write that lands sooner after the phase started than the editor's save debounce cannot
+ * hold anything the phase did, so its description names the phase before as its likely origin.
  */
 function describeUnaskedWrites(
   phase: WritePhase,
@@ -1073,17 +1098,22 @@ function describeUnaskedWrites(
   previousPhase: WritePhase | undefined,
 ): string[] {
   const savedFiles = new Set<string>();
-  return writes.flatMap((write) => {
+  return writes.flatMap((write, index) => {
     if (phase.scope !== 'project' && !phase.scope.includes(write.file)) return [];
     const rule = phase.writes.get(write.file);
-    const why = whyNotAsked(write, rule, savedFiles.has(write.file));
+    const intoPhase = write.at - phase.startedAt;
+    const why = whyNotAsked(write, rule, {
+      hasSaved: savedFiles.has(write.file),
+      isEarlyAndFollowed:
+        intoPhase < EDITOR_SAVE_DEBOUNCE_MS &&
+        writes.slice(index + 1).some((later) => later.file === write.file),
+    });
     const after = write.after ?? Buffer.alloc(0);
     if (why === undefined) {
       if (rule?.kind === 'save' && (!rule.result || after.equals(rule.result)))
         savedFiles.add(write.file);
       return [];
     }
-    const intoPhase = write.at - phase.startedAt;
     const lines = [
       `${write.file}: ${WRITE_KIND_DESCRIPTIONS[write.kind]} ${intoPhase} ms into the step ` +
         `(+${secondsOf(write.at)} s of the recording), but ${why}.`,
@@ -1189,12 +1219,15 @@ class ProjectWriteRecorder {
   }
 
   /**
-   * Waits for a save to land on `file`: for its bytes to stop being `from` and, when `result` is
-   * given, to become `result` — or anything else `isPartway` does not accept, since that is already
-   * a finding and the caller judges it. Once it has landed, leaves the editor alone for
-   * `pauseAfterMs` ({@link ECHO_ARRIVAL_MS} unless given). Returns what landed, the latest bytes if
-   * only a partway state did within {@link SAVE_LANDED_TIMEOUT_MS}, or `undefined` if no write
-   * changed the file at all.
+   * Waits for the running phase's save to land on `file`: for its bytes to stop being `from` and,
+   * when `result` is given, to become `result` — or anything else `isPartway` does not accept,
+   * since that is already a finding and the caller judges it. Bytes other than `result` that a
+   * write landed sooner after the phase began than the editor's save debounce (or before it began)
+   * are taken only once {@link OWN_SAVE_WINDOW_MS} has passed since this call with no write after
+   * them: until then the phase's own save may still land after them ({@link WriteRule}). Once it has
+   * landed, leaves the editor alone for `pauseAfterMs` ({@link ECHO_ARRIVAL_MS} unless given).
+   * Returns what landed, the latest bytes if only a partway state did within
+   * {@link SAVE_LANDED_TIMEOUT_MS}, or `undefined` if no write changed the file at all.
    */
   async waitForSave(
     page: Page,
@@ -1211,10 +1244,18 @@ class ProjectWriteRecorder {
       pauseAfterMs?: number;
     },
   ): Promise<Buffer | undefined> {
-    const hasLanded = (bytes: Buffer | undefined): bytes is Buffer =>
-      !!bytes &&
-      !bytes.equals(from) &&
-      (!result || bytes.equals(result) || !(isPartway?.(bytes) ?? false));
+    const phaseIndex = this.phases.length - 1;
+    const phaseStartedAt = this.phases[phaseIndex].startedAt;
+    const earlyWritesTakenAt = Date.now() + OWN_SAVE_WINDOW_MS;
+    const hasLanded = (bytes: Buffer | undefined): bytes is Buffer => {
+      if (!bytes || bytes.equals(from)) return false;
+      if (result && bytes.equals(result)) return true;
+      if (result && (isPartway?.(bytes) ?? false)) return false;
+      const write = this.lastWriteTo(file);
+      const isEarly =
+        !write || write.phase !== phaseIndex || write.at - phaseStartedAt < EDITOR_SAVE_DEBOUNCE_MS;
+      return !isEarly || Date.now() >= earlyWritesTakenAt;
+    };
     const deadline = Date.now() + SAVE_LANDED_TIMEOUT_MS;
     let now = this.current(file);
     // Sequential sampling: each sample decides whether to take another.
@@ -1302,6 +1343,11 @@ class ProjectWriteRecorder {
     this.isStopped = true;
     clearInterval(this.timer);
     this.watcher?.close();
+  }
+
+  /** The last write recorded on `file`, as of the last sample. */
+  private lastWriteTo(file: string): RecordedWrite | undefined {
+    return this.writes.filter((write) => write.file === file).at(-1);
   }
 
   /** Samples every file of the project once, recording each write since the last sample. */
