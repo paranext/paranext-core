@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * The launch and teardown waits that replaced fixed pauses: `waitForPapiMethodsRegistered`, which
+ * Two launch and teardown waits the e2e suite relies on: `waitForPapiMethodsRegistered`, which
  * gates a spec on the renderer's services having registered, and `waitForProcessGone`, which ends a
  * teardown as soon as the killed app has exited. Driven against a local WebSocket server and real
  * child processes, so no app is needed.

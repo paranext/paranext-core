@@ -443,7 +443,7 @@ export async function getReportedWindows(): Promise<ReportedWindow[]> {
  * How long a count that must NOT change has to hold, for {@link waitForAppWindowCount}'s
  * `stableForMs`. Whatever would change the count — a close or a new window — starts within main's
  * handling of the command that came just before the check, so two seconds covers the gap between
- * that handling and the first poll with room to spare, without the 5 s a blind pause needed.
+ * that handling and the first poll with room to spare.
  */
 export const WINDOW_COUNT_STABLE_MS = 2_000;
 
