@@ -129,10 +129,11 @@ describe('OnboardingTour with the real Tour overlay', () => {
   });
 
   it('never opens while localization has not resolved, so no handler is installed offline', () => {
-    // The one case the mount guard does NOT cover: a reload while the server is still down comes
-    // back to a renderer that never latches the connection-lost state, so nothing stands the tour
-    // down. What keeps the Escape handler off the window there is the readiness gate — the
-    // localization data provider lives over the dead socket, so `isLoading` never resolves.
+    // The window the mount guard does NOT cover: a reload while the server is still down latches
+    // the store only once the first connect gives up (up to about 10 s, the connect timeout).
+    // Until the failure is reported, what keeps the Escape handler off the window is the readiness
+    // gate — the localization data provider lives over the socket that has not opened, so
+    // `isLoading` never resolves.
     knobs.isLocalizationLoading = true;
 
     render(<OnboardingTour />);

@@ -234,10 +234,13 @@ export function OnboardingTour() {
   // mid-tour already does: an interrupted user has not been oriented.
   //
   // This also covers reloading while the server is still down: the renderer's first connect fails,
-  // which latches the store as never connected, and that counts as lost here. One edge the guard
-  // does not reach: the latch is per renderer while the done flag is `localStorage` shared across
-  // windows, so a second window whose socket survived can still spend the flag; there the user has
-  // a working app and a visible tour, so dismissing it is a genuine dismissal.
+  // which latches the store as never connected, and that counts as lost here. The latch lands only
+  // once the connect gives up (up to about 10 s, the connect timeout); until then the readiness
+  // gate keeps the tour closed, because localization is reached over the socket that has not
+  // opened, so `isLoading` never resolves. One edge neither reaches: the latch is per renderer
+  // while the done flag is `localStorage` shared across windows, so a second window whose socket
+  // survived can still spend the flag; there the user has a working app and a visible tour, so
+  // dismissing it is a genuine dismissal.
   if (isConnectionLost) return undefined;
 
   if (doneAtMount && replayCount === 0) return undefined;

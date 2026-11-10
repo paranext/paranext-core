@@ -1935,6 +1935,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the scrim) is PT-4851, because that one runs the other way — main must notice this window's port
   dying, since the window cannot tell it. The `TODO(main-renderer-shutdown-relay)` slug is gone from
   the code.
+- **Amended 2026-11-10 (PT-4494):** the state now also covers a renderer whose FIRST connect
+  fails, widening the "Scope: an ESTABLISHED connection only" bullet above. That bullet's text
+  stays as written; read it together with this amendment.
+  - **Why the scope widened.** Without it, a renderer whose first connect failed stopped its
+    startup partway through and still rendered a UI where nothing worked, with nothing telling the
+    user. The `RpcClient` gate is unchanged — `onDidLoseConnection` still fires only for an
+    established connection — so the failed first connect is reported separately:
+    `initializeNetworkReportingFailure` (`connection-lost-service.ts`) wraps the network service's
+    `initialize` and calls `reportConnectionNeverEstablished()` when it rejects.
+  - **Store model.** The "Store" bullet's `isConnectionLost` boolean is now one latched
+    `ConnectionFailure | undefined` (`'lost' | 'neverConnected'`). The store is still one-way and
+    import-free, and keeps whichever failure is reported first. One latch rather than a second flag
+    because every surface that stands down on a lost connection (`OverlayHost`, `FirstRunOverlay`,
+    `OnboardingTour`, the extension-host-stopped banner) must stand down for both kinds:
+    `getIsConnectionLost()` / `useIsConnectionLost()` are true for either, and only the overlay asks
+    which kind (`useConnectionFailure()`) to choose its wording.
+  - **Why Reload is the right action after all.** The Scope bullet's objection — "the banner offers
+    a reload, which is not the answer to a server that was never there" — was written when each
+    window reached main over a WebSocket on port 8876, where "never there" meant nothing listening
+    on that port. Since `adr-renderer-papi-transport-is-messageport` (2026-09-24) a window reaches
+    main over a MessagePort that main hands it, and main necessarily exists because it created the
+    window. A failed first connect is therefore a failed handshake between this window and main,
+    which a reload starts over. For the case where main's side is itself broken, the message adds
+    "If this keeps happening, close and reopen {%product_name%}." A Restart button that relaunches
+    the whole app is open work (PT-5054); it needs a new non-PAPI path from the window to main, and
+    so its own security review.
+  - **Wording and language.** The overlay shows "Couldn't start" text and a plain "Reload" (no
+    "anyway": nothing was ever connected, so no work can be lost). Localization travels over the
+    connection that never opened, so this state normally shows the English fallbacks whatever the
+    interface language, and interface mode keeps its Simple default for the banner's offset.
+  - **Pointer.** The Scope bullet's "belongs to PT-4494 / PT-4495" now applies only to PT-4495: the
+    extension host still does not surface a failed first connect.
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 

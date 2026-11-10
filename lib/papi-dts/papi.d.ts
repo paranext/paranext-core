@@ -2872,7 +2872,8 @@ declare module 'renderer/services/renderer-web-socket.service' {
    *
    * The block cannot run before `initialize` settles: without an Electron bridge, the renderer's own
    * connection to main is a `PapiRendererWebSocket` to the PAPI port (see `web-socket.factory.ts`).
-   * Until it settles, web views are not blocked.
+   * Until it settles (at most about 10 s, the connect timeout) web views are not blocked; none can
+   * exist yet, because the web view service starts only after this call in `index.tsx`.
    *
    * @param initialize Starts the renderer's network service
    * @throws Whatever `initialize` threw or rejected with, after blocking

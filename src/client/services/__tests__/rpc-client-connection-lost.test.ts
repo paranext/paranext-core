@@ -91,9 +91,9 @@ describe('RpcClient connection-lost announcement', () => {
 
   // A socket that never opened is a failed connection attempt, not a lost connection: `connect()`
   // reports it through its own return value, and the renderer surfaces a failed first connect
-  // separately (`initializeNetworkReportingFailure`). Both shapes of a failing startup are pinned because they
-  // reach this handler differently — one arrives here, the other cannot — and the gate is what
-  // makes them agree.
+  // separately (`initializeNetworkReportingFailure`). Both shapes of a failing startup are pinned
+  // because they reach this handler differently — one arrives here, the other cannot — and the
+  // gate is what makes them agree.
   it('stays silent when a socket dies before the connection was ever established', () => {
     const rpcClient = createRpcClient(ConnectionStatus.Connecting);
     const listener = vi.fn();

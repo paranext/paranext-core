@@ -78,7 +78,7 @@ describe('connection-lost store', () => {
     expect(getIsConnectionLost()).toBe(true);
   });
 
-  describe('a connection that was never established', () => {
+  describe('getConnectionFailure', () => {
     it('reports no failure while the connection is alive', () => {
       expect(getConnectionFailure()).toBeUndefined();
     });

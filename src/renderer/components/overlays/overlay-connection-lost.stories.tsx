@@ -39,7 +39,7 @@ const meta: Meta<typeof ConnectionLostOverlayPresentational> = {
     docs: {
       description: {
         component:
-          "Shown when this renderer loses its websocket connection to the rest of the app, or when its first connect at startup fails (the Couldn't start story). A banner names the problem and offers a reload; a scrim covers the whole window, including the toolbar, because every control on screen reaches the app over that connection.",
+          'Shown when this renderer loses its websocket connection to the rest of the app, or when its first connect at startup fails (see Could Not Start). A banner names the problem and offers a reload; a scrim covers the whole window, including the toolbar, because every control on screen reaches the app over that connection.',
       },
     },
   },

@@ -94,8 +94,8 @@ export class RpcClient implements IRpcMethodRegistrar {
   //
   // TODO(PT-4495): Reconnect is only needed by the extension host. The renderer connects over a
   // MessagePort (see `web-socket.factory.ts`), which survives an OS suspend and does not go through
-  // the PAPI-port block in `renderer-web-socket.service.ts`. For the extension host, reconnect still needs the
-  // `AsyncVariable` problems above resolved first.
+  // the PAPI-port block in `renderer-web-socket.service.ts`. For the extension host, reconnect
+  // still needs the `AsyncVariable` problems above resolved first.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
   private readonly connectionLostEmitter = new PlatformEventEmitter<void>();

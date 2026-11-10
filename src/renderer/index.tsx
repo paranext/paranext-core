@@ -140,8 +140,9 @@ initExtensionHostStoppedService();
 (async () => {
   try {
     // The network service has to start first, and it uses the shared store after initialization.
-    // Web views are blocked from the PAPI network here, before any of them can start running. A
-    // failed connect shows the couldn't-start state, since nothing after this line runs.
+    // Web views are blocked from the PAPI network here, before any of them can start running. If
+    // the connect fails, `initializeNetworkReportingFailure` shows the couldn't-start state and the
+    // rest of startup is skipped.
     await initializeNetworkThenBlockPapiWebSockets(initializeNetworkReportingFailure);
     markStartup('papi-connected');
     // Not awaited: nothing at startup needs the answer, and it never rejects.

@@ -46,9 +46,10 @@ export function initConnectionLostService(): () => void {
  * `onDidLoseConnection` covers only a connection that was established, so this is the only report a
  * failed startup gets.
  *
- * The recorded state is one-way, like a lost connection. A later PAPI request can call the network
- * service's `initialize` again; if that succeeds, this window is connected but its startup has
- * already stopped, so it keeps showing the couldn't-start state and Reload remains the recovery.
+ * The recorded state is one-way, like a lost connection. After a failed connect the network service
+ * keeps its unconnected handler, so later requests fail rather than retry. Only a failure to create
+ * the handler can be retried by a later request, and the window stays on couldn't-start either way:
+ * Reload is the recovery.
  *
  * @throws Whatever the network service's `initialize` rejected with, after recording it
  */
