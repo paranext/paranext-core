@@ -114,13 +114,18 @@ export const test = base.extend<IsolatedFixtures>({
       ...seedSettings,
     });
     try {
+      const setupStart = Date.now();
       const ctx = await launchElectronApp(electronLaunchOptions);
+      console.log(`[setup +${Date.now() - setupStart}ms] Electron app launch complete`);
       try {
         await use(ctx.electronApp);
       } finally {
-        console.log('[teardown] Test-scoped app teardown starting...');
+        const teardownStart = Date.now();
+        console.log('[teardown +0ms] Test-scoped app teardown starting...');
         await teardownElectronApp(ctx);
-        console.log('[teardown] Test-scoped app teardown complete');
+        console.log(
+          `[teardown +${Date.now() - teardownStart}ms] Test-scoped app teardown complete`,
+        );
       }
     } finally {
       // Restore the developer's settings file only after the app has fully closed so the app's own
@@ -133,7 +138,10 @@ export const test = base.extend<IsolatedFixtures>({
   },
 
   mainPage: async ({ electronApp, windowSize, interfaceMode }, use, testInfo: TestInfo) => {
+    const pageSetupStart = Date.now();
+    const stamp = () => `[setup +${Date.now() - pageSetupStart}ms]`;
     const page = await electronApp.firstWindow({ timeout: 90_000 });
+    console.log(`${stamp()} First window available`);
 
     // Ensure the window is large enough for WebView content to be visible.
     // On headless Linux (xvfb) or WSL2 the default window can be very small,
@@ -147,6 +155,7 @@ export const test = base.extend<IsolatedFixtures>({
       'This fixture sets this size at launch; check that the window manager is not overriding it.',
     );
 
+    console.log(`${stamp()} Window size applied`);
     console.log(`Window URL: ${page.url()}`);
     const onPageError = (err: Error) => console.error(`Page error: ${err.message}`);
     const onConsoleMsg = (msg: ConsoleMessage) => {
@@ -159,6 +168,7 @@ export const test = base.extend<IsolatedFixtures>({
 
     // Wait for React to mount
     await page.waitForSelector('#root', { state: 'attached', timeout: 30_000 });
+    console.log(`${stamp()} React root mounted`);
 
     // Verify the mode this fixture just seeded actually took effect, before any test runs against a
     // layout it was not written for. Always checked, not opt-in: the fixture knows what it seeded,
@@ -173,6 +183,8 @@ export const test = base.extend<IsolatedFixtures>({
         `preConfigureSettings call — see the IsolatedFixtures doc for why a spec-level seed is ` +
         `both overridden and leaked back into the developer's settings.`,
     );
+
+    console.log(`${stamp()} Interface mode confirmed`);
 
     await use(page);
 
