@@ -1461,8 +1461,14 @@ describe('menus.json dynamic conditions', () => {
   describe('the Edit section a resource shows instead of the Edit flyout', () => {
     const EDIT_SUBMENU_ID = 'platformScriptureEditor.editSubmenu';
     const EDIT_COLUMN = 'platformScriptureEditor.edit';
+    // A resource is never editable, so both facts hold for every real resource
+    const RESOURCE_FACTS = {
+      'platform.project.p1.isResource': true,
+      'platform.project.p1.isEditable': false,
+    };
     type EvaluatedItem = { id?: string; command?: string; group: string; order: number };
     type EvaluatedMenu = {
+      columns: Record<string, unknown>;
       groups: Record<string, { column?: string; order: number }>;
       items: EvaluatedItem[];
     };
@@ -1499,7 +1505,7 @@ describe('menus.json dynamic conditions', () => {
       menu.items.filter((item) => item.command === command).length;
 
     it('replaces the Edit flyout with an Edit section holding Copy and Find on a resource in Power', () => {
-      const menu = evaluateInMode('power', { 'platform.project.p1.isResource': true });
+      const menu = evaluateInMode('power', RESOURCE_FACTS);
       expect(hasEditSubmenu(menu)).toBe(false);
       expect(editSectionCommands(menu)).toEqual([
         'platformScriptureEditor.copySelection',
@@ -1512,7 +1518,7 @@ describe('menus.json dynamic conditions', () => {
     });
 
     it('shows only Copy in the Edit section on a resource in Simple', () => {
-      const menu = evaluateInMode('simple', { 'platform.project.p1.isResource': true });
+      const menu = evaluateInMode('simple', RESOURCE_FACTS);
       expect(hasEditSubmenu(menu)).toBe(false);
       expect(editSectionCommands(menu)).toEqual(['platformScriptureEditor.copySelection']);
       // Simple's Find stays under Tools and resources
