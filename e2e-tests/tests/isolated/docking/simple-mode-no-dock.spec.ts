@@ -63,7 +63,8 @@ test.setTimeout(300_000);
 
 test.beforeEach(async ({ mainPage: page }) => {
   await waitForAppReady(page, { timeout: 180_000 });
-  // The floats and drags below would otherwise race the startup layout load, which replaces them
+  // The drags below press on tab padding measured from the tab bar, which shifts when `%key%` tab
+  // titles are localized
   await waitForFirstLayoutLoad(page);
 });
 
