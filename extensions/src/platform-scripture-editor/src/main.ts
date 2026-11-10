@@ -115,55 +115,72 @@ const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchPro
 const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
 
 /**
+ * Disposes a switch-event emitter whose registration finished after deactivation had already reset
+ * it. Nothing else holds it, so without this its event would stay registered and the next
+ * activation's registration of the same event would be rejected.
+ */
+function disposeDetachedEmitter(emitter: { dispose: () => Promise<boolean> }) {
+  emitter.dispose().catch((error) => {
+    logger.warn(`Could not dispose a project-switch event emitter after deactivation: ${error}`);
+  });
+}
+
+/**
  * Event emitter fired before a project switch. Payload carries the switch's unique `switchId`, so
  * the renderer's workspace-updating service can pair each finish with exactly the switch that
  * started it. Created lazily on the first call to open() to avoid network initialization races
  * during extension activation. Overlapping first calls share one registration, because the main
  * process's registry rejects a second registration of the same event.
+ *
+ * Both switch events use the async factory (the sync createNetworkEventEmitter is deprecated) so
+ * they can carry `x-experimental` in the generated OpenRPC document — their contract isn't settled
+ * (see their @experimental TSDoc in the d.ts). The payload type is inferred from the NetworkEvents
+ * augmentation, so no explicit generic here.
  */
-const willStartEmitter = createLazySharedPromise(() =>
-  // Uses the async factory (the sync createNetworkEventEmitter is deprecated) so the event can
-  // carry `x-experimental` in the generated OpenRPC document — these are recently-added switch-
-  // pairing events whose contract isn't settled (see their @experimental TSDoc in the d.ts). The
-  // payload type is inferred from the NetworkEvents augmentation, so no explicit generic here.
-  papi.network.createNetworkEventEmitterAsync(PROJECT_SWITCH_WILL_START_EVENT, {
-    notification: {
-      'x-experimental': true,
-      summary:
-        'Emitted just before a scripture editor web view is opened or replaced with a new project.',
-      params: [
-        {
-          name: 'switchId',
-          required: true,
-          summary: 'Token pairing this switch with its matching onDidSwitchProject event.',
-          schema: { type: 'string' },
-        },
-      ],
-    },
-  }),
+const willStartEmitter = createLazySharedPromise(
+  () =>
+    papi.network.createNetworkEventEmitterAsync(PROJECT_SWITCH_WILL_START_EVENT, {
+      notification: {
+        'x-experimental': true,
+        summary:
+          'Emitted just before a scripture editor web view is opened or replaced with a new project.',
+        params: [
+          {
+            name: 'switchId',
+            required: true,
+            summary: 'Token pairing this switch with its matching onDidSwitchProject event.',
+            schema: { type: 'string' },
+          },
+        ],
+      },
+    }),
+  disposeDetachedEmitter,
 );
 
 /**
  * Event emitter fired after a project switch completes, with the `switchId` of the will-start event
  * that began it. Created lazily on the first call to open(), sharing one registration between
- * overlapping first calls. Kept separate from the will-start emitter so a failure creating one does
- * not leave the other half-registered.
+ * overlapping first calls. Kept separate from the will-start emitter so each is cached and retried
+ * on its own: a failure creating one neither discards the other's registration nor registers it
+ * again.
  */
-const didFinishEmitter = createLazySharedPromise(() =>
-  papi.network.createNetworkEventEmitterAsync(PROJECT_SWITCH_DID_FINISH_EVENT, {
-    notification: {
-      'x-experimental': true,
-      summary: 'Emitted after the scripture editor web view open/replace call resolves.',
-      params: [
-        {
-          name: 'switchId',
-          required: true,
-          summary: 'The switchId of the onWillSwitchProject event that started this switch.',
-          schema: { type: 'string' },
-        },
-      ],
-    },
-  }),
+const didFinishEmitter = createLazySharedPromise(
+  () =>
+    papi.network.createNetworkEventEmitterAsync(PROJECT_SWITCH_DID_FINISH_EVENT, {
+      notification: {
+        'x-experimental': true,
+        summary: 'Emitted after the scripture editor web view open/replace call resolves.',
+        params: [
+          {
+            name: 'switchId',
+            required: true,
+            summary: 'The switchId of the onWillSwitchProject event that started this switch.',
+            schema: { type: 'string' },
+          },
+        ],
+      },
+    }),
+  disposeDetachedEmitter,
 );
 
 // #endregion Project Switch Events
@@ -381,7 +398,7 @@ async function open(
       if (didFinish) didFinish.emit({ switchId });
       else
         logger.warn(
-          'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
+          `${PROJECT_SWITCH_DID_FINISH_EVENT} emitter was disposed before the project switch completed — workspace-updating overlay may be stuck`,
         );
     };
 

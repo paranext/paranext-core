@@ -81,4 +81,50 @@ describe('createLazySharedPromise', () => {
 
     expect(lazy.peek()).toBeUndefined();
   });
+
+  it('hands a value whose creation finished after reset() to disposeDetached, and still to its caller', async () => {
+    const pending = deferred<string>();
+    const disposeDetached = vi.fn();
+    const lazy = createLazySharedPromise(() => pending.promise, disposeDetached);
+
+    const inFlight = lazy.get();
+    lazy.reset();
+    pending.resolve('late');
+
+    expect(await inFlight).toBe('late');
+    expect(disposeDetached).toHaveBeenCalledExactlyOnceWith('late');
+  });
+
+  it('does not call disposeDetached for a value it keeps', async () => {
+    const disposeDetached = vi.fn();
+    const lazy = createLazySharedPromise(async () => 'kept', disposeDetached);
+
+    await lazy.get();
+    await lazy.get();
+
+    expect(lazy.peek()).toBe('kept');
+    expect(disposeDetached).not.toHaveBeenCalled();
+  });
+
+  it('a creation rejecting after reset() does not forget the creation started since', async () => {
+    const detached = deferred<string>();
+    const current = deferred<string>();
+    const create = vi
+      .fn()
+      .mockReturnValueOnce(detached.promise)
+      .mockReturnValueOnce(current.promise);
+    const lazy = createLazySharedPromise<string>(create);
+
+    const first = lazy.get();
+    lazy.reset();
+    const second = lazy.get();
+    detached.reject(new Error('stale'));
+    await expect(first).rejects.toThrow('stale');
+
+    const third = lazy.get();
+    current.resolve('current');
+    expect(await second).toBe('current');
+    expect(await third).toBe('current');
+    expect(create).toHaveBeenCalledTimes(2);
+  });
 });
