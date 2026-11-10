@@ -114,6 +114,7 @@ import {
   pollUntil,
   quitAndExpectCleanExit,
   waitForAppWindowCount,
+  WINDOW_COUNT_STABLE_MS,
   waitForRendererRegistered,
   webViewTabTitle,
   withPlatformWindow,
@@ -423,6 +424,7 @@ test.describe('moving a web view between windows', () => {
       2,
       60_000,
       'the app to end the move with exactly two windows',
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
     );
 
     // Nothing about creating a window, emptying another, and reopening a web view across them may
@@ -501,6 +503,7 @@ test.describe('moving a web view between windows', () => {
       2,
       120_000,
       `window ${window1Id} to stay open after the move emptied it`,
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
     );
     logStep(`window ${window1Id} docked Home after being emptied, as the primary`);
 
@@ -544,6 +547,7 @@ test.describe('moving a web view between windows', () => {
       3,
       60_000,
       'the app to end the second move with exactly three windows',
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
     );
 
     // MOVE BACK IN THROUGH THE SUBMENU — the user's route to what the requirement calls docking a
