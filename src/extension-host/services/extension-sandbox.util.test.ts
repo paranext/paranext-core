@@ -87,4 +87,29 @@ describe('loadExtensionModule', () => {
     fs.writeFileSync(file, 'module.exports = 2;');
     expect(loadExtensionModule(file, unusedRequire)).toBe(2);
   });
+
+  it.each([
+    ['a path without its file extension', 'no-extension'],
+    ['a directory', '.'],
+  ])('explains that "main" must name the entry file exactly when given %s', (_, entry) => {
+    const entryPath = path.join(tempDir, entry);
+    writeFixture('no-extension.js', 'module.exports = 1;');
+
+    expect(() => loadExtensionModule(entryPath, unusedRequire)).toThrow(
+      `Extension entry file '${entryPath}' (the manifest's "main") could not be read`,
+    );
+  });
+
+  it('keeps the file system error as the cause', () => {
+    const entryPath = path.join(tempDir, 'missing.js');
+
+    let caught: unknown;
+    try {
+      loadExtensionModule(entryPath, unusedRequire);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught instanceof Error && caught.cause).toMatchObject({ code: 'ENOENT' });
+  });
 });

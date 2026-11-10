@@ -5,8 +5,8 @@
  * Usage: `node --import tsx extension-sandbox.probe-host.fixture.ts <protected | unprotected>`
  *
  * - `protected` applies the extension host's lockdowns and loads evil through `loadExtensionModule`.
- * - `unprotected` loads evil with Node's own `require`, only filtering `require` calls by name: the
- *   sandbox extensions had before `loadExtensionModule`. It shows the probes can report an escape.
+ * - `unprotected` loads evil with Node's own `require` and only filters `require` calls by name, with
+ *   no lockdowns. It shows the probes can report an escape.
  */
 import Module, { createRequire } from 'node:module';
 import path from 'node:path';
