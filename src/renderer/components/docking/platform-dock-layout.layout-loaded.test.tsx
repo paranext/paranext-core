@@ -1,4 +1,4 @@
-import { ForwardedRef, StrictMode, forwardRef, useImperativeHandle } from 'react';
+import { Activity, ForwardedRef, StrictMode, forwardRef, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import DockLayout from 'rc-dock';
@@ -121,6 +121,31 @@ describe('PlatformDockLayout marks its root once the initial layout load has fin
     expect(dockRoot.hasAttribute(LAYOUT_LOADED_ATTRIBUTE)).toBe(false);
 
     act(() => currentRegistration[1]?.());
+    expect(dockRoot.getAttribute(LAYOUT_LOADED_ATTRIBUTE)).toBe('true');
+  });
+
+  it('drops the mark when it registers again, until the new registration has loaded', () => {
+    // Hiding the component under an Activity boundary runs its effects' cleanups, and showing it
+    // again runs the effects anew while its state survives: it unregisters and registers again, as
+    // a hot reload makes it do, and the new registration starts an initial load of its own
+    const dock = (mode: 'visible' | 'hidden') => (
+      <Activity mode={mode}>
+        <PlatformDockLayout />
+      </Activity>
+    );
+    const { rerender } = render(dock('visible'));
+    act(() => finishInitialLayoutLoad()());
+    // Positive control: the first registration's mark was there to drop
+    expect(dockRoot.getAttribute(LAYOUT_LOADED_ATTRIBUTE)).toBe('true');
+
+    rerender(dock('hidden'));
+    rerender(dock('visible'));
+
+    const registrations = mocks.registerDockLayout.mock.calls;
+    expect(registrations).toHaveLength(2);
+    expect(dockRoot.hasAttribute(LAYOUT_LOADED_ATTRIBUTE)).toBe(false);
+
+    act(() => registrations[1][1]?.());
     expect(dockRoot.getAttribute(LAYOUT_LOADED_ATTRIBUTE)).toBe('true');
   });
 });
