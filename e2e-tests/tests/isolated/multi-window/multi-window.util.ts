@@ -473,7 +473,15 @@ export async function waitForAppWindowCount(
   await pollUntil(
     async () => {
       const pages = getAppPages(electronApp).length;
-      const reported = (await getReportedWindows()).length;
+      let reported: number;
+      try {
+        reported = (await getReportedWindows()).length;
+      } catch (error) {
+        // A poll that observed nothing cannot count towards the hold: a close or a new window may
+        // have come and gone in the gap
+        agreedSince = undefined;
+        throw error;
+      }
       const now = Date.now();
       if (pages === expectedCount && reported === expectedCount) agreedSince ??= now;
       else agreedSince = undefined;
