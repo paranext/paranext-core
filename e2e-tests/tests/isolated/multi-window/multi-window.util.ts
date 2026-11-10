@@ -459,8 +459,9 @@ export const WINDOW_COUNT_STABLE_MS = 2_000;
  *
  * Agreement on the first poll cannot show that nothing is ABOUT to change, so a caller asserting
  * that a count must not change passes `stableForMs`: the agreeing count must then hold on every
- * poll for that long, and any poll that disagrees restarts the clock. `timeoutMs` bounds the whole
- * wait, stability included.
+ * poll for that long, and any poll that disagrees restarts the clock — so does a poll that cannot
+ * read the reported window list, since it observed nothing and cannot vouch for the count.
+ * `timeoutMs` bounds the whole wait, stability included.
  */
 export async function waitForAppWindowCount(
   electronApp: ElectronApplication,
@@ -781,15 +782,23 @@ export async function expectWindowDockHasOnlyHomeTab(page: Page): Promise<void> 
   let homeAloneSince: number | undefined;
   await pollUntil(
     async () => {
-      const counts = {
-        tabs: await page.locator('.dock-tab').count(),
-        titles: await page.locator('.platform-tab-title').count(),
-        iframes: await page.locator('iframe[data-web-view-id]').count(),
-      };
-      const now = Date.now();
-      if (counts.tabs === 1 && counts.titles === 1 && counts.iframes === 1) homeAloneSince ??= now;
-      else homeAloneSince = undefined;
-      return { ...counts, heldMs: homeAloneSince === undefined ? -1 : now - homeAloneSince };
+      try {
+        const counts = {
+          tabs: await page.locator('.dock-tab').count(),
+          titles: await page.locator('.platform-tab-title').count(),
+          iframes: await page.locator('iframe[data-web-view-id]').count(),
+        };
+        const now = Date.now();
+        if (counts.tabs === 1 && counts.titles === 1 && counts.iframes === 1)
+          homeAloneSince ??= now;
+        else homeAloneSince = undefined;
+        return { ...counts, heldMs: homeAloneSince === undefined ? -1 : now - homeAloneSince };
+      } catch (error) {
+        // A poll that observed nothing cannot count towards the hold: a second tab may have come
+        // and gone in the gap
+        homeAloneSince = undefined;
+        throw error;
+      }
     },
     ({ heldMs }) => heldMs >= HOME_ONLY_STABLE_MS,
     60_000,
