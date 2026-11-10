@@ -12,8 +12,9 @@
  * save, USJ → USX, the PDP's USX fragmenter and `PutText` — and judges it by the only thing that
  * matters to the user: the book file on disk. Per chapter:
  *
- * 1. **Loading never writes.** Open the chapter and wait well past the 700ms save debounce: the book
- *    file is byte-identical and its modification time unchanged.
+ * 1. **Loading never writes.** Open the chapter and wait out the save debounce and the writes after it
+ *    ({@link SAVE_PATH_QUIET_MS}): the book file is byte-identical and its modification time
+ *    unchanged.
  * 2. **First save, then undo.** Type one character, wait for that save to reach the disk, press
  *    Ctrl+Z, wait for that save too. The undo takes back exactly the typed character and nothing
  *    else. Against the file as installed, the result differs by exactly
@@ -137,17 +138,38 @@ const BUNDLED_WEB_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
 const INSTALLED_WEB_FOLDER = 'WEB';
 
 /**
- * How long a freshly opened chapter is left alone before checking that nothing was written. The
- * editor's save debounce is 700ms (`PDP_SAVE_DEBOUNCE_MS`); this is several of those plus the PDP's
- * own write, so a load-triggered save would have landed.
+ * The editor's trailing-edge save debounce. Copied from `PDP_SAVE_DEBOUNCE_MS` in
+ * `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`, which is
+ * not exported; keep the two in step. It is the only deliberate delay between an edit (or a load)
+ * and the write it causes.
  */
-const LOAD_QUIET_MS = 5_000;
+const EDITOR_SAVE_DEBOUNCE_MS = 700;
+
+/**
+ * Headroom for the writes that follow the debounce: the save's round trip through the extension
+ * host to the .NET backend's `PutText`, and the echo of that write coming back, whose own push-back
+ * save (immediate) or follow-up edit (a second debounce) can add one more write. Two round trips of
+ * about half a second each on a loaded machine.
+ */
+const SAVE_ROUND_TRIPS_MARGIN_MS = 1_000;
+
+/**
+ * How long the save path is left alone before concluding that no write is coming: the debounce,
+ * then the round trips after it. Any write an edit or a load causes has landed by then, so a file
+ * that is unchanged after this long was not written. Used after a load, after a read-only gesture,
+ * and as the quiet that follows an expected write.
+ */
+const SAVE_PATH_QUIET_MS = EDITOR_SAVE_DEBOUNCE_MS + SAVE_ROUND_TRIPS_MARGIN_MS;
+
+/**
+ * The one long quiet window kept at the end of a run, a backstop for a write that arrives later
+ * than {@link SAVE_PATH_QUIET_MS} allows for (a stalled backend, a timer the analysis above
+ * missed).
+ */
+const BACKSTOP_QUIET_MS = 5_000;
 
 /** How long a gesture's save gets to reach the disk. */
 const SAVE_LANDED_TIMEOUT_MS = 30_000;
-
-/** A file counts as settled once it has not changed for this long. */
-const SETTLED_QUIET_MS = 3_000;
 
 /**
  * How long the editor gets to pick up a selection set on the DOM before a key acts on it. Lexical
@@ -750,7 +772,7 @@ async function expectChangesOnlyIn(
 
 /**
  * Waits until the file's bytes stop matching `previous` — a save reached the disk — and then until
- * they have held still for {@link SETTLED_QUIET_MS}, so a second write still in flight is not
+ * they have held still for {@link SAVE_PATH_QUIET_MS}, so a second write still in flight is not
  * missed. Returns the settled bytes, or `undefined` if no write landed within the timeout.
  */
 async function waitForSaveToSettle(
@@ -768,7 +790,7 @@ async function waitForSaveToSettle(
     current = fs.readFileSync(filePath);
   }
   let quietSince = Date.now();
-  while (Date.now() - quietSince < SETTLED_QUIET_MS) {
+  while (Date.now() - quietSince < SAVE_PATH_QUIET_MS) {
     await page.waitForTimeout(250);
     const next = fs.readFileSync(filePath);
     if (!next.equals(current)) {
@@ -778,6 +800,15 @@ async function waitForSaveToSettle(
   }
   /* eslint-enable no-await-in-loop */
   return current;
+}
+
+/**
+ * Leaves the app alone for `ms`, so a write that was going to happen has. The event this stands in
+ * for is a write that never comes: nothing in the app, the PAPI or the file system announces it, so
+ * the only evidence is time. Use {@link SAVE_PATH_QUIET_MS} unless it is the end-of-run backstop.
+ */
+async function waitForNoWrite(page: Page, ms: number = SAVE_PATH_QUIET_MS): Promise<void> {
+  await page.waitForTimeout(ms);
 }
 
 // #endregion
@@ -827,7 +858,7 @@ async function runLoadAndUndoSteps(
   const installedMtimeMs = fs.statSync(bookPath).mtimeMs;
 
   // 1. Loading never writes.
-  await mainPage.waitForTimeout(LOAD_QUIET_MS);
+  await waitForNoWrite(mainPage);
   const afterLoad = fs.readFileSync(bookPath);
   await expectSameBytes(
     chapter.bookFile,
@@ -835,7 +866,7 @@ async function runLoadAndUndoSteps(
     afterLoad,
     'installed',
     'after-opening',
-    `${chapter.bookFile}: opening ${chapter.reference} and waiting ${LOAD_QUIET_MS}ms changed the book file`,
+    `${chapter.bookFile}: opening ${chapter.reference} and waiting ${SAVE_PATH_QUIET_MS}ms changed the book file`,
   );
   expect
     .soft(
@@ -1060,6 +1091,7 @@ export async function runNoUnaskedEdits(
   await runChapter(CHAPTERS[1]);
 
   // Leaving a chapter flushes any pending save; nothing may reach a book after its step settled.
+  await waitForNoWrite(mainPage, BACKSTOP_QUIET_MS);
   await Promise.all(
     CHAPTERS.map(async (chapter) => {
       const settled = settledBooks.get(chapter.bookFile);
@@ -1153,8 +1185,8 @@ function isSameSnapshot(first: ProjectSnapshot, second: ProjectSnapshot): boolea
 const PROJECT_SETTLE_TIMEOUT_MS = 60_000;
 
 /**
- * The installed project once no file of it has changed for {@link LOAD_QUIET_MS}: for a baseline
- * taken after an edit, whose save can be followed by a second write still in flight.
+ * The installed project once no file of it has changed for {@link SAVE_PATH_QUIET_MS}: for a
+ * baseline taken after an edit, whose save can be followed by a second write still in flight.
  */
 async function snapshotSettledProject(page: Page): Promise<ProjectSnapshot> {
   const deadline = Date.now() + PROJECT_SETTLE_TIMEOUT_MS;
@@ -1162,7 +1194,7 @@ async function snapshotSettledProject(page: Page): Promise<ProjectSnapshot> {
   let quietSince = Date.now();
   // Sequential polling of the folder: each snapshot decides whether to take another.
   /* eslint-disable no-await-in-loop */
-  while (Date.now() - quietSince < LOAD_QUIET_MS) {
+  while (Date.now() - quietSince < SAVE_PATH_QUIET_MS) {
     if (Date.now() > deadline)
       throw new Error(
         `The installed project kept changing for ${PROJECT_SETTLE_TIMEOUT_MS}ms before the editor opened`,
@@ -1362,7 +1394,7 @@ export async function runPreviewWritesNothing({
     test.step(`Preview: ${chapter.label}`, async () => {
       await goTo(chapter.reference, chapter.renderedText);
       await expectPreview();
-      await mainPage.waitForTimeout(LOAD_QUIET_MS);
+      await waitForNoWrite(mainPage);
       await expectProjectUnchanged(before, `opening ${chapter.reference}`);
 
       await test.step('scrolling, clicking, selecting and copying', async () => {
@@ -1388,7 +1420,7 @@ export async function runPreviewWritesNothing({
             })
             .toContain(copy.copied);
         }, Promise.resolve());
-        await mainPage.waitForTimeout(LOAD_QUIET_MS);
+        await waitForNoWrite(mainPage);
         await expectProjectUnchanged(
           before,
           `scrolling, clicking, selecting and copying in ${chapter.reference}`,
@@ -1410,7 +1442,7 @@ export async function runPreviewWritesNothing({
         await expect(footnotePopover).toHaveCount(0);
         await sendCommandWithId(mainPage, 'platformScriptureEditor.toggleFootnotes', editorId);
         await expect(footnotesPane).toHaveCount(0, { timeout: 20_000 });
-        await mainPage.waitForTimeout(LOAD_QUIET_MS);
+        await waitForNoWrite(mainPage);
         await expectProjectUnchanged(before, `opening a footnote in ${chapter.reference}`);
       });
 
@@ -1430,7 +1462,7 @@ export async function runPreviewWritesNothing({
         );
         await mainPage.keyboard.press(PASTE_KEY);
         // Past the save debounce and the PDP's write, as for a freshly opened chapter.
-        await mainPage.waitForTimeout(LOAD_QUIET_MS);
+        await waitForNoWrite(mainPage);
         expect
           .soft(
             await editorInput.textContent(),
@@ -1448,7 +1480,7 @@ export async function runPreviewWritesNothing({
     await goTo(JONAH_2.reference, JONAH_2.renderedText);
     await goTo(PREVIEW_CHAPTERS[0].chapter.reference, PREVIEW_CHAPTERS[0].chapter.renderedText);
     await expectPreview();
-    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await waitForNoWrite(mainPage);
     await expectProjectUnchanged(before, 'moving to Jonah 2 and back');
   });
 
@@ -1460,14 +1492,17 @@ export async function runPreviewWritesNothing({
     await mainPage.keyboard.press(VIEW_TOGGLE_KEY);
     await expect(editorInput).toHaveClass(/\bmarker-editable\b/, { timeout: 20_000 });
     await expect(editorInput).toHaveAttribute('contenteditable', 'true');
-    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await waitForNoWrite(mainPage);
     await expectProjectUnchanged(before, 'switching to Standard view');
     await clickText(renderedText);
     await mainPage.keyboard.press(VIEW_TOGGLE_KEY);
     await expectPreview();
-    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await waitForNoWrite(mainPage);
     await expectProjectUnchanged(before, 'switching back to Preview');
   });
+
+  await waitForNoWrite(mainPage, BACKSTOP_QUIET_MS);
+  await expectProjectUnchanged(before, 'the end of the run');
 }
 
 // #endregion
@@ -1764,7 +1799,7 @@ export async function runFootnotesPaneRowEdits(
             await mainPage.keyboard.press('ArrowRight');
             await mainPage.keyboard.press('ArrowLeft');
           });
-          await mainPage.waitForTimeout(LOAD_QUIET_MS);
+          await waitForNoWrite(mainPage);
           await expectProjectUnchanged(
             beforeOpening,
             `opening ${note.label} in the row editor and leaving it by ${note.leaves.unchanged}`,
@@ -1956,6 +1991,7 @@ export async function runFootnotesPaneRowEdits(
   }, Promise.resolve());
 
   // Leaving a chapter flushes any pending save; nothing may reach a book after its step finished.
+  await waitForNoWrite(mainPage, BACKSTOP_QUIET_MS);
   await Promise.all(
     FOOTNOTE_CHAPTERS.map(async (chapter) => {
       const settled = settledBooks.get(chapter.bookFile);
@@ -2478,11 +2514,11 @@ export async function runInvisibleCharacters(
         { message: `the editor should be showing ${view.name}`, timeout: 30_000 },
       )
       .toBe(true);
-    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await waitForNoWrite(mainPage);
     await goTo(INVISIBLE_OTHER_CHAPTER.reference, INVISIBLE_OTHER_CHAPTER.renderedText);
-    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await waitForNoWrite(mainPage);
     await goTo(INVISIBLE_CHAPTER.reference, INVISIBLE_CHAPTER.renderedText);
-    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await waitForNoWrite(mainPage);
     await expectProjectUnchanged(baseline, 'opening and navigating');
   });
 
@@ -2525,7 +2561,7 @@ export async function runInvisibleCharacters(
     }, Promise.resolve());
   });
 
-  await mainPage.waitForTimeout(LOAD_QUIET_MS);
+  await waitForNoWrite(mainPage, BACKSTOP_QUIET_MS);
   await expectSameBytes(
     INVISIBLE_CHAPTER.bookFile,
     afterPasted,
