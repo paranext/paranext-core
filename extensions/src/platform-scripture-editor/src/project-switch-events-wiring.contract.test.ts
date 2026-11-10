@@ -53,9 +53,11 @@ describe('project-switch event wiring (main.ts)', () => {
     );
   });
 
-  it('resets and disposes both emitters on deactivation', () => {
+  it('resets both emitters on deactivation and waits for their disposal', () => {
     expect(source).toContain(
-      compact('willStartEmitter.reset()?.dispose(); didFinishEmitter.reset()?.dispose();'),
+      compact(
+        'await Promise.all( [willStartEmitter.reset(), didFinishEmitter.reset()].map( (emitter) => emitter && disposeSwitchEmitter(emitter), ), );',
+      ),
     );
   });
 });

@@ -115,14 +115,24 @@ const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchPro
 const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
 
 /**
+ * Disposes a switch-event emitter, logging a failure instead of rejecting, so deactivation can
+ * await it without one failed unregistration stopping the rest.
+ */
+async function disposeSwitchEmitter(emitter: { dispose: () => Promise<boolean> }): Promise<void> {
+  try {
+    await emitter.dispose();
+  } catch (error) {
+    logger.warn(`Could not dispose a project-switch event emitter: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
  * Disposes a switch-event emitter whose registration finished after deactivation had already reset
  * it. Nothing else holds it, so without this its event would stay registered and the next
  * activation's registration of the same event would be rejected.
  */
 function disposeDetachedEmitter(emitter: { dispose: () => Promise<boolean> }) {
-  emitter.dispose().catch((error) => {
-    logger.warn(`Could not dispose a project-switch event emitter after deactivation: ${error}`);
-  });
+  disposeSwitchEmitter(emitter);
 }
 
 /**
@@ -1870,8 +1880,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     selectionChangedEventEmitter,
     {
       dispose: async () => {
-        willStartEmitter.reset()?.dispose();
-        didFinishEmitter.reset()?.dispose();
+        // Awaited, so a re-activation in the same extension host registers the events only after
+        // these registrations are gone
+        await Promise.all(
+          [willStartEmitter.reset(), didFinishEmitter.reset()].map(
+            (emitter) => emitter && disposeSwitchEmitter(emitter),
+          ),
+        );
         return true;
       },
     },
