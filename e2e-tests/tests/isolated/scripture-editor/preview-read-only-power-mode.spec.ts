@@ -174,6 +174,8 @@ test.describe('Power-mode Standard view and Preview', () => {
       // the main text the view stays Preview and the draft stays up.
       await text.click();
       await mainPage.keyboard.press('Control+e');
+      // Nothing happening has no event to wait for. Where Ctrl+E is honoured it switches the view
+      // within a PAPI round trip, far inside this window.
       await mainPage.waitForTimeout(2_000);
       await expectPreview();
       await expect(commentEditor).toBeVisible();
