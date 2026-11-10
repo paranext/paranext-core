@@ -1030,11 +1030,12 @@ type LayoutLoadOutcome = 'applied' | 'stood-down' | 'superseded';
 
 /**
  * Report of the initial layout load, waiting for a load that settles the dock. Set by
- * {@link registerDockLayout}; cleared once reported, when the initial load fails, or when that dock
- * layout is unregistered. A superseded initial load leaves it in place so the load that superseded
- * it (an interface-mode switch, through {@link loadLayout}) reports instead. If that superseding
- * load fails the report never fires, which fails closed: no signal is better than a signal for a
- * dock that was never populated.
+ * {@link registerDockLayout}; cleared once reported, when the initial load fails before any newer
+ * load started, or when that dock layout is unregistered. A superseded initial load leaves it in
+ * place — whether it then returns or throws — so the load that superseded it (an interface-mode
+ * switch, through {@link loadLayout}) reports instead. If that superseding load fails the report
+ * never fires, which fails closed: no signal is better than a signal for a dock that was never
+ * populated.
  */
 let pendingInitialLayoutLoadReport: (() => void) | undefined;
 
@@ -1532,8 +1533,9 @@ function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
  *   failing, while this dock layout is still registered. By then that load can no longer change the
  *   dock: it has either handed its layout to the dock or stood down without writing because content
  *   arrived in the dock while it read what to restore. When a newer load (an interface-mode switch)
- *   superseded it, the callback waits for that newer load to settle the dock instead. Not called
- *   when the initial load fails.
+ *   superseded it, the callback waits for that newer load to settle the dock instead, even if the
+ *   superseded initial load then fails. Not called when the initial load fails before any newer
+ *   load started.
  * @returns Unsubscriber that unregisters this dock layout
  */
 export function registerDockLayout(
@@ -1559,12 +1561,20 @@ export function registerDockLayout(
     if (isRegistered) onInitialLayoutLoadFinished?.();
   };
   pendingInitialLayoutLoadReport = onInitialLayoutLoadFinished ? report : undefined;
+  const initialLoad = loadLayout();
+  // `loadLayout` takes its generation before its first await, so this is the initial load's
+  const initialLoadGeneration = layoutLoadGeneration;
   (async () => {
     try {
-      await loadLayout();
+      await initialLoad;
     } catch (err) {
       logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`);
-      if (pendingInitialLayoutLoadReport === report) pendingInitialLayoutLoadReport = undefined;
+      // A load that superseded this one owns the report: it fires it once it settles the dock
+      if (
+        initialLoadGeneration === layoutLoadGeneration &&
+        pendingInitialLayoutLoadReport === report
+      )
+        pendingInitialLayoutLoadReport = undefined;
     }
   })();
 
