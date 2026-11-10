@@ -1488,9 +1488,26 @@ function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
     });
 }
 
-export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
+/**
+ * Register the dock layout this window's web view service operates on, and start the window's
+ * initial layout load.
+ *
+ * @param dockLayout The dock layout to register
+ * @param onInitialLayoutLoadFinished Called once the initial layout load has finished without
+ *   failing, while this dock layout is still registered. By then that load can no longer change the
+ *   dock: it has either handed its layout to the dock or stood down without writing — because
+ *   content arrived in the dock while it read what to restore, or because a newer load (an
+ *   interface-mode switch) took over, in which case that newer load may still be on its way. Not
+ *   called when the load fails.
+ * @returns Unsubscriber that unregisters this dock layout
+ */
+export function registerDockLayout(
+  dockLayout: PapiDockLayout,
+  onInitialLayoutLoadFinished?: () => void,
+): Unsubscriber {
   // Save the current async var so we know if it changed before we unsubscribed
   const currentPapiDockLayoutVar = papiDockLayoutVar;
+  let isRegistered = true;
 
   setDockLayout(dockLayout);
 
@@ -1501,7 +1518,15 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // Fire-and-forget so `registerDockLayout` can stay sync. Guard the rejection, though: `loadLayout`
   // awaits settings reads (supplement flags), and an unhandled rejection here would leave the dock
   // unloaded (blank window).
-  loadLayout().catch((err) => logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`));
+  (async () => {
+    try {
+      await loadLayout();
+    } catch (err) {
+      logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`);
+      return;
+    }
+    if (isRegistered) onInitialLayoutLoadFinished?.();
+  })();
 
   const unsubscribeOnDidOpenWebViewForCache = onDidOpenWebView((event) =>
     cacheLastOpenedSimpleProject(event.webView),
@@ -1590,6 +1615,7 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
     if (papiDockLayoutVar !== currentPapiDockLayoutVar)
       throw new Error('Tried to unregister an old dock layout');
 
+    isRegistered = false;
     unsubscribeOnDidOpenWebViewForCache();
     unsubscribeOnDidUpdateWebViewForCache();
 
