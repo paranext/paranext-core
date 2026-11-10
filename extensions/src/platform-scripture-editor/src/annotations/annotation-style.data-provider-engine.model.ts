@@ -32,6 +32,16 @@ function shorthandValues(value: string): string[] {
   return values;
 }
 
+/** Whether `value` holds a `/` outside parentheses: an elliptical radius, not a `calc()` division. */
+function hasTopLevelSlash(value: string): boolean {
+  let depth = 0;
+  return [...value].some((character) => {
+    if (character === '(') depth += 1;
+    if (character === ')') depth -= 1;
+    return depth === 0 && character === '/';
+  });
+}
+
 /** The declarations of the three rules a registered style becomes. */
 type EdgeDeclarations = {
   /** On every element the annotation paints. */
@@ -80,7 +90,12 @@ function stylesToCss(properties: AnnotationStyleProperties): EdgeDeclarations {
       end.push(declaration('border-inline-end', value));
       return;
     }
-    if (key === 'borderRadius' && isSplittable && values.length === 1 && !values[0].includes('/')) {
+    if (
+      key === 'borderRadius' &&
+      isSplittable &&
+      values.length === 1 &&
+      !hasTopLevelSlash(String(value))
+    ) {
       start.push(
         declaration('border-start-start-radius', value),
         declaration('border-end-start-radius', value),
