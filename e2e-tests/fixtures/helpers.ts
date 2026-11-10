@@ -177,7 +177,7 @@ async function waitForPortFree(
  * process that reports none of these (the port poll that follows is the real readiness check). The
  * cap timer, the poll and the `exit` listener are all cleaned up when the wait ends.
  */
-async function waitForProcessGone(
+export async function waitForProcessGone(
   proc: ReturnType<ElectronApplication['process']> | undefined,
   appClosed: Promise<void>,
   capMs: number,
