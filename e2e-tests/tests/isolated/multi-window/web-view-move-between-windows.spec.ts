@@ -78,7 +78,7 @@
  *
  * `npm run test:e2e:isolated multi-window`
  */
-import type { ElectronApplication, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { sendPapiRequestOnce, waitForAppReady } from '../../../fixtures/helpers';
 import {
@@ -113,6 +113,7 @@ import {
   homeTabTitle,
   pollUntil,
   quitAndExpectCleanExit,
+  waitForAppWindowCount,
   waitForRendererRegistered,
   webViewTabTitle,
   withPlatformWindow,
@@ -187,35 +188,6 @@ async function expectWindowToHoldExactly(
   await expect(page.locator('.dock-tab')).toHaveCount(expectedWebViewIds.length);
 }
 
-/**
- * How long to let the window set settle before pinning its size. A window that is about to close —
- * or a second window that is about to be created — looks exactly like a settled set for a moment,
- * so the count is read once the wait is satisfied and then again after this pause.
- */
-const WINDOW_COUNT_SETTLE_MS = 5_000;
-
-/**
- * Wait until the app has exactly `expectedCount` windows, then confirm it still does after a
- * settle.
- */
-async function expectAppWindowCount(
-  electronApp: ElectronApplication,
-  expectedCount: number,
-  timeoutMs: number,
-  label: string,
-): Promise<void> {
-  await pollUntil(
-    async () => getAppPages(electronApp).length,
-    (count) => count === expectedCount,
-    timeoutMs,
-    label,
-  );
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, WINDOW_COUNT_SETTLE_MS);
-  });
-  expect(getAppPages(electronApp).length, label).toBe(expectedCount);
-}
-
 // #endregion
 
 // #region move failure marker
@@ -282,7 +254,7 @@ test.describe('moving a web view between windows', () => {
     const window1Id = getWindowIdOfPage(mainPage);
     await expect(homeTabTitle(mainPage)).toBeVisible({ timeout: 60_000 });
     const webViewId = await getHomeTabWebViewId(mainPage);
-    await expectAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
+    await waitForAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
 
     // Establish the routing target first, so "focus did not move" is a change that could have been
     // observed rather than a value that was never set.
@@ -291,7 +263,7 @@ test.describe('moving a web view between windows', () => {
     logStep(`window ${window1Id} holds focus before the move`);
 
     await moveWebViewToNewWindow(webViewId);
-    await expectAppWindowCount(electronApp, 2, 60_000, 'the moved web view to get its own window');
+    await waitForAppWindowCount(electronApp, 2, 60_000, 'the moved web view to get its own window');
 
     // Matched by the platform's own windowId query parameter, not Electron's numeric
     // `BrowserWindow.id` — see `withPlatformWindow`'s doc comment in `multi-window.util.ts`.
@@ -339,7 +311,7 @@ test.describe('moving a web view between windows', () => {
     await expect(
       mainPage.locator(`iframe[data-web-view-id="${webViewIdBeforeMove}"]`),
     ).toBeAttached({ timeout: 60_000 });
-    await expectAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
+    await waitForAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
     logStep(`window ${window1Id} holds web view ${webViewIdBeforeMove}`);
 
     // Drive the only route a user actually has today: the tab's own context menu. The window
@@ -446,7 +418,7 @@ test.describe('moving a web view between windows', () => {
     logStep(`window ${window1Id} docked its own Home tab as ${dockedHomeWebViewId}`);
 
     // Two windows, and exactly two: the moved web view's window, plus the window it left.
-    await expectAppWindowCount(
+    await waitForAppWindowCount(
       electronApp,
       2,
       60_000,
@@ -520,16 +492,16 @@ test.describe('moving a web view between windows', () => {
     // the same thing as closing that last tab. Only its ✕ and the Quit menu close it. Were it to
     // close here, no window would hold the primary role at all, and window 2 — the one the user is
     // now working in — would be a secondary whose ✕ drops its layout.
-    await expectAppWindowCount(
+    // Docked on the fly, so it carries a freshly minted id, distinct from the web view that moved
+    // out — see {@link expectWindowDockHasOnlyHomeTab}.
+    await expectWindowDockHasOnlyHomeTab(mainPage);
+    expect(mainPage.isClosed()).toBe(false);
+    await waitForAppWindowCount(
       electronApp,
       2,
       120_000,
       `window ${window1Id} to stay open after the move emptied it`,
     );
-    expect(mainPage.isClosed()).toBe(false);
-    // Docked on the fly, so it carries a freshly minted id, distinct from the web view that moved
-    // out — see {@link expectWindowDockHasOnlyHomeTab}.
-    await expectWindowDockHasOnlyHomeTab(mainPage);
     logStep(`window ${window1Id} docked Home after being emptied, as the primary`);
 
     // MOVE BACK OUT, to a window created for it. The source survives this one: it keeps its own
@@ -567,7 +539,7 @@ test.describe('moving a web view between windows', () => {
     expect(page2.isClosed()).toBe(false);
     logStep(`window ${window2Id} survived the move out, holding only its own Home tab`);
 
-    await expectAppWindowCount(
+    await waitForAppWindowCount(
       electronApp,
       3,
       60_000,
@@ -650,7 +622,7 @@ test.describe('moving a web view between windows', () => {
 
     // The source side, by the same rule the earlier moves assert: this move emptied window 3 while
     // window 2 was standing, so window 3 closes rather than docking a Home tab of its own
-    await expectAppWindowCount(
+    await waitForAppWindowCount(
       electronApp,
       2,
       120_000,
