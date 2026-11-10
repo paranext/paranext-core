@@ -159,23 +159,45 @@ async function waitForPortFree(
  * Resolves as soon as the launched process has exited or Playwright reports the app closed,
  * whichever comes first, or after `capMs` if neither does. Never rejects.
  *
- * The `exit` event is the one that matters on Windows, where the launched pid is a `cmd.exe`
- * wrapper that `taskkill /t` takes down with the rest of the tree; `appClosed` is Playwright's own
- * `close` event and also covers a disposed handle. The cap only bounds a process that reports
- * neither (the port poll that follows is the real readiness check), and its timer is cleared so it
- * does not outlive the wait.
+ * With a live ChildProcess handle the `exit` event is the signal; that matters on Windows, where
+ * the launched pid is a `cmd.exe` wrapper that `taskkill /t` takes down with the rest of the tree.
+ * Without a handle (Playwright disposed it) and with a `pid`, the pid is polled every 100 ms until
+ * the OS reports it dead. `appClosed` is Playwright's own `close` event. The cap only bounds a
+ * process that reports none of these (the port poll that follows is the real readiness check). The
+ * cap timer, the poll and the `exit` listener are all cleaned up when the wait ends.
  */
 async function waitForProcessGone(
   proc: ReturnType<ElectronApplication['process']> | undefined,
   appClosed: Promise<void>,
   capMs: number,
+  pid?: number,
 ): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
+  let exitHandler: (() => void) | undefined;
+  let polling = true;
   const exited = new Promise<void>((resolve) => {
-    // Node.js ChildProcess.exitCode/signalCode are null until the process exits
-    // eslint-disable-next-line no-null/no-null
-    if (!proc || proc.exitCode !== null || proc.signalCode !== null) resolve();
-    else proc.once('exit', () => resolve());
+    if (proc) {
+      // Node.js ChildProcess.exitCode/signalCode are null until the process exits
+      // eslint-disable-next-line no-null/no-null
+      if (proc.exitCode !== null || proc.signalCode !== null) {
+        resolve();
+        return;
+      }
+      exitHandler = () => resolve();
+      proc.once('exit', exitHandler);
+    } else if (pid === undefined) {
+      resolve();
+    } else {
+      const poll = async () => {
+        while (polling && isPidAlive(pid)) {
+          // Sequential polling: each probe follows the previous interval.
+          // eslint-disable-next-line no-await-in-loop
+          await sleep(100);
+        }
+        resolve();
+      };
+      poll();
+    }
   });
   const capped = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, capMs);
@@ -184,6 +206,8 @@ async function waitForProcessGone(
     await Promise.race([appClosed, exited, capped]);
   } finally {
     clearTimeout(timer);
+    polling = false;
+    if (proc && exitHandler) proc.off('exit', exitHandler);
   }
 }
 
@@ -1003,7 +1027,7 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
     console.log('[teardown] Sending SIGKILL to process group...');
     if (pid) killProcessTree(pid, 'SIGKILL');
     console.log('[teardown] Waiting for the process to exit after SIGKILL (up to 3s)...');
-    await waitForProcessGone(electronProcess, appClosed, 3_000);
+    await waitForProcessGone(electronProcess, appClosed, 3_000, pid);
     console.log('[teardown] Done waiting after SIGKILL');
   } else if (!electronProcess) {
     console.log('[teardown] Playwright handle already disposed and the OS process has exited.');
