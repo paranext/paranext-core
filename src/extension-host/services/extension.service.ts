@@ -1343,8 +1343,8 @@ function isExtensionInterfaceModule(
  * https://github.com/paranext/paranext/wiki/Module-import-restrictions
  */
 function requireForExtension(moduleName: string): unknown {
-  // Allow the extension to import papi and some other things. The list is EXTENSION_INTERFACE_MODULES
-  // (above), looked up rather than compared against name by name, so the set an extension may
+  // Allow the extension to import papi and some other things. The list is EXTENSION_INTERFACE_MODULES,
+  // looked up rather than compared against name by name, so the set an extension may
   // link against is a value a test can read instead of a source pattern it has to recognize.
   if (isExtensionInterfaceModule(moduleName)) return EXTENSION_INTERFACE_MODULES[moduleName];
 

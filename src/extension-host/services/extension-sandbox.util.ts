@@ -36,11 +36,13 @@ export function loadExtensionModule(
   );
 
   const extensionModule: { exports: unknown } = { exports: {} };
-  const requireForExtension = (moduleName: string): unknown => extensionRequire(moduleName);
+  // A fresh arrow, not `extensionRequire` itself, so extension code cannot read or reassign any
+  // properties the caller's function carries
+  const isolatedRequire = (moduleName: string): unknown => extensionRequire(moduleName);
   compiled.call(
     extensionModule.exports,
     extensionModule.exports,
-    requireForExtension,
+    isolatedRequire,
     extensionModule,
     entryFilePath,
     path.dirname(entryFilePath),

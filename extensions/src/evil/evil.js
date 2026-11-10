@@ -226,7 +226,12 @@ const evilFileWebViewProvider = {
   },
 };
 
-/** Substring of every error the extension host throws when it refuses an extension access */
+/**
+ * Substring of the errors the extension host's loader and lockdowns throw when they refuse an
+ * extension access. Must match `NOT_ALLOWED_IN_EXTENSIONS` in
+ * `src/extension-host/services/extension-sandbox.util.ts`; this file cannot import host code, so it
+ * keeps its own copy, and the probe tests fail if the two drift apart.
+ */
 const NOT_ALLOWED_IN_EXTENSIONS = 'not allowed in extensions';
 
 /**
