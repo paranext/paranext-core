@@ -206,10 +206,12 @@ async function placeWindowAndSettle(
 
 /**
  * How long the window count must hold at one after the interface-mode read answers before "no extra
- * window came back" is believed. The restore creates its secondary windows right after that read,
- * so three seconds is ample for the first of them to be reported.
+ * window came back" is believed. `restoreWindows` in `src/main/main.ts` creates the main window,
+ * awaits that same read, then creates the saved secondary windows one after another, so a window
+ * wrongly restored appears within the first few `createWindow` calls after the read. Five seconds
+ * covers those calls on a slow machine.
  */
-const RESTORE_QUIET_MS = 3_000;
+const RESTORE_QUIET_MS = 5_000;
 
 /**
  * The window size the app falls back to when a saved placement is unusable. Keep in sync with
