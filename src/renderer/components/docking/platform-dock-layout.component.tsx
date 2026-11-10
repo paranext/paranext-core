@@ -64,8 +64,8 @@ import { installMiddleClickTabBarHandlers } from '@renderer/components/docking/p
  * window's initial layout load has finished and React has rendered the result, so the layout it
  * brought is in the DOM. From then on that load will not replace the dock again. See
  * `registerDockLayout`'s `onInitialLayoutLoadFinished` for the cases it covers, including a load
- * that stood down without writing. Never set when the initial load fails, and never removed while
- * the dock is mounted.
+ * that stood down without writing. Never set when the initial load fails, and removed when the dock
+ * layout registers again, until that registration's initial load finishes.
  *
  * Nothing in the app reads it. It is what e2e tests wait on before acting on a freshly started
  * window's dock, since a tab they open before that load lands is replaced along with everything
@@ -127,6 +127,9 @@ export function PlatformDockLayout() {
   );
 
   useEffect(() => {
+    // Whether this registration is still the current one. A report from a superseded registration's
+    // load must not mark the dock the next registration is still loading.
+    let isCurrentRegistration = true;
     // Register with `web-view.service.ts` so it can perform operations on us
     const unsub = registerDockLayout(
       {
@@ -202,7 +205,9 @@ export function PlatformDockLayout() {
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         simpleLayout: simpleLayout as unknown as LayoutInfo,
       },
-      () => setHasInitialLayoutLoadFinished(true),
+      () => {
+        if (isCurrentRegistration) setHasInitialLayoutLoadFinished(true);
+      },
     );
 
     // Name the window from whatever it renders first, before any layout change has happened. No
@@ -213,6 +218,10 @@ export function PlatformDockLayout() {
     refreshWindowTitle();
 
     return () => {
+      isCurrentRegistration = false;
+      // A re-registration starts its own initial load, so the mark (removed by the effect below
+      // once this state clears) must not outlive the registration it described
+      setHasInitialLayoutLoadFinished(false);
       unsub();
       // This is not a component ref but just a timeout. We don't want to save the value from when
       // this hook first ran
