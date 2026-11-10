@@ -34,7 +34,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Autobuild uses whichever .NET SDK the runner has; install the one global.json names.
+      # Install the SDK global.json names, as the other workflows do.
       - name: Install .NET
         if: matrix.language == 'csharp'
         uses: actions/setup-dotnet@v4

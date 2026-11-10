@@ -2697,6 +2697,54 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   electron-builder makes staging the upstream files directly practical.
 - **Source:** the AGPL relicense branch; the multi-agent review of #2654.
 
+## adr-dotnet-sdk-pin-and-package-pruning: `global.json` sets the .NET SDK floor for builds and CI, and the SDK's package pruning keeps `System.Net.Http` 4.3.4 out
+
+- **Date:** 2026-11-10
+- **Status:** Accepted
+- **Context:** The data provider (`c-sharp/ParanextDataProvider.csproj`) and its test projects moved
+  from `net8.0` to `net10.0`, which needs a .NET 10 SDK. Until then the repository named no SDK:
+  each machine built with the newest SDK it had, and each CI workflow named its own version. On
+  `net8.0`, an explicit `System.Net.Http` 4.3.4 reference with `ExcludeAssets="all"` made
+  `project.assets.json` record only `_._` placeholders for `SIL.Core`'s transitive copy, so the
+  closure the third-party notices derive from did not see it
+  (`adr-notices-derived-from-what-ships`); the .NET 8 override table stopped at 4.3.0, so nothing
+  else would have dropped it. That package's pre-MIT license terms raise an AGPL question nobody
+  has settled (`LICENSING.md`, "The two Microsoft compatibility shims this project does not
+  ship").
+- **Decision:**
+  1. **`global.json` is the one place the SDK version lives.** It pins `10.0.100` with
+     `rollForward: latestFeature`, so any .NET 10 SDK at or above 10.0.100 builds and a newer major
+     SDK does not. Every CI `actions/setup-dotnet` step in this repository reads it
+     (`global-json-file: global.json`), which installs the newest 10.0 SDK. `chromatic.yml` and
+     `publish-docs.yml` install no SDK and use the runner image's, which must satisfy it too.
+  2. **The SDK's package pruning replaces the `ExcludeAssets` reference.** The .NET 10 SDK prunes
+     packages its shared framework supplies, `System.Net.Http` 4.3.4 and `System.Net.WebSockets`
+     4.3.0 among them, so neither reaches the assets file. The reference is removed, and the csproj
+     comment says never to reference either package for its assets. The notices generator would
+     drop 4.3.4 even without pruning: the .NET 10 override table lists `System.Net.Http` through
+     4.3.4.
+  3. **`NET10_FRAMEWORK_OVERRIDES` (`.erb/scripts/third-party-notices/nuget-set.ts`) stays at
+     10.0.0.** It is copied from the 10.0.0 targeting pack, the one bundled by SDK 10.0.100, the
+     oldest SDK `global.json` allows. Later SDKs only raise its entries, so the notices can
+     over-disclose a package but never omit one that ships.
+- **Alternatives:**
+  - No `global.json` — rejected: a developer with a newer major SDK installed, including a preview,
+    would build with an SDK CI never tests, and each workflow's version would drift separately.
+  - Pin an exact SDK (`rollForward: disable` or `latestPatch`) — rejected: every machine and
+    runner would need that one feature band, when any 10.0 SDK at or above it builds the project.
+  - Keep the `ExcludeAssets` reference — rejected: it is redundant under pruning, and a reference
+    to a package nobody may use for its assets invites someone to turn it into a real one.
+- **Consequences:** Raising the SDK floor within .NET 10 means editing `global.json` only; the
+  override table can stay at 10.0.0, because a newer floor only makes it over-disclose.
+  paratext-10-studio's workflows install .NET before they clone core, so they name `10.0.x`
+  themselves and must keep satisfying this file. If pruning ever stops covering `System.Net.Http`
+  4.3.4, the override table still keeps it out of the notices, matching publish, which picks the
+  framework's assembly. A newer version of the package is not dropped (`isFrameworkPackage`), so it
+  would change the notices and fail their check, and the license question must be answered before
+  it ships. **Revisit** when the data provider retargets past `net10.0`: both `global.json` and the
+  override table move with it.
+- **Source:** PT-4881, the .NET 8 to .NET 10 upgrade (paranext-core PR #2995).
+
 ## adr-durable-window-ids: Window ids are durable across a restart; the separate persisted-layout "slot" indirection is removed
 
 - **Date:** 2026-08-28

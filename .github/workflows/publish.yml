@@ -49,7 +49,6 @@ jobs:
       matrix:
         # Make sure these match with the env values above
         os: [windows-latest, macos-15, ubuntu-22.04]
-        dotnet_version: [10.0.x]
 
     steps:
       - name: Output Workflow Dispatch Inputs
@@ -152,7 +151,7 @@ jobs:
         timeout-minutes: 90
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet_version }}
+          global-json-file: global.json
 
       - name: Read package.json
         id: package_json

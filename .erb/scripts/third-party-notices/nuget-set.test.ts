@@ -525,8 +525,9 @@ describe('isFrameworkPackage', () => {
     ['System.ValueTuple', '4.6.1'],
     ['Microsoft.CSharp', '4.7.1'],
     ['System.Security.Cryptography.Xml', '4.7.1'],
-    // A patch above 10.0.0, the oldest runtime `global.json` allows. A newer SDK may drop it, but
-    // keeping it only over-discloses, which is the safe direction.
+    // A patch above 10.0.0, the runtime bundled by SDK 10.0.100, the oldest SDK `global.json`
+    // allows. A newer SDK may drop it, but keeping it only over-discloses, which is the safe
+    // direction.
     ['System.Collections.Immutable', '10.0.1'],
     // A version this comparison cannot order. `compareVersions` is a total order, so a component
     // it cannot read sorts as 0 and `5.0.x` compares EQUAL to the 5.0.0 the framework supersedes -

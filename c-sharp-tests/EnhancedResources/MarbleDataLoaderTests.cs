@@ -13,8 +13,9 @@ namespace TestParanextDataProvider.EnhancedResources;
 /// success with non-empty data is covered by the developer smoke check (Chunk 14),
 /// not here, because real encrypted marble zips cannot be checked in.
 ///
-/// The catastrophic-failure path is driven through the LoadCore subclass seam (see
-/// MarbleDataLoader.LoadCore for why no input can force it).
+/// The catastrophic-failure path is driven through the LoadCore subclass seam. An invalid
+/// path makes Directory.Exists return false rather than throw, so the seam is the portable
+/// way to force it (see MarbleDataLoader.LoadCore).
 /// </summary>
 [TestFixture]
 [ExcludeFromCodeCoverage]

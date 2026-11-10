@@ -57,9 +57,9 @@ export const DOTNET_MIN_PACKAGES = 40;
  * wholesale (see `isFrameworkPackage`). Refresh this if the data provider ever retargets past
  * net10.0.
  *
- * Keep it at 10.0.0, the oldest runtime `global.json` allows. The entries versioned `10.0.0` rise
- * with each patch release in the SDK's own copy, so a newer SDK can only drop a package this list
- * keeps (over-disclosure), never ship one this list drops.
+ * Keep it at 10.0.0, the runtime bundled by SDK 10.0.100, the oldest SDK `global.json` allows. The
+ * entries versioned `10.0.0` rise with each patch release in the SDK's own copy, so a newer SDK can
+ * only drop a package this list keeps (over-disclosure), never ship one this list drops.
  */
 const NET10_FRAMEWORK_OVERRIDES = `
 Microsoft.CSharp|4.7.0 Microsoft.VisualBasic|10.4.0 Microsoft.Win32.Primitives|4.3.0
