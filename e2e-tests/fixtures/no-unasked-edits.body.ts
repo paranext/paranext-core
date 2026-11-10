@@ -137,13 +137,32 @@ const BUNDLED_WEB_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
 /** Folder the backend installs the sample project into, under the project root. */
 const INSTALLED_WEB_FOLDER = 'WEB';
 
+/** The editor web view's source, where its save debounce is declared. */
+const EDITOR_WEB_VIEW_SOURCE = path.resolve(
+  __dirname,
+  '../../extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+);
+
 /**
- * The editor's trailing-edge save debounce. Copied from `PDP_SAVE_DEBOUNCE_MS` in
- * `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`, which is
- * not exported; keep the two in step. It is the only deliberate delay between an edit (or a load)
- * and the write it causes.
+ * Reads `PDP_SAVE_DEBOUNCE_MS` from the editor web view's source, which does not export it. Throws
+ * if the declaration is missing or not a plain number, so a change to how the editor declares its
+ * debounce fails loudly here instead of leaving every quiet window silently too short.
  */
-const EDITOR_SAVE_DEBOUNCE_MS = 700;
+function readEditorSaveDebounceMs(): number {
+  const source = fs.readFileSync(EDITOR_WEB_VIEW_SOURCE, 'utf8');
+  const match = /const PDP_SAVE_DEBOUNCE_MS\s*=\s*(\d[\d_]*)\s*;/.exec(source);
+  if (!match)
+    throw new Error(
+      `Could not find "const PDP_SAVE_DEBOUNCE_MS = <number>;" in ${EDITOR_WEB_VIEW_SOURCE}; update readEditorSaveDebounceMs to match how the editor declares its save debounce`,
+    );
+  return Number(match[1].replace(/_/g, ''));
+}
+
+/**
+ * The editor's trailing-edge save debounce, read from the editor's own source. It is the only
+ * deliberate delay between an edit (or a load) and the write it causes.
+ */
+const EDITOR_SAVE_DEBOUNCE_MS = readEditorSaveDebounceMs();
 
 /**
  * Headroom for the writes that follow the debounce: the save's round trip through the extension
@@ -160,6 +179,15 @@ const SAVE_ROUND_TRIPS_MARGIN_MS = 1_000;
  * and as the quiet that follows an expected write.
  */
 const SAVE_PATH_QUIET_MS = EDITOR_SAVE_DEBOUNCE_MS + SAVE_ROUND_TRIPS_MARGIN_MS;
+
+/**
+ * The quiet that must follow an edit's write before the file or project counts as settled. The
+ * first save can be followed by a chained second write (its echo comes back, and the editor pushes
+ * back or starts a second debounce), and the polling loops sample every 250 ms, which shortens the
+ * effective window; so this allows a second full debounce on top of {@link SAVE_PATH_QUIET_MS}.
+ * {@link SAVE_PATH_QUIET_MS} alone is only for checks that a step caused no write at all.
+ */
+const SAVE_SETTLE_QUIET_MS = SAVE_PATH_QUIET_MS + EDITOR_SAVE_DEBOUNCE_MS;
 
 /**
  * The one long quiet window kept at the end of a run, a backstop for a write that arrives later
@@ -772,7 +800,7 @@ async function expectChangesOnlyIn(
 
 /**
  * Waits until the file's bytes stop matching `previous` — a save reached the disk — and then until
- * they have held still for {@link SAVE_PATH_QUIET_MS}, so a second write still in flight is not
+ * they have held still for {@link SAVE_SETTLE_QUIET_MS}, so a second write still in flight is not
  * missed. Returns the settled bytes, or `undefined` if no write landed within the timeout.
  */
 async function waitForSaveToSettle(
@@ -790,7 +818,7 @@ async function waitForSaveToSettle(
     current = fs.readFileSync(filePath);
   }
   let quietSince = Date.now();
-  while (Date.now() - quietSince < SAVE_PATH_QUIET_MS) {
+  while (Date.now() - quietSince < SAVE_SETTLE_QUIET_MS) {
     await page.waitForTimeout(250);
     const next = fs.readFileSync(filePath);
     if (!next.equals(current)) {
@@ -805,7 +833,8 @@ async function waitForSaveToSettle(
 /**
  * Leaves the app alone for `ms`, so a write that was going to happen has. The event this stands in
  * for is a write that never comes: nothing in the app, the PAPI or the file system announces it, so
- * the only evidence is time. Use {@link SAVE_PATH_QUIET_MS} unless it is the end-of-run backstop.
+ * the only evidence is time, so this is a deliberate sleep, not a stand-in for a missed wait. Use
+ * {@link SAVE_PATH_QUIET_MS} unless it is the end-of-run backstop.
  */
 async function waitForNoWrite(page: Page, ms: number = SAVE_PATH_QUIET_MS): Promise<void> {
   await page.waitForTimeout(ms);
@@ -1185,7 +1214,7 @@ function isSameSnapshot(first: ProjectSnapshot, second: ProjectSnapshot): boolea
 const PROJECT_SETTLE_TIMEOUT_MS = 60_000;
 
 /**
- * The installed project once no file of it has changed for {@link SAVE_PATH_QUIET_MS}: for a
+ * The installed project once no file of it has changed for {@link SAVE_SETTLE_QUIET_MS}: for a
  * baseline taken after an edit, whose save can be followed by a second write still in flight.
  */
 async function snapshotSettledProject(page: Page): Promise<ProjectSnapshot> {
@@ -1194,7 +1223,7 @@ async function snapshotSettledProject(page: Page): Promise<ProjectSnapshot> {
   let quietSince = Date.now();
   // Sequential polling of the folder: each snapshot decides whether to take another.
   /* eslint-disable no-await-in-loop */
-  while (Date.now() - quietSince < SAVE_PATH_QUIET_MS) {
+  while (Date.now() - quietSince < SAVE_SETTLE_QUIET_MS) {
     if (Date.now() > deadline)
       throw new Error(
         `The installed project kept changing for ${PROJECT_SETTLE_TIMEOUT_MS}ms before the editor opened`,
