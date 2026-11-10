@@ -56,6 +56,9 @@ export function panelLocator(page: Page, panelId: string): Locator {
  * does.
  *
  * A floating panel's tabs count too, so call it before the test opens one.
+ *
+ * An empty dock returns with no tab present, so a caller that needs a tab must wait for that tab
+ * itself.
  */
 export async function waitForFirstLayoutLoad(page: Page, timeout = 60_000): Promise<void> {
   const start = Date.now();
