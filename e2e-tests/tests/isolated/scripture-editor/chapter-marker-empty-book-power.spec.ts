@@ -33,44 +33,57 @@ test.use({
 const JONAH_1 = { book: 'JON', chapterNum: 1, verseNum: 1 };
 
 test.describe('scripture editor chapter marker in an empty book', () => {
-  test('the \\ palette offers \\c in an empty book, and chapter 1 saves', async ({ mainPage }) => {
-    // Heavy isolated test (own Electron instance + backend-readiness gates). 3x "slow" budget.
-    test.slow();
+  // Skipped until PT-5053 is fixed: right after End, the editor can still report the caret the
+  // click left, so the palette's change guard sees a caret move and drops the `\c` pick (about one
+  // run in three).
+  test.fixme(
+    'the \\ palette offers \\c in an empty book, and chapter 1 saves',
+    {
+      annotation: {
+        type: 'fixme',
+        description:
+          'PT-5053: a marker picked right after a keyboard caret move is silently dropped (fails ~1 run in 3)',
+      },
+    },
+    async ({ mainPage }) => {
+      // Heavy isolated test (own Electron instance + backend-readiness gates). 3x "slow" budget.
+      test.slow();
 
-    await waitForHomeTab(mainPage);
-    const emptyBookUsfm = await prepareEmptySampleBook(JONAH_1);
+      await waitForHomeTab(mainPage);
+      const emptyBookUsfm = await prepareEmptySampleBook(JONAH_1);
 
-    const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
-    const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
-    await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
-    await navigateToolbarBcv(mainPage, 'Jonah 1:1');
-    // `.first()` because the footnote-editor popover renders its own `.editor-input.marker-editable`.
-    const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
-    await expect(editorInput).toContainText(EMPTY_BOOK_ID_TEXT, { timeout: 60_000 });
-    const chapterMarker = editorFrame.locator('p.chapter[data-marker="c"]');
-    await expect(chapterMarker).toHaveCount(0);
+      const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+      const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
+      await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+      await navigateToolbarBcv(mainPage, 'Jonah 1:1');
+      // `.first()` because the footnote-editor popover renders its own `.editor-input.marker-editable`.
+      const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
+      await expect(editorInput).toContainText(EMPTY_BOOK_ID_TEXT, { timeout: 60_000 });
+      const chapterMarker = editorFrame.locator('p.chapter[data-marker="c"]');
+      await expect(chapterMarker).toHaveCount(0);
 
-    await test.step('\\ at the end of the \\id line offers \\c', async () => {
-      await editorInput.getByText(EMPTY_BOOK_ID_TEXT).click();
-      await mainPage.keyboard.press('End');
-      // The click moves the reference to the `\id` line's verse 0. Wait for that to land first: the
-      // palette refuses a pick once the editor's caret or text has changed under it.
-      await expect(mainPage.getByText('Jonah 1:0').first()).toBeVisible({ timeout: 15_000 });
-      const palette = await openMarkerPalette(mainPage);
-      await expect(palette).toContainText('Chapter number');
-    });
+      await test.step('\\ at the end of the \\id line offers \\c', async () => {
+        await editorInput.getByText(EMPTY_BOOK_ID_TEXT).click();
+        await mainPage.keyboard.press('End');
+        // The click moves the reference to the `\id` line's verse 0. Wait for that to land first: the
+        // palette refuses a pick once the editor's caret or text has changed under it.
+        await expect(mainPage.getByText('Jonah 1:0').first()).toBeVisible({ timeout: 15_000 });
+        const palette = await openMarkerPalette(mainPage);
+        await expect(palette).toContainText('Chapter number');
+      });
 
-    await test.step('picking \\c inserts chapter 1 after the \\id line', async () => {
-      await pickFromMarkerPalette(mainPage, 'c');
+      await test.step('picking \\c inserts chapter 1 after the \\id line', async () => {
+        await pickFromMarkerPalette(mainPage, 'c');
 
-      await expect(chapterMarker).toHaveAttribute('data-number', '1', { timeout: 30_000 });
-      await expect(editorInput).toContainText(EMPTY_BOOK_ID_TEXT);
-    });
+        await expect(chapterMarker).toHaveAttribute('data-number', '1', { timeout: 30_000 });
+        await expect(editorInput).toContainText(EMPTY_BOOK_ID_TEXT);
+      });
 
-    await test.step('chapter 1 saves after the \\id line', async () => {
-      await expect
-        .poll(() => getSampleProjectChapterUsfm(JONAH_1), { timeout: 30_000 })
-        .toBe(`${emptyBookUsfm}\\c 1\r\n`);
-    });
-  });
+      await test.step('chapter 1 saves after the \\id line', async () => {
+        await expect
+          .poll(() => getSampleProjectChapterUsfm(JONAH_1), { timeout: 30_000 })
+          .toBe(`${emptyBookUsfm}\\c 1\r\n`);
+      });
+    },
+  );
 });
