@@ -2281,6 +2281,38 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
   await expect(page.locator('.pr-twp [role="status"]')).not.toBeVisible({ timeout });
 }
 
+/**
+ * A window's dock once its initial layout load has finished and React has rendered the result:
+ * `PlatformDockLayout` then sets `data-layout-loaded="true"` on rc-dock's root element
+ * (`LAYOUT_LOADED_ATTRIBUTE` in
+ * `src/renderer/components/docking/platform-dock-layout.component.tsx`). Everything that load
+ * brought is in the DOM by then, and it will not replace the dock again.
+ */
+export const DOCK_LAYOUT_LOADED_SELECTOR = '.dock-layout[data-layout-loaded="true"]';
+
+/**
+ * Wait until a window's initial layout load has finished — see {@link DOCK_LAYOUT_LOADED_SELECTOR}.
+ *
+ * That load can take seconds (it asks the main process for the window's saved layout, with retries)
+ * and replaces the whole dock when it lands, so a tab opened before it is lost or ends up in
+ * another panel. It covers a load that stood down without writing, too: one that found content
+ * already docked (a web view moved into a new window) leaves the dock as it is. It does NOT cover
+ * tabs the main process routes into the window afterwards, such as the Home tab a window born empty
+ * gets.
+ */
+export async function waitForDockLayoutLoaded(page: Page, timeout: number): Promise<void> {
+  try {
+    await page.waitForSelector(DOCK_LAYOUT_LOADED_SELECTOR, { state: 'attached', timeout });
+  } catch (error) {
+    throw new Error(
+      `the dock's initial layout load did not finish within ${timeout} ms (no ` +
+        `${DOCK_LAYOUT_LOADED_SELECTOR}). A load that fails never sets it: look for "Initial ` +
+        'loadLayout failed" in the renderer log.',
+      { cause: error },
+    );
+  }
+}
+
 /** What the gate is showing, once it is known to be showing something. */
 interface StuckGateObservations {
   escapeHatchVisible: boolean;
@@ -2733,7 +2765,7 @@ export function describeInconclusiveOverlayTimeout(
 /** Options accepted by {@link waitForAppReady}. */
 export interface WaitForAppReadyOptions {
   /**
-   * Budget for the whole readiness sequence, shared across its three waits.
+   * Budget for the whole readiness sequence, shared across its waits.
    *
    * @default 90_000
    */
@@ -2752,9 +2784,13 @@ export interface WaitForAppReadyOptions {
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
  * platform-dock layout to appear, then for a renderer to finish registering every window-scoped
  * shard the main process routes a command to (the dock can render before that async work
- * completes), then for the rare first-run-gate race to clear if it happened, and finally for the
- * full-screen initialization overlay to clear. The overlay lingers while async services (settings,
- * theme) finish initializing — it must be gone before tests interact with the UI.
+ * completes), then for the rare first-run-gate race to clear if it happened, then for the
+ * full-screen initialization overlay to clear, and finally for the dock's initial layout load to
+ * finish. The overlay lingers while async services (settings, theme) finish initializing — it must
+ * be gone before tests interact with the UI. The layout load can outlast it, and replaces the whole
+ * dock when it lands (see {@link waitForDockLayoutLoaded}). Tab titles may still show `%key%`
+ * localization placeholders when this returns; `waitForFirstLayoutLoad` in `dock-tab-helpers.ts`
+ * also waits for those.
  *
  * Unless `allowOnboardingTour` is set, also suppresses the onboarding tour — see
  * {@link suppressOnboardingTour} for why and how.
@@ -2792,6 +2828,10 @@ export async function waitForAppReady(
       throw describeInconclusiveOverlayTimeout(error, gateOutcome.sampleReadFailure);
     throw error;
   }
+  // The overlay clears without waiting for the dock's initial layout load, which then replaces the
+  // whole dock when it lands; a test acting on the dock before that loses what it opened
+  const remainingForLayoutLoad = Math.max(1000, timeout - (Date.now() - start));
+  await waitForDockLayoutLoaded(page, remainingForLayoutLoad);
   if (!allowOnboardingTour) await suppressOnboardingTour(page);
 }
 
