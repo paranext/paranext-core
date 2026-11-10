@@ -72,8 +72,8 @@ windows off the desktop, so expect them to open and close in front of you for th
 the machine alone and keep the session unlocked while it runs. A locked session (Win+L), or anything
 else that steals focus, breaks the tests that assert real window focus (the `multi-window` subset).
 
-A healthy teardown prints `[teardown] Port 8876 is free` between tests, with no `still in use` or
-`EBUSY` lines.
+A healthy teardown prints `[teardown +<n>ms] Port 8876 is free` between tests (the log tags carry
+the milliseconds elapsed in that phase), with no `still in use` or `EBUSY` lines.
 
 ### If it goes wrong
 

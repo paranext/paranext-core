@@ -54,6 +54,8 @@ const SCOPED_SHARD_METHODS = [
 ];
 
 const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
+/** Poll interval of {@link waitForPapiMethodsRegistered}: one `rpc.discover` fetch per round. */
+const RPC_DISCOVER_SET_POLL_INTERVAL_MS = 100;
 export const PROCESS_READY_TIMEOUT = 120_000;
 
 /**
@@ -94,6 +96,15 @@ export interface ElectronAppContext {
    * reuse it. Carried over from {@link LaunchElectronAppOptions.preserveUserDataDir}.
    */
   preserveUserDataDir?: boolean;
+}
+
+/**
+ * Log tag with the milliseconds elapsed since `startMs`, e.g. `[setup +3412ms]`, so one run's
+ * output shows how long each phase of a launch or teardown took. The tag name stays first so a
+ * search for `[setup` or `[teardown` still finds every line.
+ */
+function elapsedTag(tag: string, startMs: number): string {
+  return `[${tag} +${Date.now() - startMs}ms]`;
 }
 
 /**
@@ -196,7 +207,9 @@ async function waitForProcessGone(
         }
         resolve();
       };
-      poll();
+      // Never rejects out of this fire-and-forget loop: a throwing probe ends the wait instead of
+      // leaving `exited` pending until the cap.
+      poll().catch(() => resolve());
     }
   });
   const capped = new Promise<void>((resolve) => {
@@ -211,7 +224,14 @@ async function waitForProcessGone(
   }
 }
 
-/** Wait for the WebSocket server to be ready on the specified port. */
+/** Delay between failed connects in {@link waitForWebSocketReady}. */
+const WEBSOCKET_READY_RETRY_MS = 100;
+
+/**
+ * Wait for the WebSocket server to be ready on the specified port. Each attempt is capped at 2 s: a
+ * refused connect returns at once, so the cap only bounds a server that accepts the TCP connection
+ * but is slow to finish the handshake.
+ */
 async function waitForWebSocketReady(port: number, timeout: number): Promise<void> {
   const startTime = Date.now();
 
@@ -243,7 +263,8 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
       // Sequential polling: each attempt must finish (or time out) before the next;
       // parallelizing would defeat the retry/backoff.
       // eslint-disable-next-line no-await-in-loop
-      await sleep(500);
+      // A refused connect fails immediately, so this is the real retry cadence while the app boots.
+      await sleep(WEBSOCKET_READY_RETRY_MS);
     }
   }
   throw new Error(`WebSocket server not ready on port ${port} after ${timeout}ms`);
@@ -673,7 +694,7 @@ export async function assertInterfaceMode(
   let lastReadError: unknown;
   try {
     const remainingForRegistration = Math.max(1000, timeoutMs - (Date.now() - start));
-    await waitForPapiMethodRegistered(SETTINGS_GET_METHOD, undefined, remainingForRegistration);
+    await waitForPapiMethodsRegistered([SETTINGS_GET_METHOD], undefined, remainingForRegistration);
     // Polled, not read once: `set()` calls (including our own pin) are async too, so a single read
     // right as the provider registers can still race a write that landed a moment later.
     await expect
@@ -825,8 +846,9 @@ export async function launchElectronApp(
   opts: LaunchElectronAppOptions = {},
 ): Promise<ElectronAppContext> {
   const rootDir = path.resolve(__dirname, '../..');
+  const launchStart = Date.now();
 
-  console.log(`Launching Electron app from project root: ${rootDir}`);
+  console.log(`[setup +0ms] Launching Electron app from project root: ${rootDir}`);
 
   // Use an isolated user-data directory so the singleton instance lock does not
   // conflict with any already-running Platform.Bible instance. A caller-supplied directory (a
@@ -903,7 +925,9 @@ export async function launchElectronApp(
   }
 
   // Wait for WebSocket server to be ready (port 8876)
-  console.log('Waiting for WebSocket server on port 8876...');
+  console.log(
+    `${elapsedTag('setup', launchStart)} Electron launched; waiting for WebSocket server on port 8876...`,
+  );
   try {
     await waitForWebSocketReady(DEFAULT_WEBSOCKET_PORT, PROCESS_READY_TIMEOUT);
   } catch (error) {
@@ -919,7 +943,7 @@ export async function launchElectronApp(
     restoreAppGlobalState();
     throw error;
   }
-  console.log('WebSocket server is ready');
+  console.log(`${elapsedTag('setup', launchStart)} WebSocket server is ready`);
 
   // Register the close listener BEFORE yielding to tests. The 'close' event
   // fires once — if we registered it after use(), it could already be gone by
@@ -980,6 +1004,7 @@ export function removeUserDataDirBestEffort(userDataDir: string): void {
  */
 export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void> {
   const { electronApp, userDataDir, appClosed, appPid, preserveUserDataDir } = ctx;
+  const teardownStart = Date.now();
 
   // Teardown: kill the OS process and wait for Playwright to passively detect
   // the disconnection via the 'close' event registered above.
@@ -996,7 +1021,7 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   }
   const pid = electronProcess?.pid ?? appPid;
   console.log(
-    `[teardown] Closing Electron app... pid=${pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
+    `${elapsedTag('teardown', teardownStart)} Closing Electron app... pid=${pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
   );
 
   // On Linux, processLauncher.js spawns Electron with `detached: true`, making Electron the leader
@@ -1022,15 +1047,19 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   if (isProcessAlive()) {
     if (!electronProcess)
       console.log(
-        `[teardown] Playwright handle already disposed but pid ${pid} is still alive — killing anyway...`,
+        `${elapsedTag('teardown', teardownStart)} Playwright handle already disposed but pid ${pid} is still alive — killing anyway...`,
       );
-    console.log('[teardown] Sending SIGKILL to process group...');
+    console.log(`${elapsedTag('teardown', teardownStart)} Sending SIGKILL to process group...`);
     if (pid) killProcessTree(pid, 'SIGKILL');
-    console.log('[teardown] Waiting for the process to exit after SIGKILL (up to 3s)...');
+    console.log(
+      `${elapsedTag('teardown', teardownStart)} Waiting for the process to exit after SIGKILL (up to 3s)...`,
+    );
     await waitForProcessGone(electronProcess, appClosed, 3_000, pid);
-    console.log('[teardown] Done waiting after SIGKILL');
+    console.log(`${elapsedTag('teardown', teardownStart)} Done waiting after SIGKILL`);
   } else if (!electronProcess) {
-    console.log('[teardown] Playwright handle already disposed and the OS process has exited.');
+    console.log(
+      `${elapsedTag('teardown', teardownStart)} Playwright handle already disposed and the OS process has exited.`,
+    );
   }
 
   // Wait for the extension-host's WebSocket server (port 8876) to release the port before the next
@@ -1038,20 +1067,22 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // to unbind after being signalled, and keep port 8876 bound in the meantime, causing the next
   // test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
   // preserve-and-return path too, since a relaunch reuses the same fixed port 8876.
-  console.log('[teardown] Waiting for port 8876 to be free...');
+  console.log(`${elapsedTag('teardown', teardownStart)} Waiting for port 8876 to be free...`);
   const portFreed = await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000, 100);
-  if (portFreed) console.log('[teardown] Port 8876 is free');
+  if (portFreed) console.log(`${elapsedTag('teardown', teardownStart)} Port 8876 is free`);
 
   // A preserved profile stays on disk so a later launch can relaunch into it (see
   // LaunchElectronAppOptions.preserveUserDataDir). The last teardown of a relaunch chain runs with
   // the flag unset and deletes the directory below.
   if (preserveUserDataDir) {
-    console.log(`[teardown] Preserving user data dir for relaunch: ${userDataDir}`);
-    console.log('[teardown] Complete');
+    console.log(
+      `${elapsedTag('teardown', teardownStart)} Preserving user data dir for relaunch: ${userDataDir}`,
+    );
+    console.log(`${elapsedTag('teardown', teardownStart)} Complete`);
     return;
   }
 
-  console.log('[teardown] Cleaning up user data dir...');
+  console.log(`${elapsedTag('teardown', teardownStart)} Cleaning up user data dir...`);
 
   // Clean up the isolated user-data directory. See removeUserDataDirBestEffort for why this retries
   // rather than trusting the first attempt.
@@ -1063,7 +1094,7 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // never reaches its final, non-preserving teardown — for global teardown's
   // restoreAppGlobalState()/restoreLeakedSettings() call to recover as a safety net.
   restoreAppGlobalState();
-  console.log('[teardown] Complete');
+  console.log(`${elapsedTag('teardown', teardownStart)} Complete`);
 }
 
 /**
@@ -1204,6 +1235,55 @@ export async function waitForPapiMethodRegistered(
     await sleep(sleepMs);
   }
   throw new Error(`PAPI method "${methodName}" not listed in rpc.discover within ${timeoutMs}ms`);
+}
+
+/**
+ * Poll `rpc.discover` until EVERY entry of `methodNames` has a matching registered method, or
+ * `timeoutMs` elapses. One `rpc.discover` fetch per round serves the whole set, so waiting for
+ * several methods costs no more requests than waiting for one. The timeout error names the entries
+ * still missing at the last successful fetch.
+ *
+ * @param methodNames Exact method names or patterns (see {@link waitForPapiMethodRegistered})
+ */
+export async function waitForPapiMethodsRegistered(
+  methodNames: ReadonlyArray<string | RegExp>,
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  timeoutMs = PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+): Promise<void> {
+  const isMatch = (methodName: string | RegExp, name: string) =>
+    typeof methodName === 'string' ? name === methodName : methodName.test(name);
+  const start = Date.now();
+  let missing: ReadonlyArray<string | RegExp> = methodNames;
+  while (Date.now() - start < timeoutMs) {
+    const remaining = timeoutMs - (Date.now() - start);
+    try {
+      // Sequential polling: each attempt must finish (or time out) before the next;
+      // parallelizing would defeat the retry/backoff.
+      // eslint-disable-next-line no-await-in-loop
+      const result = await sendPapiRequestOnce<RpcDiscoverResult>(
+        GET_METHODS,
+        [],
+        port,
+        singleAttemptBudgetMs(remaining),
+      );
+      const registered = result.methods ?? [];
+      missing = methodNames.filter(
+        (methodName) => !registered.some((m) => isMatch(methodName, m.name)),
+      );
+      if (missing.length === 0) return;
+    } catch {
+      /* next poll */
+    }
+    const sleepMs = Math.min(RPC_DISCOVER_SET_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    if (sleepMs <= 0) break;
+    // Sequential polling: each attempt must finish (or time out) before the next;
+    // parallelizing would defeat the retry/backoff.
+    // eslint-disable-next-line no-await-in-loop
+    await sleep(sleepMs);
+  }
+  throw new Error(
+    `PAPI method(s) ${missing.map((m) => `"${m}"`).join(', ')} not listed in rpc.discover within ${timeoutMs}ms`,
+  );
 }
 
 /**
@@ -2804,16 +2884,20 @@ export async function waitForAppReady(
     state: 'attached',
     timeout,
   });
-  // Waited on together: the renderer starts them together too, so they arrive within a poll of one
-  // another and waiting one after another would spend the timeout budget several times over
+  console.log(`${elapsedTag('ready', start)} dock layout attached`);
+  // One discover fetch per poll serves every shard: the renderer starts them together, so they
+  // arrive within a poll of one another and waiting one after another would spend the timeout
+  // budget several times over
   const remainingForShards = Math.max(1000, timeout - (Date.now() - start));
-  await Promise.all(
-    SCOPED_SHARD_METHODS.map((scopedShardMethod) =>
-      waitForPapiMethodRegistered(scopedShardMethod, DEFAULT_WEBSOCKET_PORT, remainingForShards),
-    ),
+  await waitForPapiMethodsRegistered(
+    SCOPED_SHARD_METHODS,
+    DEFAULT_WEBSOCKET_PORT,
+    remainingForShards,
   );
+  console.log(`${elapsedTag('ready', start)} scoped shard methods registered`);
   const remainingForFirstRunGate = Math.max(1000, timeout - (Date.now() - start));
   const gateOutcome = await dismissStuckFirstRunGate(page, remainingForFirstRunGate);
+  console.log(`${elapsedTag('ready', start)} first-run gate settled`);
   const remainingForOverlay = Math.max(1000, timeout - (Date.now() - start));
   // Services like settings and theme finish async work after the dock layout mounts and the shards
   // register, so the overlay can outlast both earlier signals.
@@ -2828,11 +2912,14 @@ export async function waitForAppReady(
       throw describeInconclusiveOverlayTimeout(error, gateOutcome.sampleReadFailure);
     throw error;
   }
+  console.log(`${elapsedTag('ready', start)} initialization overlay gone`);
   // The overlay clears without waiting for the dock's initial layout load, which then replaces the
   // whole dock when it lands; a test acting on the dock before that loses what it opened
   const remainingForLayoutLoad = Math.max(1000, timeout - (Date.now() - start));
   await waitForDockLayoutLoaded(page, remainingForLayoutLoad);
+  console.log(`${elapsedTag('ready', start)} dock layout loaded`);
   if (!allowOnboardingTour) await suppressOnboardingTour(page);
+  console.log(`${elapsedTag('ready', start)} ready`);
 }
 
 /** The fields of an open web view definition these helpers read. */
