@@ -182,6 +182,13 @@ const EDITOR_SAVE_DEBOUNCE_MS = readEditorSaveDebounceMs();
 const SAVE_ROUND_TRIP_MS = 500;
 
 /**
+ * How long a freshly opened chapter is left alone before the first gesture: one editor save
+ * debounce plus two round trips, the longest a load-triggered save takes to reach disk. Without it
+ * such a save could be coalesced into the first typing save and go unnoticed.
+ */
+const LOAD_WRITE_WINDOW_MS = EDITOR_SAVE_DEBOUNCE_MS + 2 * SAVE_ROUND_TRIP_MS;
+
+/**
  * How long a run leaves the editor alone once a save has landed, before the next gesture: one round
  * trip, so the write's echo has reached the editor and been applied or deferred, as it would have
  * during a user's pause. Nothing the test can observe marks the echo's arrival (a deferred echo
@@ -1403,7 +1410,10 @@ async function runLoadAndUndoSteps(
   where: string,
   expectedFirstSave: Buffer = expectedAfterFirstSave(installed, chapter.chapterNum),
 ): Promise<Buffer> {
-  // 1. Loading never writes.
+  // 1. Loading never writes. Still inside the caller's no-write "opening" phase: give a save the
+  // load might trigger time to land there, rather than merge into the typing save below, where it
+  // would pass as that save's normalization. A write that never comes cannot be waited on.
+  await mainPage.waitForTimeout(LOAD_WRITE_WINDOW_MS);
   const afterLoad = recorder.lastSeen(chapter.bookFile) ?? Buffer.alloc(0);
   await expectSameBytes(
     chapter.bookFile,
