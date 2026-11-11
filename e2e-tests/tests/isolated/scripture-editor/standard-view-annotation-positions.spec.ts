@@ -60,13 +60,20 @@
  * scripture editor's web view controller network object (`object:webViewController<webViewId>.…`),
  * the same surface extensions use.
  *
- * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a SECOND Electron
- * instance launched against the shared webpack renderer dev server has a documented failure mode
- * where new dock tabs never render (see isolated.fixture.ts). The scenarios run as test.step()s
- * sharing the one instance and one loaded chapter, in an order that types content only after the
- * read-only scenarios, then addresses what that typing settles to, then the chapter's own last
- * position, and — because a failing step aborts every later one — whether an UNRELATED
- * `setAnnotation` disturbs typing still in progress elsewhere in the same text, last of all.
+ * The first test runs its scenarios as test.step()s sharing one app and one loaded chapter, in an
+ * order that types content only after the read-only scenarios, then addresses what that typing
+ * settles to, then the chapter's own last position, and — because a failing step aborts every later
+ * one — whether an UNRELATED `setAnnotation` disturbs typing still in progress elsewhere in the
+ * same text, last of all.
+ *
+ * The second test runs on its own app, because it needs the `\wj` span untouched by the first
+ * test's annotation and edits. Standard view shows every space of a run of two or more as an NBSP,
+ * so the run stays visible while the user types, and the editor→USJ conversion collapses the run to
+ * one space — the USJ a caller computes positions against never has the run. A coordinate model
+ * that counts the run's extra spaces puts every position after it that many characters off, in both
+ * directions. The run is typed between `Woman,` and `what` at the start of John 2:4's `\wj` text,
+ * and each of its scenarios addresses characters AFTER it: a clicked caret, `selectRange` and
+ * `setAnnotation` over the span's last offsets.
  *
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into the empty root): `npm run test:e2e:isolated
@@ -113,6 +120,9 @@ const PENDING_ANNOTATION_ID = 'pending-attribute-word-after';
 const ATTRIBUTE_ANNOTATION_ID = 'attribute-value-probe';
 const VERSE_ANNOTATION_ID = 'verse-number-probe';
 const CLICKED_ANNOTATION_ID = 'clicked-verse-number-probe';
+const SPACE_RUN_ANNOTATION_ID = 'space-run-probe';
+/** Where the space-run test's run goes: right after the existing space that follows `Woman,`. */
+const SPACE_RUN_AFTER = '“Woman, ';
 /**
  * The command a clicked annotation runs. Nothing registers it: the web view scrolls to the
  * annotation before it sends the command, so the send failing (and being logged) does not matter.
@@ -314,7 +324,7 @@ test.describe('scripture editor settled positions', () => {
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, a chapter load and
-    // three editor round trips). 3x "slow" budget — see standard-default-power-mode.spec.ts.
+    // three editor round trips). 3x "slow" budget — see preview-read-only-power-mode.spec.ts.
     test.slow();
 
     const { editorId, editorInput, chapterUsj, jsonPath, charText } =
@@ -1054,6 +1064,117 @@ test.describe('scripture editor settled positions', () => {
       } finally {
         await setUserSetting(MARKER_SETTLE_DELAY_SETTING_KEY, DEFAULT_MARKER_SETTLE_DELAY_MS);
       }
+    });
+  });
+
+  test('positions past a space run the user typed address the text they name', async ({
+    mainPage,
+  }) => {
+    // Heavy isolated test (own Electron instance, backend-readiness gates, a chapter load, typing,
+    // and three editor round trips). 3x "slow" budget — see preview-read-only-power-mode.spec.ts.
+    test.slow();
+
+    const { editorId, editorInput, jsonPath, charText } = await openTargetVerseEditor(mainPage);
+
+    /** The span's content as the browser holds it: the separator NBSP, then the display text. */
+    const spanDomText = () =>
+      editorInput
+        .locator(`span.opening[data-marker="${CHAR_MARKER}"]`)
+        .first()
+        .evaluate((glyph) => glyph.nextSibling?.textContent ?? '');
+
+    /**
+     * The typed run is never saved — it differs from the project only in whitespace — so anything
+     * that reloads the editor drops it and puts the caret at the verse start. Every assertion after
+     * the run is typed addresses text AFTER the run, so each one reads exactly the same with the
+     * run gone: a reload part-way through would leave the spec green having exercised none of the
+     * space-run coordinate path. Checked at the end of every step, not once, so there is no window
+     * a reload can hide in.
+     */
+    const expectRunStillOnScreen = async () =>
+      expect(await spanDomText(), 'the typed run is gone: the editor reloaded').toContain(
+        `,${NBSP}${NBSP}`,
+      );
+
+    await test.step('a second space typed after an existing one displays as a run', async () => {
+      // Place the caret by position rather than by gesture — the collapsed-placement path the
+      // first test above already verifies — before any run exists to disturb it.
+      const caret = chapterLocation(TARGET_VERSE_REF, jsonPath, SPACE_RUN_AFTER.length);
+      await sendToEditorController(editorId, 'selectRange', [{ start: caret, end: caret }]);
+      // Node identity as well as the offset: a bare offset is satisfied by any caret anywhere in
+      // the document that happens to sit there — including the one `navigateToolbarBcv` left —
+      // so the space would be typed somewhere else and the failure would surface below as a
+      // confusing display-run diff instead of here.
+      await expect
+        .poll(() => readDomCaret(editorInput), { timeout: 20_000 })
+        // One past the USJ offset: the separator NBSP precedes the span's text in the DOM.
+        .toEqual({
+          anchorText: NBSP + charText,
+          anchorOffset: SPACE_RUN_AFTER.length + 1,
+          isCollapsed: true,
+        });
+
+      // Typed through a locator inside the editor frame: the page's own keyboard targets the
+      // parent document, where the editor's key handling never sees it.
+      await editorInput.pressSequentially(' ');
+
+      await expect
+        .poll(spanDomText, { timeout: 20_000 })
+        .toBe(`${NBSP}“Woman,${NBSP}${NBSP}${charText.slice(SPACE_RUN_AFTER.length)}`);
+    });
+
+    await test.step("a caret clicked to the span's end reports the span text's own last offset", async () => {
+      await expectRunStillOnScreen();
+      // Just inside the left edge of the closing glyph is the insertion point immediately before
+      // `\wj*`, the end of the span's text. Reaching it by gesture makes this the live → USJ
+      // direction: nothing translated coordinates on the way in.
+      await clickBeforeGlyph(
+        editorInput.locator(`span.closing[data-marker="${CHAR_MARKER}"]`).first(),
+      );
+
+      // Poll on the offset: the caret sat in this same span's text before the click.
+      await expect
+        .poll(async () => (await readEditorSelection(editorId))?.start?.documentLocation, {
+          timeout: 30_000,
+        })
+        // The span text's own length, not one more: the run's extra space is not in the USJ.
+        .toEqual({ jsonPath, offset: charText.length });
+      await expectRunStillOnScreen();
+    });
+
+    await test.step("selecting the span's last two characters highlights exactly those characters", async () => {
+      await sendToEditorController(editorId, 'selectRange', [
+        {
+          start: chapterLocation(TARGET_VERSE_REF, jsonPath, charText.length - 2),
+          end: chapterLocation(TARGET_VERSE_REF, jsonPath, charText.length),
+        },
+      ]);
+
+      // What the browser highlights is the oracle; a shift applied on the way in and again on the
+      // way out would cancel in anything the editor reports back.
+      await expect
+        .poll(() => readDomSelectedText(editorInput), { timeout: 20_000 })
+        .toBe(charText.slice(-2));
+      await expectRunStillOnScreen();
+    });
+
+    await test.step("an annotation over the span's last two characters marks exactly those characters", async () => {
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterLocation(TARGET_VERSE_REF, jsonPath, charText.length - 2),
+          end: chapterLocation(TARGET_VERSE_REF, jsonPath, charText.length),
+        },
+        ANNOTATION_TYPE,
+        SPACE_RUN_ANNOTATION_ID,
+      ]);
+
+      const annotatedMark = editorInput.locator(`mark.annotationId-${SPACE_RUN_ANNOTATION_ID}`);
+      await expect(annotatedMark).toHaveCount(1, { timeout: 30_000 });
+      // Exact: an off-by-one marks two characters just like a correct call does. Counting the
+      // run's extra space yields `charText.slice(-3, -1)`, the two characters before the ones
+      // addressed.
+      expect(await annotatedMark.textContent()).toBe(charText.slice(-2));
+      await expectRunStillOnScreen();
     });
   });
 });
