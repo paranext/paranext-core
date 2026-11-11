@@ -78,7 +78,7 @@
  *
  * `npm run test:e2e:isolated multi-window`
  */
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { sendPapiRequestOnce, waitForAppReady } from '../../../fixtures/helpers';
 import {
@@ -119,6 +119,23 @@ import {
   webViewTabTitle,
   withPlatformWindow,
 } from './multi-window.util';
+
+// #region tab menu
+
+/**
+ * Right-clicks `tabTitle` until its context menu offers `item`, and returns `item`. A tab reads its
+ * menu items from the menu data provider once the interface mode is known, so a right-click soon
+ * after its window came up can open no menu at all; the next one finds the items loaded.
+ */
+async function openTabMenuItem(tabTitle: Locator, item: Locator): Promise<Locator> {
+  await expect(async () => {
+    await tabTitle.click({ button: 'right' });
+    await expect(item).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 60_000 });
+  return item;
+}
+
+// #endregion
 
 // #region move commands
 
@@ -334,9 +351,10 @@ test.describe('moving a web view between windows', () => {
       predicate: (page: Page) => page.url().includes('windowId='),
       timeout: 180_000,
     });
-    await homeTabTitle(mainPage).click({ button: 'right' });
-    const moveMenuItem = mainPage.getByRole('menuitem', { name: 'Move tab to new window' });
-    await expect(moveMenuItem).toBeVisible({ timeout: 30_000 });
+    const moveMenuItem = await openTabMenuItem(
+      homeTabTitle(mainPage),
+      mainPage.getByRole('menuitem', { name: 'Move tab to new window' }),
+    );
     await moveMenuItem.click();
     logStep('chose "Move tab to new window" from the tab context menu');
 
@@ -593,9 +611,10 @@ test.describe('moving a web view between windows', () => {
     const window2Title = await page2.title();
     logStep(`all three windows are named after the tab they show: "${window2Title}"`);
 
-    await webViewTabTitle(page3, idAfterSecondMove).click({ button: 'right' });
-    const moveToWindowItem = page3.getByRole('menuitem', { name: 'Move tab to window' });
-    await expect(moveToWindowItem).toBeVisible({ timeout: 30_000 });
+    const moveToWindowItem = await openTabMenuItem(
+      webViewTabTitle(page3, idAfterSecondMove),
+      page3.getByRole('menuitem', { name: 'Move tab to window' }),
+    );
     await moveToWindowItem.hover();
 
     // TWO targets with three windows open: the window the tab is already in is left out, because
