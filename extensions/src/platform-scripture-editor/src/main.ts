@@ -26,7 +26,10 @@ import {
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
 import { mergeDecorations } from './decorations.util';
-import { createLazySharedPromise } from './lazy-shared-promise.util';
+import {
+  createProjectSwitchEvents,
+  PROJECT_SWITCH_DID_FINISH_EVENT,
+} from './project-switch-events';
 import { createSelectionTracker } from './selection-tracker.utils';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
@@ -98,100 +101,11 @@ let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | u
 
 // #region Project Switch Events
 
-// String values must match PROJECT_SWITCH_WILL_START_EVENT / PROJECT_SWITCH_DID_FINISH_EVENT in
-// src/renderer/services/workspace-updating-service.ts
-
 /**
- * Network event name emitted just before a scripture editor web view is opened or replaced with a
- * new project. Subscribe via
- * `papi.network.getNetworkEvent('platformScriptureEditor.onWillSwitchProject')`.
+ * Registers the project-switch events lazily on the first call to open() to avoid network
+ * initialization races during extension activation, and unregisters them on deactivation.
  */
-const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchProject';
-
-/**
- * Network event name emitted after the scripture editor web view open/replace call resolves.
- * Subscribe via `papi.network.getNetworkEvent('platformScriptureEditor.onDidSwitchProject')`.
- */
-const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
-
-/**
- * Disposes a switch-event emitter, logging a failure instead of rejecting, so deactivation can
- * await it without one failed unregistration stopping the rest.
- */
-async function disposeSwitchEmitter(emitter: { dispose: () => Promise<boolean> }): Promise<void> {
-  try {
-    await emitter.dispose();
-  } catch (error) {
-    logger.warn(`Could not dispose a project-switch event emitter: ${getErrorMessage(error)}`);
-  }
-}
-
-/**
- * Disposes a switch-event emitter whose registration finished after deactivation had already reset
- * it. Nothing else holds it, so without this its event would stay registered and the next
- * activation's registration of the same event would be rejected.
- */
-function disposeDetachedEmitter(emitter: { dispose: () => Promise<boolean> }) {
-  disposeSwitchEmitter(emitter);
-}
-
-/**
- * Event emitter fired before a project switch. Payload carries the switch's unique `switchId`, so
- * the renderer's workspace-updating service can pair each finish with exactly the switch that
- * started it. Created lazily on the first call to open() to avoid network initialization races
- * during extension activation. Overlapping first calls share one registration, because the main
- * process's registry rejects a second registration of the same event.
- *
- * Both switch events use the async factory (the sync createNetworkEventEmitter is deprecated) so
- * they can carry `x-experimental` in the generated OpenRPC document — their contract isn't settled
- * (see their @experimental TSDoc in the d.ts). The payload type is inferred from the NetworkEvents
- * augmentation, so no explicit generic here.
- */
-const willStartEmitter = createLazySharedPromise(
-  () =>
-    papi.network.createNetworkEventEmitterAsync(PROJECT_SWITCH_WILL_START_EVENT, {
-      notification: {
-        'x-experimental': true,
-        summary:
-          'Emitted just before a scripture editor web view is opened or replaced with a new project.',
-        params: [
-          {
-            name: 'switchId',
-            required: true,
-            summary: 'Token pairing this switch with its matching onDidSwitchProject event.',
-            schema: { type: 'string' },
-          },
-        ],
-      },
-    }),
-  disposeDetachedEmitter,
-);
-
-/**
- * Event emitter fired after a project switch completes, with the `switchId` of the will-start event
- * that began it. Created lazily on the first call to open(), sharing one registration between
- * overlapping first calls. Kept separate from the will-start emitter so each is cached and retried
- * on its own: a failure creating one neither discards the other's registration nor registers it
- * again.
- */
-const didFinishEmitter = createLazySharedPromise(
-  () =>
-    papi.network.createNetworkEventEmitterAsync(PROJECT_SWITCH_DID_FINISH_EVENT, {
-      notification: {
-        'x-experimental': true,
-        summary: 'Emitted after the scripture editor web view open/replace call resolves.',
-        params: [
-          {
-            name: 'switchId',
-            required: true,
-            summary: 'The switchId of the onWillSwitchProject event that started this switch.',
-            schema: { type: 'string' },
-          },
-        ],
-      },
-    }),
-  disposeDetachedEmitter,
-);
+const projectSwitchEvents = createProjectSwitchEvents(papi.network, logger);
 
 // #endregion Project Switch Events
 
@@ -391,7 +305,7 @@ async function open(
       // Create emitters lazily on first use, after full activation, to avoid network init races.
       // Awaited before emit: the enclosing handler is async, so this only adds first-use latency and
       // the will-start event still fires before the switch below.
-      const [willStart] = await Promise.all([willStartEmitter.get(), didFinishEmitter.get()]);
+      const { willStart } = await projectSwitchEvents.getEmitters();
       willStart.emit({ switchId });
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
@@ -404,7 +318,7 @@ async function open(
 
     const emitDidFinish = () => {
       if (!needsOverlay) return;
-      const didFinish = didFinishEmitter.peek();
+      const didFinish = projectSwitchEvents.peekDidFinish();
       if (didFinish) didFinish.emit({ switchId });
       else
         logger.warn(
@@ -1880,13 +1794,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     selectionChangedEventEmitter,
     {
       dispose: async () => {
-        // Awaited, so a re-activation in the same extension host registers the events only after
-        // these registrations are gone
-        await Promise.all(
-          [willStartEmitter.reset(), didFinishEmitter.reset()].map(
-            (emitter) => emitter && disposeSwitchEmitter(emitter),
-          ),
-        );
+        // Awaited so the unregistration requests are sent before a re-activation in the same
+        // extension host registers the events again; the RPC client runs the unregister and
+        // register of one event name in order (`registerEvent` / `unregisterEvent` share a
+        // per-name mutex in `rpc-client.ts`)
+        await projectSwitchEvents.dispose();
         return true;
       },
     },

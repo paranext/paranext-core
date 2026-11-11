@@ -12,6 +12,13 @@ function deferred<T>() {
   return { promise, resolve: resolveDeferred, reject: rejectDeferred };
 }
 
+/** Lets pending promise callbacks run */
+async function flushPromises() {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 describe('createLazySharedPromise', () => {
   it('creates once for concurrent get() calls and gives them the same value', async () => {
     const pending = deferred<{ id: number }>();
@@ -75,24 +82,38 @@ describe('createLazySharedPromise', () => {
     const lazy = createLazySharedPromise(() => pending.promise);
 
     const inFlight = lazy.get();
+    const outcome = inFlight.catch((error: unknown) => error);
     expect(lazy.reset()).toBeUndefined();
     pending.resolve('late');
-    await inFlight;
+    expect(await outcome).toMatchObject({
+      message: expect.stringContaining('disposed before its creation finished'),
+    });
 
     expect(lazy.peek()).toBeUndefined();
   });
 
-  it('hands a value whose creation finished after reset() to disposeDetached, and still to its caller', async () => {
+  it('hands a value whose creation finished after reset() to disposeDetached and rejects its caller after the disposal', async () => {
     const pending = deferred<string>();
-    const disposeDetached = vi.fn();
+    const disposal = deferred<void>();
+    const disposeDetached = vi.fn(() => disposal.promise);
     const lazy = createLazySharedPromise(() => pending.promise, disposeDetached);
 
     const inFlight = lazy.get();
+    let settled = false;
+    const outcome = inFlight.catch((error: unknown) => {
+      settled = true;
+      return error;
+    });
     lazy.reset();
     pending.resolve('late');
+    await flushPromises();
 
-    expect(await inFlight).toBe('late');
     expect(disposeDetached).toHaveBeenCalledExactlyOnceWith('late');
+    expect(settled).toBe(false);
+    disposal.resolve();
+    expect(await outcome).toMatchObject({
+      message: expect.stringContaining('disposed before its creation finished'),
+    });
   });
 
   it('does not call disposeDetached for a value it keeps', async () => {
@@ -126,5 +147,33 @@ describe('createLazySharedPromise', () => {
     expect(await second).toBe('current');
     expect(await third).toBe('current');
     expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it('a get() after a mid-creation reset() creates again only after the detached value is disposed', async () => {
+    const first = deferred<string>();
+    const disposal = deferred<void>();
+    const create = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValueOnce('second');
+    const disposeDetached = vi.fn(() => disposal.promise);
+    const lazy = createLazySharedPromise<string>(create, disposeDetached);
+
+    const detachedCaller = lazy.get();
+    const detachedOutcome = detachedCaller.catch((error: unknown) => error);
+    lazy.reset();
+    const next = lazy.get();
+    await flushPromises();
+    expect(create).toHaveBeenCalledTimes(1);
+
+    first.resolve('first');
+    await flushPromises();
+    expect(disposeDetached).toHaveBeenCalledExactlyOnceWith('first');
+    expect(create).toHaveBeenCalledTimes(1);
+
+    disposal.resolve();
+    expect(await next).toBe('second');
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(await detachedOutcome).toMatchObject({
+      message: expect.stringContaining('disposed before its creation finished'),
+    });
+    expect(lazy.peek()).toBe('second');
   });
 });
