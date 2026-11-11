@@ -8,9 +8,12 @@
  * ## Test strategy
  *
  * Each test uses `isolated.fixture` (fresh Electron instance per test) to get a clean localStorage.
- * Settings are seeded through the fixture's own `test.use` options, never through a spec-level
- * `preConfigureSettings` — hooks run before test-scoped fixture setup, so a spec's own seed loses
- * to the fixture's for any shared key and leaks on restore (see the `IsolatedFixtures` doc):
+ * The Simple-mode checks share one instance: the first step runs on that clean localStorage, and
+ * every later step first clears the completion record and reloads (`restoreFreshTour`), which is
+ * the first-launch state the tour reads. Settings are seeded through the fixture's own `test.use`
+ * options, never through a spec-level `preConfigureSettings` — hooks run before test-scoped fixture
+ * setup, so a spec's own seed loses to the fixture's for any shared key and leaks on restore (see
+ * the `IsolatedFixtures` doc):
  *
  * - `interfaceMode` — the mode the block is about. The unrequested showing needs `'simple'`; the
  *   Power block pins `'power'` to exercise the replay path.
@@ -107,156 +110,177 @@ async function collectStepTitles(page: Page): Promise<string[]> {
   return titles;
 }
 
+/**
+ * Puts the tour back to its first-launch state inside the running app: no completion record, and a
+ * reload so the tour mounts afresh at its first stop. A reload alone is not enough once a step has
+ * skipped or finished the tour, because that writes the completion record.
+ */
+async function restoreFreshTour(page: Page): Promise<void> {
+  await clearTourDone(page);
+  await page.reload();
+  await waitForAppReadyWithTour(page);
+}
+
 /** Bypasses the first-run wizard so `firstRunStatus.kind === 'app'` and the tour can be reached. */
 const SEED_PAST_FIRST_RUN = { 'platform.firstRunComplete': true };
 
 test.describe('Onboarding tour', () => {
   test.use({ interfaceMode: 'simple', seedSettings: SEED_PAST_FIRST_RUN });
 
-  test('shows on first launch in Simple mode (fresh localStorage)', async ({ mainPage }) => {
-    // The isolated fixture gives us a clean user-data dir with no localStorage, so the tour
-    // shows without any manual clearing. waitForAppReady confirms the dock and overlay are settled
-    // before we assert tour visibility.
-    await waitForAppReadyWithTour(mainPage);
-
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
-  });
-
-  test('spotlights every unconditional stop, in order', async ({ mainPage }) => {
-    await waitForAppReadyWithTour(mainPage);
-
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
-
-    const total = await getTourTotalSteps(mainPage);
-    const titles = await collectStepTitles(mainPage);
-
-    expect(titles).toHaveLength(total);
-    // The four unconditional stops must all be there, in this order — the sync stop may or may not
-    // sit between resources and profile, so filtering it out is what makes the check stable
-    // without weakening it to a bare count.
-    expect(titles.filter((t) => t !== CONDITIONAL_STEP_TITLE)).toEqual(REQUIRED_STEP_TITLES);
-    expect(total).toBe(
-      REQUIRED_STEP_TITLES.length + (titles.includes(CONDITIONAL_STEP_TITLE) ? 1 : 0),
-    );
-  });
-
-  test('advances through all steps with Next and shows Done on the last step', async ({
+  test('Simple-mode tour: first launch, stops, navigation, dismissal and replay', async ({
     mainPage,
   }) => {
-    await waitForAppReadyWithTour(mainPage);
+    test.setTimeout(9 * 120_000);
 
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
+    await test.step('shows on first launch in Simple mode (fresh localStorage)', async () => {
+      // The isolated fixture gives us a clean user-data dir with no localStorage, so the tour
+      // shows without any manual clearing. waitForAppReady confirms the dock and overlay are settled
+      // before we assert tour visibility.
+      await waitForAppReadyWithTour(mainPage);
 
-    await advanceToLastStep(mainPage);
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+    });
 
-    // On the last step the primary button label changes to "Done".
-    await expect(getTourDoneButton(mainPage)).toBeVisible({ timeout: 5_000 });
-    await expect(getTourNextButton(mainPage)).not.toBeVisible();
-  });
+    await test.step('spotlights every unconditional stop, in order', async () => {
+      await restoreFreshTour(mainPage);
+      await waitForAppReadyWithTour(mainPage);
 
-  test('Back returns to the previous step', async ({ mainPage }) => {
-    await waitForAppReadyWithTour(mainPage);
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
 
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
+      const total = await getTourTotalSteps(mainPage);
+      const titles = await collectStepTitles(mainPage);
 
-    // Back is deliberately absent on the first step, so it only appears once we have advanced.
-    await expect(getTourBackButton(mainPage)).not.toBeVisible();
-    expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
+      expect(titles).toHaveLength(total);
+      // The four unconditional stops must all be there, in this order — the sync stop may or may not
+      // sit between resources and profile, so filtering it out is what makes the check stable
+      // without weakening it to a bare count.
+      expect(titles.filter((t) => t !== CONDITIONAL_STEP_TITLE)).toEqual(REQUIRED_STEP_TITLES);
+      expect(total).toBe(
+        REQUIRED_STEP_TITLES.length + (titles.includes(CONDITIONAL_STEP_TITLE) ? 1 : 0),
+      );
+    });
 
-    await advanceTour(mainPage);
-    const secondTitle = await getCurrentStepTitle(mainPage);
-    expect(secondTitle).not.toBe(REQUIRED_STEP_TITLES[0]);
+    await test.step('advances through all steps with Next and shows Done on the last step', async () => {
+      await restoreFreshTour(mainPage);
+      await waitForAppReadyWithTour(mainPage);
 
-    await goBackTour(mainPage);
-    expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
-  });
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
 
-  test('Skip closes the tour immediately', async ({ mainPage }) => {
-    await waitForAppReadyWithTour(mainPage);
+      await advanceToLastStep(mainPage);
 
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
+      // On the last step the primary button label changes to "Done".
+      await expect(getTourDoneButton(mainPage)).toBeVisible({ timeout: 5_000 });
+      await expect(getTourNextButton(mainPage)).not.toBeVisible();
+    });
 
-    await skipTour(mainPage);
+    await test.step('Back returns to the previous step', async () => {
+      await restoreFreshTour(mainPage);
+      await waitForAppReadyWithTour(mainPage);
 
-    // The tour dialog disappears after skip.
-    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
-  });
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
 
-  test('after completing the tour it does not show again after reload', async ({ mainPage }) => {
-    await waitForAppReadyWithTour(mainPage);
+      // Back is deliberately absent on the first step, so it only appears once we have advanced.
+      await expect(getTourBackButton(mainPage)).not.toBeVisible();
+      expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
 
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
+      await advanceTour(mainPage);
+      const secondTitle = await getCurrentStepTitle(mainPage);
+      expect(secondTitle).not.toBe(REQUIRED_STEP_TITLES[0]);
 
-    // Advance through all steps and click Done, which is what records completion.
-    await advanceToLastStep(mainPage);
-    await getTourDoneButton(mainPage).click();
-    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+      await goBackTour(mainPage);
+      expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
+    });
 
-    await mainPage.reload();
-    await waitForAppReadyWithTour(mainPage);
+    await test.step('Skip closes the tour immediately', async () => {
+      await restoreFreshTour(mainPage);
+      await waitForAppReadyWithTour(mainPage);
 
-    // The tour must not appear again because completion is already recorded.
-    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
-  });
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
 
-  test('Escape key closes the tour', async ({ mainPage }) => {
-    await waitForAppReadyWithTour(mainPage);
+      await skipTour(mainPage);
 
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
+      // The tour dialog disappears after skip.
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    });
 
-    // Advance one step first so we verify Escape works mid-tour, not just on step 1.
-    // advanceTour clicks Next (or Done if on the last step).
-    await advanceTour(mainPage);
+    await test.step('after completing the tour it does not show again after reload', async () => {
+      await restoreFreshTour(mainPage);
+      await waitForAppReadyWithTour(mainPage);
 
-    // The Tour component listens for Escape in the capture phase and calls onSkip.
-    await mainPage.keyboard.press('Escape');
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
 
-    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
-  });
+      // Advance through all steps and click Done, which is what records completion.
+      await advanceToLastStep(mainPage);
+      await getTourDoneButton(mainPage).click();
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 
-  test('shows again once the completion record is cleared', async ({ mainPage }) => {
-    await waitForAppReadyWithTour(mainPage);
+      await mainPage.reload();
+      await waitForAppReadyWithTour(mainPage);
 
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
+      // The tour must not appear again because completion is already recorded.
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    });
 
-    // Skipping records completion, so a reload alone would not bring the tour back.
-    await skipTour(mainPage);
-    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
-    await mainPage.reload();
-    await waitForAppReadyWithTour(mainPage);
-    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    await test.step('Escape key closes the tour', async () => {
+      await restoreFreshTour(mainPage);
+      await waitForAppReadyWithTour(mainPage);
 
-    await clearTourDone(mainPage);
-    await mainPage.reload();
-    await waitForAppReadyWithTour(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
-  });
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
 
-  test('Help > Show the tour reopens the completed tour at its first stop', async ({
-    mainPage,
-  }) => {
-    await waitForAppReadyWithTour(mainPage);
+      // Advance one step first so we verify Escape works mid-tour, not just on step 1.
+      // advanceTour clicks Next (or Done if on the last step).
+      await advanceTour(mainPage);
 
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
+      // The Tour component listens for Escape in the capture phase and calls onSkip.
+      await mainPage.keyboard.press('Escape');
 
-    // Skipping records completion, so nothing but the menu item can bring the tour back.
-    await skipTour(mainPage);
-    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    });
 
-    await mainPage.getByRole('menuitem', { name: /^Help$/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Show the tour/i }).click();
+    await test.step('shows again once the completion record is cleared', async () => {
+      await restoreFreshTour(mainPage);
+      await waitForAppReadyWithTour(mainPage);
 
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
-    expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      // Skipping records completion, so a reload alone would not bring the tour back.
+      await skipTour(mainPage);
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+      await mainPage.reload();
+      await waitForAppReadyWithTour(mainPage);
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+      await clearTourDone(mainPage);
+      await mainPage.reload();
+      await waitForAppReadyWithTour(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+    });
+
+    await test.step('Help > Show the tour reopens the completed tour at its first stop', async () => {
+      await restoreFreshTour(mainPage);
+      await waitForAppReadyWithTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      // Skipping records completion, so nothing but the menu item can bring the tour back.
+      await skipTour(mainPage);
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+      await mainPage.getByRole('menuitem', { name: /^Help$/i }).click();
+      await mainPage.getByRole('menuitem', { name: /Show the tour/i }).click();
+
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+      expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
+    });
   });
 });
 
