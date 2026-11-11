@@ -10,11 +10,13 @@
  *
  * Reference history is per scroll group and lives in memory for the life of the app session — it is
  * session-only by design, matching Paratext 9 (see `referenceHistories` in
- * `src/renderer/services/scroll-group.service-host.ts`). The isolated fixture launches one Electron
- * per test, so every test starts from the same freshly seeded history: the scroll group's current
- * reference as the only entry, with both stacks empty. The seed reference is the app default (GEN
- * 1:1), because the launch fixture gives each instance its own user-data directory and the scroll
- * group's persisted reference lives in that directory's localStorage.
+ * `src/main/services/scroll-group.service-host.ts`). The isolated fixture launches one Electron per
+ * test, so a test starts from a freshly seeded history: the scroll group's current reference as the
+ * only entry, with both stacks empty. The steps of the one test below share that app, so the step
+ * that runs second jumps back to the seeded entry first: a new navigation then discards the forward
+ * stack, which leaves the same history a fresh launch has. The seed reference is the app default
+ * (GEN 1:1), because the launch fixture gives each instance its own user-data directory and the
+ * scroll group's persisted reference lives in that directory's localStorage.
  *
  * ## Declared, not inherited
  *
@@ -29,7 +31,10 @@ import {
   waitForAppReady,
   waitForProjectMetadata,
 } from '../../../fixtures/helpers';
-import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
+import {
+  navigateToolbarBcv,
+  openScriptureEditorForProject,
+} from '../../../fixtures/scripture-editor-helpers';
 
 const WEBSOCKET_PORT = 8876;
 
@@ -79,57 +84,25 @@ test.use({
 });
 
 /**
- * Navigate the top toolbar BCV control to a typed reference (e.g. 'MRK 4').
+ * Navigates the top toolbar BCV control with the shared {@link navigateToolbarBcv} and confirms the
+ * navigation landed: the trigger must show the expected reference afterwards.
  *
- * After typing, the control shows a "top match" row rendered with the DISPLAY spelling of the
- * reference (e.g. typing "MRK 4" shows "Mark 4:1"). Commit with Enter, but only AFTER that row
- * shows the expected reference: the control parses the input asynchronously, so an immediate Enter
- * can race the parse and commit the previous reference. Mouse-clicking the row is also unreliable —
- * the list auto-scrolls (deferred `setTimeout(0)` + smooth scroll) on every input change, which can
- * shift the layout under the pointer between Playwright's stability check and the actual click
- * (observed to hit the next-chapter quick-nav button instead).
- *
- * Deliberately NOT keyed on cmdk's `data-selected` highlight: that highlight sits on a cell of the
- * chapter preview grid below this row, never on the row itself, and Enter submits the row's
- * reference rather than whatever cmdk has highlighted.
- *
- * @param expectedRef Display-text pattern of the committed reference (e.g. /Mark 4(?!\d)/i —
- *   anchored so e.g. "Mark 40" cannot false-pass). Matched against the top-match row's rendered
- *   text before Enter is pressed, then asserted again against the trigger at the end to confirm the
- *   navigation landed.
+ * @param reference The reference as the control displays it (e.g. 'Mark 4'); the control renders
+ *   the book NAME, so a book code never matches its own row.
+ * @param expectedRef Display-text pattern the trigger must show afterwards (e.g. /Mark 4(?!\d)/i —
+ *   anchored so e.g. "Mark 40" cannot false-pass).
  */
-async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegExp) {
-  const trigger = mainPage.locator(BCV_TRIGGER);
-  await expect(trigger).toBeVisible({ timeout: 10_000 });
-  await trigger.click();
-  const commandInput = mainPage.locator('[data-radix-popper-content-wrapper] input');
-  await expect(commandInput).toBeVisible({ timeout: 5_000 });
-  await commandInput.fill(refText);
-  // Wait for the top-match row to display the reference it will submit before pressing Enter, or
-  // Enter can commit whatever the previous query resolved to.
-  //
-  // Matched against `expectedRef`, NOT the typed text: the row renders the book NAME, so typing the
-  // book CODE "MRK 4" produces a row reading "Mark 4:1". A locator built from the typed text can
-  // never match its own row, and because the locator then finds nothing the failure reads as
-  // "element(s) not found" — indistinguishable from the list never loading, and unfixable by any
-  // timeout.
-  //
-  // `expectedRef` carries the `(?!\d)` anchor that keeps a wrong-chapter row from false-passing:
-  // /Mark 4(?!\d)/ accepts "Mark 4:1" but rejects "Mark 40:1". A `\b` anchor cannot do that job
-  // here — the row renders the reference and the book id as adjacent spans with no whitespace, so
-  // `hasText` sees "Mark 4:1MRK" and a verse-level pattern would find no word boundary at all.
-  const topMatchRow = mainPage.locator('[data-radix-popper-content-wrapper] [cmdk-item]', {
-    hasText: expectedRef,
-  });
-  await expect(topMatchRow.first()).toBeVisible({ timeout: 5_000 });
-  await commandInput.press('Enter');
-  await expect(commandInput).not.toBeVisible({ timeout: 5_000 });
-  await expect(trigger).toContainText(expectedRef, { timeout: 10_000 });
+async function navigateToRef(mainPage: Page, reference: string, expectedRef: RegExp) {
+  await navigateToolbarBcv(mainPage, reference);
+  await expect(mainPage.locator(BCV_TRIGGER)).toContainText(expectedRef, { timeout: 10_000 });
 }
 
 test.describe('Reference history', () => {
-  // Each test pays a full app startup (up to ~180 s worst case) before it navigates anything.
-  test.setTimeout(300_000);
+  // The first step pays the full app startup (up to ~180 s worst case) before it navigates
+  // anything; the second runs on the app it started.
+  const COLD_START_TIMEOUT_MS = 300_000;
+  /** The config's per-test default (`e2e-tests/playwright.config.ts`). */
+  const WARM_STEP_TIMEOUT_MS = 120_000;
 
   // Setup, not reset: the isolated fixture hands every test a freshly launched app, so there is no
   // leftover layout or history to clear. What a test does need is something to navigate — the top
@@ -150,63 +123,76 @@ test.describe('Reference history', () => {
     await expect(mainPage.locator(BCV_TRIGGER)).toBeEnabled({ timeout: 30_000 });
   });
 
-  test('back/forward buttons navigate the visited references', async ({ mainPage }) => {
+  test('reference history navigation', async ({ mainPage }) => {
+    test.setTimeout(COLD_START_TIMEOUT_MS + WARM_STEP_TIMEOUT_MS);
+
     const backButton = mainPage.getByTestId('navigation-history-back-button');
     const forwardButton = mainPage.getByTestId('navigation-history-forward-button');
     const bcvTrigger = mainPage.locator(BCV_TRIGGER);
 
-    // Falsifiability precondition: a freshly launched app has visited nothing, so there is nowhere
-    // to go in either direction yet. Without it, the enabled/disabled assertions below could all
-    // pass against buttons that were simply never disabled.
-    await expect(backButton).toBeDisabled();
-    await expect(forwardButton).toBeDisabled();
+    await test.step('back/forward buttons navigate the visited references', async () => {
+      // Falsifiability precondition: a freshly launched app has visited nothing, so there is nowhere
+      // to go in either direction yet. Without it, the enabled/disabled assertions below could all
+      // pass against buttons that were simply never disabled.
+      await expect(backButton).toBeDisabled();
+      await expect(forwardButton).toBeDisabled();
 
-    await navigateToRef(mainPage, 'MRK 4', /Mark 4(?!\d)/i);
-    await navigateToRef(mainPage, 'LUK 2', /Luke 2(?!\d)/i);
+      await navigateToRef(mainPage, 'Mark 4', /Mark 4(?!\d)/i);
+      await navigateToRef(mainPage, 'Luke 2', /Luke 2(?!\d)/i);
 
-    await expect(backButton).toBeEnabled();
-    await backButton.click();
-    await expect(bcvTrigger).toContainText(/Mark 4(?!\d)/i, { timeout: 10_000 });
+      await expect(backButton).toBeEnabled();
+      await backButton.click();
+      await expect(bcvTrigger).toContainText(/Mark 4(?!\d)/i, { timeout: 10_000 });
 
-    await expect(forwardButton).toBeEnabled();
-    await forwardButton.click();
-    await expect(bcvTrigger).toContainText(/Luke 2(?!\d)/i, { timeout: 10_000 });
-    await expect(forwardButton).toBeDisabled();
-  });
+      await expect(forwardButton).toBeEnabled();
+      await forwardButton.click();
+      await expect(bcvTrigger).toContainText(/Luke 2(?!\d)/i, { timeout: 10_000 });
+      await expect(forwardButton).toBeDisabled();
 
-  test('right-click history menu jumps multiple steps', async ({ mainPage }) => {
-    const bcvTrigger = mainPage.locator(BCV_TRIGGER);
+      // Back to the seeded entry, so the next step's exact back list starts from the same history a
+      // fresh launch has: the jump leaves nothing on the back stack, and the first navigation after it
+      // discards the forward stack.
+      await mainPage.getByTestId('navigation-history-back-button').click({ button: 'right' });
+      await mainPage
+        .getByRole('menu', { name: BACK_MENU })
+        .getByRole('menuitem', { name: 'Genesis 1:1' })
+        .click();
+      await expect(bcvTrigger).toContainText(/Genesis 1(?!\d)/i, { timeout: 10_000 });
+      await expect(backButton).toBeDisabled();
+    });
 
-    // Three genuinely new chapters, so each visit pushes the previous location onto the back
-    // stack. A move within the current book and chapter would instead replace the current entry
-    // and record nothing (`recordNavigation` in src/renderer/services/reference-history.util.ts),
-    // which is why none of these is the seeded GEN 1:1.
-    await navigateToRef(mainPage, 'JHN 3', /John 3(?!\d)/i);
-    await navigateToRef(mainPage, 'ACT 2', /Acts 2(?!\d)/i);
-    await navigateToRef(mainPage, 'REV 1', /Revelation 1(?!\d)/i);
+    await test.step('right-click history menu jumps multiple steps', async () => {
+      // Three genuinely new chapters, so each visit pushes the previous location onto the back
+      // stack. A move within the current book and chapter would instead replace the current entry
+      // and record nothing (`recordNavigation` in src/renderer/services/reference-history.util.ts),
+      // which is why none of these is the seeded GEN 1:1.
+      await navigateToRef(mainPage, 'John 3', /John 3(?!\d)/i);
+      await navigateToRef(mainPage, 'Acts 2', /Acts 2(?!\d)/i);
+      await navigateToRef(mainPage, 'Revelation 1', /Revelation 1(?!\d)/i);
 
-    // The back menu lists the whole back stack nearest-first: the two visits above, then the
-    // seeded starting reference. Asserting the exact list (not just that one entry exists) is what
-    // makes the jump below checkable — it pins which entry sits two steps back.
-    await mainPage.getByTestId('navigation-history-back-button').click({ button: 'right' });
-    const backMenu = mainPage.getByRole('menu', { name: BACK_MENU });
-    await expect(backMenu.getByRole('menuitem')).toHaveText([
-      'Acts 2:1',
-      'John 3:1',
-      'Genesis 1:1',
-    ]);
+      // The back menu lists the whole back stack nearest-first: the two visits above, then the
+      // seeded starting reference. Asserting the exact list (not just that one entry exists) is what
+      // makes the jump below checkable — it pins which entry sits two steps back.
+      await mainPage.getByTestId('navigation-history-back-button').click({ button: 'right' });
+      const backMenu = mainPage.getByRole('menu', { name: BACK_MENU });
+      await expect(backMenu.getByRole('menuitem')).toHaveText([
+        'Acts 2:1',
+        'John 3:1',
+        'Genesis 1:1',
+      ]);
 
-    // Jump two steps back in one gesture.
-    await backMenu.getByRole('menuitem', { name: 'John 3:1' }).click();
-    await expect(bcvTrigger).toContainText(/John 3(?!\d)/i, { timeout: 10_000 });
+      // Jump two steps back in one gesture.
+      await backMenu.getByRole('menuitem', { name: 'John 3:1' }).click();
+      await expect(bcvTrigger).toContainText(/John 3(?!\d)/i, { timeout: 10_000 });
 
-    // Both entries the jump passed over are now on the forward stack, nearest-first — the
-    // passed-over Acts 2:1 ahead of the Revelation 1:1 the jump started from.
-    await mainPage.getByTestId('navigation-history-forward-button').click({ button: 'right' });
-    await expect(
-      mainPage.getByRole('menu', { name: FORWARD_MENU }).getByRole('menuitem'),
-    ).toHaveText(['Acts 2:1', 'Revelation 1:1']);
-    await mainPage.keyboard.press('Escape');
+      // Both entries the jump passed over are now on the forward stack, nearest-first — the
+      // passed-over Acts 2:1 ahead of the Revelation 1:1 the jump started from.
+      await mainPage.getByTestId('navigation-history-forward-button').click({ button: 'right' });
+      await expect(
+        mainPage.getByRole('menu', { name: FORWARD_MENU }).getByRole('menuitem'),
+      ).toHaveText(['Acts 2:1', 'Revelation 1:1']);
+      await mainPage.keyboard.press('Escape');
+    });
   });
 
   // SKIPPED — a harness limitation, not a product defect, and one that launch mode does NOT lift.
@@ -221,7 +207,7 @@ test.describe('Reference history', () => {
   //
   // The behaviour is covered where it can be driven: the key-to-command mapping by
   // src/main/reference-history-keyboard.util.test.ts, and the navigation the command performs by
-  // the two tests above, which reach it through the buttons. Exercising the real key path needs
+  // the two steps of the test above, which reach it through the buttons. Exercising the real key path needs
   // OS-level input injection (e.g. xdotool into the Xvfb display), which this harness does not
   // have. Do NOT delete the body — it documents the intended end-to-end behaviour and can be
   // re-enabled if OS-level injection becomes available.
@@ -237,8 +223,8 @@ test.describe('Reference history', () => {
     async ({ mainPage }) => {
       const bcvTrigger = mainPage.locator(BCV_TRIGGER);
 
-      await navigateToRef(mainPage, 'MRK 4', /Mark 4(?!\d)/i);
-      await navigateToRef(mainPage, 'LUK 2', /Luke 2(?!\d)/i);
+      await navigateToRef(mainPage, 'Mark 4', /Mark 4(?!\d)/i);
+      await navigateToRef(mainPage, 'Luke 2', /Luke 2(?!\d)/i);
 
       await mainPage.keyboard.press(BACK_KEY);
       await expect(bcvTrigger).toContainText(/Mark 4(?!\d)/i, { timeout: 10_000 });
