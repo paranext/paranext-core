@@ -7,13 +7,13 @@
  *
  * ## Test strategy
  *
- * Each test uses `isolated.fixture` (fresh Electron instance per test) to get a clean localStorage.
- * The Simple-mode checks share one instance: the first step runs on that clean localStorage, and
- * every later step first clears the completion record and reloads (`restoreFreshTour`), which is
- * the first-launch state the tour reads. Settings are seeded through the fixture's own `test.use`
- * options, never through a spec-level `preConfigureSettings` — hooks run before test-scoped fixture
- * setup, so a spec's own seed loses to the fixture's for any shared key and leaks on restore (see
- * the `IsolatedFixtures` doc):
+ * `isolated.fixture` starts a fresh Electron instance, with a clean localStorage, for each test.
+ * The Simple-mode checks are the steps of one test and share one instance: the first step runs on
+ * that clean localStorage, and every later step first clears the completion record and reloads
+ * (`restoreFreshTour`), which is the first-launch state the tour reads. Settings are seeded through
+ * the fixture's own `test.use` options, never through a spec-level `preConfigureSettings` — hooks
+ * run before test-scoped fixture setup, so a spec's own seed loses to the fixture's for any shared
+ * key and leaks on restore (see the `IsolatedFixtures` doc):
  *
  * - `interfaceMode` — the mode the block is about. The unrequested showing needs `'simple'`; the
  *   Power block pins `'power'` to exercise the replay path.
@@ -46,11 +46,11 @@
  * ## Tour retrigger
  *
  * The tour only shows _on its own_ when `platform-bible.onboardingTourComplete` is absent from
- * localStorage. Because each test gets a fresh isolated user-data dir, localStorage starts empty —
- * the tour appears without any explicit clearing. Tests that verify the "does not show again"
- * behaviour advance all the way through the tour first to write the flag, then reload. Help > Show
- * the tour again (`platform.showOnboardingTour`) is the one path that reopens it regardless of the
- * flag.
+ * localStorage. Each test gets a fresh isolated user-data dir, so localStorage starts empty and the
+ * tour appears without any explicit clearing; each later Simple-mode step clears the flag itself
+ * (`restoreFreshTour`). Steps that verify the "does not show again" behaviour advance all the way
+ * through the tour first to write the flag, then reload. Help > Show the tour again
+ * (`platform.showOnboardingTour`) is the one path that reopens it regardless of the flag.
  */
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/isolated.fixture';
@@ -110,6 +110,12 @@ async function collectStepTitles(page: Page): Promise<string[]> {
   return titles;
 }
 
+/** How many steps the Simple-mode test runs; its timeout is this many {@link STEP_TIMEOUT_MS}. */
+const SIMPLE_MODE_STEP_COUNT = 9;
+
+/** The time budget of one Simple-mode step, app reload included. */
+const STEP_TIMEOUT_MS = 120_000;
+
 /**
  * Puts the tour back to its first-launch state inside the running app: no completion record, and a
  * reload so the tour mounts afresh at its first stop. A reload alone is not enough once a step has
@@ -130,7 +136,7 @@ test.describe('Onboarding tour', () => {
   test('Simple-mode tour: first launch, stops, navigation, dismissal and replay', async ({
     mainPage,
   }) => {
-    test.setTimeout(9 * 120_000);
+    test.setTimeout(SIMPLE_MODE_STEP_COUNT * STEP_TIMEOUT_MS);
 
     await test.step('shows on first launch in Simple mode (fresh localStorage)', async () => {
       // The isolated fixture gives us a clean user-data dir with no localStorage, so the tour
@@ -144,7 +150,6 @@ test.describe('Onboarding tour', () => {
 
     await test.step('spotlights every unconditional stop, in order', async () => {
       await restoreFreshTour(mainPage);
-      await waitForAppReadyWithTour(mainPage);
 
       const dialog = getTourDialog(mainPage);
       await expect(dialog).toBeVisible({ timeout: 15_000 });
@@ -164,7 +169,6 @@ test.describe('Onboarding tour', () => {
 
     await test.step('advances through all steps with Next and shows Done on the last step', async () => {
       await restoreFreshTour(mainPage);
-      await waitForAppReadyWithTour(mainPage);
 
       const dialog = getTourDialog(mainPage);
       await expect(dialog).toBeVisible({ timeout: 15_000 });
@@ -178,7 +182,6 @@ test.describe('Onboarding tour', () => {
 
     await test.step('Back returns to the previous step', async () => {
       await restoreFreshTour(mainPage);
-      await waitForAppReadyWithTour(mainPage);
 
       const dialog = getTourDialog(mainPage);
       await expect(dialog).toBeVisible({ timeout: 15_000 });
@@ -197,7 +200,6 @@ test.describe('Onboarding tour', () => {
 
     await test.step('Skip closes the tour immediately', async () => {
       await restoreFreshTour(mainPage);
-      await waitForAppReadyWithTour(mainPage);
 
       const dialog = getTourDialog(mainPage);
       await expect(dialog).toBeVisible({ timeout: 15_000 });
@@ -210,7 +212,6 @@ test.describe('Onboarding tour', () => {
 
     await test.step('after completing the tour it does not show again after reload', async () => {
       await restoreFreshTour(mainPage);
-      await waitForAppReadyWithTour(mainPage);
 
       const dialog = getTourDialog(mainPage);
       await expect(dialog).toBeVisible({ timeout: 15_000 });
@@ -229,7 +230,6 @@ test.describe('Onboarding tour', () => {
 
     await test.step('Escape key closes the tour', async () => {
       await restoreFreshTour(mainPage);
-      await waitForAppReadyWithTour(mainPage);
 
       const dialog = getTourDialog(mainPage);
       await expect(dialog).toBeVisible({ timeout: 15_000 });
@@ -246,7 +246,6 @@ test.describe('Onboarding tour', () => {
 
     await test.step('shows again once the completion record is cleared', async () => {
       await restoreFreshTour(mainPage);
-      await waitForAppReadyWithTour(mainPage);
 
       const dialog = getTourDialog(mainPage);
       await expect(dialog).toBeVisible({ timeout: 15_000 });
@@ -266,7 +265,6 @@ test.describe('Onboarding tour', () => {
 
     await test.step('Help > Show the tour reopens the completed tour at its first stop', async () => {
       await restoreFreshTour(mainPage);
-      await waitForAppReadyWithTour(mainPage);
 
       const dialog = getTourDialog(mainPage);
       await expect(dialog).toBeVisible({ timeout: 15_000 });
