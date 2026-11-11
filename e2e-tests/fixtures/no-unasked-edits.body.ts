@@ -1982,6 +1982,9 @@ const INVISIBLE_CHARACTERS = {
   'right-to-left mark U+200F': '‏',
   'soft hyphen U+00AD': '­',
   'zero-width no-break space U+FEFF': '﻿',
+  'line separator U+2028': '\u2028',
+  'paragraph separator U+2029': '\u2029',
+  'next line U+0085': '\u0085',
 } as const;
 
 type InvisibleCharacterName = keyof typeof INVISIBLE_CHARACTERS;
@@ -2046,9 +2049,10 @@ function seededVerses(
         'The news reached the king of Nineveh, and he arose from his throne, took off his royal robe, covered himself with sackcloth, and sat in ashes.',
       seeded:
         `The news reached the king of Nine${c['zero-width non-joiner U+200C']}veh, and he ` +
-        `a${c['zero-width joiner U+200D']}rose from his throne, took${c['word joiner U+2060']}off ` +
-        `his royal${c['tilde ~']}robe, covered him${c['soft hyphen U+00AD']}self ` +
-        `with${c['left-to-right mark U+200E']} sackcloth, and sat${c['right-to-left mark U+200F']} ` +
+        `a${c['zero-width joiner U+200D']}rose from${c['next line U+0085']}his throne, ` +
+        `took${c['word joiner U+2060']}off his${c['line separator U+2028']}royal${c['tilde ~']}robe, ` +
+        `covered him${c['soft hyphen U+00AD']}self with${c['left-to-right mark U+200E']} sackcloth, ` +
+        `and${c['paragraph separator U+2029']}sat${c['right-to-left mark U+200F']} ` +
         `in a${c['zero-width no-break space U+FEFF']}shes.`,
     },
     {
@@ -2153,6 +2157,9 @@ const INSERTION_POINTS: Array<{ name: InvisibleCharacterName; unit: string; poin
   { name: 'right-to-left mark U+200F', unit: '3:10', point: 'their wor|ks' },
   { name: 'soft hyphen U+00AD', unit: '3:10', point: 'the disas|ter' },
   { name: 'zero-width no-break space U+FEFF', unit: '3:10', point: 'God sa|w their' },
+  { name: 'line separator U+2028', unit: '3:2', point: 'great ci|ty, and' },
+  { name: 'paragraph separator U+2029', unit: '3:4', point: 'the ci|ty a day' },
+  { name: 'next line U+0085', unit: '3:9', point: 'whe|ther God' },
 ];
 
 /** The gesture that puts a character into the text. */
