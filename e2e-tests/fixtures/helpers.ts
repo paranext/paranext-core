@@ -274,7 +274,7 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
 export interface LaunchElectronAppOptions {
   /**
    * Additional environment variables to merge into the child process environment, applied after the
-   * defaults. Keys present here override the defaults (e.g. `{ DEV_NOISY: 'false' }`).
+   * defaults. Keys present here override the defaults (e.g. `{ DEV_NOISY: 'true' }`).
    */
   envOverrides?: Record<string, string>;
   /**
@@ -883,10 +883,11 @@ export async function launchElectronApp(
   const env = {
     ...restEnv,
     NODE_ENV: 'development',
-    // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
-    // Only set if not already defined, so other E2E suites can override (e.g. a suite that needs a
-    // clean layout passes `envOverrides: { DEV_NOISY: 'false' }`, which is spread last below).
-    DEV_NOISY: process.env.DEV_NOISY ?? 'true',
+    // Quiet dev mode by default: the test extensions (helloRock3, helloSomeone, etc.) stay
+    // unloaded, so the window opens on the normal layout and no test-only web views shift iframe
+    // order or slow the launch. A suite that drives a test extension turns it on with
+    // `envOverrides: { DEV_NOISY: 'true' }` (the overlay specs do), which is spread last below.
+    DEV_NOISY: process.env.DEV_NOISY ?? 'false',
     // Keep DevTools out of the window so the renderer is the size the test asked for.
     // Docked DevTools eats ~555px of a 1280px window, leaving specs interacting with a dock
     // they were never sized for. Honored in src/main/main.ts.
