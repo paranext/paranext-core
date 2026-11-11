@@ -168,7 +168,9 @@ import {
   editorHoldsUnsavedChanges,
   isEditorContentForChapter,
   performDebouncedPdpSave,
+  withoutZeroWidthNoBreakSpaces,
 } from './debounced-pdp-save.util';
+import { createPendingSaveSlot, type PendingPdpSave } from './pending-save-slot.util';
 import {
   PLATFORM_CARET_RESTORE_TIMERS,
   isCaretPlacedAt,
@@ -3357,6 +3359,18 @@ function PlatformScriptureEditor({
   }, [usjFromPdpError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
+  // The save that arrived while a write was in flight, sent when that write settles (see
+  // `saveUsjToPdpInternal`). Latest wins: any number of saves made during one write collapse into
+  // one follow-up.
+  const pendingSaveSlot = useMemo(
+    () => createPendingSaveSlot<PendingPdpSave>(currentlyWritingUsjToPdp),
+    [],
+  );
+  // The newest `saveUsjToPdpIfUpdated`, readable from the saves that outlive the closure they
+  // started in. Kept current by the effect beside `saveUsjToPdpIfUpdatedRef`.
+  const latestSaveUsjToPdpIfUpdated = useRef<((usj?: Usj) => Promise<boolean>) | undefined>(
+    undefined,
+  );
   // Which save rejection the user has already been told about. A chapter the backend refuses is
   // refused again on every save for as long as the user keeps typing, so this is what turns that
   // run of identical rejections into one report; a write that completes clears it. Both transitions
@@ -4076,6 +4090,47 @@ function PlatformScriptureEditor({
      *   save is dropped or refused, or the backend rejects it.
      */
     async function saveUsjToPdpInternal(newUsj: Usj, onWritten?: () => void): Promise<boolean> {
+      try {
+        return await writeUsjToPdp(newUsj, onWritten);
+      } finally {
+        sendPendingSave();
+      }
+    }
+
+    /**
+     * Sends the save that arrived while a write was in flight, now that the guard is free. Same
+     * chapter: the editor's document as it is NOW, and only when it differs from what was last
+     * sent, so edits made during the write go out as one save and an unchanged editor sends
+     * nothing. Another chapter: the content held, through the save bound to that chapter, which
+     * refuses it if its chapter is no longer the one selected.
+     */
+    function sendPendingSave(): void {
+      const pending = pendingSaveSlot.takeIfIdle();
+      if (!pending) return;
+      const resend = async (): Promise<void> => {
+        if (pending.chapterKey !== chapterKeyRef.current) {
+          await pending.resend(pending.usj);
+          return;
+        }
+        const editorUsj = editorRef.current?.getUsj();
+        if (!editorUsj) return;
+        const lastSent = usjSentToPdp.current;
+        if (
+          lastSent &&
+          !editorHoldsUnsavedChanges(editorUsj, withoutZeroWidthNoBreakSpaces(lastSent))
+        )
+          return;
+        await (latestSaveUsjToPdpIfUpdated.current ?? pending.resend)(editorUsj);
+      };
+      resend().catch((error: unknown) => {
+        logger.error(
+          `Error sending the save held back by a write in flight: ${getErrorMessage(error)}`,
+        );
+      });
+    }
+
+    /** One attempt to write `newUsj`; a save that arrives while a write is in flight is held. */
+    async function writeUsjToPdp(newUsj: Usj, onWritten?: () => void): Promise<boolean> {
       const { save: rawSave, chapterKey: rawSaveChapterKey } = saveUsjToPdpRawStableRef.current;
       if (!rawSave) return false;
       if (rawSaveChapterKey !== savedChapterKey) {
@@ -4115,15 +4170,18 @@ function PlatformScriptureEditor({
             }
             return false;
           }
-          // A save arriving while another write is in flight is DROPPED here, not queued: the
-          // debouncer has already consumed its pending args, and the echo-driven push-back only
-          // re-pushes while the editor still shows this document — so a chapter-switch flush
-          // that lands on a held guard loses those edits outright. Surface it loudly until a
-          // re-queue exists.
-          logger.warn(
-            'saveUsjToPdp: dropped a save because another PDP write was already in flight — ' +
-              'no retry is queued for this content, so if this was a chapter-switch flush the ' +
-              'flushed edits did not reach the PDP',
+          // A save arriving while another write is in flight is held, latest wins, and sent when
+          // that write settles (`sendPendingSave`): the debouncer has already consumed its pending
+          // args, and the echo-driven push-back only re-pushes while the editor still shows this
+          // document, so nothing else would send these edits. It reports `false` (no write ran
+          // for it yet), which the deferral bookkeeping in `useEditorPdpSync` relies on.
+          pendingSaveSlot.hold({
+            chapterKey: savedChapterKey,
+            usj: newUsj,
+            resend: saveUsjToPdpIfUpdatedInternal,
+          });
+          logger.debug(
+            'saveUsjToPdp: another PDP write is in flight; holding this save until it settles',
           );
           return false;
         }
@@ -4223,6 +4281,7 @@ function PlatformScriptureEditor({
 
     return saveUsjToPdpIfUpdatedInternal;
   }, [
+    pendingSaveSlot,
     usjFromPdp,
     projectName,
     localizedStrings,
@@ -4577,6 +4636,7 @@ function PlatformScriptureEditor({
   const saveUsjToPdpIfUpdatedRef = useRef(saveUsjToPdpIfUpdated);
   useEffect(() => {
     saveUsjToPdpIfUpdatedRef.current = saveUsjToPdpIfUpdated;
+    latestSaveUsjToPdpIfUpdated.current = saveUsjToPdpIfUpdated;
   }, [saveUsjToPdpIfUpdated]);
 
   /**
