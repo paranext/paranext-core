@@ -2319,13 +2319,14 @@
 
 /* A collapsed note shows only its caller, so a `<mark>` an annotation puts in its content holds no
    visible text; any box an annotation style gives it (a border, padding, a margin) would draw a
-   sliver beside the caller. The caller is never a mark, so its own painting is untouched. */
+   sliver beside the caller. The caller is never a mark, so its own painting is untouched. The
+   reset is `!important` because a registered annotation style keeps its own `!important`. */
 .note.collapsed mark {
-  margin: 0;
-  padding: 0;
-  border: none;
-  outline: none;
-  box-shadow: none;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* Expanded NoteNode background styling */
