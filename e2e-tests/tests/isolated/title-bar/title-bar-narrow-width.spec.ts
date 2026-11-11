@@ -94,12 +94,15 @@ async function expectControlWithinRow(
 
 test.describe('Title bar at narrow window widths', () => {
   // Both checks run against the same Simple-mode app at the minimum width, so they share one launch.
-  // Each step re-requests the width and re-reads the bar, so it does not depend on the other.
+  // Each step applies the minimum width itself (a no-op once the window is already there) and
+  // re-reads the bar, so neither depends on what the other did. A failing first step stops the test
+  // before the second runs.
   test('Simple-mode title bar fits at the minimum window width', async ({
     electronApp,
     mainPage,
   }) => {
-    test.setTimeout(240_000);
+    // The suite's per-test default (120 s) for each of the two checks.
+    test.setTimeout(2 * 120_000);
     await waitForAppReady(mainPage);
     await waitForLocalizedTitleBar(mainPage);
 
