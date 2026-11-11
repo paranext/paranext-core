@@ -2,6 +2,9 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
 import { findHelloRock3Frame, DEFAULT_PERSON_NAME } from './overlay-helpers';
 
+// These steps drive the helloRock3 test extension's web view, which only noisy dev mode loads.
+test.use({ electronLaunchOptions: { envOverrides: { DEV_NOISY: 'true' } } });
+
 test('overlay popover rendering and interaction', async ({ mainPage }) => {
   await waitForAppReady(mainPage);
   const frame = await findHelloRock3Frame(mainPage);
