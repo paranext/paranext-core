@@ -90,8 +90,14 @@ async function injectDemoMode(mainPage: import('@playwright/test').Page): Promis
   await mainPage.reload();
 }
 
-/** How many steps the wizard walkthrough runs; its timeout is this many {@link STEP_TIMEOUT_MS}. */
-const WIZARD_WALKTHROUGH_STEP_COUNT = 6;
+/** How many steps the wizard walkthrough runs after its first. */
+const WIZARD_WALKTHROUGH_WARM_STEP_COUNT = 5;
+
+/**
+ * The budget of one walkthrough step after the first: the app is already up, so it is the config's
+ * per-test default rather than the cold-start {@link STEP_TIMEOUT_MS}.
+ */
+const WARM_STEP_TIMEOUT_MS = 120_000;
 
 // The demo-reload path is fast, but the sub-waits along the worst path are sized for a COLD
 // start: injectDemoMode waits up to 90 s for the first boot to settle, then waitForWizard
@@ -131,7 +137,8 @@ test.describe('First-run wizard', () => {
   test('wizard walkthrough: Language → Internet Settings → Identify → Sync consent → Sync progress', async ({
     mainPage,
   }) => {
-    test.setTimeout(WIZARD_WALKTHROUGH_STEP_COUNT * STEP_TIMEOUT_MS);
+    // Only the first step pays the cold start; the rest run on the app it started.
+    test.setTimeout(STEP_TIMEOUT_MS + WIZARD_WALKTHROUGH_WARM_STEP_COUNT * WARM_STEP_TIMEOUT_MS);
 
     if (!savedInternetSettings) throw new Error('expected the saved internet settings to be read');
     const savedBeforeWalkthrough = savedInternetSettings;
