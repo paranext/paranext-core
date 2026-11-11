@@ -61,6 +61,20 @@ export async function openReactWebViewTab(page: Page, parentTabGroupId?: string)
   return webViewId;
 }
 
+/** Reloads a {@link REACT_WEB_VIEW_TYPE} web view in place and checks the reload keeps its id */
+export async function reloadReactWebView(page: Page, webViewId: string): Promise<void> {
+  const reloadedId = await page.evaluate(
+    async ({ type, id }) => {
+      // The renderer sets `globalThis.papi`; it is untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { papi } = window as unknown as PapiWindow;
+      return papi.webViews.reloadWebView(type, id);
+    },
+    { type: REACT_WEB_VIEW_TYPE, id: webViewId },
+  );
+  expect(reloadedId, 'the reload returns the same web view').toBe(webViewId);
+}
+
 /** Console lines in which `WebViewErrorBoundary` reports one of `webViewIds` crashing */
 export function crashLines(lines: string[], webViewIds: string[]): string[] {
   return lines.filter(
