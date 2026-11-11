@@ -148,7 +148,7 @@ test.use({
 test.describe('switching interface mode', () => {
   // Every test flips the mode and waits for windows to close or be built again, which is a whole
   // renderer start per window — well past the default budget
-  test.setTimeout(900_000);
+  test.setTimeout(COLD_START_TIMEOUT_MS);
 
   test('switching to simple with two windows open leaves exactly the primary', async ({
     electronApp,
