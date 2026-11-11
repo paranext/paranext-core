@@ -1471,7 +1471,7 @@ e2e-tests/run-e2e-wsl.sh --wrap npx playwright test e2e-tests/tests/isolated/{fe
 **On an Electron upgrade, re-run `tests/isolated/web-view-lifecycle/` by hand.** CI runs only the
 smoke project (`.github/workflows/test.yml`), and that subset is the only place that would notice
 Chromium no longer firing `unload` in web view iframes: the React web view bootstrap unmounts a
-replaced document's root on `unload`, and `extension-teardown-listeners.spec.ts` goes red if it stops.
+replaced document's root on `unload`, and the teardown-listener step of `stale-root-unmount.spec.ts` goes red if it stops.
 
 ### Manually Testing the First-Run Wizard
 
