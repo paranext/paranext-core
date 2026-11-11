@@ -2857,7 +2857,7 @@ async function enterAndDeleteEachCharacter(
   );
   const startedAt = Date.now();
   // Chained: each character is entered at its own point before the next is aimed.
-  await INSERTION_POINTS.reduce(async (previous, { name, point }, index) => {
+  await INSERTION_POINTS.reduce(async (previous, { name, point }) => {
     await previous;
     const character = INVISIBLE_CHARACTERS[name];
     if (gesture === 'pasted')
@@ -2868,9 +2868,10 @@ async function enterAndDeleteEachCharacter(
       return;
     }
     await mainPage.keyboard.press(PASTE_KEY);
-    // The last paste has no clipboard write after it to race, and its character (U+FEFF) is one
-    // the editor may keep out of its text.
-    if (index < INSERTION_POINTS.length - 1) await waitForEnteredCharacter(editorInput, point);
+    // A zero-width no-break space is not waited for: the editor may keep it out of its text. It is
+    // entered last, so no clipboard write follows it to race its paste.
+    if (name !== 'zero-width no-break space U+FEFF')
+      await waitForEnteredCharacter(editorInput, point);
   }, Promise.resolve());
 
   const enteredAt = Date.now();
