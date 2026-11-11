@@ -1,5 +1,7 @@
 /**
- * End-to-end cover for the chapter-marker save-boundary repair.
+ * End-to-end cover for the chapter-marker save-boundary repair of a marker that is WRONG: a
+ * mistyped number, a second `\c` typed into a chapter, and the backend's own correction of the same
+ * documents. (A marker that is MISSING, or left as text, is `chapter-marker-restore.spec.ts`.)
  *
  * Retyping the number on a `\c` marker in Standard view is a legal gesture (Paratext 9 parity:
  * whole word, valid or not), but the document it produces is one `ScrText.ValidateChapterNumber`
@@ -11,24 +13,41 @@
  * can show is the part those suites stub: that the gesture really does poison the document, that
  * the push-back reaches the editor, that the caret the push-back destroyed is put back at the
  * correction, that the chapter goes on saving afterwards, that a repair carried by the
- * chapter-switch flush reports without overwriting the chapter the user moved to, and that a repair
+ * chapter-switch flush reports without overwriting the chapter the user moved to, that a repair
  * carried by the save on leaving still reaches the screen — the one case the save runs in with the
- * user's last keystroke still fresh.
+ * user's last keystroke still fresh — and that a `\c` typed into the middle of a paragraph is
+ * removed with the paragraph kept whole.
  *
- * ONE test() per spec file on purpose (the isolated fixture is test-scoped and a second Electron
- * instance against the shared renderer dev server has a documented dock-tab failure mode — see
- * standard-default-power-mode.spec.ts). Sub-scenarios are test.step()s sharing the one instance.
+ * The backend half (`ChapterMarkerCorrection.cs`, wired into the Paratext PDP's chapter setters as
+ * the backstop for writers that never go through the editor) has no UI: its steps go straight to
+ * the project data provider over PAPI. `ChapterMarkerCorrectionTests.cs` pins the algorithm to
+ * Paratext 9's own `[TestCase]` table and `ChapterMarkerCorrectionWiringTests.cs` pins the setters
+ * to calling it, but only a live write reaches `ScrText.ValidateChapterNumber`, the code that
+ * refuses these documents — so a correction that fixed the marker but left, say, content ahead of
+ * it would pass every unit test and still fail every save.
+ *
+ * Each test() launches its own Electron instance and edits the project on disk, so a test that
+ * leaves a chapter changed gets its own start. The first test's steps share one instance: each
+ * works on a chapter the steps before it did not edit (Jonah 1 through the editor, then Jonah 2
+ * through the provider, which the editor never saves).
  *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  chapterMarkerCorrectionMessage,
+  getChapterUsfmFromProvider,
+  getSampleProjectDataProviderId,
+  openSampleEditorInStandardView,
+  PDP_REQUEST_TIMEOUT_MS,
+  WEBSOCKET_PORT,
+} from '../../../fixtures/chapter-marker-helpers';
+import { sendPapiRequestOnce } from '../../../fixtures/helpers';
+import {
   findScriptureEditorFrame,
   makeSampleProjectEditable,
   navigateToolbarBcv,
-  openEditableScriptureEditorForProject,
-  SAMPLE_WEB_PROJECT_ID,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
 import {
@@ -38,40 +57,58 @@ import {
 } from '../../../fixtures/toast-recorder';
 
 // Power mode so the editor opens in Standard view, where the chapter marker is editable text at
-// all. DEV_NOISY=false keeps the normal Home layout (see standard-default-power-mode.spec.ts).
+// all. DEV_NOISY=false keeps the normal Home layout (see preview-read-only-power-mode.spec.ts).
 test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
 
-/**
- * How `%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%` reads for Jonah 1,
- * the chapter every repair in this spec is made to. The chapter is part of the match on purpose:
- * the notice has to name the chapter it repaired, which is not always the chapter on screen.
- */
-const CORRECTION_MESSAGE =
-  'The chapter marker in Jonah 1 did not match the chapter, so it was corrected';
+/** The config's per-test default (`e2e-tests/playwright.config.ts`), `test.slow()` triples it. */
+const DEFAULT_TEST_TIMEOUT_MS = 120_000;
+/** The cold-start budget: Playwright's 3x "slow" allowance on the config's default. */
+const COLD_START_TIMEOUT_MS = 3 * DEFAULT_TEST_TIMEOUT_MS;
+/** The budget of a step added after the cold start: the app is up, so the config's default. */
+const WARM_STEP_TIMEOUT_MS = DEFAULT_TEST_TIMEOUT_MS;
+
+/** The correction notice for Jonah 1, the chapter every editor repair in the first test is made to. */
+const JONAH_1_CORRECTION_MESSAGE = chapterMarkerCorrectionMessage(1, 'Jonah');
 
 // All-caps tokens that appear nowhere in the WEB text, so a `toContainText` match is unambiguous.
 const AFTER_REPAIR_TOKEN = 'ZZAFTERREPAIR';
 const FLUSH_TOKEN = 'ZZFLUSHSAVE';
+
+/** Jonah 2 — a chapter after the first, so its document must BEGIN with its chapter marker. */
+const JONAH_2 = { book: 'JON', chapterNum: 2, verseNum: 1 };
+/** A phrase from Jonah 2:1 that must survive every round trip, proving the write kept the content. */
+const JONAH_2_PHRASE = 'prayed to Yahweh, his God';
+
+/** Every `\c N` marker in a USFM document, in order. `\ca`/`\cl`/`\cp` do not match. */
+function chapterMarkers(usfm: string): string[] {
+  return [...usfm.matchAll(/\\c\s+(\d+)/g)].map((match) => match[1]);
+}
+
+/** The text the marker is typed into the middle of, split where it goes. */
+const TEXT_BEFORE_MARKER = 'Naomi had ';
+const TEXT_AFTER_MARKER = 'a relative of her husband';
+
+/** Between keys, so each is handled before the next arrives. */
+const KEY_DELAY_MS = 80;
+
+/** Typed once the correction is on screen, to show where the caret came back. */
+const CARET_TOKEN = 'ZZMID';
 
 test.describe('scripture editor chapter-marker repair', () => {
   test('repairs a mistyped chapter marker, reports it, and keeps the chapter saving', async ({
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, then several rounds of
-    // deliberately-paced typing and chapter navigation). Playwright's 3x "slow" budget.
-    test.slow();
+    // deliberately-paced typing and chapter navigation), plus one warm step for the backend half.
+    test.setTimeout(COLD_START_TIMEOUT_MS + WARM_STEP_TIMEOUT_MS);
 
     await waitForHomeTab(mainPage);
     await makeSampleProjectEditable();
-    const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
-    const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
-    await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+    const { editorFrame, editorInput } = await openSampleEditorInStandardView(mainPage);
 
-    // `.first()` because the footnote-editor popover renders its own `.editor-input.marker-editable`.
-    const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
     // The editable chapter node renders as `<p class="chapter" data-marker="c" data-number="N">`
     // holding the `\c<NBSP>N ` glyph text, so `data-number` is a direct read of the chapter number
     // the document currently claims.
@@ -90,8 +127,7 @@ test.describe('scripture editor chapter-marker repair', () => {
      *
      * The click lands on the glyph but every KEY goes to the contenteditable: Playwright's
      * `press`/`pressSequentially` focus their target first, and focusing the unfocusable inner
-     * `<span>` drops the caret the click just placed — the keys then reach no Lexical selection at
-     * all and the document is left untouched (a silently vacuous test, confirmed by probe).
+     * `<span>` drops the caret the click just placed (see `clickChapterMarkerGlyph`).
      */
     const retypeChapterNumber = async (digit: string) => {
       await chapterGlyph.click();
@@ -147,7 +183,7 @@ test.describe('scripture editor chapter-marker repair', () => {
       await expect(chapterMarker).toHaveAttribute('data-number', '1', { timeout: 30_000 });
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
-        .toEqual(expect.arrayContaining([expect.stringContaining(CORRECTION_MESSAGE)]));
+        .toEqual(expect.arrayContaining([expect.stringContaining(JONAH_1_CORRECTION_MESSAGE)]));
     });
 
     await test.step('the caret comes back to the number that was corrected', async () => {
@@ -178,7 +214,7 @@ test.describe('scripture editor chapter-marker repair', () => {
       // against RENDERED chapter-2 content — `not.toContainText` alone is satisfied by the empty
       // mid-navigation editor and would pass vacuously.
       await navigateToolbarBcv(mainPage, 'Jonah 2:1');
-      await expect(editorInput).toContainText('prayed to Yahweh, his God', { timeout: 60_000 });
+      await expect(editorInput).toContainText(JONAH_2_PHRASE, { timeout: 60_000 });
       await expect(editorInput).not.toContainText(AFTER_REPAIR_TOKEN, { timeout: 20_000 });
 
       await navigateToolbarBcv(mainPage, 'Jonah 1:1');
@@ -212,10 +248,10 @@ test.describe('scripture editor chapter-marker repair', () => {
 
       // The user is still told — and the notice names Jonah 1, the chapter that was repaired,
       // rather than leaving the reader to assume it means the Jonah 3 they are now looking at.
-      // Naming the chapter is what this assertion is for; see CORRECTION_MESSAGE.
+      // Naming the chapter is what this assertion is for; see `chapterMarkerCorrectionMessage`.
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
-        .toEqual(expect.arrayContaining([expect.stringContaining(CORRECTION_MESSAGE)]));
+        .toEqual(expect.arrayContaining([expect.stringContaining(JONAH_1_CORRECTION_MESSAGE)]));
 
       // ...and the chapter left behind was written repaired, with the edit that went with it.
       await navigateToolbarBcv(mainPage, 'Jonah 1:1');
@@ -257,12 +293,164 @@ test.describe('scripture editor chapter-marker repair', () => {
       // about where that repair landed, and cannot pass vacuously.
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
-        .toEqual(expect.arrayContaining([expect.stringContaining(CORRECTION_MESSAGE)]));
+        .toEqual(expect.arrayContaining([expect.stringContaining(JONAH_1_CORRECTION_MESSAGE)]));
       await expect.poll(() => chapterGlyph.textContent(), { timeout: 20_000 }).toBe('\\c\u00A01 ');
 
       // ...and the control the user moved to still has the caret.
       await expect(mainPage.locator('[data-radix-popper-content-wrapper] input')).toBeFocused();
       await mainPage.keyboard.press('Escape');
+    });
+
+    await test.step('accepts a chapter whose markers disagree with it, and stores it corrected', async () => {
+      // The provider's own half, on Jonah 2: the editor above only viewed that chapter, so its
+      // document on disk is still the sample's.
+      const pdpId = await getSampleProjectDataProviderId();
+      const getChapterUsfm = () => getChapterUsfmFromProvider(pdpId, 'JON', 2);
+      const setChapterUsfm = (usfm: string) =>
+        sendPapiRequestOnce<boolean>(
+          `object:${pdpId}.setChapterUSFM`,
+          [JONAH_2, usfm],
+          WEBSOCKET_PORT,
+          PDP_REQUEST_TIMEOUT_MS,
+        );
+
+      const original = await getChapterUsfm();
+      expect(chapterMarkers(original)).toEqual(['2']);
+      expect(original).toContain(JONAH_2_PHRASE);
+
+      await test.step('a wrong chapter number is put back rather than refused', async () => {
+        // Without the correction this write is rejected outright ("Wrong chapter number"), so the
+        // request below rejects and the test fails before reaching any assertion — which is exactly
+        // the silent, unsurfaced save failure this correction exists to prevent.
+        await setChapterUsfm(original.replace(/\\c\s+2/, '\\c 9'));
+
+        const stored = await getChapterUsfm();
+        expect(chapterMarkers(stored)).toEqual(['2']);
+        expect(stored).toContain(JONAH_2_PHRASE);
+      });
+
+      await test.step('a second chapter marker typed into the chapter is dropped', async () => {
+        // "Multiple chapter markers present." — the rejection a `\c` typed mid-chapter produces.
+        const stored = await getChapterUsfm();
+        await setChapterUsfm(`${stored.trimEnd()}\n\\c 9\n`);
+
+        const repaired = await getChapterUsfm();
+        expect(chapterMarkers(repaired)).toEqual(['2']);
+        expect(repaired).toContain(JONAH_2_PHRASE);
+      });
+
+      await test.step('a deleted chapter marker is restored at the very start of the document', async () => {
+        // "No chapter marker present." — and the restored marker has to go at position 0, because
+        // Paratext also refuses any content ahead of a chapter marker after the first
+        // ("Text present before chapter marker.").
+        const stored = await getChapterUsfm();
+        await setChapterUsfm(stored.replace(/\\c\s+2\s*/, ''));
+
+        const repaired = await getChapterUsfm();
+        expect(chapterMarkers(repaired)).toEqual(['2']);
+        expect(repaired.trimStart().startsWith('\\c 2')).toBe(true);
+        expect(repaired).toContain(JONAH_2_PHRASE);
+      });
+    });
+  });
+
+  test('removes the marker, keeps the paragraph whole, and returns the caret to where it was', async ({
+    mainPage,
+  }) => {
+    // Heavy isolated test (own Electron instance, backend-readiness gates). Playwright's 3x "slow"
+    // budget.
+    test.slow();
+
+    await waitForHomeTab(mainPage);
+    await makeSampleProjectEditable();
+
+    // The marker is typed key by key, which is what makes the editor save: the `\` opens the marker
+    // menu, and the space after `c` commits what was typed as the same bytes typing alone would
+    // leave. Keys go through `mainPage.keyboard` with the editor focused (`locator.press` focuses
+    // its target first and is slow per key).
+    const pdpId = await getSampleProjectDataProviderId();
+    const getRuth2Usfm = () => getChapterUsfmFromProvider(pdpId, 'RUT', 2);
+    // Whitespace-normalized: saving through the editor rewrites the file's line-end spacing.
+    const normalized = (usfm: string) => usfm.replace(/\s+/g, ' ').trim();
+
+    const { editorFrame, editorInput } = await openSampleEditorInStandardView(mainPage);
+    const editorEvalFrame = await findScriptureEditorFrame(mainPage);
+
+    await installToastProbe(mainPage);
+
+    await navigateToolbarBcv(mainPage, 'Ruth 2:1');
+    await expect(editorInput).toContainText(TEXT_BEFORE_MARKER + TEXT_AFTER_MARKER, {
+      timeout: 60_000,
+    });
+    const storedUsfm = normalized(await getRuth2Usfm());
+    expect(storedUsfm).toContain(TEXT_BEFORE_MARKER + TEXT_AFTER_MARKER);
+
+    await test.step('a chapter marker is typed into the middle of verse 1', async () => {
+      const placed = await editorEvalFrame.evaluate(
+        ({ before, after }) => {
+          const root = document.querySelector<HTMLElement>('.editor-input.marker-editable');
+          if (!root) return false;
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const offset = (node.textContent ?? '').indexOf(before + after);
+            if (offset >= 0) {
+              root.focus();
+              document.getSelection()?.collapse(node, offset + before.length);
+              return true;
+            }
+          }
+          return false;
+        },
+        { before: TEXT_BEFORE_MARKER, after: TEXT_AFTER_MARKER },
+      );
+      expect(placed).toBe(true);
+      await mainPage.keyboard.type('\\c 5 ', { delay: KEY_DELAY_MS });
+    });
+
+    await test.step('the marker is removed and the user is told', async () => {
+      await expect
+        .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
+        .toEqual(
+          expect.arrayContaining([
+            expect.stringContaining(chapterMarkerCorrectionMessage(2, 'Ruth')),
+          ]),
+        );
+      await expect(editorFrame.locator('p.chapter[data-marker="c"]')).toHaveCount(1, {
+        timeout: 30_000,
+      });
+      await expect(editorInput).toContainText(TEXT_BEFORE_MARKER + TEXT_AFTER_MARKER, {
+        timeout: 30_000,
+      });
+    });
+
+    await test.step('the caret is back where the marker was typed', async () => {
+      // The caret restore runs once the corrected document has loaded; until then a key would go
+      // wherever the load left the caret, so wait for the caret to sit in the rejoined text.
+      await expect
+        .poll(
+          () =>
+            editorEvalFrame.evaluate((before) => {
+              const selection = document.getSelection();
+              const node = selection?.anchorNode;
+              if (!selection || !node || node.nodeType !== Node.TEXT_NODE) return '';
+              return (node.textContent ?? '').slice(0, selection.anchorOffset).endsWith(before)
+                ? 'after-the-text-before-the-marker'
+                : (node.textContent ?? '').slice(0, selection.anchorOffset);
+            }, TEXT_BEFORE_MARKER),
+          { timeout: 20_000 },
+        )
+        .toBe('after-the-text-before-the-marker');
+      await mainPage.keyboard.type(CARET_TOKEN, { delay: KEY_DELAY_MS });
+    });
+
+    await test.step('the chapter saves with its one marker and the paragraph whole', async () => {
+      const expected = storedUsfm.replace(
+        TEXT_BEFORE_MARKER + TEXT_AFTER_MARKER,
+        TEXT_BEFORE_MARKER + CARET_TOKEN + TEXT_AFTER_MARKER,
+      );
+      await expect
+        .poll(async () => normalized(await getRuth2Usfm()), { timeout: 30_000 })
+        .toBe(expected);
     });
   });
 });

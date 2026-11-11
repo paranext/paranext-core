@@ -19,7 +19,8 @@
  * chapter saved. A move whose content arrives before any key lands gives nothing to measure, so the
  * spec moves on until one does.
  *
- * ONE test() per spec file on purpose (see chapter-marker-repair.spec.ts).
+ * One test() in this file: the isolated fixture is test-scoped, so the test has its own Electron
+ * instance.
  *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated scripture-editor`.
@@ -36,7 +37,7 @@ import {
 } from '../../../fixtures/scripture-editor-helpers';
 
 // Power mode: the editable Standard view. DEV_NOISY=false keeps the normal Home layout (see
-// standard-default-power-mode.spec.ts).
+// preview-read-only-power-mode.spec.ts).
 test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
