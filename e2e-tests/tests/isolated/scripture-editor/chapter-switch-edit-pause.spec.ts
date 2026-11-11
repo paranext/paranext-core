@@ -8,9 +8,9 @@
  * in.
  *
  * The move is made the way F8 makes it — the `platform.goToNextChapter` command — because F8 is a
- * main-process shortcut that Playwright's key events never reach (see
- * verse-navigation-shortcuts.spec.ts), and because it leaves the focus in the editor, which is the
- * case this is about. One stream of keys spans the move.
+ * main-process shortcut that Playwright's key events never reach (see navigation-history.spec.ts),
+ * and because it leaves the focus in the editor, which is the case this is about. One stream of
+ * keys spans the move.
  *
  * What would go wrong without the hold-off is a key shown in the chapter being left and then never
  * saved (and, since each such key moves the caret there, the reference pulled back to that

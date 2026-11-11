@@ -130,7 +130,7 @@ test.describe('UI Interaction', () => {
   // iframe). We assert only its rendered + disabled state here — a fresh smoke profile opens no
   // scripture-navigable web view, so the control has nothing to navigate and is disabled. The
   // enabled/interactive flow (open an editor, search, navigate) requires a project + editor, which
-  // is per-feature and belongs in the cdp-fixture verse-navigation spec, not the smoke suite.
+  // is per-feature and belongs in `tests/isolated/navigation-history/navigation-history.spec.ts`, not the smoke suite.
   test('top toolbar book/chapter control renders and is disabled with no scripture web view open', async ({
     mainPage,
   }) => {

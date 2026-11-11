@@ -96,7 +96,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
 
     // Scoped to the FIRST editor input, not the whole iframe and not every `.editor-input`: the
     // footnote editor auto-opens on insert, carries an `.editor-input.marker-editable` of its own
-    // (see marker-palette-trigger-focus.spec.ts), and renders the note being edited — so a wider
+    // (see marker-palette-typed-commit.spec.ts), and renders the note being edited — so a wider
     // locator counts one inserted note twice.
     const mainEditor = editorInput.first();
     const endnotes = mainEditor.locator('span.note.usfm_fe');
