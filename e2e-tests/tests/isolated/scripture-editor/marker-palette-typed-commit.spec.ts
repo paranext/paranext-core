@@ -4,6 +4,9 @@
  * the marker as it settles, so this is the end-to-end check of that hand-off: unit tests cover the
  * editor and the key routing separately, and only the running app puts them together.
  *
+ * It also checks that `\` opens the palette over a selection and that Escape dismisses a palette
+ * opened from the editor.
+ *
  * The same markers typed straight through, without waiting for the palette to appear, are covered
  * by marker-palette-typed-through.spec.ts.
  *
@@ -11,6 +14,7 @@
  * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { getMarkerPalette, openMarkerPalette } from '../../../fixtures/marker-palette.page';
 import {
   findScriptureEditorFrame,
   makeSampleProjectEditable,
@@ -43,7 +47,7 @@ test.describe('scripture editor marker palette typed commit', () => {
     });
 
     // The marker palette renders in the renderer (parent doc), not the editor iframe.
-    const palette = mainPage.locator('[data-overlay-command-palette]').first();
+    const palette = getMarkerPalette(mainPage);
     const editorEvalFrame = await findScriptureEditorFrame(mainPage);
     /** Whether a `\nd` span holds the given text, so that text is styled as `\nd`. */
     const isInNdSpan = async (text: string) =>
@@ -88,6 +92,22 @@ test.describe('scripture editor marker palette typed commit', () => {
       await mainPage.keyboard.press('End');
       await typeMarker('v', '91 Z');
       await expect.poll(() => hasVerse('91'), { timeout: 20_000 }).toBe(true);
+    });
+
+    await test.step('a selection + backslash opens the marker palette', async () => {
+      // The editor still holds focus after the last commit; select the caret's line.
+      await mainPage.keyboard.press('Home');
+      await mainPage.keyboard.press('Shift+End');
+      const selectedText = await editorEvalFrame.evaluate(
+        () => window.getSelection()?.toString() ?? '',
+      );
+      expect(selectedText.length).toBeGreaterThan(0);
+      await openMarkerPalette(mainPage);
+    });
+
+    await test.step('Escape dismisses the marker palette opened from the editor', async () => {
+      await mainPage.keyboard.press('Escape');
+      await expect(palette).not.toBeAttached({ timeout: 10_000 });
     });
   });
 });
