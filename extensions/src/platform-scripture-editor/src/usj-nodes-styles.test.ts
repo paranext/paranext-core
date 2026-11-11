@@ -396,10 +396,42 @@ describe('Simple-mode section headings in the compiled editor sheets', () => {
       .map((file) => path.resolve(markerStylesDir, file)),
   ].map((file) => ({ file: path.basename(file), root: postcss.parse(compile(file).css) }));
 
-  /** A selector for a gutter-view `\s`-`\s3` heading itself, not for something inside or after it. */
+  /** `selector` with every `(…)` argument removed, innermost first, so `:not(.a, .b)` is `:not`. */
+  const withoutArguments = (selector: string) => {
+    let result = selector;
+    while (/\([^()]*\)/.test(result)) result = result.replace(/\([^()]*\)/g, '');
+    return result;
+  };
+
+  /**
+   * A selector for a Simple-mode `\s`-`\s3` heading itself, not for something inside or after it.
+   * `_simple-mode.scss` scopes its rules with `.editor-container-simple` rather than
+   * `.psc-gutter-markers`, so either scope counts.
+   */
   const isGutterHeading = (selector: string) =>
-    selector.includes('.psc-gutter-markers') &&
-    /\.usfm_s[1-3]?(?![\w-])[^\s>+~]*$/.test(selector.trim());
+    (selector.includes('.psc-gutter-markers') || selector.includes('.editor-container-simple')) &&
+    /\.usfm_s[1-3]?(?![\w-])[^\s>+~]*$/.test(withoutArguments(selector).trim());
+
+  it.each([
+    ['.psc-gutter-markers .usfm_s1', true],
+    ['.psc-gutter-markers .usfm_s', true],
+    ['.psc-gutter-markers .usfm_s3.x', true],
+    ['.psc-gutter-markers .usfm_s1:not(.psc-para-marker-selected, .x)', true],
+    ['.psc-gutter-markers .usfm_s1:is(.a, .b)', true],
+    ['.psc-gutter-markers .usfm_s1:has(> .usfm_bd)', true],
+    ['.psc-gutter-markers:not(.a, .b) .usfm_s1', true],
+    ['.editor-container-simple .usfm_s1', true],
+    ['.psc-gutter-markers .usfm_s1 .usfm_bd', false],
+    ['.psc-gutter-markers .usfm_s1 > .marker', false],
+    ['.psc-gutter-markers .usfm_s1 + .usfm_p', false],
+    ['.psc-gutter-markers .usfm_s1 ~ .usfm_p', false],
+    ['.psc-gutter-markers .usfm_s4', false],
+    ['.psc-gutter-markers .usfm_sp', false],
+    ['.psc-gutter-markers .usfm_s-x', false],
+    ['.formatted-font .usfm_s1', false],
+  ])('treats `%s` as a Simple-mode heading: %s', (selector, expected) => {
+    expect(isGutterHeading(selector)).toBe(expected);
+  });
 
   it('only places the headings, leaving their size, weight and color to the base styles', () => {
     // As upstream (eten-tech-foundation/scripture-editors#486), so a heading's type matches
@@ -411,16 +443,22 @@ describe('Simple-mode section headings in the compiled editor sheets', () => {
       root.walkRules((rule) => {
         if (!rule.selectors.some(isGutterHeading)) return;
         rule.walkDecls((declaration) => {
-          if (declaration.prop === 'text-align')
+          const centers = declaration.prop === 'text-align' && declaration.value === 'center';
+          if (centers)
             rule.selectors
               .filter(isGutterHeading)
               .forEach((selector) => placed.push(`${file}: ${selector}`));
-          if (!placementProperties.includes(declaration.prop))
+          // Any other `text-align` undoes the centering, which `\s3` has nowhere else.
+          if (
+            !placementProperties.includes(declaration.prop) ||
+            (declaration.prop === 'text-align' && !centers)
+          )
             styled.push(`${file}: ${rule.selector} { ${declaration.toString()} }`);
         });
       }),
     );
-    // Positive control, so a parser that finds no heading rule doesn't pass vacuously.
+    // Positive control, so a parser that finds no heading rule doesn't pass vacuously. It also
+    // pins the deliberate centering of every level, `\s3` included.
     ['.usfm_s', '.usfm_s1', '.usfm_s2', '.usfm_s3'].forEach((heading) =>
       expect(placed).toContain(
         `platform-scripture-editor.web-view.scss: .psc-gutter-markers ${heading}`,

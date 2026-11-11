@@ -14,6 +14,8 @@
    The Simple-mode verse and ellipsis sizes are base-relative here
    (`--psc-base-font-size`, in the gutter section) and intentionally not in the demo copy, where
    no project stylesheet is injected.
+   The gutter `\s`-`\s3` rule matches eten-tech-foundation/scripture-editors#486; that PR's
+   empty-verse ellipsis changes (`font-weight: normal`, `cursor: text`) are not copied.
    The source's four `local()`-only Charis SIL @font-face rules are dropped. */
 
 /* stylelint-disable */
