@@ -14,7 +14,9 @@
  *    Home instead — one tab, one web view, nothing else (it must not clone the first window's
  *    layout or load some OTHER default layout) — while its per-window services register under
  *    scoped names with no collisions, generic window-service calls route to whichever window has
- *    focus, and closing the secondary window neither quits the app nor runs shutdown tasks.
+ *    focus, the secondary window keeps the toolbar and drops only the top-level menu (the main
+ *    window keeps its menubar), and closing the secondary window neither quits the app nor runs
+ *    shutdown tasks.
  * 2. App-global state across windows, and surviving any window's close: a scroll group change and a
  *    theme change each reach every open window, a window created afterwards starts on the current
  *    reference and the current theme rather than the defaults, and then window 1 — no longer
@@ -35,7 +37,7 @@
  *
  * ## App configuration
  *
- * All three tests pre-configure (via the dev-appdata settings file, read at app startup):
+ * All four tests pre-configure (via the dev-appdata settings file, read at app startup):
  *
  * - `platform.interfaceMode: 'power'` — load-bearing for falsifiability, not a styling choice. The
  *   power-mode shutdown path always attempts the S/R extension's `runScheduledSessionSync` command,
@@ -153,6 +155,26 @@ const SIMPLE_MODE_SHUTDOWN_MARKERS = ['Syncing projects on shutdown', 'Sync on s
  * warning says nothing about the shutdown path.
  */
 const SHUTDOWN_MODE_UNREADABLE_LOG = 'Could not read platform.interfaceMode; skipping';
+
+/** Radix's Menubar root, which the shared `Toolbar` renders only when it is given `menuData`. */
+const MENUBAR = '[data-slot="menubar"]';
+/** The toolbar wrapper `platform-bible-toolbar.tsx` always renders, menu or no menu. */
+const TOOLBAR = '[data-testid="toolbar-reserved-space-wrapper"]';
+/** The app-menu-area logo, which sits beside the menubar and must survive its removal. */
+const APP_LOGO = 'img[alt="Application Logo"]';
+/**
+ * The book/chapter control in a window's toolbar, asserted separately from the toolbar container:
+ * `TOOLBAR` is the component's unconditional root, so on its own it cannot fail independently of
+ * the menubar assertions and proves nothing about the toolbar's contents surviving.
+ */
+const BCV_CONTROL = 'button[aria-label="book-chapter-trigger"]';
+
+/**
+ * Give a menubar that should not exist time to appear before asserting it is absent. Menu data
+ * arrives asynchronously from the extension host, so an immediate negative assertion would pass
+ * even against a build that renders the menu a moment later.
+ */
+const MENU_SETTLE_MS = 3_000;
 
 // #endregion
 
@@ -277,9 +299,7 @@ function isVerseRefShaped(ref: Partial<SerializedVerseRef> | undefined): boolean
  * put it on screen, which is what a user sees and the point of the whole move.
  */
 async function readToolbarReference(page: Page): Promise<string> {
-  return (
-    (await page.locator('button[aria-label="book-chapter-trigger"]').first().textContent()) ?? ''
-  );
+  return (await page.locator(BCV_CONTROL).first().textContent()) ?? '';
 }
 
 /** Wait until a window's toolbar displays a reference containing `expected` (e.g. `'3:16'`). */
@@ -483,6 +503,35 @@ test.describe('multi-window lifecycle', () => {
     const focusInWindow1 = await waitForGenericFocusToReportWebView(window1HomeId);
     expect(focusInWindow1?.id).toBe(window1HomeId);
     logStep(`generic getFocus followed back to window ${window1Id}`);
+
+    await test.step('a secondary window keeps the toolbar and drops only the top-level menu', async () => {
+      // The main window is the control: it has the menubar.
+      await expect(mainPage.locator(TOOLBAR)).toBeAttached({ timeout: 60_000 });
+      await expect(mainPage.locator(MENUBAR)).toHaveCount(1, { timeout: 60_000 });
+      // A populated menubar, not merely a rendered one: MAIN_MENU_DEFAULT is `{columns:{},groups:{},
+      // items:[]}`, which is truthy, so a main window whose menu data never arrived still renders an
+      // empty menubar and would satisfy the count assertion above on its own.
+      await expect(mainPage.getByRole('menuitem').first()).toBeVisible({ timeout: 60_000 });
+      logStep(`window ${window1Id} has the toolbar and a populated menubar`);
+
+      // The secondary window keeps everything but the menu.
+      await expect(page2.locator(TOOLBAR)).toBeAttached({ timeout: 60_000 });
+      await expect(page2.locator(APP_LOGO)).toBeVisible({ timeout: 60_000 });
+      // "Removed only the menu" needs a real control, not just the toolbar's own root, which renders
+      // whether or not anything inside it survived. `toBeVisible` rather than `toBeAttached`: a
+      // `display:none` or zero-size survivor would satisfy attachment without actually being "kept".
+      await expect(page2.locator(BCV_CONTROL).first()).toBeVisible({ timeout: 60_000 });
+      logStep(`window ${window2Id} has the toolbar, the logo and its navigation control`);
+
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, MENU_SETTLE_MS);
+      });
+      await expect(page2.locator(MENUBAR)).toHaveCount(0);
+      await expect(page2.getByRole('menuitem')).toHaveCount(0);
+      // The main window keeps its menubar throughout — the flag is per window, not app-global.
+      await expect(mainPage.locator(MENUBAR)).toHaveCount(1);
+      logStep(`window ${window2Id} has no menubar; window ${window1Id} still does`);
+    });
 
     // Close the SECONDARY window the way a user does. The app must stay up, keep serving window 1,
     // and must NOT treat this as the app going down (no shutdown tasks, no quit).
