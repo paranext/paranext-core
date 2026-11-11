@@ -30,8 +30,9 @@ job and no npm script collects them:
 - `tests/enhanced-resources/` — the Text Collection grid specs (`scripture-text-grid*.spec.ts`,
   `cell-reorder.spec.ts`, `enhanced-resource-content-zoom.spec.ts`) and
   `enhanced-resources-image-render.spec.ts`. They need real Marble resources (paid, not available
-  in CI) and an app started in Power mode. `scripture-text-grid.spec.ts` is out of date; PT-4779
-  covers bringing it up to date.
+  in CI) and an app started in Power mode (every spec there but
+  `scripture-text-grid-verse-row.spec.ts` asserts it). `scripture-text-grid.spec.ts` is out of date;
+  PT-4779 covers bringing it up to date.
 - `tests/markers-checklist/` — the only end-to-end coverage of the Markers checklist. It needs a
   real project (`wgPIDGIN`) on the machine, so it cannot run in CI.
 - `tests/manage-books/` — `manage-books-commands.spec.ts` checks the wire shape of each

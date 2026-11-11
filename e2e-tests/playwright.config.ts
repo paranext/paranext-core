@@ -47,8 +47,8 @@ const config = defineConfig({
   //
   // Exceptions:
   // `_example/` — reference template for new tests, not a runnable test suite.
-  // Experimental tests that should not be wired into any standard test run. (e.g.,
-  // `manage-books/` and `markers-checklist/`)
+  // Local-only suites run by hand against a running app (`manage-books/`, `markers-checklist/`; see
+  // "Local-only directories" in `e2e-tests/CLAUDE.md`).
   // Nothing else is excluded here: `navigation-history/` is an isolated subset like any other,
   // and `playwright-cdp.config.ts` cannot collect it at all (`testIgnore: ['**/isolated/**']`).
   projects: [

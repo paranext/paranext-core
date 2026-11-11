@@ -1,13 +1,10 @@
 /**
- * === NEW IN PT10 ===
- *
  * Runtime verification tests for the manage-books feature. These tests exercise every PAPI
  * NetworkObject method registered under `object:platformScripture.manageBooks` against a
  * live-running Platform.Bible instance.
  *
- * The purpose is NOT to validate business logic — that is covered by the C# unit test suite (216
- * ManageBooks tests, all green) and the golden-master tests. The purpose here is to catch the
- * runtime-integration bugs that unit tests cannot see:
+ * The purpose is NOT to validate business logic — the C# unit tests cover that. The purpose here is
+ * to catch the runtime-integration bugs that unit tests cannot see:
  *
  * - Parameter count / shape mismatches between the TS wire contract and the C# handler delegate
  * - Serialization / deserialization round-trips (including AlertEntry[] in ImportBooksResult)
@@ -17,17 +14,14 @@
  *   unavailable, permission denied) surface as user errors with a distinct code (-32000 under
  *   StreamJsonRpc), meaning the handler was reached and executed.
  *
- * See backend-smoke-tests.md Smoke Test 4 for the canonical error-code rubric.
- *
  * Scope:
  *
- * - 1 method-discovery test (rpc.discover) over the set documented in data-contracts.md §7
+ * - 1 method-discovery test (rpc.discover) over the 12 methods registered on the network object
  * - 12 per-method round-trip tests, one per registered NetworkObject function, each called with a
  *   made-up project id (`BOGUS_PROJECT_ID`) so no real project is read or written
  *
- * All 12 methods are exposed on the wire prefix `object:platformScripture.manageBooks`. See
- * `.context/features/manage-books/proofs/runtime-verification/param-alignment.md` for the TS-vs-C#
- * parameter-alignment matrix.
+ * All 12 methods are exposed on the wire prefix `object:platformScripture.manageBooks`; their
+ * parameter shapes are those of the C# handler delegates the network object registers.
  */
 import { test, expect, canConnectToPapi } from '../../fixtures/papi-live.fixture';
 
@@ -45,7 +39,6 @@ const JSON_RPC_PROTOCOL_CODES: readonly number[] = [
 /**
  * Assert that, if a JSON-RPC error was returned, it is NOT a protocol-level error. A business error
  * (any code outside the protocol reserved range) proves the C# handler was reached and executed.
- * See backend-smoke-tests.md Smoke Test 4 rubric.
  */
 function expectNotProtocolError(
   response: { error?: { code: number; message: string } },
@@ -74,7 +67,7 @@ test.describe('manage-books PAPI command verification (wire-level round-trip)', 
     const schema = await papiLive.request<{ methods: { name: string }[] }>('rpc.discover', []);
     const methodNames = new Set(schema.methods.map((m) => m.name));
 
-    // All 12 methods from data-contracts.md §7 (M-003..M-014 minus REMOVED M-001/M-002)
+    // The 12 methods registered on the network object
     const expected = [
       `${METHOD_PREFIX}.deleteBooks`,
       `${METHOD_PREFIX}.filterProjects`,
@@ -274,13 +267,9 @@ test.describe('manage-books PAPI command verification (wire-level round-trip)', 
     }
   });
 
-  test('M-014 copyCustomVersification — two positional strings (Theme 1 reconciled)', async ({
-    papiLive,
-  }) => {
-    // data-contracts.md §4.14 specifies (sourceProjectId, destProjectId) as two positional
-    // string arguments. The C# wire was reconciled to match this shape on 2026-04-30
-    // (Theme 1 of phase-3-backend revision). See backend-alignment.md for the
-    // "two same-typed positional args" exception to the general object-form preference.
+  test('M-014 copyCustomVersification — two positional strings', async ({ papiLive }) => {
+    // Takes (sourceProjectId, destProjectId) as two positional string arguments rather than one
+    // object argument.
     const wire = `${METHOD_PREFIX}.copyCustomVersification`;
     const response = await papiLive.requestRaw(wire, [
       `${BOGUS_PROJECT_ID}-src`,
