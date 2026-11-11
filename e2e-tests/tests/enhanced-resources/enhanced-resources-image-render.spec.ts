@@ -58,10 +58,15 @@ test.describe('Enhanced Resources Image Protocol', () => {
         async () =>
           frame
             .locator('img')
-            .evaluateAll<
-              number,
-              HTMLImageElement
-            >((imgs) => imgs.filter((i) => i.src.startsWith('papi-er://images/') && i.naturalWidth > 0).length),
+            .evaluateAll(
+              (elements) =>
+                elements.filter(
+                  (element) =>
+                    element instanceof HTMLImageElement &&
+                    element.src.startsWith('papi-er://images/') &&
+                    element.naturalWidth > 0,
+                ).length,
+            ),
         {
           message: 'expected at least one papi-er:// image to load with naturalWidth > 0',
           timeout: 30_000,

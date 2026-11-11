@@ -2764,7 +2764,7 @@ identifiers": `fsevents@2.3.3`.
 | `electron-is-accelerator` | 0.1.2 | MIT |
 | `electron-is-dev` | 1.2.0 | MIT |
 | `electron-localshortcut` | 3.2.1 | MIT |
-| `electron-log` | 5.4.1 | MIT |
+| `electron-log` | 5.4.4 | MIT |
 | `fast-deep-equal` | 3.1.3 | MIT |
 | `fast-diff` | 1.3.0 | Apache-2.0 |
 | `fast-equals` | 5.4.0 | MIT |
@@ -5048,7 +5048,7 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### 41. electron-log@5.4.1
+### 41. electron-log@5.4.4
 
 ```text
 The MIT License (MIT)

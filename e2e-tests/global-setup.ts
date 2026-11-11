@@ -287,7 +287,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     // load — and with `stdio: 'ignore'` there is no record anywhere of why it went. One dead dev
     // server then costs a whole suite's runtime and leaves nothing to diagnose from.
     const devServerLog = fs.openSync(devServerLogPath, 'w');
-    const devServer = spawn('npm', ['run', 'start:renderer'], {
+    const devServer = spawn('npm run start:renderer', {
       cwd: rootDir,
       stdio: ['ignore', devServerLog, devServerLog],
       shell: true,

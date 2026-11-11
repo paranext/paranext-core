@@ -522,8 +522,10 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // leave whatever html a previous run or retry attempt wrote still sitting on the clipboard —
       // exactly the stale payload the poll below must not be allowed to pass on.
       await electronApp.evaluate(
-        ({ clipboard }, sentinel) =>
-          clipboard.write({ text: sentinel, html: `<p>${sentinel}</p>` }),
+        ({ clipboard, ClipboardItem }, sentinel) =>
+          clipboard.write([
+            new ClipboardItem({ 'text/plain': sentinel, 'text/html': `<p>${sentinel}</p>` }),
+          ]),
         CLIPBOARD_SENTINEL,
       );
 
@@ -535,7 +537,11 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       await expect
         .poll(
           async () => {
-            clipboardHtml = await electronApp.evaluate(({ clipboard }) => clipboard.readHTML());
+            clipboardHtml = await electronApp.evaluate(async ({ clipboard }) => {
+              const [item] = await clipboard.read();
+              if (!item?.types.includes('text/html')) return '';
+              return (await item.getType('text/html')).text();
+            });
             // Compared with NBSP normalized away: the marker bytes are what this measures, and a
             // display-NBSP or an `&nbsp;` a clipboard intermediary re-serialized would otherwise
             // fail the match on the serialization rather than on the content. None of `\`, `+`, `:`
@@ -566,10 +572,13 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       const noteCallers = editorInput.locator('span.immutable-note-caller');
       const callerCountBeforePaste = await noteCallers.count();
 
-      await electronApp.evaluate(({ clipboard }, payload) => clipboard.write(payload), {
-        text: PARATEXT_9_CLIPBOARD_TEXT,
-        html: PARATEXT_9_CLIPBOARD_HTML,
-      });
+      await electronApp.evaluate(
+        ({ clipboard, ClipboardItem }, payload) =>
+          clipboard.write([
+            new ClipboardItem({ 'text/plain': payload.text, 'text/html': payload.html }),
+          ]),
+        { text: PARATEXT_9_CLIPBOARD_TEXT, html: PARATEXT_9_CLIPBOARD_HTML },
+      );
       // Same reason as the step above for not re-clicking first: the copy above left the caret in the
       // editor, and a click could land on the figure's read-only block.
       await editorInput.press(DOC_END_KEY);

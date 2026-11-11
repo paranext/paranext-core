@@ -5256,7 +5256,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-leaked-emudhra-certificates-blocked-in-app: The app blocks the leaked eMudhra intermediate certificates itself until Electron is upgraded
 
 - **Date:** 2026-10-27
-- **Status:** Accepted (temporary; superseded once PT-3111 upgrades Electron)
+- **Status:** Superseded: Electron 45 (PT-3111) blocks these certificates itself; the modules were
+  removed, and the rules below no longer apply.
 - **Context:** In October 2026 the private keys of eight eMudhra intermediate certificates (16
   certificates, including Sectigo `AAA Certificate Services` cross-signs) became recoverable by
   anyone (https://emudhra.we-have-a-problem.com/). Operating systems and browsers blocked them, but
