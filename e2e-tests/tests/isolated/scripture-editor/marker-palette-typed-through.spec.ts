@@ -11,7 +11,7 @@
  * that follow.
  *
  * ONE test() per spec file (isolated-fixture / second-Electron-instance constraint — see
- * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
+ * preview-read-only-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {

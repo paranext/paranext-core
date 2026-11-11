@@ -50,7 +50,7 @@ import {
 } from '../../../fixtures/scripture-editor-helpers';
 
 // Power mode so the editor opens in Standard view (marker-editable) — the surface this feature
-// targets. DEV_NOISY=false keeps the normal Home layout (see standard-default-power-mode.spec.ts).
+// targets. DEV_NOISY=false keeps the normal Home layout (see preview-read-only-power-mode.spec.ts).
 test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
@@ -198,7 +198,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
   }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, several clipboard round
     // trips each awaiting a settle/save), with an explicit ceiling rather than the 3x `test.slow()`
-    // budget other isolated specs use (see standard-default-power-mode.spec.ts): eight steps no
+    // budget other isolated specs use (see preview-read-only-power-mode.spec.ts): eight steps no
     // longer fit that budget's worst case, because a cold launch spends ~85s of it before the first
     // step and each step then waits on a paste or a clipboard poll with its own 15-20s allowance,
     // which adds up past the 360s `slow()` grants. No step is individually slower than before —

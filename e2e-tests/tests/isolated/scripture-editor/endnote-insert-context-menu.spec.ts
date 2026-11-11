@@ -56,7 +56,7 @@
  *   declared but load-bearing: the list actually caps, actually scrolls, and stays open while doing
  *   so.
  *
- * ONE test() per spec file (isolated-fixture constraint — see standard-default-power-mode.spec.ts).
+ * ONE test() per spec file (isolated-fixture constraint — see preview-read-only-power-mode.spec.ts).
  * Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';

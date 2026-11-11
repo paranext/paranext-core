@@ -2,7 +2,7 @@
  * Simple-mode default-view e2e: a scripture editor opened with no previously saved view state keeps
  * the pre-Standard-view 'formatted' default when `platform.interfaceMode` is 'simple', so nothing
  * changes for Simple users — the power-mode Standard default (see
- * standard-default-power-mode.spec.ts) must not leak into Simple mode.
+ * preview-read-only-power-mode.spec.ts) must not leak into Simple mode.
  *
  * The flow mirrors the power-mode spec exactly (same project, same open command, same navigation);
  * the ONLY variable is `interfaceMode`, so a failure here isolates the interface-mode gating of the
@@ -13,7 +13,7 @@
  * the headings, the empty-verse placeholder and the footnotes pane's rows, read-only and while
  * edited.
  *
- * ONE test() per spec file on purpose — see standard-default-power-mode.spec.ts.
+ * ONE test() per spec file on purpose — see preview-read-only-power-mode.spec.ts.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';

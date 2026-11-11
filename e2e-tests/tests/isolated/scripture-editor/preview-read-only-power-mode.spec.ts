@@ -10,7 +10,27 @@
  * Jonah 1 carries footnote callers at verses 1, 6 (twice) and 9
  * (`c-sharp/assets/WEB/32JONengWEBUS.SFM`), and verse 2 holds "that great city".
  *
- * ONE test() per spec file (isolated-fixture constraint — see standard-default-power-mode.spec.ts).
+ * It also guards the default: a scripture editor opened with no previously saved view state
+ * defaults to Standard view when `platform.interfaceMode` is 'power'. The default is applied by a
+ * corrective effect in platform-scripture-editor.web-view.tsx that fires only after the
+ * interface-mode setting resolves (the first frames may render 'formatted'), so the Standard-view
+ * assertions poll with generous timeouts rather than asserting immediately. Its probes:
+ *
+ * - `.editor-input.marker-editable` — the editor library maps `ViewOptions.markerMode` onto a
+ *   `marker-<mode>` class on the contentEditable root (`getViewClassList` in shared-react), and
+ *   Standard view (STANDARD_VIEW_MODE) is the only view preset with markerMode 'editable'.
+ * - `span.opening[data-marker]` — a rendered inline marker glyph (MarkerNode; class from its
+ *   markerSyntax). Only the editable marker mode creates MarkerNodes, and their visible `\marker`
+ *   text is the user-facing substance of Standard view.
+ *
+ * The isolated fixture is test-scoped, so each `test()` starts its own Electron instance, and a
+ * SECOND instance launched against the shared webpack renderer dev server has a documented failure
+ * mode where new dock tabs never render (see isolated.fixture.ts). The scenarios therefore run as
+ * test.step()s sharing the one instance. A cold first run measured ~84s against the default 120s
+ * budget (~70%), so a colder or memory-pressured machine could spuriously time out; the test gets
+ * Playwright's 3x "slow" budget for headroom (a passing run still exits in seconds). The
+ * Simple-mode counterpart lives in formatted-default-simple-mode.spec.ts.
+ *
  * Run: `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/preview-read-only-power-mode.spec.ts`.
  */
@@ -28,6 +48,10 @@ import {
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
 
+// interfaceMode 'power' matches the fixture default but is stated explicitly — this spec guards the
+// power-default view, so it must not drift if the fixture default ever changes.
+// DEV_NOISY=false: the noisy dev test layout has no Home tab (see scroll-group-sync.spec.ts), and
+// keeps the normal Home layout the other isolated scripture-editor specs rely on.
 test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
@@ -58,7 +82,8 @@ test.describe('Power-mode Standard view and Preview', () => {
   });
 
   test('Ctrl+E toggles Standard view and a read-only Preview', async ({ mainPage }) => {
-    // Heavy isolated test (own Electron instance, backend-readiness gates, several view switches).
+    // Heavy isolated test (own Electron instance, installs the bundled sample project into a fresh
+    // root, backend-readiness gates, several view switches).
     test.slow();
 
     await waitForHomeTab(mainPage);
@@ -66,6 +91,21 @@ test.describe('Power-mode Standard view and Preview', () => {
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = await getEditorFrame(mainPage, editorId);
     await editorFrame.locator('.editor-container').first().waitFor({ timeout: 60_000 });
+
+    await test.step('a first-open editor defaults to Standard view in power mode', async () => {
+      // A small single-chapter book (same choice as scroll-group-sync.spec.ts) so the marker glyph
+      // assertion below runs against real chapter content.
+      await navigateToolbarBcv(mainPage, 'Obadiah 1:1');
+
+      // The view settles on 'standard' once the corrective effect fires (see file header).
+      await expect(editorFrame.locator('.editor-input.marker-editable')).toBeAttached({
+        timeout: 60_000,
+      });
+      // And Standard view actually renders inline marker glyphs, not just the mode class.
+      await expect(
+        editorFrame.locator('.editor-input.marker-editable span.opening[data-marker]').first(),
+      ).toBeAttached({ timeout: 30_000 });
+    });
 
     await navigateToolbarBcv(mainPage, 'Jonah 1:1');
     // The main text comes first; a footnotes pane row editor renders an `.editor-input` of its own.
