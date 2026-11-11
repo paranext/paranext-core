@@ -267,10 +267,18 @@ const RECORDER_POLL_MS = 100;
 const EDIT_RENDERED_MS = 300;
 
 /**
- * How long the editor gets to pick up a selection set on the DOM before a key acts on it. Lexical
- * adopts the DOM selection on the document's `selectionchange` event, which fires asynchronously.
+ * How long the editor gets to pick up a selection set on the DOM before a key acts on it, where no
+ * event marks it (the footnote row editor's own caret placement). Lexical adopts the DOM selection
+ * on the document's `selectionchange` event, which fires asynchronously.
  */
 const SELECTION_ADOPTED_MS = 300;
+
+/**
+ * The longest a selection set on the DOM waits for the document's `selectionchange` event before
+ * going on without it. The event fires within a task of the change, so this only bounds a change
+ * the browser chose not to report.
+ */
+const SELECTION_CHANGE_FALLBACK_MS = 1_000;
 
 /** The most undo presses a gesture's undo may take before the file must be back to its bytes. */
 const MAX_UNDO_PRESSES = 3;
@@ -415,7 +423,7 @@ function usfmBetween(unitText: string, from: TextPoint, to: TextPoint): string {
  */
 async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoint = from) {
   await editorInput.evaluate(
-    (root, points) => {
+    async (root, { fallbackMs, ...points }) => {
       // Runs in the page, so it cannot call `splitPoint`; the points were checked by it below.
       const locate = (point: string) => {
         const caret = point.indexOf('|');
@@ -441,14 +449,38 @@ async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoi
       };
       const start = locate(points.from);
       const end = locate(points.to);
+      const document = root.ownerDocument;
+      const selection = document.getSelection();
+      // An unchanged selection fires no `selectionchange`, and the editor already holds it.
+      const isUnchanged =
+        document.activeElement === root &&
+        selection?.anchorNode === start.node &&
+        selection.anchorOffset === start.offset &&
+        selection.focusNode === end.node &&
+        selection.focusOffset === end.offset;
       if (root instanceof HTMLElement) root.focus({ preventScroll: true });
-      root.ownerDocument
-        .getSelection()
-        ?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
+      selection?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
+      if (isUnchanged) return;
+      // Lexical adopts the selection in its own `selectionchange` listener, registered before this
+      // one, and commits that update before the next frame.
+      await new Promise<void>((resolve) => {
+        const fallback = setTimeout(resolve, fallbackMs);
+        document.addEventListener(
+          'selectionchange',
+          () => {
+            clearTimeout(fallback);
+            requestAnimationFrame(() => resolve());
+          },
+          { once: true },
+        );
+      });
     },
-    { from: checkedPoint(from), to: checkedPoint(to) },
+    {
+      from: checkedPoint(from),
+      to: checkedPoint(to),
+      fallbackMs: SELECTION_CHANGE_FALLBACK_MS,
+    },
   );
-  await editorInput.page().waitForTimeout(SELECTION_ADOPTED_MS);
 }
 
 /** Types `text` at `point`. */
@@ -2726,7 +2758,8 @@ function savedInsertion(
 /**
  * Counts the places where the editor's text holds one character between `point`'s two halves — what
  * was entered there; the halves may sit in different text nodes. With `select`, and exactly one
- * place, also selects that character by setting the DOM selection, which the editor adopts.
+ * place, also selects that character by setting the DOM selection, and waits for the editor to
+ * adopt it.
  */
 async function findEnteredCharacter(
   editorInput: Locator,
@@ -2735,7 +2768,7 @@ async function findEnteredCharacter(
 ): Promise<number> {
   const [before, after] = splitPoint(point);
   return editorInput.evaluate(
-    (root, { halves, shouldSelect }) => {
+    async (root, { halves, shouldSelect, fallbackMs }) => {
       const nodes: Text[] = [];
       const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode())
@@ -2759,13 +2792,34 @@ async function findEnteredCharacter(
       };
       const start = locate(starts[0] + halves.before.length);
       const end = locate(starts[0] + halves.before.length + 1);
+      const document = root.ownerDocument;
+      const selection = document.getSelection();
+      // An unchanged selection fires no `selectionchange`, and the editor already holds it.
+      const isUnchanged =
+        document.activeElement === root &&
+        selection?.anchorNode === start.node &&
+        selection.anchorOffset === start.offset &&
+        selection.focusNode === end.node &&
+        selection.focusOffset === end.offset;
       if (root instanceof HTMLElement) root.focus({ preventScroll: true });
-      root.ownerDocument
-        .getSelection()
-        ?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
+      selection?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
+      if (isUnchanged) return 1;
+      // Lexical adopts the selection in its own `selectionchange` listener, registered before this
+      // one, and commits that update before the next frame.
+      await new Promise<void>((resolve) => {
+        const fallback = setTimeout(resolve, fallbackMs);
+        document.addEventListener(
+          'selectionchange',
+          () => {
+            clearTimeout(fallback);
+            requestAnimationFrame(() => resolve());
+          },
+          { once: true },
+        );
+      });
       return 1;
     },
-    { halves: { before, after }, shouldSelect: select },
+    { halves: { before, after }, shouldSelect: select, fallbackMs: SELECTION_CHANGE_FALLBACK_MS },
   );
 }
 
@@ -2775,9 +2829,7 @@ async function findEnteredCharacter(
  * selects only when exactly one did.
  */
 async function selectEnteredCharacter(editorInput: Locator, point: TextPoint): Promise<number> {
-  const matches = await findEnteredCharacter(editorInput, point, true);
-  await editorInput.page().waitForTimeout(SELECTION_ADOPTED_MS);
-  return matches;
+  return findEnteredCharacter(editorInput, point, true);
 }
 
 /**
