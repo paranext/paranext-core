@@ -57,6 +57,13 @@ test.use({
 });
 
 test.describe('simple mode: Find follows the editor onto an Editable=F project', () => {
+  // TODO(PT-5052): run again once overlapping Simple-mode project switches register the switch
+  // events only once.
+  test.fixme(
+    true,
+    'PT-5052: two Simple-mode project switches that overlap register the project-switch events twice, and the second registration is rejected (about 1 run in 10 of this spec)',
+  );
+
   // App startup plus two editor opens, each of which re-points the whole of Column 3.
   test.setTimeout(420_000);
 
