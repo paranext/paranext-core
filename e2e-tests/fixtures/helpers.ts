@@ -118,6 +118,40 @@ export function sleep(ms: number): Promise<void> {
   });
 }
 
+/** How many times {@link withMainProcessLinkRetry} tries a call that hit a debugger-link error. */
+const MAIN_PROCESS_LINK_ATTEMPTS = 3;
+
+/**
+ * Runs `evaluate` — an `electronApp.evaluate(...)` call — and tries it again when Playwright's link
+ * to the Electron main process drops it. Playwright reports ANY protocol error on that debugger
+ * link as "Execution context was destroyed, most likely because of a navigation." — including one
+ * where nothing was destroyed and the app is still running. Only that error, and only while the app
+ * process is still running, is tried again; anything else, or an app that has exited, is thrown as
+ * is. Use it for calls that can safely run twice, such as reading or writing the clipboard.
+ */
+export async function withMainProcessLinkRetry<R>(
+  electronApp: ElectronApplication,
+  evaluate: () => Promise<R>,
+): Promise<R> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      // Sequential retries of one call
+      // eslint-disable-next-line no-await-in-loop
+      return await evaluate();
+    } catch (error) {
+      const appProcess = electronApp.process();
+      // Node.js ChildProcess.exitCode/signalCode are null until the process exits
+      // eslint-disable-next-line no-null/no-null
+      const isAppRunning = appProcess.exitCode === null && appProcess.signalCode === null;
+      const isLinkError = String(error).includes('Execution context was destroyed');
+      if (!isLinkError || !isAppRunning || attempt >= MAIN_PROCESS_LINK_ATTEMPTS) throw error;
+      // Sequential retries of one call
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(100);
+    }
+  }
+}
+
 /**
  * Wait for the given port to stop accepting connections (i.e., be free). Used after teardown to
  * ensure the previous Electron's extension-host WebSocket server has released port 8876 before the

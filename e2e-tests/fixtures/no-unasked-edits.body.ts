@@ -68,7 +68,7 @@ import path from 'path';
 import { type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import { test, expect } from './isolated.fixture';
 import { TEXT_NOTE_CALLER_SELECTOR } from './content-zoom-helpers';
-import { requireIsolatedProjectRoot, waitForAppReady } from './helpers';
+import { requireIsolatedProjectRoot, waitForAppReady, withMainProcessLinkRetry } from './helpers';
 import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
@@ -497,7 +497,9 @@ function typeAt(point: TextPoint, text: string) {
  */
 function pastePlainTextAt(point: TextPoint, text: string) {
   return async ({ electronApp, editorInput }: GestureContext) => {
-    await electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), text);
+    await withMainProcessLinkRetry(electronApp, () =>
+      electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), text),
+    );
     await selectInEditor(editorInput, point);
     await editorInput.press(PASTE_KEY);
   };
@@ -2463,7 +2465,9 @@ export async function runFootnotesPaneRowEdits(
                   test.info().annotations.push({
                     type: 'copied',
                     description: `${note.label} (${view.name}): text/plain ${JSON.stringify(
-                      await electronApp.evaluate(({ clipboard }) => clipboard.readText()),
+                      await withMainProcessLinkRetry(electronApp, () =>
+                        electronApp.evaluate(({ clipboard }) => clipboard.readText()),
+                      ),
                     )}`,
                   });
                   await selectInEditor(rowEditor, copyPaste.destination);
@@ -2913,7 +2917,9 @@ async function enterAndDeleteEachCharacter(
     await previous;
     const character = INVISIBLE_CHARACTERS[name];
     if (gesture === 'pasted')
-      await electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), character);
+      await withMainProcessLinkRetry(electronApp, () =>
+        electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), character),
+      );
     await selectInEditor(editorInput, point);
     if (gesture === 'typed') {
       await mainPage.keyboard.type(character);
@@ -3061,10 +3067,12 @@ async function copySeededVerse(
       timeout: 15_000,
     })
     .not.toBe(CLIPBOARD_SENTINEL);
-  const { text, html } = await electronApp.evaluate(({ clipboard }) => ({
-    text: clipboard.readText(),
-    html: clipboard.readHTML(),
-  }));
+  const { text, html } = await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }) => ({
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+    })),
+  );
   expect.soft(visible(text), `${where}: the copied plain text`).toBe(visible(expected));
   expect
     .soft(text.includes(NBSP_STAND_IN), `${where}: the plain text holds the editor's stand-in`)
