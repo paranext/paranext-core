@@ -31,7 +31,6 @@ e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 These belong to no subset; run them by path (see "How to run").
 
 - `comments-tab.spec.ts` (one Electron per worker)
-- `first-run-wizard.spec.ts` (one Electron per test)
 - `internet-settings.spec.ts` (one Electron per test)
 - `no-projects-without-sample.spec.ts` (one Electron per test) — an empty projects folder with the
   sample project turned off resolves to the editor's no-projects guidance and Home's empty state
@@ -56,7 +55,6 @@ These belong to no subset; run them by path (see "How to run").
   machine-wide OS clipboard — see "State that leaks between runs" in `e2e-tests/CLAUDE.md`
 - `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
 - `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
-- `verse-navigation/` (one Electron per worker) — tests for verse navigation keyboard shortcuts
 - `web-view-lifecycle/` (one Electron per test) — tests for a web view's React root when its iframe gets a new document: a reload, or a tab move within the window, unmounts the root of the document it replaces, and neither that nor the tab's close logs a crash or React's unmount-during-render warning. A reload runs the web view's own `pagehide` and `unload` listeners before that unmount
 
 ## Running on Windows

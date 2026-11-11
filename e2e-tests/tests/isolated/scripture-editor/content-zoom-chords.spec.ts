@@ -5,11 +5,11 @@
  * `web-view-content-zoom.bootstrap-script.ts`; `main.ts`'s `before-input-event` handler does not
  * claim them. CDP's `Input.dispatchKeyEvent` (`mainPage.keyboard.press`) is OS-level input that
  * lands on whatever holds focus, including inside an iframe, so it reaches that listener — see
- * `marker-palette-trigger-focus.spec.ts` for the same in-iframe CDP precedent. The handler picks
- * the area from the caret's position — except while the platform knows the view itself moved the
- * caret in answer to a pointer gesture, in which case it picks the area the user last pointed at
- * instead, so a pane click keeps the chords on that pane even when the view's own reaction sends
- * the caret elsewhere.
+ * `marker-palette-typed-commit.spec.ts` for the same in-iframe CDP precedent. The handler picks the
+ * area from the caret's position — except while the platform knows the view itself moved the caret
+ * in answer to a pointer gesture, in which case it picks the area the user last pointed at instead,
+ * so a pane click keeps the chords on that pane even when the view's own reaction sends the caret
+ * elsewhere.
  */
 import { type Frame } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';

@@ -2680,8 +2680,9 @@ export async function buildFirstRunGateSample(
  * signal to do that work.
  *
  * Deliberately loud when it fires, with a stable, greppable tag: this is called from
- * `waitForAppReady`, which is about POST-first-run behaviour, never first-run itself (that is
- * `first-run-wizard.spec.ts`, which documents why it cannot call `waitForAppReady` at all), so
+ * `waitForAppReady`, which is about POST-first-run behaviour, never first-run itself (the specs
+ * under `tests/isolated/first-run/` cannot call `waitForAppReady` at all: the first-run overlay's
+ * loading spinner matches the `role="status"` selector `waitForOverlayGone` waits on), so
  * recovering silently here would hide a real, if rare, product-level race behind a passing test.
  *
  * Takes and respects a caller-supplied budget rather than its own fixed timeout, matching every
@@ -2784,10 +2785,9 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
  * at all.
  *
  * `waitForOverlayGone`'s `.pr-twp [role="status"]` selector also matches the first-run gate's own
- * loading spinner (see its docblock and `first-run-wizard.spec.ts`), so a gate that is still
- * showing at this point times out here with a generic locator message that gives no hint the gate,
- * not the workspace overlay, is what never went away. Exported so the message this builds is
- * checkable without a live Page.
+ * loading spinner (see its docblock), so a gate that is still showing at this point times out here
+ * with a generic locator message that gives no hint the gate, not the workspace overlay, is what
+ * never went away. Exported so the message this builds is checkable without a live Page.
  *
  * @param sampleReadFailure When set, the gate check gave up because samples kept failing to read
  *   anything (see {@link SampleReadFailure}), rather than because it saw the gate and it never
