@@ -16,8 +16,7 @@ export { expect } from './cdp.fixture';
 
 // Supplied as a plain fixture value rather than `['power', { option: true }]`: `cdp.fixture`
 // already declares `requiredInterfaceMode` as an option, and Playwright's types reject a derived
-// test re-declaring one. A spec that needs a different mode imports `cdp.fixture` directly, the way
-// `tests/enhanced-resources/text-collection-schema.spec.ts` does.
+// test re-declaring one. A spec that needs a different mode imports `cdp.fixture` directly.
 export const test = cdpTest.extend({
   requiredInterfaceMode: 'power',
 });

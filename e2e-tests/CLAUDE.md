@@ -9,7 +9,7 @@ Running the isolated suite natively on Windows: see `tests/isolated/README.md#ru
 | Core happy path (app launch, basic nav) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
 | Bare-Electron check of an Electron behavior the dev app can't show | `tests/smoke/` (see its README) | `npm run test:e2e:smoke` (also CI) |
 | Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>`, or `all` for every subset (the bare form lists the subsets and exits 1) |
-| Tests needing real Marble resources | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` |
+| Tests needing real Marble resources (local-only) | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` |
 
 On WSL2, prefix a suite that launches its own Electron with `e2e-tests/run-e2e-wsl.sh --wrap` to
 keep its windows off the Windows desktop — e.g.
@@ -22,12 +22,22 @@ over port 9223, and the two `*-commands.spec.ts` files' `fixtures/papi-live.fixt
 under its own Xvfb — and run those suites through `playwright-cdp.config.ts`, which has no
 globalSetup.
 
-`tests/manage-books/` also attaches, but is deliberately excluded from that config and is collected
-by nothing: all four of its specs can mutate real project data with no restore. Three do so
-outright; `manage-books-commands.spec.ts` is safe only by environment, since its later tests drive
-real projects discovered from the live app and depend on assumptions (a book already present, a
-non-administrator destination) that need not hold on a given machine. See its README before removing
-the exclusion.
+### Local-only directories
+
+Three directories under `tests/` are run by hand against a running app and by nothing else — no CI
+job and no npm script collects them:
+
+- `tests/enhanced-resources/` — the Text Collection grid specs (`scripture-text-grid*.spec.ts`,
+  `cell-reorder.spec.ts`, `enhanced-resource-content-zoom.spec.ts`) and
+  `enhanced-resources-image-render.spec.ts`. They need real Marble resources (paid, not available
+  in CI) and an app started in Power mode. `scripture-text-grid.spec.ts` is out of date; PT-4779
+  covers bringing it up to date.
+- `tests/markers-checklist/` — the only end-to-end coverage of the Markers checklist. It needs a
+  real project (`wgPIDGIN`) on the machine, so it cannot run in CI.
+- `tests/manage-books/` — `manage-books-commands.spec.ts` checks the wire shape of each
+  `manageBooks` network object method over the live PAPI websocket, using made-up project ids so
+  nothing real is read or written. `playwright-cdp.config.ts` testIgnores it, so a bare CDP run
+  skips it; its README says how to run it.
 
 **An attach-based spec must not live under `tests/isolated/`.** `playwright-cdp.config.ts` ignores
 that tree, and the `isolated` project's globalSetup refuses to start while an app holds port 8876 —
@@ -48,8 +58,9 @@ meant to be run routinely.
 
 - Do not put feature tests in `smoke/` — smoke tests are for the core happy path (plus the
   bare-Electron checks its README describes) and must stay fast and CI-green.
-- Do not use `manage-books/` or `markers-checklist/` as models — those are legacy AI-porting
-  experiments not wired into any standard test run. See the README in each directory.
+- Do not use `manage-books/`, `markers-checklist/` or `enhanced-resources/` as models — those are
+  local-only suites (see "Local-only directories") not wired into any standard test run. See the
+  README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding
   a well-named spec file to `isolated/` instead.
 
@@ -80,7 +91,7 @@ one of these.
     as a plain value rather than an option, because Playwright's types reject a derived test
     re-declaring an option its base already declares — so `test.use({ requiredInterfaceMode })` in a
     spec on that fixture is silently inert too. A spec in that suite needing a different mode imports
-    `cdp.fixture` directly, as `tests/enhanced-resources/text-collection-schema.spec.ts` does. Either way the check confirms the app
+    `cdp.fixture` directly. Either way the check confirms the app
     IS in that mode — which is what the layout depends on — rather than proving a particular seed is
     what put it there; for `'simple'` an app that was never pinned satisfies it, because that is the
     contributed default. It reads `platform.interfaceMode` from the settings service over PAPI, NOT
