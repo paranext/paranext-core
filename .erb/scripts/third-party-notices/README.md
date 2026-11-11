@@ -59,6 +59,28 @@ byte-comparison against the committed document and lock, which catches a **regre
 existing row rather than the **omission** of a new one. The three guards above are what cover
 omission, and only for what this repository itself declares or imports.
 
+An itemized external extension (see "Downstream products") adds checks of its own, run against its
+checkout's module manifests with the same machinery and the same reasoning:
+
+- **Production manifests only.** A manifest written by a development build is refused, because the
+  installer packs production zips and a development graph can differ.
+- **The core-folder check.** The checkout's web views compile code from this repository through a
+  `file:` link. Every package folder a module belongs to under this repository must be one of this
+  repository's own shipping-set folders, so the packages are listed from this repository's set
+  rather than guessed at.
+- **Three minimums.** `minimumPackages.own`, `.core` and `.stylesheet` floor the checkout's own
+  packages, the package folders from this repository that its bundles reach, and the packages
+  reached through a stylesheet. A short count means the manifests or the stylesheet scan missed part
+  of the build.
+- **The import check.** Every package the checkout's workspace sources (`src/*/src`) import must be
+  in a bundle or be one the platform itself provides (`platform-provided.ts`). Files outside those
+  folders are not read.
+- **The pointer check** (`license-pointers.ts`). A minifier's license comment
+  (`For license information please see x.LICENSE.txt`) must name a file that ships beside the
+  script, in this build's output and in every external extension zip. It runs for `--verify-shipping-set` and the full run, not for
+  `--verify-document`. `--verify-shipping-set` checks only the zips this platform packs; the full
+  run checks every platform's.
+
 Deliberately **not** covered, each for a stated reason:
 
 - **Anything that only exists while building or linting.** It is not in the binary.
@@ -200,25 +222,63 @@ packaging config does not copy into `resources/`:
 `__fixtures__/overlay/policy.json` is a worked example of the whole shape, and `overlay.test.ts`
 drives the real `loadPolicy` over it — the one place core reads an overlay off disk.
 
+### Itemizing an extension built alongside the product
+
+An `externalExtensions` entry for a zip built elsewhere says `"itemized": false` and a `reason`; the
+document records the omission. An extension repository that is checked out beside the product build
+can be itemized instead. The overlay then needs two things:
+
+```jsonc
+"externalExtensions": {
+  "my-extension": {
+    "itemized": true,
+    "sourceCheckout": "../my-extension",
+    "reason": "Built in the my-extension repository and itemized from its checkout."
+  }
+},
+"externalExtensionCheckouts": {
+  "../my-extension": { "minimumPackages": { "own": 15, "core": 80, "stylesheet": 3 } }
+}
+```
+
+- `sourceCheckout` resolves against the overlay's folder when one is selected, else the base
+  policy file's folder, whichever file declares the entry. The `externalExtensionCheckouts` key is
+  the same path.
+- `reason` is required, itemized or not. An itemized entry's reason is reproduced under its
+  checkout's listing, so it is where to state what the itemization does not cover.
+- All three minimums are required. Set each a little under what the checkout yields today, so a
+  shrinking read fails the run instead of passing as a shorter list.
+- `"itemized": true` with no `sourceCheckout`, `"itemized": false` with one, a checkout no entry
+  names, and a checkout with no table entry are all refused.
+
+The checkout's own webpack build has to write the stamped module manifests under
+`.notices/modules/` (`extension-main.json` and `extension-web-view.json`). The extension templates'
+`prebuild` and `prebuild:production` scripts do this, so the repository must be packaged with
+`npm run package` (which runs `prebuild:production`) before the generator runs. The generator then
+merges the checkout's packages into the npm set; its rows are keyed like any other.
+
 ## Module map
 
-| File                       | Answers                                                                          |
-| -------------------------- | -------------------------------------------------------------------------------- |
-| `main.ts`                  | Entry point and wiring; `--verify`, `--verify-document`, `--verify-shipping-set` |
-| `shipping-set.ts`          | Which npm packages ship, from the build rather than from manifests               |
-| `nuget-set.ts`             | Which NuGet packages ship, unioned across all four runtime identifiers           |
-| `static-assets.ts`         | Third-party files copied verbatim into an installer, from any tree it packs      |
-| `identify.ts`, `detect.rb` | What a license text on disk is, per `licensee`                                   |
-| `declared.ts`              | What a manifest declares, per `spdx-expression-parse`                            |
-| `policy.ts`                | Reconciles those two signals into one verdict per package                        |
-| `report.ts`                | The block message, and the paste-ready remedy for it                             |
-| `render.ts`                | The document itself, including the prose sections nothing can scan               |
-| `lock.ts`                  | The sidecar, and every drift comparison against it                               |
-| `corpus.ts`                | Canonical SPDX texts, checksum-verified against a pinned `spdx-license-list`     |
-| `build-corpus-index.ts`    | Writes that checksum index, for the identifiers the policy can reach and no more |
-| `product.ts`               | Reads `electron-builder.json5`; checks an overlay's `product` block against it   |
-| `separate-programs.ts`     | Third-party programs redistributed as separate executables, and their evidence   |
-| `external-extensions.ts`   | Extension zips packed from other repositories, recorded as an omission           |
+| File                             | Answers                                                                          |
+| -------------------------------- | -------------------------------------------------------------------------------- |
+| `main.ts`                        | Entry point and wiring; `--verify`, `--verify-document`, `--verify-shipping-set` |
+| `shipping-set.ts`                | Which npm packages ship, from the build rather than from manifests               |
+| `nuget-set.ts`                   | Which NuGet packages ship, unioned across all four runtime identifiers           |
+| `static-assets.ts`               | Third-party files copied verbatim into an installer, from any tree it packs      |
+| `identify.ts`, `detect.rb`       | What a license text on disk is, per `licensee`                                   |
+| `declared.ts`                    | What a manifest declares, per `spdx-expression-parse`                            |
+| `policy.ts`                      | Reconciles those two signals into one verdict per package                        |
+| `report.ts`                      | The block message, and the paste-ready remedy for it                             |
+| `render.ts`                      | The document itself, including the prose sections nothing can scan               |
+| `lock.ts`                        | The sidecar, and every drift comparison against it                               |
+| `corpus.ts`                      | Canonical SPDX texts, checksum-verified against a pinned `spdx-license-list`     |
+| `build-corpus-index.ts`          | Writes that checksum index, for the identifiers the policy can reach and no more |
+| `product.ts`                     | Reads `electron-builder.json5`; checks an overlay's `product` block against it   |
+| `separate-programs.ts`           | Third-party programs redistributed as separate executables, and their evidence   |
+| `external-extensions.ts`         | Extension zips packed from other repositories: omissions, and itemized checkouts |
+| `external-extension-packages.ts` | The packages an itemized checkout's bundles ship, with its guards                |
+| `license-pointers.ts`            | Refuses a `.LICENSE.txt` pointer whose file does not ship                        |
+| `platform-provided.ts`           | Packages the platform supplies to extensions at run time                         |
 
 ## Changing the generator
 

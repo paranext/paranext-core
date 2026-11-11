@@ -42,7 +42,7 @@ import { compareStrings } from './compare';
 import { identify } from './identify';
 import { copyrightNoticeIn } from './credit';
 import { snapCopyrightText, vendoredLicenseText } from './vendored-text';
-import { classify, loadPolicy } from './policy';
+import { classify, loadPolicy, overlayFromEnv } from './policy';
 import {
   ACCEPT_SHRINK_ENV,
   REQUIRED_BUNDLES,
@@ -87,11 +87,27 @@ import {
   assertSeparateProgramsRecorded,
   assertSeparateProgramTextsAvailable,
 } from './separate-programs';
-import { assertExternalExtensionsRecorded, externalExtensionNames } from './external-extensions';
+import {
+  assertExternalExtensionsRecorded,
+  externalExtensionFolders,
+  externalExtensionNames,
+  extensionZipsIn,
+  itemizedCheckouts,
+} from './external-extensions';
+import {
+  checkoutName,
+  checkoutStylesheetSpecifiers,
+  collectCheckoutPackages,
+  externalExtensionListing,
+  mergeCheckoutPackages,
+} from './external-extension-packages';
+import type { CheckoutPackages } from './external-extension-packages';
+import { assertNoDanglingLicensePointers } from './license-pointers';
 import type {
   CopiedPlatformLibrary,
   Detection,
   ExternalExtension,
+  ExternalExtensionListing,
   Lock,
   MergedNugetPackage,
   NamedText,
@@ -566,12 +582,70 @@ export function withPlatformOnlyPackages(
 }
 
 /**
+ * The folder a `sourceCheckout` resolves against: the folder of the overlay when one is selected,
+ * since a downstream build records its itemized extensions there, and this file's otherwise.
+ */
+function policyFolder(): string {
+  return path.dirname(overlayFromEnv() ?? POLICY);
+}
+
+/**
+ * The packages each itemized checkout's bundles ship, collected against paranext-core's set.
+ *
+ * Every itemized checkout is collected, whichever platform packs its zips: the checkouts come from
+ * the policy table, not from the zips this run can see.
+ */
+function collectCheckouts(
+  policy: Policy,
+  corePackages: ShippedPackage[],
+  warmCache: 'throw' | 'report',
+): CheckoutPackages[] {
+  return itemizedCheckouts(
+    policy.externalExtensions || {},
+    policy.externalExtensionCheckouts || {},
+    policyFolder(),
+  ).map((checkout) =>
+    collectCheckoutPackages({ checkout, coreRepo: REPO, corePackages, warmCache }),
+  );
+}
+
+/**
+ * Paranext-core's set with the checkouts' own packages added, or paranext-core's set untouched when
+ * nothing is itemized - so a duplicate `name@version` in paranext-core's own set still reaches
+ * `buildLock`'s refusal.
+ */
+function withCheckoutPackages(
+  corePackages: ShippedPackage[],
+  checkouts: CheckoutPackages[],
+): ShippedPackage[] {
+  return checkouts.length ? mergeCheckoutPackages(corePackages, checkouts) : corePackages;
+}
+
+/**
+ * The extension zips in the folders the packaging config maps to `./extensions`, for the license
+ * pointer check. `platform` narrows to that platform's folders, as `externalExtensionFolders`
+ * does.
+ *
+ * A mapped folder that does not exist is skipped here; `externalExtensionNames` is what refuses it.
+ */
+function externalExtensionZips(platform?: typeof process.platform): string[] {
+  return externalExtensionFolders(readPackagingConfig(ELECTRON_BUILDER), platform)
+    .map((folder) => path.resolve(REPO, folder))
+    .filter((dir) => fs.existsSync(dir))
+    .flatMap((dir) => extensionZipsIn(dir).map((zip) => path.join(dir, zip)));
+}
+
+/**
  * The npm packages this build ships, checked against both floors and against the runtime
  * dependencies this repository declares.
+ *
+ * The set is paranext-core's own packages plus each itemized checkout's, merged before any floor or
+ * cross-check so that every one of them measures what the document will list.
  */
 function buildNpmShippingSet(policy: Policy): {
   npmPackages: ShippedPackage[];
   unresolvedStylesheetSpecifiers: string[];
+  checkouts: CheckoutPackages[];
 } {
   // Returns `{ packages, unresolvedStylesheetSpecifiers }`, not a bare array. The second field is
   // load-bearing: a stylesheet specifier that resolves to no installed package is SKIPPED rather
@@ -611,8 +685,11 @@ function buildNpmShippingSet(policy: Policy): {
       `  note: ${ACCEPT_SHRINK_ENV} is set, so a large drop against the committed lock is being ` +
         'accepted rather than refused. Check the removals in the diff before committing.',
     );
+  const corePackages = withPlatformOnlyPackages(packages, policy);
+  // `throw`, like paranext-core's own collection above: this run writes the artifact.
+  const checkouts = collectCheckouts(policy, corePackages, 'throw');
   const npmPackages = assertNpmNotShrunk(
-    assertNpmFloor(withPlatformOnlyPackages(packages, policy)),
+    assertNpmFloor(withCheckoutPackages(corePackages, checkouts)),
     committedNpmCount(),
     { accepted: acceptShrink },
   );
@@ -620,8 +697,12 @@ function buildNpmShippingSet(policy: Policy): {
   // second source rather than measuring the derived set against itself. Both assertions above are
   // measures of size, and size cannot see a package whose modules were never recorded: the set is
   // simply short by one, the document never gains the row, and no removal appears in any diff.
+  //
+  // This and the source-import check below read paranext-core's OWN set, not the merged one. Both
+  // match by name alone, so a checkout's copy of a package would hide paranext-core's manifests
+  // missing theirs.
   const missingDependencies = missingDirectDependencies(
-    npmPackages,
+    corePackages,
     readDirectDependencies(REPO),
     Object.keys(policy.unbundledDependencies || {}),
   );
@@ -652,7 +733,11 @@ function buildNpmShippingSet(policy: Policy): {
   // this repository bundles from `devDependencies` by convention - so the packages most likely to
   // ship are exactly the ones it cannot see.
   const exemptNames = Object.keys(policy.unbundledDependencies || {});
-  const missingImported = missingImportedPackages(npmPackages, importedPackages(REPO), exemptNames);
+  const missingImported = missingImportedPackages(
+    corePackages,
+    importedPackages(REPO),
+    exemptNames,
+  );
   if (missingImported.length)
     throw new Error(
       `${missingImported.length} package(s) imported by first-party source reach no bundle and ` +
@@ -667,7 +752,14 @@ function buildNpmShippingSet(policy: Policy): {
         '"unbundledDependencies" with a reason.',
     );
 
-  return { npmPackages, unresolvedStylesheetSpecifiers };
+  return {
+    npmPackages,
+    unresolvedStylesheetSpecifiers: [
+      ...unresolvedStylesheetSpecifiers,
+      ...checkoutStylesheetSpecifiers(checkouts),
+    ],
+    checkouts,
+  };
 }
 
 /** One verdict per shipped npm package, from what licensee read out of each directory. */
@@ -769,6 +861,7 @@ type BuiltReport = {
   copiedPlatformLibraries: Record<string, CopiedPlatformLibrary>;
   separatePrograms: Record<string, SeparateProgram>;
   externalExtensions: Record<string, ExternalExtension>;
+  externalExtensionListings: ExternalExtensionListing[];
   packedExtensions: string[];
   shipsElectron: boolean;
   product: ProductBlock | undefined;
@@ -887,8 +980,17 @@ export function buildReport(): BuiltReport {
   // Refused before anything is derived: the product name goes into the first sentence of the
   // document, and the rest read committed files this run has already paid to open.
   assertCommittedPolicyGates(policy, packagingConfig);
+  // Every platform's mapped folders, because this is the run that WRITES the document and the
+  // document covers every platform. `verifyNpmShippingSet` narrows to the platform in hand. Run
+  // before the npm set is collected, because collecting it reads each itemized checkout this
+  // validates.
+  assertExternalExtensionsRecorded(
+    externalExtensionNames(REPO, packagingConfig),
+    policy.externalExtensions || {},
+    { checkouts: policy.externalExtensionCheckouts || {}, policyDir: policyFolder() },
+  );
 
-  const { npmPackages, unresolvedStylesheetSpecifiers } = buildNpmShippingSet(policy);
+  const { npmPackages, unresolvedStylesheetSpecifiers, checkouts } = buildNpmShippingSet(policy);
   const npmVerdicts = classifyNpmPackages(npmPackages, policy);
 
   const { collected, directReferences, alwaysListed } = collectNugetClosure(policy);
@@ -897,12 +999,6 @@ export function buildReport(): BuiltReport {
   assertStaticAssetNoticesRecorded(REPO, policy);
   assertCopiedPlatformLibraryIdsAllowed(policy);
   assertCopiedPlatformLibrariesRecorded(policy, copiedPlatformLibraryStems());
-  // Every platform's mapped folders, because this is the run that WRITES the document and the
-  // document covers every platform. `verifyNpmShippingSet` narrows to the platform in hand.
-  assertExternalExtensionsRecorded(
-    externalExtensionNames(REPO, packagingConfig),
-    policy.externalExtensions || {},
-  );
 
   const nugetVerdicts = buildNugetVerdicts({ policy, collected, directReferences, alwaysListed });
 
@@ -949,6 +1045,8 @@ export function buildReport(): BuiltReport {
     // The seventh: extensions packed from other repositories, whose bundled dependencies no
     // manifest here describes - see `ExternalExtension`.
     externalExtensions: policy.externalExtensions || {},
+    // What the itemized ones bundle, one listing per checkout.
+    externalExtensionListings: checkouts.map(externalExtensionListing),
     // What the two prose sections are gated on, so neither can survive the thing it describes. The
     // extension set is the directory listing of `extensions/dist`, which is the tree an installer
     // packs; `electron` ships as a prebuilt runtime compiled into no bundle, so the policy's
@@ -1018,7 +1116,8 @@ function verifyCommittedDocument(): Lock | undefined {
  * Deliberately narrower than `buildReport` + `diffLock` - see the module docstring for why license
  * identification and the NuGet closure do not need re-checking per platform. This calls only
  * `collectShippedPackages` (webpack's module manifests, the stylesheet leaf scan, and
- * `release/app`'s closure - `shipping-set.ts`) and `diffShippingSet` against the committed lock's
+ * `release/app`'s closure - `shipping-set.ts`), the same collection over each itemized extension
+ * checkout (`external-extension-packages.ts`), and `diffShippingSet` against the committed lock's
  * npm entries: no `identify` (Ruby), no `nuget-set` (dotnet), no network.
  *
  * It ALSO checks the document itself against the hash the lock records. This is the only notices
@@ -1063,7 +1162,9 @@ function verifyNpmShippingSet() {
     assertExternalExtensionsRecorded(
       externalExtensionNames(REPO, packagingConfig, process.platform),
       policy.externalExtensions || {},
+      { checkouts: policy.externalExtensionCheckouts || {}, policyDir: policyFolder() },
     );
+    const warmCache = inCi() ? 'throw' : 'report';
 
     ({
       packages: npmPackages,
@@ -1080,12 +1181,29 @@ function verifyNpmShippingSet() {
       // fails. Run by hand it meets the normal state of any tree that has been built twice, where
       // failing would report a difference it cannot trust, so it says so and stops instead.
       // Writing the artifact still refuses outright either way; only this check stops short.
-      warmCache: inCi() ? 'throw' : 'report',
+      warmCache,
     }));
     // The same union `buildReport` applies - see `withPlatformOnlyPackages`. Without it this check
     // compares a set missing the other platforms' packages against a lock that records them, and
     // reports every one as `removed:` on the platform that does not install them.
     npmPackages = withPlatformOnlyPackages(npmPackages, policy);
+
+    // The itemized checkouts are measured against paranext-core's set, so they are collected only
+    // when that set can be trusted. A warm checkout bundle joins the skip below, named with its
+    // checkout so the reader knows which tree to rebuild.
+    const checkouts = warmBundles.length ? [] : collectCheckouts(policy, npmPackages, warmCache);
+    const warmCheckouts = checkouts.filter((collected) => collected.warmBundles.length);
+    warmBundles = [
+      ...warmBundles,
+      ...warmCheckouts.flatMap((collected) =>
+        collected.warmBundles.map((bundle) => `${checkoutName(collected)}:${bundle}`),
+      ),
+    ];
+    unresolvedStylesheetSpecifiers = [
+      ...unresolvedStylesheetSpecifiers,
+      ...checkoutStylesheetSpecifiers(checkouts),
+    ];
+    npmPackages = withCheckoutPackages(npmPackages, checkouts);
 
     // BEFORE the floors, which is the whole point of the `report` mode above. Both floors measure
     // the derived set, and a warm cache is the one condition under which that set is known to be
@@ -1096,6 +1214,12 @@ function verifyNpmShippingSet() {
     // warm cache produced. Only the SHIPPING SET half stops here: the document check above has
     // already run, because it rests on two committed files rather than on the manifests.
     if (warmBundles.length) {
+      const checkoutRebuilds = warmCheckouts
+        .map(
+          (collected) =>
+            `  and in ${collected.checkout.root}, from a cold webpack cache: npm run package\n`,
+        )
+        .join('');
       console.log(
         `Verified ${path.relative(REPO, OUT)} against the hash its lock records.\n` +
           `Skipped the npm shipping set: ${warmBundles.join(', ')} ` +
@@ -1103,7 +1227,7 @@ function verifyNpmShippingSet() {
           "cache, whose module list can be short, so this platform's npm shipping set cannot be " +
           'compared against the committed lock.\n' +
           '  To run that half too: rm -rf node_modules/.cache/webpack-* && npm run build\n' +
-          '  CI builds are always cold, so this check runs there in full.',
+          `${checkoutRebuilds}  CI builds are always cold, so this check runs there in full.`,
       );
       return;
     }
@@ -1375,7 +1499,30 @@ function writeArtifactPair(report: BuiltReport, lock: Lock, rendered: string): v
   console.log(`Wrote ${path.relative(REPO, OUT)}: ${npm} npm packages, ${nuget} NuGet packages.`);
 }
 
-export function main(): void {
+/**
+ * Refuses a license pointer whose file does not ship, in this build's output or in the external
+ * extension zips `platform`'s folders hold (every platform's when it is omitted). Not run for
+ * `--verify-document`, which reads two committed files and nothing else.
+ *
+ * @returns Whether every pointer resolved; `exitCode` is set when one did not.
+ */
+async function checkLicensePointers(
+  platform: typeof process.platform | undefined,
+): Promise<boolean> {
+  try {
+    await assertNoDanglingLicensePointers({
+      repo: REPO,
+      externalZips: externalExtensionZips(platform),
+    });
+    return true;
+  } catch (err) {
+    console.error(`\nERROR: ${messageOf(err)}\n`);
+    process.exitCode = 1;
+    return false;
+  }
+}
+
+export async function main(): Promise<void> {
   const verifyOnly = process.argv.includes('--verify');
   const verifyShippingSetOnly = process.argv.includes('--verify-shipping-set');
   const verifyDocumentOnly = process.argv.includes('--verify-document');
@@ -1388,10 +1535,18 @@ export function main(): void {
     return;
   }
 
+  // The shipping-set check runs the pointer check AFTER its own, and whatever its own concluded, so
+  // a pointer failure never hides the document-hash verdict; both failures are reported. It checks
+  // the zips this platform packs.
   if (verifyShippingSetOnly) {
     verifyNpmShippingSet();
+    await checkLicensePointers(process.platform);
     return;
   }
+
+  // The full run checks every platform's zips, because the document covers every platform, and
+  // checks them first: a pointer failure is a reason not to write the document at all.
+  if (!(await checkLicensePointers(undefined))) return;
 
   let report;
   try {
@@ -1434,4 +1589,8 @@ export function main(): void {
 // Guarded rather than called unconditionally, so `buildReport` can be imported and driven without
 // the side effects of a full run - writing the artifact, writing the lock, setting an exit code.
 // That is what `degradation.test.ts` and `verify-shipping-set.test.ts` rest on.
-if (require.main === module) main();
+if (require.main === module)
+  main().catch((err) => {
+    console.error(`\nERROR: ${messageOf(err)}\n`);
+    process.exitCode = 1;
+  });

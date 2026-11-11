@@ -194,10 +194,34 @@ const productReport = {
     'example-private-extension': {
       itemized: false,
       reason:
-        'Built in another repository, which emits no module manifest yet, so its bundle cannot be ' +
-        'itemized here - see PT-4604.',
+        'Built in another repository whose build is not part of this one, so its bundle cannot be ' +
+        'itemized here.',
+    },
+    'example-itemized-extension': {
+      itemized: true,
+      sourceCheckout: '../example-extensions',
+      reason: 'Its assets tree is not scanned by the static-asset gate.',
+    },
+    'other-itemized-extension': {
+      itemized: true,
+      sourceCheckout: '../example-extensions',
+      reason: 'Built in the example extensions repository.',
     },
   },
+  // Two extensions from one checkout, so the listing's plural wording and its per-extension reasons
+  // are both byte-pinned. The packages are rows of `report`, as a checkout's packages are rows of
+  // the npm table.
+  externalExtensionListings: [
+    {
+      checkoutName: 'example-extensions',
+      extensions: ['example-itemized-extension', 'other-itemized-extension'],
+      packages: [
+        { name: 'beta', version: '2.0.0' },
+        { name: 'delta', version: '4.0.0' },
+        { name: 'epsilon', version: '5.0.0' },
+      ],
+    },
+  ],
 };
 
 describe('render', () => {
@@ -1215,14 +1239,133 @@ describe('external extensions section', () => {
       externalExtensions: {
         'paratext-bible-send-receive': {
           itemized: false,
-          reason:
-            'Built in paratext-bible-internal-extensions, which emits no module manifest yet.',
+          reason: 'Built in another repository whose build is not part of this one.',
         },
       },
     });
     expect(out).toContain('## Extensions packed from other repositories');
     expect(out).toContain('### paratext-bible-send-receive');
     expect(out).toContain('bundled dependencies are **not itemized** in this document');
-    expect(out).toContain('emits no module manifest yet.');
+    expect(out).toContain('whose build is not part of this one.');
+  });
+
+  const listing = {
+    checkoutName: 'paratext-bible-internal-extensions',
+    extensions: ['paratext-bible-marketplace', 'paratext-bible-send-receive'],
+    packages: [
+      { name: '@scope/pkg', version: '1.0.0' },
+      { name: 'diff', version: '9.0.0' },
+    ],
+  };
+
+  it('lists the bundled packages of an itemized checkout under one heading', () => {
+    const out = render({ ...report, externalExtensions: {}, externalExtensionListings: [listing] });
+    expect(out).toContain('## Extensions packed from other repositories');
+    expect(out).toContain(
+      '### paratext-bible-marketplace and paratext-bible-send-receive ' +
+        '(built in paratext-bible-internal-extensions)',
+    );
+    expect(out).toContain(
+      'Their bundled npm packages, listed under "npm production dependencies" below, include ' +
+        '`@scope/pkg@1.0.0`, `diff@9.0.0`.',
+    );
+  });
+
+  it('points at the npm table below, which the section precedes', () => {
+    const out = render({ ...report, externalExtensions: {}, externalExtensionListings: [listing] });
+    expect(out.indexOf('## Extensions packed from other repositories')).toBeLessThan(
+      out.indexOf('## npm production dependencies'),
+    );
+    expect(out).not.toContain('npm section above');
+  });
+
+  it("reproduces each itemized extension's reason under its checkout, in extension order", () => {
+    const out = render({
+      ...report,
+      externalExtensions: {
+        'paratext-bible-send-receive': {
+          itemized: true,
+          sourceCheckout: '../x',
+          reason: 'Its assets are not scanned yet.',
+        },
+        'paratext-bible-marketplace': {
+          itemized: true,
+          sourceCheckout: '../x',
+          reason: 'Built in the internal extensions repository.',
+        },
+      },
+      externalExtensionListings: [listing],
+    });
+    expect(out).toContain(
+      'include `@scope/pkg@1.0.0`, `diff@9.0.0`.\n\n' +
+        '**paratext-bible-marketplace:** Built in the internal extensions repository.\n\n' +
+        '**paratext-bible-send-receive:** Its assets are not scanned yet.\n',
+    );
+  });
+
+  it('joins three or more extensions with commas and a final "and"', () => {
+    const out = render({
+      ...report,
+      externalExtensions: {},
+      externalExtensionListings: [{ ...listing, extensions: ['a', 'b', 'c'] }],
+    });
+    expect(out).toContain('### a, b and c (built in paratext-bible-internal-extensions)');
+  });
+
+  it('names a single extension bare', () => {
+    const out = render({
+      ...report,
+      externalExtensions: {},
+      externalExtensionListings: [{ ...listing, extensions: ['solo'] }],
+    });
+    expect(out).toContain('### solo (built in paratext-bible-internal-extensions)');
+    expect(out).toContain('Its bundled npm packages, listed under');
+    expect(out).not.toContain('Their bundled npm packages');
+  });
+
+  it("names the extension zips in a product's npm clause only when something is itemized", () => {
+    const clause = 'compiled into `dist/` and into the extension zips listed\nbelow';
+    expect(
+      render({ ...productReport, externalExtensionListings: [listing] }).split('\n\n')[1],
+    ).toContain(clause);
+    expect(render({ ...productReport, externalExtensionListings: [] })).not.toContain(clause);
+  });
+
+  it("names the extension zips in this repository's npm clause only when something is itemized", () => {
+    const clause = 'compiled into `dist/` and into the\nextension zips listed below';
+    expect(
+      render({ ...report, externalExtensions: {}, externalExtensionListings: [listing] }).split(
+        '\n\n',
+      )[1],
+    ).toContain(clause);
+    expect(
+      render({ ...report, externalExtensions: {}, externalExtensionListings: [] }),
+    ).not.toContain(clause);
+  });
+
+  it('gives an itemized table entry no heading of its own and keeps a not-itemized one', () => {
+    const out = render({
+      ...report,
+      externalExtensions: {
+        'paratext-bible-send-receive': {
+          itemized: true,
+          sourceCheckout: '../x',
+          reason: 'Built in the internal extensions repository.',
+        },
+        'checking-assistant': { itemized: false, reason: 'Another team builds it.' },
+      },
+      externalExtensionListings: [listing],
+    });
+    expect(out).not.toContain('### paratext-bible-send-receive\n');
+    expect(out).toContain('### checking-assistant');
+    expect(out).toContain('**not itemized**');
+    expect(out.indexOf('(built in paratext-bible-internal-extensions)')).toBeLessThan(
+      out.indexOf('### checking-assistant'),
+    );
+  });
+
+  it('is absent when there are neither entries nor listings', () => {
+    const out = render({ ...report, externalExtensions: {}, externalExtensionListings: [] });
+    expect(out).not.toContain('## Extensions packed from other repositories');
   });
 });

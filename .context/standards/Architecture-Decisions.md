@@ -6545,6 +6545,20 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
+- **Amended 2026-11-09:** an overlay can now itemize an external extension that is built alongside
+  the product, by recording `"itemized": true` and naming its `sourceCheckout` (with an
+  `externalExtensionCheckouts` entry holding that checkout's minimum package counts). The
+  generator reads the checkout's webpack module manifests and applies the same safety checks as for
+  this repository's own build: production manifests only, the packages compiled from this
+  repository found in its own shipping set, the minimums, an import cross-check, and a refusal of
+  any license pointer to a `.LICENSE.txt` file that does not ship. `"itemized": false` remains for
+  zips built elsewhere. Rejected: packing the package list inside each zip and reading it from
+  there. A zip carries package names but no license files, so every row would lack its notice, and
+  without the extension's source the stylesheet scan and import cross-check that confirm the list is
+  complete cannot run. The module-manifest plugin and its build-id helper are copied into the two
+  extension templates rather than published as an npm package: two small files did not justify a
+  package's publishing and versioning setup, and each copy's header names the paranext-core file it
+  must be kept in step with.
 
 ## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
 

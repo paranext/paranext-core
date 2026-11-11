@@ -31,6 +31,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { NPM_MIN_PACKAGES, assertNpmFloor, collectShippedPackages } from './shipping-set';
 import { assertFloor, DOTNET_MIN_PACKAGES } from './nuget-set';
 import { CONFIDENCE_THRESHOLD } from './policy';
+import { itemizedCheckoutSetup, writeItemizedCheckout } from './__fixtures__/itemized-checkout';
 
 /**
  * Registers tsx in the child, so it can `require` this pipeline's `.ts` modules.
@@ -60,8 +61,15 @@ type Run = { status: number; stdout: string; stderr: string };
  *
  * `main()` sets `process.exitCode` rather than throwing, so the child exits with it naturally and
  * `status` is the value CI would see.
+ *
+ * `entry` replaces the call to `main()`, for a case that inspects what `buildReport` returns.
  */
-function runGenerator(setup: string, argv: string[] = [], tmp = ''): Run {
+function runGenerator(
+  setup: string,
+  argv: string[] = [],
+  tmp = '',
+  entry = "load('main.ts').main();",
+): Run {
   const script = `
 const path = require('path');
 const DIR = ${JSON.stringify(DIR)};
@@ -109,10 +117,14 @@ const emptyNuget = () => {
   });
 };
 
+// The license-pointer check reads the real build output, and none of these cases is about it
+// except the ones that re-stub it below.
+stub('./license-pointers', { assertNoDanglingLicensePointers: async () => {} });
+
 ${setup}
 
 process.argv = [process.argv[0], path.join(DIR, 'main.ts'), ...${JSON.stringify(argv)}];
-load('main.ts').main();
+${entry}
 `;
   const result = spawnSync(process.execPath, [...TSX, '-e', script], {
     encoding: 'utf8',
@@ -315,6 +327,8 @@ describe('a degraded environment fails closed', () => {
     // short .NET section is exactly the failure this generator exists to prevent.
     const run = runGenerator(`
       stub('./shipping-set', {
+        // Read when the module that lists the platform-provided packages loads.
+        packageOfSpecifier: load('shipping-set.ts').packageOfSpecifier,
         collectShippedPackages: () => ({ packages: [], unresolvedStylesheetSpecifiers: [] }),
         // This case is about the .NET floor, and it supplies an empty npm set on purpose - so the
         // npm floor (exercised on its own below) is stubbed out rather than left to fire first.
@@ -360,6 +374,8 @@ describe('a degraded environment fails closed', () => {
       `
       emptyNuget();
       stub('./shipping-set', {
+        // Read when the module that lists the platform-provided packages loads.
+        packageOfSpecifier: load('shipping-set.ts').packageOfSpecifier,
         // One package on purpose; the npm floor is exercised on its own below.
         assertNpmFloor: (packages) => packages,
         // The real one reads the repository's own package-lock.json, which these
@@ -440,6 +456,8 @@ describe('a degraded environment fails closed', () => {
       `
       emptyNuget();
       stub('./shipping-set', {
+        // Read when the module that lists the platform-provided packages loads.
+        packageOfSpecifier: load('shipping-set.ts').packageOfSpecifier,
         // One package on purpose; the npm floor is exercised on its own below.
         assertNpmFloor: (packages) => packages,
         // The real one reads the repository's own package-lock.json, which these
@@ -610,6 +628,54 @@ describe('a degraded environment fails closed', () => {
 
     expect(run.status).not.toBe(0);
     expect(run.stderr).toMatch(/npm shipping set has 1 packages; expected at least/);
+    leavesTheCommittedArtifactUntouched();
+  });
+
+  it('exits non-zero when two folders hold the same name@version and nothing is itemized', () => {
+    // The lock is keyed by name@version, so two rows under one key cannot both be recorded; the
+    // run must refuse rather than keep one of them.
+    const first = writePackage(tmp, 'dup', { version: '1.0.0', license: 'MIT' });
+    const second = writePackage(path.join(tmp, 'node_modules', 'outer'), 'dup', {
+      version: '1.0.0',
+      license: 'MIT',
+    });
+    const row = (dir: string) => ({
+      ecosystem: 'npm',
+      name: 'dup',
+      version: '1.0.0',
+      dir,
+      reachedVia: ['main'],
+    });
+
+    const run = runGenerator(
+      `
+      emptyNuget();
+      const real = load('shipping-set.ts');
+      stub('./shipping-set', {
+        ...real,
+        assertNpmFloor: (packages) => packages,
+        assertNpmNotShrunk: (packages) => packages,
+        collectPlatformOnlyPackages: () => [],
+        readDirectDependencies: () => [],
+        missingDirectDependencies: () => [],
+        importedPackages: () => [],
+        missingImportedPackages: () => [],
+        collectShippedPackages: () => ({
+          packages: ${JSON.stringify([row(first), row(second)])},
+          unresolvedStylesheetSpecifiers: [],
+          warmBundles: [],
+        }),
+      });
+      stub('./identify', {
+        identify: (dirs) => new Map(dirs.map((dir) => [dir, { dir, files: [] }])),
+      });
+      `,
+      ['--verify'],
+      tmp,
+    );
+
+    expect(run.stderr).toMatch(/duplicate lock key\(s\): npm:dup@1\.0\.0/);
+    expect(run.status).not.toBe(0);
     leavesTheCommittedArtifactUntouched();
   });
 
@@ -826,6 +892,139 @@ describe('NOTICES_FORCE_PLATFORM can only turn the write refusal ON', () => {
     expect(run.status).not.toBe(0);
     expect(run.stderr).toMatch(/this is darwin/);
     expect(fs.readFileSync(OUT, 'utf8')).toBe(committedArtifact);
+  });
+});
+
+describe('an itemized external extension checkout in the full run', () => {
+  /** Prints what `buildReport` derived, as `REPORT <json>`, instead of running `main()`. */
+  const printReport = `
+    const report = load('main.ts').buildReport();
+    console.log('REPORT ' + JSON.stringify({
+      npm: report.verdicts
+        .filter((verdict) => verdict.ecosystem === 'npm')
+        .map((verdict) => verdict.name + '@' + verdict.version + ' ' + verdict.verdict),
+      listings: report.externalExtensionListings,
+    }));
+  `;
+  const identifyNothing = `
+    stub('./identify', {
+      identify: (dirs) => new Map(dirs.map((dir) => [dir, { dir, files: [] }])),
+    });
+  `;
+  const reportOf = (run: Run) => {
+    const line = run.stdout.split('\n').find((entry) => entry.startsWith('REPORT '));
+    if (!line) throw new Error(`no report was printed:\n${run.stdout}\n${run.stderr}`);
+    return JSON.parse(line.slice('REPORT '.length));
+  };
+
+  it("lists the checkout's own packages as verdicts and in its listing", () => {
+    const fixture = writeItemizedCheckout(tmp, REPO);
+    const run = runGenerator(
+      `emptyNuget();\n${identifyNothing}\n${itemizedCheckoutSetup(fixture)}`,
+      [],
+      tmp,
+      printReport,
+    );
+
+    const report = reportOf(run);
+    expect(report.npm).toEqual(
+      expect.arrayContaining(['own-a@1.0.0 allowed', 'css-only@2.0.0 allowed']),
+    );
+    expect(report.listings).toEqual([
+      {
+        checkoutName: 'extension-repo',
+        extensions: ['ext-one', 'ext-two'],
+        packages: [
+          { name: 'css-only', version: '2.0.0' },
+          { name: 'own-a', version: '1.0.0' },
+          { name: 'react', version: fixture.corePackage.version },
+        ],
+      },
+    ]);
+  });
+
+  it('collects a checkout once, and lists both extensions, when two entries name it', () => {
+    // The fixture's two entries spell the folder differently, and both zips are packed.
+    const fixture = writeItemizedCheckout(tmp, REPO);
+    const run = runGenerator(
+      `emptyNuget();\n${identifyNothing}\n${itemizedCheckoutSetup(fixture)}`,
+      [],
+      tmp,
+      printReport,
+    );
+
+    const report = reportOf(run);
+    expect(run.stdout.match(/COLLECTED-CHECKOUT /g)).toHaveLength(1);
+    expect(report.listings.map((listing: { extensions: string[] }) => listing.extensions)).toEqual([
+      ['ext-one', 'ext-two'],
+    ]);
+  });
+
+  it("checks every platform's zips for dangling license pointers, and stops on one", () => {
+    const fixture = writeItemizedCheckout(tmp, REPO, { otherPlatformFolder: true });
+    const run = runGenerator(
+      `${itemizedCheckoutSetup(fixture)}
+      stub('./license-pointers', {
+        assertNoDanglingLicensePointers: async ({ externalZips }) => {
+          const named = externalZips.map((zip) => path.basename(path.dirname(zip)) + '/' + path.basename(zip));
+          console.log('POINTERS ' + JSON.stringify(named.sort()));
+          throw new Error('main.js points at main.js.LICENSE.txt, which does not ship');
+        },
+      });`,
+      ['--verify'],
+      tmp,
+    );
+
+    expect(run.stdout).toContain(
+      'POINTERS ["zips-elsewhere/ext-one_1.0.0.zip","zips-elsewhere/ext-two_1.0.0.zip",' +
+        '"zips-here/ext-one_1.0.0.zip","zips-here/ext-two_1.0.0.zip"]',
+    );
+    expect(run.stderr).toContain(
+      'ERROR: main.js points at main.js.LICENSE.txt, which does not ship',
+    );
+    expect(run.status).not.toBe(0);
+    leavesTheCommittedArtifactUntouched();
+  });
+
+  it("refuses a package paranext-core's source imports when only a checkout's bundles contain it", () => {
+    // Name-only matching against the merged set would let the checkout's `own-a` stand in for
+    // the one paranext-core's manifests are missing.
+    const fixture = writeItemizedCheckout(tmp, REPO);
+    const run = runGenerator(
+      `emptyNuget();\n${identifyNothing}\n${itemizedCheckoutSetup(fixture)}
+      const fixtureShipping = require.cache[require.resolve(path.join(DIR, './shipping-set'))].exports;
+      stub('./shipping-set', {
+        ...fixtureShipping,
+        importedPackages: (repo, options) =>
+          options && options.workspaceSourcesOnly
+            ? fixtureShipping.importedPackages(repo, options)
+            : [{ name: 'own-a', importedIn: 'src/main/main.ts' }],
+      });`,
+      [],
+      tmp,
+      printReport,
+    );
+
+    expect(run.stderr).toMatch(
+      /imported by first-party source reach no bundle[\s\S]*own-a \(imported in src\/main\/main\.ts\)/,
+    );
+    expect(run.stdout).not.toContain('REPORT ');
+    expect(run.status).not.toBe(0);
+  });
+
+  it('does not check license pointers for --verify-document', () => {
+    const run = runGenerator(
+      `stub('./license-pointers', {
+        assertNoDanglingLicensePointers: async () => {
+          throw new Error('the pointer check ran');
+        },
+      });`,
+      ['--verify-document'],
+    );
+
+    expect(run.stderr).not.toContain('the pointer check ran');
+    expect(run.stdout).toContain('against the hash its lock records');
+    expect(run.status).toBe(0);
   });
 });
 

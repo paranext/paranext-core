@@ -4,8 +4,10 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   assertExternalExtensionsRecorded,
+  extensionZipsIn,
   externalExtensionFolders,
   externalExtensionNames,
+  itemizedCheckouts,
 } from './external-extensions';
 
 let repo: string;
@@ -175,6 +177,24 @@ describe('externalExtensionNames', () => {
   });
 });
 
+describe('extensionZipsIn', () => {
+  it('counts a zip whose extension is upper case', () => {
+    write('zips/X_1.0.0.ZIP');
+    expect(extensionZipsIn(path.join(repo, 'zips'))).toEqual(['X_1.0.0.ZIP']);
+  });
+
+  it('does not count a directory named like a zip', () => {
+    fs.mkdirSync(path.join(repo, 'zips', 'y_1.0.0.zip'), { recursive: true });
+    expect(extensionZipsIn(path.join(repo, 'zips'))).toEqual([]);
+  });
+
+  it('does not count a file that is not a zip', () => {
+    write('zips/z_1.0.0.tar.gz');
+    write('zips/README.md');
+    expect(extensionZipsIn(path.join(repo, 'zips'))).toEqual([]);
+  });
+});
+
 describe('assertExternalExtensionsRecorded', () => {
   const table = { a: { itemized: false, reason: 'no manifest yet' } };
 
@@ -189,14 +209,122 @@ describe('assertExternalExtensionsRecorded', () => {
     );
   });
 
+  it('offers both an itemized and a not-itemized entry for an unrecorded zip', () => {
+    expect(() => assertExternalExtensionsRecorded(['a', 'b'], table)).toThrow(
+      /"b": \{\n {6}"itemized": true,\n {6}"sourceCheckout": "<path to the checkout>",\n {6}"reason": "<[^>]+>"\n {4}\}[\s\S]*"b": \{\n {6}"itemized": false,\n {6}"reason": "<why it is not itemized>"\n {4}\}/,
+    );
+  });
+
   it('refuses an entry whose zip is not packed', () => {
     expect(() => assertExternalExtensionsRecorded([], table)).toThrow(/"a".*no longer packs/s);
   });
 
-  it('refuses itemized: true until the generator can read an external manifest set', () => {
+  describe('an itemized entry', () => {
+    const minimumPackages = { own: 15, core: 80, stylesheet: 3 };
+    let policyDir: string;
+    beforeEach(() => {
+      policyDir = path.join(repo, 'policy');
+      fs.mkdirSync(path.join(repo, 'co'), { recursive: true });
+      fs.mkdirSync(policyDir, { recursive: true });
+    });
+    const itemized = (sourceCheckout?: string) => ({
+      a: { itemized: true, reason: 'r', ...(sourceCheckout ? { sourceCheckout } : {}) },
+    });
+
+    it('is accepted with an existing checkout and valid minimums', () => {
+      expect(() =>
+        assertExternalExtensionsRecorded(['a'], itemized('../co'), {
+          checkouts: { '../co': { minimumPackages } },
+          policyDir,
+        }),
+      ).not.toThrow();
+    });
+
+    it('needs a sourceCheckout', () => {
+      expect(() =>
+        assertExternalExtensionsRecorded(['a'], itemized(), { checkouts: {}, policyDir }),
+      ).toThrow(/sourceCheckout/);
+    });
+
+    it('needs the checkout to have a key in externalExtensionCheckouts', () => {
+      expect(() =>
+        assertExternalExtensionsRecorded(['a'], itemized('../co'), { checkouts: {}, policyDir }),
+      ).toThrow(/"\.\.\/co"/);
+    });
+
+    it('needs the checkout folder to exist', () => {
+      const missing = path.resolve(policyDir, '../nope');
+      expect(() =>
+        assertExternalExtensionsRecorded(['a'], itemized('../nope'), {
+          checkouts: { '../nope': { minimumPackages } },
+          policyDir,
+        }),
+      ).toThrow(missing);
+    });
+
+    it.each([
+      ['own', { own: 0, core: 80, stylesheet: 3 }],
+      ['core', { own: 15, core: -1, stylesheet: 3 }],
+      ['stylesheet', { own: 15, core: 80, stylesheet: 1.5 }],
+      ['own', { core: 80, stylesheet: 3 }],
+    ])('refuses a bad minimumPackages.%s', (field, minimums) => {
+      // Round-tripped through JSON, which is how the policy actually reaches this function.
+      const checkouts = JSON.parse(JSON.stringify({ '../co': { minimumPackages: minimums } }));
+      expect(() =>
+        assertExternalExtensionsRecorded(['a'], itemized('../co'), { checkouts, policyDir }),
+      ).toThrow(`minimumPackages.${field}`);
+    });
+
+    it('refuses a checkout key no entry names', () => {
+      expect(() =>
+        assertExternalExtensionsRecorded(
+          ['a'],
+          { a: { itemized: false, reason: 'r' } },
+          { checkouts: { '../co': { minimumPackages } }, policyDir },
+        ),
+      ).toThrow(/remove the entry/);
+    });
+
+    it('does not count a spelling difference as an unnamed checkout', () => {
+      expect(() =>
+        assertExternalExtensionsRecorded(['a'], itemized('..\\co\\'), {
+          checkouts: { '../co': { minimumPackages } },
+          policyDir,
+        }),
+      ).not.toThrow();
+    });
+
+    it('refuses two checkout keys that spell one folder', () => {
+      const root = path.resolve(policyDir, '../co');
+      expect(() =>
+        assertExternalExtensionsRecorded(['a'], itemized('../co'), {
+          checkouts: { '../co': { minimumPackages }, '..\\co\\': { minimumPackages } },
+          policyDir,
+        }),
+      ).toThrow(
+        `"externalExtensionCheckouts" records both "../co" and "..\\co\\", which resolve to the ` +
+          `same folder, ${root}. Keep one of them.`,
+      );
+    });
+
+    it('refuses an itemized entry when no checkout policy is passed', () => {
+      expect(() => assertExternalExtensionsRecorded(['a'], itemized('../co'))).toThrow(
+        /no checkout policy/,
+      );
+    });
+  });
+
+  it('refuses itemized: false with a sourceCheckout as contradictory', () => {
     expect(() =>
-      assertExternalExtensionsRecorded(['a'], { a: { itemized: true, reason: 'r' } }),
-    ).toThrow(/itemized.*not supported yet/s);
+      assertExternalExtensionsRecorded(['a'], {
+        a: { itemized: false, reason: 'r', sourceCheckout: '../co' },
+      }),
+    ).toThrow(/contradictory/);
+  });
+
+  it('refuses itemized recorded as a string', () => {
+    const malformed = JSON.parse('{"a":{"itemized":"true","reason":"r"}}');
+    expect(() => assertExternalExtensionsRecorded(['a'], malformed)).toThrow(/itemized/);
   });
 
   it('refuses an empty or placeholder reason', () => {
@@ -218,6 +346,67 @@ describe('assertExternalExtensionsRecorded', () => {
     const malformed = JSON.parse(JSON.stringify({ a: { itemized: false, reason } }));
     expect(() => assertExternalExtensionsRecorded(['a'], malformed)).toThrow(
       /"externalExtensions" entry for "a" records "reason"/,
+    );
+  });
+});
+
+describe('itemizedCheckouts', () => {
+  const minimumPackages = { own: 15, core: 80, stylesheet: 3 };
+
+  it('refuses an itemized entry whose checkout the table does not record', () => {
+    expect(() =>
+      itemizedCheckouts(
+        { a: { itemized: true, reason: 'r', sourceCheckout: '../co' } },
+        {},
+        path.resolve('/x/policy'),
+      ),
+    ).toThrow(/"a".*externalExtensionCheckouts/s);
+  });
+
+  it('gives one checkout for two spellings of one folder, listing both extensions', () => {
+    const result = itemizedCheckouts(
+      {
+        b: { itemized: true, reason: 'r', sourceCheckout: '..\\co\\' },
+        a: { itemized: true, reason: 'r', sourceCheckout: '../co' },
+        c: { itemized: false, reason: 'r' },
+      },
+      { '../co': { minimumPackages } },
+      path.resolve('/x/policy'),
+    );
+    expect(result).toEqual([
+      {
+        root: path.resolve('/x/co'),
+        key: '../co',
+        tableKey: '../co',
+        extensions: ['a', 'b'],
+        minimumPackages,
+      },
+    ]);
+  });
+
+  it('carries the table key as recorded, however the entries spell the folder', () => {
+    const [result] = itemizedCheckouts(
+      { a: { itemized: true, reason: 'r', sourceCheckout: '../co' } },
+      { '..\\co\\': { minimumPackages } },
+      path.resolve('/x/policy'),
+    );
+    expect(result.key).toBe('../co');
+    expect(result.tableKey).toBe('..\\co\\');
+  });
+
+  it('refuses two checkouts whose folders share a name', () => {
+    expect(() =>
+      itemizedCheckouts(
+        {
+          a: { itemized: true, reason: 'r', sourceCheckout: '../one/co' },
+          b: { itemized: true, reason: 'r', sourceCheckout: '../two/co' },
+        },
+        { '../one/co': { minimumPackages }, '../two/co': { minimumPackages } },
+        path.resolve('/x/policy'),
+      ),
+    ).toThrow(
+      `the itemized checkouts ${path.resolve('/x/one/co')} and ${path.resolve('/x/two/co')} ` +
+        'share the folder name "co"',
     );
   });
 });

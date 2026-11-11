@@ -26,6 +26,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { alwaysListedPackages, inCi, withPlatformOnlyPackages } from './main';
+import { itemizedCheckoutSetup, writeItemizedCheckout } from './__fixtures__/itemized-checkout';
 
 /**
  * Registers tsx in the child, so it can `require` this pipeline's `.ts` modules.
@@ -95,6 +96,9 @@ stub('./nuget-set', {
 stub('./identify', {
   identify: throwing('identify'),
 });
+// The license-pointer check reads the real build output, and none of these cases is about it
+// except the ones that re-stub it below.
+stub('./license-pointers', { assertNoDanglingLicensePointers: async () => {} });
 
 ${setup}
 
@@ -113,6 +117,8 @@ load('main.ts').main();
 function stubShippedPackages(packages: { name: string; version: string }[]) {
   return `
     stub('./shipping-set', {
+      // Read when the module that lists the platform-provided packages loads.
+      packageOfSpecifier: load('shipping-set.ts').packageOfSpecifier,
       // These cases are about the lock DIFF, and they deliberately supply two-package sets - so the
       // plausibility floor the real call site applies is stubbed out rather than left to fire
       // first. The floor has its own falsifying cases in degradation.test.ts and shipping-set.test.ts.
@@ -365,6 +371,107 @@ describe('--verify-shipping-set', () => {
 
     expect(run.status).not.toBe(0);
     expect(run.stderr).toMatch(/no module manifests/);
+  });
+});
+
+describe('--verify-shipping-set with an itemized external extension checkout', () => {
+  const lockWith = (fixture: ReturnType<typeof writeItemizedCheckout>, ...extra: string[]) =>
+    stubLock([
+      { name: fixture.corePackage.name, version: fixture.corePackage.version },
+      ...extra.map((id) => {
+        const [name, version] = id.split('@');
+        return { name, version };
+      }),
+    ]);
+
+  it("passes against a lock that records the checkout's own packages, collecting it once", () => {
+    // The fixture's two entries name the one checkout, and both zips are packed.
+    const fixture = writeItemizedCheckout(tmp, REPO);
+    const run = runVerifyShippingSet(
+      itemizedCheckoutSetup(fixture) + lockWith(fixture, 'css-only@2.0.0', 'own-a@1.0.0'),
+    );
+
+    expect(run.stderr).toBe('');
+    expect(run.stdout).toMatch(/3 npm packages/);
+    expect(run.stdout.match(/COLLECTED-CHECKOUT /g)).toHaveLength(1);
+    expect(run.status).toBe(0);
+  });
+
+  it("reports the checkout's own packages as added against a lock without them", () => {
+    const fixture = writeItemizedCheckout(tmp, REPO);
+    const run = runVerifyShippingSet(itemizedCheckoutSetup(fixture) + lockWith(fixture));
+
+    expect(run.status).not.toBe(0);
+    expect(run.stderr).toMatch(/added: css-only@2\.0\.0/);
+    expect(run.stderr).toMatch(/added: own-a@1\.0\.0/);
+  });
+
+  /** A pointer check that prints the zips it was given, as `<folder>/<zip>`, and then fails. */
+  const failingPointerCheck = `
+    stub('./license-pointers', {
+      assertNoDanglingLicensePointers: async ({ externalZips }) => {
+        const named = externalZips.map((zip) => path.basename(path.dirname(zip)) + '/' + path.basename(zip));
+        console.log('POINTERS ' + JSON.stringify(named.sort()));
+        throw new Error('main.js points at main.js.LICENSE.txt, which does not ship');
+      },
+    });
+  `;
+
+  it("checks this platform's zips for dangling license pointers after the shipping set", () => {
+    const fixture = writeItemizedCheckout(tmp, REPO, { otherPlatformFolder: true });
+    const run = runVerifyShippingSet(
+      itemizedCheckoutSetup(fixture) +
+        failingPointerCheck +
+        lockWith(fixture, 'css-only@2.0.0', 'own-a@1.0.0'),
+    );
+
+    expect(run.stdout).toContain(
+      'POINTERS ["zips-here/ext-one_1.0.0.zip","zips-here/ext-two_1.0.0.zip"]',
+    );
+    // The shipping-set verdict came first and still stands.
+    expect(run.stdout).toMatch(/3 npm packages against the committed lock/);
+    expect(run.stderr).toContain(
+      'ERROR: main.js points at main.js.LICENSE.txt, which does not ship',
+    );
+    expect(run.status).not.toBe(0);
+  });
+
+  it('reports both a document-hash failure and a pointer failure', () => {
+    const fixture = writeItemizedCheckout(tmp, REPO);
+    const run = runVerifyShippingSet(
+      itemizedCheckoutSetup(fixture) +
+        failingPointerCheck +
+        stubLock(
+          [
+            { name: fixture.corePackage.name, version: fixture.corePackage.version },
+            { name: 'css-only', version: '2.0.0' },
+            { name: 'own-a', version: '1.0.0' },
+          ],
+          'f'.repeat(64),
+        ),
+    );
+
+    expect(run.stderr).toContain('edited by hand');
+    expect(run.stderr).toContain(
+      'ERROR: main.js points at main.js.LICENSE.txt, which does not ship',
+    );
+    expect(run.status).not.toBe(0);
+  });
+
+  it("names a checkout's warm bundles and skips the npm half", () => {
+    const fixture = writeItemizedCheckout(tmp, REPO);
+    const manifest = path.join(fixture.checkout, '.notices', 'modules', 'extension-main.json');
+    fs.writeFileSync(
+      manifest,
+      JSON.stringify({ ...JSON.parse(fs.readFileSync(manifest, 'utf8')), cacheWarm: true }),
+    );
+    const run = runVerifyShippingSet(itemizedCheckoutSetup(fixture) + lockWith(fixture), {
+      CI: '',
+    });
+
+    expect(run.stdout).toContain('Skipped the npm shipping set: extension-repo:extension-main');
+    expect(run.stderr).toBe('');
+    expect(run.status).toBe(0);
   });
 });
 

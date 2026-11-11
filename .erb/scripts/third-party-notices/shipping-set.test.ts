@@ -1719,6 +1719,96 @@ describe('a repository reached through a symlink', () => {
   });
 });
 
+describe('a linked repository whose modules an extension bundle compiled', () => {
+  // An extension repository's web views bundle code that webpack found in paranext-core's own
+  // checkout through a `file:` link, so the modules sit outside the repository being described.
+  let core: string;
+
+  function writeCorePackage(rel: string, name: string, version: string | undefined) {
+    const dir = path.join(core, rel);
+    fs.mkdirSync(dir, { recursive: true });
+    if (version !== undefined)
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name, version }));
+    fs.writeFileSync(path.join(dir, 'index.js'), '');
+    return dir;
+  }
+
+  const collect = (linkedRepo?: string) =>
+    collectShippedPackages({
+      manifestDir: path.join(repo, '.notices', 'modules'),
+      repo,
+      linkedRepo,
+    });
+
+  beforeEach(() => {
+    core = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-linked-core-'));
+  });
+  afterEach(() => {
+    fs.rmSync(core, { recursive: true, force: true });
+  });
+
+  it('keeps the linked repository packages out of the shipping set and reports their folders', () => {
+    const a = writePackage('node_modules/a', 'a', '1.0.0');
+    const b = writeCorePackage('node_modules/b', 'b', '2.0.0');
+    const c = writeCorePackage('dev-packages/staging/c', 'c-real-name', '3.0.0');
+    const react = writeCorePackage('lib/platform-bible-react/dist', 'x', undefined);
+    writeManifest('extension-web-view', [
+      path.join(a, 'index.js'),
+      path.join(b, 'index.js'),
+      path.join(c, 'dist', 'index.js'),
+      path.join(react, 'index.js'),
+    ]);
+
+    const { packages, linkedPackageDirs } = collect(core);
+
+    expect(packages.map((pkg) => pkg.name)).toEqual(['a']);
+    expect(linkedPackageDirs).toEqual([c, b]);
+  });
+
+  it('respells a linked module reported under the linked repository real path', () => {
+    const linkPath = path.join(os.tmpdir(), `notices-linked-junction-${process.pid}-${Date.now()}`);
+    fs.symlinkSync(core, linkPath, 'junction');
+    try {
+      const b = writeCorePackage('node_modules/b', 'b', '2.0.0');
+      writeManifest('extension-web-view', [path.join(fs.realpathSync(b), 'index.js')]);
+
+      const { linkedPackageDirs } = collect(linkPath);
+
+      expect(linkedPackageDirs).toEqual([path.join(linkPath, 'node_modules', 'b')]);
+    } finally {
+      try {
+        fs.unlinkSync(linkPath);
+      } catch {
+        fs.rmdirSync(linkPath);
+      }
+    }
+  });
+
+  it('refuses a module under neither repository', () => {
+    const elsewhere = path.join(os.tmpdir(), 'notices-elsewhere', 'other', 'x.js');
+    writeManifest('extension-web-view', [elsewhere]);
+
+    expect(() => collect(core)).toThrow(/outside both/);
+  });
+
+  it('refuses a linked installed path with no readable package.json', () => {
+    const broken = writeCorePackage('node_modules/broken', 'broken', undefined);
+    writeManifest('extension-web-view', [path.join(broken, 'x.js')]);
+
+    expect(() => collect(core)).toThrow(/no readable package\.json/);
+  });
+
+  it('reports no linked folders when no linked repository is given', () => {
+    const dir = writePackage('node_modules/pkg-a', 'pkg-a', '1.0.0');
+    writeManifest('main', [path.join(dir, 'index.js')]);
+
+    const { packages, linkedPackageDirs } = collect();
+
+    expect(packages.map((pkg) => pkg.name)).toEqual(['pkg-a']);
+    expect(linkedPackageDirs).toEqual([]);
+  });
+});
+
 describe('packages only another platform installs', () => {
   // npm honours `os`/`cpu`, so a platform-restricted optional dependency is absent from the tree
   // everywhere else - and this artifact is generated on Linux. `fsevents` is the live case: chokidar
@@ -2115,6 +2205,23 @@ describe('missingImportedPackages', () => {
 });
 
 describe('importedPackages', () => {
+  it('scans only each workspace child source tree when asked for workspace sources only', () => {
+    fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ workspaces: ['src/*'] }));
+    writePackage('node_modules/webpack', 'webpack', '5.0.0');
+    writePackage('node_modules/diff', 'diff', '5.0.0');
+    const build = path.join(repo, 'src/ext/webpack/x.ts');
+    const main = path.join(repo, 'src/ext/src/main.ts');
+    fs.mkdirSync(path.dirname(build), { recursive: true });
+    fs.mkdirSync(path.dirname(main), { recursive: true });
+    fs.writeFileSync(build, "import webpack from 'webpack';\nexport default webpack;\n");
+    fs.writeFileSync(main, "import diff from 'diff';\nexport default diff;\n");
+
+    expect(importedPackages(repo, { workspaceSourcesOnly: true })).toEqual([
+      { name: 'diff', importedIn: 'src/ext/src/main.ts' },
+    ]);
+    expect(importedPackages(repo).map((entry) => entry.name)).toEqual(['diff', 'webpack']);
+  });
+
   it('names a third-party package an extension imports, and where it imports it', () => {
     writePackage('node_modules/some-widget', 'some-widget', '1.0.0');
     const file = path.join(repo, 'extensions/src/an-extension/src/thing.tsx');
@@ -2161,6 +2268,44 @@ describe('importedPackages', () => {
 
     expect(importedPackages(repo)).toEqual([]);
   });
+
+  it.each(['__mocks__', '__fixtures__', '__test-fixtures__'])(
+    'says nothing about a package reached only from a file in a %s folder',
+    (folder) => {
+      // paratext-bible-internal-extensions keeps vitest-importing fixtures in `__test-fixtures__`.
+      writePackage('node_modules/test-only', 'test-only', '1.0.0');
+      const file = path.join(repo, `extensions/src/an-extension/src/${folder}/thing.fixtures.ts`);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, "import t from 'test-only';\nexport default t;\n");
+
+      expect(importedPackages(repo)).toEqual([]);
+    },
+  );
+
+  it.each(['__mocks__', '__fixtures__', '__test-fixtures__'])(
+    'still reports an import from a normal file when the repository itself lives in a %s folder',
+    (folder) => {
+      const outer = repo;
+      repo = path.join(outer, folder, 'checkout');
+      try {
+        fs.mkdirSync(repo, { recursive: true });
+        fs.writeFileSync(
+          path.join(repo, 'package.json'),
+          JSON.stringify({ workspaces: WORKSPACES }),
+        );
+        writePackage('node_modules/shipped', 'shipped', '1.0.0');
+        const file = path.join(repo, 'extensions/src/an-extension/src/thing.ts');
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, "import s from 'shipped';\nexport default s;\n");
+
+        expect(importedPackages(repo)).toEqual([
+          { name: 'shipped', importedIn: 'extensions/src/an-extension/src/thing.ts' },
+        ]);
+      } finally {
+        repo = outer;
+      }
+    },
+  );
 
   it('says nothing about a specifier that resolves to no installed package', () => {
     // Webpack externals (`@papi/frontend`), tsconfig path aliases and typos all fail to resolve

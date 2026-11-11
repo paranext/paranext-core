@@ -1,3 +1,7 @@
+// Copied into paranext-extension-template and paranext-multi-extension-template as
+// `webpack/notices-build-id.ts`, and the notices generator reads the manifests those copies stamp
+// too - so a change to the build-id stamp has to be made in the copies as well.
+
 /**
  * Stamps one identity on every module manifest a single `npm run build` produces.
  *
