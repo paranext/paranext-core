@@ -1,6 +1,12 @@
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { describe, expect, it, vi } from 'vitest';
-import { createPendingSaveSlot, PendingPdpSave, sendPendingSaves } from './pending-save-slot.util';
+import {
+  createPendingSaveSlot,
+  PendingPdpSave,
+  recordSentUsjForShownChapter,
+  revertEditorAfterRefusedSave,
+  sendPendingSaves,
+} from './pending-save-slot.util';
 
 function usjOf(text: string): Usj {
   return { type: 'USJ', version: '3.1', content: [text] };
@@ -266,5 +272,70 @@ describe('sendPendingSaves', () => {
 
     expect(error).toHaveBeenCalledWith(expect.stringContaining('boom'));
     expect(goodWrite).toHaveBeenCalledWith(usjOf('b'));
+  });
+});
+
+describe('recordSentUsjForShownChapter', () => {
+  it('records the baseline for the chapter on screen', () => {
+    const sentRef: { current: Usj | undefined } = { current: usjOf('old') };
+    expect(recordSentUsjForShownChapter(sentRef, usjOf('new'), 'A', 'A')).toBe(true);
+    expect(sentRef.current).toEqual(usjOf('new'));
+  });
+
+  it('leaves the baseline alone for a write to another chapter', () => {
+    const sentRef: { current: Usj | undefined } = { current: usjOf('chapter B baseline') };
+    expect(recordSentUsjForShownChapter(sentRef, usjOf('chapter A flush'), 'A', 'B')).toBe(false);
+    expect(sentRef.current).toEqual(usjOf('chapter B baseline'));
+  });
+
+  it('does not treat the same chapter number in another project as the shown chapter', () => {
+    const sentRef: { current: Usj | undefined } = { current: undefined };
+    expect(
+      recordSentUsjForShownChapter(sentRef, usjOf('x'), 'projectA:JON 3', 'projectB:JON 3'),
+    ).toBe(false);
+    expect(sentRef.current).toBeUndefined();
+  });
+});
+
+describe('revertEditorAfterRefusedSave', () => {
+  function setup(saveChapterKey: string, shownChapterKey: string) {
+    const sentRef: { current: Usj | undefined } = { current: usjOf('sent') };
+    const setEditorUsj = vi.fn();
+    const reverted = revertEditorAfterRefusedSave({
+      saveChapterKey,
+      shownChapterKey,
+      usjFromPdp: usjOf('from pdp'),
+      hasEditor: true,
+      sentRef,
+      setEditorUsj,
+    });
+    return { sentRef, setEditorUsj, reverted };
+  }
+
+  it('puts the PDP document back for the chapter on screen', () => {
+    const { sentRef, setEditorUsj, reverted } = setup('A', 'A');
+    expect(reverted).toBe(true);
+    expect(setEditorUsj).toHaveBeenCalledWith(usjOf('from pdp'));
+    expect(sentRef.current).toEqual(usjOf('from pdp'));
+  });
+
+  it('does not touch the editor or the baseline for another chapter', () => {
+    const { sentRef, setEditorUsj, reverted } = setup('A', 'B');
+    expect(reverted).toBe(false);
+    expect(setEditorUsj).not.toHaveBeenCalled();
+    expect(sentRef.current).toEqual(usjOf('sent'));
+  });
+
+  it('does nothing without a PDP document or an editor', () => {
+    const setEditorUsj = vi.fn();
+    const sentRef: { current: Usj | undefined } = { current: usjOf('sent') };
+    const base = { saveChapterKey: 'A', shownChapterKey: 'A', sentRef, setEditorUsj };
+    expect(revertEditorAfterRefusedSave({ ...base, usjFromPdp: undefined, hasEditor: true })).toBe(
+      false,
+    );
+    expect(
+      revertEditorAfterRefusedSave({ ...base, usjFromPdp: usjOf('p'), hasEditor: false }),
+    ).toBe(false);
+    expect(setEditorUsj).not.toHaveBeenCalled();
   });
 });

@@ -125,3 +125,52 @@ export async function sendPendingSaves(deps: PendingSaveDrainDeps): Promise<void
   // One send at a time, each through the guard; whatever else is held goes next.
   await sendPendingSaves(deps);
 }
+
+/**
+ * Records `usj` as the document last sent to the PDP — the baseline the editor's echo comparison
+ * and {@link sendPendingSaves} measure the editor against — but only when the write is for the
+ * chapter the editor shows. A write for a chapter since left (a held save sent through its bound
+ * save) says nothing about the chapter now on screen, and recording it would make that chapter's
+ * own echo and its next save compare against another chapter's document.
+ *
+ * @returns Whether the baseline was recorded.
+ */
+export function recordSentUsjForShownChapter(
+  sentRef: MutableRefObject<Usj | undefined>,
+  usj: Usj,
+  saveChapterKey: string,
+  shownChapterKey: string,
+): boolean {
+  if (saveChapterKey !== shownChapterKey) return false;
+  sentRef.current = usj;
+  return true;
+}
+
+/**
+ * After a write the backend refused, puts the PDP's last document back into the editor and makes it
+ * the sent baseline — but only when the write was for the chapter the editor shows. A held save for
+ * a chapter since left can be refused after navigation, and its snapshot would replace the chapter
+ * now on screen.
+ *
+ * @returns Whether the editor was reverted.
+ */
+export function revertEditorAfterRefusedSave({
+  saveChapterKey,
+  shownChapterKey,
+  usjFromPdp,
+  hasEditor,
+  sentRef,
+  setEditorUsj,
+}: {
+  saveChapterKey: string;
+  shownChapterKey: string;
+  usjFromPdp: Usj | undefined;
+  hasEditor: boolean;
+  sentRef: MutableRefObject<Usj | undefined>;
+  setEditorUsj: (usj: Usj) => void;
+}): boolean {
+  if (!usjFromPdp || !hasEditor || saveChapterKey !== shownChapterKey) return false;
+  sentRef.current = usjFromPdp;
+  setEditorUsj(usjFromPdp);
+  return true;
+}

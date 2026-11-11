@@ -172,6 +172,8 @@ import {
 import {
   createPendingSaveSlot,
   type PendingPdpSave,
+  recordSentUsjForShownChapter,
+  revertEditorAfterRefusedSave,
   sendPendingSaves,
 } from './pending-save-slot.util';
 import {
@@ -4140,7 +4142,12 @@ function PlatformScriptureEditor({
         // unrelated PDP update and never left stuck. It is a no-op (`ran: false`) when a write is
         // already in flight, which is how we avoid triggering multiple concurrent writes.
         const outcome = await withWriteInFlightGuard(currentlyWritingUsjToPdp, () => {
-          usjSentToPdp.current = newUsj;
+          recordSentUsjForShownChapter(
+            usjSentToPdp,
+            newUsj,
+            savedChapterKey,
+            chapterKeyRef.current,
+          );
           return rawSave(newUsj);
         });
         if (!outcome.ran) {
@@ -4248,20 +4255,21 @@ function PlatformScriptureEditor({
         // and record as last-sent, leaving the editor out of step until the next delivery.
         if (failureResponse.shouldRevert) {
           try {
-            // Only while this chapter is the one on screen: a save held for a chapter since left
-            // can reject after navigation, and its snapshot would replace the chapter now shown.
-            if (usjFromPdp && editorRef.current && chapterKeyRef.current === savedChapterKey) {
-              usjSentToPdp.current = usjFromPdp;
-              // Forced: when the refused edit is a marker edit still in progress — a chapter or
-              // verse number retyped — the stored document can equal the editor's own record from
-              // before that edit, which the editor would take for a re-send of old text and keep
-              // the refused edit on screen.
-              setEditorUsj.current(usjFromPdp, { force: true });
-              // The revert takes back any chapter number still in flight, so "Add chapter number"
-              // must accept another click. Only for the chapter on screen, which owns the flag.
-              if (chapterKeyRef.current === savedChapterKey)
-                pendingScaffoldInsertRef.current = false;
-            }
+            // Forced: when the refused edit is a marker edit still in progress — a chapter or
+            // verse number retyped — the stored document can equal the editor's own record from
+            // before that edit, which the editor would take for a re-send of old text and keep
+            // the refused edit on screen.
+            const didRevert = revertEditorAfterRefusedSave({
+              saveChapterKey: savedChapterKey,
+              shownChapterKey: chapterKeyRef.current,
+              usjFromPdp,
+              hasEditor: !!editorRef.current,
+              sentRef: usjSentToPdp,
+              setEditorUsj: (usj) => setEditorUsj.current(usj, { force: true }),
+            });
+            // The revert takes back any chapter number still in flight, so "Add chapter number"
+            // must accept another click. Only for the chapter on screen, which owns the flag.
+            if (didRevert) pendingScaffoldInsertRef.current = false;
           } catch (innerError) {
             logger.error(
               `Error restoring the last PDP state after a failed save: ${getErrorMessage(innerError)}`,
