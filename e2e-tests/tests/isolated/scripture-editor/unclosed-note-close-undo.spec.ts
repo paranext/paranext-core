@@ -25,6 +25,7 @@
  */
 import { type ElectronApplication, type Frame, type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { writeClipboardText } from '../../../fixtures/helpers';
 import {
   getEditorFrame,
   makeSampleProjectEditable,
@@ -113,10 +114,7 @@ async function closeThenUndo(
   const text = frame.locator('.editor-input').first();
   await text.click();
   await text.press('Control+End');
-  await electronApp.evaluate(
-    ({ clipboard }, usfm) => clipboard.writeText(usfm),
-    UNCLOSED_NOTE_USFM,
-  );
+  await writeClipboardText(electronApp, UNCLOSED_NOTE_USFM);
   await text.press('Control+V');
   await expect.poll(async () => (await readChapterEnd(frame)).noteText).toContain('as');
   await mainPage.waitForTimeout(PAUSE_MS);

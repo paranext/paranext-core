@@ -93,8 +93,11 @@ one of these.
   15 entries, and survives the test, the Electron process, and the whole run. A history assertion
   that passed yesterday can fail today on what an earlier run left behind.
 - **The real OS clipboard is shared with the developer's desktop, and nothing restores it.**
-  `clipboard-usfm-round-trip.spec.ts` reaches it through `electronApp.evaluate(({ clipboard }) =>
-  …)` — the main-process module, outside the renderer's permission surface — so a run leaves its
+  `clipboard-usfm-round-trip.spec.ts` reaches it through the retrying helpers in
+  `fixtures/helpers.ts` (`writeClipboardText`, `readClipboardText`, `readClipboardHtml`,
+  `writeClipboard`), which call Electron's main-process `clipboard` module from
+  `electronApp.evaluate` — outside the renderer's permission surface. Every main-process clipboard
+  call in `e2e-tests/` goes through them, so a dropped debugger link is retried. A run leaves its
   last payload sitting in the machine-wide clipboard. It is not confined by `isolatedProjectRoot`
   or the temp `userDataDir`, which do contain everything else that spec touches. Two consequences:
   a paste in the developer's own editor after a run yields test USFM, and a spec that reads the

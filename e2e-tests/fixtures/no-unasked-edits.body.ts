@@ -68,7 +68,13 @@ import path from 'path';
 import { type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import { test, expect } from './isolated.fixture';
 import { TEXT_NOTE_CALLER_SELECTOR } from './content-zoom-helpers';
-import { requireIsolatedProjectRoot, waitForAppReady, withMainProcessLinkRetry } from './helpers';
+import {
+  readClipboardHtml,
+  readClipboardText,
+  requireIsolatedProjectRoot,
+  waitForAppReady,
+  writeClipboardText,
+} from './helpers';
 import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
@@ -497,9 +503,7 @@ function typeAt(point: TextPoint, text: string) {
  */
 function pastePlainTextAt(point: TextPoint, text: string) {
   return async ({ electronApp, editorInput }: GestureContext) => {
-    await withMainProcessLinkRetry(electronApp, () =>
-      electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), text),
-    );
+    await writeClipboardText(electronApp, text);
     await selectInEditor(editorInput, point);
     await editorInput.press(PASTE_KEY);
   };
@@ -508,15 +512,12 @@ function pastePlainTextAt(point: TextPoint, text: string) {
 /** Copies the range `from`…`to` through the OS clipboard and pastes it at `destination`. */
 function copyRangeAndPasteAt(from: TextPoint, to: TextPoint, destination: TextPoint) {
   return async ({ electronApp, editorInput }: GestureContext) => {
-    await electronApp.evaluate(
-      ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-      CLIPBOARD_SENTINEL,
-    );
+    await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
     await selectInEditor(editorInput, from, to);
     await editorInput.press(COPY_KEY);
     // The copy reaches the OS clipboard asynchronously; the sentinel makes the poll measure it.
     await expect
-      .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+      .poll(() => readClipboardText(electronApp), {
         message: `copying ${from} … ${to} never reached the OS clipboard`,
         timeout: 15_000,
       })
@@ -1912,14 +1913,11 @@ export async function runPreviewWritesNothing({
           // Chained, not concurrent: each copy must land on the clipboard before the next one.
           await copies.reduce(async (previous, copy) => {
             await previous;
-            await electronApp.evaluate(
-              ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-              CLIPBOARD_SENTINEL,
-            );
+            await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
             await selectInEditor(editorInput, copy.from, copy.to);
             await mainPage.keyboard.press(COPY_KEY);
             await expect
-              .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+              .poll(() => readClipboardText(electronApp), {
                 message: `copying ${copy.from} … ${copy.to} in Preview never reached the OS clipboard`,
                 timeout: 15_000,
               })
@@ -1956,10 +1954,7 @@ export async function runPreviewWritesNothing({
           await mainPage.keyboard.press('Backspace');
           await mainPage.keyboard.press('Enter');
           await mainPage.keyboard.type(TYPED_CHARACTER);
-          await electronApp.evaluate(
-            ({ clipboard }, plain) => clipboard.writeText(plain),
-            MATTHEW_PASTED,
-          );
+          await writeClipboardText(electronApp, MATTHEW_PASTED);
           await mainPage.keyboard.press(PASTE_KEY);
           await mainPage.waitForTimeout(EDIT_RENDERED_MS);
           expect
@@ -2450,14 +2445,11 @@ export async function runFootnotesPaneRowEdits(
               pasted.bytes,
               () =>
                 editRow(chapter, note, 'closing the pane', async () => {
-                  await electronApp.evaluate(
-                    ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-                    CLIPBOARD_SENTINEL,
-                  );
+                  await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
                   await selectInEditor(rowEditor, copyPaste.from, copyPaste.to);
                   await mainPage.keyboard.press(COPY_KEY);
                   await expect
-                    .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+                    .poll(() => readClipboardText(electronApp), {
                       message: `copying ${copyPaste.from} … ${copyPaste.to} in the row editor never reached the OS clipboard`,
                       timeout: 15_000,
                     })
@@ -2465,9 +2457,7 @@ export async function runFootnotesPaneRowEdits(
                   test.info().annotations.push({
                     type: 'copied',
                     description: `${note.label} (${view.name}): text/plain ${JSON.stringify(
-                      await withMainProcessLinkRetry(electronApp, () =>
-                        electronApp.evaluate(({ clipboard }) => clipboard.readText()),
-                      ),
+                      await readClipboardText(electronApp),
                     )}`,
                   });
                   await selectInEditor(rowEditor, copyPaste.destination);
@@ -2916,10 +2906,7 @@ async function enterAndDeleteEachCharacter(
   await INSERTION_POINTS.reduce(async (previous, { name, point }) => {
     await previous;
     const character = INVISIBLE_CHARACTERS[name];
-    if (gesture === 'pasted')
-      await withMainProcessLinkRetry(electronApp, () =>
-        electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), character),
-      );
+    if (gesture === 'pasted') await writeClipboardText(electronApp, character);
     await selectInEditor(editorInput, point);
     if (gesture === 'typed') {
       await mainPage.keyboard.type(character);
@@ -3055,24 +3042,17 @@ async function copySeededVerse(
   // stored no-break space as `~` with the setting off and as U+00A0 with it on.
   const expected = usfmBetween(unitText, copy.from, copy.to);
 
-  await electronApp.evaluate(
-    ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-    CLIPBOARD_SENTINEL,
-  );
+  await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
   await selectInEditor(editorInput, copy.from, copy.to);
   await editorInput.press(COPY_KEY);
   await expect
-    .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+    .poll(() => readClipboardText(electronApp), {
       message: `${where} never reached the OS clipboard`,
       timeout: 15_000,
     })
     .not.toBe(CLIPBOARD_SENTINEL);
-  const { text, html } = await withMainProcessLinkRetry(electronApp, () =>
-    electronApp.evaluate(({ clipboard }) => ({
-      text: clipboard.readText(),
-      html: clipboard.readHTML(),
-    })),
-  );
+  const text = await readClipboardText(electronApp);
+  const html = await readClipboardHtml(electronApp);
   expect.soft(visible(text), `${where}: the copied plain text`).toBe(visible(expected));
   expect
     .soft(text.includes(NBSP_STAND_IN), `${where}: the plain text holds the editor's stand-in`)
