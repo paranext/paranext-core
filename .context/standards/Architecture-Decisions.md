@@ -3019,6 +3019,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   carve-out described under "Don't rewrite history" above. Git history keeps the text.
 - **What covers this ground instead:** `adr-pop-ups-stay-at-interface-scale`.
 
+## adr-editor-control-characters-entered-as-spaces: Every view takes an entered C0 control character in as a space, and the editors keep U+001A and U+000B for themselves
+
+- **Date:** 2026-11-11
+- **Status:** Accepted (TJ, 2026-11-11: "use U+000B and we don't lose U+2028").
+- **Context:** Standard view's marker settle re-reads a paragraph's text, and spelled the
+  display-only line break a view without spacing shows before a verse as U+2028 in that text,
+  removing every U+2028 before tokenizing. The text holds text nodes' content as it is, so a real
+  U+2028, which Paratext 9 keeps as a character, was removed with the breaks (catalog T-19). The
+  break needs a character that JavaScript's `\s` reads as whitespace, so the positions either side
+  of it stay apart, and that no text can hold. Only Standard view turned entered control characters
+  into spaces (for its U+001A stand-in, `adr-editor-nbsp-spelling-follows-project-setting`), and
+  not U+0000.
+- **Decision:** The settle spells the display-only break as U+000B (vertical tab). Every view takes
+  each C0 control character but tab, LF and CR that the user types, pastes or drops in as a space —
+  plain text, html and a node copy alike — through the rule that drops an entered U+FEFF
+  (`InvisibleCharactersPlugin`, `normalizeEnteredText`; catalog EV-6). ParatextData reads every such
+  character as a space (`ScrText.ProcessBookOrChapterText`), so no loaded text holds one, and so
+  the editors can keep U+001A (Standard view's no-break-space stand-in) and U+000B for their own
+  use. Text a document already holds is never changed on input; a load keeps its own rules.
+- **Alternatives:** **Keep U+2028 and escape a real one in the settle's text** — rejected: every
+  reader of that text that counts positions would have to know the escape. **A noncharacter or
+  private-use code point** — not whitespace to `\s`, so the caret positions either side of the
+  break would collapse; private use also occurs in some projects' text. **Drop an entered control
+  character instead of making it a space** — rejected: it would join the text either side, and the
+  user wrote something there.
+- **Consequences:** A new internal use of a control character can rely on no entered or loaded
+  text holding one, but must say so beside it and name the rule. A library host that loads USJ
+  holding a control character into a view other than Standard (Paratext's reader never gives it
+  one) keeps it until a settle in the Unformatted view, which removes a U+000B. Applied delta ops
+  are not filtered outside Standard view: they carry what another editor already took in through
+  the same rule.
+
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
 - **Formerly:** ADR-0012
