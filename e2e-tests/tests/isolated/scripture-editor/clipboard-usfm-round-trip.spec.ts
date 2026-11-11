@@ -19,7 +19,8 @@
  * than that this spec drifted — iterate on selectors/timing only.
  *
  * The "external application" side of the round trip is Electron's main-process `clipboard` module,
- * reached via `electronApp.evaluate(({ clipboard }) => ...)`. That reads and writes the real OS
+ * reached through the retrying helpers in `fixtures/helpers.ts` (`writeClipboardText`,
+ * `readClipboardText`, `readClipboardHtml`, `writeClipboard`). That reads and writes the real OS
  * clipboard from OUTSIDE the renderer entirely — bypassing `navigator.clipboard` and its renderer
  * permission surface — which is exactly the external round trip this spec needs to exercise.
  *
@@ -34,6 +35,12 @@
  */
 import { type Locator, type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import {
+  readClipboardHtml,
+  readClipboardText,
+  writeClipboard,
+  writeClipboardText,
+} from '../../../fixtures/helpers';
 import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
@@ -225,10 +232,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // "this copy wrote USFM" from "USFM was already there": a retry attempt (1 locally, 2 in CI)
       // that got past the poll and then failed the one-shot `\p ` check leaves real copied USFM on
       // the clipboard, and the next attempt's first read would pass with the copy path broken.
-      await electronApp.evaluate(
-        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-        CLIPBOARD_SENTINEL,
-      );
+      await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
 
       await editorInput.click();
       await editorInput.press(DOC_START_KEY);
@@ -241,7 +245,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       await expect
         .poll(
           async () => {
-            clipboardText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
+            clipboardText = await readClipboardText(electronApp);
             return clipboardText;
           },
           { timeout: 15_000 },
@@ -252,10 +256,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     });
 
     await test.step('pasting external USFM-looking text tokenizes into editor marker spans', async () => {
-      await electronApp.evaluate(
-        ({ clipboard }, token) => clipboard.writeText(`\\nd ${token}\\nd* `),
-        PASTE_TOKEN,
-      );
+      await writeClipboardText(electronApp, `\\nd ${PASTE_TOKEN}\\nd* `);
       await editorInput.click();
       await editorInput.press(DOC_END_KEY);
       await editorInput.press(PASTE_KEY);
@@ -313,10 +314,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // regressed and a real `\c 99` had arrived. The token also puts the `\c` mid-line rather
       // than on a line of its own — the shape a start-of-line-anchored strip would miss — and the
       // engine keeps the leading text while eating the marker and its payload.
-      await electronApp.evaluate(
-        ({ clipboard }, token) => clipboard.writeText(`${token} \\c 99 `),
-        CHAPTER_PASTE_TOKEN,
-      );
+      await writeClipboardText(electronApp, `${CHAPTER_PASTE_TOKEN} \\c 99 `);
       await editorInput.click();
       await editorInput.press(DOC_END_KEY);
       await editorInput.press(PASTE_KEY);
@@ -357,10 +355,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // (EditingBoundaryAdjuster moves a focus outside the anchor's root boundary element back to
       // that element's edge), so releasing past the figure selects up to the figure's end — the
       // whole figure, which is what this step measures.
-      await electronApp.evaluate(
-        ({ clipboard }, payload) => clipboard.writeText(payload),
-        `${FIGURE_USFM} \\nd ${FIGURE_TAIL_TOKEN}\\nd* `,
-      );
+      await writeClipboardText(electronApp, `${FIGURE_USFM} \\nd ${FIGURE_TAIL_TOKEN}\\nd* `);
       await editorInput.click();
       await editorInput.press(DOC_END_KEY);
       await editorInput.press(PASTE_KEY);
@@ -371,10 +366,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // The sentinel matters more here than anywhere else in this spec: the paste just above put
       // these very bytes on the clipboard, so without overwriting them first the poll below would
       // pass on the paste's own payload with the copy path completely broken.
-      await electronApp.evaluate(
-        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-        CLIPBOARD_SENTINEL,
-      );
+      await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
 
       // Centre the figure before measuring: the boxes have to be on screen for the mouse to land on
       // them, and `scrollIntoViewIfNeeded` centres an element that is not already visible, which
@@ -404,7 +396,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       await expect
         .poll(
           async () => {
-            clipboardText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
+            clipboardText = await readClipboardText(electronApp);
             return clipboardText;
           },
           { timeout: 15_000 },
@@ -418,10 +410,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     });
 
     await test.step('a selection ending inside a figure’s attribute run copies the whole run', async () => {
-      await electronApp.evaluate(
-        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-        CLIPBOARD_SENTINEL,
-      );
+      await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
 
       await expect(figureAttributeRun).toHaveCount(1);
       await figure.scrollIntoViewIfNeeded();
@@ -478,7 +467,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       await expect
         .poll(
           async () => {
-            clipboardText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
+            clipboardText = await readClipboardText(electronApp);
             return clipboardText;
           },
           { timeout: 15_000 },
@@ -502,10 +491,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     });
 
     await test.step('copying a footnote carries its USFM bytes in the `text/html` flavour too', async () => {
-      await electronApp.evaluate(
-        ({ clipboard }, usfm) => clipboard.writeText(`${usfm} `),
-        NOTE_USFM,
-      );
+      await writeClipboardText(electronApp, `${NOTE_USFM} `);
       // Leave the figure first. The previous step's selection ends inside the figure's
       // `contenteditable="false"` block, and from there Ctrl+End does not carry the caret out of the
       // island — so the paste would land on a selection still inside the read-only block, which the
@@ -521,11 +507,10 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // A sentinel in BOTH flavours. The html is what this step measures, and `writeText` alone would
       // leave whatever html a previous run or retry attempt wrote still sitting on the clipboard —
       // exactly the stale payload the poll below must not be allowed to pass on.
-      await electronApp.evaluate(
-        ({ clipboard }, sentinel) =>
-          clipboard.write({ text: sentinel, html: `<p>${sentinel}</p>` }),
-        CLIPBOARD_SENTINEL,
-      );
+      await writeClipboard(electronApp, {
+        text: CLIPBOARD_SENTINEL,
+        html: `<p>${CLIPBOARD_SENTINEL}</p>`,
+      });
 
       await editorInput.press(DOC_START_KEY);
       await editorInput.press(SELECT_TO_DOC_END_KEY);
@@ -535,7 +520,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       await expect
         .poll(
           async () => {
-            clipboardHtml = await electronApp.evaluate(({ clipboard }) => clipboard.readHTML());
+            clipboardHtml = await readClipboardHtml(electronApp);
             // Compared with NBSP normalized away: the marker bytes are what this measures, and a
             // display-NBSP or an `&nbsp;` a clipboard intermediary re-serialized would otherwise
             // fail the match on the serialization rather than on the content. None of `\`, `+`, `:`
@@ -555,7 +540,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // scripture-editors' `whitespaceDisplay.plugin.utils.ts`), so this flavour can never carry an
       // NBSP in the first place — normalizing it here would hide a regression if that replace ever
       // stopped running.
-      const clipboardText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
+      const clipboardText = await readClipboardText(electronApp);
       expect(clipboardText).toContain(NOTE_USFM);
     });
 
@@ -566,7 +551,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       const noteCallers = editorInput.locator('span.immutable-note-caller');
       const callerCountBeforePaste = await noteCallers.count();
 
-      await electronApp.evaluate(({ clipboard }, payload) => clipboard.write(payload), {
+      await writeClipboard(electronApp, {
         text: PARATEXT_9_CLIPBOARD_TEXT,
         html: PARATEXT_9_CLIPBOARD_HTML,
       });

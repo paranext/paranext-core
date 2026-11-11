@@ -132,6 +132,8 @@ const MAIN_PROCESS_LINK_ATTEMPTS = 3;
 export async function withMainProcessLinkRetry<R>(
   electronApp: ElectronApplication,
   evaluate: () => Promise<R>,
+  /** Waits between attempts; a unit test passes one that resolves at once. */
+  waitBetweenAttempts: (ms: number) => Promise<void> = sleep,
 ): Promise<R> {
   for (let attempt = 1; ; attempt += 1) {
     try {
@@ -147,9 +149,46 @@ export async function withMainProcessLinkRetry<R>(
       if (!isLinkError || !isAppRunning || attempt >= MAIN_PROCESS_LINK_ATTEMPTS) throw error;
       // Sequential retries of one call
       // eslint-disable-next-line no-await-in-loop
-      await sleep(100);
+      await waitBetweenAttempts(100);
     }
   }
+}
+
+/**
+ * Puts `text` on the real OS clipboard as plain text, from the Electron main process, retrying when
+ * Playwright's link to it drops the call (see {@link withMainProcessLinkRetry}).
+ */
+export function writeClipboardText(electronApp: ElectronApplication, text: string): Promise<void> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), text),
+  );
+}
+
+/** Reads the plain text on the real OS clipboard from the Electron main process, with link retry. */
+export function readClipboardText(electronApp: ElectronApplication): Promise<string> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }) => clipboard.readText()),
+  );
+}
+
+/** Reads the HTML on the real OS clipboard from the Electron main process, with link retry. */
+export function readClipboardHtml(electronApp: ElectronApplication): Promise<string> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }) => clipboard.readHTML()),
+  );
+}
+
+/**
+ * Replaces the real OS clipboard's contents with `data` (`clipboard.write`: each flavour given is
+ * set, the others are cleared), from the Electron main process, with link retry.
+ */
+export function writeClipboard(
+  electronApp: ElectronApplication,
+  data: { text?: string; html?: string },
+): Promise<void> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }, payload) => clipboard.write(payload), data),
+  );
 }
 
 /**
