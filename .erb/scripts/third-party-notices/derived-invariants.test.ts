@@ -17,6 +17,7 @@ import {
 } from './external-extensions';
 import { assertProductMatchesPackaging, readPackagingConfig } from './product';
 import { assertSeparateProgramsRecorded } from './separate-programs';
+import { readExternals } from '../../../src/extension-host/services/webpack-externals.test-utils';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 
@@ -199,19 +200,17 @@ describe('LICENSING.md agrees with what the packages declare', () => {
     // The MIT side of the rule rests on runtime linking, and for platform-bible-utils the mechanism
     // IS the externals list - the table says so in as many words. Dropping it from `externals` would
     // bundle it instead: the license answer is unchanged, but the table's stated reason would stop
-    // describing what actually happens. The whole list, in every copy, is pinned against what the
-    // hosts supply in `src/extension-host/services/extension.service.module-allowlist.test.ts`.
-    const externals = fs.readFileSync(
-      path.join(REPO, 'extensions', 'webpack', 'webpack.config.base.ts'),
-      'utf8',
-    );
+    // describing what actually happens. Read with the parser the externals pin uses, so a name that
+    // only appears in a comment does not count; the whole list, in every copy, is pinned against what
+    // the hosts supply in `src/extension-host/services/extension.service.webpack-externals.test.ts`.
+    const externals = readExternals(path.join(REPO, 'extensions', 'webpack'));
     const suppliedByHost = [
       ...licensing.matchAll(
         /^\|\s*`([a-z0-9-]+)`[^|]*\|[^|]*\|[^|]*supplied by the host as a webpack external/gm,
       ),
     ].map((match) => match[1]);
     expect(suppliedByHost.length).toBeGreaterThan(0);
-    suppliedByHost.forEach((name) => expect(externals).toContain(`'${name}'`));
+    suppliedByHost.forEach((name) => expect(externals).toContain(name));
   });
 });
 

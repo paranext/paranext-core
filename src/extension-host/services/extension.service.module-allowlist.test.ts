@@ -1,9 +1,10 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { EXTENSION_INTERFACE_MODULE_SPECIFIERS } from '@extension-host/data/extension-interface-modules.data';
-import { WEB_VIEW_MODULE_SPECIFIERS } from '@renderer/data/web-view-modules.data';
+import {
+  readPermittedModuleSpecifiers,
+  readSuppliedModuleSpecifiers,
+} from './webpack-externals.test-utils';
 
 /*
  * Pins the module specifiers an extension may `require` at runtime.
@@ -24,6 +25,9 @@ import { WEB_VIEW_MODULE_SPECIFIERS } from '@renderer/data/web-view-modules.data
  * pulls in React and `platform-bible-react`, which do not load outside a browser environment, so its
  * map is keyed by `WEB_VIEW_MODULE_SPECIFIERS` in a module that imports nothing and this compares
  * that value.
+ *
+ * The webpack `externals` list extension builds declare is pinned against what these hosts supply
+ * in `extension.service.webpack-externals.test.ts`.
  */
 
 const REPO = path.join(__dirname, '..', '..', '..');
@@ -53,11 +57,6 @@ const WIDENING_THE_GRANT = [
   'intended, update PERMITTED_MODULE_SPECIFIERS deliberately and say so in the review; do not update',
   'it to make the test pass.',
 ].join(' ');
-
-/** The specifiers the extension host supplies, as the shim reads them. */
-function readPermittedModuleSpecifiers(): string[] {
-  return [...EXTENSION_INTERFACE_MODULE_SPECIFIERS].sort();
-}
 
 // The consequence lives in the test name because that is what a failing run prints. Vitest's
 // two-argument `expect(value, message)` would say it closer to the assertion, but `vitest/valid-expect`
@@ -146,18 +145,6 @@ const FIRST_PARTY_SUPPLIED_MODULES = [
   'platform-bible-utils',
 ];
 
-/** The specifiers the renderer answers for a web view, as its module map is keyed. */
-function readWebViewModuleSpecifiers(): string[] {
-  return [...WEB_VIEW_MODULE_SPECIFIERS].sort();
-}
-
-/** Every specifier either host supplies - the extension host or the renderer - each named once. */
-function readSuppliedModuleSpecifiers(): string[] {
-  return [
-    ...new Set([...readPermittedModuleSpecifiers(), ...readWebViewModuleSpecifiers()]),
-  ].sort();
-}
-
 /**
  * The module specifiers `LICENSE-EXCEPTION.md` names as the Extension Interface.
  *
@@ -211,212 +198,5 @@ describe('the Extension Interface the license exception grants', () => {
       'react-dom/client',
       'react/jsx-runtime',
     ]);
-  });
-});
-
-/**
- * Modules the hosts supply that extension builds bundle anyway instead of leaving to the host.
- *
- * The renderer supplies `platform-bible-react` to web views, but extensions built from the
- * templates bundle their own copy, as the table of `lib/` packages in `LICENSING.md` states. No
- * permission depends on it: the library is also published under the MIT License. Making it an
- * external is a product decision (smaller extensions, against tying every extension to the
- * platform's copy and its styles), not something to change silently here.
- */
-const SUPPLIED_BUT_BUNDLED_MODULES = ['platform-bible-react'];
-
-const EXTENSION_SOURCES_DIR = path.join(REPO, 'extensions', 'src');
-/** The webpack folder of the combined build that packs every extension into the installer. */
-const COMBINED_WEBPACK_DIR = path.join(REPO, 'extensions', 'webpack');
-/** The one file in a webpack folder that may declare `externals`; the other configs merge it in. */
-const BASE_CONFIG_FILE_NAME = 'webpack.config.base.ts';
-
-const CHANGING_THE_EXTERNALS = [
-  'The `externals` list decides which modules every extension built from the templates takes from',
-  'Platform.Bible at run time instead of carrying its own copy, and LICENSE-EXCEPTION.md grants its',
-  'additional permission to works that reach Platform.Bible only through the modules it supplies.',
-  'These lists come from the extension templates: change them there, merge the change into every',
-  'copy, and if a module the hosts supply is deliberately left out, update',
-  "SUPPLIED_BUT_BUNDLED_MODULES and LICENSING.md's table of `lib/` packages, and say so in the",
-  'review; do not update this test to make it pass.',
-].join(' ');
-
-/**
- * The `externals` list a webpack config declares, read by parsing it so comments and formatting
- * cannot change the result, or `undefined` if it declares none.
- *
- * Every `externals*` setting webpack has reaches here, not only `externals` itself, because
- * `externalsPresets` (`{ node: true }`) and a list assigned or pushed after the fact also change
- * what extensions take from the hosts. The one accepted form is a single `externals: [...]` of
- * plain string literals; anything else (a regex, a function, a spread, a template string, a second
- * list) is refused rather than skipped, because each can change what extensions take from the hosts
- * without naming a module this test could compare. `externalsType` is let through: it changes how a
- * module is loaded, not which.
- *
- * What it still misses: a setting reached under a computed name (`config[key]`) or built in a file
- * outside the webpack folder.
- */
-function parseExternals(file: string, text: string): string[] | undefined {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-  const lists: ts.ArrayLiteralExpression[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      (ts.isIdentifier(node) || ts.isStringLiteral(node)) &&
-      node.text.startsWith('externals') &&
-      node.text !== 'externalsType'
-    ) {
-      const { parent } = node;
-      if (
-        node.text === 'externals' &&
-        ts.isPropertyAssignment(parent) &&
-        parent.name === node &&
-        ts.isArrayLiteralExpression(parent.initializer)
-      )
-        lists.push(parent.initializer);
-      else {
-        const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-        throw new Error(
-          `${file}:${line} uses webpack's \`${node.text}\` other than as one ` +
-            `\`externals: [...]\` list of module names. ${CHANGING_THE_EXTERNALS}`,
-        );
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  if (lists.length > 1)
-    throw new Error(
-      `${file} declares \`externals\` ${lists.length} times. ${CHANGING_THE_EXTERNALS}`,
-    );
-  if (lists.length === 0) return undefined;
-  return lists[0].elements
-    .map((element) => {
-      if (!ts.isStringLiteral(element))
-        throw new Error(
-          `\`externals\` in ${file} holds \`${element.getText(source)}\`, which is not a plain ` +
-            `string. ${CHANGING_THE_EXTERNALS}`,
-        );
-      return element.text;
-    })
-    .sort();
-}
-
-/**
- * The `externals` list of one webpack build, given the source of every file in its folder.
- *
- * The main and web-view configs merge the base config in, and webpack-merge appends lists, so an
- * `externals` declared in either would be added to every extension's without changing the base
- * config. Only the base config may declare it, and it must.
- */
-function externalsOfBuild(folder: string, files: { name: string; text: string }[]): string[] {
-  const declared = files.flatMap(({ name, text }) => {
-    const externals = parseExternals(path.join(folder, name), text);
-    return externals ? [{ name, externals }] : [];
-  });
-  if (declared.length !== 1 || declared[0].name !== BASE_CONFIG_FILE_NAME)
-    throw new Error(
-      `Expected only ${BASE_CONFIG_FILE_NAME} in ${folder} to declare \`externals\`, found: ` +
-        `${declared.map(({ name }) => name).join(', ') || 'none'}. ${CHANGING_THE_EXTERNALS}`,
-    );
-  return declared[0].externals;
-}
-
-/** {@link externalsOfBuild}, reading every script in the folder. */
-function readExternals(folder: string): string[] {
-  return externalsOfBuild(
-    folder,
-    readdirSync(folder)
-      .filter((name) => /\.[cm]?[jt]s$/.test(name))
-      .map((name) => ({ name, text: readFileSync(path.join(folder, name), 'utf8') })),
-  );
-}
-
-/**
- * The webpack folder of each extension's own build. Each comes from the extension templates, so
- * each is where a template change takes effect.
- */
-function perExtensionWebpackDirs(): string[] {
-  return readdirSync(EXTENSION_SOURCES_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(EXTENSION_SOURCES_DIR, entry.name, 'webpack'))
-    .filter((folder) => existsSync(folder));
-}
-
-describe('the modules extension builds leave to the hosts (webpack `externals`)', () => {
-  it(`are the same in every extension's own build as in the combined build — ${CHANGING_THE_EXTERNALS}`, () => {
-    // Keyed by folder, so a failure names every build that differs, not only the first.
-    const combined = readExternals(COMBINED_WEBPACK_DIR);
-    const perExtension = Object.fromEntries(
-      perExtensionWebpackDirs().map((folder) => [
-        path.relative(REPO, folder),
-        readExternals(folder),
-      ]),
-    );
-
-    expect(Object.keys(perExtension).length).toBeGreaterThan(0);
-    expect(perExtension).toEqual(
-      Object.fromEntries(Object.keys(perExtension).map((folder) => [folder, combined])),
-    );
-  });
-
-  it(`are the modules either host supplies, apart from the ones extensions bundle — ${CHANGING_THE_EXTERNALS}`, () => {
-    // Adding an external makes every extension rely on the host's copy of that module instead of
-    // carrying one; removing one makes every extension carry its own. Either changes what extensions
-    // reach Platform.Bible through, and the license exception is defined by that.
-    //
-    // This pins the union of the two hosts, not each one: the main and web-view bundles share one
-    // list, so `react` is external in an extension's main bundle too, though only the renderer
-    // supplies it. An extension's `main.ts` that imports React therefore fails when it activates.
-    const supplied = readSuppliedModuleSpecifiers();
-
-    expect(readExternals(COMBINED_WEBPACK_DIR)).toEqual(
-      supplied.filter((module) => !SUPPLIED_BUT_BUNDLED_MODULES.includes(module)),
-    );
-    expect(SUPPLIED_BUT_BUNDLED_MODULES.filter((module) => !supplied.includes(module))).toEqual([]);
-  });
-});
-
-describe('reading the `externals` list a webpack build declares', () => {
-  const read = (text: string) => parseExternals('config.ts', text);
-
-  it('reads the module names, whatever the comments around them hold', () => {
-    expect(
-      read(
-        "export default { externals: [/* ] */ 'react', // ]\n 'crypto'], externalsType: 'commonjs' };",
-      ),
-    ).toEqual(['crypto', 'react']);
-  });
-
-  it('finds no list in a config that declares none', () => {
-    expect(read("export default { target: 'web' };")).toBeUndefined();
-  });
-
-  it.each([
-    ['a regular expression', 'export default { externals: [/^react/] };'],
-    ['a spread', 'export default { externals: [...more] };'],
-    ['a template string', 'export default { externals: [`react`] };'],
-    ['a function', 'export default { externals: ({ request }, callback) => callback() };'],
-    ['a list held in a variable', 'const externals = []; export default { externals };'],
-    ['a list assigned afterwards', "config.externals = ['react'];"],
-    ['a list pushed onto afterwards', "config.externals.push('react');"],
-    ['`externalsPresets`', 'export default { externalsPresets: { node: true } };'],
-    ['a second list', "export const a = { externals: ['react'] }, b = { externals: ['crypto'] };"],
-  ])('refuses %s', (_, text) => {
-    expect(() => read(text)).toThrow(CHANGING_THE_EXTERNALS);
-  });
-
-  it('refuses a list declared outside the base config, which would be appended to it', () => {
-    expect(() =>
-      externalsOfBuild('webpack', [
-        { name: BASE_CONFIG_FILE_NAME, text: "export default { externals: ['react'] };" },
-        { name: 'webpack.config.main.ts', text: "export default { externals: ['lodash'] };" },
-      ]),
-    ).toThrow(CHANGING_THE_EXTERNALS);
-  });
-
-  it('refuses a build whose base config declares no list', () => {
-    expect(() =>
-      externalsOfBuild('webpack', [{ name: 'webpack.config.main.ts', text: 'export default {};' }]),
-    ).toThrow(CHANGING_THE_EXTERNALS);
   });
 });
