@@ -2,11 +2,12 @@ import {
   dataProtectionServiceNetworkObjectName,
   IDataProtectionService,
 } from '@shared/models/data-protection.service-model';
+import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { safeStorage } from 'electron';
 
 /** If encryption is not available, return reason why. If encryption is available, return `undefined` */
-function getReasonEncryptionIsNotAvailable() {
+async function getReasonEncryptionIsNotAvailable(): Promise<string | undefined> {
   if (process.platform === 'linux') {
     const backend = safeStorage.getSelectedStorageBackend();
     if (!backend || backend === 'basic_text') {
@@ -17,34 +18,41 @@ function getReasonEncryptionIsNotAvailable() {
       return 'No keyring service that safeStorage can encrypt with is available on this system. Install one of the supported services to continue; the setup steps are documented at https://github.com/paranext/paranext/wiki/How-to-set-up-Platform.Bible-on-Linux#how-secrets-are-stored';
     }
   }
-  if (!safeStorage.isEncryptionAvailable()) {
-    return 'safeStorage.isEncryptionAvailable returned false';
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) {
+    return 'safeStorage.isAsyncEncryptionAvailable returned false';
   }
   return undefined;
 }
 
 /** If encryption is not available, throw */
-function validateEncryptionAvailable() {
-  const reason = getReasonEncryptionIsNotAvailable();
+async function validateEncryptionAvailable() {
+  const reason = await getReasonEncryptionIsNotAvailable();
   if (reason) {
     throw new Error(reason);
   }
 }
 
 async function isEncryptionAvailable() {
-  return getReasonEncryptionIsNotAvailable() === undefined;
+  return (await getReasonEncryptionIsNotAvailable()) === undefined;
 }
 
 async function encryptString(text: string) {
-  validateEncryptionAvailable();
-  const buffer = safeStorage.encryptString(text);
+  await validateEncryptionAvailable();
+  const buffer = await safeStorage.encryptStringAsync(text);
   return buffer.toString('base64');
 }
 
 async function decryptString(encryptedText: string) {
-  validateEncryptionAvailable();
+  await validateEncryptionAvailable();
   const buffer = Buffer.from(encryptedText, 'base64');
-  return safeStorage.decryptString(buffer);
+  const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(buffer);
+  // This service only decrypts; the caller stores the ciphertext, so there is nowhere here to put a
+  // re-encrypted value. Callers that want the new key's protection must encrypt and store again.
+  if (shouldReEncrypt)
+    logger.warn(
+      'safeStorage reports that decrypted data should be re-encrypted (its key was rotated or a stronger one is available); this service cannot store it, so the caller keeps the old ciphertext',
+    );
+  return result;
 }
 
 const dataProtectionService: IDataProtectionService = {

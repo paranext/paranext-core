@@ -277,6 +277,10 @@ body:has(> .dragging-layer.dock-style-platform-bible)
   padding-inline: vars.$space--sm;
   flex-wrap: nowrap;
   overflow-x: clip;
+  // `overflow-x: clip` does not make this a scroll container, so as a flex item its automatic
+  // minimum width is its content's width: without this the row never shrinks below its tabs, and
+  // rc-dock never moves the extra tabs into the overflow dropdown.
+  min-width: 0;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
