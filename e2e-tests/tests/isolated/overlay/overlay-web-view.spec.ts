@@ -55,9 +55,12 @@ async function openCommandPalette(mainPage: Page, frame: Frame) {
  * mounted often opens no new menu.
  */
 async function openContextMenu(mainPage: Page, frame: Frame) {
-  const menu = mainPage.locator('[role="menu"]');
-  await expect(menu).toHaveCount(0, { timeout: 5_000 });
+  const anyMenu = mainPage.locator('[role="menu"]');
+  await expect(anyMenu).toHaveCount(0, { timeout: 5_000 });
   await frame.locator('.title').click({ button: 'right' });
+  // The context menu is the first menu in the document; a submenu opened from it is portalled as a
+  // second `[role="menu"]`, so the returned locator stays on the context menu itself.
+  const menu = anyMenu.first();
   await expect(menu).toBeVisible({ timeout: 10_000 });
   return menu;
 }
