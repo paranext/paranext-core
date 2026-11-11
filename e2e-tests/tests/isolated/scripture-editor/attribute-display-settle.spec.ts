@@ -46,7 +46,7 @@ import {
 } from '../../../fixtures/scripture-editor-helpers';
 
 // Power mode so the editor opens in Standard view (marker-editable) — the surface this feature
-// targets. DEV_NOISY=false keeps the normal Home layout (see standard-default-power-mode.spec.ts).
+// targets. DEV_NOISY=false keeps the normal Home layout (see preview-read-only-power-mode.spec.ts).
 test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
@@ -57,7 +57,7 @@ test.describe('scripture editor attribute display', () => {
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, several typed marker
-    // sequences each awaiting a settle). 3x "slow" budget — see standard-default-power-mode.spec.ts.
+    // sequences each awaiting a settle). 3x "slow" budget — see preview-read-only-power-mode.spec.ts.
     test.slow();
 
     await waitForHomeTab(mainPage);

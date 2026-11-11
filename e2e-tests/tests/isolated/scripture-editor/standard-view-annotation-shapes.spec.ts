@@ -153,7 +153,7 @@ test.describe('scripture editor annotation shapes', () => {
   }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, two chapter loads,
     // several typed edits each awaited through a save). 3x "slow" budget — see
-    // standard-default-power-mode.spec.ts.
+    // preview-read-only-power-mode.spec.ts.
     test.slow();
 
     await waitForHomeTab(mainPage);
