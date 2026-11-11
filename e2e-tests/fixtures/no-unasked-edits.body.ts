@@ -2724,14 +2724,18 @@ function savedInsertion(
 }
 
 /**
- * Selects the one character the editor's text holds between `point`'s two halves — what was entered
- * there — by setting the DOM selection, which the editor adopts. The halves may sit in different
- * text nodes. Returns how many places matched; selects only when exactly one did.
+ * Counts the places where the editor's text holds one character between `point`'s two halves — what
+ * was entered there; the halves may sit in different text nodes. With `select`, and exactly one
+ * place, also selects that character by setting the DOM selection, which the editor adopts.
  */
-async function selectEnteredCharacter(editorInput: Locator, point: TextPoint): Promise<number> {
+async function findEnteredCharacter(
+  editorInput: Locator,
+  point: TextPoint,
+  select: boolean,
+): Promise<number> {
   const [before, after] = splitPoint(point);
-  const matches = await editorInput.evaluate(
-    (root, halves) => {
+  return editorInput.evaluate(
+    (root, { halves, shouldSelect }) => {
       const nodes: Text[] = [];
       const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode())
@@ -2742,7 +2746,7 @@ async function selectEnteredCharacter(editorInput: Locator, point: TextPoint): P
       const starts: number[] = [];
       for (let at = text.indexOf(halves.before); at >= 0; at = text.indexOf(halves.before, at + 1))
         if (text.startsWith(halves.after, at + halves.before.length + 1)) starts.push(at);
-      if (starts.length !== 1) return starts.length;
+      if (starts.length !== 1 || !shouldSelect) return starts.length;
       // Maps an offset in the joined text to a node and an offset in it.
       const locate = (offset: number) => {
         let remaining = offset;
@@ -2761,10 +2765,33 @@ async function selectEnteredCharacter(editorInput: Locator, point: TextPoint): P
         ?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
       return 1;
     },
-    { before, after },
+    { halves: { before, after }, shouldSelect: select },
   );
+}
+
+/**
+ * Selects the one character the editor's text holds between `point`'s two halves — what was entered
+ * there — by setting the DOM selection, which the editor adopts. Returns how many places matched;
+ * selects only when exactly one did.
+ */
+async function selectEnteredCharacter(editorInput: Locator, point: TextPoint): Promise<number> {
+  const matches = await findEnteredCharacter(editorInput, point, true);
   await editorInput.page().waitForTimeout(SELECTION_ADOPTED_MS);
   return matches;
+}
+
+/**
+ * Waits until the editor's text holds one character between `point`'s two halves. A paste reads the
+ * clipboard after the key press has returned, so the next clipboard write has to wait for this or
+ * the editor pastes that next payload instead.
+ */
+async function waitForEnteredCharacter(editorInput: Locator, point: TextPoint): Promise<void> {
+  await expect
+    .poll(() => findEnteredCharacter(editorInput, point, false), {
+      message: `the character pasted at ${JSON.stringify(point)} never reached the editor`,
+      timeout: 15_000,
+    })
+    .toBe(1);
 }
 
 /**
@@ -2830,14 +2857,20 @@ async function enterAndDeleteEachCharacter(
   );
   const startedAt = Date.now();
   // Chained: each character is entered at its own point before the next is aimed.
-  await INSERTION_POINTS.reduce(async (previous, { name, point }) => {
+  await INSERTION_POINTS.reduce(async (previous, { name, point }, index) => {
     await previous;
     const character = INVISIBLE_CHARACTERS[name];
     if (gesture === 'pasted')
       await electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), character);
     await selectInEditor(editorInput, point);
-    if (gesture === 'pasted') await mainPage.keyboard.press(PASTE_KEY);
-    else await mainPage.keyboard.type(character);
+    if (gesture === 'typed') {
+      await mainPage.keyboard.type(character);
+      return;
+    }
+    await mainPage.keyboard.press(PASTE_KEY);
+    // The last paste has no clipboard write after it to race, and its character (U+FEFF) is one
+    // the editor may keep out of its text.
+    if (index < INSERTION_POINTS.length - 1) await waitForEnteredCharacter(editorInput, point);
   }, Promise.resolve());
 
   const enteredAt = Date.now();
