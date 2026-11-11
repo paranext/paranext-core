@@ -129,7 +129,9 @@ import {
  */
 async function openTabMenuItem(tabTitle: Locator, item: Locator): Promise<Locator> {
   await expect(async () => {
-    await tabTitle.click({ button: 'right' });
+    // A menu an earlier attempt left open blocks pointer events outside itself, so close it first.
+    await tabTitle.page().keyboard.press('Escape');
+    await tabTitle.click({ button: 'right', timeout: 5_000 });
     await expect(item).toBeVisible({ timeout: 5_000 });
   }).toPass({ timeout: 60_000 });
   return item;
