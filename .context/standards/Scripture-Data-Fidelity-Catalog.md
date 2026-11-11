@@ -253,9 +253,10 @@ the book. As of 2026-10-28 every assertion passes in both modes; no loss found. 
 no no-break space (`~`), so these specs do not cover it; the invisible-characters specs below do.
 
 Whitespace and invisible characters are checked by `runInvisibleCharacters` from the same body, in
-four specs: `no-unasked-edits-invisible-characters-{on,off}-{power-standard,simple-paragraph-structure}.spec.ts`
-(`AllowInvisibleChars` on and off, each in Power's Standard view and Simple's paragraph-structure
-view). The WEB has none of these characters, so each spec seeds Jonah 3:5–6 (and a second U+FEFF in 4:1) before the app starts
+two specs: `no-unasked-edits-invisible-characters-off-power-standard.spec.ts` (`AllowInvisibleChars`
+off, Power's Standard view) and `no-unasked-edits-invisible-characters-on-simple-paragraph-structure.spec.ts`
+(on, Simple's paragraph-structure view). The body branches on the setting and on the mode
+independently, never on the pair, so these two reach every branch. The WEB has none of these characters, so each spec seeds Jonah 3:5–6 (and a second U+FEFF in 4:1) before the app starts
 (and, for `on`, `<AllowInvisibleChars>T</AllowInvisibleChars>` in `Settings.xml`): a no-break space
 (`~` off, U+00A0 on), a `~` (a literal tilde when on), U+200B, U+200C, U+200D, U+2060, U+202F,
 U+2009, U+2002, U+2003, U+200A, U+3000, U+200E, U+200F, U+00AD and U+FEFF, each between two
