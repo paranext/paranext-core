@@ -1,14 +1,22 @@
 /**
- * E2E for the Simple-mode Comments panel's per-pane content zoom: Ctrl+wheel and the tab's own
- * "Zoom in" / "Zoom out" / "Zoom reset" menu items scale the panel, and the level is remembered
- * under the panel's project identity (the `notes` kind), the same identity a project's tab list
- * opens at.
+ * E2E for the Comments panel's per-pane content zoom: Ctrl+wheel and the tab's own "Zoom in" /
+ * "Zoom out" / "Zoom reset" menu items scale the panel, and the level is remembered under the
+ * panel's project identity (the `notes` kind), the same identity a project's tab list opens at.
  *
- * Own Electron app (`commentAppOwner`): a shared app would carry over whatever layout change
- * another comment spec left behind, and the fixture only starts a fresh worker when the option
- * value differs.
+ * The Simple-mode test runs on its own Electron app (`commentAppOwner`): a shared app would carry
+ * over whatever layout change another comment spec left behind, and the fixture only starts a fresh
+ * worker when the option value differs.
+ *
+ * The Power-mode test checks the tab menu's ladder where the panel is a plain dock tab. It runs on
+ * `isolated.fixture`, because `comment.fixture` pins Simple mode and ignores `test.use({
+ * interfaceMode })` (see `e2e-tests/CLAUDE.md`, "State that leaks between runs"). The tab context
+ * menu's zoom items are a generic dock-tab feature (`platform-tab-title.component.tsx`,
+ * `tab-menu.util.ts`), not something the Simple-mode Column 3 placement grants the panel; the test
+ * opens the same panel web view type at a project through the same
+ * `legacyCommentManager.openCommentListPanel` command.
  */
 import { test, expect } from '../../../fixtures/comment.fixture';
+import { test as powerModeTest } from '../../../fixtures/isolated.fixture';
 import {
   ctrlWheel,
   INDICATOR_SELECTOR,
@@ -27,7 +35,11 @@ import {
   openCommentListPanel,
   openCommentListPanelUntilVisible,
 } from '../../../fixtures/comment-test-helpers';
-import { readFactor } from '../../../fixtures/scripture-editor-helpers';
+import {
+  getEditorFrame,
+  readFactor,
+  waitForHomeTab,
+} from '../../../fixtures/scripture-editor-helpers';
 
 /**
  * `webViewType` of the Comment List Panel tab in Column 3 of the simple layout. Source:
@@ -36,7 +48,9 @@ import { readFactor } from '../../../fixtures/scripture-editor-helpers';
 const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
 
 // Own this spec's Electron app: a different owner string from any other comment spec, so the
-// fixture starts a fresh worker rather than inheriting another spec's layout/panel state.
+// fixture starts a fresh worker rather than inheriting another spec's layout/panel state. A worker
+// option must be set at the top level; `isolated.fixture` has no such option, so the Power-mode
+// test below ignores it.
 test.use({ commentAppOwner: 'notes-content-zoom-panel' });
 
 test.describe('Comments panel content zoom in Simple mode', () => {
@@ -207,4 +221,69 @@ test.describe('Comments panel content zoom in Simple mode', () => {
       },
     );
   });
+});
+
+powerModeTest.describe('Comments panel content zoom in Power mode', () => {
+  powerModeTest.use({
+    interfaceMode: 'power',
+    electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
+  });
+  powerModeTest.setTimeout(300_000);
+
+  let project: CommentTestProject;
+
+  powerModeTest.beforeAll(async () => {
+    project = await createCommentTestProject([], '_power_tab_menu');
+  });
+
+  powerModeTest.afterAll(() => {
+    cleanupCommentTestProject(project);
+  });
+
+  powerModeTest(
+    'the tab context menu drives the same Zoom in / Zoom out / Reset ladder as the wheel',
+    async ({ mainPage }) => {
+      powerModeTest.slow();
+
+      await waitForHomeTab(mainPage);
+      const [threadId] = await createCommentThreads(
+        project,
+        ['GEN 1:1'],
+        ['Power tab-menu marker'],
+      );
+      await openCommentListPanel(project.projectId);
+      const panelId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_PANEL_WEBVIEW_TYPE);
+      const panelFrame = await getEditorFrame(mainPage, panelId);
+      await expect(panelFrame.locator('body')).toContainText('Power tab-menu marker', {
+        timeout: 90_000,
+      });
+
+      await expect.poll(() => readFactor(panelFrame, '')).toBe(1);
+
+      await powerModeTest.step('the wheel establishes a non-default baseline', async () => {
+        const box = await panelFrame.locator(`[role="option"][id="${threadId}"]`).boundingBox();
+        if (!box) throw new Error('Comment card not found');
+        await ctrlWheel(mainPage, box, -120);
+        await expect.poll(() => readFactor(panelFrame, '')).toBe(1.1);
+      });
+
+      const tab = mainPage.locator(`.platform-tab-title[data-web-view-id="${panelId}"]`);
+      await powerModeTest.step(
+        'the tab context menu drives the same ladder as the wheel',
+        async () => {
+          await tab.click({ button: 'right' });
+          await mainPage.getByRole('menuitem', { name: 'Zoom in' }).click();
+          await expect.poll(() => readFactor(panelFrame, '')).toBe(1.2);
+
+          await tab.click({ button: 'right' });
+          await mainPage.getByRole('menuitem', { name: 'Zoom out' }).click();
+          await expect.poll(() => readFactor(panelFrame, '')).toBe(1.1);
+
+          await tab.click({ button: 'right' });
+          await mainPage.getByRole('menuitem', { name: 'Zoom reset' }).click();
+          await expect.poll(() => readFactor(panelFrame, '')).toBe(1);
+        },
+      );
+    },
+  );
 });
