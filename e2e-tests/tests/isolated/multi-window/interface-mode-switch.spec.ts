@@ -19,7 +19,8 @@
  *
  * TEST 3 — switching to Simple with only the primary open changes nothing. The negative control for
  * test 1: an implementation that closed windows without asking which is the primary would pass test
- * 1 and fail here by leaving the user with no window at all.
+ * 1 and fail here by leaving the user with no window at all. Test 3 is the first step of the test
+ * that also holds test 4, on one app start; the mode is put back to Power between the two.
  *
  * TEST 4 — creating a window is refused in Simple mode. Simple mode has no chrome that can reach a
  * second window, so the command is refused rather than producing one nobody can see; this refusal
@@ -58,6 +59,12 @@ const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
 
 /** How long a switch may take to settle before a poll gives up */
 const SWITCH_SETTLE_TIMEOUT_MS = 120_000;
+
+/** The cold-start budget of a test: the one every test here gets from the describe block below */
+const COLD_START_TIMEOUT_MS = 900_000;
+
+/** The budget of a step after the first: the app is already up, so the config's default */
+const WARM_STEP_TIMEOUT_MS = 120_000;
 
 /** How long a single PAPI call may take */
 const PAPI_CALL_TIMEOUT_MS = 30_000;
@@ -265,51 +272,60 @@ test.describe('switching interface mode', () => {
     expectNoFaultsWhileRunning(output);
   });
 
-  test('switching to simple with only the primary open leaves it open', async ({
+  test('switching to simple with only the primary open, then creating a window', async ({
     electronApp,
     mainPage,
   }) => {
-    // The negative control for the first test: a switch that closed windows without asking which
-    // one is the primary would pass that one and leave the user with nothing here.
-    //
-    // No fault sweep here, deliberately: `expectNoFaultsWhileRunning` opens with a positive
-    // control that a renderer started during the capture, and the whole point of this test is that
-    // nothing starts. The count and identity below are the assertions.
+    // Only the first step pays the cold start; the second runs on the app it started.
+    test.setTimeout(COLD_START_TIMEOUT_MS + WARM_STEP_TIMEOUT_MS);
     await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
     expect(getAppPages(electronApp)).toHaveLength(1);
 
-    await setInterfaceMode('simple');
-    await waitForInterfaceMode('simple');
+    await test.step('switching to simple with only the primary open leaves it open', async () => {
+      // The negative control for the first test: a switch that closed windows without asking which
+      // one is the primary would pass that one and leave the user with nothing here.
+      //
+      // No fault sweep here, deliberately: `expectNoFaultsWhileRunning` opens with a positive
+      // control that a renderer started during the capture, and the whole point of this step is that
+      // nothing starts. The count and identity below are the assertions.
+      await setInterfaceMode('simple');
+      await waitForInterfaceMode('simple');
 
-    // Nothing to close, so nothing may close. Given real time to get it wrong: a poll on a count
-    // that is already right would return on its first read and prove nothing, so this waits for
-    // the application to have taken the mode and then holds still to see whether a window goes.
-    await new Promise((resolve) => {
-      setTimeout(resolve, 5_000);
+      // Nothing to close, so nothing may close. Given real time to get it wrong: a poll on a count
+      // that is already right would return on its first read and prove nothing, so this waits for
+      // the application to have taken the mode and then holds still to see whether a window goes.
+      await new Promise((resolve) => {
+        setTimeout(resolve, 5_000);
+      });
+      expect(getAppPages(electronApp)).toHaveLength(1);
+      expect(getWindowIdOfPage(getAppPages(electronApp)[0])).toBe(primaryId);
+
+      // Back to Power with the one window still open, so the next step's switch to Simple is a real
+      // change of mode rather than a write of the value it already holds.
+      await setInterfaceMode('power');
+      await waitForInterfaceMode('power');
+      expect(getAppPages(electronApp)).toHaveLength(1);
     });
-    expect(getAppPages(electronApp)).toHaveLength(1);
-    expect(getWindowIdOfPage(getAppPages(electronApp)[0])).toBe(primaryId);
-  });
 
-  test('creating a window is refused in simple mode', async ({ electronApp, mainPage }) => {
-    await waitForAppReady(mainPage, { timeout: 180_000 });
-    await setInterfaceMode('simple');
-    // Waited on the mode itself, not the window count: the count is already 1, so a poll on it
-    // returns on its first read and the request below could reach the application before it has
-    // taken the new mode — the guard would then read the mode it is being tested for having left.
-    await waitForInterfaceMode('simple');
+    await test.step('creating a window is refused in simple mode', async () => {
+      await setInterfaceMode('simple');
+      // Waited on the mode itself, not the window count: the count is already 1, so a poll on it
+      // returns on its first read and the request below could reach the application before it has
+      // taken the new mode — the guard would then read the mode it is being tested for having left.
+      await waitForInterfaceMode('simple');
 
-    // Refused, rather than quietly producing a window the mode has no way to show
-    await expect(
-      sendPapiRequestOnce(
-        'command:platform.createWindow',
-        [],
-        WEBSOCKET_PORT,
-        PAPI_CALL_TIMEOUT_MS,
-      ),
-    ).rejects.toThrow(/simple/i);
+      // Refused, rather than quietly producing a window the mode has no way to show
+      await expect(
+        sendPapiRequestOnce(
+          'command:platform.createWindow',
+          [],
+          WEBSOCKET_PORT,
+          PAPI_CALL_TIMEOUT_MS,
+        ),
+      ).rejects.toThrow(/simple/i);
 
-    expect(getAppPages(electronApp)).toHaveLength(1);
+      expect(getAppPages(electronApp)).toHaveLength(1);
+    });
   });
 });
