@@ -14,6 +14,9 @@ async function openCommandPalette(mainPage: Page, frame: Frame) {
   return palette;
 }
 
+// These steps drive the helloRock3 test extension's web view, which only noisy dev mode loads.
+test.use({ electronLaunchOptions: { envOverrides: { DEV_NOISY: 'true' } } });
+
 test('overlay command palette rendering and interaction', async ({ mainPage }) => {
   await waitForAppReady(mainPage);
   const frame = await findHelloRock3Frame(mainPage);

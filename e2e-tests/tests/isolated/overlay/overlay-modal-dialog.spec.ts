@@ -15,6 +15,8 @@ import { findHelloRock3Frame, DEFAULT_PERSON_NAME } from './overlay-helpers';
 // The English interface language every asserted string depends on ("Delete Person", "More
 // Actions", "Show Alert", "OK") is seeded by the fixture itself.
 test.use({
+  // The steps drive the helloRock3 test extension's web view, which only noisy dev mode loads.
+  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'true' } },
   interfaceMode: 'power',
   seedSettings: { 'platform.firstRunComplete': true },
   // The context-menu step drives a Radix submenu by pointer coordinates, so it needs the
