@@ -251,11 +251,17 @@ export async function goBackTour(page: Page): Promise<void> {
  */
 export async function advanceToLastStep(page: Page): Promise<void> {
   const nextButton = getTourNextButton(page);
+  const doneButton = getTourDoneButton(page);
   const stepCounter = getStepCounter(page);
   for (let i = 0; i < 10; i += 1) {
+    // The card renders nothing while it re-measures a step's target, and the step counter can
+    // already read the new step by then. So wait for the card's primary button, whichever it is,
+    // before deciding: a Next that is merely not painted yet is not the last step.
+    // eslint-disable-next-line no-await-in-loop
+    await expect(nextButton.or(doneButton)).toBeVisible({ timeout: 10_000 });
     // Steps are inherently sequential — must observe the current step before advancing.
     // eslint-disable-next-line no-await-in-loop
-    if (!(await nextButton.isVisible())) return;
+    if (await doneButton.isVisible()) return;
     // Must be read before the click below fires, so there is nothing to parallelize.
     // eslint-disable-next-line no-await-in-loop
     const stepBeforeClick = await stepCounter.textContent();
