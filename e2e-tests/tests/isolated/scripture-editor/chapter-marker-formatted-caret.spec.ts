@@ -14,7 +14,8 @@
  * intact, which is what makes the repaired caret cross a line break rather than land where it was
  * placed.
  *
- * ONE test() per spec file on purpose (see chapter-marker-repair.spec.ts).
+ * One test() in this file: the isolated fixture is test-scoped, so the test has its own Electron
+ * instance.
  *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated scripture-editor/chapter-marker-formatted-caret.spec.ts`.
