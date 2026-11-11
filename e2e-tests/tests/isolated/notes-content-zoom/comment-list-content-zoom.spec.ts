@@ -13,12 +13,12 @@
  * `npm run test:e2e:isolated notes-content-zoom`
  */
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { type Frame } from '@playwright/test';
 import { test, expect } from '../../../fixtures/comment.fixture';
 import {
   type CommentTestProject,
+  PARATEXT_PROJECTS_ROOT,
   createCommentTestProject,
   cleanupCommentTestProject,
   createCommentThreads,
@@ -51,24 +51,30 @@ import {
 test.use({ commentAppOwner: 'notes-content-zoom-list' });
 
 /**
- * Whether the app's project folder holds Paratext projects of the checkout's own — anything but the
- * installed sample (`WEB`), the resources folder and the comment suites' own test projects. This
- * suite opens the checkout's real project folder, and with such projects there Simple mode's
- * start-up default project pick can replace the project the test opened.
+ * Whether the project folder the app scans (`PARATEXT_PROJECTS_ROOT`) holds Paratext projects of
+ * the checkout's own — anything but the installed sample (`WEB`), the resources folder and the
+ * comment suites' own test projects. This suite opens the checkout's real project folder, and with
+ * such projects there Simple mode's start-up default project pick can replace the project the test
+ * opened.
  */
 function holdsProjectsOfItsOwn(): boolean {
-  const root =
-    process.env.PLATFORM_BIBLE_PROJECT_ROOT_FOLDER ||
-    path.join(os.homedir(), '.platform.bible', 'projects', 'Paratext 9 Projects');
-  if (!fs.existsSync(root)) return false;
+  if (!fs.existsSync(PARATEXT_PROJECTS_ROOT)) return false;
+  // statSync follows a symlinked or junctioned project folder; a broken link is not a project.
+  const isFolder = (name: string) => {
+    try {
+      return fs.statSync(path.join(PARATEXT_PROJECTS_ROOT, name)).isDirectory();
+    } catch {
+      return false;
+    }
+  };
   return fs
-    .readdirSync(root, { withFileTypes: true })
+    .readdirSync(PARATEXT_PROJECTS_ROOT)
     .some(
-      (entry) =>
-        entry.isDirectory() &&
-        entry.name !== 'WEB' &&
-        entry.name !== '_Resources' &&
-        !entry.name.startsWith('testComment_'),
+      (name) =>
+        name !== 'WEB' &&
+        name !== '_Resources' &&
+        !name.startsWith('testComment_') &&
+        isFolder(name),
     );
 }
 
