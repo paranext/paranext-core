@@ -215,9 +215,9 @@ test.describe('Reference history', () => {
   // the renderer. Playwright drives the keyboard through CDP's `Input.dispatchKeyEvent`, which
   // injects at the renderer level and never passes through that listener — equally true when
   // Playwright launches Electron and when it attaches to a running one, so a launch fixture
-  // changes nothing here. The same limitation is documented for the verse navigation shortcuts,
-  // whose spec runs in launch mode
-  // (tests/isolated/verse-navigation/verse-navigation-shortcuts.spec.ts).
+  // changes nothing here. The same limitation applies to the verse navigation shortcuts (F8, F9,
+  // Ctrl+Up/Down, Ctrl+B), whose key-to-command mapping is covered by
+  // src/main/verse-navigation-shortcuts.util.test.ts.
   //
   // The behaviour is covered where it can be driven: the key-to-command mapping by
   // src/main/reference-history-keyboard.util.test.ts, and the navigation the command performs by
