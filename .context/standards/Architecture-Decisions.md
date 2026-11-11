@@ -3258,6 +3258,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Alt-tabbing away mid-edit in the footnotes pane applies a delivery once the grace period ends,
   after flushing pending saves, as the text editor does.
   Revisit the grace period if the window service's focus debounce changes.
+- **Amended 2026-11-05:** the footnotes pane claims from the same last-edit stamp as the text
+  (`lastLocalEditTimestamp`) rather than from a pane-only one. A pane row edit stamps it as a text
+  edit does, so moving between the text and a row (inserting a footnote, clicking a row, clicking
+  back into the text) keeps the claim, and the Send/Receive and other-web-view releases clear one
+  ref for both surfaces. The cost: after a row edit and a click into the text without typing, a
+  differing update from another view is held back for up to `EDITOR_OWNERSHIP_WINDOW_MS`, and this
+  view's copy is pushed over it.
 - **Source:** PT-4968
 
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
