@@ -142,8 +142,12 @@ test.describe('web view tab moved within its window', () => {
     const consoleLines: string[] = [];
     page.on('console', (message) => consoleLines.push(message.text()));
 
-    const moved = await openReactWebViewTab(page);
-    const stayed = await openReactWebViewTab(page);
+    // Both tabs go into the Home tab's panel by name: left to the dock, a tab opened this early can
+    // land in a new panel, depending on whether the Home tab's own start-up update came first.
+    const [homePanel] = await readBars(page);
+    if (!homePanel) throw new Error('the window has no dock panel');
+    const moved = await openReactWebViewTab(page, homePanel.panelId);
+    const stayed = await openReactWebViewTab(page, homePanel.panelId);
     const webViewIds = [moved, stayed];
 
     const barsBefore = await readBars(page);
