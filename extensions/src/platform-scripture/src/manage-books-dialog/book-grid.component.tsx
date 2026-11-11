@@ -14,12 +14,11 @@
  * - All user-facing text is sourced from a `localizedStrings` map (no hard- coded English) so the
  *   component participates in PT10 localization.
  * - The pill `<li>` carries the canonical `data-book` / `aria-checked` / `role="option"` attributes
- *   the existing WP-001 functional tests rely on; the inner `<button>` handles the keyboard / click
- *   logic.
+ *   that tests and assistive technology locate a book by; the inner `<button>` handles the keyboard
+ *   / click logic.
  * - `BookGridSelector` exposes `aria-label` and `aria-multiselectable` on the container `<ul>` to
  *   preserve the listbox role.
- * - Tooltips render only at the pill level to keep accessible-name resolution deterministic for
- *   WP-001 tests.
+ * - Tooltips render only at the pill level to keep accessible-name resolution deterministic.
  */
 
 import {
