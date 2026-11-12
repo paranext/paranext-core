@@ -59,7 +59,7 @@ describe('registerUsersnapNetworkErrorLogging', () => {
     expect(completedRegistrations[0].filter).toEqual({ urls: ['https://*.usersnap.com/*'] });
   });
 
-  it('adds the space-key hint to a 404 from the loader', () => {
+  it('adds the space-key hint only to a 404 from the loader', () => {
     const { session, completedRegistrations } = createSession();
     registerUsersnapNetworkErrorLogging(session, 'test-space-key');
 
