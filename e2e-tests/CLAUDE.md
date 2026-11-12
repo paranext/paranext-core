@@ -25,20 +25,35 @@ globalSetup.
 ### Local-only directories
 
 Three directories under `tests/` are run by hand against a running app and by nothing else — no CI
-job and no npm script collects them:
+job collects them (CI runs only `test:e2e:smoke`):
 
-- `tests/enhanced-resources/` — the Text Collection grid specs (`scripture-text-grid*.spec.ts`,
-  `cell-reorder.spec.ts`, `enhanced-resource-content-zoom.spec.ts`) and
-  `enhanced-resources-image-render.spec.ts`. They need real Marble resources (paid, not available
-  in CI) and an app started in Power mode (every spec there but
-  `scripture-text-grid-verse-row.spec.ts` asserts it). `scripture-text-grid.spec.ts` is out of date;
-  PT-4779 covers bringing it up to date.
+- `tests/enhanced-resources/` — two groups.
+  - Runs locally: the Text Collection grid specs (`scripture-text-grid*.spec.ts`,
+    `cell-reorder.spec.ts`, `enhanced-resource-content-zoom.spec.ts`) and
+    `enhanced-resources-image-render.spec.ts`. They need real Marble resources (paid, not available
+    in CI) and an app started in Power mode (every spec there but
+    `scripture-text-grid-verse-row.spec.ts` asserts it). `scripture-text-grid.spec.ts` is out of date;
+    PT-4779 covers bringing it up to date.
+  - Parked: `enhanced-resources-functional-UI-PKG-001` to `-008.spec.ts`,
+    `enhanced-resources-journey.spec.ts` and `text-collection-schema.spec.ts`. Parked means the file
+    is kept as the written scenarios for a feature that is still to be finished (epic PT-2021,
+    "Enhanced Resources"), no CI job runs it, and it has never run as a whole. Many of its tests
+    are `test.fixme`. Before it can run it needs an app in Power mode with real Marble resources
+    such as `ESV16UK+`, and `text-collection-schema.spec.ts` also needs `E2E_TEST_PROJECT_ID` to
+    name an editable admin project (it skips itself otherwise). One caveat: `playwright-cdp.config.ts`
+    does not ignore this directory, so a bare `npm run test:e2e-cdp` lists these files too. Run the
+    local group by file name instead. See the directory's README.
 - `tests/markers-checklist/` — the only end-to-end coverage of the Markers checklist. It needs a
   real project (`wgPIDGIN`) on the machine, so it cannot run in CI.
-- `tests/manage-books/` — `manage-books-commands.spec.ts` checks the wire shape of each
-  `manageBooks` network object method over the live PAPI websocket, using made-up project ids so
-  nothing real is read or written. `playwright-cdp.config.ts` testIgnores it, so a bare CDP run
-  skips it; its README says how to run it.
+- `tests/manage-books/` — all of it is parked, kept as the written scenarios for the Manage Books
+  feature (epic PT-1779, "Manage Books in a Project"). `playwright-cdp.config.ts` testIgnores the
+  directory and `playwright.config.ts` has no project for it, so no config collects it. It attaches
+  to a running app. `manage-books-commands.spec.ts` checks the wire shape of each `manageBooks`
+  network object method over the live PAPI websocket; its first `describe` uses made-up project ids
+  (nothing real is read or written), its second drives real projects the app already holds. The
+  other three specs (`manage-books-journey`, `-functional-WP-001`, `-functional-WP-002`) change
+  real project data (delete or create books) with no restore. Before any of it can run it needs a
+  disposable project fixture, so it never touches a developer's real projects. See its README.
 
 **An attach-based spec must not live under `tests/isolated/`.** `playwright-cdp.config.ts` ignores
 that tree, and the `isolated` project's globalSetup refuses to start while an app holds port 8876 —
@@ -60,8 +75,8 @@ meant to be run routinely.
 - Do not put feature tests in `smoke/` — smoke tests are for the core happy path (plus the
   bare-Electron checks its README describes) and must stay fast and CI-green.
 - Do not use `manage-books/`, `markers-checklist/` or `enhanced-resources/` as models — those are
-  local-only suites (see "Local-only directories") not wired into any standard test run. See the
-  README in each directory.
+  local-only or parked suites (see "Local-only directories") not wired into any standard test run.
+  See the README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding
   a well-named spec file to `isolated/` instead.
 
@@ -92,7 +107,7 @@ one of these.
     as a plain value rather than an option, because Playwright's types reject a derived test
     re-declaring an option its base already declares — so `test.use({ requiredInterfaceMode })` in a
     spec on that fixture is silently inert too. A spec in that suite needing a different mode imports
-    `cdp.fixture` directly. Either way the check confirms the app
+    `cdp.fixture` directly, as `tests/enhanced-resources/text-collection-schema.spec.ts` does. Either way the check confirms the app
     IS in that mode — which is what the layout depends on — rather than proving a particular seed is
     what put it there; for `'simple'` an app that was never pinned satisfies it, because that is the
     contributed default. It reads `platform.interfaceMode` from the settings service over PAPI, NOT

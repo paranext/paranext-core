@@ -81,7 +81,8 @@ const RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID = 'resource-text-editor-container';
  * panel opened for `containerProjectId` resolves a real chapter with no DBL resource involved. Goes
  * through the USER-scope setter (`setUserReferencedProjectsAndResources`) rather than the
  * project-level `platformScripture.referencedProjectsAndResources` setting: the latter is
- * admin-gated, while the personal list needs no special project role.
+ * admin-gated (`text-collection-schema.spec.ts`), while the personal list needs no special project
+ * role.
  */
 async function referenceProjectAsBibleText(
   page: Page,

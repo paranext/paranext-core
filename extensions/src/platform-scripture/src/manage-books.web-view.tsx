@@ -1137,7 +1137,9 @@ global.webViewComponent = function ManageBooksWebView({
   // WP-002 architectural decision: in-process render rather than `papi.webViews.openWebView`.
   // Rationale: the parent dialog awaits a `Promise<EstherTemplate | undefined>` returned from
   // this callback. In-process resolution is one ref + one useState; the cross-iframe alternative
-  // would need a PAPI command + correlation ID + state subscription.
+  // would need a PAPI command + correlation ID + state subscription. Functional tests
+  // (manage-books-functional-WP-002.spec.ts) also assert the picker renders inside the
+  // manage-books iframe via `frame.getByRole('dialog', ...)`, which requires same-iframe render.
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerResolverRef = useRef<((value: GreekEstherTemplate | undefined) => void) | undefined>(
     undefined,

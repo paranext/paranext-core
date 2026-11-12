@@ -14,9 +14,16 @@ const config = defineConfig({
   // both here — run the isolated suite (which includes the find tests under isolated/find) via
   // `npm run test:e2e:isolated`.
   // _example/ contains reference templates, not runnable tests.
-  // manage-books is excluded because its one spec talks to the PAPI websocket of a running app
-  // directly (`fixtures/papi-live.fixture.ts`) and is run by hand, not as part of a bare
-  // `npm run test:e2e-cdp`; see `tests/manage-books/README.md`.
+  // manage-books is parked and excluded: a bare `npm run test:e2e-cdp` would otherwise run it
+  // against whatever app is live, and its journey and functional specs (and the second `describe`
+  // of `manage-books-commands.spec.ts`) change real projects with no restore. Those projects live
+  // on developer machines under ~/.platform.bible/projects, so that is data loss, not test noise.
+  // Re-enable per spec once the suite owns a throwaway project root (`isolatedProjectRoot`, the way
+  // `find.fixture` does); see `tests/manage-books/README.md`.
+  // enhanced-resources is NOT excluded: a bare run collects its local specs and its parked ones
+  // (`enhanced-resources-functional-*`, `enhanced-resources-journey`, `text-collection-schema`),
+  // which need Power mode and real Marble resources; run those by file name. See
+  // `tests/enhanced-resources/README.md`.
   testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**', '**/manage-books/**'],
   fullyParallel: false,
   workers: 1,
