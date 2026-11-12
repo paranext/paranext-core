@@ -387,15 +387,17 @@ internal static class Pt9InterlinearReader
 
     /// <summary>
     /// Whether a project-relative path is a PT9 interlinear book file (one gloss language's
-    /// cluster data for one book), matched the way PT9 classifies one: the lowercased path starts
-    /// with <c>interlinear_</c> and the extension is <c>.xml</c>. Matching on lowercased text
-    /// keeps the scan case-insensitive on every filesystem.
+    /// cluster data for one book), matched the way PT9 names one: the lowercased file name starts
+    /// with <c>interlinear_</c> and the extension is <c>.xml</c>. The file name is matched rather
+    /// than the path, so other XML a user keeps inside an <c>Interlinear_*</c> directory (an
+    /// exported wordlist, say) is not mistaken for a book file and cannot fail the read. Matching
+    /// on lowercased text keeps the scan case-insensitive on every filesystem.
     /// </summary>
     private static bool IsPt9InterlinearBookFile(string relativePath)
     {
-        string lowerPath = relativePath.ToLowerInvariant();
-        return lowerPath.StartsWith(Pt9InterlinearFilePrefixLower, StringComparison.Ordinal)
-            && Path.GetExtension(lowerPath) == ".xml";
+        string lowerName = Path.GetFileName(relativePath).ToLowerInvariant();
+        return lowerName.StartsWith(Pt9InterlinearFilePrefixLower, StringComparison.Ordinal)
+            && Path.GetExtension(lowerName) == ".xml";
     }
 
     /// <summary>
