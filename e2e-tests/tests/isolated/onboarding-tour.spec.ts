@@ -54,7 +54,7 @@
  */
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/isolated.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { sendCommandFromPage, waitForAppReady } from '../../fixtures/helpers';
 import {
   clearTourDone,
   getTourBackButton,
@@ -314,14 +314,7 @@ test.describe('Onboarding tour in Power mode', () => {
     await mainPage.keyboard.press('Escape');
 
     // The command stays registered, so the tour's Power filtering is still reachable through it.
-    await mainPage.evaluate(async () => {
-      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const win = window as unknown as {
-        papi: { commands: { sendCommand: (command: string) => Promise<unknown> } };
-      };
-      await win.papi.commands.sendCommand('platform.showOnboardingTour');
-    });
+    await sendCommandFromPage(mainPage, 'platform.showOnboardingTour');
 
     await expect(dialog).toBeVisible({ timeout: 15_000 });
 
