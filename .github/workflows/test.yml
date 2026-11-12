@@ -24,11 +24,17 @@ on:
         description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
         required: false
         default: false
+      e2e_core_only:
+        type: boolean
+        description: 'Run only the "E2E core" job (the isolated end-to-end specs in e2e-tests/core-specs.txt), not the builds'
+        required: false
+        default: false
 
 jobs:
   test:
     name: Build on ${{ matrix.os }}
 
+    if: ${{ !inputs.e2e_core_only }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
 
@@ -532,3 +538,80 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: true
+
+  # The isolated end-to-end specs listed in e2e-tests/core-specs.txt: each starts its own copy of
+  # the app and exercises one feature. Started by hand for now (Actions tab, "Run workflow", or
+  # `gh workflow run test.yml --ref <branch> -f e2e_core_only=true`).
+  #
+  # A job of its own, beside the builds: it builds for itself because a job cannot reuse another
+  # job's output without an artifact hand-over, and the development bundles the specs need are
+  # built by e2e-tests/global-setup.ts on first use.
+  e2e-core:
+    name: E2E core (isolated specs), ubuntu-22.04
+
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props',
+            '.config/dotnet-tools.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Installs the system libraries Electron needs on a bare runner, as the smoke step relies on.
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      # One Xvfb at 1920x1080x24: xvfb-run's default screen (1280x1024, 8-bit colour) is too small
+      # for the docking specs. No retries, so a test that passes only on a second attempt fails the
+      # job; `--trace=retain-on-failure` because the config records a trace only on a retry.
+      - name: E2E core specs
+        run: |
+          mapfile -t core_specs < <(grep -v -e '^#' -e '^[[:space:]]*$' e2e-tests/core-specs.txt)
+          echo "Running ${#core_specs[@]} spec files"
+          xvfb-run --auto-servernum -s '-screen 0 1920x1080x24' \
+            npm run test:e2e:isolated -- "${core_specs[@]}" --retries=0 --trace=retain-on-failure
+
+      - name: Upload Playwright test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results-e2e-core
+          retention-days: 7
+          path: |
+            e2e-tests/test-results/
+            e2e-tests/playwright-report/
+          if-no-files-found: ignore

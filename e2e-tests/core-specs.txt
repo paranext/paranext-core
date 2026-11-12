@@ -1,0 +1,20 @@
+# The isolated e2e specs the pull-request job runs: the ones that guard data loss or core flows.
+# One path per line, relative to the repository root. Read by .github/workflows/test.yml.
+e2e-tests/tests/isolated/comments-tab.spec.ts
+e2e-tests/tests/isolated/no-projects-without-sample.spec.ts
+e2e-tests/tests/isolated/docking/middle-click-close-tab.spec.ts
+e2e-tests/tests/isolated/docking/simple-mode-no-dock.spec.ts
+e2e-tests/tests/isolated/menu-dismissal/cross-frame-dismissal.spec.ts
+e2e-tests/tests/isolated/multi-window/window-close-rule.spec.ts
+e2e-tests/tests/isolated/navigation-history/navigation-history.spec.ts
+e2e-tests/tests/isolated/overlay/dialog-rendering.spec.ts
+e2e-tests/tests/isolated/overlay/overlay-web-view.spec.ts
+e2e-tests/tests/isolated/scroll-groups/scroll-group-sync.spec.ts
+e2e-tests/tests/isolated/title-bar/title-bar-narrow-width.spec.ts
+e2e-tests/tests/isolated/web-view-lifecycle/stale-root-unmount.spec.ts
+e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts
+e2e-tests/tests/isolated/scripture-editor/chapter-marker-restore.spec.ts
+e2e-tests/tests/isolated/scripture-editor/formatted-default-simple-mode.spec.ts
+e2e-tests/tests/isolated/scripture-editor/marker-palette-typed-commit.spec.ts
+e2e-tests/tests/isolated/scripture-editor/preview-read-only-power-mode.spec.ts
+e2e-tests/tests/isolated/scripture-editor/type-through-save-echo.spec.ts
