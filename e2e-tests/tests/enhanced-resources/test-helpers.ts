@@ -25,8 +25,8 @@ export async function closeAllNonHomeDockTabs(page: Page): Promise<void> {
 }
 
 /**
- * Sends `platformEnhancedResources.openEnhancedResource` through the renderer's `papi`, exposed on
- * `window` untyped here (the same pattern the content-zoom spec uses).
+ * Sends `platformEnhancedResources.openEnhancedResource` from inside the app window, as a menu
+ * entry would, with the shared `sendCommandFromPage` helper, and waits for the command to answer.
  */
 export async function sendOpenEnhancedResourceCommand(page: Page): Promise<void> {
   await sendCommandFromPage(page, 'platformEnhancedResources.openEnhancedResource');

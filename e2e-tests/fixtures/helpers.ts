@@ -3099,11 +3099,12 @@ type PagePapiCommands<T> = {
 /**
  * Sends a PAPI command from inside the app window and waits for its result, exactly as a menu entry
  * would (the renderer exposes `papi` on `window`, untyped in Playwright's page context). `T` is the
- * result type the caller expects; the command name and arguments are not checked against PAPI's
- * command map. The arguments must survive Playwright's `page.evaluate` serialization. A command
- * that opens a dialog answers only once the dialog closes: use
- * {@link sendCommandFromPageWithoutWaiting} for those. For a client over the websocket instead of
- * the page, see `sendCommand` on `fixtures/papi.fixture.ts` and `fixtures/papi-live.fixture.ts`.
+ * result type the caller expects, and must be JSON-like so Playwright can serialize it back from
+ * the page; the command name and arguments are not checked against PAPI's command map. The
+ * arguments must survive Playwright's `page.evaluate` serialization too. A command that opens a
+ * dialog answers only once the dialog closes: use {@link sendCommandFromPageWithoutWaiting} for
+ * those. For a client over the websocket instead of the page, see `sendCommand` on
+ * `fixtures/papi.fixture.ts` and `fixtures/papi-live.fixture.ts`.
  */
 export async function sendCommandFromPage<T = unknown>(
   page: Page,
