@@ -95,7 +95,7 @@ one of these.
 - **The real OS clipboard is shared with the developer's desktop, and nothing restores it.**
   `clipboard-usfm-round-trip.spec.ts` reaches it through the retrying helpers in
   `fixtures/helpers.ts` (`writeClipboardText`, `readClipboardText`, `readClipboardHtml`,
-  `writeClipboard`), which call Electron's main-process `clipboard` module from
+  `readClipboardTextAndHtml`, `writeClipboard`), which call Electron's main-process `clipboard` module from
   `electronApp.evaluate` — outside the renderer's permission surface. Every main-process clipboard
   call in `e2e-tests/` goes through them, so a dropped debugger link is retried. A run leaves its
   last payload sitting in the machine-wide clipboard. It is not confined by `isolatedProjectRoot`
