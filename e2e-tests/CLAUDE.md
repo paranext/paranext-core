@@ -1,6 +1,8 @@
 # E2E Test Instructions
 
-Running the isolated suite natively on Windows: see `tests/isolated/README.md#running-on-windows`.
+Linux, including WSL2, is the supported platform for the isolated suite; native Windows and macOS
+are best effort. To run it natively on Windows, see `tests/isolated/README.md#running-on-windows`.
+Run the subset for the area you changed: the full isolated run takes about an hour.
 
 ## Where to put new E2E tests
 
@@ -64,7 +66,7 @@ one of these.
   exception is `window-layout-persistence.spec.ts`, which manages its own launches by hand instead
   of going through a fixture (see its own docblock) and does restore via `test.afterAll`. A
   run whose process is killed outright (Ctrl+C, a crashed worker) never reaches that teardown and
-  never restores. The four `multi-window` specs pin `'platform.interfaceMode': 'power'`, so a killed
+  never restores. The `multi-window` specs pin `'platform.interfaceMode': 'power'`, so a killed
   multi-window run leaves the whole checkout in Power mode. A suite that pins nothing inherits it.
   With no pin at all the app falls back to `'simple'` (`src/renderer/hooks/use-interface-mode.hook.ts`).
   - Check it first when a suite behaves differently than it did yesterday: `cat dev-appdata/data/settings.json`
