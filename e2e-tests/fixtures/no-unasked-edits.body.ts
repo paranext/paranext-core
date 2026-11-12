@@ -2071,8 +2071,6 @@ const FOOTNOTE_CHAPTERS: FootnoteChapterCase[] = [
     ],
   },
   {
-    // A book without a leading number: the toolbar's match row runs a numbered book's reference
-    // into its book code (`2 Thessalonians 2:12TH`), which `navigateToolbarBcv` cannot pick.
     label: 'Tobit 1 — a footnote holding an \\fqa span',
     reference: 'Tobit 1:1',
     chapterNum: 1,

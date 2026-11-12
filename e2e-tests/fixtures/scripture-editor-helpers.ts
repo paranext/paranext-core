@@ -537,7 +537,8 @@ export function topMatchReferencePattern(reference: string): RegExp {
  * reference rather than whatever cmdk has highlighted.
  *
  * Pass `reference` with the ENGLISH book name ("Exodus 2:3", not "EXO 2:3"): the row renders the
- * book name localized, and the app under test runs in English, so a book CODE never matches.
+ * book name localized, and the app under test runs in English, so a book CODE never matches. Spell
+ * the name as the row shows it: Daniel and Esther read "Daniel (Hebrew)" and "Esther (Hebrew)".
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
