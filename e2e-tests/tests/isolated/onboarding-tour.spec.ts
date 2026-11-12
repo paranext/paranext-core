@@ -130,6 +130,9 @@ async function restoreFreshTour(page: Page): Promise<void> {
 /** Bypasses the first-run wizard so `firstRunStatus.kind === 'app'` and the tour can be reached. */
 const SEED_PAST_FIRST_RUN = { 'platform.firstRunComplete': true };
 
+// The fixture suppresses the tour at launch unless a suite opts in; every test here needs it to show.
+test.use({ allowOnboardingTour: true });
+
 test.describe('Onboarding tour', () => {
   test.use({ interfaceMode: 'simple', seedSettings: SEED_PAST_FIRST_RUN });
 
