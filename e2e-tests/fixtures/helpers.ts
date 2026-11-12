@@ -179,6 +179,22 @@ export function readClipboardHtml(electronApp: ElectronApplication): Promise<str
 }
 
 /**
+ * Reads the plain text and the HTML on the real OS clipboard in ONE main-process call, with link
+ * retry, so both flavours come from the same clipboard contents. Use it when the two are asserted
+ * together: two separate reads can straddle a clipboard change.
+ */
+export function readClipboardTextAndHtml(
+  electronApp: ElectronApplication,
+): Promise<{ text: string; html: string }> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }) => ({
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+    })),
+  );
+}
+
+/**
  * Replaces the real OS clipboard's contents with `data` (`clipboard.write`: each flavour given is
  * set, the others are cleared), from the Electron main process, with link retry.
  */

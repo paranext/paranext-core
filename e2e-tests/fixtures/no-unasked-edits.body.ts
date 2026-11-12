@@ -69,8 +69,8 @@ import { type ElectronApplication, type Locator, type Page } from '@playwright/t
 import { test, expect } from './isolated.fixture';
 import { TEXT_NOTE_CALLER_SELECTOR } from './content-zoom-helpers';
 import {
-  readClipboardHtml,
   readClipboardText,
+  readClipboardTextAndHtml,
   requireIsolatedProjectRoot,
   waitForAppReady,
   writeClipboardText,
@@ -3051,8 +3051,7 @@ async function copySeededVerse(
       timeout: 15_000,
     })
     .not.toBe(CLIPBOARD_SENTINEL);
-  const text = await readClipboardText(electronApp);
-  const html = await readClipboardHtml(electronApp);
+  const { text, html } = await readClipboardTextAndHtml(electronApp);
   expect.soft(visible(text), `${where}: the copied plain text`).toBe(visible(expected));
   expect
     .soft(text.includes(NBSP_STAND_IN), `${where}: the plain text holds the editor's stand-in`)
