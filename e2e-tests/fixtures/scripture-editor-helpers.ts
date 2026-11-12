@@ -399,15 +399,17 @@ export const EMPTY_BOOK_ID_TEXT = 'empty book';
  * {@link setSampleProjectBookUsfm}.
  *
  * @param book Any reference in the book; only `book` is read.
- * @param headerUsfm USFM for the lines that follow the `\id` line, such as `\h` and `\toc2`, each
- *   ending in `\r\n`. Defaults to none.
+ * @param headerLines The lines that follow the `\id` line, such as `\h JON`, without line endings.
+ *   Defaults to none.
  * @returns The book's USFM as written, which is also all of its chapter 1.
  */
 export async function prepareEmptySampleBook(
   book: SampleChapterRef,
-  headerUsfm = '',
+  headerLines: string[] = [],
 ): Promise<string> {
-  const usfm = `\\id ${book.book} - ${EMPTY_BOOK_ID_TEXT}\r\n${headerUsfm}`;
+  const usfm = [`\\id ${book.book} - ${EMPTY_BOOK_ID_TEXT}`, ...headerLines]
+    .map((line) => `${line}\r\n`)
+    .join('');
   await makeSampleProjectEditable();
   await setSampleProjectBookUsfm(book, usfm);
   const chapterOne = await getSampleProjectChapterUsfm({ ...book, chapterNum: 1 });

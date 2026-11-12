@@ -10,7 +10,8 @@
  *
  * The book has header lines because a book Paratext creates does, and because they are where the
  * chapter can go wrong: above them, or with a second `\id` line. A book of only the `\id` line is
- * covered by the Power mode spec and by the editor's own tests.
+ * covered end to end by the Power mode spec (through the `\` palette), and its "Add chapter number"
+ * insert by the editor's own tests.
  *
  * ONE test() per spec file on purpose (see chapter-marker-repair.spec.ts).
  *
@@ -37,7 +38,7 @@ test.use({
 const JONAH_1 = { book: 'JON', chapterNum: 1, verseNum: 1 };
 
 /** The running header and table-of-contents line a new book holds under its `\id` line. */
-const HEADER_USFM = '\\h JON\r\n\\toc2 JON\r\n';
+const HEADER_LINES = [`\\h ${JONAH_1.book}`, `\\toc2 ${JONAH_1.book}`];
 
 /** Jonah 1 has 17 verses, so its scaffold is `\c 1` then `\v 1` to `\v 17`. */
 const CHAPTER_1_SCAFFOLD_USFM = `\\c 1\r\n${Array.from(
@@ -54,7 +55,7 @@ test.describe('scripture editor chapter marker in an empty book', () => {
 
     // Simple mode has no Home tab (simple-layout.data.ts); see formatted-default-simple-mode.spec.ts.
     await waitForAppReady(mainPage);
-    const emptyBookUsfm = await prepareEmptySampleBook(JONAH_1, HEADER_USFM);
+    const emptyBookUsfm = await prepareEmptySampleBook(JONAH_1, HEADER_LINES);
 
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
