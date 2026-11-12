@@ -7089,6 +7089,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   trip to the extension host. A hidden panel needs no catch-up: the switch reloads it like a visible
   one, and picking the selection is data, not layout.
 
+## adr-papi-port-blocked-at-the-session: Renderer windows are kept off the PAPI port by the main process's session, not by the renderer alone
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** PAPI connections are unauthenticated, and a raw socket to port 8876 is a separate
+  client that can call any method, register any unclaimed method, and broadcast any event. The
+  renderer kept web views off the port by making `PapiRendererWebSocket` (the `WebSocket` a web
+  view gets from `papi`) refuse it. But web views are same-origin `srcdoc` iframes, and three routes
+  borrow an unchecked constructor from the renderer's realm: `window.top.WebSocket` (`top` is
+  non-configurable, so the web view preamble's `delete window.top` does nothing); the
+  `constructor` of the native socket `PapiRendererWebSocket` returns; and a fresh about:blank
+  iframe in the top document, which gets its own native `WebSocket` under the renderer's CSP,
+  which allows `ws:`. A web view's own realm is not a route: its CSP has `connect-src 'self'` and
+  `worker-src 'none'`.
+- **Decision:** The main process cancels every WebSocket request to `WEBSOCKET_PORT` from the
+  default session in an `onBeforeRequest` listener (`registerPapiPortRequestBlock` in
+  `src/main/services/papi-port-request-block.util.ts`). Every handshake from every frame passes
+  through it, whatever constructor opened it. It matches on the port, not the host, as
+  `isPotentialConnectionToPapiNetwork` does. Nothing legitimate is blocked: windows reach main over
+  a `MessagePort`, the extension host and the .NET data provider are not in a browser session, and
+  external browsers use their own sessions. As defence in depth, and to give a clear `Invalid URL`
+  error, the renderer also replaces the top window's `WebSocket` and the native prototype's
+  `constructor` with `PapiRendererWebSocket` (`replaceTopWindowWebSocket`, called from the web
+  view service's monkey patches); that layer does not cover the fresh-iframe route.
+- **Alternatives:** **Patch the renderer only.** Cannot cover a fresh iframe's realm, and
+  `document.createElement`'s patch is bypassed by `insertAdjacentHTML` and by calling
+  `Document.prototype.createElement` on the top document; the iframe's `contentWindow` is readable
+  before the MutationObserver removes it. **Authenticate PAPI connections.** The real fix for
+  caller identity (PT-2893), and much larger.
+- **Consequences:** Electron keeps one `onBeforeRequest` listener per session; registering another
+  on the default session replaces this one and silently reopens the port, so any other need for
+  `onBeforeRequest` there must be folded into this listener. The renderer is still not a hard
+  boundary: a same-origin web view can reach renderer internals through `window.top`, including
+  the window's `MessagePort` bridge. Revisit when PT-2893 identifies callers.
+
 ## adr-papi-websocket-hostname-bind: The PAPI websocket binds by hostname, and readiness is awaited rather than assumed
 
 - **Date:** 2026-08-29

@@ -56,6 +56,7 @@ import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { registerDisplayMediaRequestHandler } from '@main/services/display-media-request.util';
 import { registerLeakedCertificateCheck } from '@main/services/leaked-certificate-check.util';
+import { registerPapiPortRequestBlock } from '@main/services/papi-port-request-block.util';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
@@ -2448,6 +2449,11 @@ async function main() {
 
       // TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
       registerLeakedCertificateCheck(session.defaultSession);
+
+      // Web views can borrow the renderer's native WebSocket, so the PAPI port is closed to every
+      // renderer window here. This owns the default session's only `onBeforeRequest` listener;
+      // registering another would replace it and silently reopen the port.
+      registerPapiPortRequestBlock(session.defaultSession);
 
       // Install Chromium devtools extensions once (not per-window)
       if (isDebug) {

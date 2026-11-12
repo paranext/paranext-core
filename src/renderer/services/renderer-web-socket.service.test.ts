@@ -86,4 +86,37 @@ describe('PapiRendererWebSocket blocking', () => {
 
     expect(new mod.PapiRendererWebSocket('ws://localhost:1234')).toBeInstanceOf(FakeWebSocket);
   });
+
+  describe('replaceTopWindowWebSocket', () => {
+    it("makes the window's WebSocket refuse the PAPI port", async () => {
+      const mod = await importFresh();
+      const target: { WebSocket: unknown } = { WebSocket: FakeWebSocket };
+      mod.replaceTopWindowWebSocket(target);
+      await mod.initializeNetworkThenBlockPapiWebSockets(async () => {});
+
+      expect(target.WebSocket).toBe(mod.PapiRendererWebSocket);
+      expect(() => new mod.PapiRendererWebSocket(papiUrl)).toThrow(`Invalid URL: ${papiUrl}`);
+    });
+
+    it("makes a native socket's constructor the checked one", async () => {
+      const mod = await importFresh();
+      mod.replaceTopWindowWebSocket({ WebSocket: FakeWebSocket });
+
+      const socket = new mod.PapiRendererWebSocket('ws://localhost:1234');
+
+      expect(socket).toBeInstanceOf(FakeWebSocket);
+      expect(socket.constructor).toBe(mod.PapiRendererWebSocket);
+    });
+
+    it('keeps the WebSocket statics and instanceof working', async () => {
+      const mod = await importFresh();
+      mod.replaceTopWindowWebSocket({ WebSocket: FakeWebSocket });
+
+      expect(mod.PapiRendererWebSocket.OPEN).toBe(1);
+      expect(mod.PapiRendererWebSocket.CLOSED).toBe(3);
+      expect(new mod.PapiRendererWebSocket('ws://localhost:1234')).toBeInstanceOf(
+        mod.PapiRendererWebSocket,
+      );
+    });
+  });
 });

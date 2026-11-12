@@ -2888,6 +2888,10 @@ declare module 'renderer/services/renderer-web-socket.service' {
    * Note that the Node WebSocket implementation is different and not wrapped here.
    */
   export class PapiRendererWebSocket implements WebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
     readonly CONNECTING: 0;
     readonly OPEN: 1;
     readonly CLOSING: 2;
@@ -2916,7 +2920,24 @@ declare module 'renderer/services/renderer-web-socket.service' {
     send: (data: string | ArrayBufferLike | Blob | ArrayBufferView) => void;
     url: string;
     constructor(url: string | URL, protocols?: string | string[]);
+    /**
+     * Sockets this class returns are native `WebSocket` instances, so `socket instanceof WebSocket`
+     * keeps working for code that sees this class as its `WebSocket`
+     */
+    static [Symbol.hasInstance](instance: unknown): boolean;
   }
+  /**
+   * Puts `PapiRendererWebSocket` in place of the native `WebSocket` on `target` (the top window), and
+   * makes it the `constructor` of every native socket, so a same-origin web view that borrows the
+   * constructor through `window.top` or through a socket it was handed gets the PAPI-port check too.
+   *
+   * This is defence in depth that gives a clear `Invalid URL` error: a fresh iframe in the top
+   * document still gets its own native `WebSocket`, so the main process's `onBeforeRequest` block
+   * (`papi-port-request-block.util.ts`) is what actually closes the port.
+   *
+   * @param target The window whose `WebSocket` to replace
+   */
+  export function replaceTopWindowWebSocket(target: { WebSocket: unknown }): void;
   export default PapiRendererWebSocket;
 }
 declare module 'extension-host/services/extension-host-web-socket.model' {

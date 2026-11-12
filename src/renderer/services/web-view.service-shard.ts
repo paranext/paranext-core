@@ -133,6 +133,7 @@ import {
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
 } from '@renderer/components/docking/simple-layout.builder';
 import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
+import { replaceTopWindowWebSocket } from '@renderer/services/renderer-web-socket.service';
 import {
   getWindowIdsWithStoredState,
   removeStateOfWindows,
@@ -3871,6 +3872,10 @@ export const initialize = () => {
       }
       return createElementOriginal(...args);
     };
+
+    // Web views can reach this window's native WebSocket through `window.top` or through the
+    // `constructor` of a socket they were handed, so route both through the PAPI-port check
+    replaceTopWindowWebSocket(window);
 
     // #endregion
 
