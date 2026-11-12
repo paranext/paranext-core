@@ -19,8 +19,9 @@ const config = defineConfig({
   // against whatever app is live, and its journey and functional specs (and the second `describe`
   // of `manage-books-commands.spec.ts`) change real projects with no restore. Those projects live
   // on developer machines under ~/.platform.bible/projects, so that is data loss, not test noise.
-  // Re-enable per spec once the suite owns a throwaway project root (`isolatedProjectRoot`, the way
-  // `find.fixture` does); see `tests/manage-books/README.md`.
+  // Re-enable per spec once the suite owns a throwaway project root (the `isolatedProjectRoot`
+  // launch option, or a temp projects folder as `find.fixture` makes); see
+  // `tests/manage-books/README.md`.
   // The parked Enhanced Resources specs are excluded too (`PARKED_ENHANCED_RESOURCES_SPECS`); the
   // local-only specs in that directory are collected. See `parked-enhanced-resources.ts`.
   testIgnore: [

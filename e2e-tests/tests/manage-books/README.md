@@ -35,9 +35,10 @@ Every file keeps a header comment saying it is parked and, where it applies, des
 
 ## What has to exist before they can run
 
-1. **A disposable project fixture.** The suite must own a throwaway project root (the way
-   `find.fixture` does with `isolatedProjectRoot`) holding the projects the specs mutate, so a run
-   never touches a developer's real projects. Today the specs pick whatever projects the app has,
+1. **A disposable project fixture.** The suite must own a throwaway project root holding the
+   projects the specs mutate, so a run never touches a developer's real projects. Two existing
+   ways to get one: the `isolatedProjectRoot` launch option in `fixtures/helpers.ts`, and the temp
+   projects folder `find.fixture` creates for its own copy of a project. Today the specs pick whatever projects the app has,
    by name (`zzz7`, `wgPIDGIN`, `zzz6`, `MP1`, `RH2`, `ROT`, `ESVUS16`, `TPTS`).
 2. **A restore step**, or a fresh copy of that fixture per run, so books deleted or created by one
    test do not decide the result of the next. `manage-books-functional-WP-002.spec.ts` documents
