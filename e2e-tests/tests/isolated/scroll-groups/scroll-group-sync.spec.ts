@@ -32,7 +32,7 @@ import {
 // options), so reusing that name throws "Fixture ... has already been registered as a
 // { scope: 'worker' } fixture". See e2e-tests/fixtures/isolated.fixture.ts.
 //
-// DEV_NOISY=false (fixture default is true): in noisy dev mode the renderer uses the test layout
+// DEV_NOISY=false (the fixture default): in noisy dev mode the renderer uses the test layout
 // (src/renderer/testing/test-layout.data.ts), which has NO Home tab — app-ready detection and a
 // clean single-pane layout for the viewport assertions both need the normal Home layout. Same
 // approach as comment.fixture.ts.

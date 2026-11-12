@@ -25,7 +25,7 @@ test.describe('whitespace and invisible characters survive the whole app', () =>
   // TODO(PT-5055): run again once the editor's saves can no longer be dropped or land out of order.
   test.fixme(
     true,
-    'PT-5055: deleting the pasted characters one by one can leave the file holding an older editor state (a save dropped while another is in flight, or an older save landing after a newer one)',
+    'PT-5055: deleting characters one by one can leave the file holding an older editor state (a save dropped while another is in flight, or an older save landing after a newer one); every phase that waits for a save can hit it: the typed and the pasted delete-one-by-one phases and the final typing step',
   );
 
   test('Simple paragraph-structure view, allow invisible characters on: opening writes nothing, an edit keeps the seeded characters, typed and pasted characters save as Paratext 9 saves them, and a copy gives them out', async ({

@@ -66,8 +66,9 @@ if (first === 'all') {
   playwrightArgs.push(...rest);
 } else if (first.startsWith('-') || subsets.includes(first) || isPath) {
   // A flag (e.g. --list, --grep), a subset directory name, or a path. Playwright treats a positional
-  // arg as a path filter, so the subdirectory name selects that subset.
-  playwrightArgs.push(first, ...rest);
+  // arg as a substring path filter, so a subset name is expanded to `tests/isolated/<subset>/`: the
+  // trailing slash keeps specs elsewhere whose path merely contains the name out of the run.
+  playwrightArgs.push(subsets.includes(first) ? `tests/isolated/${first}/` : first, ...rest);
 } else {
   console.error(`Unknown subset '${first}'.\n`);
   printUsage();

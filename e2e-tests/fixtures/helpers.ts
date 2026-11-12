@@ -2452,8 +2452,10 @@ export async function waitForDockLayoutLoaded(page: Page, timeout: number): Prom
   } catch (error) {
     throw new Error(
       `the dock's initial layout load did not finish within ${timeout} ms (no ` +
-        `${DOCK_LAYOUT_LOADED_SELECTOR}). A load that fails never sets it: look for "Initial ` +
-        'loadLayout failed" in the renderer log.',
+        `${DOCK_LAYOUT_LOADED_SELECTOR}). A load that fails never sets it: a failed initial load ` +
+        'logs "Initial loadLayout failed", and a failed load that replaced it (an interface-mode ' +
+        'switch) logs "Dock layout failed to reload after interface mode change"; look for ' +
+        'either in the renderer log.',
       { cause: error },
     );
   }
