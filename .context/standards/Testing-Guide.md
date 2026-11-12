@@ -1291,9 +1291,12 @@ Where a spec lives is decided by how it gets its app, and that choice also picks
   Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
   port 8876 is bound, which is exactly the state these specs need.
 - `tests/enhanced-resources/`, `tests/manage-books/`, `tests/markers-checklist/` — older
-  local-only suites that also use `cdp.fixture` and the CDP config. They are not part of any
-  standard run (see their READMEs for what collects each and why), so put new work in one of the
-  three directories above rather than extending them.
+  local-only suites that also use `cdp.fixture`. They are not part of any standard run, and parts
+  of them are parked, meaning collected by no config: all of `tests/manage-books/` and
+  `tests/markers-checklist/`, and the files listed in `PARKED_ENHANCED_RESOURCES_SPECS`
+  (`e2e-tests/parked-enhanced-resources.ts`) in `tests/enhanced-resources/`. See "Local-only directories" in `e2e-tests/CLAUDE.md` and each
+  directory's README, and put new work in one of the three directories above rather than
+  extending them.
 - `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
   tests, apart from the bare-Electron checks its README describes.
 
@@ -1447,8 +1450,9 @@ A cross-screen journey test that only checks `toBeVisible()` proves the page ren
 
 ```bash
 # CDP mode (app already running via ./.erb/scripts/refresh.sh)
-# Swap tests/attached/ for tests/enhanced-resources/, tests/manage-books/ or
-# tests/markers-checklist/ to run one of the local-only suites.
+# Swap tests/attached/ for tests/enhanced-resources/ (only its files that are not parked) to run
+# the local-only suite. tests/manage-books/ and tests/markers-checklist/ are parked and collected
+# by no config; see "Local-only directories" in e2e-tests/CLAUDE.md.
 npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
 
 # CDP mode with HTML report
@@ -1458,7 +1462,8 @@ npx playwright show-report e2e-tests/playwright-report
 # Standalone mode (launches its own Electron, port 8876 must be free). Each project in
 # playwright.config.ts has its own testDir, so path-filter inside it: `isolated` →
 # tests/isolated/** (most feature tests), `smoke` → tests/smoke/** (what CI runs, via
-# `npm run test:e2e:smoke`), `enhanced-resources` → tests/enhanced-resources/**.
+# `npm run test:e2e:smoke`). The `enhanced-resources` project is registered there too, but its
+# specs attach to a running app, which that config's globalSetup rejects: run them in CDP mode.
 npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated --reporter=list
 
 # WSL2: wrap a standalone-mode run so its Electron windows do not take over the Windows desktop.
