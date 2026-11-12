@@ -59,18 +59,18 @@ describe('registerUsersnapNetworkErrorLogging', () => {
     expect(completedRegistrations[0].filter).toEqual({ urls: ['https://*.usersnap.com/*'] });
   });
 
-  it('adds the space-key hint only to a 404 from the loader', () => {
-    const { session, completedRegistrations } = createSession();
+  it("adds the space-key hint only when the loader's answer was blocked as not a script", () => {
+    const { session, registrations } = createSession();
     registerUsersnapNetworkErrorLogging(session, 'test-space-key');
 
-    completedRegistrations[0].listener({
+    registrations[0].listener({
       url: 'https://widget.usersnap.com/global/load/wrong-key?onload=usersnapCallback_1',
-      statusCode: 404,
+      error: 'net::ERR_BLOCKED_BY_ORB',
       resourceType: 'script',
     });
 
     expect(logger.warn).toHaveBeenCalledWith(
-      "A Usersnap request to 'widget.usersnap.com' (script) was answered with HTTP 404 (Usersnap answers 404 to a space key it does not accept)",
+      "A Usersnap request to 'widget.usersnap.com' (script) failed with net::ERR_BLOCKED_BY_ORB, so the feedback forms may be unavailable (the loader's answer was not a script, which is how Usersnap answers a space key it does not accept)",
     );
   });
 
@@ -83,14 +83,47 @@ describe('registerUsersnapNetworkErrorLogging', () => {
       'https://widget.usersnap.com/global/loadx',
       'script',
     ],
-  ])('logs a 404 from %s without the space-key hint', (_name, url, resourceType) => {
+  ])(
+    'logs a blocked non-script answer from %s without the space-key hint',
+    (_name, url, resourceType) => {
+      const { session, registrations } = createSession();
+      registerUsersnapNetworkErrorLogging(session, 'test-space-key');
+
+      registrations[0].listener({ url, error: 'net::ERR_BLOCKED_BY_ORB', resourceType });
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        `A Usersnap request to '${new URL(url).host}' (${resourceType}) failed with net::ERR_BLOCKED_BY_ORB, so the feedback forms may be unavailable`,
+      );
+    },
+  );
+
+  it('logs any other network error on the loader without the space-key hint', () => {
+    const { session, registrations } = createSession();
+    registerUsersnapNetworkErrorLogging(session, 'test-space-key');
+
+    registrations[0].listener({
+      url: 'https://widget.usersnap.com/global/load/test-space-key?onload=usersnapCallback_1',
+      error: 'net::ERR_NAME_NOT_RESOLVED',
+      resourceType: 'script',
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      "A Usersnap request to 'widget.usersnap.com' (script) failed with net::ERR_NAME_NOT_RESOLVED, so the feedback forms may be unavailable",
+    );
+  });
+
+  it('logs an HTTP 404, even from the loader, without the space-key hint', () => {
     const { session, completedRegistrations } = createSession();
     registerUsersnapNetworkErrorLogging(session, 'test-space-key');
 
-    completedRegistrations[0].listener({ url, statusCode: 404, resourceType });
+    completedRegistrations[0].listener({
+      url: 'https://widget.usersnap.com/global/load/wrong-key?onload=usersnapCallback_1',
+      statusCode: 404,
+      resourceType: 'script',
+    });
 
     expect(logger.warn).toHaveBeenCalledWith(
-      `A Usersnap request to '${new URL(url).host}' (${resourceType}) was answered with HTTP 404`,
+      "A Usersnap request to 'widget.usersnap.com' (script) was answered with HTTP 404",
     );
   });
 

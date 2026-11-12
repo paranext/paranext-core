@@ -7,9 +7,13 @@
  * - A network error, for a request that got no answer: `net::ERR_NAME_NOT_RESOLVED`,
  *   `net::ERR_ADDRESS_INVALID` for a name a DNS blocker answers with `0.0.0.0`,
  *   `net::ERR_CERT_...`. This is what tells a blocked network from an outage.
- * - An HTTP error status, for a request Usersnap answered with one. Its loader answers a space key it
- *   does not accept with 404; its other hosts answer for other reasons (a missing widget chunk gets
- *   403), so only the loader's 404 says anything about the key.
+ * - An HTTP error status, for a request Usersnap answered with one, such as 403 for a missing widget
+ *   chunk.
+ *
+ * Usersnap's loader answers a space key it does not accept with a 404 page, not a script. Chromium
+ * blocks that answer to a `<script>` request before it completes (Opaque Response Blocking), so it
+ * arrives as the network error `net::ERR_BLOCKED_BY_ORB` rather than as an HTTP 404. That error on
+ * the loader request is therefore the one that points at the key.
  */
 
 import { logger } from '@shared/services/logger.service';
@@ -20,8 +24,8 @@ const USERSNAP_URL_PATTERN = 'https://*.usersnap.com/*';
 const CANCELLED_REQUEST_ERROR = 'net::ERR_ABORTED';
 /** The lowest HTTP status that is an error */
 const FIRST_HTTP_ERROR_STATUS = 400;
-/** The HTTP status Usersnap's loader answers a space key it does not accept with */
-const HTTP_NOT_FOUND = 404;
+/** Chromium's error for an answer it blocked because it was not what the request asked for */
+const BLOCKED_NON_SCRIPT_ANSWER_ERROR = 'net::ERR_BLOCKED_BY_ORB';
 /** The host of the loader request, the one request whose URL carries the space key */
 const USERSNAP_LOADER_HOST = 'widget.usersnap.com';
 /** The start of the loader request's path, which continues with the space key */
@@ -81,24 +85,24 @@ export function registerUsersnapNetworkErrorLogging(
   if (!spaceApiKey) return false;
 
   session.webRequest.onErrorOccurred({ urls: [USERSNAP_URL_PATTERN] }, (details) => {
-    const request = describeRequest(new URL(details.url), details.resourceType);
+    const requestUrl = new URL(details.url);
+    const request = describeRequest(requestUrl, details.resourceType);
     if (details.error === CANCELLED_REQUEST_ERROR) {
       logger.debug(`${request} was cancelled`);
       return;
     }
+    const hint =
+      details.error === BLOCKED_NON_SCRIPT_ANSWER_ERROR && isLoaderRequest(requestUrl)
+        ? " (the loader's answer was not a script, which is how Usersnap answers a space key it does not accept)"
+        : '';
     logger.warn(
-      `${request} failed with ${details.error}, so the feedback forms may be unavailable`,
+      `${request} failed with ${details.error}, so the feedback forms may be unavailable${hint}`,
     );
   });
   session.webRequest.onCompleted({ urls: [USERSNAP_URL_PATTERN] }, (details) => {
     if (details.statusCode < FIRST_HTTP_ERROR_STATUS) return;
-    const requestUrl = new URL(details.url);
-    const hint =
-      details.statusCode === HTTP_NOT_FOUND && isLoaderRequest(requestUrl)
-        ? ' (Usersnap answers 404 to a space key it does not accept)'
-        : '';
     logger.warn(
-      `${describeRequest(requestUrl, details.resourceType)} was answered with HTTP ${details.statusCode}${hint}`,
+      `${describeRequest(new URL(details.url), details.resourceType)} was answered with HTTP ${details.statusCode}`,
     );
   });
   return true;
