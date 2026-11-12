@@ -8,8 +8,8 @@ Running the isolated suite natively on Windows: see `tests/isolated/README.md#ru
 |---|---|---|
 | Core happy path (app launch, basic nav) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
 | Bare-Electron check of an Electron behavior the dev app can't show | `tests/smoke/` (see its README) | `npm run test:e2e:smoke` (also CI) |
-| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>`, or `all` for every subset (the bare form lists the subsets and exits 1) |
-| Tests needing real Marble resources (local-only) | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` |
+| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>`, or `all` for every spec (the bare form lists the subsets and exits 1) |
+| Tests needing real Marble resources (local-only) | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` (collects only the six local-only specs; the rest are parked, see below) |
 
 On WSL2, prefix a suite that launches its own Electron with `e2e-tests/run-e2e-wsl.sh --wrap` to
 keep its windows off the Windows desktop — e.g.
@@ -18,7 +18,7 @@ keep its windows off the Windows desktop — e.g.
 This does nothing for suites that attach to an app you started separately — `fixtures/cdp.fixture.ts`
 over port 9223, and the two `*-commands.spec.ts` files' `fixtures/papi-live.fixture.ts` over port
 8876. Between them that is `tests/attached/`, the local-only part of `tests/enhanced-resources/`, and
-the parked `tests/markers-checklist/` and `tests/manage-books/`. Start the app with
+the parked `tests/markers-checklist/` and `tests/manage-books/`, which no config collects. Start the app with
 `./.erb/scripts/refresh.sh` — on Linux that already runs it under its own Xvfb — and run the
 collected ones through `playwright-cdp.config.ts`, which has no globalSetup.
 
@@ -79,9 +79,9 @@ immediately discoverable and runnable without any config changes.
 
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch
-strategy). If you do, register a named project in `playwright.config.ts` — see
-`enhanced-resources` as the template — and add a `test:e2e:<name>` npm script if the suite is
-meant to be run routinely.
+strategy). If you do, register a named project in `playwright.config.ts` whose specs launch their
+own Electron, as the `isolated` and `smoke` projects do, and add a `test:e2e:<name>` npm script if
+the suite is meant to be run routinely.
 
 ## What NOT to do
 

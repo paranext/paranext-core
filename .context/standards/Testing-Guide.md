@@ -1284,8 +1284,9 @@ async function clickEditorMenuItem(page: Page, projectName: string, itemLabel: R
 
 Where a spec lives is decided by how it gets its app, and that choice also picks its config:
 
-- `tests/isolated/{feature}/` — the default. Each test launches its own Electron, so specs are
-  self-contained and can run in CI. Uses `isolated.fixture` and `playwright.config.ts`.
+- `tests/isolated/{feature}/` — the default. Each spec launches its own Electron (one per test, or
+  one per worker in a few subsets such as `find`), so specs are self-contained. CI does not run
+  this project. Uses `isolated.fixture` and `playwright.config.ts`.
 - `tests/attached/` — for specs that must attach to an app you started yourself (`refresh.sh`),
   because they cannot own its lifecycle. Uses `cdp.fixture` and `playwright-cdp.config.ts`.
   Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
@@ -1295,7 +1296,7 @@ Where a spec lives is decided by how it gets its app, and that choice also picks
   of them are parked, meaning collected by no config: all of `tests/manage-books/` and
   `tests/markers-checklist/`, and the files listed in `PARKED_ENHANCED_RESOURCES_SPECS`
   (`e2e-tests/parked-enhanced-resources.ts`) in `tests/enhanced-resources/`. See "Local-only directories" in `e2e-tests/CLAUDE.md` and each
-  directory's README, and put new work in one of the three directories above rather than
+  directory's README, and put new work in `tests/isolated/` or `tests/attached/` rather than
   extending them.
 - `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
   tests, apart from the bare-Electron checks its README describes.
