@@ -273,8 +273,13 @@ test.describe('Onboarding tour', () => {
       await skipTour(mainPage);
       await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 
-      await mainPage.getByRole('menuitem', { name: /^Help$/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Show the tour/i }).click();
+      // On a checkout with projects of its own, Simple mode is still opening one right after the
+      // reload above. When its editor finishes loading it takes focus, and an open menu closes when
+      // focus leaves it. So open Help again until its item can be clicked, as a user would.
+      await expect(async () => {
+        await mainPage.getByRole('menuitem', { name: /^Help$/i }).click({ timeout: 5_000 });
+        await mainPage.getByRole('menuitem', { name: /Show the tour/i }).click({ timeout: 2_000 });
+      }).toPass({ timeout: 30_000 });
 
       await expect(dialog).toBeVisible({ timeout: 15_000 });
       expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
