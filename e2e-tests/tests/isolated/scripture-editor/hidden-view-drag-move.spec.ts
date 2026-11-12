@@ -53,7 +53,7 @@ const STRUCTURE_LOCK_BUTTON_NAME = 'Toggle structure protection';
 
 /** The notice for a drag-move refused because it would join two `/` into `//`. */
 const REFUSED_MOVE_MESSAGE =
-  "Not moved: where it was dropped, it would join two / into //, which can't be added in this view.";
+  "Not moved: where it was dropped, it would put \\ or // in the text, which can't be added in this view.";
 
 // Jonah 2:4. The text the steps drag within is typed here first.
 const TYPING_POINT = 'yet I will look |again toward';
