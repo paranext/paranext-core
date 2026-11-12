@@ -196,6 +196,17 @@ jobs:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
 
+      # npm 10 installs a lockfile whose nested entries fall outside the range their workspace
+      # declares. npm 11 (Node.js 24), which the extension repos' CI uses to install this repo,
+      # re-resolves them and fails `npm ci` when that changes a locked version, so whether it breaks
+      # depends on the registry. `npm ls` fails on every such entry under both npm versions, and it
+      # reads only the lockfile, so it runs before `npm ci` and on one OS.
+      # To fix a failure: delete the reported keys from package-lock.json, then run npm 10's
+      # `npm install --package-lock-only --ignore-scripts`. npm will not drop them on its own.
+      - name: Check the lockfile's entries match their declared ranges
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm ls --all --package-lock-only
+
       # licensee (Ruby) identifies license texts for the third-party notices generator. Linux only:
       # the generator writes the artifact only on Linux, and the other legs verify against the
       # committed lock, which needs no Ruby.

@@ -10,7 +10,7 @@ import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal'
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import { FOOTNOTES_PANE_ATTRIBUTE } from './editor-dom.util';
 import { getEditorViewOptions } from './editor-view-options.util';
-import { FOOTNOTE_ROWS_SELECTOR } from './project-font-css.util';
+import { FOOTNOTE_ROWS_SELECTOR } from './use-project-stylesheet.hook';
 
 vi.mock('@papi/frontend', () => ({
   logger: { warn: vi.fn(), debug: vi.fn(), info: vi.fn(), error: vi.fn() },

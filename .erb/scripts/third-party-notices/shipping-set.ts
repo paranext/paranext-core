@@ -673,10 +673,9 @@ function readLockIndex(repo: string): LockIndex {
     if (!name) return;
     // The TOP-LEVEL copy wins, not the first key seen. Lock keys sort lexicographically, so
     // `extensions/src/<ext>/node_modules/<name>` precedes `node_modules/<name>` - and taking the
-    // first made this index answer with a workspace-nested copy for 166 names in this repository's
-    // own lockfile. Two of them ship: `lucide-react` resolved to a nested 0.475.0 over the
-    // top-level 1.8.0 that the shipping set actually reaches (and whose reviewed exception is
-    // pinned `@1.8.0`), and `tailwindcss` to 3.4.19 over 4.2.2. The consumers - `describePackage`'s
+    // first would make this index answer with a workspace-nested copy wherever one exists, at a
+    // version the shipping set may never reach (and that a reviewed exception pinned to the
+    // top-level version would not match). The consumers - `describePackage`'s
     // dev-link fallback and `collectPlatformOnlyPackages` - are asking "what does the tree resolve
     // for this bare name", which is the hoisted copy.
     const topLevel = `node_modules/${name}`;
