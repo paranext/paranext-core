@@ -24,11 +24,9 @@
  *   check against content that was never there). Bytes the closer-deletion scenario degraded to
  *   literal content stay visible there, because they ARE content now.
  *
- * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a SECOND Electron
- * instance launched against the shared webpack renderer dev server has a documented failure mode
- * where new dock tabs never render (see isolated.fixture.ts). Scenarios run as test.step()s sharing
- * the one instance and one edited document, which also lets the Simple-view check assert against
- * genuinely-populated content instead of an empty positive control.
+ * One test() with test.step()s: the isolated fixture starts a new app for every test(), so the
+ * scenarios share one launch and one edited document, which also lets the Simple-view check assert
+ * against genuinely-populated content instead of an empty positive control.
  *
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into the empty root): `npm run test:e2e:isolated scripture-editor`.

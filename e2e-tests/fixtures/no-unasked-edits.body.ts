@@ -1,9 +1,8 @@
 /**
  * The running app makes no edit to Scripture that the user did not ask for — the shared body of the
- * `no-unasked-edits-*` specs, one spec per editable view (isolated specs are one test() per file,
- * so each view needs its own file; the spec files only pick the view), plus
- * {@link runPreviewWritesNothing} for Power mode's read-only Preview,
- * {@link runFootnotesPaneRowEdits} for the footnotes pane's row editor and
+ * `no-unasked-edits-*` specs, one spec per editable view (each spec is one test() on its own
+ * launch; the spec files only pick the view), plus {@link runPreviewWritesNothing} for Power mode's
+ * read-only Preview, {@link runFootnotesPaneRowEdits} for the footnotes pane's row editor and
  * {@link runInvisibleCharacters} for whitespace and invisible characters under either setting of the
  * project's `AllowInvisibleChars`.
  *
@@ -46,10 +45,9 @@
  * character span). Each chapter is a separate book file, so one chapter's result cannot mask the
  * other's.
  *
- * The chapters and gestures run as test.step()s sharing one Electron instance (a second instance
- * against the shared renderer dev server has a documented dock-tab failure mode — see
- * isolated.fixture.ts), and every comparison is a soft assertion so one finding does not hide the
- * next.
+ * The chapters and gestures run as test.step()s sharing one Electron instance (the isolated fixture
+ * starts a new app for every test(), so the steps share one launch), and every comparison is a soft
+ * assertion so one finding does not hide the next.
  *
  * **Every write is recorded, so no step waits to prove a negative.** A {@link ProjectWriteRecorder}
  * samples the project's files for the whole run, and each step is a {@link WritePhase} that says

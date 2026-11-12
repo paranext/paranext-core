@@ -10,8 +10,8 @@
  * service's debounce, and a palette that mounts after its session ended takes focus from the keys
  * that follow.
  *
- * ONE test() per spec file (isolated-fixture / second-Electron-instance constraint — see
- * preview-read-only-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
+ * One test(): the isolated fixture starts a new app for every test(). Run: `npm run
+ * test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {

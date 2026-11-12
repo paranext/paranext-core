@@ -21,9 +21,8 @@
  * book code, so the line would change shape on the next load. This drives the real keys in the real
  * browser, the only place that boundary placement happens.
  *
- * ONE test() per spec file on purpose (the isolated fixture is test-scoped and a second Electron
- * instance against the shared renderer dev server has a documented dock-tab failure mode — see
- * preview-read-only-power-mode.spec.ts). Sub-scenarios are test.step()s sharing the one instance.
+ * One test() with test.step()s: the isolated fixture starts a new app for every test(), so the
+ * sub-scenarios share one launch.
  *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated scripture-editor`.

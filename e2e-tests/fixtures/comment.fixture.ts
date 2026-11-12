@@ -2,9 +2,7 @@
  * Playwright fixture for comment-related isolated E2E tests.
  *
  * Uses a **worker-scoped** Electron app so all tests in a describe block share a single Electron
- * instance. This avoids a known issue where the second Electron instance launched against the
- * webpack renderer dev server fails to render new dock tabs (`openResourceViewer` returns an ID but
- * the editor iframe never appears in the DOM).
+ * instance, so the launch cost is paid once per worker and the tests share the app's state.
  *
  * Worker-scoped means worker, not file: with `workers: 1` one worker runs every spec, so without
  * {@link CommentWorkerFixtures.commentAppOwner} a second spec would inherit the first spec's app —
