@@ -5,6 +5,7 @@ import {
   LAUNCH_PHASE_TIMEOUT_MS,
   requireIsolatedProjectRoot,
   SAMPLE_WEB_PROJECT_ID,
+  sendCommandFromPage,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
@@ -133,19 +134,10 @@ export async function sendCommandWithId(
   webViewId: string,
   areaId?: string,
 ): Promise<void> {
-  await page.evaluate(
-    ([cmd, id, area]) => {
-      // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as
-      // scripture-text-grid-zoom.spec.ts's afterEach cleanup).
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const win = window as unknown as {
-        papi: { commands: { sendCommand: (c: string, ...a: unknown[]) => Promise<unknown> } };
-      };
-      return area === undefined
-        ? win.papi.commands.sendCommand(cmd, id)
-        : win.papi.commands.sendCommand(cmd, id, area);
-    },
-    [commandName, webViewId, areaId] as const,
+  await sendCommandFromPage(
+    page,
+    commandName,
+    ...(areaId === undefined ? [webViewId] : [webViewId, areaId]),
   );
 }
 

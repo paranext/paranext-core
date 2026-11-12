@@ -3089,6 +3089,63 @@ export async function waitForOpenWebViewIdByType(
 }
 
 /**
+ * The slice of the renderer's `papi` that {@link sendCommandFromPage} uses. Type-only: it is erased
+ * before the callback runs in the page.
+ */
+type PagePapiCommands<T> = {
+  papi: { commands: { sendCommand: (commandName: string, ...args: unknown[]) => Promise<T> } };
+};
+
+/**
+ * Sends a PAPI command from inside the app window and waits for its result, exactly as a menu entry
+ * would (the renderer exposes `papi` on `window`, untyped in Playwright's page context). `T` is the
+ * result type the caller expects; the command name and arguments are not checked against PAPI's
+ * command map. The arguments must survive Playwright's `page.evaluate` serialization. A command
+ * that opens a dialog answers only once the dialog closes: use
+ * {@link sendCommandFromPageWithoutWaiting} for those. For a client over the websocket instead of
+ * the page, see `sendCommand` on `fixtures/papi.fixture.ts` and `fixtures/papi-live.fixture.ts`.
+ */
+export async function sendCommandFromPage<T = unknown>(
+  page: Page,
+  commandName: string,
+  ...args: unknown[]
+): Promise<T> {
+  return page.evaluate(
+    ([name, commandArgs]) => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { papi } = window as unknown as PagePapiCommands<T>;
+      return papi.commands.sendCommand(name, ...commandArgs);
+    },
+    [commandName, args] as const,
+  );
+}
+
+/**
+ * Sends a PAPI command from inside the app window and resolves once it is sent, without waiting for
+ * its result. A rejection is logged to the page's console as `<command> failed: <error>` so a
+ * failure does not surface only as a later timeout. Same serialization limit as
+ * {@link sendCommandFromPage}.
+ */
+export async function sendCommandFromPageWithoutWaiting(
+  page: Page,
+  commandName: string,
+  ...args: unknown[]
+): Promise<void> {
+  await page.evaluate(
+    ([name, commandArgs]) => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { papi } = window as unknown as PagePapiCommands<unknown>;
+      papi.commands
+        .sendCommand(name, ...commandArgs)
+        .catch((error) => console.error(`${name} failed: ${error}`));
+    },
+    [commandName, args] as const,
+  );
+}
+
+/**
  * Open the Markers Checklist for the open scripture editor by sending
  * `platformScripture.openMarkersChecklist` with the editor's web view id; the handler resolves the
  * project from the web view definition. The editor menu hides the Markers Checklist item in both
@@ -3096,14 +3153,7 @@ export async function waitForOpenWebViewIdByType(
  */
 export async function sendOpenMarkersChecklistCommand(page: Page): Promise<void> {
   const editorWebViewId = await waitForOpenWebViewIdByType(page, 'platformScriptureEditor.react');
-  await page.evaluate(async (webViewId) => {
-    // The renderer exposes `papi` on `window` without a declared type in the e2e project.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const win = window as unknown as {
-      papi: { commands: { sendCommand: (command: string, id: string) => Promise<unknown> } };
-    };
-    await win.papi.commands.sendCommand('platformScripture.openMarkersChecklist', webViewId);
-  }, editorWebViewId);
+  await sendCommandFromPage(page, 'platformScripture.openMarkersChecklist', editorWebViewId);
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */

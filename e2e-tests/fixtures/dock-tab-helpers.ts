@@ -1,6 +1,6 @@
 /** Helpers shared by the e2e specs that read rc-dock's tab bars and drag its tabs in a real window. */
 import { type Locator, type Page, expect } from '@playwright/test';
-import { waitForDockLayoutLoaded } from './helpers';
+import { sendCommandFromPageWithoutWaiting, waitForDockLayoutLoaded } from './helpers';
 
 /** The global overlay rc-dock positions over whatever drop target the pointer is on. */
 export const DROP_INDICATOR = '.dock-layout > .dock-drop-indicator';
@@ -216,16 +216,7 @@ export async function floatPanelIds(page: Page): Promise<string[]> {
  */
 export async function openFloat(page: Page, command: string): Promise<string> {
   const before = await floatPanelIds(page);
-  await page.evaluate((commandName) => {
-    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const { papi } = window as unknown as {
-      papi: { commands: { sendCommand: (name: string) => Promise<unknown> } };
-    };
-    papi.commands
-      .sendCommand(commandName)
-      .catch((error) => console.error(`${commandName} failed: ${error}`));
-  }, command);
+  await sendCommandFromPageWithoutWaiting(page, command);
   let added: string | undefined;
   await expect(async () => {
     added = (await floatPanelIds(page)).find((id) => !before.includes(id));
