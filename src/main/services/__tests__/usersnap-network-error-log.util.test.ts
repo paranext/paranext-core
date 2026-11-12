@@ -59,7 +59,7 @@ describe('registerUsersnapNetworkErrorLogging', () => {
     expect(completedRegistrations[0].filter).toEqual({ urls: ['https://*.usersnap.com/*'] });
   });
 
-  it('logs an HTTP error response, which is how Usersnap answers a space key it does not accept', () => {
+  it('adds the space-key hint to a 404 from the loader', () => {
     const { session, completedRegistrations } = createSession();
     registerUsersnapNetworkErrorLogging(session, 'test-space-key');
 
@@ -71,6 +71,22 @@ describe('registerUsersnapNetworkErrorLogging', () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       "A Usersnap request to 'widget.usersnap.com' (script) was answered with HTTP 404 (Usersnap answers 404 to a space key it does not accept)",
+    );
+  });
+
+  it.each([
+    ['a widget chunk', 'https://resources.usersnap.com/widget-assets/js/chunks/1/a.js', 'script'],
+    ['an API call', 'https://widget.usersnap.com/api/widget/xhrrpc', 'xhr'],
+    ['the loader path on another host', 'https://resources.usersnap.com/global/load/x', 'script'],
+    ['a path that only starts like the loader', 'https://widget.usersnap.com/global/loadx', 'script'],
+  ])('logs a 404 from %s without the space-key hint', (_name, url, resourceType) => {
+    const { session, completedRegistrations } = createSession();
+    registerUsersnapNetworkErrorLogging(session, 'test-space-key');
+
+    completedRegistrations[0].listener({ url, statusCode: 404, resourceType });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      `A Usersnap request to '${new URL(url).host}' (${resourceType}) was answered with HTTP 404`,
     );
   });
 

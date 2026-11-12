@@ -7,8 +7,9 @@
  * - A network error, for a request that got no answer: `net::ERR_NAME_NOT_RESOLVED`,
  *   `net::ERR_ADDRESS_INVALID` for a name a DNS blocker answers with `0.0.0.0`,
  *   `net::ERR_CERT_...`. This is what tells a blocked network from an outage.
- * - An HTTP error status, for a request Usersnap answered with one. It answers a space key it does
- *   not accept with 404.
+ * - An HTTP error status, for a request Usersnap answered with one. Its loader answers a space key
+ *   it does not accept with 404; its other hosts answer for other reasons (a missing widget chunk
+ *   gets 403), so only the loader's 404 says anything about the key.
  */
 
 import { logger } from '@shared/services/logger.service';
@@ -19,8 +20,12 @@ const USERSNAP_URL_PATTERN = 'https://*.usersnap.com/*';
 const CANCELLED_REQUEST_ERROR = 'net::ERR_ABORTED';
 /** The lowest HTTP status that is an error */
 const FIRST_HTTP_ERROR_STATUS = 400;
-/** The HTTP status Usersnap answers a space key it does not accept with */
+/** The HTTP status Usersnap's loader answers a space key it does not accept with */
 const HTTP_NOT_FOUND = 404;
+/** The host of the loader request, the one request whose URL carries the space key */
+const USERSNAP_LOADER_HOST = 'widget.usersnap.com';
+/** The start of the loader request's path, which continues with the space key */
+const USERSNAP_LOADER_PATH_PREFIX = '/global/load/';
 
 /** The parts of Electron's `OnErrorOccurredListenerDetails` the log reads */
 export type UsersnapNetworkErrorDetails = { url: string; error: string; resourceType: string };
@@ -46,8 +51,16 @@ export type UsersnapNetworkErrorSession = {
 };
 
 /** Names the request in a log line by host only: the path and query hold the space key */
-function describeRequest({ url, resourceType }: { url: string; resourceType: string }): string {
-  return `A Usersnap request to '${new URL(url).host}' (${resourceType})`;
+function describeRequest(requestUrl: URL, resourceType: string): string {
+  return `A Usersnap request to '${requestUrl.host}' (${resourceType})`;
+}
+
+/** Whether the request is the loader's, the one that tells Usersnap which space key to load */
+function isLoaderRequest(requestUrl: URL): boolean {
+  return (
+    requestUrl.hostname === USERSNAP_LOADER_HOST &&
+    requestUrl.pathname.startsWith(USERSNAP_LOADER_PATH_PREFIX)
+  );
 }
 
 /**
@@ -66,21 +79,25 @@ export function registerUsersnapNetworkErrorLogging(
   if (!spaceApiKey) return false;
 
   session.webRequest.onErrorOccurred({ urls: [USERSNAP_URL_PATTERN] }, (details) => {
+    const request = describeRequest(new URL(details.url), details.resourceType);
     if (details.error === CANCELLED_REQUEST_ERROR) {
-      logger.debug(`${describeRequest(details)} was cancelled`);
+      logger.debug(`${request} was cancelled`);
       return;
     }
     logger.warn(
-      `${describeRequest(details)} failed with ${details.error}; the feedback forms may not work while it does`,
+      `${request} failed with ${details.error}; the feedback forms may not work while it does`,
     );
   });
   session.webRequest.onCompleted({ urls: [USERSNAP_URL_PATTERN] }, (details) => {
     if (details.statusCode < FIRST_HTTP_ERROR_STATUS) return;
+    const requestUrl = new URL(details.url);
     const hint =
-      details.statusCode === HTTP_NOT_FOUND
+      details.statusCode === HTTP_NOT_FOUND && isLoaderRequest(requestUrl)
         ? ' (Usersnap answers 404 to a space key it does not accept)'
         : '';
-    logger.warn(`${describeRequest(details)} was answered with HTTP ${details.statusCode}${hint}`);
+    logger.warn(
+      `${describeRequest(requestUrl, details.resourceType)} was answered with HTTP ${details.statusCode}${hint}`,
+    );
   });
   return true;
 }
