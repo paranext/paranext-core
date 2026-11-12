@@ -3,9 +3,14 @@
  * number" button.
  *
  * Simple mode replaces a blank chapter with that view, and an empty book's chapter 1 is one: it
- * holds nothing but the `\id` line. The button stays enabled there while structure is locked, which
- * is Simple mode's default, since the book has no structure yet. It adds chapter 1 and its empty
- * verses after the `\id` line, and the book saves with its one `\id` line first.
+ * holds the `\id` line and the header lines under it, and no chapter or verse. The button stays
+ * enabled there while structure is locked, which is Simple mode's default, since the book has no
+ * structure yet. It adds chapter 1 and its empty verses below the header lines, and the book saves
+ * with its one `\id` line first and the header lines unchanged.
+ *
+ * The book has header lines because a book Paratext creates does, and because they are where the
+ * chapter can go wrong: above them, or with a second `\id` line. A book of only the `\id` line is
+ * covered by the Power mode spec and by the editor's own tests.
  *
  * ONE test() per spec file on purpose (see chapter-marker-repair.spec.ts).
  *
@@ -31,6 +36,9 @@ test.use({
 
 const JONAH_1 = { book: 'JON', chapterNum: 1, verseNum: 1 };
 
+/** The running header and table-of-contents line a new book holds under its `\id` line. */
+const HEADER_USFM = '\\h JON\r\n\\toc2 JON\r\n';
+
 /** Jonah 1 has 17 verses, so its scaffold is `\c 1` then `\v 1` to `\v 17`. */
 const CHAPTER_1_SCAFFOLD_USFM = `\\c 1\r\n${Array.from(
   { length: 17 },
@@ -46,7 +54,7 @@ test.describe('scripture editor chapter marker in an empty book', () => {
 
     // Simple mode has no Home tab (simple-layout.data.ts); see formatted-default-simple-mode.spec.ts.
     await waitForAppReady(mainPage);
-    const emptyBookUsfm = await prepareEmptySampleBook(JONAH_1);
+    const emptyBookUsfm = await prepareEmptySampleBook(JONAH_1, HEADER_USFM);
 
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
@@ -65,7 +73,7 @@ test.describe('scripture editor chapter marker in an empty book', () => {
       await expect(addChapterNumber).toBeEnabled();
     });
 
-    await test.step('chapter 1 saves after the \\id line, with one \\id line', async () => {
+    await test.step('chapter 1 saves below the header lines, with one \\id line', async () => {
       await addChapterNumber.click();
       await expect(editorFrame.locator('[data-marker="c"][data-number="1"]')).toBeAttached({
         timeout: 30_000,
