@@ -22,6 +22,9 @@ const config = defineConfig({
   // Re-enable per spec once the suite owns a throwaway project root (the `isolatedProjectRoot`
   // launch option, or a temp projects folder as `find.fixture` makes); see
   // `tests/manage-books/README.md`.
+  // markers-checklist is parked and excluded: its specs are the written scenarios for the Markers
+  // checklist, have never run to completion and need the `wgPIDGIN` project and an app in Power
+  // mode; see `tests/markers-checklist/README.md`.
   // The parked Enhanced Resources specs are excluded too (`PARKED_ENHANCED_RESOURCES_SPECS`); the
   // local-only specs in that directory are collected. See `parked-enhanced-resources.ts`.
   testIgnore: [
@@ -29,6 +32,7 @@ const config = defineConfig({
     '**/isolated/**',
     '**/_example/**',
     '**/manage-books/**',
+    '**/markers-checklist/**',
     ...PARKED_ENHANCED_RESOURCES_SPECS,
   ],
   fullyParallel: false,

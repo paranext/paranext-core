@@ -74,7 +74,7 @@ To bring a parked file back into use:
 
 The 7 locally-run files are registered as a project in `playwright.config.ts`
 (`name: 'enhanced-resources'`) and also collected by `playwright-cdp.config.ts`, which testIgnores
-`smoke`, `isolated`, `_example` and `manage-books` but not this directory. There is no dedicated npm
+`smoke`, `isolated`, `_example`, `manage-books` and `markers-checklist` but not this directory. There is no dedicated npm
 script, and nothing in CI runs it. The 10 parked files are testIgnored by both configs
 (`PARKED_ENHANCED_RESOURCES_SPECS`), so no config collects them.
 

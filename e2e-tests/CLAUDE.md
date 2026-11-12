@@ -17,15 +17,17 @@ keep its windows off the Windows desktop — e.g.
 
 This does nothing for suites that attach to an app you started separately — `fixtures/cdp.fixture.ts`
 over port 9223, and the two `*-commands.spec.ts` files' `fixtures/papi-live.fixture.ts` over port
-8876. Between them that is all of `tests/enhanced-resources/` and `tests/markers-checklist/`, plus
-`tests/attached/`. Start the app with `./.erb/scripts/refresh.sh` — on Linux that already runs it
-under its own Xvfb — and run those suites through `playwright-cdp.config.ts`, which has no
-globalSetup.
+8876. Between them that is `tests/attached/`, the local-only part of `tests/enhanced-resources/`, and
+the parked `tests/markers-checklist/` and `tests/manage-books/`. Start the app with
+`./.erb/scripts/refresh.sh` — on Linux that already runs it under its own Xvfb — and run the
+collected ones through `playwright-cdp.config.ts`, which has no globalSetup.
 
 ### Local-only directories
 
-Three directories under `tests/` are run by hand against a running app and by nothing else — no CI
-job collects them (CI runs only `test:e2e:smoke`):
+Three directories under `tests/` are not part of any standard run, and no CI job collects them (CI
+runs only `test:e2e:smoke`). Only the local-only specs of `tests/enhanced-resources/` are run by
+hand against a running app; everything else in these directories is parked, meaning no config
+collects it:
 
 - `tests/enhanced-resources/` — two groups.
   - Runs locally: the Text Collection grid specs (`scripture-text-grid*.spec.ts`,
@@ -46,10 +48,11 @@ job collects them (CI runs only `test:e2e:smoke`):
     both `playwright-cdp.config.ts` and `playwright.config.ts` list them in `testIgnore` through
     `PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`. To work on one,
     remove its entry from that list and run it against a prepared app. See the directory's README.
-- `tests/markers-checklist/` — written scenarios for the Markers checklist. The specs have never run
-  to completion and are a record of intent, not coverage. They need a real project (`wgPIDGIN`) on
-  the machine, so they cannot run in CI, and only `playwright-cdp.config.ts` collects them (they
-  are not a project in `playwright.config.ts`). See its README.
+- `tests/markers-checklist/` — all of it is parked, kept as the written scenarios for the Markers
+  checklist (epic PT-2049, "Inventory & Checklists"). The specs have never run to completion and
+  are a record of intent, not coverage. `playwright-cdp.config.ts` testIgnores the directory and
+  `playwright.config.ts` has no project for it, so no config collects it. They attach to a running
+  app and need a real project (`wgPIDGIN`) on the machine. See its README.
 - `tests/manage-books/` — all of it is parked, kept as the written scenarios for the Manage Books
   feature (epic PT-1779, "Manage Books in a Project"). `playwright-cdp.config.ts` testIgnores the
   directory and `playwright.config.ts` has no project for it, so no config collects it. It attaches
@@ -82,7 +85,7 @@ meant to be run routinely.
 - Do not put feature tests in `smoke/` — smoke tests are for the core happy path (plus the
   bare-Electron checks its README describes) and must stay fast and CI-green.
 - Do not use `manage-books/`, `markers-checklist/` or `enhanced-resources/` as models — those are
-  local-only or parked suites (see "Local-only directories") not wired into any standard test run.
+  parked or local-only suites (see "Local-only directories") not wired into any standard test run.
   See the README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding
   a well-named spec file to `isolated/` instead.

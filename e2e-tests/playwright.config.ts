@@ -48,10 +48,10 @@ const config = defineConfig({
   //
   // Exceptions:
   // `_example/` — reference template for new tests, not a runnable test suite.
-  // Local-only suites run by hand against a running app (`manage-books/`, `markers-checklist/`; see
-  // "Local-only directories" in `e2e-tests/CLAUDE.md`). `manage-books/` is parked and has no project
-  // here; `enhanced-resources/` below is registered, but its parked specs are testIgnored (see
-  // `parked-enhanced-resources.ts`).
+  // Parked suites (`manage-books/`, `markers-checklist/`; see "Local-only directories" in
+  // `e2e-tests/CLAUDE.md`) have no project here and are testIgnored by `playwright-cdp.config.ts`
+  // too, so no config collects them. `enhanced-resources/` below is registered, but its parked
+  // specs are testIgnored (see `parked-enhanced-resources.ts`).
   // Nothing else is excluded here: `navigation-history/` is an isolated subset like any other,
   // and `playwright-cdp.config.ts` cannot collect it at all (`testIgnore: ['**/isolated/**']`).
   projects: [

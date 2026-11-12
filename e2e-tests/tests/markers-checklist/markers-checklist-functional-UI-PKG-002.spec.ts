@@ -1,4 +1,13 @@
 /**
+ * PARKED — no Playwright config collects this file, and it has never run to completion. It is kept
+ * as the written scenarios for the Markers checklist (epic PT-2049, "Inventory & Checklists"). It
+ * attaches to a running app over CDP in Power mode and needs the `wgPIDGIN` project; it writes
+ * evidence screenshots under `.context/features/markers-checklist/proofs/e2e-evidence`. To work on
+ * it, remove the markers-checklist glob from `testIgnore` in `e2e-tests/playwright-cdp.config.ts`
+ * (the ignore also applies to a file named on the command line). See
+ * `e2e-tests/tests/markers-checklist/README.md`.
+ */
+/**
  * === NEW IN PT10 === Reason: RED-phase functional tests for the wired Markers Checklist web view
  * (UI-PKG-002) plus adjacent coverage for UI-PKG-001 (provider/hook/main.ts/menus.json) and
  * UI-PKG-004 (`useWebViewState` persistence slots).
