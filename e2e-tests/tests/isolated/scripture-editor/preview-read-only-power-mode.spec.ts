@@ -23,13 +23,11 @@
  *   markerSyntax). Only the editable marker mode creates MarkerNodes, and their visible `\marker`
  *   text is the user-facing substance of Standard view.
  *
- * The isolated fixture is test-scoped, so each `test()` starts its own Electron instance, and a
- * SECOND instance launched against the shared webpack renderer dev server has a documented failure
- * mode where new dock tabs never render (see isolated.fixture.ts). The scenarios therefore run as
- * test.step()s sharing the one instance. A cold first run measured ~84s against the default 120s
- * budget (~70%), so a colder or memory-pressured machine could spuriously time out; the test gets
- * Playwright's 3x "slow" budget for headroom (a passing run still exits in seconds). The
- * Simple-mode counterpart lives in formatted-default-simple-mode.spec.ts.
+ * The isolated fixture is test-scoped, so each `test()` starts its own Electron instance. The
+ * scenarios therefore run as test.step()s sharing one launch. A cold first run measured ~84s
+ * against the default 120s budget (~70%), so a colder or memory-pressured machine could spuriously
+ * time out; the test gets Playwright's 3x "slow" budget for headroom (a passing run still exits in
+ * seconds). The Simple-mode counterpart lives in formatted-default-simple-mode.spec.ts.
  *
  * Run: `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/preview-read-only-power-mode.spec.ts`.

@@ -25,7 +25,7 @@ export { expect } from '@playwright/test';
  * ## One instance per test
  *
  * Every `test()` block launches and tears down its own Electron process. This gives full isolation
- * between tests at the cost of startup time (30+ seconds per test).
+ * between tests at the cost of startup time (several seconds per test, plus teardown).
  *
  * Use these fixtures when tests mutate application state in ways that would affect subsequent
  * tests, or when you need a guaranteed clean slate. For tests that can tolerate shared state,
@@ -34,10 +34,10 @@ export { expect } from '@playwright/test';
  * tests within a single file typically share an instance, but this is a side effect of Playwright's
  * default parallelism settings, not a guarantee of the fixture itself.
  *
- * The renderer connects to a shared webpack dev server (`localhost:1212`), and ES module state
- * (initialization guards, dock layout singletons, etc.) persists across navigations within the same
- * renderer process. A second Electron instance launched against the same dev-server renderer will
- * inherit stale module state, which prevents dock tabs from rendering correctly.
+ * Because the fixture is test-scoped, every `test()` pays its own app start and teardown. Write
+ * checks that can share one launch state as `test.step`s of a single test; give a check that needs
+ * a fresh app or different launch settings its own `test()`, in the same file when it covers the
+ * same behaviour.
  */
 export interface IsolatedFixtures {
   /**

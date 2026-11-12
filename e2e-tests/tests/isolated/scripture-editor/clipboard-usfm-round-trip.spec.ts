@@ -24,10 +24,8 @@
  * clipboard from OUTSIDE the renderer entirely — bypassing `navigator.clipboard` and its renderer
  * permission surface — which is exactly the external round trip this spec needs to exercise.
  *
- * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a SECOND Electron
- * instance launched against the shared webpack renderer dev server has a documented failure mode
- * where new dock tabs never render (see isolated.fixture.ts). Sub-scenarios are test.step()s
- * sharing the one instance, in sequence, so each step's assertions run against the state the prior
+ * One test() with test.step()s: the isolated fixture starts a new app for every test(), so the
+ * steps share one launch, in sequence, and each step's assertions run against the state the prior
  * step left behind (the undo step, in particular, depends on the paste step having landed).
  *
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed

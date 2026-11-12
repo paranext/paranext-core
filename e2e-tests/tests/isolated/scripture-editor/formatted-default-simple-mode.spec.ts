@@ -13,7 +13,8 @@
  * the headings, the empty-verse placeholder and the footnotes pane's rows, read-only and while
  * edited.
  *
- * ONE test() per spec file on purpose — see preview-read-only-power-mode.spec.ts.
+ * One test(): the isolated fixture starts a new app for every test(), so its checks share one
+ * launch.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';

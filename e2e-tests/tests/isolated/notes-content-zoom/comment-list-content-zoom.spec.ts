@@ -6,9 +6,8 @@
  * independent level, and BCV-driven scroll sync still lands on the right card once the list is
  * zoomed.
  *
- * ONE test() per spec file, matching every other suite built on the worker-scoped comment fixture:
- * a second Electron instance against the shared renderer dev server has a documented dock-tab
- * failure mode. Sub-scenarios are test.step()s sharing the one instance.
+ * One test() on the worker-scoped comment fixture, which shares one app per worker; the
+ * sub-scenarios are test.step()s sharing that instance.
  *
  * `npm run test:e2e:isolated notes-content-zoom`
  */
