@@ -1,7 +1,8 @@
 // Copied into paranext-extension-template and paranext-multi-extension-template as
 // `webpack/emit-shipped-modules-plugin.ts`, and the notices generator reads the manifests those
 // copies write too - so a change to the manifest format or the build-id stamp has to be made in
-// the copies as well.
+// the copies as well. The copies keep this code but have their own comments, which describe the
+// templates' build; the design rationale is recorded here.
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
