@@ -543,8 +543,13 @@ export async function navigateToolbarBcv(mainPage: Page, reference: string): Pro
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
+  // The reference is the row's first DIRECT child span and the book id is its sibling (see the
+  // top-match `CommandItem` in book-chapter-control.component.tsx), so `:scope >` keeps a nested
+  // first-child span from standing in for it.
   const topMatchRow = mainPage.locator('[data-radix-popper-content-wrapper] [cmdk-item]', {
-    has: mainPage.locator('span:first-child', { hasText: topMatchReferencePattern(reference) }),
+    has: mainPage.locator(':scope > span:first-child', {
+      hasText: topMatchReferencePattern(reference),
+    }),
   });
   await topMatchRow.first().waitFor({ timeout: 10_000 });
   await input.press('Enter');
