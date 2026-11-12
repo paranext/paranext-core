@@ -16,6 +16,7 @@ import {
   teardownElectronApp,
   WindowSize,
 } from './helpers';
+import { suppressOnboardingTour } from './onboarding-tour.page';
 
 export { expect } from '@playwright/test';
 
@@ -81,6 +82,14 @@ export interface IsolatedFixtures {
    * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
    */
   windowSize: WindowSize;
+  /**
+   * Set `test.use({ allowOnboardingTour: true })` only in a suite that is ABOUT the onboarding tour
+   * and needs it to show. By default `mainPage` writes the tour's completion flag as soon as the
+   * window loads, so a Simple-mode spec never has its first click intercepted by the tour's
+   * full-screen overlay. A suite that opts in must also pass `allowOnboardingTour` to
+   * `waitForAppReady`, which suppresses the tour by default too.
+   */
+  allowOnboardingTour: boolean;
   electronApp: ElectronApplication;
   mainPage: Page;
 }
@@ -96,6 +105,9 @@ export const test = base.extend<IsolatedFixtures>({
   // Option fixture: extra settings seeded in the same pre-launch write (see IsolatedFixtures doc
   // for why specs must not run their own preConfigureSettings).
   seedSettings: [{}, { option: true }],
+
+  // Option fixture: see the IsolatedFixtures doc; the tour is suppressed unless a suite opts in.
+  allowOnboardingTour: [false, { option: true }],
 
   // Test-scoped fixture: Playwright launches one Electron instance per test() block.
   electronApp: async ({ electronLaunchOptions, interfaceMode, seedSettings }, use) => {
@@ -137,7 +149,11 @@ export const test = base.extend<IsolatedFixtures>({
     }
   },
 
-  mainPage: async ({ electronApp, windowSize, interfaceMode }, use, testInfo: TestInfo) => {
+  mainPage: async (
+    { electronApp, windowSize, interfaceMode, allowOnboardingTour },
+    use,
+    testInfo: TestInfo,
+  ) => {
     const pageSetupStart = Date.now();
     const stamp = () => `[setup +${Date.now() - pageSetupStart}ms]`;
     const page = await electronApp.firstWindow({ timeout: 90_000 });
@@ -165,6 +181,11 @@ export const test = base.extend<IsolatedFixtures>({
     page.on('console', onConsoleMsg);
 
     await page.waitForLoadState('domcontentloaded');
+
+    // The tour opens on its own, asynchronously, in Simple mode with a fresh profile, and its
+    // overlay intercepts every pointer event. The renderer re-reads the completion flag on each
+    // render, so writing it now, before the dock layout renders, keeps the tour from ever opening.
+    if (!allowOnboardingTour) await suppressOnboardingTour(page);
 
     // Wait for React to mount
     await page.waitForSelector('#root', { state: 'attached', timeout: 30_000 });
