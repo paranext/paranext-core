@@ -31,27 +31,32 @@ Seventeen spec files, plus `test-helpers.ts` (dock and Enhanced Resource helpers
 `scripture-text-grid.page.ts` (page helpers for the Text Collection grid). Each has one of two
 statuses.
 
-**Runs locally against a prepared app** (7 files). Someone runs them by hand when they change the
+**Runs locally against a prepared app** (6 files). Someone runs them by hand when they change the
 feature:
 
-- `scripture-text-grid.spec.ts`, `scripture-text-grid-verse-row.spec.ts`,
-  `scripture-text-grid-view-options.spec.ts`, `scripture-text-grid-zoom.spec.ts` and
-  `cell-reorder.spec.ts` — the Text Collection grid. `scripture-text-grid.spec.ts` is out of date;
-  PT-4779 covers bringing it up to date.
+- `scripture-text-grid-verse-row.spec.ts`, `scripture-text-grid-view-options.spec.ts`,
+  `scripture-text-grid-zoom.spec.ts` and `cell-reorder.spec.ts` — the Text Collection grid.
 - `enhanced-resource-content-zoom.spec.ts` — content zoom in the Enhanced Resource window.
 - `enhanced-resources-image-render.spec.ts` — images render in an Enhanced Resource.
 
-**Parked** (10 files). The Enhanced Resources feature was built experimentally and is still to be
-finished (epic PT-2021, "Enhanced Resources"). These files are its written test scenarios, kept so
-that work can start from them. They have never run as a whole, no CI job runs them, and some of
-their tests are `test.fixme` placeholders for behaviour or fixtures that do not exist yet:
+**Parked** (11 files). One of them is parked because it is out of date:
+
+- `scripture-text-grid.spec.ts` — the Text Collection grid, a shipped feature. Eight of its
+  assertions are out of date; PT-4779 covers bringing it up to date, and the file comes back then.
+  It needs Power mode and Marble resources like the other grid specs.
+
+The other ten are parked for a different reason. The Enhanced Resources feature was built
+experimentally and is still to be finished (epic PT-2021, "Enhanced Resources"). These files are its
+written test scenarios, kept so that work can start from them. They have never run as a whole, no CI
+job runs them, and some of their tests are `test.fixme` placeholders for behaviour or fixtures that
+do not exist yet:
 
 - `enhanced-resources-functional-UI-PKG-001.spec.ts` to `-008.spec.ts` — one file per UI package
   of the Enhanced Resource window (main window shell, and the other seven packages).
 - `enhanced-resources-journey.spec.ts` — flows that cross several of those packages.
 - `text-collection-schema.spec.ts` — the Text Collection flags and per-user overlay of a project.
 
-Together the parked files declare 136 `test(...)` / `test.fixme(...)` tests, 45 of them
+Together the parked files declare 157 `test(...)` / `test.fixme(...)` tests, 45 of them
 `test.fixme`.
 
 To bring a parked file back into use:
@@ -72,10 +77,10 @@ To bring a parked file back into use:
 
 ### What collects this suite
 
-The 7 locally-run files are registered as a project in `playwright.config.ts`
+The 6 locally-run files are registered as a project in `playwright.config.ts`
 (`name: 'enhanced-resources'`) and also collected by `playwright-cdp.config.ts`, which testIgnores
 `smoke`, `isolated`, `_example`, `manage-books` and `markers-checklist` but not this directory. There is no dedicated npm
-script, and nothing in CI runs it. The 10 parked files are testIgnored by both configs
+script, and nothing in CI runs it. The 11 parked files are testIgnored by both configs
 (`PARKED_ENHANCED_RESOURCES_SPECS`), so no config collects them.
 
 Registered is not the same as runnable. These specs attach through `fixtures/cdp.fixture.ts`, via
@@ -94,4 +99,4 @@ The `no-silent-skips` reporter (`e2e-tests/reporters/`) fails a run in which tes
 skipped that nobody asked to skip, so a run of this suite is watched by it.
 
 **Size:** 17 spec files — 171 `test(...)` declarations in all, of which 45 are `test.fixme(...)`;
-the 7 locally-run files hold 35 and no `test.fixme(...)`, the 10 parked files 136.
+the 6 locally-run files hold 14 and no `test.fixme(...)`, the 11 parked files 157.

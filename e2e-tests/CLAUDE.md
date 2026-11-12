@@ -30,24 +30,27 @@ hand against a running app; everything else in these directories is parked, mean
 collects it:
 
 - `tests/enhanced-resources/` — two groups.
-  - Runs locally: the Text Collection grid specs (`scripture-text-grid*.spec.ts`,
-    `cell-reorder.spec.ts`, `enhanced-resource-content-zoom.spec.ts`) and
+  - Runs locally: the Text Collection grid specs `scripture-text-grid-verse-row.spec.ts`,
+    `scripture-text-grid-view-options.spec.ts`, `scripture-text-grid-zoom.spec.ts` and
+    `cell-reorder.spec.ts`, plus `enhanced-resource-content-zoom.spec.ts` and
     `enhanced-resources-image-render.spec.ts`. They need real Marble resources (paid, not available
     in CI) and an app started in Power mode (every spec there but
-    `scripture-text-grid-verse-row.spec.ts` asserts it). `scripture-text-grid.spec.ts` is out of date;
-    PT-4779 covers bringing it up to date.
-  - Parked: `enhanced-resources-functional-UI-PKG-001` to `-008.spec.ts`,
-    `enhanced-resources-journey.spec.ts` and `text-collection-schema.spec.ts`. Parked means the file
-    is kept as the written scenarios for a feature that is still to be finished (epic PT-2021,
-    "Enhanced Resources"), no CI job runs it, and it has never run as a whole. Many of its tests
+    `scripture-text-grid-verse-row.spec.ts` asserts it).
+  - Parked, out of date: `scripture-text-grid.spec.ts`. It covers the shipped Text Collection grid,
+    but eight of its assertions are out of date; it comes back when PT-4779 is done. Like the other
+    grid specs it needs Power mode and real Marble resources.
+  - Parked, unfinished feature: `enhanced-resources-functional-UI-PKG-001` to `-008.spec.ts`,
+    `enhanced-resources-journey.spec.ts` and `text-collection-schema.spec.ts`. These are kept as
+    the written scenarios for a feature that is still to be finished (epic PT-2021, "Enhanced
+    Resources"), no CI job runs them, and they have never run as a whole. Many of their tests
     are `test.fixme`. Before the `enhanced-resources-functional-*` and `-journey` files can run they
     need an app in Power mode with real Marble resources such as `ESV16UK+`.
     `text-collection-schema.spec.ts` needs neither: it works in either interface mode and only needs
-    `E2E_TEST_PROJECT_ID` to name an editable admin project (it skips itself otherwise). No config
-    collects these files:
-    both `playwright-cdp.config.ts` and `playwright.config.ts` list them in `testIgnore` through
-    `PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`. To work on one,
-    remove its entry from that list and run it against a prepared app. See the directory's README.
+    `E2E_TEST_PROJECT_ID` to name an editable admin project (it skips itself otherwise).
+  - No config collects the parked files: both `playwright-cdp.config.ts` and `playwright.config.ts`
+    list them in `testIgnore` through `PARKED_ENHANCED_RESOURCES_SPECS` in
+    `e2e-tests/parked-enhanced-resources.ts`. To work on one, remove its entry from that list and
+    run it against a prepared app. See the directory's README.
 - `tests/markers-checklist/` — all of it is parked, kept as the written scenarios for the Markers
   checklist (epic PT-2049, "Inventory & Checklists"). The specs have never run to completion and
   are a record of intent, not coverage. `playwright-cdp.config.ts` testIgnores the directory and
