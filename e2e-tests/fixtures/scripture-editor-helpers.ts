@@ -518,17 +518,28 @@ function escapeForRegExp(value: string): string {
 }
 
 /**
+ * Pattern for the text of the top-match row's reference span, which holds the formatted reference
+ * and nothing else (the book id is a sibling span). It requires the span to start with `reference`
+ * and the number to have ended there: a following digit means a longer number ("Mark 40:1" for
+ * "Mark 4"), while a numbered book's id never reaches this span.
+ */
+export function topMatchReferencePattern(reference: string): RegExp {
+  return new RegExp(`^${escapeForRegExp(reference)}(?!\\d)`, 'i');
+}
+
+/**
  * Navigate the main toolbar's book-chapter-verse control (drives scroll group A).
  *
  * Commits with Enter only AFTER the top-match row displays the typed reference: the control parses
  * the input asynchronously, so an immediate Enter can race the parse and commit the previous
- * reference (observed as "typed EXO 2:3, still on Genesis 1:1"). The `(?!\d)` anchor keeps a
+ * reference (observed as "typed EXO 2:3, still on Genesis 1:1"). The match is made against the
+ * row's first span alone (see {@link topMatchReferencePattern}), whose `(?!\d)` anchor keeps a
  * wrong-chapter row from false-matching — "Mark 4" accepts "Mark 4:1" but rejects "Mark 40:1".
  *
- * A `\b` anchor cannot do that job here. The row renders the reference and the book id as adjacent
- * spans with no whitespace between them, so `hasText` sees one run of "Jonah 1:1JON" — a digit
- * followed by a letter, which is not a word boundary, so `\b` never matches any verse-level
- * reference. `(?!\d)` asserts what the anchor is actually for: the number must have ended.
+ * The row renders the reference and the book id as two adjacent spans with no whitespace between
+ * them, so the row's whole text reads like "1 Samuel 17:11SA". Matching that run would let a
+ * numbered book's id digit stand in for the end of the verse number; the reference span carries no
+ * id, so the anchor sees only the reference.
  *
  * Deliberately NOT keyed on cmdk's `data-selected` highlight: that highlight sits on a cell of the
  * chapter preview grid below this row, never on the row itself, and Enter submits the row's
@@ -545,7 +556,7 @@ export async function navigateToolbarBcv(mainPage: Page, reference: string): Pro
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
   const topMatchRow = mainPage.locator('[data-radix-popper-content-wrapper] [cmdk-item]', {
-    hasText: new RegExp(`${escapeForRegExp(reference)}(?!\\d)`, 'i'),
+    has: mainPage.locator('span:first-child', { hasText: topMatchReferencePattern(reference) }),
   });
   await topMatchRow.first().waitFor({ timeout: 10_000 });
   await input.press('Enter');
