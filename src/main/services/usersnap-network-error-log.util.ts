@@ -84,9 +84,7 @@ export function registerUsersnapNetworkErrorLogging(
       logger.debug(`${request} was cancelled`);
       return;
     }
-    logger.warn(
-      `${request} failed with ${details.error}; the feedback forms may not work while it does`,
-    );
+    logger.warn(`${request} failed with ${details.error}, so the feedback forms may be unavailable`);
   });
   session.webRequest.onCompleted({ urls: [USERSNAP_URL_PATTERN] }, (details) => {
     if (details.statusCode < FIRST_HTTP_ERROR_STATUS) return;

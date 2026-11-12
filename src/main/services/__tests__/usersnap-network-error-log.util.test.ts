@@ -142,7 +142,7 @@ describe('registerUsersnapNetworkErrorLogging', () => {
     });
 
     expect(logger.warn).toHaveBeenCalledWith(
-      "A Usersnap request to 'widget.usersnap.com' (script) failed with net::ERR_ADDRESS_INVALID; the feedback forms may not work while it does",
+      "A Usersnap request to 'widget.usersnap.com' (script) failed with net::ERR_ADDRESS_INVALID, so the feedback forms may be unavailable",
     );
   });
 
