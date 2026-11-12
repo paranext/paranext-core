@@ -65,8 +65,10 @@ function isLoaderRequest(requestUrl: URL): boolean {
 
 /**
  * Logs every request to Usersnap that failed or was answered with an HTTP error, but only when
- * Usersnap is configured. A session has one `onErrorOccurred` and one `onCompleted` listener at a
- * time, so registering another one replaces this one.
+ * Usersnap is configured. Electron keeps one `onErrorOccurred` and one `onCompleted` listener per
+ * session, so this takes the session's only listeners for both events: registering another one
+ * replaces this one, even with a different URL filter. Route any other use of those events through
+ * this function rather than registering another listener.
  *
  * @param session The session whose Usersnap requests to log
  * @param spaceApiKey The Usersnap space key; empty when this build has no Usersnap integration

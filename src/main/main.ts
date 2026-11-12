@@ -2446,7 +2446,9 @@ async function main() {
       // web views with `allowSameOrigin: false` and any other iframe are denied (see
       // `selectDisplayMediaSource`).
       registerDisplayMediaRequestHandler(session.defaultSession, USERSNAP_SPACE_API_KEY);
-      // The renderer cannot see why the Usersnap widget failed to load; this session can
+      // Logs why Usersnap requests failed, which the renderer cannot see. This takes defaultSession's
+      // only onCompleted and onErrorOccurred listeners (Electron keeps one per event), so route any
+      // other use of those events through it rather than registering another.
       registerUsersnapNetworkErrorLogging(session.defaultSession, USERSNAP_SPACE_API_KEY);
 
       // TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
