@@ -56,6 +56,7 @@ import {
   sendPapiRequestOnce,
   teardownElectronApp,
   waitForAppReady,
+  withMainProcessLinkRetry,
 } from '../../../fixtures/helpers';
 import {
   MOVE_COMMAND_TIMEOUT_MS,
@@ -110,30 +111,32 @@ async function stubMessageBox(
   answer: number,
   holdOpen = false,
 ): Promise<void> {
-  await electronApp.evaluate(
-    ({ dialog }, { buttonIndex, neverResolve }) => {
-      const calls: RecordedMessageBox[] = [];
-      // Electron overloads the call as (window, options) and (options); the app uses the first.
-      // The record is what the test reads; the answer is what the app reads.
-      const stub = (
-        windowOrOptions: Electron.BaseWindow | Electron.MessageBoxOptions,
-        maybeOptions?: Electron.MessageBoxOptions,
-      ): Promise<Electron.MessageBoxReturnValue> => {
-        const options =
-          maybeOptions ?? ('buttons' in windowOrOptions ? windowOrOptions : undefined);
-        calls.push({
-          buttons: options?.buttons ?? [],
-          defaultId: options?.defaultId,
-          cancelId: options?.cancelId,
-          noLink: options?.noLink,
-          hasSignal: !!options?.signal,
-        });
-        if (neverResolve) return new Promise(() => {});
-        return Promise.resolve({ response: buttonIndex, checkboxChecked: false });
-      };
-      Object.assign(dialog, { showMessageBox: stub, recordedMessageBoxCalls: calls });
-    },
-    { buttonIndex: answer, neverResolve: holdOpen },
+  await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(
+      ({ dialog }, { buttonIndex, neverResolve }) => {
+        const calls: RecordedMessageBox[] = [];
+        // Electron overloads the call as (window, options) and (options); the app uses the first.
+        // The record is what the test reads; the answer is what the app reads.
+        const stub = (
+          windowOrOptions: Electron.BaseWindow | Electron.MessageBoxOptions,
+          maybeOptions?: Electron.MessageBoxOptions,
+        ): Promise<Electron.MessageBoxReturnValue> => {
+          const options =
+            maybeOptions ?? ('buttons' in windowOrOptions ? windowOrOptions : undefined);
+          calls.push({
+            buttons: options?.buttons ?? [],
+            defaultId: options?.defaultId,
+            cancelId: options?.cancelId,
+            noLink: options?.noLink,
+            hasSignal: !!options?.signal,
+          });
+          if (neverResolve) return new Promise(() => {});
+          return Promise.resolve({ response: buttonIndex, checkboxChecked: false });
+        };
+        Object.assign(dialog, { showMessageBox: stub, recordedMessageBoxCalls: calls });
+      },
+      { buttonIndex: answer, neverResolve: holdOpen },
+    ),
   );
 }
 
@@ -141,33 +144,35 @@ async function stubMessageBox(
 async function readMessageBoxCalls(
   electronApp: ElectronApplication,
 ): Promise<RecordedMessageBox[]> {
-  return electronApp.evaluate(({ dialog }) => {
-    // `stubMessageBox` hangs the record off the dialog module; read it back the same way
-    const record: unknown = Reflect.get(dialog, 'recordedMessageBoxCalls');
-    if (!Array.isArray(record)) return [];
-    // Narrow each entry rather than asserting the array's type. Everything the app passed is
-    // carried through, not just the buttons: the rest of the options decide what Enter and Esc do
-    // and whether a quit can take the question down, and a reader that dropped them would leave
-    // them asserted by nothing
-    return record.flatMap((entry: unknown): RecordedMessageBox[] => {
-      if (typeof entry !== 'object' || !entry || !('buttons' in entry)) return [];
-      const { buttons } = entry;
-      if (!Array.isArray(buttons)) return [];
-      const numberAt = (key: string): number | undefined => {
-        const value: unknown = Reflect.get(entry, key);
-        return typeof value === 'number' ? value : undefined;
-      };
-      return [
-        {
-          buttons: buttons.map(String),
-          defaultId: numberAt('defaultId'),
-          cancelId: numberAt('cancelId'),
-          noLink: Reflect.get(entry, 'noLink') === true,
-          hasSignal: Reflect.get(entry, 'hasSignal') === true,
-        },
-      ];
-    });
-  });
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ dialog }) => {
+      // `stubMessageBox` hangs the record off the dialog module; read it back the same way
+      const record: unknown = Reflect.get(dialog, 'recordedMessageBoxCalls');
+      if (!Array.isArray(record)) return [];
+      // Narrow each entry rather than asserting the array's type. Everything the app passed is
+      // carried through, not just the buttons: the rest of the options decide what Enter and Esc do
+      // and whether a quit can take the question down, and a reader that dropped them would leave
+      // them asserted by nothing
+      return record.flatMap((entry: unknown): RecordedMessageBox[] => {
+        if (typeof entry !== 'object' || !entry || !('buttons' in entry)) return [];
+        const { buttons } = entry;
+        if (!Array.isArray(buttons)) return [];
+        const numberAt = (key: string): number | undefined => {
+          const value: unknown = Reflect.get(entry, key);
+          return typeof value === 'number' ? value : undefined;
+        };
+        return [
+          {
+            buttons: buttons.map(String),
+            defaultId: numberAt('defaultId'),
+            cancelId: numberAt('cancelId'),
+            noLink: Reflect.get(entry, 'noLink') === true,
+            hasSignal: Reflect.get(entry, 'hasSignal') === true,
+          },
+        ];
+      });
+    }),
+  );
 }
 
 /** Ask a window to close the way its ✕ does — through Electron's `close`, not `app.quit()` */
@@ -177,12 +182,14 @@ async function clickCloseOn(electronApp: ElectronApplication, windowId: string):
 
 /** Platform ids of the windows still alive in the main process, sorted for stable comparison */
 async function liveWindowIds(electronApp: ElectronApplication): Promise<string[]> {
-  return electronApp.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()
-      .filter((win) => !win.isDestroyed())
-      .map((win) => new URL(win.webContents.getURL()).searchParams.get('windowId') ?? undefined)
-      .filter((id): id is string => id !== undefined)
-      .sort(),
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .filter((win) => !win.isDestroyed())
+        .map((win) => new URL(win.webContents.getURL()).searchParams.get('windowId') ?? undefined)
+        .filter((id): id is string => id !== undefined)
+        .sort(),
+    ),
   );
 }
 

@@ -70,6 +70,7 @@ import {
   sendPapiRequestOnce,
   waitForAppReady,
   waitForOpenWebViewIdByType,
+  withMainProcessLinkRetry,
   PROCESS_READY_TIMEOUT,
 } from '../../../fixtures/helpers';
 import {
@@ -819,10 +820,12 @@ async function setWindowContentSize(
     return { width: originalWidth, height: originalHeight };
   }, newSize);
   return async () => {
-    await electronApp.evaluate(({ BrowserWindow }, size) => {
-      const [appWindow] = BrowserWindow.getAllWindows();
-      appWindow.setContentSize(size.width, size.height);
-    }, original);
+    await withMainProcessLinkRetry(electronApp, () =>
+      electronApp.evaluate(({ BrowserWindow }, size) => {
+        const [appWindow] = BrowserWindow.getAllWindows();
+        appWindow.setContentSize(size.width, size.height);
+      }, original),
+    );
   };
 }
 

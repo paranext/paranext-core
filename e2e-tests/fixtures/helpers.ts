@@ -466,13 +466,15 @@ export async function applyDeclaredWindowSize(
   size: WindowSize,
   howToFix: string,
 ): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }, declared) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (win) {
-      if (win.isMaximized()) win.unmaximize();
-      win.setSize(declared.width, declared.height);
-    }
-  }, size);
+  await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ BrowserWindow }, declared) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      if (win) {
+        if (win.isMaximized()) win.unmaximize();
+        win.setSize(declared.width, declared.height);
+      }
+    }, size),
+  );
   await expect(async () => {
     await assertDeclaredWindowSize(page, size, howToFix);
   }).toPass({ timeout: 15_000 });
@@ -504,11 +506,13 @@ const WINDOW_WIDTH_RAF_SETTLE_TIMEOUT_MS = 2_000;
  * at the width a user would actually see.
  */
 export async function closeDevTools(electronApp: ElectronApplication): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().forEach((win) => {
-      if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
-    });
-  });
+  await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows().forEach((win) => {
+        if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
+      });
+    }),
+  );
 }
 
 /**
@@ -536,25 +540,27 @@ export async function setWindowWidth(
 ): Promise<void> {
   await closeDevTools(electronApp);
 
-  const settledWidth = await electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
-    // timeout and then fail with a width mismatch, hiding the actual cause.
-    if (!win) throw new Error('No Electron window to resize');
-    if (win.isMaximized()) win.unmaximize();
+  const settledWidth = await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
+      // timeout and then fail with a width mismatch, hiding the actual cause.
+      if (!win) throw new Error('No Electron window to resize');
+      if (win.isMaximized()) win.unmaximize();
 
-    const [outerWidth, height] = win.getSize();
-    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
-    // reading the size back immediately after it returns the width the window still has, not the one
-    // it is moving to. The target is derived instead — the request clamped by the window's own
-    // `minWidth` (main.ts), converted from outer to content width by the frame delta, since the
-    // renderer's `innerWidth` measures the content box.
-    const frameDelta = outerWidth - win.getContentSize()[0];
-    const target = Math.max(requestedWidth, win.getMinimumSize()[0]) - frameDelta;
+      const [outerWidth, height] = win.getSize();
+      // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
+      // reading the size back immediately after it returns the width the window still has, not the one
+      // it is moving to. The target is derived instead — the request clamped by the window's own
+      // `minWidth` (main.ts), converted from outer to content width by the frame delta, since the
+      // renderer's `innerWidth` measures the content box.
+      const frameDelta = outerWidth - win.getContentSize()[0];
+      const target = Math.max(requestedWidth, win.getMinimumSize()[0]) - frameDelta;
 
-    win.setSize(requestedWidth, height);
-    return target;
-  }, width);
+      win.setSize(requestedWidth, height);
+      return target;
+    }, width),
+  );
 
   await expect
     .poll(async () => Math.abs((await page.evaluate(() => window.innerWidth)) - settledWidth), {
@@ -611,26 +617,28 @@ export async function setWindowHeight(
 ): Promise<void> {
   await closeDevTools(electronApp);
 
-  const settledHeight = await electronApp.evaluate(({ BrowserWindow }, requestedHeight) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
-    // timeout and then fail with a height mismatch, hiding the actual cause.
-    if (!win) throw new Error('No Electron window to resize');
-    if (win.isMaximized()) win.unmaximize();
+  const settledHeight = await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ BrowserWindow }, requestedHeight) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
+      // timeout and then fail with a height mismatch, hiding the actual cause.
+      if (!win) throw new Error('No Electron window to resize');
+      if (win.isMaximized()) win.unmaximize();
 
-    const [width, outerHeight] = win.getSize();
-    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
-    // reading the size back immediately after it returns the height the window still has, not the
-    // one it is moving to. The target is derived instead — the request clamped by the window's own
-    // minimum height (main.ts sets no explicit `minHeight`, so this is Electron's own default),
-    // converted from outer to content height by the frame delta, since the renderer's `innerHeight`
-    // measures the content box.
-    const frameDelta = outerHeight - win.getContentSize()[1];
-    const target = Math.max(requestedHeight, win.getMinimumSize()[1]) - frameDelta;
+      const [width, outerHeight] = win.getSize();
+      // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
+      // reading the size back immediately after it returns the height the window still has, not the
+      // one it is moving to. The target is derived instead — the request clamped by the window's own
+      // minimum height (main.ts sets no explicit `minHeight`, so this is Electron's own default),
+      // converted from outer to content height by the frame delta, since the renderer's `innerHeight`
+      // measures the content box.
+      const frameDelta = outerHeight - win.getContentSize()[1];
+      const target = Math.max(requestedHeight, win.getMinimumSize()[1]) - frameDelta;
 
-    win.setSize(width, requestedHeight);
-    return target;
-  }, height);
+      win.setSize(width, requestedHeight);
+      return target;
+    }, height),
+  );
 
   await expect
     .poll(async () => Math.abs((await page.evaluate(() => window.innerHeight)) - settledHeight), {

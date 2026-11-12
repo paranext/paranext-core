@@ -3,7 +3,7 @@
 // to an app you started live in tests/attached/ with cdp.fixture.
 import type { ConsoleMessage } from '@playwright/test';
 import { test, expect } from '../../fixtures/papi.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { waitForAppReady, withMainProcessLinkRetry } from '../../fixtures/helpers';
 
 test.describe('Platform Basics', () => {
   test('should launch the app: window, React root, PAPI server and a quiet console', async ({
@@ -18,9 +18,11 @@ test.describe('Platform Basics', () => {
     });
 
     await test.step('should create a BrowserWindow', async () => {
-      const windowCount = await electronApp.evaluate(async ({ BrowserWindow }) => {
-        return BrowserWindow.getAllWindows().length;
-      });
+      const windowCount = await withMainProcessLinkRetry(electronApp, () =>
+        electronApp.evaluate(async ({ BrowserWindow }) => {
+          return BrowserWindow.getAllWindows().length;
+        }),
+      );
       expect(windowCount).toBeGreaterThanOrEqual(1);
     });
 
@@ -35,9 +37,11 @@ test.describe('Platform Basics', () => {
     await test.step('should have PAPI WebSocket server running', async () => {
       expect(electronApp).toBeTruthy();
 
-      const appPath = await electronApp.evaluate(async ({ app }) => {
-        return app.getAppPath();
-      });
+      const appPath = await withMainProcessLinkRetry(electronApp, () =>
+        electronApp.evaluate(async ({ app }) => {
+          return app.getAppPath();
+        }),
+      );
       expect(appPath).toBeTruthy();
     });
 

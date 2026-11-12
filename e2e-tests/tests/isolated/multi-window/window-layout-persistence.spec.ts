@@ -103,6 +103,7 @@ import {
   preConfigureSettings,
   teardownElectronApp,
   waitForAppReady,
+  withMainProcessLinkRetry,
 } from '../../../fixtures/helpers';
 import {
   captureAppOutput,
@@ -155,7 +156,9 @@ function isContainedInSomeDisplay(bounds: Rectangle, displays: readonly Rectangl
 
 /** Bounds of all connected displays, as the app itself sees them (`screen.getAllDisplays()`). */
 async function getDisplayBounds(electronApp: ElectronApplication): Promise<Rectangle[]> {
-  return electronApp.evaluate(({ screen }) => screen.getAllDisplays().map((d) => d.bounds));
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ screen }) => screen.getAllDisplays().map((d) => d.bounds)),
+  );
 }
 
 /**
@@ -447,8 +450,9 @@ test.describe('window layout persistence', () => {
       // DIFFERENT sizes — both also different from the app's fallback size — so the phase-2 size
       // comparison can tell the windows' saved entries apart (a swap changes both) and can tell a
       // restored entry from a fallback re-placement.
-      const workArea = await ctx.electronApp.evaluate(
-        ({ screen }) => screen.getPrimaryDisplay().workArea,
+      const { electronApp: launchedApp } = ctx;
+      const workArea = await withMainProcessLinkRetry(launchedApp, () =>
+        launchedApp.evaluate(({ screen }) => screen.getPrimaryDisplay().workArea),
       );
       // Both widths have to clear WINDOW_MIN_WIDTH: Electron clamps a smaller `setBounds` silently,
       // and `placeWindowAndSettle` asserts the window ended up exactly the width it asked for, so a
@@ -688,8 +692,9 @@ test.describe('window layout persistence', () => {
       await expect(homeTabTitle(mainPage1)).toBeAttached({ timeout: 60_000 });
       logStep(`phase 1: main window ${mainId1} ready`);
 
-      const workArea = await ctx.electronApp.evaluate(
-        ({ screen }) => screen.getPrimaryDisplay().workArea,
+      const { electronApp: launchedApp } = ctx;
+      const workArea = await withMainProcessLinkRetry(launchedApp, () =>
+        launchedApp.evaluate(({ screen }) => screen.getPrimaryDisplay().workArea),
       );
       // Distinct sizes, all different from each other and from the app's fallback size, so the
       // phase-2 comparison can tell the three entries apart and can tell a restored entry from a
@@ -894,8 +899,9 @@ test.describe('window layout persistence', () => {
       // The keeper bounds written below sit at the primary display's origin, so the upgrade's
       // on-display validation is guaranteed to accept them (this compositor honors requested
       // sizes, which is the half the assertion uses).
-      const primaryDisplayBounds = await ctx.electronApp.evaluate(
-        ({ screen }) => screen.getPrimaryDisplay().bounds,
+      const { electronApp: launchedApp } = ctx;
+      const primaryDisplayBounds = await withMainProcessLinkRetry(launchedApp, () =>
+        launchedApp.evaluate(({ screen }) => screen.getPrimaryDisplay().bounds),
       );
 
       await quitAndExpectCleanExit(ctx.electronApp, outputA, logStep, 'launch A');

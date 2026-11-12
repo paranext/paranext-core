@@ -80,7 +80,11 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { sendPapiRequestOnce, waitForAppReady } from '../../../fixtures/helpers';
+import {
+  sendPapiRequestOnce,
+  waitForAppReady,
+  withMainProcessLinkRetry,
+} from '../../../fixtures/helpers';
 import {
   INDICATOR_SELECTOR,
   readContentZoomMemory,
@@ -397,28 +401,30 @@ test.describe('moving a web view between windows', () => {
     // came from the tab's OWN CONTEXT MENU, so a person asked for it and the window they asked for
     // must come to the front. Without this, withholding could be applied to every move — including
     // the user's own — and the suite would still be green.
-    const menuMoveFocus = await electronApp.evaluate(
-      ({ BrowserWindow }, { id }) => {
-        // Matched on the `windowId` query parameter, not `BrowserWindow.id`: the platform's id is a
-        // durable GUID with no relationship to Electron's numeric id (see `withPlatformWindow`'s own
-        // doc comment in `multi-window.util.ts` for why).
-        const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
-          try {
-            return (
-              new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined
-            );
-          } catch {
-            return undefined;
-          }
-        };
-        const created = BrowserWindow.getAllWindows().find((win) => platformIdOf(win) !== id);
-        const focusedWindow = BrowserWindow.getFocusedWindow();
-        return {
-          createdIsFocused: created ? created.isFocused() : undefined,
-          focusedWindowId: focusedWindow ? platformIdOf(focusedWindow) : undefined,
-        };
-      },
-      { id: window1Id },
+    const menuMoveFocus = await withMainProcessLinkRetry(electronApp, () =>
+      electronApp.evaluate(
+        ({ BrowserWindow }, { id }) => {
+          // Matched on the `windowId` query parameter, not `BrowserWindow.id`: the platform's id is a
+          // durable GUID with no relationship to Electron's numeric id (see `withPlatformWindow`'s own
+          // doc comment in `multi-window.util.ts` for why).
+          const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
+            try {
+              return (
+                new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined
+              );
+            } catch {
+              return undefined;
+            }
+          };
+          const created = BrowserWindow.getAllWindows().find((win) => platformIdOf(win) !== id);
+          const focusedWindow = BrowserWindow.getFocusedWindow();
+          return {
+            createdIsFocused: created ? created.isFocused() : undefined,
+            focusedWindowId: focusedWindow ? platformIdOf(focusedWindow) : undefined,
+          };
+        },
+        { id: window1Id },
+      ),
     );
     expect(menuMoveFocus.createdIsFocused).toBe(true);
     expect(menuMoveFocus.focusedWindowId).toBe(window2Id);
