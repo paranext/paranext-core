@@ -1,11 +1,12 @@
 /**
  * ⚠ PARKED, and its second `describe` is DESTRUCTIVE — it can write to REAL project data.
  *
- * The first `describe` calls every method with a made-up project id, so it reads and writes nothing
- * real. The second `describe` drives real projects it discovers in the running app (`createBooks`,
- * `copyBooks`, `copyCustomVersification`) and is safe only on a machine prepared for it: it assumes
- * particular projects exist, that a book is already present in one, and that the user is not an
- * administrator on another. Nothing restores what it changes.
+ * The first `describe` writes nothing: its project-specific methods get a made-up project id,
+ * `getToProjectFilter` and `filterProjects` read the running app's real project list, and
+ * `checkOverlappingFiles` takes no project. The second `describe` drives real projects it discovers
+ * in the running app (`createBooks`, `copyBooks`, `copyCustomVersification`) and is safe only on a
+ * machine prepared for it: it assumes particular projects exist, that a book is already present in
+ * one, and that the user is not an administrator on another. Nothing restores what it changes.
  *
  * `playwright-cdp.config.ts` testIgnores this whole directory for that reason, and it is not a
  * project in `playwright.config.ts` either, so nothing collects it. Do not remove either exclusion
@@ -33,7 +34,9 @@
  *
  * - 1 method-discovery test (rpc.discover) over the 12 methods registered on the network object
  * - 12 per-method round-trip tests, one per registered NetworkObject function, each called with a
- *   made-up project id (`BOGUS_PROJECT_ID`) so no real project is read or written
+ *   made-up project id (`BOGUS_PROJECT_ID`) where the method takes a project, so no real project is
+ *   written; `getToProjectFilter` and `filterProjects` read the running app's real project list,
+ *   and `checkOverlappingFiles` takes no project
  *
  * The second `describe` checks the permission, versification and error-shape paths against real
  * projects found through `filterProjects`, and skips a test when the project it needs is absent.

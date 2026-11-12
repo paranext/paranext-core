@@ -58,12 +58,14 @@ To bring a parked file back into use:
 
 - Remove its entry from `PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`;
   until then no Playwright config collects it.
-- Start the app in Power mode with the Marble resources the file opens (such as `ESV16UK+`) installed.
+- For the `enhanced-resources-functional-*` and `-journey` files, start the app in Power mode with
+  the Marble resources the file opens (such as `ESV16UK+`) installed.
 - Replace each `test.fixme` with a real test once the behaviour it describes exists, or delete the
   scenario if the design dropped it. Some `test.fixme` bodies name a missing fixture, such as a
   resource with partial book coverage or a pre-release resource.
 - For `text-collection-schema.spec.ts`, set `E2E_TEST_PROJECT_ID` to an editable project on which
-  you are administrator; the spec skips itself without it.
+  you are administrator; the spec skips itself without it. It runs in either interface mode and
+  needs no Marble resource.
 - Check the selectors and expectations against the current UI, since the specs were written before
   the feature settled, then run the file and fix what fails.
 - Move the file out of "parked" here and remove its header comment once it passes.

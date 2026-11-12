@@ -7,12 +7,13 @@
 /**
  * E2E checks for the PT-4050 (A2) two-flag schema + overlay init + admin gate.
  *
- * MANUAL-ONLY: this spec does not run in CI. It lives in the `enhanced-resources` Playwright
- * project (not the CI `smoke` run) and is `test.skip`-gated on `E2E_TEST_PROJECT_ID`, which is set
- * nowhere in the repo. To run it locally, boot the app with CDP enabled, set `E2E_TEST_PROJECT_ID`
- * to a known editable admin project, and run the `enhanced-resources` project (see the run command
- * in `e2e-tests/playwright.config.ts`). Regression protection for this feature comes from the C#
- * unit tests (ParatextProjectDataProviderTextCollectionTests); this spec is a manual smoke check.
+ * MANUAL-ONLY: this spec does not run in CI. It is `test.skip`-gated on `E2E_TEST_PROJECT_ID`,
+ * which is set nowhere in the repo. While its entry is in `PARKED_ENHANCED_RESOURCES_SPECS`
+ * (`e2e-tests/parked-enhanced-resources.ts`) no Playwright config collects it. To run it locally,
+ * remove that entry, boot the app with CDP enabled, set `E2E_TEST_PROJECT_ID` to a known editable
+ * admin project, and run it through `e2e-tests/playwright-cdp.config.ts`. Regression protection for
+ * this feature comes from the C# unit tests (ParatextProjectDataProviderTextCollectionTests); this
+ * spec is a manual smoke check.
  *
  * Scope — vanilla-core-observable only:
  *

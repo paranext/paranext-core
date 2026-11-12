@@ -38,20 +38,26 @@ job collects them (CI runs only `test:e2e:smoke`):
     `enhanced-resources-journey.spec.ts` and `text-collection-schema.spec.ts`. Parked means the file
     is kept as the written scenarios for a feature that is still to be finished (epic PT-2021,
     "Enhanced Resources"), no CI job runs it, and it has never run as a whole. Many of its tests
-    are `test.fixme`. Before it can run it needs an app in Power mode with real Marble resources
-    such as `ESV16UK+`, and `text-collection-schema.spec.ts` also needs `E2E_TEST_PROJECT_ID` to
-    name an editable admin project (it skips itself otherwise). No config collects these files:
+    are `test.fixme`. Before the `enhanced-resources-functional-*` and `-journey` files can run they
+    need an app in Power mode with real Marble resources such as `ESV16UK+`.
+    `text-collection-schema.spec.ts` needs neither: it works in either interface mode and only needs
+    `E2E_TEST_PROJECT_ID` to name an editable admin project (it skips itself otherwise). No config
+    collects these files:
     both `playwright-cdp.config.ts` and `playwright.config.ts` list them in `testIgnore` through
     `PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`. To work on one,
     remove its entry from that list and run it against a prepared app. See the directory's README.
-- `tests/markers-checklist/` — the only end-to-end coverage of the Markers checklist. It needs a
-  real project (`wgPIDGIN`) on the machine, so it cannot run in CI.
+- `tests/markers-checklist/` — written scenarios for the Markers checklist. The specs have never run
+  to completion and are a record of intent, not coverage. They need a real project (`wgPIDGIN`) on
+  the machine, so they cannot run in CI, and only `playwright-cdp.config.ts` collects them (they
+  are not a project in `playwright.config.ts`). See its README.
 - `tests/manage-books/` — all of it is parked, kept as the written scenarios for the Manage Books
   feature (epic PT-1779, "Manage Books in a Project"). `playwright-cdp.config.ts` testIgnores the
   directory and `playwright.config.ts` has no project for it, so no config collects it. It attaches
   to a running app. `manage-books-commands.spec.ts` checks the wire shape of each `manageBooks`
-  network object method over the live PAPI websocket; its first `describe` uses made-up project ids
-  (nothing real is read or written), its second drives real projects the app already holds. The
+  network object method over the live PAPI websocket; its first `describe` writes nothing (its
+  project-specific methods get a made-up project id, `getToProjectFilter` and `filterProjects` read
+  the running app's real project list, and `checkOverlappingFiles` takes no project), its second
+  drives real projects the app already holds. The
   other three specs (`manage-books-journey`, `-functional-WP-001`, `-functional-WP-002`) change
   real project data (delete or create books) with no restore. Before any of it can run it needs a
   disposable project fixture, so it never touches a developer's real projects. See its README.

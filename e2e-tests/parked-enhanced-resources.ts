@@ -4,10 +4,12 @@
  * config. Both `playwright.config.ts` and `playwright-cdp.config.ts` list these globs in
  * `testIgnore`.
  *
- * They have never run as a whole. They need an app started in Power mode with real Marble resources
- * installed (such as `ESV16UK+`), many of their tests are `test.fixme`, and
- * `text-collection-schema.spec.ts` also needs `E2E_TEST_PROJECT_ID` to name an editable admin
- * project. See `tests/enhanced-resources/README.md`.
+ * They have never run as a whole, and many of their tests are `test.fixme`. The
+ * `enhanced-resources-functional-*` and `enhanced-resources-journey` entries need an app started in
+ * Power mode with real Marble resources installed (such as `ESV16UK+`).
+ * `text-collection-schema.spec.ts` needs neither: it works in either interface mode and needs only
+ * `E2E_TEST_PROJECT_ID` to name an editable admin project. See
+ * `tests/enhanced-resources/README.md`.
  *
  * One entry per file: to work on one, remove its entry here, then run it against a prepared app.
  * Finishing the feature means removing the entries one by one. The local-only specs in the same
