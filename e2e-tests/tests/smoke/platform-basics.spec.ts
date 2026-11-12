@@ -1,6 +1,7 @@
 // SMOKE TEST ONLY — uses papi.fixture for CI smoke testing.
 // Per-feature E2E tests belong in tests/isolated/ with isolated.fixture; the ones that must attach
 // to an app you started live in tests/attached/ with cdp.fixture.
+import type { ConsoleMessage } from '@playwright/test';
 import { test, expect } from '../../fixtures/papi.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 
@@ -44,13 +45,18 @@ test.describe('Platform Basics', () => {
       const page = await electronApp.firstWindow();
       const consoleErrors: string[] = [];
 
-      page.on('console', (msg) => {
+      const onConsole = (msg: ConsoleMessage) => {
         if (msg.type() === 'error') {
           consoleErrors.push(msg.text());
         }
-      });
+      };
 
-      await page.waitForTimeout(3000);
+      page.on('console', onConsole);
+      try {
+        await page.waitForTimeout(3000);
+      } finally {
+        page.off('console', onConsole);
+      }
 
       const criticalErrors = consoleErrors.filter(
         (err) =>

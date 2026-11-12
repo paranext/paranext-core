@@ -282,11 +282,15 @@ test.describe('Onboarding tour', () => {
       // reload above. When its editor finishes loading it takes focus, and an open menu closes when
       // focus leaves it. So open Help again until its item can be clicked, as a user would.
       const showTourItem = mainPage.getByRole('menuitem', { name: /Show the tour/i });
+      // A click that lands while the menu is closing can still open the tour and then throw, so an
+      // open dialog ends the loop once a click was attempted. Before any click, a visible dialog
+      // would mean the tour reopened without the menu item, which must not pass this step.
+      let clicked = false;
       await expect(async () => {
-        // A click that lands while the menu is closing can still open the tour.
-        if (await dialog.isVisible()) return;
+        if (clicked && (await dialog.isVisible())) return;
         if (!(await showTourItem.isVisible()))
           await mainPage.getByRole('menuitem', { name: /^Help$/i }).click({ timeout: 5_000 });
+        clicked = true;
         await showTourItem.click({ timeout: 2_000 });
       }).toPass({ timeout: 30_000 });
 

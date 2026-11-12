@@ -257,8 +257,9 @@ three specs: `no-unasked-edits-invisible-characters-off-power-standard.spec.ts` 
 off, Power's Standard view), `no-unasked-edits-invisible-characters-on-simple-paragraph-structure.spec.ts`
 (on, Simple's paragraph-structure view) and `no-unasked-edits-invisible-characters-on-power-standard.spec.ts`
 (on, Power's Standard view). The body branches on the setting and on the mode
-independently, never on the pair, so the first two reach every branch; the third runs the setting on
-while the second is switched off (PT-5055). The WEB has none of these characters, so each spec seeds Jonah 3:5–6 (and a second U+FEFF in 4:1) before the app starts
+independently, never on the pair. `no-unasked-edits-invisible-characters-on-simple-paragraph-structure.spec.ts`
+is switched off until PT-5055 is fixed, so no running spec drives Simple's paragraph-structure view
+with these characters and the Simple-mode branch is unpinned meanwhile. The WEB has none of these characters, so each spec seeds Jonah 3:5–6 (and a second U+FEFF in 4:1) before the app starts
 (and, for `on`, `<AllowInvisibleChars>T</AllowInvisibleChars>` in `Settings.xml`): a no-break space
 (`~` off, U+00A0 on), a `~` (a literal tilde when on), U+200B, U+200C, U+200D, U+2060, U+202F,
 U+2009, U+2002, U+2003, U+200A, U+3000, U+200E, U+200F, U+00AD and U+FEFF, each between two

@@ -45,9 +45,16 @@ import {
   waitForSettingsLoaded,
 } from './internet-settings.page';
 
+/** The first step also waits for the app to finish starting. */
+const APP_START_ALLOWANCE_MS = 120_000;
+/** What each step needs once the app is up. */
+const STEP_ALLOWANCE_MS = 30_000;
+/** The number of `test.step` calls in the single test below. */
+const STEP_COUNT = 12;
+
 test.describe('Internet connectivity settings', () => {
   test('Internet connectivity settings panel and server gating', async ({ mainPage }) => {
-    test.setTimeout(12 * 120_000);
+    test.setTimeout(APP_START_ALLOWANCE_MS + STEP_COUNT * STEP_ALLOWANCE_MS);
 
     await test.step('profile popover shows the "Internet connectivity" label and opens settings panel', async () => {
       await waitForAppReady(mainPage);

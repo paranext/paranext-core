@@ -138,7 +138,8 @@ test.describe('Reference history', () => {
       await expect(forwardButton).toBeDisabled();
 
       await navigateToRef(mainPage, 'Mark 4', /Mark 4(?!\d)/i);
-      await navigateToRef(mainPage, 'Luke 2', /Luke 2(?!\d)/i);
+      // A typed verse other than 1, so the committed trigger is checked to show the verse.
+      await navigateToRef(mainPage, 'Luke 2:3', /Luke 2:3(?!\d)/i);
 
       await expect(backButton).toBeEnabled();
       await backButton.click();
@@ -146,7 +147,7 @@ test.describe('Reference history', () => {
 
       await expect(forwardButton).toBeEnabled();
       await forwardButton.click();
-      await expect(bcvTrigger).toContainText(/Luke 2(?!\d)/i, { timeout: 10_000 });
+      await expect(bcvTrigger).toContainText(/Luke 2:3(?!\d)/i, { timeout: 10_000 });
       await expect(forwardButton).toBeDisabled();
 
       // Back to the seeded entry, so the next step's exact back list starts from the same history a

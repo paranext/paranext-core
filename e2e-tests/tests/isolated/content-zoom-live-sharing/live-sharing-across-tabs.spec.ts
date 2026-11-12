@@ -158,6 +158,12 @@ test.describe('content zoom shares live between two already-open tabs of one pro
 test.describe('a live Settings-default change moves only follower panes', () => {
   test.use({
     interfaceMode: 'power',
+    // A pinned default and an emptied zoom memory, because a default or a remembered level from the
+    // developer's own app would win over the unseeded default this test asserts on
+    seedSettings: {
+      'platform.webViewContentZoom': 1,
+      [CONTENT_ZOOM_MEMORY_SETTING]: {},
+    },
     electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
   });
 
