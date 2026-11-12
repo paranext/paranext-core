@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { PARKED_ENHANCED_RESOURCES_SPECS } from './parked-enhanced-resources';
 
 /**
  * Playwright configuration for running E2E tests against an already-running Platform.Bible instance
@@ -20,11 +21,15 @@ const config = defineConfig({
   // on developer machines under ~/.platform.bible/projects, so that is data loss, not test noise.
   // Re-enable per spec once the suite owns a throwaway project root (`isolatedProjectRoot`, the way
   // `find.fixture` does); see `tests/manage-books/README.md`.
-  // enhanced-resources is NOT excluded: a bare run collects its local specs and its parked ones
-  // (`enhanced-resources-functional-*`, `enhanced-resources-journey`, `text-collection-schema`),
-  // which need Power mode and real Marble resources; run those by file name. See
-  // `tests/enhanced-resources/README.md`.
-  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**', '**/manage-books/**'],
+  // The parked Enhanced Resources specs are excluded too (`PARKED_ENHANCED_RESOURCES_SPECS`); the
+  // local-only specs in that directory are collected. See `parked-enhanced-resources.ts`.
+  testIgnore: [
+    '**/smoke/**',
+    '**/isolated/**',
+    '**/_example/**',
+    '**/manage-books/**',
+    ...PARKED_ENHANCED_RESOURCES_SPECS,
+  ],
   fullyParallel: false,
   workers: 1,
   reporter: [

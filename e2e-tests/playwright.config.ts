@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { PARKED_ENHANCED_RESOURCES_SPECS } from './parked-enhanced-resources';
 
 /**
  * Playwright configuration for paranext-core E2E tests.
@@ -49,7 +50,8 @@ const config = defineConfig({
   // `_example/` — reference template for new tests, not a runnable test suite.
   // Local-only suites run by hand against a running app (`manage-books/`, `markers-checklist/`; see
   // "Local-only directories" in `e2e-tests/CLAUDE.md`). `manage-books/` is parked and has no project
-  // here; `enhanced-resources/` below is registered but holds parked specs as well.
+  // here; `enhanced-resources/` below is registered, but its parked specs are testIgnored (see
+  // `parked-enhanced-resources.ts`).
   // Nothing else is excluded here: `navigation-history/` is an isolated subset like any other,
   // and `playwright-cdp.config.ts` cannot collect it at all (`testIgnore: ['**/isolated/**']`).
   projects: [
@@ -86,6 +88,8 @@ const config = defineConfig({
       // effect is that `test:e2e:all` (this config, no --project) cannot pass either.
       name: 'enhanced-resources',
       testDir: './tests/enhanced-resources',
+      // The parked specs in this directory are collected by no config.
+      testIgnore: PARKED_ENHANCED_RESOURCES_SPECS,
     },
   ],
 });

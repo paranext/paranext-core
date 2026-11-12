@@ -40,9 +40,10 @@ job collects them (CI runs only `test:e2e:smoke`):
     "Enhanced Resources"), no CI job runs it, and it has never run as a whole. Many of its tests
     are `test.fixme`. Before it can run it needs an app in Power mode with real Marble resources
     such as `ESV16UK+`, and `text-collection-schema.spec.ts` also needs `E2E_TEST_PROJECT_ID` to
-    name an editable admin project (it skips itself otherwise). One caveat: `playwright-cdp.config.ts`
-    does not ignore this directory, so a bare `npm run test:e2e-cdp` lists these files too. Run the
-    local group by file name instead. See the directory's README.
+    name an editable admin project (it skips itself otherwise). No config collects these files:
+    both `playwright-cdp.config.ts` and `playwright.config.ts` list them in `testIgnore` through
+    `PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`. To work on one,
+    remove its entry from that list and run it against a prepared app. See the directory's README.
 - `tests/markers-checklist/` — the only end-to-end coverage of the Markers checklist. It needs a
   real project (`wgPIDGIN`) on the machine, so it cannot run in CI.
 - `tests/manage-books/` — all of it is parked, kept as the written scenarios for the Manage Books

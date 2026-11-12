@@ -1,8 +1,8 @@
 /**
- * PARKED — no routine run collects this file, and it has never run as a whole. It is kept as the
- * written scenarios for the Enhanced Resources feature (epic PT-2021). It skips itself unless
- * `E2E_TEST_PROJECT_ID` names an editable admin project. A bare `npm run test:e2e-cdp` does list
- * it; run it by file name. See `e2e-tests/tests/enhanced-resources/README.md`.
+ * PARKED — no Playwright config collects this file, and it has never run as a whole. It is kept as
+ * the written scenarios for the Enhanced Resources feature (epic PT-2021). It skips itself unless
+ * `E2E_TEST_PROJECT_ID` names an editable admin project. To work on it, remove its entry from
+ * `e2e-tests/parked-enhanced-resources.ts`. See `e2e-tests/tests/enhanced-resources/README.md`.
  */
 /**
  * E2E checks for the PT-4050 (A2) two-flag schema + overlay init + admin gate.

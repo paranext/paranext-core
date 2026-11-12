@@ -1,8 +1,9 @@
 /**
- * PARKED — no routine run collects this file, and it has never run as a whole. It is kept as the
- * written scenarios for the Enhanced Resources feature (epic PT-2021). It needs an app started in
- * Power mode with real Marble resources installed (such as ESV16UK+). A bare `npm run test:e2e-cdp`
- * does list it; run it by file name. See `e2e-tests/tests/enhanced-resources/README.md`.
+ * PARKED — no Playwright config collects this file, and it has never run as a whole. It is kept as
+ * the written scenarios for the Enhanced Resources feature (epic PT-2021). It needs an app started
+ * in Power mode with real Marble resources installed (such as ESV16UK+). To work on it, remove its
+ * entry from `e2e-tests/parked-enhanced-resources.ts`. See
+ * `e2e-tests/tests/enhanced-resources/README.md`.
  */
 /**
  * Enhanced Resources — Cross-WP Journey Tests (RED phase)

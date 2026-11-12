@@ -56,6 +56,8 @@ Together the parked files declare 136 `test(...)` / `test.fixme(...)` tests, 45 
 
 To bring a parked file back into use:
 
+- Remove its entry from `PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`;
+  until then no Playwright config collects it.
 - Start the app in Power mode with the Marble resources the file opens (such as `ESV16UK+`) installed.
 - Replace each `test.fixme` with a real test once the behaviour it describes exists, or delete the
   scenario if the design dropped it. Some `test.fixme` bodies name a missing fixture, such as a
@@ -68,12 +70,11 @@ To bring a parked file back into use:
 
 ### What collects this suite
 
-Registered as a project in `playwright.config.ts` (`name: 'enhanced-resources'`) and also collected
-by `playwright-cdp.config.ts`, which testIgnores `smoke`, `isolated`, `_example`, and
-`manage-books` but not this directory. There is no dedicated npm script, and nothing in CI runs it.
-This applies to the parked files too: a bare `npm run test:e2e-cdp` (or `npm run test:e2e:all`,
-through the `enhanced-resources` project) lists them next to the others, so run a single file by
-name instead.
+The 7 locally-run files are registered as a project in `playwright.config.ts`
+(`name: 'enhanced-resources'`) and also collected by `playwright-cdp.config.ts`, which testIgnores
+`smoke`, `isolated`, `_example` and `manage-books` but not this directory. There is no dedicated npm
+script, and nothing in CI runs it. The 10 parked files are testIgnored by both configs
+(`PARKED_ENHANCED_RESOURCES_SPECS`), so no config collects them.
 
 Registered is not the same as runnable. These specs attach through `fixtures/cdp.fixture.ts`, via
 the `enhanced-resources.fixture.ts` wrapper, so they attach to an already-running app and must go
@@ -91,4 +92,4 @@ The `no-silent-skips` reporter (`e2e-tests/reporters/`) fails a run in which tes
 skipped that nobody asked to skip, so a run of this suite is watched by it.
 
 **Size:** 17 spec files — 171 `test(...)` declarations in all, of which 45 are `test.fixme(...)`;
-the 7 locally-run files hold 35 and no `test.fixme(...)`.
+the 7 locally-run files hold 35 and no `test.fixme(...)`, the 10 parked files 136.
