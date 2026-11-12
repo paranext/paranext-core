@@ -197,16 +197,16 @@ test.describe('scripture editor chapter-marker restore', () => {
     });
   });
 
-  // Skipped until the product race it hits is fixed (Bug drafted, ticket key pending): the
-  // correction can repeat for most of a second while the typing is still arriving, and its last
-  // round puts the caret after the chapter number instead of after the typed text.
+  // Skipped until PT-5059 is fixed: the correction can repeat for most of a second while the typing
+  // is still arriving, and its last round puts the caret after the chapter number instead of after
+  // the typed text.
   test.fixme(
     'restores the marker of a blank chapter typed into, and leaves the caret where the typing was',
     {
       annotation: {
         type: 'fixme',
         description:
-          'Ticket pending: a chapter-marker correction can repeat while the user types and leave the caret on the chapter line (fails ~1 run in 15)',
+          'PT-5059: a chapter-marker correction can repeat while the user types and leave the caret on the chapter line (fails ~1 run in 15)',
       },
     },
     async ({ mainPage }) => {
@@ -316,7 +316,7 @@ test.describe('scripture editor chapter-marker restore', () => {
     },
   );
 
-  // Skipped for the same product race as the blank-chapter test above (ticket key pending): after
+  // Skipped until PT-5059 is fixed, the same product race as the blank-chapter test above: after
   // typing over a selection that starts in the chapter line, the caret can end outside the line
   // the typing went into.
   test.fixme(
@@ -325,7 +325,7 @@ test.describe('scripture editor chapter-marker restore', () => {
       annotation: {
         type: 'fixme',
         description:
-          'Ticket pending: a chapter-marker correction can repeat while the user types and leave the caret outside the typed line (fails ~1 run in 25)',
+          'PT-5059: a chapter-marker correction can repeat while the user types and leave the caret outside the typed line (fails ~1 run in 25)',
       },
     },
     async ({ mainPage }) => {
