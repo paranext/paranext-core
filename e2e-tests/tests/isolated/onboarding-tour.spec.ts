@@ -154,8 +154,10 @@ test.describe('Onboarding tour', () => {
       const dialog = getTourDialog(mainPage);
       await expect(dialog).toBeVisible({ timeout: 15_000 });
 
-      const total = await getTourTotalSteps(mainPage);
       const titles = await collectStepTitles(mainPage);
+      // Read at the last stop: the tour drops a conditional stop whose target goes away after it
+      // opened (the sync button, while a project is still opening), and the counter follows.
+      const total = await getTourTotalSteps(mainPage);
 
       expect(titles).toHaveLength(total);
       // The four unconditional stops must all be there, in this order — the sync stop may or may not
@@ -276,9 +278,13 @@ test.describe('Onboarding tour', () => {
       // On a checkout with projects of its own, Simple mode is still opening one right after the
       // reload above. When its editor finishes loading it takes focus, and an open menu closes when
       // focus leaves it. So open Help again until its item can be clicked, as a user would.
+      const showTourItem = mainPage.getByRole('menuitem', { name: /Show the tour/i });
       await expect(async () => {
-        await mainPage.getByRole('menuitem', { name: /^Help$/i }).click({ timeout: 5_000 });
-        await mainPage.getByRole('menuitem', { name: /Show the tour/i }).click({ timeout: 2_000 });
+        // A click that lands while the menu is closing can still open the tour.
+        if (await dialog.isVisible()) return;
+        if (!(await showTourItem.isVisible()))
+          await mainPage.getByRole('menuitem', { name: /^Help$/i }).click({ timeout: 5_000 });
+        await showTourItem.click({ timeout: 2_000 });
       }).toPass({ timeout: 30_000 });
 
       await expect(dialog).toBeVisible({ timeout: 15_000 });
