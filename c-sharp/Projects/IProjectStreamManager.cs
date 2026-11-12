@@ -52,8 +52,10 @@ internal interface IProjectStreamManager
     /// </returns>
     /// <exception cref="ArgumentException"><paramref name="streamName"/> is not valid.</exception>
     /// <exception cref="InvalidDataException">
-    /// The stream exists but cannot be read, such as a resource entry that cannot be decrypted.
+    /// The stream exists but cannot be read, such as a resource entry that cannot be decrypted or
+    /// whose data does not read back intact.
     /// </exception>
+    /// <exception cref="IOException">The file holding the stream could not be read.</exception>
     Stream? GetDataStream(string streamName, bool createIfNotExists = false);
 
     /// <summary>
