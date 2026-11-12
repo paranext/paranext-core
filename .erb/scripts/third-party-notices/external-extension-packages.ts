@@ -1,9 +1,8 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import { compareByNameThenVersion, compareStrings } from './compare';
 import type { ItemizedCheckout } from './external-extensions';
-import { PLATFORM_PROVIDED_PACKAGES } from './platform-provided';
-import { messageOf, readJsonFile } from './read-json';
+import { platformProvidedPackages } from './platform-provided';
+import { messageOf } from './read-json';
 import { collectShippedPackages, importedPackages, missingImportedPackages } from './shipping-set';
 import type { ExternalExtensionListing, ShippedPackage } from './types';
 
@@ -43,49 +42,26 @@ function comparableDir(dir: string): string {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-/**
- * Refuses manifests a development build wrote. The installer packs production zips, and a
- * development graph can differ from them. The mixed-mode check in `collectShippedPackages` cannot
- * catch this, because two development manifests agree with each other. A missing manifest is left
- * to `collectShippedPackages`, which names it.
- */
-function refuseDevelopmentManifests(checkout: ItemizedCheckout, manifestDir: string): void {
-  const notProduction = EXTENSION_REQUIRED_BUNDLES.flatMap((bundle) => {
-    const file = path.join(manifestDir, `${bundle}.json`);
-    if (!fs.existsSync(file)) return [];
-    const { mode } = readJsonFile<{ mode?: string }>(file, 'a webpack module manifest');
-    return mode === 'production' ? [] : [`  ${bundle}: ${mode || 'unrecorded'}`];
-  });
-  if (notProduction.length)
-    throw new Error(
-      `${checkout.key}: the module manifests in ${manifestDir} were not written by a production ` +
-        `build:\n${notProduction.join('\n')}\n` +
-        'The installer packs production zips, so a development graph does not describe them. ' +
-        `Build the extensions the way they ship, in the checkout:\n    cd ${checkout.root} && ` +
-        'npm run package',
-    );
-}
-
-/**
- * The `externalExtensionCheckouts` entry a minimum is edited in, for the failure messages. It is
- * named by the table's own key, which the entries may spell differently, so a search finds it.
- */
+/** The `externalExtensionCheckouts` entry a minimum is edited in, for the failure messages. */
 function minimumHint(checkout: ItemizedCheckout, field: string): string {
   return (
     'If the extensions really ship fewer, lower ' +
-    `externalExtensionCheckouts["${checkout.tableKey}"].minimumPackages.${field} in the policy.`
+    `externalExtensionCheckouts["${checkout.name}"].minimumPackages.${field} in the policy.`
   );
 }
 
 /**
  * `collectShippedPackages` over the checkout, with its refusals named for the checkout.
  *
+ * Only production manifests are accepted: the installer packs production zips, and a development
+ * graph can differ from them.
+ *
  * Its own remedies are written for paranext-core, where `npm run build` writes the manifests. In an
  * extension checkout that command writes development manifests, which the next run refuses again.
- * So each refusal keeps its text and gains the checkout's key and the command that rebuilds it.
+ * So each refusal keeps its text and gains the checkout's name and the command that rebuilds it.
  */
 function collectFromCheckout(
-  { key, root }: ItemizedCheckout,
+  { name, root }: ItemizedCheckout,
   coreRepo: string,
   manifestDir: string,
   warmCache: 'throw' | 'report',
@@ -98,12 +74,13 @@ function collectFromCheckout(
       requiredBundles: EXTENSION_REQUIRED_BUNDLES,
       requireUnbundledClosure: false,
       warmCache,
+      requiredMode: 'production',
     });
   } catch (err) {
     throw new Error(
-      `${key}: ${messageOf(err)}\n` +
-        `For this extension checkout, rebuild in ${root} with \`npm run package\` (not any other ` +
-        'build command named above).',
+      `${name}: ${messageOf(err)}\n` +
+        'For this extension checkout, build the zips the way the installer packs them, and not ' +
+        `with any other build command named above:\n    cd ${root} && npm run package`,
       { cause: err },
     );
   }
@@ -112,8 +89,8 @@ function collectFromCheckout(
 /**
  * Collects the packages one checkout's bundles ship, refusing any result that could be short.
  *
- * Each refusal names the checkout's `key` - its `sourceCheckout` spelling - because a downstream
- * build may itemize several checkouts and the message has to say which one failed.
+ * Each refusal names the checkout's `name` - its `externalExtensionCheckouts` key - because a
+ * downstream build may itemize several checkouts and the message has to say which one failed.
  */
 export function collectCheckoutPackages({
   checkout,
@@ -126,11 +103,9 @@ export function collectCheckoutPackages({
   corePackages: ShippedPackage[];
   warmCache: 'throw' | 'report';
 }): CheckoutPackages {
-  const { root, key, minimumPackages } = checkout;
+  const { root, name, minimumPackages } = checkout;
   const manifestDir = path.join(root, '.notices', 'modules');
   const rebuild = `Rebuild in the checkout: cd ${root} && rm -rf .notices && npm run package`;
-
-  refuseDevelopmentManifests(checkout, manifestDir);
 
   const { packages, unresolvedStylesheetSpecifiers, warmBundles, linkedPackageDirs } =
     collectFromCheckout(checkout, coreRepo, manifestDir, warmCache);
@@ -153,7 +128,7 @@ export function collectCheckoutPackages({
   const unlisted = linkedPackageDirs.filter((dir) => !coreDirs.has(comparableDir(dir)));
   if (unlisted.length)
     throw new Error(
-      `${key}: the extension bundles compile ${unlisted.length} package folder(s) from ` +
+      `${name}: the extension bundles compile ${unlisted.length} package folder(s) from ` +
         `paranext-core that its own shipping set does not describe:\n` +
         `${unlisted
           .map(
@@ -171,14 +146,14 @@ export function collectCheckoutPackages({
 
   if (packages.length < minimumPackages.own)
     throw new Error(
-      `${key}: the extension bundles reach ${packages.length} package(s) of its own, below the ` +
+      `${name}: the extension bundles reach ${packages.length} package(s) of its own, below the ` +
         `minimum of ${minimumPackages.own}. A short list means the module manifests did not see ` +
         `the whole build.\n${rebuild}\n${minimumHint(checkout, 'own')}`,
     );
 
   if (linkedPackageDirs.length < minimumPackages.core)
     throw new Error(
-      `${key}: the extension bundles reach ${linkedPackageDirs.length} paranext-core package ` +
+      `${name}: the extension bundles reach ${linkedPackageDirs.length} paranext-core package ` +
         `folder(s), below the minimum of ${minimumPackages.core}. A short list means the bundles ` +
         `were not built against the paranext-core at ${coreRepo}, or the manifests are short.\n` +
         `${rebuild}\n${minimumHint(checkout, 'core')}`,
@@ -187,7 +162,7 @@ export function collectCheckoutPackages({
   const stylesheetCount = packages.filter((pkg) => pkg.reachedVia.includes('stylesheet')).length;
   if (stylesheetCount < minimumPackages.stylesheet)
     throw new Error(
-      `${key}: the extensions reach ${stylesheetCount} package(s) through a stylesheet, below ` +
+      `${name}: the extensions reach ${stylesheetCount} package(s) through a stylesheet, below ` +
         `the minimum of ${minimumPackages.stylesheet}. The stylesheet scan reads src/*/src under ` +
         `${root}; a short count means it found the stylesheets missing or their packages not ` +
         `installed.\nRun in the checkout: cd ${root} && npm ci\n` +
@@ -200,11 +175,11 @@ export function collectCheckoutPackages({
   const missing = missingImportedPackages(
     packages,
     importedPackages(root, { workspaceSourcesOnly: true }),
-    PLATFORM_PROVIDED_PACKAGES,
+    platformProvidedPackages(),
   ).sort((a, b) => compareStrings(a.name, b.name));
   if (missing.length)
     throw new Error(
-      `${key}: the extension source imports ${missing.length} package(s) that no bundle ` +
+      `${name}: the extension source imports ${missing.length} package(s) that no bundle ` +
         `contains:\n${missing
           .map((entry) => `  ${entry.name} (imported in ${entry.importedIn})`)
           .join('\n')}\n` +
@@ -251,16 +226,11 @@ export function mergeCheckoutPackages(
   return [...corePackages, ...added];
 }
 
-/** The name a checkout is listed and reported under: its folder's basename. */
-export function checkoutName(collected: CheckoutPackages): string {
-  return path.basename(collected.checkout.root);
-}
-
 /** Each checkout's unresolved stylesheet specifiers, prefixed with the checkout they came from. */
 export function checkoutStylesheetSpecifiers(checkouts: CheckoutPackages[]): string[] {
   return checkouts.flatMap((collected) =>
     collected.unresolvedStylesheetSpecifiers.map(
-      (specifier) => `${checkoutName(collected)}: ${specifier}`,
+      (specifier) => `${collected.checkout.name}: ${specifier}`,
     ),
   );
 }
@@ -275,7 +245,7 @@ export function externalExtensionListing(collected: CheckoutPackages): ExternalE
     byId.set(`${name}@${version}`, { name, version }),
   );
   return {
-    checkoutName: checkoutName(collected),
+    checkoutName: collected.checkout.name,
     extensions: collected.checkout.extensions,
     packages: [...byId.values()].sort(compareByNameThenVersion),
   };

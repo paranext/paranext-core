@@ -25,15 +25,15 @@ import {
 } from './shipping-set';
 import { loadPolicy } from './policy';
 import { readJsonFile } from './read-json';
+import {
+  writeManifest as writeCheckoutManifest,
+  writePackage as writePackageUnder,
+} from './__fixtures__/itemized-checkout';
 
 let repo: string;
 
 function writePackage(rel: string, name: string, version: string) {
-  const dir = path.join(repo, rel);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name, version }));
-  fs.writeFileSync(path.join(dir, 'index.js'), '');
-  return dir;
+  return writePackageUnder(repo, rel, name, version);
 }
 
 /**
@@ -1564,6 +1564,120 @@ describe('the module manifests must all come from one build', () => {
       repo,
     });
     expect(packages.map((entry) => entry.name)).toEqual(['dep']);
+  });
+});
+
+describe('a required webpack mode', () => {
+  const manifestDir = () => path.join(repo, '.notices', 'modules');
+  const collect = (options: { warmCache?: 'throw' | 'report'; requiredMode?: string } = {}) =>
+    collectShippedPackages({
+      manifestDir: manifestDir(),
+      repo,
+      requiredBundles: ['main', 'renderer'],
+      requiredMode: 'production',
+      ...options,
+    });
+  /** The message `collect` throws, or '' when it does not. */
+  const refusalOf = (run: () => unknown) => {
+    try {
+      run();
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+    return '';
+  };
+  let pkg: string;
+  beforeEach(() => {
+    pkg = writePackage('node_modules/dep', 'dep', '1.0.0');
+  });
+
+  it('accepts a set every required bundle of which was built in that mode', () => {
+    writeCheckoutManifest(repo, 'main', [path.join(pkg, 'index.js')]);
+    writeCheckoutManifest(repo, 'renderer', [path.join(pkg, 'index.js')]);
+
+    expect(collect().packages.map((entry) => entry.name)).toEqual(['dep']);
+  });
+
+  it('refuses a set that agrees on another mode, naming each bundle and its mode', () => {
+    writeCheckoutManifest(repo, 'main', [path.join(pkg, 'index.js')], { mode: 'development' });
+    writeCheckoutManifest(repo, 'renderer', [path.join(pkg, 'index.js')], { mode: 'development' });
+
+    expect(refusalOf(collect)).toBe(
+      `the module manifests in ${manifestDir()} were not written by a production build:\n` +
+        '  main: development\n  renderer: development\n' +
+        'The installer packs what a production build compiles, and a graph compiled in any ' +
+        'other mode can differ from it. Rebuild the bundles the way they ship.',
+    );
+  });
+
+  it('accepts an agreeing set in any mode when no mode is required', () => {
+    writeCheckoutManifest(repo, 'main', [path.join(pkg, 'index.js')], { mode: 'development' });
+    writeCheckoutManifest(repo, 'renderer', [path.join(pkg, 'index.js')], { mode: 'development' });
+
+    expect(collect({ requiredMode: undefined }).packages).toHaveLength(1);
+  });
+
+  it('refuses a manifest that records no mode as unrecorded', () => {
+    writeCheckoutManifest(repo, 'main', [path.join(pkg, 'index.js')]);
+    writeManifest('renderer', [path.join(pkg, 'index.js')]);
+
+    expect(refusalOf(collect)).toContain(
+      'not written by a production build:\n  renderer: unrecorded\n',
+    );
+  });
+
+  it.each([
+    ['records no bundle', {}],
+    ['records another bundle', { bundle: 'renamed' }],
+  ])('judges a manifest by its file name when it %s', (_label, field) => {
+    writeCheckoutManifest(repo, 'main', [path.join(pkg, 'index.js')]);
+    fs.writeFileSync(
+      path.join(manifestDir(), 'renderer.json'),
+      JSON.stringify({
+        ...field,
+        buildId: 'one-build',
+        mode: 'development',
+        modules: [path.join(pkg, 'index.js')],
+      }),
+    );
+
+    expect(refusalOf(collect)).toContain(
+      'not written by a production build:\n  renderer: development\n',
+    );
+  });
+
+  it('names only the bundle in another mode when the set is mixed', () => {
+    writeCheckoutManifest(repo, 'main', [path.join(pkg, 'index.js')]);
+    writeCheckoutManifest(repo, 'renderer', [path.join(pkg, 'index.js')], { mode: 'development' });
+
+    const message = refusalOf(collect);
+    expect(message).toContain('not written by a production build:\n  renderer: development\n');
+    expect(message).not.toContain('main: ');
+    expect(message).not.toContain('different webpack modes');
+  });
+
+  it('does not judge a manifest outside the required bundles', () => {
+    writeCheckoutManifest(repo, 'main', [path.join(pkg, 'index.js')]);
+    writeCheckoutManifest(repo, 'renderer', [path.join(pkg, 'index.js')]);
+    writeCheckoutManifest(repo, 'fixture-only', [path.join(pkg, 'index.js')], {
+      mode: 'development',
+    });
+
+    expect(collect().packages).toHaveLength(1);
+  });
+
+  it("refuses a set in another mode in 'report' mode too, rather than returning it as warm", () => {
+    writeCheckoutManifest(repo, 'main', [path.join(pkg, 'index.js')], { mode: 'development' });
+    writeCheckoutManifest(repo, 'renderer', [path.join(pkg, 'index.js')], { mode: 'development' });
+    const file = path.join(manifestDir(), 'main.json');
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), cacheWarm: true }),
+    );
+
+    expect(refusalOf(() => collect({ warmCache: 'report' }))).toContain(
+      'not written by a production build',
+    );
   });
 });
 

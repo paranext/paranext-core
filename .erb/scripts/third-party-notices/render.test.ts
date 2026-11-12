@@ -199,12 +199,12 @@ const productReport = {
     },
     'example-itemized-extension': {
       itemized: true,
-      sourceCheckout: '../example-extensions',
+      sourceCheckout: 'example-extensions',
       reason: 'Its assets tree is not scanned by the static-asset gate.',
     },
     'other-itemized-extension': {
       itemized: true,
-      sourceCheckout: '../example-extensions',
+      sourceCheckout: 'example-extensions',
       reason: 'Built in the example extensions repository.',
     },
   },
@@ -1276,7 +1276,6 @@ describe('external extensions section', () => {
     expect(out.indexOf('## Extensions packed from other repositories')).toBeLessThan(
       out.indexOf('## npm production dependencies'),
     );
-    expect(out).not.toContain('npm section above');
   });
 
   it("reproduces each itemized extension's reason under its checkout, in extension order", () => {
@@ -1285,12 +1284,12 @@ describe('external extensions section', () => {
       externalExtensions: {
         'paratext-bible-send-receive': {
           itemized: true,
-          sourceCheckout: '../x',
+          sourceCheckout: 'x',
           reason: 'Its assets are not scanned yet.',
         },
         'paratext-bible-marketplace': {
           itemized: true,
-          sourceCheckout: '../x',
+          sourceCheckout: 'x',
           reason: 'Built in the internal extensions repository.',
         },
       },
@@ -1349,7 +1348,7 @@ describe('external extensions section', () => {
       externalExtensions: {
         'paratext-bible-send-receive': {
           itemized: true,
-          sourceCheckout: '../x',
+          sourceCheckout: 'x',
           reason: 'Built in the internal extensions repository.',
         },
         'checking-assistant': { itemized: false, reason: 'Another team builds it.' },

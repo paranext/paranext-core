@@ -95,7 +95,6 @@ import {
   itemizedCheckouts,
 } from './external-extensions';
 import {
-  checkoutName,
   checkoutStylesheetSpecifiers,
   collectCheckoutPackages,
   externalExtensionListing,
@@ -582,7 +581,7 @@ export function withPlatformOnlyPackages(
 }
 
 /**
- * The folder a `sourceCheckout` resolves against: the folder of the overlay when one is selected,
+ * The folder a checkout's `path` resolves against: the folder of the overlay when one is selected,
  * since a downstream build records its itemized extensions there, and this file's otherwise.
  */
 function policyFolder(): string {
@@ -1196,7 +1195,7 @@ function verifyNpmShippingSet() {
     warmBundles = [
       ...warmBundles,
       ...warmCheckouts.flatMap((collected) =>
-        collected.warmBundles.map((bundle) => `${checkoutName(collected)}:${bundle}`),
+        collected.warmBundles.map((bundle) => `${collected.checkout.name}:${bundle}`),
       ),
     ];
     unresolvedStylesheetSpecifiers = [

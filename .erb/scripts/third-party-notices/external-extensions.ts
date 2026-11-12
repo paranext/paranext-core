@@ -12,12 +12,13 @@ import type { ExternalExtension, ExternalExtensionCheckout } from './types';
  * that folder to `./extensions` in `electron-builder.json5`, beside this repository's own
  * `./extensions/dist/`. Each zip bundles every dependency outside the extension host's externals
  * list, and the zip itself carries no manifest describing that bundle. An entry recorded `itemized:
- * true` names the `sourceCheckout` of the repository that builds the zip, and
- * `external-extension-packages.ts` itemizes the bundle from that checkout's module manifests and
- * installed packages; `externalExtensionCheckouts` records, per checkout, the package counts it
- * must yield. An entry recorded `itemized: false` - a zip built somewhere no checkout here can
- * reach - states the reason instead, so the omission is a recorded state rather than silence.
- * Either way, every packed zip must have an entry, and the document names it.
+ * true` names, as its `sourceCheckout`, the `externalExtensionCheckouts` entry for a checkout of
+ * the repository that builds the zip, and `external-extension-packages.ts` itemizes the bundle from
+ * that checkout's module manifests and installed packages. Each `externalExtensionCheckouts` entry
+ * records its checkout's `path` and the package counts it must yield. An entry recorded `itemized:
+ * false` - a zip built somewhere no checkout here can reach - states the reason instead, so the
+ * omission is a recorded state rather than silence. Either way, every packed zip must have an
+ * entry, and the document names it.
  */
 
 /**
@@ -179,128 +180,107 @@ export function externalExtensionNames(
   return [...new Set(names)].sort(compareStrings);
 }
 
-/** An itemized checkout: one source folder, however many entries and spellings name it. */
+/** An itemized checkout: one `externalExtensionCheckouts` entry, and the extensions that name it. */
 export type ItemizedCheckout = {
+  /** The `externalExtensionCheckouts` key: the name the checkout is listed and reported under. */
+  name: string;
+  /** The absolute folder the entry's `path` resolves to. */
   root: string;
-  /** The first (sorted) spelling of the checkout found among the entries. */
-  key: string;
-  /**
-   * The `externalExtensionCheckouts` key recorded for this checkout, verbatim. It may be spelled
-   * differently from `key`, and it is the one a reader editing a minimum has to search for.
-   */
-  tableKey: string;
   extensions: string[];
   minimumPackages: ExternalExtensionCheckout['minimumPackages'];
 };
 
 /**
- * The absolute folder a `sourceCheckout` names, resolved against `policyDir`: the overlay's folder
+ * The absolute folder a checkout's `path` names, resolved against `policyDir`: the overlay's folder
  * when one is selected, else the base policy file's folder.
  *
- * Backslashes become `/` so a policy edited on Windows resolves identically elsewhere, and
- * `resolve` drops a trailing separator, so `../co` and `..\co\` are one root.
+ * Backslashes become `/` so a policy edited on Windows resolves identically elsewhere.
  */
-function checkoutRoot(policyDir: string, sourceCheckout: string): string {
-  return path.resolve(policyDir, sourceCheckout.replace(/\\/g, '/'));
+function checkoutRoot(policyDir: string, checkoutPath: string): string {
+  return path.resolve(policyDir, checkoutPath.replace(/\\/g, '/'));
 }
 
 /**
- * The refusal for an itemized entry whose `sourceCheckout` has no `externalExtensionCheckouts` key.
+ * The refusal for an itemized entry whose `sourceCheckout` names no `externalExtensionCheckouts`
+ * entry.
  *
  * @param subject The entry or entries naming the checkout, in a phrase that opens the sentence.
- * @param key The `sourceCheckout` spelling the entry uses, which the remedy tells the reader to
- *   add.
+ * @param name The checkout name the entry records, which the remedy tells the reader to add.
  */
-function missingCheckoutKeyMessage(subject: string, key: string): string {
+function missingCheckoutMessage(subject: string, name: string): string {
   return (
-    `${subject} names sourceCheckout "${key}", and "externalExtensionCheckouts" has no key for ` +
-    `it. Add "${key}" there with its minimumPackages.`
+    `${subject} names sourceCheckout "${name}", and "externalExtensionCheckouts" has no entry by ` +
+    `that name. Add "${name}" there with its "path" and "minimumPackages", or name an entry it ` +
+    'already has.'
   );
 }
 
 /**
- * The checkouts `itemized: true` entries read from, one per distinct resolved root.
- *
- * Two distinct roots with one basename are refused: a checkout is listed and reported under its
- * folder's basename, so the document's headings and the rebuild messages could not tell them
- * apart.
+ * The checkouts `itemized: true` entries read from: one per `externalExtensionCheckouts` entry they
+ * name, sorted by name.
  */
 export function itemizedCheckouts(
   table: Record<string, ExternalExtension>,
   checkouts: Record<string, ExternalExtensionCheckout>,
   policyDir: string,
 ): ItemizedCheckout[] {
-  const byRoot = new Map<string, { keys: string[]; extensions: string[] }>();
-  Object.entries(table).forEach(([name, entry]) => {
+  const extensionsByName = new Map<string, string[]>();
+  Object.entries(table).forEach(([extension, entry]) => {
     if (entry.itemized !== true || typeof entry.sourceCheckout !== 'string') return;
-    const root = checkoutRoot(policyDir, entry.sourceCheckout);
-    const found = byRoot.get(root) ?? { keys: [], extensions: [] };
-    found.keys.push(entry.sourceCheckout);
-    found.extensions.push(name);
-    byRoot.set(root, found);
+    extensionsByName.set(entry.sourceCheckout, [
+      ...(extensionsByName.get(entry.sourceCheckout) ?? []),
+      extension,
+    ]);
   });
-  const roots = [...byRoot.keys()].sort(compareStrings);
-  roots.forEach((root, index) => {
-    const clash = roots
-      .slice(index + 1)
-      .find((other) => path.basename(other) === path.basename(root));
-    if (clash)
-      throw new Error(
-        `the itemized checkouts ${root} and ${clash} share the folder name ` +
-          `"${path.basename(root)}", which is the name each checkout is listed and reported ` +
-          "under. The document's headings and the rebuild messages would not say which one they " +
-          'mean. ' +
-          'Rename one of the folders.',
-      );
-  });
-  return [...byRoot.entries()]
-    .map(([root, { keys, extensions }]) => {
-      const key = keys.sort(compareStrings)[0];
-      // The table is keyed by one spelling and an entry may use another, so match by resolved root.
-      const recorded = Object.entries(checkouts).find(
-        ([candidate]) => checkoutRoot(policyDir, candidate) === root,
-      );
-      if (!recorded)
+  return [...extensionsByName.entries()]
+    .sort(([first], [second]) => compareStrings(first, second))
+    .map(([name, extensions]) => {
+      if (!Object.hasOwn(checkouts, name))
         throw new Error(
-          missingCheckoutKeyMessage(
+          missingCheckoutMessage(
             `the "externalExtensions" entry for ${extensions.map((n) => `"${n}"`).join(', ')}`,
-            key,
+            name,
           ),
         );
+      const checkout = checkouts[name];
       return {
-        root,
-        key,
-        tableKey: recorded[0],
+        name,
+        root: checkoutRoot(policyDir, checkout.path),
         extensions: extensions.sort(compareStrings),
-        minimumPackages: recorded[1].minimumPackages,
+        minimumPackages: checkout.minimumPackages,
       };
-    })
-    .sort((a, b) => compareStrings(a.root, b.root));
+    });
 }
 
 const MINIMUM_FIELDS = ['own', 'core', 'stylesheet'] as const;
 
+/** A checkout name: one line, with no spaces at either end. */
+const CHECKOUT_NAME = /^\S(?:.*\S)?$/;
+
+/**
+ * Which folder `root` is, for telling whether two checkout entries name the same one: its real
+ * path, so a symlink or junction counts as the folder it points to, compared without case where the
+ * filesystem usually ignores it.
+ */
+function folderIdentity(root: string): string {
+  const real = fs.realpathSync.native(root);
+  return process.platform === 'win32' || process.platform === 'darwin' ? real.toLowerCase() : real;
+}
+
 /**
  * Refuses a packed extension with no entry, an entry with no zip, and an unusable checkout.
  *
- * @param checkoutPolicy The policy's `externalExtensionCheckouts` table and the folder its
- *   `sourceCheckout` paths resolve against. Optional only for a table with no itemized entry, which
- *   reads no checkout.
+ * @param checkoutPolicy The policy's `externalExtensionCheckouts` table and the folder each
+ *   checkout's `path` resolves against.
  */
 export function assertExternalExtensionsRecorded(
   names: string[],
   table: Record<string, ExternalExtension>,
-  checkoutPolicy?: { checkouts: Record<string, ExternalExtensionCheckout>; policyDir: string },
+  {
+    checkouts,
+    policyDir,
+  }: { checkouts: Record<string, ExternalExtensionCheckout>; policyDir: string },
 ): void {
-  // Without the policy's folder an itemized entry's `sourceCheckout` would resolve against the
-  // process's working directory, and the checks below would validate a folder nobody named.
-  if (!checkoutPolicy && Object.values(table).some((entry) => entry.itemized === true))
-    throw new Error(
-      'assertExternalExtensionsRecorded was given an itemized "externalExtensions" entry and no ' +
-        'checkout policy. Pass the policy\'s "externalExtensionCheckouts" and the folder its ' +
-        'sourceCheckout paths resolve against.',
-    );
-  const { checkouts, policyDir } = checkoutPolicy ?? { checkouts: {}, policyDir: '' };
   const unrecorded = names.filter((name) => !Object.hasOwn(table, name));
   if (unrecorded.length)
     throw new Error(
@@ -308,12 +288,12 @@ export function assertExternalExtensionsRecorded(
         'repository, and the notices policy has no "externalExtensions" entry for it. Its ' +
         'bundled dependencies are itemized nowhere, and the document has to say so rather than ' +
         'omit it. Record each, either itemized from a checkout of the repository that builds it ' +
-        '(which also needs an "externalExtensionCheckouts" entry for that checkout):\n' +
+        '(named by an "externalExtensionCheckouts" entry that records the checkout\'s path):\n' +
         `${unrecorded
           .map(
             (name) =>
               `    ${JSON.stringify(name)}: {\n      "itemized": true,\n` +
-              '      "sourceCheckout": "<path to the checkout>",\n' +
+              '      "sourceCheckout": "<name of its externalExtensionCheckouts entry>",\n' +
               '      "reason": "<where it is built, and anything the itemization does not ' +
               'cover>"\n    }',
           )
@@ -335,20 +315,6 @@ export function assertExternalExtensionsRecorded(
         'and this build no longer packs a zip by that name. A disclosure about an extension that ' +
         'does not ship would be reproduced as though it did - remove the entry.',
     );
-  // Two keys for one folder are refused: `itemizedCheckouts` reads the minimums of whichever it
-  // finds first, so the other would read as a minimum that is enforced when it is not.
-  const keyByRoot = new Map<string, string>();
-  Object.keys(checkouts).forEach((key) => {
-    const root = checkoutRoot(policyDir, key);
-    const earlier = keyByRoot.get(root);
-    if (earlier !== undefined)
-      throw new Error(
-        `"externalExtensionCheckouts" records both "${earlier}" and "${key}", which resolve to ` +
-          `the same folder, ${root}. Keep one of them.`,
-      );
-    keyByRoot.set(root, key);
-  });
-  const checkoutKeys = new Set(keyByRoot.keys());
   const named = new Set<string>();
   Object.entries(table).forEach(([name, entry]) => {
     const where = `the "externalExtensions" entry for "${name}"`;
@@ -361,21 +327,13 @@ export function assertExternalExtensionsRecorded(
     if (entry.itemized) {
       if (typeof entry.sourceCheckout !== 'string' || !entry.sourceCheckout.trim())
         throw new Error(
-          `${where} records "itemized": true with no "sourceCheckout". Name the folder ` +
-            "holding the extension's source and installed node_modules, relative to the " +
-            "overlay's folder when one is selected, else the base policy file's folder, or " +
-            'record false with the reason.',
+          `${where} records "itemized": true with no "sourceCheckout". Name the ` +
+            '"externalExtensionCheckouts" entry for the checkout of the repository that builds ' +
+            'it, or record false with the reason.',
         );
-      const root = checkoutRoot(policyDir, entry.sourceCheckout);
-      named.add(root);
-      if (!checkoutKeys.has(root))
-        throw new Error(missingCheckoutKeyMessage(where, entry.sourceCheckout));
-      if (!fs.existsSync(root) || !fs.statSync(root).isDirectory())
-        throw new Error(
-          `${where} names sourceCheckout "${entry.sourceCheckout}", which resolves to ` +
-            `${root}, and that folder does not exist. Check the extension out there and install ` +
-            'its dependencies, or correct the path.',
-        );
+      if (!Object.hasOwn(checkouts, entry.sourceCheckout))
+        throw new Error(missingCheckoutMessage(where, entry.sourceCheckout));
+      named.add(entry.sourceCheckout);
     } else if (entry.sourceCheckout !== undefined)
       throw new Error(
         `${where} records "itemized": false with a "sourceCheckout", which is contradictory. ` +
@@ -387,20 +345,58 @@ export function assertExternalExtensionsRecorded(
     // records the same kind of reviewer-written prose.
     requireText(where, 'reason', entry.reason);
   });
-  Object.entries(checkouts).forEach(([key, checkout]) => {
-    if (!named.has(checkoutRoot(policyDir, key)))
+  // Two entries for one folder are refused: that checkout would be read twice and listed under two
+  // names, each with minimums of its own.
+  const nameByFolder = new Map<string, string>();
+  Object.entries(checkouts).forEach(([name, checkout]) => {
+    const where = `"externalExtensionCheckouts" entry "${name}"`;
+    // The name is the heading the checkout's packages are listed under, and Markdown ends a heading
+    // at a line break.
+    if (!CHECKOUT_NAME.test(name))
       throw new Error(
-        `"externalExtensionCheckouts" records "${key}", and no itemized "externalExtensions" ` +
+        `"externalExtensionCheckouts" records the name ${JSON.stringify(name)}, which the ` +
+          'notices document uses as a heading. Use one line with no spaces at either end.',
+      );
+    if (!named.has(name))
+      throw new Error(
+        `"externalExtensionCheckouts" records "${name}", and no itemized "externalExtensions" ` +
           'entry names it as its sourceCheckout. A minimum nothing checks would read as ' +
           'protection that is not there - remove the entry.',
       );
+    const checkoutPath: unknown = checkout?.path;
+    if (typeof checkoutPath !== 'string' || !checkoutPath.trim())
+      throw new Error(
+        `${where} records "path" as ${JSON.stringify(checkoutPath)}. Record the folder holding ` +
+          "the extensions' source and installed node_modules, relative to the overlay's folder " +
+          "when one is selected, else the base policy file's folder.",
+      );
+    const root = checkoutRoot(policyDir, checkoutPath);
+    if (!fs.existsSync(root))
+      throw new Error(
+        `${where} records path "${checkoutPath}", which resolves to ${root}, and that folder ` +
+          "does not exist. Check the extensions' repository out there and install its " +
+          'dependencies, or correct the path.',
+      );
+    if (!fs.statSync(root).isDirectory())
+      throw new Error(
+        `${where} records path "${checkoutPath}", which resolves to ${root}, and that is a ` +
+          "file rather than a folder. Point it at the checkout's folder.",
+      );
+    const folder = folderIdentity(root);
+    const earlier = nameByFolder.get(folder);
+    if (earlier !== undefined)
+      throw new Error(
+        `"externalExtensionCheckouts" entries "${earlier}" and "${name}" both name the folder ` +
+          `${fs.realpathSync.native(root)}, so that one checkout would be read and listed twice. ` +
+          'Keep one of them, and name it in every sourceCheckout that names the other.',
+      );
+    nameByFolder.set(folder, name);
     MINIMUM_FIELDS.forEach((field) => {
       const value: unknown = checkout?.minimumPackages?.[field];
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 1)
         throw new Error(
-          `"externalExtensionCheckouts" entry "${key}" records minimumPackages.${field} as ` +
-            `${JSON.stringify(value)}; it must be a positive integer, so a source that finds ` +
-            'nothing is refused.',
+          `${where} records minimumPackages.${field} as ${JSON.stringify(value)}; it must be a ` +
+            'positive integer, so a source that finds nothing is refused.',
         );
     });
   });

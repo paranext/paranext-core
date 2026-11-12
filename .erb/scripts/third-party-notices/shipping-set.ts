@@ -1847,9 +1847,13 @@ function readModuleManifests({
     // manifests - two manifests that each fail to say which build they came from are not evidence
     // that they came from the SAME one.
     // Only the REQUIRED bundles are placed on the mode check: a fixture manifest, or one left
-    // behind by a renamed bundle, says nothing about what the application is compiled as.
-    if (requiredBundles.includes(bundle))
-      modes.set(mode || 'unrecorded', [...(modes.get(mode || 'unrecorded') || []), bundle]);
+    // behind by a renamed bundle, says nothing about what the application is compiled as. Which
+    // bundle a manifest is comes from its file name, as `readManifestFiles` found it, not from the
+    // `bundle` field it records: a manifest whose field is missing or names another bundle would
+    // otherwise escape the check.
+    const fileBundle = file.slice(0, -'.json'.length);
+    if (requiredBundles.includes(fileBundle))
+      modes.set(mode || 'unrecorded', [...(modes.get(mode || 'unrecorded') || []), fileBundle]);
     stamps.set(buildId || `unstamped:${bundle}`, [
       ...(stamps.get(buildId || `unstamped:${bundle}`) || []),
       bundle,
@@ -1941,6 +1945,32 @@ function refuseWarmCacheManifests(warmBundles: string[], warmCache: 'throw' | 'r
         'Delete the cache and rebuild: rm -rf node_modules/.cache/webpack-* && npm run build',
     );
   }
+}
+
+/**
+ * Refuses a required bundle compiled in any webpack mode other than `requiredMode`, listing each
+ * such bundle with the mode its manifest records.
+ *
+ * The mixed-mode refusal in `assertOneBuildGraph` cannot catch a set that agrees on the wrong mode:
+ * two development manifests agree with each other. A mixed set always holds a bundle in some other
+ * mode, so this runs first and names exactly the bundles to rebuild.
+ */
+function refuseOtherModes(
+  manifestDir: string,
+  modes: Map<string, string[]>,
+  requiredMode: string,
+): void {
+  const otherModes = [...modes.entries()]
+    .filter(([mode]) => mode !== requiredMode)
+    .flatMap(([mode, bundles]) => bundles.map((bundle) => `  ${bundle}: ${mode}`))
+    .sort(compareStrings);
+  if (otherModes.length)
+    throw new Error(
+      `the module manifests in ${manifestDir} were not written by a ${requiredMode} build:\n` +
+        `${otherModes.join('\n')}\n` +
+        `The installer packs what a ${requiredMode} build compiles, and a graph compiled in any ` +
+        'other mode can differ from it. Rebuild the bundles the way they ship.',
+    );
 }
 
 /**
@@ -2115,6 +2145,7 @@ export function collectShippedPackages({
   requireUnbundledClosure = false,
   warmCache = 'throw',
   linkedRepo,
+  requiredMode,
 }: {
   manifestDir: string;
   repo: string;
@@ -2126,6 +2157,11 @@ export function collectShippedPackages({
   requiredBundles?: string[];
   requireUnbundledClosure?: boolean;
   warmCache?: 'throw' | 'report';
+  /**
+   * The webpack mode every required bundle's manifest must record. A manifest that records another
+   * mode, or none, is refused. Omitted, any one mode the set agrees on is accepted.
+   */
+  requiredMode?: string;
 }): {
   packages: ShippedPackage[];
   unresolvedStylesheetSpecifiers: string[];
@@ -2143,6 +2179,9 @@ export function collectShippedPackages({
       requiredBundles,
     });
 
+  // Before the warm-cache check, so a wrong-mode set is refused for its mode rather than for its
+  // cache; and here at all, so `'report'` cannot hand a wrong-mode set back as merely warm.
+  if (requiredMode) refuseOtherModes(manifestDir, modes, requiredMode);
   refuseWarmCacheManifests(warmBundles, warmCache);
   assertOneBuildGraph({ manifestDir, stamps, modes, unresolved });
 

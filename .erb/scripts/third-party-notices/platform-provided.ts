@@ -10,11 +10,16 @@ import { packageOfSpecifier } from './shipping-set';
  * Derived from the two module allowlists the extension host and the renderer enforce, reduced to
  * package names. Node built-ins (`crypto`) are packages of no one, and `packageOfSpecifier` drops
  * them.
+ *
+ * A function rather than a constant, so loading this module calls nothing in `shipping-set.ts`: a
+ * suite that replaces that module with a partial stub then only has to supply what it calls.
  */
-export const PLATFORM_PROVIDED_PACKAGES: string[] = [
-  ...new Set(
-    [...EXTENSION_INTERFACE_MODULE_SPECIFIERS, ...WEB_VIEW_MODULE_SPECIFIERS]
-      .map((specifier) => packageOfSpecifier(specifier))
-      .filter((name): name is string => name !== undefined),
-  ),
-].sort(compareStrings);
+export function platformProvidedPackages(): string[] {
+  return [
+    ...new Set(
+      [...EXTENSION_INTERFACE_MODULE_SPECIFIERS, ...WEB_VIEW_MODULE_SPECIFIERS]
+        .map((specifier) => packageOfSpecifier(specifier))
+        .filter((name): name is string => name !== undefined),
+    ),
+  ].sort(compareStrings);
+}

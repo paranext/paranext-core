@@ -310,7 +310,7 @@ export type Policy = {
   /** Keyed by extension name - see `external-extensions.ts`. */
   externalExtensions?: Record<string, ExternalExtension>;
   externalExtensionCheckoutsNote?: string;
-  /** Keyed by the relative path `ExternalExtension.sourceCheckout` uses. */
+  /** Keyed by checkout name, which `ExternalExtension.sourceCheckout` records. */
   externalExtensionCheckouts?: Record<string, ExternalExtensionCheckout>;
   productNote?: string;
   /** Overlay only: the downstream product this run describes. */
@@ -371,15 +371,14 @@ export type ExternalExtension = {
   /**
    * Whether its bundled dependencies have rows in this document.
    *
-   * `true`: the generator reads the extension's dependencies from the source checkout named by
-   * `sourceCheckout`, which is then required. `false`: the document states the omission, and
-   * `sourceCheckout` must be absent.
+   * `true`: the generator reads the extension's dependencies from the checkout `sourceCheckout`
+   * names, which is then required. `false`: the document states the omission, and `sourceCheckout`
+   * must be absent.
    */
   itemized: boolean;
   /**
-   * The folder holding the extension's source and installed `node_modules`, relative to the
-   * overlay's folder when one is selected, else the base policy file's folder. Must be a key of
-   * `Policy.externalExtensionCheckouts`.
+   * The name of the `Policy.externalExtensionCheckouts` entry for the checkout of the repository
+   * that builds this extension.
    */
   sourceCheckout?: string;
   /**
@@ -390,8 +389,16 @@ export type ExternalExtension = {
   reason: string;
 };
 
-/** What a source checkout must yield before an itemized extension's rows are trusted. */
+/**
+ * Where a source checkout is, and what it must yield before an itemized extension's rows are
+ * trusted.
+ */
 export type ExternalExtensionCheckout = {
+  /**
+   * The folder holding the extensions' source and installed `node_modules`, relative to the
+   * overlay's folder when one is selected, else the base policy file's folder.
+   */
+  path: string;
   /** Package counts below which the run is refused, so a source that finds almost nothing fails. */
   minimumPackages: { own: number; core: number; stylesheet: number };
 };
@@ -401,7 +408,7 @@ export type ExternalExtensionCheckout = {
  * extensions: the checkout's own packages and the paranext-core packages its bundles compile.
  */
 export type ExternalExtensionListing = {
-  /** The checkout folder's basename. */
+  /** The checkout's `externalExtensionCheckouts` key. */
   checkoutName: string;
   /** The extensions the policy itemizes from this checkout, sorted. */
   extensions: string[];

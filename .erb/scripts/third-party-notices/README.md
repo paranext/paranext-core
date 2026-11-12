@@ -226,30 +226,38 @@ drives the real `loadPolicy` over it — the one place core reads an overlay off
 
 An `externalExtensions` entry for a zip built elsewhere says `"itemized": false` and a `reason`; the
 document records the omission. An extension repository that is checked out beside the product build
-can be itemized instead. The overlay then needs two things:
+can be itemized instead. The overlay then needs two things: an entry naming the checkout, and an
+`externalExtensionCheckouts` entry under that name saying where the checkout is.
 
 ```jsonc
 "externalExtensions": {
   "my-extension": {
     "itemized": true,
-    "sourceCheckout": "../my-extension",
-    "reason": "Built in the my-extension repository and itemized from its checkout."
+    "sourceCheckout": "my-extensions",
+    "reason": "Built in the my-extensions repository and itemized from its checkout."
   }
 },
 "externalExtensionCheckouts": {
-  "../my-extension": { "minimumPackages": { "own": 15, "core": 80, "stylesheet": 3 } }
+  "my-extensions": {
+    "path": "../my-extensions",
+    "minimumPackages": { "own": 15, "core": 80, "stylesheet": 3 }
+  }
 }
 ```
 
-- `sourceCheckout` resolves against the overlay's folder when one is selected, else the base
-  policy file's folder, whichever file declares the entry. The `externalExtensionCheckouts` key is
-  the same path.
+- `sourceCheckout` is the name of an `externalExtensionCheckouts` entry, and that name is what the
+  checkout is listed and reported under: the document's heading for its extensions and every
+  message about it. Several entries may name one checkout.
+- A checkout's `path` resolves against the overlay's folder whenever an overlay is selected - even
+  for an entry the base policy file declares - and against the base policy file's folder when none
+  is. It must name an existing folder, and two checkout entries may not resolve to the same one.
 - `reason` is required, itemized or not. An itemized entry's reason is reproduced under its
   checkout's listing, so it is where to state what the itemization does not cover.
 - All three minimums are required. Set each a little under what the checkout yields today, so a
   shrinking read fails the run instead of passing as a shorter list.
-- `"itemized": true` with no `sourceCheckout`, `"itemized": false` with one, a checkout no entry
-  names, and a checkout with no table entry are all refused.
+- `"itemized": true` with no `sourceCheckout`, `"itemized": false` with one, a `sourceCheckout`
+  naming no `externalExtensionCheckouts` entry, and a checkout entry no itemized entry names are all
+  refused.
 
 The checkout's own webpack build has to write the stamped module manifests under
 `.notices/modules/` (`extension-main.json` and `extension-web-view.json`). The extension templates'
@@ -275,7 +283,7 @@ merges the checkout's packages into the npm set; its rows are keyed like any oth
 | `build-corpus-index.ts`          | Writes that checksum index, for the identifiers the policy can reach and no more |
 | `product.ts`                     | Reads `electron-builder.json5`; checks an overlay's `product` block against it   |
 | `separate-programs.ts`           | Third-party programs redistributed as separate executables, and their evidence   |
-| `external-extensions.ts`         | Extension zips packed from other repositories: omissions, and itemized checkouts |
+| `external-extensions.ts`         | Extension zips packed from other repositories: omissions, and named checkouts    |
 | `external-extension-packages.ts` | The packages an itemized checkout's bundles ship, with its guards                |
 | `license-pointers.ts`            | Refuses a `.LICENSE.txt` pointer whose file does not ship                        |
 | `platform-provided.ts`           | Packages the platform supplies to extensions at run time                         |

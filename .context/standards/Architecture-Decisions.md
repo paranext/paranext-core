@@ -6479,6 +6479,32 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (checked-in canonical texts; a regex import scan; a copyleft denylist), none of which reached
   `main`.
 
+## adr-notices-manifest-plugin-copied-into-templates: The extension templates carry copies of the module-manifest plugin and its build-id script, not an npm package
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:** Itemizing an extension zip built in another repository
+  (`adr-notices-overlay-for-downstream-products`, amended 2026-11-09) needs that repository's
+  webpack build to write the same stamped module manifests this repository's build writes. Two
+  files produce them here: `.erb/configs/emit-shipped-modules-plugin.ts`, the webpack plugin that
+  writes each bundle's manifest, and `.erb/scripts/notices-build-id.ts`, which mints the build id
+  every manifest of one build is stamped with. Extension repositories start from
+  `paranext-extension-template` or `paranext-multi-extension-template`, so the templates are where
+  those files have to reach.
+- **Decision:** Copy both files into the two extension templates rather than publish them as an
+  npm package. Each template copy's header names the paranext-core file it must be kept in step
+  with. The copies keep the same code, apart from their import paths and how the build-id script
+  finds the manifest folder (through the template's `webpack.util.ts`, `noticesManifestFolder`),
+  but carry their own comments, which describe the template's build; the design rationale stays in
+  the paranext-core files. In the templates the copies sit in `#region shared with` regions, so
+  the two templates stay in step with each other the way their other shared code does.
+- **Alternatives:** Publishing the plugin and the build-id script as an npm package - rejected: two
+  small files did not justify a package's publishing and versioning setup.
+- **Consequences:** A change to the manifest format or to the build-id stamp has to be made in
+  paranext-core and in both templates, and an extension repository picks it up through its next
+  template merge. Nothing in paranext-core checks that the copies agree with its files; the headers
+  are what point a maintainer at them. **Revisit** if the files grow, or if a third consumer appears.
+
 ## adr-notices-overlay-for-downstream-products: A downstream product runs this generator with its own policy overlay
 
 - **Date:** 2026-09-09
@@ -6545,20 +6571,25 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
-- **Amended 2026-11-09:** an overlay can now itemize an external extension that is built alongside
-  the product, by recording `"itemized": true` and naming its `sourceCheckout` (with an
-  `externalExtensionCheckouts` entry holding that checkout's minimum package counts). The
-  generator reads the checkout's webpack module manifests and applies the same safety checks as for
-  this repository's own build: production manifests only, the packages compiled from this
-  repository found in its own shipping set, the minimums, an import cross-check, and a refusal of
-  any license pointer to a `.LICENSE.txt` file that does not ship. `"itemized": false` remains for
-  zips built elsewhere. Rejected: packing the package list inside each zip and reading it from
-  there. A zip carries package names but no license files, so every row would lack its notice, and
-  without the extension's source the stylesheet scan and import cross-check that confirm the list is
-  complete cannot run. The module-manifest plugin and its build-id helper are copied into the two
-  extension templates rather than published as an npm package: two small files did not justify a
-  package's publishing and versioning setup, and each copy's header names the paranext-core file it
-  must be kept in step with.
+- **Amended 2026-11-09 (PT-4604):** an overlay can now itemize an external extension that is built
+  alongside the product, by recording `"itemized": true` with a `sourceCheckout` that names an
+  `externalExtensionCheckouts` entry; that entry records the checkout's `path` and its minimum
+  package counts. The table is keyed by name, as `separatePrograms` and `externalExtensions` are,
+  and the name is what the document's heading and the run's messages call the checkout. Keying it
+  by path instead would require every entry and the table to spell a folder the same way, or the
+  generator to reconcile two spellings. A checkout's `path` resolves against the overlay's folder
+  whenever an overlay is selected, and against the base policy file's folder otherwise, because the
+  checkout sits beside the downstream build whose overlay records it. That differs from a separate
+  program's evidence paths, which resolve against the repository root because the evidence is a
+  file in this tree. The generator reads the checkout's webpack module manifests and applies the
+  same safety checks as for this repository's own build: production manifests only, the packages
+  compiled from this repository found in its own shipping set, the minimums, an import
+  cross-check, and a refusal of any license pointer to a `.LICENSE.txt` file that does not ship.
+  `"itemized": false` remains for zips built elsewhere. Rejected: packing the package list inside
+  each zip and reading it from there. A zip carries package names but no license files, so every
+  row would lack its notice, and without the extension's source the stylesheet scan and import
+  cross-check that confirm the list is complete cannot run. How the extension templates come to
+  write those manifests is `adr-notices-manifest-plugin-copied-into-templates`.
 
 ## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
 

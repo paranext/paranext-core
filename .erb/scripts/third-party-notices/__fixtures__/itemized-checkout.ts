@@ -1,10 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import type { ShippedPackage } from '../types';
 
 /**
  * An extension repository checkout, a policy overlay itemizing two of its extensions, and the two
  * zips a downstream build would pack from it, for the suites that drive `main.ts` in a child
- * process.
+ * process. Also the small writers the notices suites share for installed packages and module
+ * manifests.
  *
  * The checkout's bundles reach two packages of its own (`own-a`, and `css-only` through a
  * stylesheet) and one of paranext-core's: the REAL `node_modules/react` of this repository, which
@@ -12,8 +14,13 @@ import * as path from 'path';
  * paranext-core's set.
  */
 export type ItemizedCheckoutFixture = {
-  /** The checkout's folder; its basename is the listing's `checkoutName`. */
+  /** The checkout's folder. */
   checkout: string;
+  /**
+   * The overlay's `externalExtensionCheckouts` key for the checkout, which is the listing's
+   * `checkoutName`. It differs from the folder's name, so a case can tell the two apart.
+   */
+  checkoutName: string;
   /** The policy overlay naming the checkout, for `NOTICES_POLICY_OVERLAY`. */
   overlay: string;
   /** The folder this platform packs, holding both extensions' zips. */
@@ -24,25 +31,72 @@ export type ItemizedCheckoutFixture = {
   corePackage: { name: string; version: string; dir: string };
 };
 
-function writePackage(base: string, name: string, version: string): string {
-  const dir = path.join(base, 'node_modules', name);
+/**
+ * Writes an installed package at `base/rel` - a `package.json` holding `name`, `version` and any
+ * further `manifest` fields, and an empty `index.js` for a manifest to name - and returns its
+ * folder.
+ */
+export function writePackage(
+  base: string,
+  rel: string,
+  name: string,
+  version: string,
+  manifest: Record<string, unknown> = {},
+): string {
+  const dir = path.join(base, rel);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, 'package.json'),
-    JSON.stringify({ name, version, license: 'MIT' }),
-  );
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name, version, ...manifest }));
   fs.writeFileSync(path.join(dir, 'index.js'), '');
   return dir;
 }
 
-function writeManifest(checkout: string, bundle: string, modules: string[]): void {
-  const dir = path.join(checkout, '.notices', 'modules');
+/**
+ * Writes one of an extension checkout's module manifests under `root/.notices/modules`, as the
+ * plugin stamps it for a production build unless `mode` or `buildId` says otherwise.
+ */
+export function writeManifest(
+  root: string,
+  bundle: string,
+  modules: string[],
+  { mode = 'production', buildId = 'one-build' }: { mode?: string; buildId?: string } = {},
+): void {
+  const dir = path.join(root, '.notices', 'modules');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(
     path.join(dir, `${bundle}.json`),
-    JSON.stringify({ bundle, buildId: 'one-build', mode: 'production', modules }),
+    JSON.stringify({ bundle, buildId, mode, modules }),
   );
 }
+
+/** Each package as an `allowed` MIT row, the shape `buildLock` reads. */
+export function allowedVerdicts(packages: ShippedPackage[]) {
+  return packages.map((entry) => ({
+    ecosystem: entry.ecosystem,
+    name: entry.name,
+    version: entry.version,
+    verdict: 'allowed' as const,
+    spdxId: 'MIT',
+    reason: 'r',
+    declared: 'MIT',
+    detected: 'MIT',
+    matchedFile: 'LICENSE',
+    textSha256: 'abc',
+  }));
+}
+
+/**
+ * Child-process setup: a license-pointer check that prints the zips it was given, as `POINTERS
+ * ["<folder>/<zip>", ...]`, and then fails with a fixed dangling-pointer message.
+ */
+export const failingPointerCheck = `
+  stub('./license-pointers', {
+    assertNoDanglingLicensePointers: async ({ externalZips }) => {
+      const named = externalZips.map((zip) => path.basename(path.dirname(zip)) + '/' + path.basename(zip));
+      console.log('POINTERS ' + JSON.stringify(named.sort()));
+      throw new Error('main.js points at main.js.LICENSE.txt, which does not ship');
+    },
+  });
+`;
 
 /**
  * Writes the fixture. Both zips share one folder this platform packs; `otherPlatformFolder` adds a
@@ -54,6 +108,7 @@ export function writeItemizedCheckout(
   { otherPlatformFolder = false }: { otherPlatformFolder?: boolean } = {},
 ): ItemizedCheckoutFixture {
   const checkout = path.join(tmp, 'extension-repo');
+  const checkoutName = 'example-extensions';
   fs.mkdirSync(checkout, { recursive: true });
   fs.writeFileSync(
     path.join(checkout, 'package.json'),
@@ -63,8 +118,9 @@ export function writeItemizedCheckout(
     path.join(checkout, 'package-lock.json'),
     JSON.stringify({ lockfileVersion: 3, packages: { '': {} } }),
   );
-  const ownA = writePackage(checkout, 'own-a', '1.0.0');
-  writePackage(checkout, 'css-only', '2.0.0');
+  const mit = { license: 'MIT' };
+  const ownA = writePackage(checkout, 'node_modules/own-a', 'own-a', '1.0.0', mit);
+  writePackage(checkout, 'node_modules/css-only', 'css-only', '2.0.0', mit);
 
   const source = path.join(checkout, 'src', 'ext-one', 'src');
   fs.mkdirSync(source, { recursive: true });
@@ -92,19 +148,24 @@ export function writeItemizedCheckout(
   fs.writeFileSync(
     overlay,
     JSON.stringify({
+      // Two entries naming one checkout: it is collected once and lists both.
       externalExtensions: {
-        'ext-one': { itemized: true, sourceCheckout: 'extension-repo', reason },
-        // A second spelling of the same folder: still one checkout.
-        'ext-two': { itemized: true, sourceCheckout: './extension-repo/', reason },
+        'ext-one': { itemized: true, sourceCheckout: checkoutName, reason },
+        'ext-two': { itemized: true, sourceCheckout: checkoutName, reason },
       },
       externalExtensionCheckouts: {
-        'extension-repo': { minimumPackages: { own: 1, core: 1, stylesheet: 1 } },
+        [checkoutName]: {
+          // Not the canonical spelling: the path is resolved, not compared as text.
+          path: './extension-repo/',
+          minimumPackages: { own: 1, core: 1, stylesheet: 1 },
+        },
       },
     }),
   );
 
   return {
     checkout,
+    checkoutName,
     overlay,
     zipsHere,
     zipsElsewhere,

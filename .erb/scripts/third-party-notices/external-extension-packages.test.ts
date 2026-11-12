@@ -12,31 +12,22 @@ import {
 import type { ItemizedCheckout } from './external-extensions';
 import { buildLock } from './lock';
 import type { ShippedPackage } from './types';
+import {
+  allowedVerdicts,
+  writeManifest as writeCheckoutManifest,
+  writePackage,
+} from './__fixtures__/itemized-checkout';
 
 let root: string;
 let core: string;
-
-/** Writes an installed package under `base` and returns its folder. */
-function writePackage(base: string, rel: string, name: string, version: string) {
-  const dir = path.join(base, rel);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name, version }));
-  fs.writeFileSync(path.join(dir, 'index.js'), '');
-  return dir;
-}
 
 /** Writes one of the checkout's module manifests, as the plugin stamps it. */
 function writeManifest(
   bundle: string,
   modules: string[],
-  { mode = 'production', buildId = 'one-build' }: { mode?: string; buildId?: string } = {},
+  stamp: { mode?: string; buildId?: string } = {},
 ) {
-  const dir = path.join(root, '.notices', 'modules');
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, `${bundle}.json`),
-    JSON.stringify({ bundle, buildId, mode, modules }),
-  );
+  writeCheckoutManifest(root, bundle, modules, stamp);
 }
 
 /** Writes a file of the checkout's own source, under its one extension's `src/`. */
@@ -51,12 +42,13 @@ function corePackage(dir: string, name: string, version: string): ShippedPackage
   return { ecosystem: 'npm', name, version, dir, reachedVia: ['extension-web-view'] };
 }
 
+const CHECKOUT_NAME = 'example-extensions';
+
 const checkout = (
   minimumPackages: Partial<ItemizedCheckout['minimumPackages']> = {},
 ): ItemizedCheckout => ({
+  name: CHECKOUT_NAME,
   root,
-  key: '../extension-repo',
-  tableKey: '../extension-repo',
   extensions: ['ext'],
   minimumPackages: { own: 3, core: 2, stylesheet: 1, ...minimumPackages },
 });
@@ -129,7 +121,7 @@ describe('collectCheckoutPackages', () => {
   it("returns the checkout's own packages and the paranext-core packages its bundles reach", () => {
     const result = collect();
 
-    expect(result.checkout.key).toBe('../extension-repo');
+    expect(result.checkout.name).toBe(CHECKOUT_NAME);
     expect(result.packages.map((pkg) => `${pkg.name}@${pkg.version}`)).toEqual([
       'css-only@2.0.0',
       'own-a@1.0.0',
@@ -158,9 +150,32 @@ describe('collectCheckoutPackages', () => {
       { mode: 'development' },
     );
 
-    expect(() => collect()).toThrow(
-      /\.\.\/extension-repo[\s\S]*extension-main[\s\S]*npm run package/,
+    let message = '';
+    try {
+      collect();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toMatch(
+      /^example-extensions: [\s\S]*not written by a production build[\s\S]*extension-main: development/,
     );
+    expect(message).toContain('The installer packs what a production build compiles');
+    expect(message).toContain(`cd ${root} && npm run package`);
+  });
+
+  it('refuses a set where only one bundle was built in development mode, naming that bundle', () => {
+    writeManifest('extension-main', [path.join(ownA, 'index.js')], { mode: 'development' });
+
+    let message = '';
+    try {
+      collect();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toMatch(
+      /not written by a production build:\n {2}extension-main: development\n/,
+    );
+    expect(message).not.toContain('extension-web-view: ');
   });
 
   it('refuses two manifests from different builds', () => {
@@ -173,7 +188,7 @@ describe('collectCheckoutPackages', () => {
     fs.rmSync(path.join(root, '.notices', 'modules', `${bundle}.json`));
 
     expect(() => collect()).toThrow(
-      new RegExp(`\\.\\./extension-repo: [\\s\\S]*missing the manifest for ${bundle}\\b`),
+      new RegExp(`^example-extensions: [\\s\\S]*missing the manifest for ${bundle}\\b`),
     );
   });
 
@@ -184,7 +199,7 @@ describe('collectCheckoutPackages', () => {
     fs.rmSync(path.join(root, '.notices'), { recursive: true });
     if (keepFolder) fs.mkdirSync(path.join(root, '.notices', 'modules'), { recursive: true });
 
-    expect(() => collect()).toThrow(/\.\.\/extension-repo: no module manifests/);
+    expect(() => collect()).toThrow(/^example-extensions: no module manifests/);
   });
 
   it('refuses manifests that record no mode', () => {
@@ -197,7 +212,7 @@ describe('collectCheckoutPackages', () => {
     });
 
     expect(() => collect()).toThrow(
-      /\.\.\/extension-repo: [\s\S]*not written by a production build[\s\S]*extension-main: unrecorded/,
+      /^example-extensions: [\s\S]*not written by a production build[\s\S]*extension-main: unrecorded/,
     );
   });
 
@@ -209,7 +224,7 @@ describe('collectCheckoutPackages', () => {
       fs.writeFileSync(file, JSON.stringify(unstamped));
     });
 
-    expect(() => collect()).toThrow(/\.\.\/extension-repo: [\s\S]*2 different builds/);
+    expect(() => collect()).toThrow(/^example-extensions: [\s\S]*2 different builds/);
   });
 
   it('names the checkout, and the command that rebuilds it, on a refusal from the shared collection', () => {
@@ -223,8 +238,8 @@ describe('collectCheckoutPackages', () => {
     }
     if (!(error instanceof Error) || !(error.cause instanceof Error))
       throw new Error('expected a refusal carrying the original one as its cause');
-    expect(error.message).toMatch(/^\.\.\/extension-repo: /);
-    expect(error.message).toContain(`rebuild in ${root} with \`npm run package\``);
+    expect(error.message).toMatch(/^example-extensions: /);
+    expect(error.message).toContain(`cd ${root} && npm run package`);
     expect(error.cause.message).toMatch(/missing the manifest for extension-main/);
     expect(error.message).toContain(error.cause.message);
   });
@@ -234,7 +249,7 @@ describe('collectCheckoutPackages', () => {
 
     expect(() => collect()).toThrow(
       new RegExp(
-        `\\.\\./extension-repo[\\s\\S]*belongs to ${staged.replace(/[\\.]/g, '\\$&')}, which ` +
+        `^example-extensions[\\s\\S]*belongs to ${staged.replace(/[\\.]/g, '\\$&')}, which ` +
           "paranext-core's own list doesn't contain",
       ),
     );
@@ -245,7 +260,7 @@ describe('collectCheckoutPackages', () => {
 
     expect(() => collect()).toThrow(
       new RegExp(
-        `\\.\\./extension-repo[\\s\\S]*belongs to ${coreA.replace(/[\\.]/g, '\\$&')}, which ` +
+        `^example-extensions[\\s\\S]*belongs to ${coreA.replace(/[\\.]/g, '\\$&')}, which ` +
           "paranext-core's own list doesn't contain",
       ),
     );
@@ -278,33 +293,25 @@ describe('collectCheckoutPackages', () => {
 
   it('refuses fewer own packages than the policy minimum', () => {
     expect(() => collect({ own: 4 })).toThrow(
-      /\.\.\/extension-repo[\s\S]*3 package\(s\) of its own[\s\S]*minimumPackages\.own/,
+      /^example-extensions[\s\S]*3 package\(s\) of its own[\s\S]*minimumPackages\.own/,
     );
   });
 
   it('refuses fewer paranext-core package folders than the policy minimum', () => {
     expect(() => collect({ core: 3 })).toThrow(
-      /\.\.\/extension-repo[\s\S]*2 paranext-core package folder\(s\)[\s\S]*minimumPackages\.core/,
+      /^example-extensions[\s\S]*2 paranext-core package folder\(s\)[\s\S]*minimumPackages\.core/,
     );
   });
 
-  it.each(['../extension-repo/', '..\\extension-repo\\'])(
-    'names the minimum by the table key as the policy spells it: %s',
-    (tableKey) => {
-      expect(() =>
-        collectCheckoutPackages({
-          checkout: { ...checkout({ own: 4 }), tableKey },
-          coreRepo: core,
-          corePackages,
-          warmCache: 'throw',
-        }),
-      ).toThrow(`externalExtensionCheckouts["${tableKey}"].minimumPackages.own`);
-    },
-  );
+  it('names the minimum to lower by the checkout name the policy records', () => {
+    expect(() => collect({ own: 4 })).toThrow(
+      'externalExtensionCheckouts["example-extensions"].minimumPackages.own',
+    );
+  });
 
   it('refuses fewer stylesheet packages than the policy minimum', () => {
     expect(() => collect({ stylesheet: 2 })).toThrow(
-      /\.\.\/extension-repo[\s\S]*1 package\(s\) through a stylesheet[\s\S]*minimumPackages\.stylesheet/,
+      /^example-extensions[\s\S]*1 package\(s\) through a stylesheet[\s\S]*minimumPackages\.stylesheet/,
     );
   });
 
@@ -313,7 +320,7 @@ describe('collectCheckoutPackages', () => {
     writeSource('other.ts', "import dropped from 'dropped';\nexport default dropped;\n");
 
     expect(() => collect()).toThrow(
-      /\.\.\/extension-repo[\s\S]*dropped \(imported in src\/ext\/src\/other\.ts\)/,
+      /^example-extensions[\s\S]*dropped \(imported in src\/ext\/src\/other\.ts\)/,
     );
   });
 
@@ -361,20 +368,11 @@ describe('mergeCheckoutPackages', () => {
       'x@2.0.0 /checkout/node_modules/y/node_modules/x',
     ]);
 
-    const verdicts = merged.map((entry) => ({
-      ecosystem: entry.ecosystem,
-      name: entry.name,
-      version: entry.version,
-      verdict: 'allowed' as const,
-      spdxId: 'MIT',
-      reason: 'r',
-      declared: 'MIT',
-      detected: 'MIT',
-      matchedFile: 'LICENSE',
-      textSha256: 'abc',
-    }));
     expect(() =>
-      buildLock({ verdicts, licenseeVersion: '9.18.0', corpusVersion: '6.6.0' }, '# notices\n'),
+      buildLock(
+        { verdicts: allowedVerdicts(merged), licenseeVersion: '9.18.0', corpusVersion: '6.6.0' },
+        '# notices\n',
+      ),
     ).not.toThrow();
   });
 
@@ -403,20 +401,11 @@ describe('mergeCheckoutPackages', () => {
       '/core/node_modules/d',
       '/core/node_modules/a/node_modules/d',
     ]);
-    const verdicts = merged.map((entry) => ({
-      ecosystem: entry.ecosystem,
-      name: entry.name,
-      version: entry.version,
-      verdict: 'allowed' as const,
-      spdxId: 'MIT',
-      reason: 'r',
-      declared: 'MIT',
-      detected: 'MIT',
-      matchedFile: 'LICENSE',
-      textSha256: 'abc',
-    }));
     expect(() =>
-      buildLock({ verdicts, licenseeVersion: '9.18.0', corpusVersion: '6.6.0' }, '# notices\n'),
+      buildLock(
+        { verdicts: allowedVerdicts(merged), licenseeVersion: '9.18.0', corpusVersion: '6.6.0' },
+        '# notices\n',
+      ),
     ).toThrow(/npm:d@1\.0\.0/);
   });
 });
@@ -424,7 +413,7 @@ describe('mergeCheckoutPackages', () => {
 describe('checkoutStylesheetSpecifiers', () => {
   it('prefixes each unresolved specifier with the name of the checkout it came from', () => {
     const collected: CheckoutPackages = {
-      checkout: { ...checkout(), root: path.join(os.tmpdir(), 'extensions-repo') },
+      checkout: checkout(),
       packages: [],
       linkedPackages: [],
       corePackageCount: 0,
@@ -432,7 +421,7 @@ describe('checkoutStylesheetSpecifiers', () => {
       warmBundles: [],
     };
     expect(checkoutStylesheetSpecifiers([collected])).toEqual([
-      'extensions-repo: some-pkg/style.css',
+      'example-extensions: some-pkg/style.css',
     ]);
   });
 });

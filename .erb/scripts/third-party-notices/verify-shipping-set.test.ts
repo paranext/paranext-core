@@ -26,7 +26,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { alwaysListedPackages, inCi, withPlatformOnlyPackages } from './main';
-import { itemizedCheckoutSetup, writeItemizedCheckout } from './__fixtures__/itemized-checkout';
+import {
+  failingPointerCheck,
+  itemizedCheckoutSetup,
+  writeItemizedCheckout,
+} from './__fixtures__/itemized-checkout';
 
 /**
  * Registers tsx in the child, so it can `require` this pipeline's `.ts` modules.
@@ -117,8 +121,6 @@ load('main.ts').main();
 function stubShippedPackages(packages: { name: string; version: string }[]) {
   return `
     stub('./shipping-set', {
-      // Read when the module that lists the platform-provided packages loads.
-      packageOfSpecifier: load('shipping-set.ts').packageOfSpecifier,
       // These cases are about the lock DIFF, and they deliberately supply two-package sets - so the
       // plausibility floor the real call site applies is stubbed out rather than left to fire
       // first. The floor has its own falsifying cases in degradation.test.ts and shipping-set.test.ts.
@@ -406,17 +408,6 @@ describe('--verify-shipping-set with an itemized external extension checkout', (
     expect(run.stderr).toMatch(/added: own-a@1\.0\.0/);
   });
 
-  /** A pointer check that prints the zips it was given, as `<folder>/<zip>`, and then fails. */
-  const failingPointerCheck = `
-    stub('./license-pointers', {
-      assertNoDanglingLicensePointers: async ({ externalZips }) => {
-        const named = externalZips.map((zip) => path.basename(path.dirname(zip)) + '/' + path.basename(zip));
-        console.log('POINTERS ' + JSON.stringify(named.sort()));
-        throw new Error('main.js points at main.js.LICENSE.txt, which does not ship');
-      },
-    });
-  `;
-
   it("checks this platform's zips for dangling license pointers after the shipping set", () => {
     const fixture = writeItemizedCheckout(tmp, REPO, { otherPlatformFolder: true });
     const run = runVerifyShippingSet(
@@ -469,7 +460,9 @@ describe('--verify-shipping-set with an itemized external extension checkout', (
       CI: '',
     });
 
-    expect(run.stdout).toContain('Skipped the npm shipping set: extension-repo:extension-main');
+    expect(run.stdout).toContain(
+      `Skipped the npm shipping set: ${fixture.checkoutName}:extension-main`,
+    );
     expect(run.stderr).toBe('');
     expect(run.status).toBe(0);
   });

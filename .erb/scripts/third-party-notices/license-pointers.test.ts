@@ -4,10 +4,10 @@ import * as path from 'path';
 import JSZip from 'jszip';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  LICENSE_POINTER,
   assertNoDanglingLicensePointers,
   danglingPointersInFiles,
   danglingPointersInZip,
+  licensePointersIn,
 } from './license-pointers';
 
 const POINTER_COMMENT = '/*! For license information please see main.js.LICENSE.txt */';
@@ -28,12 +28,16 @@ function write(relativePath: string, content: string): void {
   fs.writeFileSync(full, content);
 }
 
-describe('LICENSE_POINTER', () => {
+describe('licensePointersIn', () => {
   it('captures exactly the file name inside an escaped string', () => {
     const source =
       'const s = "x\\n\\/*! For license information please see x.LICENSE.txt *\\/\\ny";';
-    const names = [...source.matchAll(LICENSE_POINTER)].map((match) => match[1]);
-    expect(names).toEqual(['x.LICENSE.txt']);
+    expect(licensePointersIn(source)).toEqual(['x.LICENSE.txt']);
+  });
+
+  it('gives the same answer when called again on the same source', () => {
+    expect(licensePointersIn(POINTER_COMMENT)).toEqual(['main.js.LICENSE.txt']);
+    expect(licensePointersIn(POINTER_COMMENT)).toEqual(['main.js.LICENSE.txt']);
   });
 });
 
@@ -73,16 +77,18 @@ describe('danglingPointersInFiles', () => {
   });
 });
 
+/** Writes a real zip holding `entries` under `tmp` and returns its path. */
+async function zipWith(entries: Record<string, string>, fileName = 'ext.zip'): Promise<string> {
+  const zip = new JSZip();
+  Object.entries(entries).forEach(([name, content]) => zip.file(name, content));
+  const zipPath = path.join(tmp, fileName);
+  fs.mkdirSync(path.dirname(zipPath), { recursive: true });
+  fs.writeFileSync(zipPath, await zip.generateAsync({ type: 'nodebuffer' }));
+  return zipPath;
+}
+
 describe('danglingPointersInZip', () => {
   const POINTER = '/*! For license information please see send-receive.web-view.js.LICENSE.txt */';
-
-  async function zipWith(entries: Record<string, string>): Promise<string> {
-    const zip = new JSZip();
-    Object.entries(entries).forEach(([name, content]) => zip.file(name, content));
-    const zipPath = path.join(tmp, 'ext.zip');
-    fs.writeFileSync(zipPath, await zip.generateAsync({ type: 'nodebuffer' }));
-    return zipPath;
-  }
 
   it('reports a pointer whose file is not in the zip, naming the zip', async () => {
     const zipPath = await zipWith({ 'ext/src/main.js': POINTER });
@@ -136,5 +142,37 @@ describe('assertNoDanglingLicensePointers', () => {
     const check = assertNoDanglingLicensePointers({ repo: tmp, externalZips: [] });
     await expect(check).rejects.toThrow('release/app/dist/main.js -> main.js.LICENSE.txt');
     await expect(check).rejects.toThrow('extensions/dist/ext/main.js -> main.js.LICENSE.txt');
+  });
+
+  describe('over external extension zips', () => {
+    const WEB_VIEW_POINTER =
+      '/*! For license information please see ext.web-view.js.LICENSE.txt */';
+
+    beforeEach(() => {
+      write('release/app/dist/main.js', 'console.log(1);');
+    });
+
+    it('refuses a zip whose bundle points at a .LICENSE.txt it does not carry', async () => {
+      const zipPath = await zipWith(
+        { 'ext/src/main.js': WEB_VIEW_POINTER },
+        'zips/ext-one_1.0.0.zip',
+      );
+      await expect(
+        assertNoDanglingLicensePointers({ repo: tmp, externalZips: [zipPath] }),
+      ).rejects.toThrow('ext-one_1.0.0.zip!ext/src/main.js -> ext.web-view.js.LICENSE.txt');
+    });
+
+    it('accepts a zip that carries the file its bundle points at', async () => {
+      const zipPath = await zipWith(
+        {
+          'ext/src/main.js': WEB_VIEW_POINTER,
+          'ext/src/ext.web-view.js.LICENSE.txt': 'text',
+        },
+        'zips/ext-one_1.0.0.zip',
+      );
+      await expect(
+        assertNoDanglingLicensePointers({ repo: tmp, externalZips: [zipPath] }),
+      ).resolves.toBeUndefined();
+    });
   });
 });

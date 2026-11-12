@@ -11,13 +11,16 @@ import { messageOf } from './read-json';
  *
  * The name stops at `\` because an extension's `main.js` carries each web view inlined as a
  * JavaScript string, where the comment may be escaped (`\/*! ... x.LICENSE.txt *\/`).
+ *
+ * Module-private because it is a `/g` regex: `matchAll` copies it, but a `.test()` or `.exec()`
+ * caller would carry `lastIndex` from one call into the next.
  */
-export const LICENSE_POINTER = /For license information please see ([^\s*"'\\]+\.LICENSE\.txt)/g;
+const LICENSE_POINTER = /For license information please see ([^\s*"'\\]+\.LICENSE\.txt)/g;
 
 type PointerScan = { scanned: number; dangling: string[] };
 
 /** The distinct license file names a script points at. */
-function pointersIn(source: string): string[] {
+export function licensePointersIn(source: string): string[] {
   return [...new Set([...source.matchAll(LICENSE_POINTER)].map((match) => match[1]))];
 }
 
@@ -40,7 +43,7 @@ export function danglingPointersInFiles(root: string): PointerScan {
   const dangling: string[] = [];
   files.forEach((file) => {
     const relative = path.relative(root, file).split(path.sep).join('/');
-    pointersIn(fs.readFileSync(file, 'utf8')).forEach((pointer) => {
+    licensePointersIn(fs.readFileSync(file, 'utf8')).forEach((pointer) => {
       if (!fs.existsSync(path.resolve(path.dirname(file), pointer)))
         dangling.push(`${relative} -> ${pointer}`);
     });
@@ -70,7 +73,7 @@ export async function danglingPointersInZip(zipPath: string): Promise<PointerSca
   await scripts.reduce(async (previous, name) => {
     await previous;
     const source = await zip.files[name].async('string');
-    pointersIn(source).forEach((pointer) => {
+    licensePointersIn(source).forEach((pointer) => {
       const target = path.posix.join(path.posix.dirname(name), pointer);
       if (!zip.files[target]) dangling.push(`${zipName}!${name} -> ${pointer}`);
     });

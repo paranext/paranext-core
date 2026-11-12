@@ -31,7 +31,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { NPM_MIN_PACKAGES, assertNpmFloor, collectShippedPackages } from './shipping-set';
 import { assertFloor, DOTNET_MIN_PACKAGES } from './nuget-set';
 import { CONFIDENCE_THRESHOLD } from './policy';
-import { itemizedCheckoutSetup, writeItemizedCheckout } from './__fixtures__/itemized-checkout';
+import {
+  failingPointerCheck,
+  itemizedCheckoutSetup,
+  writeItemizedCheckout,
+} from './__fixtures__/itemized-checkout';
 
 /**
  * Registers tsx in the child, so it can `require` this pipeline's `.ts` modules.
@@ -327,8 +331,6 @@ describe('a degraded environment fails closed', () => {
     // short .NET section is exactly the failure this generator exists to prevent.
     const run = runGenerator(`
       stub('./shipping-set', {
-        // Read when the module that lists the platform-provided packages loads.
-        packageOfSpecifier: load('shipping-set.ts').packageOfSpecifier,
         collectShippedPackages: () => ({ packages: [], unresolvedStylesheetSpecifiers: [] }),
         // This case is about the .NET floor, and it supplies an empty npm set on purpose - so the
         // npm floor (exercised on its own below) is stubbed out rather than left to fire first.
@@ -374,8 +376,6 @@ describe('a degraded environment fails closed', () => {
       `
       emptyNuget();
       stub('./shipping-set', {
-        // Read when the module that lists the platform-provided packages loads.
-        packageOfSpecifier: load('shipping-set.ts').packageOfSpecifier,
         // One package on purpose; the npm floor is exercised on its own below.
         assertNpmFloor: (packages) => packages,
         // The real one reads the repository's own package-lock.json, which these
@@ -456,8 +456,6 @@ describe('a degraded environment fails closed', () => {
       `
       emptyNuget();
       stub('./shipping-set', {
-        // Read when the module that lists the platform-provided packages loads.
-        packageOfSpecifier: load('shipping-set.ts').packageOfSpecifier,
         // One package on purpose; the npm floor is exercised on its own below.
         assertNpmFloor: (packages) => packages,
         // The real one reads the repository's own package-lock.json, which these
@@ -932,7 +930,7 @@ describe('an itemized external extension checkout in the full run', () => {
     );
     expect(report.listings).toEqual([
       {
-        checkoutName: 'extension-repo',
+        checkoutName: fixture.checkoutName,
         extensions: ['ext-one', 'ext-two'],
         packages: [
           { name: 'css-only', version: '2.0.0' },
@@ -944,7 +942,7 @@ describe('an itemized external extension checkout in the full run', () => {
   });
 
   it('collects a checkout once, and lists both extensions, when two entries name it', () => {
-    // The fixture's two entries spell the folder differently, and both zips are packed.
+    // The fixture's two entries name one checkout, and both zips are packed.
     const fixture = writeItemizedCheckout(tmp, REPO);
     const run = runGenerator(
       `emptyNuget();\n${identifyNothing}\n${itemizedCheckoutSetup(fixture)}`,
@@ -963,14 +961,7 @@ describe('an itemized external extension checkout in the full run', () => {
   it("checks every platform's zips for dangling license pointers, and stops on one", () => {
     const fixture = writeItemizedCheckout(tmp, REPO, { otherPlatformFolder: true });
     const run = runGenerator(
-      `${itemizedCheckoutSetup(fixture)}
-      stub('./license-pointers', {
-        assertNoDanglingLicensePointers: async ({ externalZips }) => {
-          const named = externalZips.map((zip) => path.basename(path.dirname(zip)) + '/' + path.basename(zip));
-          console.log('POINTERS ' + JSON.stringify(named.sort()));
-          throw new Error('main.js points at main.js.LICENSE.txt, which does not ship');
-        },
-      });`,
+      itemizedCheckoutSetup(fixture) + failingPointerCheck,
       ['--verify'],
       tmp,
     );
