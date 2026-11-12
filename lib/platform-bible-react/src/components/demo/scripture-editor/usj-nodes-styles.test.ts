@@ -282,17 +282,11 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     });
   });
 
-  // A collapsed note hides its content's text but not a `<mark>` around it, so an annotation's box
-  // style would draw an empty sliver beside the caller.
+  // A collapsed note hides its content's text, and must hide a `<mark>` around it too, or an
+  // annotation's box style would draw an empty sliver beside the caller.
   describe('collapsed note content', () => {
-    it('draws no box on an annotation mark inside it, even from a style with its own priority', () => {
-      [
-        'margin: 0 !important;',
-        'padding: 0 !important;',
-        'border: none !important;',
-        'outline: none !important;',
-        'box-shadow: none !important;',
-      ].forEach((declaration) => expect(css).toMatch(rule(['.note.collapsed mark'], declaration)));
+    it('hides an annotation mark inside it, so no box style draws beside the caller', () => {
+      expect(css).toMatch(rule(['.note.collapsed mark'], 'display: none;'));
     });
   });
 

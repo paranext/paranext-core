@@ -27,6 +27,8 @@
  *   (`|lemma="grace"` settling to `|grace`), and the saved span carries the attribute.
  * - A caret clicked past a paragraph's trailing footnote stays there when a marker literal typed
  *   earlier in the same paragraph settles, and is reported at the footnote's closer.
+ * - An annotation on a collapsed footnote's text, styled with a box that carries its own
+ *   `!important`, draws nothing: the footnote is no wider than its caller alone.
  *
  * Settle timing: a typed marker literal settles when the caret leaves it or after an idle delay,
  * whichever comes first. This test raises the idle delay
@@ -53,6 +55,7 @@
  */
 import { ConsoleMessage, FrameLocator, Locator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { DEFAULT_WEBSOCKET_PORT, sendPapiRequestOnce } from '../../../fixtures/helpers';
 import {
   chapterLocation,
   contentJsonPath,
@@ -676,6 +679,58 @@ test.describe('scripture editor annotation shapes', () => {
           { timeout: 30_000 },
         )
         .toEqual([expected, expected]);
+    });
+
+    await test.step('an annotation in a collapsed footnote draws no box beside its caller, even with a priority style', async () => {
+      // A box style with its own priority, which a plain reset of the box properties would lose to.
+      const typeName = 'e2e-collapsed-note-box';
+      await sendPapiRequestOnce(
+        'object:platformScriptureEditor.annotationStyle-data.registerAnnotationStyle',
+        [
+          typeName,
+          {
+            padding: '6px !important',
+            margin: '4px !important',
+            border: '3px solid red !important',
+            backgroundColor: 'yellow',
+          },
+        ],
+        DEFAULT_WEBSOCKET_PORT,
+        30_000,
+      );
+      const chapterFour = await getChapterUsj(johnVerse(4, 1));
+      const verseSix = requireVerseText(chapterFour, '6');
+      const paragraphIndex = paragraphIndexOf(verseSix);
+      const content = paragraphContent(chapterFour, paragraphIndex);
+      const noteIndex = content.findIndex(
+        (item) => typeof item === 'object' && item.type === 'note' && item.marker === 'f',
+      );
+      const note = content[noteIndex];
+      if (typeof note !== 'object') throw new Error('John 4:6 has no footnote');
+      const footnoteTextIndex = (note.content ?? []).findIndex(
+        (item) => typeof item === 'object' && item.marker === 'ft',
+      );
+      expect(footnoteTextIndex).toBeGreaterThan(-1);
+      const footnoteTextPath = contentJsonPath([paragraphIndex, noteIndex, footnoteTextIndex, 0]);
+
+      const noteElement = paragraphWith('about the sixth hour')
+        .locator('span.note[data-marker="f"]')
+        .last();
+      const widthBefore = (await noteElement.boundingBox())?.width;
+      if (widthBefore === undefined) throw new Error('The footnote is not laid out');
+
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterLocation(johnVerse(4, 6), footnoteTextPath, 0),
+          end: chapterLocation(johnVerse(4, 6), footnoteTextPath, 4),
+        },
+        typeName,
+        'in-collapsed-note',
+      ]);
+      const mark = noteElement.locator('mark.annotationId-in-collapsed-note');
+      await expect(mark).toHaveCount(1, { timeout: 30_000 });
+      expect((await noteElement.boundingBox())?.width).toBe(widthBefore);
+      await expect(mark).toHaveCSS('display', 'none');
     });
   });
 });
