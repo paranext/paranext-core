@@ -7,9 +7,9 @@
  * - A network error, for a request that got no answer: `net::ERR_NAME_NOT_RESOLVED`,
  *   `net::ERR_ADDRESS_INVALID` for a name a DNS blocker answers with `0.0.0.0`,
  *   `net::ERR_CERT_...`. This is what tells a blocked network from an outage.
- * - An HTTP error status, for a request Usersnap answered with one. Its loader answers a space key
- *   it does not accept with 404; its other hosts answer for other reasons (a missing widget chunk
- *   gets 403), so only the loader's 404 says anything about the key.
+ * - An HTTP error status, for a request Usersnap answered with one. Its loader answers a space key it
+ *   does not accept with 404; its other hosts answer for other reasons (a missing widget chunk gets
+ *   403), so only the loader's 404 says anything about the key.
  */
 
 import { logger } from '@shared/services/logger.service';
@@ -86,7 +86,9 @@ export function registerUsersnapNetworkErrorLogging(
       logger.debug(`${request} was cancelled`);
       return;
     }
-    logger.warn(`${request} failed with ${details.error}, so the feedback forms may be unavailable`);
+    logger.warn(
+      `${request} failed with ${details.error}, so the feedback forms may be unavailable`,
+    );
   });
   session.webRequest.onCompleted({ urls: [USERSNAP_URL_PATTERN] }, (details) => {
     if (details.statusCode < FIRST_HTTP_ERROR_STATUS) return;
