@@ -68,7 +68,9 @@ type EdgeDeclarations = {
  * A `padding`, `margin` or `borderRadius` value with a priority (`!important`), or an empty one, is
  * not split: it stays on every element as written, since the priority would be read as one of its
  * values. A `border` is split whatever its value, each side taking the value as written. A `var()`
- * counts as one value, so a custom property that holds several makes a split longhand invalid.
+ * counts as one value, so a custom property that holds several is copied whole into each split
+ * longhand: a block longhand or a corner radius reads two values with a different meaning, and an
+ * inline-side longhand, which takes one, is invalid.
  *
  * An annotation that paints one element gets all three rules, so it is drawn as the unsplit style
  * draws it. Logical properties put the start on the right in right-to-left text.
