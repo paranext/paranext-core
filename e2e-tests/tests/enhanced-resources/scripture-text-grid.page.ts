@@ -49,8 +49,13 @@ export type ScriptureTextGridPapiWindow = {
   };
 };
 
+/**
+ * One entry of the seeded `referencedProjectsAndResources` list. A `project` entry's `id` is a
+ * project id; a `dblResource` entry's `id` is a DBL resource uid, which the grid resolves to an
+ * installed project (or reports as not installed).
+ */
 export type FlaggedResourceItem = {
-  type: 'project';
+  type: 'project' | 'dblResource';
   name: string;
   id: string;
   isInTextCollection: boolean;

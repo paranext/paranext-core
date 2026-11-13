@@ -6,9 +6,8 @@
  * The panel renders these controls without a bound project (the TEXTS list is simply empty), so
  * this does not depend on project fixtures.
  *
- * There is no menu/command for the grid (it ships in the default layout), so the test opens it
- * directly via `window.papi.webViews.openWebView` and addresses the web view iframe by its
- * `data-web-view-id` (the tab is icon-only, so it has no title text to match).
+ * The test opens the grid directly via `window.papi.webViews.openWebView` and addresses the web
+ * view iframe by its `data-web-view-id`, which identifies this instance whatever the tab shows.
  *
  * NOT covered here (needs an app relaunch the CDP fixture can't do, plus resource fixtures;
  * verified manually): the user-scope round-trip — add via Get Resources, hover-✕ to remove, uncheck
@@ -52,31 +51,8 @@ test.describe('Scripture Text Grid — View Options panel', () => {
     await closeAllNonHomeDockTabs(mainPage);
   });
 
-  // The grid tab is non-closable, so make it closable via the renderer global before the shared
-  // sweep, otherwise it leaks into later specs. Best-effort: cleanup must not fail the test.
+  // Close the grid so it does not leak into later specs (shared app, persisted layout).
   test.afterEach(async ({ mainPage }) => {
-    await mainPage
-      .evaluate(async (webViewType) => {
-        // The renderer exposes `papi` and `updateWebViewDefinitionById` on `globalThis`, untyped here.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const win = window as unknown as {
-          papi: {
-            webViews: {
-              getAllOpenWebViewDefinitions: () => Promise<{ id: string; webViewType: string }[]>;
-            };
-          };
-          updateWebViewDefinitionById: (id: string, update: { isClosable: boolean }) => unknown;
-        };
-        const defs = await win.papi.webViews.getAllOpenWebViewDefinitions();
-        await Promise.all(
-          defs
-            .filter((d) => d.webViewType === webViewType)
-            .map((d) => win.updateWebViewDefinitionById(d.id, { isClosable: true })),
-        );
-      }, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
-      .catch(() => {
-        // Ignore — cleanup is best-effort and must not fail the test.
-      });
     await closeAllNonHomeDockTabs(mainPage);
   });
 
