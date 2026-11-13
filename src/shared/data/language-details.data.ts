@@ -11,9 +11,13 @@ import { LanguageInfo } from 'platform-bible-react';
 export const languageDetails: Record<string, LanguageInfo> = {
   en: {
     autonym: 'English',
-    uiNames: { es: 'inglés', de: 'Englisch', fr: 'Anglais', km: 'ភាសាអង់គ្លេស' },
+    uiNames: { es: 'inglés', de: 'Englisch', fr: 'Anglais', km: 'ភាសាអង់គ្លេស', nl: 'Engels' },
   },
-  es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch' } },
+  es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch', nl: 'Spaans' } },
+  nl: {
+    autonym: 'Nederlands',
+    uiNames: { en: 'Dutch', es: 'neerlandés', de: 'Niederländisch', fr: 'Néerlandais' },
+  },
   fr: { autonym: 'Français', uiNames: { en: 'French', de: 'Französisch', es: 'francés' } },
   de: { autonym: 'Deutsch', uiNames: { en: 'German', es: 'alemán', fr: 'Allemand' } },
   km: { autonym: 'ខ្មែរ', uiNames: { en: 'Khmer', es: 'jemer', de: 'Khmer', fr: 'Khmer' } },

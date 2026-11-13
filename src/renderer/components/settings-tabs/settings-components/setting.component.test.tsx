@@ -822,15 +822,23 @@ describe('interface language selector', () => {
     expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
   });
 
-  it('offers exactly English and Español when the offered languages cannot be read', () => {
+  it('offers exactly English, Español and Nederlands when the offered languages cannot be read', () => {
     availableLanguages.loaded = newPlatformError('Localization service unavailable');
     renderLanguageSetting(['en']);
-    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual(['en', 'es']);
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual([
+      'en',
+      'es',
+      'nl',
+    ]);
   });
 
-  it('offers exactly English and Español while the languages load', () => {
+  it('offers exactly English, Español and Nederlands while the languages load', () => {
     renderLanguageSetting(['en']);
-    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual(['en', 'es']);
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual([
+      'en',
+      'es',
+      'nl',
+    ]);
   });
 
   it('keeps a hidden current language, by its autonym, once the offered languages load', () => {

@@ -74,6 +74,35 @@
       "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%": "Diccionario: SDBH/SDBG",
       "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Abrir diccionario HEBGRK",
       "%platformLexicalTools_webViewMenu_openDictionary%": "Abrir diccionario"
+    },
+    "nl": {
+      "%platformLexicalTools_dictionary_allOccurrencesLabel%": "Voorkomens",
+      "%platformLexicalTools_dictionary_backToList%": "Terug naar lijst",
+      "%platformLexicalTools_dictionary_definitionLabel%": "Definitie",
+      "%platformLexicalTools_dictionary_domainTaxonomyLabel%": "Domein {taxonomy}",
+      "%platformLexicalTools_dictionary_dataLoadError%": "Woordenboekgegevens laden is mislukt.",
+      "%platformLexicalTools_dictionary_noResults%": "Geen resultaten",
+      "%platformLexicalTools_dictionary_occurrencesInChapterLabel%": "Voorkomens in hoofdstuk",
+      "%platformLexicalTools_dictionary_occurrencesInVerseLabel%": "Voorkomens in vers",
+      "%platformLexicalTools_dictionary_occurrencesForSenseLabel%": "Voorkomens voor betekenis {index}",
+      "%platformLexicalTools_dictionary_occurrencesToggleAll%": "alle",
+      "%platformLexicalTools_dictionary_occurrencesToggleChapter%": "hoofdstuk",
+      "%platformLexicalTools_dictionary_searchDictionary%": "Woordenboek doorzoeken...",
+      "%platformLexicalTools_dictionary_sensesLabel%": "Betekenissen",
+      "%platformLexicalTools_dictionary_scopeSelector_chapter%": "Huidig hoofdstuk",
+      "%platformLexicalTools_dictionary_scopeSelector_section%": "Huidige sectie",
+      "%platformLexicalTools_dictionary_scopeSelector_verse%": "Huidig vers",
+      "%platformLexicalTools_dictionary_strongsCodeLabel%": "Strong-code",
+      "%platformLexicalTools_dictionary_sdbgCopyright%": "Semantic Dictionary of the Greek New Testament, gebaseerd op Louw & Nida's Greek-English Lexicon of the New Testament, ©1988-2021 United Bible Societies.",
+      "%platformLexicalTools_dictionary_sdbhCopyright%": "Semantic Dictionary of Biblical Hebrew, onder redactie van Reinier de Blois, met medewerking van Enio R. Mueller, ©2000-2025 United Bible Societies.",
+      "%platformLexicalTools_dictionary_title%": "HEBGRK-woordenboek",
+      "%platformLexicalTools_dictionary_title_sdbhSdbg%": "Woordenboek: SDBH/SDBG",
+      "%platformLexicalTools_dictionary_trackProjectDropdownLabel%": "Bijbelse termen volgen",
+      "%platformLexicalTools_mainMenu_openDictionary%": "Woordenboek openen",
+      "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%": "Woordenboek openen: SDBH/SDBG",
+      "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%": "Woordenboek: SDBH/SDBG",
+      "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "HEBGRK-woordenboek openen",
+      "%platformLexicalTools_webViewMenu_openDictionary%": "Woordenboek openen"
     }
   }
 }

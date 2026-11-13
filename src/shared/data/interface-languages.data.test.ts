@@ -18,8 +18,8 @@ const LOADED: Record<string, LanguageInfo> = {
 };
 
 describe('OFFERED_INTERFACE_LANGUAGES', () => {
-  it('offers exactly English and Spanish, English first', () => {
-    expect([...OFFERED_INTERFACE_LANGUAGES]).toEqual(['en', 'es']);
+  it('offers exactly English, Spanish and Dutch, English first', () => {
+    expect([...OFFERED_INTERFACE_LANGUAGES]).toEqual(['en', 'es', 'nl']);
   });
 });
 

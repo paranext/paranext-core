@@ -10,7 +10,7 @@ import { languageDetails } from '@shared/data/language-details.data';
  * PT-4457 is expected to replace this with a rule based on app-wide translation coverage; the
  * `%firstRun_` keys alone are not enough, since a locale can have all of them and little else.
  */
-export const OFFERED_INTERFACE_LANGUAGES: readonly string[] = ['en', 'es'];
+export const OFFERED_INTERFACE_LANGUAGES: readonly string[] = ['en', 'es', 'nl'];
 
 /** Whether `tag` is one of the {@link OFFERED_INTERFACE_LANGUAGES}, compared exactly. */
 export function isOfferedInterfaceLanguage(tag: string): boolean {

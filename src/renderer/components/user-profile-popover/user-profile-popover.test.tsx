@@ -800,7 +800,7 @@ describe('UserProfilePopover language picker', () => {
     ]);
   });
 
-  test('offers exactly English and Español while the languages load', async () => {
+  test('offers exactly English, Español and Nederlands while the languages load', async () => {
     setMockSetting('availableLanguages', undefined);
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
@@ -808,7 +808,11 @@ describe('UserProfilePopover language picker', () => {
     const pills = Array.from(
       document.querySelectorAll('[data-testid^="user-profile-language-"]'),
     ).map((el) => el.getAttribute('data-testid'));
-    expect(pills).toEqual(['user-profile-language-en', 'user-profile-language-es']);
+    expect(pills).toEqual([
+      'user-profile-language-en',
+      'user-profile-language-es',
+      'user-profile-language-nl',
+    ]);
   });
 
   test('shows a hidden current language as the pressed pill next to the offered ones', async () => {
@@ -838,7 +842,7 @@ describe('UserProfilePopover language picker', () => {
     expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['en', 'es']);
   });
 
-  test('offers exactly English and Español when the offered languages cannot be read', async () => {
+  test('offers exactly English, Español and Nederlands when the offered languages cannot be read', async () => {
     setMockSetting('availableLanguages', newPlatformError('Localization service unavailable'));
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
@@ -846,7 +850,11 @@ describe('UserProfilePopover language picker', () => {
     const pills = Array.from(
       document.querySelectorAll('[data-testid^="user-profile-language-"]'),
     ).map((el) => el.getAttribute('data-testid'));
-    expect(pills).toEqual(['user-profile-language-en', 'user-profile-language-es']);
+    expect(pills).toEqual([
+      'user-profile-language-en',
+      'user-profile-language-es',
+      'user-profile-language-nl',
+    ]);
   });
 });
 
