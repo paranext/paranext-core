@@ -570,11 +570,11 @@ test.describe('per-window UI isolation', () => {
       editorFrame2,
       SCRIPTURE_EDITOR_WEB_VIEW_TYPE,
     );
-    // The rendered menu, not `[data-overlay-context-menu]`: that marks the trigger, which is a
-    // zero-size, opacity-0, aria-hidden anchor button and so is never visible by design.
     // The request stays pending when the menu never renders; its rejection at teardown must not
     // surface as an unhandled rejection.
     contextMenuPromise.catch(() => undefined);
+    // The rendered menu, not `[data-overlay-context-menu]`: that marks the trigger, which is a
+    // zero-size, opacity-0, aria-hidden anchor button and so is never visible by design.
     const contextMenu2 = page2.locator('.overlay-context-menu-content');
     test.fail(true, "PT-5009: a context menu raised from a second window's web view never renders");
     await expect(contextMenu2).toBeVisible({ timeout: 15_000 });

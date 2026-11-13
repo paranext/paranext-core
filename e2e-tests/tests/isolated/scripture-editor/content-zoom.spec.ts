@@ -375,9 +375,9 @@ test.describe('scripture editor content zoom', () => {
       // Click the caller inside a REAL footnote row (`.note-caller`, `footnote-item.component.tsx`),
       // not empty pane background: the pointerdown listener resolves the clicked element's closest
       // marked ancestor, and only an actual descendant of the footnotes ContentZoomRoot is
-      // guaranteed to register as the click target under a CSS-zoomed layout. Selecting a row also sends the
-      // caret back into the editor text (`selectNote`), so this click is exactly the case where the
-      // pointer and the resulting focus name different areas and the pointer has to win.
+      // guaranteed to register as the click target under a CSS-zoomed layout. Selecting a row also
+      // sends the caret back into the editor text (`selectNote`), so this click is exactly the case
+      // where the pointer and the resulting focus name different areas and the pointer has to win.
       await editorFrame.locator('.note-caller').first().click({ force: true });
       // Wait for the click's effect (the bootstrap's active-area tracking crosses a realm boundary
       // to reach the renderer's resolver) rather than assuming it lands within the click's own tick.
@@ -655,8 +655,9 @@ test.describe('scripture editor content zoom', () => {
       await expect(footnotesList).toBeVisible({ timeout: 20_000 });
 
       // In an editable Power-mode view the pane is the note-editing surface, so clicking a row (the
-      // `[role="option"]` element in the footnotes list) opens that note in the pane's row editor and moves the text to the note without taking focus out
-      // of the pane (`handleFootnoteEditRequested` -> `navigateToNote` in
+      // `[role="option"]` element in the footnotes list) opens that note in the pane's row editor
+      // and moves the text to the note without taking focus out of the pane
+      // (`handleFootnoteEditRequested` -> `navigateToNote` in
       // `platform-scripture-editor.web-view.tsx`). Focus is then in an editable surface inside the
       // footnotes area rather than on the row list, which is what this case adds to the keyboard one
       // above: the chords must act on the footnotes area, not on the text the caret was moved to.

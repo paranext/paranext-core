@@ -146,7 +146,8 @@ test.describe('First-run wizard', () => {
     const frPage = new FirstRunPage(mainPage);
 
     await test.step('shows wizard dialog on a clean launch', async () => {
-      await expect(frPage.dialog).toBeVisible({ timeout: 15_000 });
+      // Same budget as `waitForWizard`: a cold first boot is slow.
+      await expect(frPage.dialog).toBeVisible({ timeout: 90_000 });
       await injectDemoMode(mainPage);
       await frPage.waitForWizard();
       await expect(frPage.dialog).toBeVisible();
