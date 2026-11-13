@@ -2,14 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import postcss, { type Rule } from 'postcss';
 import { compile } from 'sass';
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import {
-  descendants,
-  parseSource,
-  parseWebViewSource,
-  propExpressions,
-} from './web-view-source.test-utils';
 
 /**
  * The marker classes that scope a rule to Simple mode. `_simple-mode.scss` explains why the scoping
@@ -187,24 +180,16 @@ describe('_simple-mode.scss', () => {
     expect(scss).not.toMatch(/--psc-character-marker-bar-width:\s*[\d.]+(em|rem|%|ch|ex)/);
   });
 
-  it('gates the bar on the same two conditions the reservation selects on', () => {
-    // The highest-coupling point in this feature, and the one failure it exists to prevent: a bar
-    // that renders where this stylesheet does not match paints over project text. The two halves
-    // live in different languages and different files, so nothing but this test can hold them
-    // together — the CSS side cannot be broadened to `!isPowerMode` alone, because this stylesheet
-    // is compiled into the resource-text and model-text panels too, and both apply
-    // `editor-container-simple` unconditionally to an editor with no gutter markers.
-    //
-    // Deliberately a source scan, in the same spirit as the scope guard above: the mount site is
-    // deep inside a web view that cannot be rendered in isolation, and a refactor that restates the
-    // gate differently SHOULD fail here rather than pass quietly.
+  it('reserves the bar on both conditions that show it: Simple mode and gutter markers', () => {
+    // The CSS half of the pairing with `shouldShowCharacterMarkerBar`, whose tests pin the React
+    // half: a bar that renders where this stylesheet does not match paints over project text. The
+    // CSS side cannot be broadened to Simple mode alone, because this stylesheet is compiled into
+    // the resource-text and model-text panels too, and both apply `editor-container-simple`
+    // unconditionally to an editor with no gutter markers.
     const scss = readFileSync(SIMPLE_MODE_SCSS_PATH, 'utf8');
-    const webView = readFileSync(join(__dirname, 'platform-scripture-editor.web-view.tsx'), 'utf8');
 
-    // CSS side: both classes on one compound selector, so BOTH are required.
+    // Both classes on one compound selector, so BOTH are required.
     expect(scss).toContain('.editor-container-simple .usfm.psc-gutter-markers {');
-    // React side: the bar slot is empty unless the same two conditions hold.
-    expect(webView).toContain('isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined');
   });
 
   it('reserves the gutter in unzoomed pixels, in both directions, so the fixed-size bar never overlaps zoomed text', () => {
@@ -267,31 +252,6 @@ describe('_simple-mode.scss', () => {
       expect(hoverColor).not.toBe('transparent');
       expect(Math.max(0, ...transitionDelaysMs(resting))).toBe(0);
       expect(Math.max(0, ...transitionDelaysMs(hovered))).toBeGreaterThan(0);
-    });
-
-    it('is switched on from the Scripture editor root only, not the read-only Simple panels', () => {
-      // When the class applies is unit-tested on `getSimpleModeRootClassNames`; this checks the
-      // editor root uses it and the panels do not.
-      expect(
-        propExpressions(parseWebViewSource(), 'div', 'className').some((expression) =>
-          expression.includes('getSimpleModeRootClassNames('),
-        ),
-      ).toBe(true);
-      ['model-text-panel.component.tsx', 'resource-text-panel.component.tsx'].forEach((panel) => {
-        const nodes = descendants(parseSource(panel));
-        const strings = nodes.flatMap((node) =>
-          ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node) || ts.isJsxText(node)
-            ? [node.text]
-            : [],
-        );
-        expect(strings.some((text) => text.includes('editor-container-simple'))).toBe(true);
-        expect(strings.some((text) => text.includes('character-marker-indicators'))).toBe(false);
-        expect(
-          nodes.some(
-            (node) => ts.isIdentifier(node) && node.text === 'getSimpleModeRootClassNames',
-          ),
-        ).toBe(false);
-      });
     });
   });
 });

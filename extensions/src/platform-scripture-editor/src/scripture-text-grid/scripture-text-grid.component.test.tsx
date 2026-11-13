@@ -283,6 +283,34 @@ beforeEach(() => {
   cellWindow.isOpen = false;
 });
 
+describe('ScriptureTextGrid content zoom', () => {
+  it('marks nothing of its own, so its headers and grips keep their size', () => {
+    // Each cell marks its own text with its resource's area (see `resource-cell-view`). A marker
+    // around the cells would also be ignored by the platform, which disregards a nested one.
+    renderGrid(resources);
+    const marker = '[data-platform-content-zoom-root]';
+
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(resources.length);
+    rows.forEach((row) => expect(row.closest(marker)).toBeNull());
+  });
+
+  it('lets Ctrl/⌘+wheel over a resource reach the platform’s content zoom', () => {
+    // The platform zooms the area under the pointer from its own window-level wheel listener. A
+    // grid handler that consumed the wheel, or zoomed on its own, would stop that or double it.
+    renderGrid(resources);
+    const reachedWindow = vi.fn((event: WheelEvent) => event.defaultPrevented);
+    window.addEventListener('wheel', reachedWindow);
+
+    fireEvent.wheel(screen.getAllByRole('listitem')[0], { ctrlKey: true, deltaY: -120 });
+    fireEvent.wheel(screen.getAllByRole('listitem')[0], { metaKey: true, deltaY: -120 });
+
+    window.removeEventListener('wheel', reachedWindow);
+    expect(reachedWindow).toHaveBeenCalledTimes(2);
+    expect(reachedWindow.mock.results.map(({ value }) => value)).toEqual([false, false]);
+  });
+});
+
 describe('ScriptureTextGrid', () => {
   it('names each row in effective-list order, on the control that carries the name', () => {
     // `onChapterContextChange` is what production always passes, so the name lives on each row's

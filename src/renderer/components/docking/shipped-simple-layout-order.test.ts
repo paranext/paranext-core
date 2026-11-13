@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { BoxData, LayoutBase, PanelData } from 'rc-dock';
-import { readdirSync, readFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { isGroupUnderColumnOrSubMenu } from 'platform-bible-react';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
@@ -16,6 +16,15 @@ import {
   TAB_GROUP,
   TAB_GROUP_RESOURCES,
 } from './platform-dock-layout-positioning.util';
+
+import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from '../../../../extensions/src/legacy-comment-manager/src/comment-list-panel-web-view-type.const';
+import { DICTIONARY_WEB_VIEW_TYPE } from '../../../../extensions/src/platform-lexical-tools/src/dictionary-web-view-type.const';
+import { findWebViewType } from '../../../../extensions/src/platform-scripture/src/find-web-view-type.const';
+import { BIBLE_TEXTS_PANEL_WEBVIEW_TYPE } from '../../../../extensions/src/platform-scripture-editor/src/bible-texts-panel-web-view-type.const';
+import { COMMENTARIES_PANEL_WEBVIEW_TYPE } from '../../../../extensions/src/platform-scripture-editor/src/commentaries-panel-web-view-type.const';
+import { MODEL_TEXT_PANEL_WEBVIEW_TYPE } from '../../../../extensions/src/platform-scripture-editor/src/model-text-panel-web-view-type.const';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '../../../../extensions/src/platform-scripture-editor/src/scripture-editor-web-view-type.const';
+import { SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE } from '../../../../extensions/src/platform-scripture-editor/src/scripture-text-grid-web-view-type.const';
 
 vi.mock('../../../shared/services/logger.service');
 vi.mock('@renderer/services/theme.service-host', () => ({
@@ -90,6 +99,18 @@ const supplementEntries: DefaultLayoutSupplementEntry[] =
   // assertion is what the production import in web-view.service-host.ts does implicitly.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   defaultLayoutSupplement.tabs as unknown as DefaultLayoutSupplementEntry[];
+
+/** The webViewType each extension's provider registers, from the extensions themselves */
+const PROVIDED_WEB_VIEW_TYPES = new Set<string>([
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  MODEL_TEXT_PANEL_WEBVIEW_TYPE,
+  BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
+  COMMENTARIES_PANEL_WEBVIEW_TYPE,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+  DICTIONARY_WEB_VIEW_TYPE,
+  COMMENT_LIST_PANEL_WEB_VIEW_TYPE,
+  findWebViewType,
+]);
 
 const EDITOR_MENUS_PATH = resolve(
   __dirname,
@@ -210,55 +231,21 @@ describe('shipped Simple-mode Column 3 order', () => {
     });
   });
 
-  it('every pinned webViewType still exists in the extension that provides it', () => {
-    // Core cannot import extension source, so these webViewTypes are bare string literals in the
-    // layout data. Renaming a provider's webViewType is a pure-rename refactor inside its own
-    // extension: it type-checks, it lints, and Simple mode silently loses that tab, because a saved
-    // tab with no registered provider just fails to load.
-    // Reading the extension source is the same technique the SCRIPTURE_EDITOR_WEBVIEW_TYPE drift
-    // guard uses (web-view.model.test.ts); matching on the literal rather than a constant name keeps
-    // it working across the several differently-named (and mostly non-exported) constants these
-    // types are declared under.
-    const extensionSourceDirs: Record<string, string> = {
-      platformScripture: 'extensions/src/platform-scripture/src',
-      platformScriptureEditor: 'extensions/src/platform-scripture-editor/src',
-      legacyCommentManager: 'extensions/src/legacy-comment-manager/src',
-      platformLexicalTools: 'extensions/src/platform-lexical-tools/src',
-    };
-
-    /**
-     * Every production .ts/.tsx source file under `dir`, skipping generated build output and
-     * tests/stories. Excluding those matters: a test fixture or story that hard-codes the same
-     * webViewType string would otherwise vouch for a constant production code no longer declares,
-     * turning this guard into a false negative.
-     */
-    function sourceFilesIn(dir: string): string[] {
-      return readdirSync(dir, { withFileTypes: true }).flatMap((dirent) => {
-        const full = resolve(dir, dirent.name);
-        if (dirent.isDirectory()) return dirent.name === 'temp-build' ? [] : sourceFilesIn(full);
-        if (/\.(test|stories)\.tsx?$/.test(dirent.name)) return [];
-        return /\.tsx?$/.test(dirent.name) ? [full] : [];
-      });
-    }
-
+  it('every pinned webViewType is one an extension declares for its provider', () => {
+    // Core cannot import extension source at runtime, so these webViewTypes are bare string
+    // literals in the layout data. Renaming a provider's webViewType is a pure-rename refactor
+    // inside its own extension: it type-checks, it lints, and Simple mode silently loses that tab,
+    // because a saved tab with no registered provider just fails to load. Each extension keeps the
+    // value its provider registers in an import-free module, so this test can import it. A new
+    // pinned tab fails here until its extension's constant is added to the list.
     const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
     const pinnedTypes = [0, 1, 2].flatMap((index) => columnWebViewTypes(merged, index));
     expect(pinnedTypes.length).toBeGreaterThan(0);
 
     // Collected rather than asserted per type so a failure names every missing one at once.
-    const undeclared = pinnedTypes.filter((webViewType) => {
-      const extensionName = webViewType?.split('.')[0] ?? '';
-      const sourceDir = extensionSourceDirs[extensionName];
-      // An unrecognized prefix means a new extension started contributing a pinned tab without
-      // being added here, which would silently skip the check for it.
-      expect(sourceDir).toBeDefined();
-
-      // Vitest runs with the repo root as cwd.
-      return !sourceFilesIn(resolve(process.cwd(), sourceDir)).some((file) =>
-        readFileSync(file, 'utf8').includes(`'${webViewType}'`),
-      );
-    });
-
+    const undeclared = pinnedTypes.filter(
+      (webViewType) => !webViewType || !PROVIDED_WEB_VIEW_TYPES.has(webViewType),
+    );
     expect(undeclared).toEqual([]);
   });
 

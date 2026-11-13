@@ -47,7 +47,6 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
-  ContentZoomRoot,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteCaretPosition,
@@ -116,6 +115,8 @@ import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } 
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
+import { isInsertCommentChord, runPaletteSessionKeyDown } from './insert-comment-chord.util';
+import { startPendingComment } from './start-pending-comment.util';
 import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { substituteProjectNameInMenu } from './menu-label-substitution.util';
@@ -175,7 +176,14 @@ import {
   scheduleCaretRestore,
   ScheduledCaretRestore,
 } from './caret-restore.util';
-import { getEditorViewOptions } from './editor-view-options.util';
+import { getEditorViewOptions, resolveFootnotesPaneViewOptions } from './editor-view-options.util';
+import {
+  getPaneRowEditorOptions,
+  runPaneNoteEditRequest,
+  settleRowEditorBeforeClose,
+} from './pane-row-editor.utils';
+import { useHeldPaneRowEditor } from './use-held-pane-row-editor.hook';
+import { useReapplyCallerHighlight } from './use-reapply-caller-highlight.hook';
 import {
   applyChapterSavePreparation,
   CARET_AT_DOCUMENT_END,
@@ -227,13 +235,12 @@ import {
   isMissingBookError,
   isMissingBookInfoOnScreen,
   isOverrunProjectIdParse,
-  openCommentListAndSelectThreadSafe,
+  createCommentThreadClickHandlerFactory,
   paragraphMarkerNameKey,
   parseMissingBookError,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   resolveAddChapterNumberClick,
   resolveCallerHighlight,
-  resolveFootnotesPaneViewOptions,
   resolveNoteEditingSurface,
   resolveNoteVerseRef,
   getDisplayedViewType,
@@ -241,14 +248,13 @@ import {
   VIEW_TYPE_UNSET,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectableParagraphMarkers,
-  selectCommentThreadInPanelSafe,
   validateCommentSelection,
   readCommentRangeText,
   hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
   shouldProtectAddChapterNumber,
   shouldPublishPaneDocument,
-  showCommentThreadForInterfaceMode,
+  showNewCommentThread,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   usesPaneNoteModel,
 } from './platform-scripture-editor.utils';
@@ -283,10 +289,10 @@ import {
 } from './platform-scripture-editor.web-view.utils';
 import { matchEditorChord, runEditorChord, shouldRunEditorChord } from './editor-chords.util';
 import { useGuardedProjectSetting } from './use-guarded-project-setting.hook';
-import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
-import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
-import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
+import { EditorSurface } from './editor-surface.component';
+import { FootnoteEditorPopover } from './footnote-editor-popover.component';
 import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
+import { shouldShowCharacterMarkerBar } from './character-marker-bar/character-marker-bar.utils';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import {
   INLINE_MARKERS_MENU_TRIGGER,
@@ -316,7 +322,8 @@ import {
   UnsupportedProjectGate,
 } from './unsupported-project-gate.component';
 import {
-  createHiddenContentDeleteHandler,
+  createPlatformHiddenContentDeleteHandler,
+  getEditabilityOptions,
   HIDDEN_CONTENT_DELETE_PROMPT_KEY,
 } from './hidden-content-delete-confirm.utils';
 
@@ -410,18 +417,6 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 
 /** Annotation ID used for a pending comment that hasn't been saved yet */
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
-
-/**
- * The footnote editor popover's minimum width: 500 px, yielding to the pane's available width so
- * the popover still fits a narrow pane. Until Radix has published the available width, the viewport
- * width stands in for it: the footnote editor locks its own width on its first layout, which
- * happens before that.
- *
- * Set inline rather than as a Tailwind arbitrary class: the web view's SCSS + PostCSS pipeline
- * drops a rule whose value is this `min()` expression, so the minimum is an inline style.
- */
-const FOOTNOTE_POPOVER_MIN_WIDTH =
-  'min(500px, var(--radix-popover-content-available-width, 100vw))';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
@@ -568,12 +563,7 @@ function PlatformScriptureEditor({
    * identity never changes.
    */
   const handleHiddenContentDelete = useMemo(
-    () =>
-      createHiddenContentDeleteHandler(
-        () => localizedStringsRef.current,
-        (localizeKey) => papi.localization.getLocalizedString({ localizeKey }),
-        (confirmOptions) => papi.dialogs.showDialog('platform.confirm', confirmOptions),
-      ),
+    () => createPlatformHiddenContentDeleteHandler(() => localizedStringsRef.current, papi),
     [],
   );
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
@@ -2005,49 +1995,45 @@ function PlatformScriptureEditor({
       anchoredText = readCommentRangeText(validation.range, editorUsj);
     }
 
-    // Try to find the selected text element to anchor the popover to. No rendered editor content
-    // means there is nothing to anchor to — bail out before recording the pending range or setting
-    // the highlight annotation below, not just before opening the popover: either one left behind
-    // with no popover open to clear it would strand a highlight in the text with no way to remove
-    // it, and would misdirect the next comment actually saved to this stale range.
-    const editorContainer = document.querySelector<HTMLElement>('.usfm');
-    if (!editorContainer) return;
-
-    pendingCommentAnnotationRange.current = {
-      range: annotationRange,
-      verseRef: scrRef,
-      anchoredText,
-    };
-
-    // Create a temporary annotation to highlight the selected text
-    editorRef.current?.setAnnotation(
-      annotationRange,
-      ANNOTATION_TYPE_TRANSLATOR_COMMENT,
-      PENDING_COMMENT_ANNOTATION_ID,
-    );
-
-    // Position the popover near the annotation. Use the browser's selection to get the bounding
-    // rect of the selected text
-    const domSelection = window.getSelection();
-    if (domSelection && domSelection.rangeCount > 0) {
-      const range = domSelection.getRangeAt(0).cloneRange();
-      commentPopoverAnchor.setSource(
-        createPendingCommentAnchorSource(
-          range,
-          () =>
-            editorRef.current?.getAnnotationRanges(
-              ANNOTATION_TYPE_TRANSLATOR_COMMENT,
-              PENDING_COMMENT_ANNOTATION_ID,
-            ) ?? [],
-          editorContainer,
+    startPendingComment(document, {
+      recordPendingRange: () => {
+        pendingCommentAnnotationRange.current = {
+          range: annotationRange,
+          verseRef: scrRef,
+          anchoredText,
+        };
+      },
+      // A temporary annotation to highlight the selected text
+      highlightPendingRange: () =>
+        editorRef.current?.setAnnotation(
+          annotationRange,
+          ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+          PENDING_COMMENT_ANNOTATION_ID,
         ),
-      );
-    } else {
-      // Fallback to center of editor viewport
-      commentPopoverAnchor.setSource(createPendingCommentCenterAnchorSource(editorContainer));
-    }
-
-    setShowCommentEditor(true);
+      // Position the popover near the annotation. Use the browser's selection to get the bounding
+      // rect of the selected text
+      anchorPopover: (editorContainer) => {
+        const domSelection = window.getSelection();
+        if (domSelection && domSelection.rangeCount > 0) {
+          const range = domSelection.getRangeAt(0).cloneRange();
+          commentPopoverAnchor.setSource(
+            createPendingCommentAnchorSource(
+              range,
+              () =>
+                editorRef.current?.getAnnotationRanges(
+                  ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+                  PENDING_COMMENT_ANNOTATION_ID,
+                ) ?? [],
+              editorContainer,
+            ),
+          );
+        } else {
+          // Fallback to center of editor viewport
+          commentPopoverAnchor.setSource(createPendingCommentCenterAnchorSource(editorContainer));
+        }
+      },
+      openCommentEditor: () => setShowCommentEditor(true),
+    });
   }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked, commentPopoverAnchor]);
 
   /**
@@ -2100,59 +2086,6 @@ function PlatformScriptureEditor({
       );
     },
     [projectId, localizedStrings, isReadOnlyEffective, endPaneNoteEdit],
-  );
-
-  const options = useMemo<EditorOptions>(
-    () => ({
-      isReadonly: isReadOnlyEffective,
-      structureProtectionMode,
-      // A read-only editor makes no edits, so there is nothing to ask about.
-      onHiddenContentDelete: isReadOnlyEffective ? undefined : handleHiddenContentDelete,
-      hasSpellCheck: false,
-      nodes: nodeOptions,
-      textDirection: textDirectionEffective,
-      markerMenuTrigger: '\\',
-      view: viewOptions,
-      styleInfo,
-      markerSettleDelayMs,
-      hasExternalUI: true,
-      contextMenu: createInsertContextMenuItems(
-        localizedStrings,
-        {
-          insertFootnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
-          ),
-          insertCrossReference: runInsertFromContextMenu(
-            () =>
-              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
-              .editDescription,
-          ),
-          insertEndnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
-          ),
-          insertComment: insertCommentAtCurrentSelection,
-        },
-        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
-      ),
-    }),
-    [
-      isReadOnlyEffective,
-      structureProtectionMode,
-      handleHiddenContentDelete,
-      canUserCreateComments,
-      isSyncBlocked,
-      textDirectionEffective,
-      nodeOptions,
-      viewOptions,
-      styleInfo,
-      markerSettleDelayMs,
-      localizedStrings,
-      insertCommentAtCurrentSelection,
-      insertNoteAtCurrentSelection,
-    ],
   );
 
   /**
@@ -2860,23 +2793,6 @@ function PlatformScriptureEditor({
   // (insert a footnote/cross-reference) in every view, and for Cmd+Alt+M (macOS) or Ctrl+Alt+M /
   // Ctrl+Shift+N (Windows/Linux) to insert a comment at the selection
   useEffect(() => {
-    /**
-     * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
-     * the capture one claims it while a palette session is open, the bubble one acts on it
-     * otherwise. A key an input method (IME) is still composing with is never the chord, as for the
-     * other editor chords (see `matchEditorChord`).
-     */
-    const isInsertCommentChord = (event: KeyboardEvent) => {
-      if (event.isComposing || event.keyCode === 229) return false;
-      return isMac
-        ? event.metaKey &&
-            event.altKey &&
-            // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-            (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
-        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-            (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
-    };
-
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
@@ -2909,23 +2825,11 @@ function PlatformScriptureEditor({
         const session = paletteSession.current;
 
         if (session) {
-          // Decided BEFORE the table runs: the table treats this chord as an ordinary chord —
-          // dismiss the palette, decline the key — and a declined key keeps propagating with the
-          // session already cleared, so the bubble-phase handler below would insert a comment
-          // anyway. The dismissal's refocus then lands on the editor and pulls focus straight back
-          // out of the comment box the user is typing in.
-          //
-          // Claimed, so the chord only closes the palette. That is also what it does once the
-          // palette HAS focus, where the keystroke goes to the renderer and never reaches this web
-          // view at all — so the pre-focus window and the focused case now behave the same.
-          const closesPaletteOnly = isInsertCommentChord(event);
-          // Through the ref so this listener and the palette's forwarded keys provably run the
-          // same handler (and so this effect needs no dependency on it).
-          runPaletteSessionKeyRef.current(event);
-          if (closesPaletteOnly) {
-            event.preventDefault();
-            event.stopPropagation();
-          }
+          // Claims the insert-comment chord, so it only closes the palette rather than also
+          // reaching `handleKeyDown` below. Through the ref so this listener and the palette's
+          // forwarded keys provably run the same handler (and so this effect needs no dependency on
+          // it).
+          runPaletteSessionKeyDown(event, isMac, (key) => runPaletteSessionKeyRef.current(key));
           return;
         }
 
@@ -2996,11 +2900,11 @@ function PlatformScriptureEditor({
         }
       }
 
-      if (isInsertCommentChord(event)) {
+      if (isInsertCommentChord(event, isMac)) {
         // Nothing here excludes an open marker palette: the capture-phase listener above claims
         // this chord while a session is open, so a palette closes and this never runs. A check
         // here could not do it anyway — the table clears the session synchronously, ahead of this
-        // bubble phase.
+        // bubble phase. See `runPaletteSessionKeyDown`.
         event.preventDefault();
         event.stopPropagation();
         // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.
@@ -3222,10 +3126,60 @@ function PlatformScriptureEditor({
   // view's project changes only by reloading it, which remounts it.
   const isChapterTextLoading = useIsProjectDataLoading(chapterUsjSelector, isUsjFromPdpLoading);
   const copyLimit = useChapterCopyLimit(projectId, scrRef, isChapterTextLoading);
-  /** `options` with the chapter's copy limit, for every copy surface the editor's text reaches. */
-  const editorOptionsWithCopyLimit = useMemo<EditorOptions>(
-    () => ({ ...options, copyLimit }),
-    [options, copyLimit],
+  // Built here, below the copy limit, so the editor has one options object and every copy surface
+  // its text reaches — the editor, the footnote editors, the footnotes pane — gets the copy limit
+  // from it. There is no variant without the copy limit to pass by mistake.
+  const options = useMemo<EditorOptions>(
+    () => ({
+      ...getEditabilityOptions(isReadOnlyEffective, handleHiddenContentDelete),
+      structureProtectionMode,
+      hasSpellCheck: false,
+      nodes: nodeOptions,
+      textDirection: textDirectionEffective,
+      markerMenuTrigger: '\\',
+      view: viewOptions,
+      styleInfo,
+      markerSettleDelayMs,
+      hasExternalUI: true,
+      copyLimit,
+      contextMenu: createInsertContextMenuItems(
+        localizedStrings,
+        {
+          insertFootnote: runInsertFromContextMenu(
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
+          ),
+          insertCrossReference: runInsertFromContextMenu(
+            () =>
+              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
+              .editDescription,
+          ),
+          insertEndnote: runInsertFromContextMenu(
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
+          ),
+          insertComment: insertCommentAtCurrentSelection,
+        },
+        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
+      ),
+    }),
+    [
+      isReadOnlyEffective,
+      structureProtectionMode,
+      handleHiddenContentDelete,
+      canUserCreateComments,
+      isSyncBlocked,
+      textDirectionEffective,
+      nodeOptions,
+      viewOptions,
+      styleInfo,
+      markerSettleDelayMs,
+      localizedStrings,
+      insertCommentAtCurrentSelection,
+      insertNoteAtCurrentSelection,
+      copyLimit,
+    ],
   );
   /**
    * The view options the footnotes pane and its row editor render with: the main editor's in Power
@@ -3238,40 +3192,20 @@ function PlatformScriptureEditor({
         isPowerMode,
         isInterfaceModeLoading,
         mainViewOptions: options.view,
-        standardViewOptions: getEditorViewOptions(
-          'standard',
-          isPowerMode,
-          allowInvisibleCharacters,
-        ),
+        allowInvisibleCharacters,
       }),
     [isPowerMode, isInterfaceModeLoading, options.view, allowInvisibleCharacters],
   );
-  /**
-   * {@link footnotesPaneViewOptions}, held while a row-editor session ends. When the pane stops
-   * being the editing surface, the row editor stays mounted until the effect that closes its
-   * session runs, and by then the pane's options can already be another view's: Power's Formatted
-   * view hides markers. The editor runs its marker engine only in editable marker mode and tears it
-   * down before any effect of that commit runs, so the close could no longer settle a marker rename
-   * still pending under the caret. Written during render so the row editor never renders a commit
-   * on the next view's options.
-   */
-  const rowEditorViewOptionsRef = useRef(footnotesPaneViewOptions);
-  if (noteEditingSurface === 'pane' || paneEditingIndex === undefined)
-    rowEditorViewOptionsRef.current = footnotesPaneViewOptions;
-  const rowEditorViewOptions = rowEditorViewOptionsRef.current;
-  /**
-   * `editorOptionsWithCopyLimit` with the pane's view options, for the pane's row editor. Structure
-   * protection is off there, as it is in Power mode: a note has no verse or paragraph structure of
-   * its own to protect, its edits only ever replace the note itself, and 'protected' would claim
-   * Enter before the note's own `\fp` handling could run.
-   */
-  const paneFootnoteEditorOptions = useMemo<EditorOptions>(
-    () => ({
-      ...editorOptionsWithCopyLimit,
-      view: rowEditorViewOptions,
-      structureProtectionMode: 'off',
-    }),
-    [editorOptionsWithCopyLimit, rowEditorViewOptions],
+  /** The row editor the pane renders, held while a session ended from outside closes */
+  const heldPaneRowEditor = useHeldPaneRowEditor(
+    footnotesPaneViewOptions,
+    noteEditingSurface,
+    paneEditingIndex,
+  );
+  const rowEditorViewOptions = heldPaneRowEditor.viewOptions;
+  const paneFootnoteEditorOptions = useMemo(
+    () => getPaneRowEditorOptions(options, rowEditorViewOptions),
+    [options, rowEditorViewOptions],
   );
   // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
   // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
@@ -3570,20 +3504,10 @@ function PlatformScriptureEditor({
    * Creates a click handler for a comment annotation that shows the specified thread: in Power
    * mode, the comment list opened on it; in Simple mode, the Column 3 Comments tab brought to the
    * front with it selected. The mode is read through `isPowerModeRef` when the annotation is
-   * clicked, the same way the save path reads it, rather than captured from the render that created
-   * the handler.
-   *
-   * @param threadId The ID of the thread to scroll to when the annotation is clicked
-   * @returns A click handler function that can be passed to setAnnotation
+   * clicked, the same way the save path reads it. See `createCommentThreadClickHandlerFactory`.
    */
-  const createCommentAnnotationClickHandler = useCallback(
-    (threadId: string) => async () => {
-      await showCommentThreadForInterfaceMode(papi, {
-        isPowerMode: isPowerModeRef.current,
-        editorWebViewId: webViewId,
-        threadId,
-      });
-    },
+  const createCommentAnnotationClickHandler = useMemo(
+    () => createCommentThreadClickHandlerFactory(papi, () => isPowerModeRef.current, webViewId),
     [webViewId],
   );
 
@@ -3678,35 +3602,26 @@ function PlatformScriptureEditor({
       // The old chapter's note, while the new chapter loads (see `navigateToNote`): its session
       // would only be ended by the load.
       if (editorChapterKeyRef.current !== toBookChapterKey(scrRefRef.current)) return;
-      // A popover that outlived a switch into this view still holds its session, and it applies its
-      // text only on Save: opening a row editor would close it and discard what was typed. The text
-      // still moves to the note, as Space on the row does, but the row is left merely selected
-      // until the popover is saved or closed.
-      if (showFootnoteEditorRef.current) {
-        navigateToNote(index);
-        return;
-      }
-      // A row editor open on another note is ended through the normal close path BEFORE this note
-      // is read, as Space on another row does. The row editor stays mounted and simply loads the
-      // next note, and a load flushes the outgoing note unsettled: a marker rename still pending
-      // under its caret would be lost. The close also lands that flush while its session still
-      // owns it, and the key and op read below then come from the document it produced.
-      if (
-        shouldEndPaneNoteEditOnRowSelect({
-          paneEditingIndex: paneEditingIndexRef.current,
-          selectedIndex: index,
-        })
-      )
-        closeFootnoteEditorRef.current(false);
-      navigateToNote(index);
-      const noteKey = editorRef.current?.getNoteKey(index);
-      const noteOp = editorRef.current?.getNoteOps(index)?.at(0);
-      if (!noteKey || !noteOp || !isInsertEmbedOpOfType('note', noteOp)) {
-        // Nothing valid to load into a row editor, so the row is left merely selected.
-        logger.warn(`footnotes pane: note ${index} produced no valid note op; selecting only`);
-        return;
-      }
-      startPaneNoteEdit(index, noteKey, noteOp, caretPosition);
+      runPaneNoteEditRequest(index, {
+        isPopoverOpen: showFootnoteEditorRef.current,
+        paneEditingIndex: paneEditingIndexRef.current,
+        navigateToNote,
+        // The close lands the outgoing note's flush while its session still owns it, so the key and
+        // op read below come from the document it produced.
+        endPaneNoteEdit: () => closeFootnoteEditorRef.current(false),
+        startPaneNoteEdit: (noteIndex) => {
+          const noteKey = editorRef.current?.getNoteKey(noteIndex);
+          const noteOp = editorRef.current?.getNoteOps(noteIndex)?.at(0);
+          if (!noteKey || !noteOp || !isInsertEmbedOpOfType('note', noteOp)) {
+            // Nothing valid to load into a row editor, so the row is left merely selected.
+            logger.warn(
+              `footnotes pane: note ${noteIndex} produced no valid note op; selecting only`,
+            );
+            return;
+          }
+          startPaneNoteEdit(noteIndex, noteKey, noteOp, caretPosition);
+        },
+      });
     },
     [navigateToNote, startPaneNoteEdit],
   );
@@ -4252,16 +4167,8 @@ function PlatformScriptureEditor({
     // brand-new note and re-opens an editor on it. Flushing here keeps every close path going
     // through the same session-integrity branch every other change does.
     //
-    // The flush settles every pending marker except the one under the caret of a FOCUSED editor,
-    // so focus is released first, as the row editor's own close does: a session ended from outside
-    // while the user is still typing in the row (a switch to Power mode, the text turning
-    // read-only) is the user leaving that marker too.
-    if (paneEditingIndexRef.current !== undefined) {
-      const rowEditor = paneNoteEditorRef.current;
-      if (rowEditor?.containsFocus() && document.activeElement instanceof HTMLElement)
-        document.activeElement.blur();
-      rowEditor?.flushPendingEdits();
-    }
+    if (paneEditingIndexRef.current !== undefined)
+      settleRowEditorBeforeClose(paneNoteEditorRef.current, document);
     if (deleteIfNew && editingNoteIsNew.current && editingNoteKey.current)
       editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, []);
     editingNoteIsNew.current = false;
@@ -4382,9 +4289,7 @@ function PlatformScriptureEditor({
   // rule's inputs can still hold on return with nothing else to re-apply the border.
   // `usesPaneModelRef` is updated by an effect declared above this one, so the resolver reads the
   // model this effect is reacting to.
-  useEffect(() => {
-    applyCallerHighlight();
-  }, [viewType, usesPaneModel, applyCallerHighlight]);
+  useReapplyCallerHighlight(applyCallerHighlight, viewType, usesPaneModel);
 
   // The row editor exists only where the pane IS the editing surface, so leaving a pane-model view
   // or losing editability ends the session. The row stays mounted, on the view options it was
@@ -5097,26 +5002,15 @@ function PlatformScriptureEditor({
             createCommentAnnotationClickHandler(newThreadId),
           );
 
-          // Power mode: open/focus the editor-anchored comment list and select the new thread.
-          // Simple mode: the new comment already lands in the fixed Column 3 Comments tab via its
-          // own PDP subscription (opening the editor-anchored panel here would just pop a second
-          // "Comments" tab and steal focus — PT-4204), but select the new thread in it so
-          // Simple-mode users get the same "yes, that worked" confirmation Power-mode users
-          // already get. bringToFront is deliberately false here: forcing the Comments tab to the
-          // front on every insert would interrupt a user who is actively working in a different
-          // Column 3 tab (UX feedback on PT-4204).
-          //
-          // The Simple-mode select is not awaited, since the comment is already saved and the
-          // select can take seconds: a Comments tab that has not been shown this session is not
-          // mounted yet (rc-dock renders a tab only once it is first shown), so the message is
-          // retried for several seconds and applies only if the user opens the tab in that time.
-          // The helper logs and swallows its own failures. Passing this editor's id points the tab
-          // at the editor's project first if it shows another one, as a highlight click does.
-          // Power mode awaits its list, so the list takes focus while the popover is up rather than
-          // after the user is typing again.
-          if (isPowerModeRef.current)
-            await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId);
-          else selectCommentThreadInPanelSafe(papi, newThreadId, false, webViewId);
+          // Confirms the save by showing the new thread where the interface mode keeps comments.
+          // Simple mode's Comments tab already receives the new comment through its own PDP
+          // subscription; opening the editor-anchored panel there would pop a second "Comments"
+          // tab and steal focus (PT-4204). See `showNewCommentThread` for what is awaited and why.
+          await showNewCommentThread(papi, {
+            isPowerMode: isPowerModeRef.current,
+            editorWebViewId: webViewId,
+            threadId: newThreadId,
+          });
         }
 
         pendingCommentAnnotationRange.current = undefined;
@@ -5397,38 +5291,6 @@ function PlatformScriptureEditor({
       );
     }
 
-    const editorTree = (
-      <TwoStepDeleteTooltipOverlay>
-        {/* The Scripture text's `main` zoom area holds the editor and nothing else. The overlays
-            around it — this one's Backspace/Delete hint, the paragraph-marker tooltips and the
-            Simple-mode character-marker bar — stay at interface scale and place themselves from
-            rect differences, which a zoomed element reports in the same viewport pixels. The area
-            sits INSIDE this overlay rather than around it because the overlay positions its hint
-            relative to its own wrapper: inside the zoom, the hint's CSS offsets would be multiplied
-            by the zoom factor and land away from the verse. The wrapper holds no text itself. */}
-        <ContentZoomRoot>
-          <EditorKeyboardShortcuts editorRef={editorRef}>
-            <Editorial
-              ref={editorRef}
-              scrRef={scrRef}
-              onScrRefChange={setScrRefNoScroll}
-              options={editorOptionsWithCopyLimit}
-              logger={logger}
-              onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
-              onSelectionChange={handleSelectionChange}
-              onParaMarkerMenuRequest={handleParagraphMarkerMenuRequest}
-              onStateChange={(state) => {
-                setCanUndo(state.canUndo);
-                setCanRedo(state.canRedo);
-                setBlockMarker(state.blockMarker);
-                setContextMarker(state.contextMarker);
-              }}
-            />
-          </EditorKeyboardShortcuts>
-        </ContentZoomRoot>
-      </TwoStepDeleteTooltipOverlay>
-    );
-
     // Simple mode only. This view REPLACES the editing surface (the subtree below is
     // `display: none`, which takes it out of both the accessibility tree and the tab order), and the
     // scaffold button is the only way back in — but `showButton` withholds it for read-only
@@ -5440,79 +5302,70 @@ function PlatformScriptureEditor({
     return (
       <>
         {workaround}
-        {showEmptyChapterView && (
-          <EmptyChapterView
-            localizedStrings={localizedStrings}
-            isAddChapterNumberProtected={isAddChapterNumberProtected}
-            isResource={isResource}
-            showButton={
-              !isReadOnlyEffective &&
-              lastVersesInCurrentBook !== undefined &&
-              canAddChapterNumber(lastVerse) &&
-              bookHoldsChapters(scrRef.book)
-            }
-            onAddChapterNumber={handleAddChapterNumber}
-            announcementKey={`${projectId}:${scrRef.book} ${scrRef.chapterNum}`}
-          />
-        )}
-        {/* The empty-chapter view HIDES this subtree rather than replacing it, for the same reason
-            the overlay below is mounted in both modes: unmounting would take Lexical's undo history
-            and the scroll position with it, and a blank chapter is transient — adding a chapter
-            number flips `isBlankChapter` straight back. The overlay lives INSIDE this wrapper so the
-            bar is hidden along with the text it annotates rather than painting beside an empty
-            chapter.
-
-            Being hidden HERE is not the case the overlay's `useViewVisibility` deferral handles:
-            that hook reports on this iframe's own visibility (whether the tab is active), so it
-            still reads visible while this inner subtree is `display: none`. What covers this case
-            is the overlay's zero-geometry guard — it declines to position, and crucially declines
-            to latch `hasPositionedRef`, when the editor root has no layout — plus its
-            ResizeObserver, which fires when the subtree regains layout because `display: none`
-            collapses the observed anchor to a 0x0 box. */}
-        <div className={showEmptyChapterView ? 'tw:hidden' : undefined}>
-          {/* The overlay is mounted in BOTH modes and only its `bar` slot is gated, so the element type
-            at this position never changes. Choosing between two different wrappers here would make
-            React unmount and remount `editorTree` whenever the mode changes — including the very
-            first resolution of `platform.interfaceMode`, which starts at its 'simple' default before
-            the stored value arrives — taking Lexical's undo history and the scroll position with it.
-            An empty slot renders nothing beside the editor.
-
-            `hasGutterParaMarkers` is checked here because it is the OTHER half of the condition the
-            gutter reservation in `_simple-mode.scss` matches on
-            (`.editor-container-simple .usfm.psc-gutter-markers`). Gating the bar on the same two
-            things the CSS does keeps the bar and the space it occupies inseparable: if this view ever
-            stops using the paragraph-structure preset — a Simple view-option chooser would do it —
-            the reservation and the bar disappear together instead of leaving the bar painting over
-            project text. The reservation cannot simply be broadened to match `!isPowerMode` alone,
-            because `_simple-mode.scss` is compiled into the resource-text and model-text panels too,
-            and both apply `editor-container-simple` unconditionally to an editor that has no gutter
-            markers. */}
-          <CharacterMarkerBarOverlay
-            bar={
-              isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined : (
-                <CharacterMarkerBar
-                  editorRef={editorRef}
-                  getSelection={getSelection}
-                  blockMarker={blockMarker}
-                  contextMarker={contextMarker}
-                  isSyncBlocked={isSyncBlocked}
-                  // Snapshotted into version history before a removal; absent means no snapshot.
-                  projectId={projectId}
-                  isChapterLoading={isChapterLoading}
-                  // The same direction the editor itself is given below. The marker menu portals to
-                  // `document.body`, outside that `dir` element, so it can only mirror its alignment for
-                  // an RTL project if the direction is handed to it explicitly.
-                  textDirection={textDirectionEffective}
-                  localizedStrings={localizedStrings}
-                />
-              )
-            }
-          >
-            <ParagraphMarkerTooltipOverlay enabled={!isPowerMode}>
-              {editorTree}
-            </ParagraphMarkerTooltipOverlay>
-          </CharacterMarkerBarOverlay>
-        </div>
+        <EditorSurface
+          editor={
+            <EditorKeyboardShortcuts editorRef={editorRef}>
+              <Editorial
+                ref={editorRef}
+                scrRef={scrRef}
+                onScrRefChange={setScrRefNoScroll}
+                options={options}
+                logger={logger}
+                onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
+                onSelectionChange={handleSelectionChange}
+                onParaMarkerMenuRequest={handleParagraphMarkerMenuRequest}
+                onStateChange={(state) => {
+                  setCanUndo(state.canUndo);
+                  setCanRedo(state.canRedo);
+                  setBlockMarker(state.blockMarker);
+                  setContextMarker(state.contextMarker);
+                }}
+              />
+            </EditorKeyboardShortcuts>
+          }
+          characterMarkerBar={
+            // Gated on the same two conditions the gutter reservation in `_simple-mode.scss`
+            // matches on, so the bar and the space it occupies stay inseparable: if this view ever
+            // stops using the paragraph-structure preset — a Simple view-option chooser would do
+            // it — the reservation and the bar disappear together instead of leaving the bar
+            // painting over project text.
+            shouldShowCharacterMarkerBar(isPowerMode, viewOptions) ? (
+              <CharacterMarkerBar
+                editorRef={editorRef}
+                getSelection={getSelection}
+                blockMarker={blockMarker}
+                contextMarker={contextMarker}
+                isSyncBlocked={isSyncBlocked}
+                // Snapshotted into version history before a removal; absent means no snapshot.
+                projectId={projectId}
+                isChapterLoading={isChapterLoading}
+                // The same direction the editor itself is given below. The marker menu portals to
+                // `document.body`, outside that `dir` element, so it can only mirror its alignment for
+                // an RTL project if the direction is handed to it explicitly.
+                textDirection={textDirectionEffective}
+                localizedStrings={localizedStrings}
+              />
+            ) : undefined
+          }
+          areParagraphMarkerTooltipsEnabled={!isPowerMode}
+          emptyChapterView={
+            showEmptyChapterView ? (
+              <EmptyChapterView
+                localizedStrings={localizedStrings}
+                isAddChapterNumberProtected={isAddChapterNumberProtected}
+                isResource={isResource}
+                showButton={
+                  !isReadOnlyEffective &&
+                  lastVersesInCurrentBook !== undefined &&
+                  canAddChapterNumber(lastVerse) &&
+                  bookHoldsChapters(scrRef.book)
+                }
+                onAddChapterNumber={handleAddChapterNumber}
+                announcementKey={`${projectId}:${scrRef.book} ${scrRef.chapterNum}`}
+              />
+            ) : undefined
+          }
+        />
       </>
     );
   }
@@ -5725,11 +5578,8 @@ function PlatformScriptureEditor({
                 onClose={hideFootnotesPane}
                 showMarkers={footnotesPaneViewOptions?.markerMode !== 'hidden'}
                 focusRequest={footnotePaneFocusRequest}
-                // Not gated on `noteEditingSurface`: when the pane stops being the editing surface,
-                // the row editor has to stay mounted until the effect that ends the session runs,
-                // so that close can settle a marker rename still pending under its caret (see
-                // `rowEditorViewOptionsRef` and `closeFootnoteEditor`).
-                editingFootnoteIndex={paneEditingIndex}
+                // Held until the session ends, whatever the editing surface (`useHeldPaneRowEditor`)
+                editingFootnoteIndex={heldPaneRowEditor.editingFootnoteIndex}
                 renderEditingFootnote={renderPaneFootnoteEditor}
                 // Only where the pane IS the editing surface: elsewhere (and in a read-only text)
                 // a row click selects rather than opens a row editor.
@@ -5750,7 +5600,7 @@ function PlatformScriptureEditor({
                 // the text beside the pane shows a spinner for both.
                 isLoading={!liveEditorUsj && (!usjForEditor || usjForEditor === defaultUsj)}
                 zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
-                copyLimit={editorOptionsWithCopyLimit.copyLimit}
+                copyLimit={copyLimit}
                 rowEditorViewOptions={rowEditorViewOptions}
                 allowInvisibleCharacters={allowInvisibleCharactersSetting.value}
               >
@@ -5783,27 +5633,21 @@ function PlatformScriptureEditor({
         </PopoverContent>
       </Popover>
       {/** Footnote editor components */}
-      <Popover open={showFootnoteEditor}>
-        <PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />
-        <PopoverContent
-          className="tw:w-max tw:p-[10px]"
-          style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}
-        >
-          <FootnoteEditor
-            classNameForEditor="scripture-font"
-            noteOps={editingNoteOps.current}
-            noteKey={editingNoteKey.current}
-            onClose={onFootnoteEditorClose}
-            onNoteEdit={onFootnoteEditorNoteEdit}
-            scrRef={scrRef}
-            editorOptions={editorOptionsWithCopyLimit}
-            defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
-            localizedStrings={localizedStrings}
-            parentEditorRef={editorRef}
-            markerPalette={footnoteMarkerPalette}
-          />
-        </PopoverContent>
-      </Popover>
+      <FootnoteEditorPopover open={showFootnoteEditor} anchorRef={notePopoverAnchor.virtualRef}>
+        <FootnoteEditor
+          classNameForEditor="scripture-font"
+          noteOps={editingNoteOps.current}
+          noteKey={editingNoteKey.current}
+          onClose={onFootnoteEditorClose}
+          onNoteEdit={onFootnoteEditorNoteEdit}
+          scrRef={scrRef}
+          editorOptions={options}
+          defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
+          localizedStrings={localizedStrings}
+          parentEditorRef={editorRef}
+          markerPalette={footnoteMarkerPalette}
+        />
+      </FootnoteEditorPopover>
       {/** Comment editor for creating new comment threads */}
       <Popover open={showCommentEditor}>
         <PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />

@@ -62,9 +62,12 @@ it reintroduces the bug silently**. Reviewers should treat any new `syncProjects
 automatic caller takes its mode and consent decisions when it requests; the queue re-checks only the
 interval engine's "still wanted" condition at run start.
 
-TODO(PT-4774): replace reviewer vigilance with a source-scan test that fails on an ungated
-automatic sync call site (`syncProjects`, `sendReceiveProjects`, `requestSync(…, 'autoSync')`), as
-`SendReceiveWriteLockCoverageTests` does for the C# write gate.
+TODO(PT-4774): replace reviewer vigilance with an ESLint rule (in `lib/eslint-plugin-paranext`) that
+flags an ungated automatic sync call site (`syncProjects`, `sendReceiveProjects`,
+`requestSync(…, 'autoSync')`) — the TypeScript counterpart of what
+`SendReceiveWriteLockCoverageTests` does for the C# write gate. A lint rule rather than a test that
+scans source text: it reads the syntax tree, so a reformat or a guard sitting in a comment cannot
+fool it.
 
 Rationale and rejected alternatives: `adr-first-run-sync-consent` in
 [`Architecture-Decisions.md`](../../.context/standards/Architecture-Decisions.md).
