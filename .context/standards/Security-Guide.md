@@ -115,11 +115,17 @@ bridge on `window.top`. This is defence in depth rather than a boundary: main re
 do not come from the window's page frame, but a web view can drive that frame's bridge, so what
 stops a second channel is that main serves one open port per window and the page keeps the first
 port it is handed; an intercepted port gives an extension no capability it does not already hold
-through `window.papi`. The renderer itself opens no WebSocket to port 8876.
-`blockWebSocketsToPapiNetwork` stops a web view's own `window.WebSocket` (replaced with
-`papi.WebSocket`) from connecting to it, but not the native constructor on `window.top`, which the
-web view can still reach: the web view preamble's `delete window.top` can't remove a
-non-configurable property.
+through `window.papi`. The renderer itself opens no WebSocket to port 8876, so the main process
+cancels every WebSocket request to that port from the windows' session
+(`registerPapiPortRequestBlock` in `src/main/services/papi-port-request-block.util.ts`). That covers
+every frame and every constructor, including the ones a same-origin web view can borrow from the
+renderer: `window.top.WebSocket` (the web view preamble's `delete window.top` can't remove a
+non-configurable property), the `constructor` of a socket it was handed, and a fresh iframe added
+to the top document. Electron keeps one `onBeforeRequest` listener per session, so registering
+another on the default session silently removes the block. As defence in depth, the renderer also
+makes `PapiRendererWebSocket` refuse the port (`blockWebSocketsToPapiNetwork`) and puts it in place
+of the top window's `WebSocket` and the native `constructor` (`replaceTopWindowWebSocket`), so the
+first two routes fail with a clear `Invalid URL` error. See `adr-papi-port-blocked-at-the-session`.
 
 ### Paratext Registry access tokens
 
@@ -151,9 +157,9 @@ type would hand a credential that works off the machine:
 
 - A web page open in the user's browser, which can connect to `ws://localhost:8876` because
   connections are not authenticated.
-- Any installed extension's web view, privilege or not. It can open a native WebSocket to port 8876
-  through `window.top.WebSocket` (see [The renderer's PAPI port](#the-renderers-papi-port)), since
-  the window's CSP allows `ws:` connections, or drive its window's PAPI connection.
+- Any installed extension's web view, privilege or not. The main process blocks it from opening a
+  WebSocket to port 8876 (see [The renderer's PAPI port](#the-renderers-papi-port)), but it can
+  still drive its window's PAPI connection.
 
 The stopgap trusts a header instead of identifying the caller, so any process that leaves `Origin`
 out gets through. Don't treat it as the fix or build on it.

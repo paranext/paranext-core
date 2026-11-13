@@ -1,4 +1,6 @@
 import {
+  ConnectionFailure,
+  getConnectionFailure,
   getIsConnectionLost,
   subscribeToConnectionLost,
 } from '@renderer/services/connection-lost-store';
@@ -43,6 +45,15 @@ import { useSyncExternalStore } from 'react';
  */
 export function useIsConnectionLost(): boolean {
   return useSyncExternalStore(subscribeToConnectionLost, getIsConnectionLost);
+}
+
+/**
+ * Returns how this renderer's connection failed, or `undefined` while it is alive. For surfaces
+ * that word the failure differently depending on whether a connection was ever established; to
+ * stand down on any failure, use {@link useIsConnectionLost}. Same PAPI-free constraint.
+ */
+export function useConnectionFailure(): ConnectionFailure | undefined {
+  return useSyncExternalStore(subscribeToConnectionLost, getConnectionFailure);
 }
 
 export default useIsConnectionLost;

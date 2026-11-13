@@ -1,5 +1,9 @@
-import { onDidLoseConnection } from '@shared/services/network.service';
-import { markShuttingDown, reportConnectionLost } from './connection-lost-store';
+import { initialize, onDidLoseConnection } from '@shared/services/network.service';
+import {
+  markShuttingDown,
+  reportConnectionLost,
+  reportConnectionNeverEstablished,
+} from './connection-lost-store';
 
 /**
  * Subscribes to this renderer losing its network connection and drives the connection-lost store.
@@ -34,4 +38,26 @@ export function initConnectionLostService(): () => void {
     window.removeEventListener('beforeunload', handleUnload);
     window.removeEventListener('pagehide', handleUnload);
   };
+}
+
+/**
+ * Initializes the network service, recording in the connection-lost store if the first connect
+ * fails so the window shows its couldn't-start state instead of a UI where nothing works.
+ * `onDidLoseConnection` covers only a connection that was established, so this is the only report a
+ * failed startup gets.
+ *
+ * The recorded state is one-way, like a lost connection. After a failed connect the network service
+ * keeps its unconnected handler, so later requests fail rather than retry. Only a failure to create
+ * the handler can be retried by a later request, and the window stays on couldn't-start either way:
+ * Reload is the recovery.
+ *
+ * @throws Whatever the network service's `initialize` rejected with, after recording it
+ */
+export async function initializeNetworkReportingFailure(): Promise<void> {
+  try {
+    await initialize();
+  } catch (e) {
+    reportConnectionNeverEstablished();
+    throw e;
+  }
 }

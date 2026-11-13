@@ -11,7 +11,10 @@ import {
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
-import { initConnectionLostService } from '@renderer/services/connection-lost-service';
+import {
+  initConnectionLostService,
+  initializeNetworkReportingFailure,
+} from '@renderer/services/connection-lost-service';
 import {
   catchUpExtensionHostStoppedState,
   initExtensionHostStoppedService,
@@ -20,7 +23,7 @@ import { startBookChapterControlServiceShard } from '@renderer/services/book-cha
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
-import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
+import { initializeNetworkThenBlockPapiWebSockets } from '@renderer/services/renderer-web-socket.service';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service';
 import {
   getCurrentThemeSync,
@@ -136,8 +139,11 @@ initExtensionHostStoppedService();
 //   this point. TODO: https://github.com/paranext/paranext-core/issues/559
 (async () => {
   try {
-    // The network service has to start first, and it uses the shared store after initialization
-    await networkService.initialize();
+    // The network service has to start first, and it uses the shared store after initialization.
+    // Web views are blocked from the PAPI network here, before any of them can start running. If
+    // the connect fails, `initializeNetworkReportingFailure` shows the couldn't-start state and the
+    // rest of startup is skipped.
+    await initializeNetworkThenBlockPapiWebSockets(initializeNetworkReportingFailure);
     markStartup('papi-connected');
     // Not awaited: nothing at startup needs the answer, and it never rejects.
     catchUpExtensionHostStoppedState();
@@ -147,9 +153,6 @@ initExtensionHostStoppedService();
     // knows which language the menu bar and Settings labels were built in. Not awaited: it never
     // rejects, and nothing at startup needs it.
     rememberLaunchInterfaceLanguage();
-
-    // This needs to run before web views start running and after the network service is running
-    blockWebSocketsToPapiNetwork();
 
     // This needs to run before the web view service shard starts running and blocks us from creating
     // an iframe for the Usersnap feedback forms

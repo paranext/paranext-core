@@ -1935,6 +1935,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the scrim) is PT-4851, because that one runs the other way — main must notice this window's port
   dying, since the window cannot tell it. The `TODO(main-renderer-shutdown-relay)` slug is gone from
   the code.
+- **Amended 2026-11-10 (PT-4494):** the state now also covers a renderer whose FIRST connect
+  fails, widening the "Scope: an ESTABLISHED connection only" bullet above. That bullet's text
+  stays as written; read it together with this amendment.
+  - **Why the scope widened.** Without it, a renderer whose first connect failed stopped its
+    startup partway through and still rendered a UI where nothing worked, with nothing telling the
+    user. The `RpcClient` gate is unchanged — `onDidLoseConnection` still fires only for an
+    established connection — so the failed first connect is reported separately:
+    `initializeNetworkReportingFailure` (`connection-lost-service.ts`) wraps the network service's
+    `initialize` and calls `reportConnectionNeverEstablished()` when it rejects.
+  - **Store model.** The "Store" bullet's `isConnectionLost` boolean is now one latched
+    `ConnectionFailure | undefined` (`'lost' | 'neverConnected'`). The store is still one-way and
+    import-free, and keeps whichever failure is reported first. One latch rather than a second flag
+    because every surface that stands down on a lost connection (`OverlayHost`, `FirstRunOverlay`,
+    `OnboardingTour`, the extension-host-stopped banner) must stand down for both kinds:
+    `getIsConnectionLost()` / `useIsConnectionLost()` are true for either, and only the overlay asks
+    which kind (`useConnectionFailure()`) to choose its wording.
+  - **Why Reload is the right action after all.** The Scope bullet's objection — "the banner offers
+    a reload, which is not the answer to a server that was never there" — was written when each
+    window reached main over a WebSocket on port 8876, where "never there" meant nothing listening
+    on that port. Since `adr-renderer-papi-transport-is-messageport` (2026-09-24) a window reaches
+    main over a MessagePort that main hands it, and main necessarily exists because it created the
+    window. A failed first connect is therefore a failed handshake between this window and main,
+    which a reload starts over. For the case where main's side is itself broken, the message adds
+    "If this keeps happening, close and reopen {%product_name%}." A Restart button that relaunches
+    the whole app is open work (PT-5054); it needs a new non-PAPI path from the window to main, and
+    so its own security review.
+  - **Wording and language.** The overlay shows "Couldn't start" text and a plain "Reload" (no
+    "anyway": nothing was ever connected, so no work can be lost). Localization travels over the
+    connection that never opened, so this state normally shows the English fallbacks whatever the
+    interface language, and interface mode keeps its Simple default for the banner's offset.
+  - **Pointer.** The Scope bullet's "belongs to PT-4494 / PT-4495" now applies only to PT-4495: the
+    extension host still does not surface a failed first connect.
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 
@@ -7111,6 +7143,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pruned, including for deleted projects. A write shows once the setting reports it back, a round
   trip to the extension host. A hidden panel needs no catch-up: the switch reloads it like a visible
   one, and picking the selection is data, not layout.
+
+## adr-papi-port-blocked-at-the-session: Renderer windows are kept off the PAPI port by the main process's session, not by the renderer alone
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** PAPI connections are unauthenticated, and a raw socket to port 8876 is a separate
+  client that can call any method, register any unclaimed method, and broadcast any event. The
+  renderer kept web views off the port by making `PapiRendererWebSocket` (the `WebSocket` a web
+  view gets from `papi`) refuse it. But web views are same-origin `srcdoc` iframes, and three routes
+  borrow an unchecked constructor from the renderer's realm: `window.top.WebSocket` (`top` is
+  non-configurable, so the web view preamble's `delete window.top` does nothing); the
+  `constructor` of the native socket `PapiRendererWebSocket` returns; and a fresh about:blank
+  iframe in the top document, which gets its own native `WebSocket` under the renderer's CSP,
+  which allows `ws:`. A web view's own realm is not a route: its CSP has `connect-src 'self'` and
+  `worker-src 'none'`.
+- **Decision:** The main process cancels every WebSocket request to `WEBSOCKET_PORT` from the
+  default session in an `onBeforeRequest` listener (`registerPapiPortRequestBlock` in
+  `src/main/services/papi-port-request-block.util.ts`). Every handshake from every frame passes
+  through it, whatever constructor opened it. It matches on the port, not the host, as
+  `isPotentialConnectionToPapiNetwork` does. Nothing legitimate is blocked: windows reach main over
+  a `MessagePort`, the extension host and the .NET data provider are not in a browser session, and
+  external browsers use their own sessions. As defence in depth, and to give a clear `Invalid URL`
+  error, the renderer also replaces the top window's `WebSocket` and the native prototype's
+  `constructor` with `PapiRendererWebSocket` (`replaceTopWindowWebSocket`, called from the web
+  view service's monkey patches); that layer does not cover the fresh-iframe route.
+- **Alternatives:** **Patch the renderer only.** Cannot cover a fresh iframe's realm, and
+  `document.createElement`'s patch is bypassed by `insertAdjacentHTML` and by calling
+  `Document.prototype.createElement` on the top document; the iframe's `contentWindow` is readable
+  before the MutationObserver removes it. **Authenticate PAPI connections.** The real fix for
+  caller identity (PT-2893), and much larger.
+- **Consequences:** Electron keeps one `onBeforeRequest` listener per session; registering another
+  on the default session replaces this one and silently reopens the port, so any other need for
+  `onBeforeRequest` there must be folded into this listener. The renderer is still not a hard
+  boundary: a same-origin web view can reach renderer internals through `window.top`, including
+  the window's `MessagePort` bridge. Revisit when PT-2893 identifies callers.
 
 ## adr-papi-websocket-hostname-bind: The PAPI websocket binds by hostname, and readiness is awaited rather than assumed
 

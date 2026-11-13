@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  getConnectionFailure,
   getIsConnectionLost,
   markShuttingDown,
   reportConnectionLost,
+  reportConnectionNeverEstablished,
   resetConnectionLost,
   subscribeToConnectionLost,
 } from '@renderer/services/connection-lost-store';
@@ -74,5 +76,48 @@ describe('connection-lost store', () => {
     markShuttingDown();
 
     expect(getIsConnectionLost()).toBe(true);
+  });
+
+  describe('getConnectionFailure', () => {
+    it('reports no failure while the connection is alive', () => {
+      expect(getConnectionFailure()).toBeUndefined();
+    });
+
+    it('reports a lost connection as lost', () => {
+      reportConnectionLost();
+      expect(getConnectionFailure()).toBe('lost');
+    });
+
+    it('reports a failed first connect as never connected, and as lost', () => {
+      reportConnectionNeverEstablished();
+
+      expect(getConnectionFailure()).toBe('neverConnected');
+      // Every surface that stands down on a lost connection must stand down here too
+      expect(getIsConnectionLost()).toBe(true);
+    });
+
+    it('notifies subscribers exactly once', () => {
+      const listener = vi.fn();
+      subscribeToConnectionLost(listener);
+
+      reportConnectionNeverEstablished();
+      reportConnectionNeverEstablished();
+
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the first failure reported', () => {
+      reportConnectionNeverEstablished();
+      reportConnectionLost();
+
+      expect(getConnectionFailure()).toBe('neverConnected');
+    });
+
+    it('ignores a failed first connect reported after this window has started unloading', () => {
+      markShuttingDown();
+      reportConnectionNeverEstablished();
+
+      expect(getConnectionFailure()).toBeUndefined();
+    });
   });
 });

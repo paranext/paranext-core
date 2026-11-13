@@ -1,16 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockOnDidLoseConnection = vi.fn();
+const mockInitialize = vi.fn();
 vi.mock('@shared/services/network.service', () => ({
   onDidLoseConnection: (callback: () => void) => mockOnDidLoseConnection(callback),
+  initialize: () => mockInitialize(),
 }));
 
 // Both imports have to follow the `vi.mock` call above: the service reads the network service at
 // import time, so the mock must already be registered. `import/first` cannot be satisfied without
 // giving that up.
 /* eslint-disable import/first */
-import { initConnectionLostService } from '@renderer/services/connection-lost-service';
-import { getIsConnectionLost, resetConnectionLost } from '@renderer/services/connection-lost-store';
+import {
+  initConnectionLostService,
+  initializeNetworkReportingFailure,
+} from '@renderer/services/connection-lost-service';
+import {
+  getConnectionFailure,
+  getIsConnectionLost,
+  resetConnectionLost,
+} from '@renderer/services/connection-lost-store';
 /* eslint-enable import/first */
 
 /** Starts the service against a fake network service and hands back the trigger for a loss. */
@@ -89,5 +98,28 @@ describe('connection-lost service', () => {
 
     expect(getIsConnectionLost()).toBe(true);
     second.teardown();
+  });
+
+  describe('initializeNetworkReportingFailure', () => {
+    beforeEach(() => {
+      mockInitialize.mockReset();
+    });
+
+    it('reports nothing when the network connects', async () => {
+      mockInitialize.mockResolvedValue(undefined);
+
+      await initializeNetworkReportingFailure();
+
+      expect(getConnectionFailure()).toBeUndefined();
+    });
+
+    it('reports a never-established connection and rethrows when the network fails', async () => {
+      const error = new Error('induced');
+      mockInitialize.mockRejectedValue(error);
+
+      await expect(initializeNetworkReportingFailure()).rejects.toBe(error);
+
+      expect(getConnectionFailure()).toBe('neverConnected');
+    });
   });
 });

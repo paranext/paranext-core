@@ -2404,9 +2404,9 @@ declare module 'shared/models/rpc.interface' {
      * close code, and a close the app asked for is not a loss.
      *
      * Nor does a connection that was never established. A socket that dies during the opening
-     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
-     * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
-     * event is only for losing a connection that was up.
+     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value.
+     * The renderer surfaces a failed first connect itself (`initializeNetworkReportingFailure`); the
+     * extension host does not yet (PT-4495). This event is only for losing a connection that was up.
      *
      * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
      * to react to the loss rather than to classify it.
@@ -2867,11 +2867,20 @@ declare module 'renderer/services/electron-papi-port-provider' {
 }
 declare module 'renderer/services/renderer-web-socket.service' {
   /**
-   * Once our network is running, run this so `PapiRendererWebSocket` (the `WebSocket` web views get)
-   * refuses connections to it. Web views can still reach the native `WebSocket` on `window.top`; see
-   * "The renderer's PAPI port" in `.context/standards/Security-Guide.md`.
+   * Runs `initialize`, then blocks web views from the PAPI network whether it resolved or rejected,
+   * so a renderer that failed to connect does not keep running with extension sandboxing off.
+   *
+   * The block cannot run before `initialize` settles: without an Electron bridge, the renderer's own
+   * connection to main is a `PapiRendererWebSocket` to the PAPI port (see `web-socket.factory.ts`).
+   * Until it settles (at most about 10 s, the connect timeout) web views are not blocked; none can
+   * exist yet, because the web view service starts only after this call in `index.tsx`.
+   *
+   * @param initialize Starts the renderer's network service
+   * @throws Whatever `initialize` threw or rejected with, after blocking
    */
-  export const blockWebSocketsToPapiNetwork: () => void;
+  export function initializeNetworkThenBlockPapiWebSockets(
+    initialize: () => Promise<void>,
+  ): Promise<void>;
   /** This wraps the browser's WebSocket implementation to provide
    * better control over internet access. It is isomorphic with the standard WebSocket, so it should
    * act as a drop-in replacement.
@@ -2879,6 +2888,10 @@ declare module 'renderer/services/renderer-web-socket.service' {
    * Note that the Node WebSocket implementation is different and not wrapped here.
    */
   export class PapiRendererWebSocket implements WebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
     readonly CONNECTING: 0;
     readonly OPEN: 1;
     readonly CLOSING: 2;
@@ -2907,7 +2920,24 @@ declare module 'renderer/services/renderer-web-socket.service' {
     send: (data: string | ArrayBufferLike | Blob | ArrayBufferView) => void;
     url: string;
     constructor(url: string | URL, protocols?: string | string[]);
+    /**
+     * Sockets this class returns are native `WebSocket` instances, so `socket instanceof WebSocket`
+     * keeps working for code that sees this class as its `WebSocket`
+     */
+    static [Symbol.hasInstance](instance: unknown): boolean;
   }
+  /**
+   * Puts `PapiRendererWebSocket` in place of the native `WebSocket` on `target` (the top window), and
+   * makes it the `constructor` of every native socket, so a same-origin web view that borrows the
+   * constructor through `window.top` or through a socket it was handed gets the PAPI-port check too.
+   *
+   * This is defence in depth that gives a clear `Invalid URL` error: a fresh iframe in the top
+   * document still gets its own native `WebSocket`, so the main process's `onBeforeRequest` block
+   * (`papi-port-request-block.util.ts`) is what actually closes the port.
+   *
+   * @param target The window whose `WebSocket` to replace
+   */
+  export function replaceTopWindowWebSocket(target: { WebSocket: unknown }): void;
   export default PapiRendererWebSocket;
 }
 declare module 'extension-host/services/extension-host-web-socket.model' {
