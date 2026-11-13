@@ -4870,15 +4870,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (2) The character-marker bar anchors to the caret's **top-level block** — the child of
   `.editor-input` that holds it (`findTopLevelEditorBlock`), the DOM twin of Lexical's
   `getTopLevelElement()` and the block `ActiveTextPlugin` outlines — while the paragraph-marker
-  tooltip keeps `EDITOR_PARA_SELECTOR`, because it names a marked paragraph. The bar's
-  before-the-first-caret fallback stays on `EDITOR_PARA_SELECTOR`.
+  tooltip keeps `EDITOR_PARA_SELECTOR`, because it names a marked paragraph. Before the first caret,
+  the bar anchors to the first marked paragraph, or to the first block in a chapter without one.
 - **Alternatives:** Report `undefined` for an implied paragraph — rejected: the character-marker
   menu returns no items without a parent marker, which disables the button in exactly the place the
   user is typing. Add an `isImpliedPara` field to `StateChangeSnapshot` — rejected: public API growth
   for one consumer, when `p` is already what the node says it is. Give the implied paragraph an
   `implied-para` class in the editor and widen the selector — rejected: a new cross-repo class
   contract, and it would still miss the `\id` and chapter lines; the top-level-block rule rests on
-  Lexical's own invariant that root children render as the contenteditable's children.
+  Lexical's own invariant that root children render as the contenteditable's children. Read the
+  `psc-active-text` class `ActiveTextPlugin` puts on the active block — rejected: it exists only in
+  views with `hasActiveTextFocusBox`, and the plugin removes it on blur, which is exactly when the
+  character-marker menu takes focus and the bar must hold.
 - **Consequences:** In Power mode the paragraph-style trigger reads `p` for text that has no `\p`
   (Simple mode is structure-protected, so the cost is Power-only); retagging an implied paragraph
   from that menu was already reachable, because the stale `id` left it enabled. The bar now also
