@@ -12,7 +12,7 @@ public class BanDynamicAnalyzerTests
     {
         var test = new CSharpAnalyzerTest<BanDynamicAnalyzer, DefaultVerifier>
         {
-            ReferenceAssemblies = ReferenceAssemblies.Net.Net80,
+            ReferenceAssemblies = ReferenceAssemblies.Net.Net100,
         };
         test.TestState.Sources.Add(source);
         test.ExpectedDiagnostics.AddRange(expected);
