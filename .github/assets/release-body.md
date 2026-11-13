@@ -1,6 +1,6 @@
 Extensible Bible translation software
 
-https://platform.bible/
+https://paranext.github.io/paranext-core/
 
 This release attaches no installers. It is a fixed point in this repository's history for other
 projects to build from, not a download.
