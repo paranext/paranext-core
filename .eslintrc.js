@@ -195,6 +195,20 @@ module.exports = {
       },
     },
     {
+      // Project names are composed, compared and de-duped only through the helpers in
+      // `lib/platform-bible-utils/src/project-util.ts`. `platform-bible-react` and
+      // `platform-bible-utils` extend this file, and ESLint resolves an extended config's
+      // `overrides` globs against the extending config's directory, so this one pattern covers
+      // their `src` folders too. `extensions/.eslintrc.cjs` enables it for the extensions.
+      // Tests are excluded: their fixtures deliberately construct the mirrored and equal-name
+      // shapes the helpers exist to handle.
+      files: ['src/**/*.ts', 'src/**/*.tsx'],
+      excludedFiles: ['*.test.ts', '*.test.tsx'],
+      rules: {
+        'paranext/no-inline-project-name': 'error',
+      },
+    },
+    {
       // Playwright e2e test fixtures use a `use()` callback that is Playwright's fixture API,
       // not a React hook. react-hooks/rules-of-hooks v5 incorrectly flags these calls.
       files: ['e2e-tests/**/*.ts', 'e2e-tests/**/*.tsx'],

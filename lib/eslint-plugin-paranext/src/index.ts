@@ -27,6 +27,10 @@
  * - Paranext/require-localized-strings-array: Require LOCALIZED_STRINGS in web-views
  * - Paranext/no-hardcoded-string-comparison: Disallow comparisons against hardcoded strings
  *
+ * Project names:
+ *
+ * - Paranext/no-inline-project-name: Compose project names through the shared project-name helpers
+ *
  * Code quality:
  *
  * - Paranext/require-provenance-comment: Require PORTED FROM PT9 / NEW IN PT10 comments
@@ -49,6 +53,7 @@ import requireProvenanceComment from './rules/require-provenance-comment';
 import noHardcodedStringComparison from './rules/no-hardcoded-string-comparison';
 import registrationCleanup from './rules/registration-cleanup';
 import requireDisableComment from './rules/require-disable-comment';
+import noInlineProjectName from './rules/no-inline-project-name';
 
 const plugin = {
   meta: {
@@ -71,6 +76,7 @@ const plugin = {
     'no-hardcoded-string-comparison': noHardcodedStringComparison,
     'registration-cleanup': registrationCleanup,
     'require-disable-comment': requireDisableComment,
+    'no-inline-project-name': noInlineProjectName,
   },
   configs: {
     recommended: {
@@ -91,6 +97,7 @@ const plugin = {
         'paranext/no-hardcoded-string-comparison': 'error',
         'paranext/registration-cleanup': 'warn',
         'paranext/require-disable-comment': 'error',
+        'paranext/no-inline-project-name': 'error',
       },
     },
     strict: {
@@ -111,6 +118,7 @@ const plugin = {
         'paranext/no-hardcoded-string-comparison': 'error',
         'paranext/registration-cleanup': 'error',
         'paranext/require-disable-comment': 'error',
+        'paranext/no-inline-project-name': 'error',
       },
     },
   },

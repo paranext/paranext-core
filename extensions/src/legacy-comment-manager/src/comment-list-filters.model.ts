@@ -16,9 +16,9 @@ export type { CommentPreset, CommentFilters, ScopeFilter, LegacyCommentFilters, 
  * module is reachable from the extension's backend entry point (`main.ts` imports
  * {@link presetToLabelKey} and {@link scopeFilterToLabelKey} for its menu contributions) as well as
  * from the web views. `@papi/frontend` is a webpack external the extension host's `require` shim
- * rejects, so importing a logger here fails the whole extension's activation — see
- * `extension-host-import-boundary.test.ts`, which pins that boundary. Every caller that can reach
- * the legacy mapping runs in a web view and passes `logger.warn` from `@papi/frontend`.
+ * rejects, so importing a logger here would fail the whole extension's activation; the extensions'
+ * main-bundle build reports that as an error. Every caller that can reach the legacy mapping runs
+ * in a web view and passes `logger.warn` from `@papi/frontend`.
  */
 export type WarnFn = (message: string) => void;
 

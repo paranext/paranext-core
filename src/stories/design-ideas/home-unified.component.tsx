@@ -695,6 +695,8 @@ export function HomeUnified({
     const needle = textFilter.trim().toLowerCase();
     return items.filter((item) => {
       if (needle) {
+        // Design-ideas prototype search haystack — fields joined for matching, never rendered.
+        // eslint-disable-next-line paranext/no-inline-project-name
         const hay = [item.shortName, item.fullName, item.language, TYPE_LABEL[item.type]]
           .join(' ')
           .toLowerCase();
@@ -2141,6 +2143,9 @@ export function HomeUnified({
               const needle = modalTextFilter.trim().toLowerCase();
               const modalFilteredUnsorted = resourceItems.filter((item) => {
                 if (needle) {
+                  // Design-ideas prototype search haystack — fields joined for matching, never
+                  // rendered.
+                  // eslint-disable-next-line paranext/no-inline-project-name
                   const hay = [item.shortName, item.fullName, item.language, TYPE_LABEL[item.type]]
                     .join(' ')
                     .toLowerCase();
@@ -2867,7 +2872,9 @@ export function HomeUnified({
             <DialogHeader>
               <DialogTitle>
                 {pendingRemove
-                  ? `${STRINGS.removeConfirmTitlePrefix} ${pendingRemove.shortName} - ${pendingRemove.fullName}`
+                  ? // Design-ideas prototype, not shipped UI.
+                    // eslint-disable-next-line paranext/no-inline-project-name
+                    `${STRINGS.removeConfirmTitlePrefix} ${pendingRemove.shortName} - ${pendingRemove.fullName}`
                   : STRINGS.removeConfirmTitlePrefix}
               </DialogTitle>
               <DialogDescription>{STRINGS.removeConfirmBody}</DialogDescription>

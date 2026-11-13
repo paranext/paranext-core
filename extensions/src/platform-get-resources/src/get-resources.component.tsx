@@ -551,6 +551,8 @@ export function GetResources({
       const filter = textFilter.toLowerCase();
       return (
         resource.displayName.toLowerCase().includes(filter) ||
+        // Search predicate — matches on either name, renders neither.
+        // eslint-disable-next-line paranext/no-inline-project-name
         resource.fullName.toLowerCase().includes(filter) ||
         resource.bestLanguageName.toLowerCase().includes(filter)
       );
@@ -732,6 +734,8 @@ export function GetResources({
                     onDoubleClick={() => {
                       if (resource.installed) onOpenResource(resource.projectId);
                     }}
+                    // React list key — never rendered as text.
+                    // eslint-disable-next-line paranext/no-inline-project-name
                     key={resource.displayName + resource.fullName}
                   >
                     <TableCell>

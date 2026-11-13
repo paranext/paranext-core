@@ -3049,6 +3049,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+- **Amended 2026-11-06:** `extension-host-import-boundary.test.ts` is gone. The extensions'
+  main-bundle webpack build now fails when `main.ts` reaches a module the extension host does not
+  supply, which is what keeps this module out of the host — see
+  `adr-extension-host-import-boundary-checked-at-build`.
 
 ## adr-editor-nbsp-spelling-follows-project-setting: The editor learns the project's `AllowInvisibleChars` through `ViewOptions`, and Standard view holds a stored U+00A0 as an internal U+001A stand-in, drawn as a blank, where `~` is an ordinary character
 
@@ -3460,6 +3464,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (accelerators behind the overlay) is PT-4851 and needs main to notice a window's port dying on
   its own. The `TODO(PT-4435)` reconnect markers are re-homed on PT-4495.
 
+## adr-extension-host-import-boundary-checked-at-build: The extension host's import boundary is checked by the extensions' main-bundle build
+
+- **Date:** 2026-11-06
+- **Status:** Accepted
+- **Context:** Everything an extension's `main.ts` reaches runs in the extension host, whose
+  `require` shim supplies only `EXTENSION_INTERFACE_MODULE_SPECIFIERS` and throws for anything else.
+  Several webpack externals — `react`, `react/jsx-runtime`, `react-dom`, `@papi/frontend` — are
+  supplied to web views but not to the host, so a value import of a UI module into a host-reachable
+  file builds cleanly and then fails the extension's activation. Four extensions each carried a copy
+  of `extension-host-import-boundary.test.ts`, which re-parsed imports with regular expressions,
+  re-implemented module resolution, and kept its own copy of the allowlist; the other extensions had
+  no guard at all.
+- **Decision:** `extensions/webpack/extension-host-import-boundary-webpack-plugin.ts`, registered in
+  `webpack.config.main.ts` (not the web-view config), walks each entry's module graph in
+  `finishModules` and fails the compilation when it reaches an external module the shim does not
+  supply, or a `.tsx` file (swc compiles JSX to `React.createElement` against a global `React` the
+  host does not have, so no `require` exists to catch). The error names the extension, the module,
+  and the import chain from `main.ts`. The plugin imports the allowlist from
+  `src/extension-host/data/extension-interface-modules.data.ts`, the module the shim dispatches
+  from, so the two cannot drift. Node built-ins need nothing extra: the bundle targets `web`, so
+  `fs` fails resolution and `node:fs` fails as an unhandled scheme, and `crypto` is both an external
+  and supplied.
+- **Alternatives:** **Keep the per-extension tests** — rejected: they re-derived what webpack
+  already knows (resolution, type-only erasure, `?inline` strings), drifted between copies, kept a
+  second allowlist, and covered only the extensions that copied them. **An ESLint rule over
+  imports** — rejected: lint sees one file at a time, and the failure is a property of the
+  transitive graph through `node_modules` (a `lucide-react` icon reaches `react` two packages down).
+  **Check the emitted chunks after tree shaking** — rejected: production can drop an import that
+  development still loads, so the check runs before tree shaking and both modes report the same
+  set.
+- **Consequences:** Every bundled extension is covered, including ones added later, and a violation
+  fails `npm run build` and shows in watch mode rather than at activation. The plugin and its import
+  of `src/extension-host/` are paranext-core only, so both sit outside the regions
+  `webpack.config.main.ts` shares with the extension template.
+
 ## adr-find-block-boundary-whitespace: Find tolerates a whitespace gap only at block boundaries, never mid-paragraph
 
 - **Date:** 2026-09-09
@@ -3782,6 +3821,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   saved books, such as a New Testament resource, would otherwise empty the saved scope for good.
   One deliberate exception: a picker edit made while books are hidden this way commits the visible
   set and drops the hidden books, so that Select all and Clear all act on the whole scope.
+- **Amended 2026-11-06:** the per-extension `extension-host-import-boundary.test.ts` guards are
+  replaced by one check in the extensions' main-bundle webpack build, which covers every extension
+  rather than the ones that remembered to copy the test — see
+  `adr-extension-host-import-boundary-checked-at-build`.
 
 ## adr-find-replace-confirms-marker-deletion: A confirmed Replace may delete markers, but never one end of a pair or a chapter
 
@@ -8257,6 +8300,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `parseProjectNameTemplate`. Hardcoding the visible order beside a localizable joined form is the
   failure this guards against: a locale that reorders the string would make the label and its own
   tooltip disagree.
+- **Amended 2026-11-06:** the sweep test is replaced by the ESLint rule
+  `paranext/no-inline-project-name`, which matches the same compositions on the syntax tree
+  rather than line by line, so a composition split across lines is caught and a string that merely
+  contains `fullName` is not. A site that is not a project-name label disables the rule on its own
+  line with the reason, in place of the test's `EXEMPT` list. It still does not see a re-inlined
+  sort.
 
 ## adr-project-selector-consumer-driven-groupings: ProjectSelector groupings are consumer-supplied descriptors over an untyped `customData` bag
 
