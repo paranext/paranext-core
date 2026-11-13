@@ -1,0 +1,29 @@
+name: E2E nightly
+
+# Every isolated end-to-end spec, once a night and on a manual start. Pull requests run only the
+# core set (the `e2e-core` job in test.yml); this run is what notices a break in the rest.
+#
+# Five runners: Playwright splits the specs between them by count, and a GitHub runner takes
+# about two and a half times as long as a developer machine for these launch-heavy specs.
+
+on:
+  schedule:
+    # 02:00 UTC, a quiet hour for the runners this repository shares
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  isolated:
+    name: Isolated suite, part ${{ matrix.shard }} of 5
+
+    strategy:
+      # One part failing must not hide what the others found
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+
+    uses: ./.github/workflows/e2e-isolated.yml
+    with:
+      shard: ${{ matrix.shard }}/5
+      timeout_minutes: 90
+      artifact_name: playwright-results-e2e-nightly-${{ matrix.shard }}

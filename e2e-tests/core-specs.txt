@@ -1,5 +1,6 @@
 # The isolated e2e specs the pull-request job runs: the ones that guard data loss or core flows.
-# One path per line, relative to the repository root. Read by .github/workflows/test.yml.
+# One path per line, relative to the repository root. Read by .github/workflows/test.yml (job
+# `e2e-core`); core-specs-editor.txt lists the specs it adds for editor changes.
 e2e-tests/tests/isolated/comments-tab.spec.ts
 e2e-tests/tests/isolated/no-projects-without-sample.spec.ts
 e2e-tests/tests/isolated/docking/middle-click-close-tab.spec.ts

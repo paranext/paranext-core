@@ -1,0 +1,124 @@
+name: E2E isolated specs
+
+# Runs isolated end-to-end specs (e2e-tests/tests/isolated/: each starts its own copy of the app and
+# exercises one feature) on one Linux runner. Called by test.yml for the core set on every pull
+# request and by e2e-nightly.yml for the whole suite; it has no trigger of its own.
+#
+# It builds for itself: a job cannot reuse another job's output without an artifact hand-over, and
+# the development bundles the specs need are built by e2e-tests/global-setup.ts on first use.
+
+on:
+  workflow_call:
+    inputs:
+      spec_lists:
+        description:
+          'Space-separated files that list the specs to run, one repository path per line (# starts
+          a comment). Empty runs every isolated spec.'
+        type: string
+        required: false
+        default: ''
+      shard:
+        description: 'Playwright shard to run, as "<index>/<total>". Empty runs everything selected.'
+        type: string
+        required: false
+        default: ''
+      report_only:
+        description: 'A failing spec raises a warning and leaves the job green.'
+        type: boolean
+        required: false
+        default: false
+      timeout_minutes:
+        type: number
+        required: false
+        default: 60
+      artifact_name:
+        description: 'Name of the uploaded Playwright results; unique within the calling run.'
+        type: string
+        required: true
+
+jobs:
+  run:
+    name: ubuntu-22.04
+    runs-on: ubuntu-22.04
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props',
+            '.config/dotnet-tools.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Installs the system libraries Electron needs on a bare runner, as the smoke step relies on.
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      # One Xvfb at 1920x1080x24: xvfb-run's default screen (1280x1024, 8-bit colour) is too small
+      # for the docking specs. No retries, so a test that passes only on a second attempt fails;
+      # `--trace=retain-on-failure` because the config records a trace only on a retry.
+      - name: Run the specs
+        id: specs
+        continue-on-error: ${{ inputs.report_only }}
+        env:
+          SPEC_LISTS: ${{ inputs.spec_lists }}
+          SHARD: ${{ inputs.shard }}
+        run: |
+          selection=(all)
+          if [ -n "$SPEC_LISTS" ]; then
+            # $SPEC_LISTS is split into its file names on purpose
+            # shellcheck disable=SC2086
+            mapfile -t selection < <(cat $SPEC_LISTS | grep -v -e '^#' -e '^[[:space:]]*$')
+          fi
+          playwright_args=(--retries=0 --trace=retain-on-failure)
+          if [ -n "$SHARD" ]; then
+            playwright_args+=("--shard=$SHARD")
+          fi
+          echo "Selection: ${#selection[@]} entries; Playwright arguments: ${playwright_args[*]}"
+          xvfb-run --auto-servernum -s '-screen 0 1920x1080x24' \
+            npm run test:e2e:isolated -- "${selection[@]}" "${playwright_args[@]}"
+
+      - name: Warn on a failure that does not block
+        if: ${{ steps.specs.outcome == 'failure' }}
+        run: echo "::warning title=E2E isolated specs failed (not blocking)::Isolated end-to-end specs failed but did not fail the build. See the ${{ inputs.artifact_name }} artifact."
+
+      - name: Upload Playwright test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          retention-days: 7
+          path: |
+            e2e-tests/test-results/
+            e2e-tests/playwright-report/
+          if-no-files-found: ignore

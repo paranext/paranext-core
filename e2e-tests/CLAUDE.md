@@ -127,6 +127,18 @@ one of these.
   temp profile) for what it saw, and `netstat -ano | findstr :8876` (Windows) or `ss -ltnp` (Linux)
   for who holds the port; see `tests/isolated/README.md` for the Windows recovery commands.
 
+## What CI runs
+
+- **Every pull request:** the smoke suite (in the build jobs of `.github/workflows/test.yml`), and
+  the `e2e-core` job: the isolated specs listed in `e2e-tests/core-specs.txt`, plus those in
+  `e2e-tests/core-specs-editor.txt` when the pull request touches the Scripture editor extension,
+  `dev-packages.json` or the C# USFM/USJ conversion code. To add or remove a spec, edit the list.
+- **Every night** (`.github/workflows/e2e-nightly.yml`, also startable by hand): every isolated
+  spec, split over five runners.
+- Both run on Linux with **no retries** and keep a trace of each failing test in the run's
+  `playwright-results-…` artifact. `e2e-core` reports without blocking: a failure shows as a
+  warning on the run, not as a red check.
+
 ## Window size and DevTools
 
 - Docked DevTools takes ~555px out of the renderer's layout viewport, so an 800px window lays the
