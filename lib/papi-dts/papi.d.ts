@@ -5059,16 +5059,16 @@ declare module 'shared/models/docking-framework.model' {
    * group that cannot take the tab gets it beside the group instead, as `left` or `right` would. Such
    * a group is one of Simple mode's fixed columns, or a group that holds another kind of tab.
    *
-   * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
-   * directly on the `direction` side instead of a new group being created, if that group can take it:
-   * it sits beside the target's group (a group touching it only at a corner does not count), has at
-   * least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at
-   * least as wide (as tall for `top` and `bottom`) as a new group beside the target would be.
-   * Otherwise the tab opens as a new group beside the target's group.
+   * For a side, when the target's tab group is docked, the tab is added, as its active tab, to the
+   * tab group directly on the `direction` side instead of a new group being created, if that group
+   * can take it: it sits beside the target's group (a group touching it only at a corner does not
+   * count), has at least one tab, holds the same kind of tab, is not one of Simple mode's fixed
+   * columns, and is at least as wide (as tall for `top` and `bottom`) as a new group beside the
+   * target would be. Otherwise the tab opens as a new group beside the target's group.
    *
-   * When the target's tab group is floating or maximized, the tab opens as a new group at the
-   * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever side
-   * was asked for, and a floating target that would cover that group is moved aside. `left` and
+   * For a side, when the target's tab group is floating or maximized, the tab opens as a new group at
+   * the reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
+   * side was asked for, and a floating target that would cover that group is moved aside. `left` and
    * `right` are mirrored in a right-to-left UI. A target in another application window is placed by
    * these same rules in the window that holds it.
    */
