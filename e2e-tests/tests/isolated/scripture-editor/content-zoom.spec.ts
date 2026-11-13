@@ -375,9 +375,10 @@ test.describe('scripture editor content zoom', () => {
       // not empty pane background: the pointerdown listener resolves the clicked element's closest
       // marked ancestor, and only an actual descendant of the footnotes ContentZoomRoot is
       // guaranteed to register as the click target under a CSS-zoomed layout. The click bubbles to the
-      // row's `onClick` (`handleFootnoteClick`), which in this editable Power view opens the row
-      // editor and keeps focus in the pane, so the pointer and the focus both name the footnotes
-      // area.
+      // row's `onClick` (`handleFootnoteClick`), which calls `onFootnoteEditRequested` whenever the
+      // editor passes it (an editable view whose notes are edited in the pane, as here). That opens
+      // the row editor and keeps focus in the pane, so the pointer and the focus both name the
+      // footnotes area.
       await editorFrame.locator('.note-caller').first().click({ force: true });
       // Wait for the click's effect (the bootstrap's active-area tracking crosses a realm boundary
       // to reach the renderer's resolver) rather than assuming it lands within the click's own tick.
