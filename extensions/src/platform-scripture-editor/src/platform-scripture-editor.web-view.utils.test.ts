@@ -488,9 +488,9 @@ describe('resolveEditingSessionActivity', () => {
   });
 
   // The pane's row editor saves as it goes, so it claims the text on the Scripture editor's terms:
-  // focus in the pane plus an edit there within the ownership window. Holding updates back any
-  // longer makes this view push its older copy of the chapter over another view's edit or a
-  // Send/Receive merge.
+  // focus in the pane plus an edit in this view (the text or a pane row) within the ownership
+  // window. Holding updates back any longer makes this view push its older copy of the chapter over
+  // another view's edit or a Send/Receive merge.
   describe('a footnotes-pane session', () => {
     const paneSessionInput = {
       hasPaletteSession: false,
