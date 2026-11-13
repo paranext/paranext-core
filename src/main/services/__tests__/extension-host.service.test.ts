@@ -23,6 +23,10 @@ vi.mock('@main/services/shutdown-latch.service', () => ({
 vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@main/services/launch-secrets.service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@main/services/launch-secrets.service')>();
+  return { ...actual, issueLaunchSecrets: vi.fn(actual.issueLaunchSecrets) };
+});
 
 /** Short, so the requested-stop budget runs out quickly in the hard-kill case. */
 const MAX_WAIT_MS = 40;
@@ -422,5 +426,80 @@ describe('extensionHostService restart in flight', () => {
     await vi.advanceTimersByTimeAsync(LONG_WAIT_MS);
     await newer;
     expect(mocks.fork).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('extensionHostService launch secrets', () => {
+  beforeEach(resetMocksAndGlobals);
+
+  /** The secrets messages main sent a child, in order */
+  function secretsSentTo(child: FakeExtensionHost) {
+    return child.send.mock.calls
+      .map(([message]) => message)
+      .filter(
+        (message): message is { type: string; clientSecret: string; serverSecret: string } =>
+          typeof message === 'object' && !!message && 'type' in message,
+      );
+  }
+
+  test('sends the launch secrets right after forking', async () => {
+    const child = new FakeExtensionHost(true);
+    willFork(child);
+    const { extensionHostService } = await loadService();
+    const { identifyClientSecret } = await import('@main/services/launch-secrets.service');
+
+    await extensionHostService.start(MAX_WAIT_MS);
+
+    const [message] = secretsSentTo(child);
+    expect(message?.type).toBe('papiLaunchSecrets');
+    expect(identifyClientSecret(message?.clientSecret ?? '')).toMatchObject({
+      identity: 'extensionHost',
+      serverSecret: message?.serverSecret,
+    });
+  });
+
+  test('keeps the secrets out of the arguments and environment', async () => {
+    const child = new FakeExtensionHost(true);
+    willFork(child);
+    const { extensionHostService } = await loadService();
+
+    await extensionHostService.start(MAX_WAIT_MS);
+
+    const [message] = secretsSentTo(child);
+    const forked = JSON.stringify(mocks.fork.mock.calls[0]);
+    expect(message?.clientSecret).toBeTruthy();
+    expect(forked).not.toContain(message?.clientSecret);
+    expect(forked).not.toContain(message?.serverSecret);
+    expect(JSON.stringify(process.env)).not.toContain(message?.clientSecret);
+  });
+
+  test('issues new secrets on a restart', async () => {
+    const first = new FakeExtensionHost(true);
+    const second = new FakeExtensionHost(true);
+    willFork(first, second);
+    const { extensionHostService } = await loadService();
+    const { identifyClientSecret } = await import('@main/services/launch-secrets.service');
+
+    await extensionHostService.start(MAX_WAIT_MS);
+    await extensionHostService.restart(MAX_WAIT_MS);
+
+    const [firstSecrets] = secretsSentTo(first);
+    const [secondSecrets] = secretsSentTo(second);
+    expect(secondSecrets?.clientSecret).not.toBe(firstSecrets?.clientSecret);
+    expect(identifyClientSecret(firstSecrets?.clientSecret ?? '')).toBeUndefined();
+    expect(identifyClientSecret(secondSecrets?.clientSecret ?? '')?.identity).toBe('extensionHost');
+  });
+
+  test('revokes the secrets when the extension host exits', async () => {
+    const child = new FakeExtensionHost(true);
+    willFork(child);
+    const { extensionHostService } = await loadService();
+    const { identifyClientSecret } = await import('@main/services/launch-secrets.service');
+    await extensionHostService.start(MAX_WAIT_MS);
+    const [message] = secretsSentTo(child);
+
+    child.exit(1);
+
+    expect(identifyClientSecret(message?.clientSecret ?? '')).toBeUndefined();
   });
 });

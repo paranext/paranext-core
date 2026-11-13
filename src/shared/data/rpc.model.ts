@@ -13,6 +13,12 @@ import { deserialize, getErrorMessage, retryUntil, serialize } from 'platform-bi
 /** Port to use for the WebSocket */
 export const WEBSOCKET_PORT = 8876;
 
+/** WebSocket handshake request header in which a child main launched presents its client secret */
+export const PAPI_CLIENT_SECRET_HEADER = 'x-papi-client-secret';
+
+/** WebSocket handshake reply header in which main proves itself to a child it launched */
+export const PAPI_SERVER_SECRET_HEADER = 'x-papi-server-secret';
+
 /**
  * Largest message the WebSocket transport carries. A message over this is not a failed request: the
  * receiver closes the connection with 1009, taking down every request in flight on it and, for the

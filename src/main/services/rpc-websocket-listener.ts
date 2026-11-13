@@ -16,6 +16,8 @@ import {
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
   MAX_WEBSOCKET_PAYLOAD_BYTES,
+  PAPI_CLIENT_SECRET_HEADER,
+  PAPI_SERVER_SECRET_HEADER,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import {
@@ -69,11 +71,6 @@ const BIND_TIMEOUT_MS = 10_000;
 function onServerError(error: unknown): void {
   logger.error(`PAPI websocket server error: ${getErrorMessage(error)}`);
 }
-
-/** Handshake request header in which a child main launched presents its client secret */
-const CLIENT_SECRET_HEADER = 'x-papi-client-secret';
-/** Handshake reply header in which main returns the server secret to a child it identified */
-const SERVER_SECRET_HEADER = 'x-papi-server-secret';
 
 /** HTTP status for a handshake whose client secret matches no current launch */
 const UNKNOWN_SECRET_STATUS = 401;
@@ -705,7 +702,7 @@ export class RpcWebSocketListener
     info: { req: IncomingMessage },
     callback: (isAccepted: boolean, code?: number) => void,
   ): void {
-    const presented = info.req.headers[CLIENT_SECRET_HEADER];
+    const presented = info.req.headers[PAPI_CLIENT_SECRET_HEADER];
     if (presented === undefined) {
       callback(true);
       return;
@@ -733,7 +730,7 @@ export class RpcWebSocketListener
   /** Proves main to a child it identified by returning that launch's server secret */
   private addServerSecretToHandshakeReply(headers: string[], request: IncomingMessage): void {
     const verified = this.verifiedLaunchByRequest.get(request);
-    if (verified) headers.push(`${SERVER_SECRET_HEADER}: ${verified.serverSecret}`);
+    if (verified) headers.push(`${PAPI_SERVER_SECRET_HEADER}: ${verified.serverSecret}`);
   }
 
   /**

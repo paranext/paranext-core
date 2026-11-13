@@ -23,8 +23,11 @@ import { watch as chokidarWatch, FSWatcher } from 'chokidar';
 import {
   extensionHostStartedMessage,
   gracefulShutdownMessage,
+  LAUNCH_SECRETS_MESSAGE_TYPE,
+  LaunchSecretsMessage,
 } from '@node/models/interprocess-messages.model';
 import { isAppShuttingDown } from '@main/services/shutdown-latch.service';
+import { issueLaunchSecrets, revokeLaunchSecrets } from '@main/services/launch-secrets.service';
 import { classifyExtensionHostExit } from '@main/services/extension-host-exit.util';
 import {
   EXTENSION_HOST_RESTART_READY_TIMEOUT_MS,
@@ -268,6 +271,7 @@ function connectToExtensionHostProcess() {
     extensionHost?.stderr?.removeListener('data', logProcessError);
     extensionHost?.stdout?.removeListener('data', logProcessInfo);
     extensionHost = undefined;
+    revokeLaunchSecrets('extensionHost');
     resolveProcessLifetimeVariable();
 
     // The cleanup above is safe for a stale child too: no newer child can exist yet, because
@@ -372,10 +376,27 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
           NODE_PATH: path.join(globalThis.resourcesPath, 'release', 'app', 'node_modules'),
         };
 
-    extensionHost = fork(extensionHostEntryPath, extensionHostArgs, {
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      env: extensionHostEnv,
-      execArgv: extensionHostExecArgv,
+    // Issued before forking and sent over IPC right after, so they appear neither in the child's
+    // arguments nor in its environment. A fork that throws leaves no process to use them.
+    const launchSecrets = issueLaunchSecrets('extensionHost');
+    try {
+      extensionHost = fork(extensionHostEntryPath, extensionHostArgs, {
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+        env: extensionHostEnv,
+        execArgv: extensionHostExecArgv,
+      });
+    } catch (error) {
+      revokeLaunchSecrets('extensionHost');
+      throw error;
+    }
+    const launchSecretsMessage: LaunchSecretsMessage = {
+      type: LAUNCH_SECRETS_MESSAGE_TYPE,
+      ...launchSecrets,
+    };
+    extensionHost.send(launchSecretsMessage, (error) => {
+      // The child exits on its own if the secrets never arrive; the error itself is what to log
+      if (error)
+        logger.error(`Could not send the extension host its launch secrets: ${error.message}`);
     });
   }
 
