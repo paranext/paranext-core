@@ -1,19 +1,20 @@
-import { clampTopToVisibleArea, EDITOR_PARA_SELECTOR } from '../editor-dom.util';
+import { clampTopToVisibleArea, findTopLevelEditorBlock } from '../editor-dom.util';
 
 /** A rect whose every edge is 0 — what a Range reports when it has no layout to measure. */
 function isDegenerate(rect: DOMRect): boolean {
   return rect.top === 0 && rect.bottom === 0 && rect.left === 0 && rect.right === 0;
 }
 
-/** The line the caret is on, plus the paragraph that owns it. */
+/** The line the caret is on, plus the top-level block that owns it. */
 export type ActiveLine = {
-  /** The rect to anchor to — the caret's own line, or the paragraph's rect when that degenerates. */
+  /** The rect to anchor to — the caret's own line, or the block's rect when that degenerates. */
   rect: DOMRect;
   /**
-   * The paragraph element the caret is inside. Returned alongside the rect because the caller needs
-   * the SAME paragraph's font metrics to measure the baseline against: the editor's first paragraph
-   * is typically a `\mt1` heading at 166% font-size, so measuring that one would misalign the bar
-   * on every body line.
+   * The top-level editor block the caret is inside (see `findTopLevelEditorBlock`): a marked
+   * paragraph, verses outside any paragraph marker, or the `\id` or chapter line. Returned
+   * alongside the rect because the caller needs the SAME block's font metrics to measure the
+   * baseline against: the editor's first paragraph is typically a `\mt1` heading at 166% font-size,
+   * so measuring that one would misalign the bar on every body line.
    */
   para: HTMLElement;
 };
@@ -25,7 +26,7 @@ export type ActiveLine = {
  * "active line" the bar tracks — finer-grained than the containing paragraph, which may wrap over
  * many lines. That rect degenerates to all-zeros at empty paragraphs, at some node boundaries, and
  * whenever the document has no layout at all (a `display: none` iframe), so fall back to the
- * containing paragraph's rect rather than reporting a position at the top of the editor.
+ * containing block's rect rather than reporting a position at the top of the editor.
  *
  * A NON-COLLAPSED selection anchors to the TOP of the selection, by design — not to the end the
  * user is dragging. The range's union rect spans every selected line, so its `top` is the first
@@ -37,8 +38,8 @@ export type ActiveLine = {
  *
  * @param selection The document's current selection, or `undefined` when there is none
  * @param editorRoot The editor element the selection must be inside to count
- * @returns The rect to anchor to and the paragraph it came from, or `undefined` when the caret is
- *   not in an editor paragraph
+ * @returns The rect to anchor to and the block it came from, or `undefined` when the caret is not
+ *   inside an editor block
  */
 export function resolveActiveLineRect(
   selection: Selection | undefined,
@@ -49,10 +50,7 @@ export function resolveActiveLineRect(
   const { anchorNode } = selection;
   if (!anchorNode || !editorRoot.contains(anchorNode)) return undefined;
 
-  // A text node has no .closest(); start from its parent element.
-  const anchorElement =
-    anchorNode instanceof Element ? anchorNode : (anchorNode.parentElement ?? undefined);
-  const para = anchorElement?.closest<HTMLElement>(EDITOR_PARA_SELECTOR);
+  const para = findTopLevelEditorBlock(anchorNode, editorRoot);
   if (!para) return undefined;
 
   const caretRect = selection.getRangeAt(0).getBoundingClientRect();

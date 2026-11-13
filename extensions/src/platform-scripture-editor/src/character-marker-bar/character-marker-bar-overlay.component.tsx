@@ -191,7 +191,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
 
     if (!targetRect) {
       // Before the first caret, anchor to the first paragraph so the bar is visible on load —
-      // discoverability is the point of the feature. After that, no caret in an editor paragraph
+      // discoverability is the point of the feature. After that, no caret in an editor block
       // means the popover took focus, so HOLD the last position rather than jumping back to the
       // top of the editor as the popover opens and closes.
       if (hasPositionedRef.current) return;

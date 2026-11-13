@@ -60,7 +60,11 @@ import { CharacterMarkerBarOverlay } from './character-marker-bar-overlay.compon
  * measured while the view is hidden.
  */
 let rectReadCount = 0;
-const stubRects = (caretTop: number) => {
+/**
+ * @param caretTop The top every `.para` reports
+ * @param classlessBlockTop The top a classless top-level block (an implied paragraph) reports
+ */
+const stubRects = (caretTop: number, classlessBlockTop = 0) => {
   rectReadCount = 0;
   // vi.spyOn rather than direct assignment so afterEach's vi.restoreAllMocks() actually restores
   // jsdom's own implementation — a bare assignment would leak the stub for the rest of the file.
@@ -69,7 +73,13 @@ const stubRects = (caretTop: number) => {
   ) {
     rectReadCount += 1;
     const isPara = this instanceof HTMLElement && this.classList.contains('para');
-    const top = isPara ? caretTop : 0;
+    const isClasslessBlock =
+      this instanceof HTMLElement &&
+      this.classList.length === 0 &&
+      !!this.parentElement?.classList.contains('editor-input');
+    let top = 0;
+    if (isPara) top = caretTop;
+    else if (isClasslessBlock) top = classlessBlockTop;
     // A real DOMRect (left, top, width, height) satisfies every field callers read with no cast.
     return new DOMRect(0, top, 200, 20);
   });
@@ -307,6 +317,25 @@ describe('CharacterMarkerBarOverlay', () => {
     stubRects(250);
     await putCaretInParagraph();
     expect(barContainer().style.top).toBe('250px');
+  });
+
+  it('follows a caret into an implied paragraph instead of holding the last position', async () => {
+    // Verses outside any paragraph marker render as a bare `<p>` with no USFM class.
+    render(
+      <CharacterMarkerBarOverlay bar={<button type="button">bd</button>}>
+        <div className="editor-input usfm">
+          <p className="para usfm_p">The LORD is my shepherd</p>
+          <p>this has text</p>
+        </div>
+      </CharacterMarkerBarOverlay>,
+    );
+    stubRects(120, 300);
+    await putCaretInParagraph();
+    expect(barContainer().style.top).toBe('120px');
+
+    await putCaretInParagraph(screen.getByText('this has text'));
+
+    expect(barContainer().style.top).toBe('300px');
   });
 
   it('holds the last position when the selection moves outside the editor', async () => {

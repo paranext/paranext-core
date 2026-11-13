@@ -55,15 +55,42 @@ const EDITOR_FIRST_LOAD_POLL_TIME = 100;
 const EDITOR_MAX_POLL_INTERVALS = 100; // Hopefully the editor will load in 10 seconds
 
 /**
- * The USFM paragraph elements the editor renders.
+ * The USFM paragraph elements the editor renders — paragraphs that carry a marker.
  *
- * Shared rather than restated: both gutter overlays decide what counts as a paragraph, and they
- * have to agree — `ParagraphMarkerTooltipOverlay` picks the paragraph to describe, and
- * `CharacterMarkerBarOverlay` picks the one to anchor and measure against. Two copies of the
- * selector could drift, and a mismatch would leave the bar tracking a different element than the
- * tooltip names.
+ * `ParagraphMarkerTooltipOverlay` uses it to pick the marked paragraph to name, and
+ * `CharacterMarkerBarOverlay` uses it to place the bar before the user has placed a caret. While a
+ * caret exists the bar follows the caret's top-level block instead (see
+ * {@link findTopLevelEditorBlock}), because it tracks the caret's line, not a marker: verses outside
+ * any paragraph marker and the `\id` line are blocks this selector does not match.
  */
 export const EDITOR_PARA_SELECTOR = '.para[class*="usfm_"]';
+
+/**
+ * Finds the top-level editor block that contains `node`: the ancestor-or-self element whose parent
+ * is `editorRoot`.
+ *
+ * This is the DOM twin of the editor's `getTopLevelElement()`, i.e. the block the editor outlines
+ * as the current editable section. It relies on the editor rendering each root-level node as a
+ * direct child of its contenteditable, so it covers every kind of block — marked paragraphs, verses
+ * outside any paragraph marker (a classless `<p>`), the `\id` line and chapter lines — without
+ * knowing their classes. The read-only block verse layout breaks that assumption: it wraps
+ * paragraphs in a verse-block element, which this would return instead. The character-marker bar is
+ * not mounted in that layout.
+ *
+ * @param node The node to start from, typically the selection's anchor node
+ * @param editorRoot The editor's contenteditable element
+ * @returns The top-level block, or `undefined` when `node` is `editorRoot` itself or is outside it
+ */
+export function findTopLevelEditorBlock(
+  node: Node,
+  editorRoot: HTMLElement,
+): HTMLElement | undefined {
+  let element = node instanceof HTMLElement ? node : (node.parentElement ?? undefined);
+  while (element && element.parentElement !== editorRoot) {
+    element = element.parentElement ?? undefined;
+  }
+  return element;
+}
 
 /**
  * Finds the USFM paragraph element genuinely rendered at the given viewport coordinates, via the

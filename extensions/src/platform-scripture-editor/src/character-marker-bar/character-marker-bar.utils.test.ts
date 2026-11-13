@@ -183,15 +183,51 @@ describe('resolveActiveLineRect', () => {
     expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)?.rect).toBe(paraRect);
   });
 
-  it('returns undefined when the caret is inside the editor but in no paragraph', () => {
+  it('returns undefined when the caret is on the editor root between blocks', () => {
     const { editorRoot } = buildEditor();
-    const bare = document.createElement('div');
-    bare.textContent = 'chrome inside the editor root';
-    editorRoot.appendChild(bare);
+    expect(resolveActiveLineRect(selectionAt(editorRoot, 0), editorRoot)).toBeUndefined();
+  });
+
+  it('resolves an implied paragraph — a classless top-level block — as the active line', () => {
+    // Verses outside any paragraph marker render as a bare `<p>` with no USFM class.
+    const { editorRoot } = buildEditor();
+    const impliedPara = document.createElement('p');
+    impliedPara.textContent = 'this has text';
+    editorRoot.appendChild(impliedPara);
     // DOM's firstChild is typed as ChildNode | null, not undefined.
     // eslint-disable-next-line no-null/no-null
-    const textNode = bare.firstChild ?? null;
+    const textNode = impliedPara.firstChild ?? null;
     if (!textNode) throw new Error('expected a text node');
-    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)).toBeUndefined();
+
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(impliedPara);
+  });
+
+  it('resolves the \\id line as the active line', () => {
+    const { editorRoot } = buildEditor();
+    const bookLine = document.createElement('p');
+    bookLine.className = 'book usfm_id';
+    bookLine.textContent = 'JDT';
+    editorRoot.prepend(bookLine);
+    // DOM's firstChild is typed as ChildNode | null, not undefined.
+    // eslint-disable-next-line no-null/no-null
+    const textNode = bookLine.firstChild ?? null;
+    if (!textNode) throw new Error('expected a text node');
+
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(bookLine);
+  });
+
+  it('resolves the top-level block, not an inner element, for a caret inside a character marker', () => {
+    const { editorRoot, para } = buildEditor();
+    para.textContent = 'a ';
+    const characterMarker = document.createElement('span');
+    characterMarker.className = 'char usfm_nd';
+    characterMarker.textContent = 'Lord';
+    para.appendChild(characterMarker);
+    // DOM's firstChild is typed as ChildNode | null, not undefined.
+    // eslint-disable-next-line no-null/no-null
+    const textNode = characterMarker.firstChild ?? null;
+    if (!textNode) throw new Error('expected a text node');
+
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(para);
   });
 });
