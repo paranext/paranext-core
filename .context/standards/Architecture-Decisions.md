@@ -5256,7 +5256,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-leaked-emudhra-certificates-blocked-in-app: The app blocks the leaked eMudhra intermediate certificates itself until Electron is upgraded
 
 - **Date:** 2026-10-27
-- **Status:** Accepted (temporary; superseded once PT-3111 upgrades Electron)
+- **Status:** Superseded: Electron 45 (PT-3111) blocks these certificates itself; the modules were
+  removed, and the rules below no longer apply. Kept rather than retired, as prior art if a future
+  leak hits an Electron release that has no fix.
 - **Context:** In October 2026 the private keys of eight eMudhra intermediate certificates (16
   certificates, including Sectigo `AAA Certificate Services` cross-signs) became recoverable by
   anyone (https://emudhra.we-have-a-problem.com/). Operating systems and browsers blocked them, but
@@ -5282,8 +5284,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   unpatched system still accepts the leaked certificates there (PT-4913); processes extensions
   start with `createProcess.fork` and worker threads are not covered (none makes network requests
   today). Distrusting whole roots also refuses legitimate sites that chain to them; none of the
-  sites the app uses does. Remove both modules, and retire this entry, when PT-3111 upgrades
-  Electron to a release that blocks the certificates itself.
+  sites the app uses does. Remove both modules when PT-3111 upgrades Electron to a release that
+  blocks the certificates itself.
 - **Source:** PR #2938
 
 ## adr-library-string-keys-ship-in-shell-assets: `platform-bible-react` string-key values ship in the platform shell's locale assets by default
@@ -5781,6 +5783,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   jsdom cannot judge. Neither can assert the ring itself — the Storybook harness does not paint the
   trigger's ring at all, so an assertion on it would pass whatever the code did. That the attribute
   removes a ring the user can see is confirmed by hand in the running app.
+- **Amended 2026-11-14 (PT-3111, Electron 45):** the app now ships Chromium 156, so the runtime reason
+  for rejecting alternative (b) no longer holds (the option already worked in Chromium 145). The CSS
+  approach stays: it works and does not depend on the runtime. Moving to
+  `focus({ focusVisible: false })` would be a separate change, with its own check that the
+  scripture editor's own `:focus-visible` outline stays hidden.
 - **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
   found not to work in the shipped runtime.
 
@@ -10451,6 +10458,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   content tag from the snap store's perspective, so store-granted auto-connection for it should be
   confirmed on a published build rather than inferred from sideload testing, which bypasses store
   assertions.
+- **Amended 2026-11-14 (PT-3111, Electron 45):** electron-builder is now pinned to 26.18.1, which
+  pins `app-builder-lib` 26.18.1, so this patch is
+  `app-builder-lib+26.18.1+002+rename-gnome-platform-plug.patch` and paratext-10-studio's is
+  `app-builder-lib+26.18.1+001+mercurial-snap-parts.patch`. The sequencing still keeps them apart,
+  but "no companion studio change" no longer holds: a patch-package file name carries the package
+  version, so every `app-builder-lib` version change also needs paratext-10-studio to rename its
+  patch, and to update the `notices/policy.json` evidence entry and `LICENSING.md` that name it.
 - **Source:** PT-4496. PR #2747 review raised the upgrade path, which the original cold-install
   diagnosis had not considered; its re-review then established the sequenced-patch mechanism above,
   correcting an earlier belief that patch-package allows only one patch per package+version and that

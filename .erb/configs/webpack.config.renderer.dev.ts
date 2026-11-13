@@ -243,7 +243,7 @@ const configuration: webpack.Configuration = {
 
       console.log('Starting preload.js builder...');
       childProcessInfos.push({
-        process: spawn('npm', ['run', 'start:preload'], {
+        process: spawn('npm run start:preload', {
           shell: true,
           stdio: 'inherit',
         }),
@@ -252,7 +252,7 @@ const configuration: webpack.Configuration = {
 
       console.log('Starting extensions builder...');
       childProcessInfos.push({
-        process: spawn('npm', ['run', 'start:extensions'], {
+        process: spawn('npm run start:extensions', {
           shell: true,
           stdio: 'inherit',
         }),
@@ -268,8 +268,11 @@ const configuration: webpack.Configuration = {
         if (process.env.MAIN_ARGS) {
           args = args.concat(['--', ...process.env.MAIN_ARGS.matchAll(/"[^"]+"|[^\s"]+/g)].flat());
         }
+        // One command string: with `shell: true` Node joins an args array with spaces unescaped
+        // anyway, and Node.js 24 deprecates passing the array (DEP0190). The MAIN_ARGS tokens keep
+        // their own quotes from the match above.
         childProcessInfos.push({
-          process: spawn('npm', args, {
+          process: spawn(['npm', ...args].join(' '), {
             shell: true,
             stdio: 'inherit',
           }),

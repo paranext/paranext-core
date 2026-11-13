@@ -2401,10 +2401,13 @@ async function copySeededVerse(
       timeout: 15_000,
     })
     .not.toBe(CLIPBOARD_SENTINEL);
-  const { text, html } = await electronApp.evaluate(({ clipboard }) => ({
-    text: clipboard.readText(),
-    html: clipboard.readHTML(),
-  }));
+  const { text, html } = await electronApp.evaluate(async ({ clipboard }) => {
+    const [item] = await clipboard.read();
+    const htmlBlob = item?.types.includes('text/html')
+      ? await item.getType('text/html')
+      : undefined;
+    return { text: await clipboard.readText(), html: htmlBlob ? await htmlBlob.text() : '' };
+  });
   expect.soft(visible(text), `${where}: the copied plain text`).toBe(visible(expected));
   expect
     .soft(text.includes(NBSP_STAND_IN), `${where}: the plain text holds the editor's stand-in`)
