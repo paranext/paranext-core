@@ -27,6 +27,8 @@
  *   (`|lemma="grace"` settling to `|grace`), and the saved span carries the attribute.
  * - A caret clicked past a paragraph's trailing footnote stays there when a marker literal typed
  *   earlier in the same paragraph settles, and is reported at the footnote's closer.
+ * - An annotation on a collapsed footnote's text, styled with a box that carries its own
+ *   `!important`, draws nothing: the footnote is no wider than its caller alone.
  *
  * Settle timing: a typed marker literal settles when the caret leaves it or after an idle delay,
  * whichever comes first. This test raises the idle delay
@@ -53,6 +55,7 @@
  */
 import { ConsoleMessage, FrameLocator, Locator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { DEFAULT_WEBSOCKET_PORT, sendPapiRequestOnce } from '../../../fixtures/helpers';
 import {
   chapterLocation,
   contentJsonPath,
@@ -170,6 +173,12 @@ test.describe('scripture editor annotation shapes', () => {
     await expect(editorInput).toBeAttached({ timeout: 60_000 });
     // Positive control, and the gate that the chapter finished loading before its USJ is read.
     await expect(editorInput).toContainText(CHAPTER_CONTROL_TEXT, { timeout: 60_000 });
+    // Standard view draws no badge behind a verse number, as in PT9, so an annotation's own
+    // background is what paints one it holds.
+    await expect(editorInput.locator('span.verse').first()).toHaveCSS(
+      'background-color',
+      'rgba(0, 0, 0, 0)',
+    );
     await waitForEditorControllerMethod(editorId, 'setAnnotation');
 
     const chapterUsj = await getChapterUsj(johnVerse(2, 1));
@@ -278,7 +287,23 @@ test.describe('scripture editor annotation shapes', () => {
 
       await expectMarkTexts('across-verse', [lastWord, firstWord]);
       const paragraph = paragraphWith('wedding in Cana');
-      await expect(paragraph.locator('span.verse[data-number="2"]')).toHaveCount(1);
+      // The comment holds the verse glyph's `\v<NBSP>2` but not its trailing separator, which no
+      // range can hold, so the editor cuts the glyph into two pieces of its own class where the
+      // hold ends. It paints both: the held piece, and the separator as filler between two held
+      // bytes. Together the pieces still spell the whole glyph, in order.
+      const verseTwoPieces = paragraph.locator('span.verse[data-number="2"]');
+      await expect
+        .poll(async () => (await verseTwoPieces.allTextContents()).join(''), { timeout: 30_000 })
+        .toBe(`\\v${NBSP}2 `);
+      await expect
+        .poll(
+          async () =>
+            paragraph
+              .locator('span.verse[data-number="2"].annotationId-across-verse')
+              .allTextContents(),
+          { timeout: 30_000 },
+        )
+        .toEqual([`\\v${NBSP}2`, ' ']);
       await expect(editorInput.locator('mark [data-marker="v"]')).toHaveCount(0);
       // Exactly one space between "there." and the verse number: the verse glyph renders as
       // `\v<NBSP>2 `, so any space the verse brought along in addition shows up as a second one.
@@ -324,6 +349,15 @@ test.describe('scripture editor annotation shapes', () => {
       await expect(paragraph.locator('span.closing[data-marker="wj"]')).not.toHaveClass(
         /(^|\s)display-annotation(\s|$)/,
       );
+      // One box over every element it paints: the start class on the mark before the span, the
+      // end class on the mark inside it, and neither anywhere else it paints.
+      const painted = paragraph.locator('.annotationId-into-char-span');
+      const startClass = `editor-typed-markStart-external-${ANNOTATION_TYPE}`;
+      const endClass = `editor-typed-markEnd-external-${ANNOTATION_TYPE}`;
+      await expect(painted.first()).toHaveClass(new RegExp(`(^|\\s)${startClass}(\\s|$)`));
+      await expect(painted.last()).toHaveClass(new RegExp(`(^|\\s)${endClass}(\\s|$)`));
+      await expect(paragraph.locator(`.annotationId-into-char-span.${startClass}`)).toHaveCount(1);
+      await expect(paragraph.locator(`.annotationId-into-char-span.${endClass}`)).toHaveCount(1);
 
       const saved = await saveAndReadChapter('probecharspan');
       expect(paragraphContent(saved, paragraphIndex)).toEqual(
@@ -645,6 +679,58 @@ test.describe('scripture editor annotation shapes', () => {
           { timeout: 30_000 },
         )
         .toEqual([expected, expected]);
+    });
+
+    await test.step('an annotation in a collapsed footnote draws no box beside its caller, even with a priority style', async () => {
+      // A box style with its own priority, which a plain reset of the box properties would lose to.
+      const typeName = 'e2e-collapsed-note-box';
+      await sendPapiRequestOnce(
+        'object:platformScriptureEditor.annotationStyle-data.registerAnnotationStyle',
+        [
+          typeName,
+          {
+            padding: '6px !important',
+            margin: '4px !important',
+            border: '3px solid red !important',
+            backgroundColor: 'yellow',
+          },
+        ],
+        DEFAULT_WEBSOCKET_PORT,
+        30_000,
+      );
+      const chapterFour = await getChapterUsj(johnVerse(4, 1));
+      const verseSix = requireVerseText(chapterFour, '6');
+      const paragraphIndex = paragraphIndexOf(verseSix);
+      const content = paragraphContent(chapterFour, paragraphIndex);
+      const noteIndex = content.findIndex(
+        (item) => typeof item === 'object' && item.type === 'note' && item.marker === 'f',
+      );
+      const note = content[noteIndex];
+      if (typeof note !== 'object') throw new Error('John 4:6 has no footnote');
+      const footnoteTextIndex = (note.content ?? []).findIndex(
+        (item) => typeof item === 'object' && item.marker === 'ft',
+      );
+      expect(footnoteTextIndex).toBeGreaterThan(-1);
+      const footnoteTextPath = contentJsonPath([paragraphIndex, noteIndex, footnoteTextIndex, 0]);
+
+      const noteElement = paragraphWith('about the sixth hour')
+        .locator('span.note[data-marker="f"]')
+        .last();
+      const widthBefore = (await noteElement.boundingBox())?.width;
+      if (widthBefore === undefined) throw new Error('The footnote is not laid out');
+
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterLocation(johnVerse(4, 6), footnoteTextPath, 0),
+          end: chapterLocation(johnVerse(4, 6), footnoteTextPath, 4),
+        },
+        typeName,
+        'in-collapsed-note',
+      ]);
+      const mark = noteElement.locator('mark.annotationId-in-collapsed-note');
+      await expect(mark).toHaveCount(1, { timeout: 30_000 });
+      expect((await noteElement.boundingBox())?.width).toBe(widthBefore);
+      await expect(mark).toHaveCSS('display', 'none');
     });
   });
 });

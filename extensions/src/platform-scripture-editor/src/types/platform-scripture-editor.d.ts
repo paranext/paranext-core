@@ -555,6 +555,16 @@ declare module 'platform-scripture-editor' {
    * extensions to define custom annotation styles while supporting theme variables.
    *
    * Supports CSS custom properties (e.g., `var(--primary)`) for theme-aware styling.
+   *
+   * An annotation can paint several elements — a verse number and the text after it, text on both
+   * sides of a character style's edge. `border`, a one-value `borderRadius`, and one- or two-value
+   * `padding` and `margin` are split across them so the annotation draws one box: the top and
+   * bottom on every element, and the leading and trailing sides (and corners) only on its first and
+   * last element. Each element's top and bottom follow its own font size and baseline, so over a
+   * raised, smaller verse number they sit inside the text's. An annotation that paints one element
+   * is drawn as the style reads. A `padding`, `margin` or `borderRadius` with `!important`, or an
+   * empty one, is not split: it applies to every element as written. A `var()` counts as one value
+   * when splitting, so a custom property used there must hold one value.
    */
   export type AnnotationStyleProperties = {
     /**
@@ -569,7 +579,9 @@ declare module 'platform-scripture-editor' {
     backgroundColor?: string;
 
     /**
-     * Border style.
+     * Border style. Drawn as one box around everything an annotation paints: the top and bottom
+     * border on every element, the leading border on the first and the trailing border on the
+     * last.
      *
      * @example '1px solid red'
      *
@@ -578,7 +590,9 @@ declare module 'platform-scripture-editor' {
     border?: string;
 
     /**
-     * Border radius for rounded corners.
+     * Border radius for rounded corners. A single value rounds only the outer corners of everything
+     * an annotation paints (the leading corners of its first element and the trailing corners of
+     * its last); several values or an elliptical `/` form round every element it paints.
      *
      * @example '4px'
      *
@@ -627,7 +641,9 @@ declare module 'platform-scripture-editor' {
     fontWeight?: string | number;
 
     /**
-     * Margin.
+     * Margin. With one or two values, the vertical part applies to every element an annotation
+     * paints and the horizontal part only before its first element and after its last; three or
+     * four values apply to every element.
      *
      * @example '2px'
      *
@@ -645,7 +661,9 @@ declare module 'platform-scripture-editor' {
     opacity?: string | number;
 
     /**
-     * Padding.
+     * Padding. With one or two values, the vertical part applies to every element an annotation
+     * paints and the horizontal part only inside the leading side of its first element and the
+     * trailing side of its last; three or four values apply to every element.
      *
      * @example '2px'
      *

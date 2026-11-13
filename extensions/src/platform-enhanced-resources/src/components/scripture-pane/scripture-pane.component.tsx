@@ -168,22 +168,22 @@ function buildMarbleOverlayCss(state: {
   const parts: string[] = [];
   if (state.highlightAllOn) {
     parts.push(
-      '.editor-typed-mark-external-marble-word { background-color: var(--er-marble-highlight-all-bg); color: black; border-radius: 2px; }',
+      '.editor-typed-mark-external-marble-word { background-color: var(--er-marble-highlight-all-bg); color: black; }',
     );
   }
   if (state.hoverMatchIds.size > 0) {
     parts.push(
-      `${selectorForAnnotationIds(state.hoverMatchIds)} { background-color: var(--er-marble-hover-match-bg); color: black; border-radius: 2px; }`,
+      `${selectorForAnnotationIds(state.hoverMatchIds)} { background-color: var(--er-marble-hover-match-bg); color: black; }`,
     );
   }
   if (state.filterMatchIds.size > 0) {
     parts.push(
-      `${selectorForAnnotationIds(state.filterMatchIds)} { background-color: var(--er-marble-filter-match-bg); color: black; border-radius: 2px; }`,
+      `${selectorForAnnotationIds(state.filterMatchIds)} { background-color: var(--er-marble-filter-match-bg); color: black; }`,
     );
   }
   if (state.filteredTokenId !== undefined) {
     parts.push(
-      `${selectorForAnnotationIds([state.filteredTokenId])} { background-color: var(--er-marble-filter-bg); color: black; border-radius: 2px; }`,
+      `${selectorForAnnotationIds([state.filteredTokenId])} { background-color: var(--er-marble-filter-bg); color: black; }`,
     );
   }
   return parts.join('\n');
@@ -237,6 +237,17 @@ mark {
      background. Without an explicit color here, marks naturally inherit the surrounding
      scripture color when no overlay is active, and the overlay's 'color: black' wins by being
      the only color rule when an overlay applies. */
+}
+/* A word the editor paints as several elements (a mark cut where another annotation or a char
+   span begins) keeps one rounded outline: only its first element rounds its leading corners and
+   only its last its trailing ones. */
+.editor-typed-markStart-external-marble-word {
+  border-start-start-radius: 2px;
+  border-end-start-radius: 2px;
+}
+.editor-typed-markEnd-external-marble-word {
+  border-start-end-radius: 2px;
+  border-end-end-radius: 2px;
 }
 .editor-typed-mark-external-marble-note {
   cursor: pointer;

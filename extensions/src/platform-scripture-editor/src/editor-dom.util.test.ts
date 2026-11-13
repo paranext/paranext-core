@@ -659,24 +659,17 @@ describe('scrollToAnnotation', () => {
     expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 200 });
   });
 
-  it('scrolls to the part of a verse number the annotation holds, and answers its element', () => {
-    // The editor paints part of a display byte with a highlight, so no element carries the
-    // annotation; only its range says where it is.
+  it('scrolls to the piece of a verse glyph the annotation holds, and answers that piece', () => {
+    // The glyph's other pieces carry the verse's own `data-*` too; the piece answered is the one
+    // the editor reports it paints, not the glyph's first piece.
     const { editorContainer, wrapperScrollTo } = buildEditorDom({ verseNumbers: [] });
-    const verse = document.createElement('span');
-    verse.setAttribute('data-marker', 'v');
-    verse.textContent = '12';
-    editorContainer.append(verse);
-    const verseText = verse.firstChild;
-    if (!(verseText instanceof Text)) throw new Error('test setup failed: no verse text');
-    const heldPart = document.createRange();
-    heldPart.setStart(verseText, 1);
-    heldPart.setEnd(verseText, 2);
-    stubClientRects(heldPart, [new DOMRect(10, 1500, 8, 20)]);
+    const { pieces, heldPiece, heldRange } = appendCutVerseGlyph(editorContainer);
+    pieces.forEach((piece) => stubRect(piece, 1500, 20));
+    stubClientRects(heldRange, [new DOMRect(10, 1500, 8, 20)]);
 
-    const annotationElement = scrollToAnnotation(() => [heldPart]);
+    const annotationElement = scrollToAnnotation(() => [heldRange]);
 
-    expect(annotationElement).toBe(verse);
+    expect(annotationElement).toBe(heldPiece);
     expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 700 });
   });
 
@@ -1435,28 +1428,93 @@ function rectNumbers(rect: DOMRect | undefined) {
  */
 function createAnnotationRanges() {
   const ranges: Range[] = [];
-  const rangeByMark = new Map<Element, Range>();
+  const rangeByFragment = new Map<Element, Range>();
   return {
     getRanges: () => [...ranges],
-    /** The range over `mark`'s contents, if one was added. */
-    rangeOver: (mark: Element) => rangeByMark.get(mark),
-    /** Adds a `<mark>` fragment of the annotation to `container`, painting `rects`. */
-    addFragment(container: Element, rects: DOMRect[], text = '') {
-      const mark = document.createElement('mark');
-      mark.textContent = text;
-      container.appendChild(mark);
+    /** The range over `fragment`'s contents, if one was added. */
+    rangeOver: (fragment: Element) => rangeByFragment.get(fragment),
+    /**
+     * Adds a fragment of the annotation to `container`, painting `rects`: `fragment` (a `<mark>`
+     * unless given) holding `text`, reported by a range over its contents.
+     */
+    addFragment(
+      container: Element,
+      rects: DOMRect[],
+      text = '',
+      fragment: HTMLElement = document.createElement('mark'),
+    ) {
+      fragment.textContent = text;
+      container.appendChild(fragment);
       const range = document.createRange();
-      range.selectNodeContents(mark);
+      range.selectNodeContents(fragment);
       stubClientRects(range, rects);
       ranges.push(range);
-      rangeByMark.set(mark, range);
-      return mark;
-    },
-    /** Reports `range` as one of the annotation's fragments. */
-    addRange(range: Range) {
-      ranges.push(range);
+      rangeByFragment.set(fragment, range);
+      return fragment;
     },
   };
+}
+
+/** The display separator between a verse glyph's `\v` and its number. */
+const NBSP = '\u00a0';
+
+/** The class names on a display byte the editor paints for `spelling` annotation `annotationId`. */
+function displayAnnotationClassNames(annotationId: string) {
+  return [
+    'editor-typed-mark-external-spelling',
+    `annotationId-${annotationId}`,
+    'display-annotation',
+  ];
+}
+
+/**
+ * Appends verse 12's editable glyph `\v<NBSP>12 ` to `container` the way the editor renders it when
+ * an annotation holds only the number's `2`: cut where the hold ends into sibling pieces of the
+ * verse's own class and `data-*`, with only the held piece painted. The range is the one
+ * `EditorRef.getAnnotationRanges` reports for it, over the painted piece's contents.
+ */
+function appendCutVerseGlyph(container: Element) {
+  const pieces = [`\\v${NBSP}1`, '2', ' '].map((text) => {
+    const piece = document.createElement('span');
+    piece.className = 'verse usfm_v';
+    piece.setAttribute('data-marker', 'v');
+    piece.setAttribute('data-number', '12');
+    piece.textContent = text;
+    container.append(piece);
+    return piece;
+  });
+  const heldPiece = pieces[1];
+  heldPiece.classList.add(...displayAnnotationClassNames('verse-probe'));
+  const heldRange = document.createRange();
+  heldRange.selectNodeContents(heldPiece);
+  return { pieces, heldPiece, heldRange };
+}
+
+/**
+ * Appends a read-only verse number `12` to `container` the way the editor renders it when an
+ * annotation holds only its `2`: the decorator's root stays whole and draws a sub-span over the
+ * held character, carrying the annotation's class names and `data-annotation-keys`. The range is
+ * the one `EditorRef.getAnnotationRanges` reports for it, over the sub-span's contents.
+ */
+function appendPartlyPaintedReadOnlyVerse(container: Element) {
+  const verse = document.createElement('span');
+  verse.className = 'verse usfm_v';
+  verse.setAttribute('data-marker', 'v');
+  verse.setAttribute('data-number', '12');
+  const subSpan = document.createElement('span');
+  subSpan.classList.add(...displayAnnotationClassNames('verse-probe'));
+  subSpan.setAttribute(
+    'data-annotation-keys',
+    JSON.stringify([JSON.stringify(['external-spelling', 'verse-probe'])]),
+  );
+  subSpan.textContent = '2';
+  const content = document.createElement('span');
+  content.append('1', subSpan);
+  verse.append(content);
+  container.append(verse);
+  const heldRange = document.createRange();
+  heldRange.selectNodeContents(subSpan);
+  return { verse, subSpan, heldRange };
 }
 
 /** An editor container for the annotation fragments to render in. */
@@ -1516,23 +1574,31 @@ describe('measureAnnotation', () => {
     });
   });
 
-  it('measures only the part of a verse number the annotation holds', () => {
-    // The editor paints part of a display byte with a highlight, so no element carries the
-    // annotation and the verse number's own box is wider than what is held.
-    const verse = document.createElement('span');
-    verse.setAttribute('data-marker', 'v');
-    verse.textContent = '12';
-    addEditorContainer().appendChild(verse);
-    stubClientRects(verse, [new DOMRect(0, 100, 18, 20)]);
-    const verseText = verse.firstChild;
-    if (!(verseText instanceof Text)) throw new Error('test setup failed: no verse text');
-    const heldPart = document.createRange();
-    heldPart.setStart(verseText, 1);
-    heldPart.setEnd(verseText, 2);
-    stubClientRects(heldPart, [new DOMRect(10, 100, 8, 20)]);
+  it('measures only the piece of a verse glyph the annotation holds', () => {
+    // The glyph's other pieces sit beside the held one, and the whole glyph is wider than it.
+    const { pieces, heldRange } = appendCutVerseGlyph(addEditorContainer());
+    pieces.forEach((piece, index) =>
+      stubClientRects(piece, [new DOMRect([0, 18, 26][index], 100, [18, 8, 4][index], 20)]),
+    );
+    stubClientRects(heldRange, [new DOMRect(18, 100, 8, 20)]);
 
-    expect(rectNumbers(measureAnnotation(() => [heldPart]))).toEqual({
-      x: 10,
+    expect(rectNumbers(measureAnnotation(() => [heldRange]))).toEqual({
+      x: 18,
+      y: 100,
+      width: 8,
+      height: 20,
+    });
+  });
+
+  it('measures only the sub-span a read-only verse number draws over what the annotation holds', () => {
+    // A read-only decorator is never cut: it draws a sub-span over the characters held, inside its
+    // own root, whose box is wider than the sub-span's.
+    const { verse, heldRange } = appendPartlyPaintedReadOnlyVerse(addEditorContainer());
+    stubClientRects(verse, [new DOMRect(0, 100, 16, 20)]);
+    stubClientRects(heldRange, [new DOMRect(8, 100, 8, 20)]);
+
+    expect(rectNumbers(measureAnnotation(() => [heldRange]))).toEqual({
+      x: 8,
       y: 100,
       width: 8,
       height: 20,
@@ -1700,6 +1766,30 @@ describe('createPendingCommentAnchorSource', () => {
     return markText;
   }
 
+  /**
+   * The editor's re-render holding the pending comment on part of a display-byte carrier — the
+   * paragraph's text standing for an attribute run's: the carrier is cut where the hold ends into
+   * sibling pieces of its own class, and only the piece over `[heldStart, heldEnd)` is painted. The
+   * original text node is detached, so a range in it collapses to the paragraph.
+   */
+  function cutCarrier(paragraph: HTMLElement, heldStart: number, heldEnd: number) {
+    const text = paragraph.textContent ?? '';
+    const piece = (pieceText = '') => {
+      const span = document.createElement('span');
+      span.className = 'attribute';
+      span.textContent = pieceText;
+      return span;
+    };
+    paragraph.replaceChildren(piece(text.slice(0, heldStart)));
+    const heldPiece = piece();
+    heldPiece.classList.add(...displayAnnotationClassNames('pending-comment'));
+    annotation.addFragment(paragraph, [], text.slice(heldStart, heldEnd), heldPiece);
+    paragraph.append(piece(text.slice(heldEnd)));
+    const heldText = heldPiece.firstChild;
+    if (!(heldText instanceof Text)) throw new Error('The held piece should hold one text node');
+    return heldText;
+  }
+
   // "In the beginning" is a spaced line; the long unspaced run the caret sits in below stands for
   // Thai or Chinese text, where the editor marks the whole run between spaces around the caret.
   const RUN_TEXT = 'xx abcdefghij yy';
@@ -1840,11 +1930,10 @@ describe('createPendingCommentAnchorSource', () => {
     expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 100, width: 0, height: 40 });
   });
 
-  it('a caret in an annotation held on part of a text node: places the caret in the held part', () => {
-    // The editor paints a part of a display byte with a highlight instead of splitting it into a
-    // mark, so the annotation's range covers only the middle of a text node; the caret is found in
-    // that part's text, not in the whole node's. The caret opened in a node holding the run alone.
-    const { paragraph, source } = openAtCaret(RUN_TEXT.slice(RUN_START, RUN_END), 6, {
+  it('a caret in a display-byte carrier held in part: places the caret in the held piece', () => {
+    // The caret opened in the carrier's whole text; the annotation's range covers only the held
+    // piece the re-render cut out of it, so the caret is found in that piece's text.
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 6, {
       left: 0,
       top: 100,
       charWidth: 10,
@@ -1852,25 +1941,17 @@ describe('createPendingCommentAnchorSource', () => {
       firstLineChars: 100,
       nextLineLeft: 0,
     });
-    // The re-render replaces the text node the caret sat in with one that also holds the text
-    // around the run.
-    const rerendered = document.createTextNode(RUN_TEXT);
-    paragraph.replaceChildren(rerendered);
-    layOut(rerendered, {
-      left: 200,
+    const heldText = cutCarrier(paragraph, RUN_START, RUN_END);
+    layOut(heldText, {
+      left: 230,
       top: 300,
       charWidth: 10,
       lineHeight: 20,
       firstLineChars: 100,
       nextLineLeft: 0,
     });
-    const heldPart = document.createRange();
-    heldPart.setStart(rerendered, RUN_START);
-    heldPart.setEnd(rerendered, RUN_END);
-    stubClientRects(heldPart, [new DOMRect(230, 300, 100, 20)]);
-    annotation.addRange(heldPart);
 
-    // x = 200 + (3 + 6) * 10: 6 characters into the held part, which starts 3 into the node.
+    // x = 230 + 6 * 10: 6 characters into the held piece.
     expect(rectNumbers(source.measure())).toEqual({ x: 290, y: 300, width: 0, height: 20 });
   });
 
