@@ -42,6 +42,7 @@
   "main": "./.erb/dll/main.bundle.dev.js",
   "scripts": {
     "assert:snap-metadata": "tsx ./.erb/scripts/assert-generated-snap-metadata.ts",
+    "audit:shipped": "tsx ./.erb/scripts/audit-shipped.ts",
     "prebuild": "tsx ./.erb/scripts/notices-build-id.ts",
     "build": "concurrently --kill-others-on-fail \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:extensions\" \"npm:build:data-release\"",
     "build:data": "dotnet build c-sharp/ParanextDataProvider.sln",
@@ -167,7 +168,6 @@
     "rc-dock": "3.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^6.30.3",
     "ws": "^8.18.1"
   },
   "devDependencies": {
@@ -212,6 +212,7 @@
     "@types/node-localstorage": "^1.3.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/semver": "^7.5.6",
     "@types/source-map-support": "^0.5.10",
     "@types/webpack-bundle-analyzer": "^4.7.0",
     "@types/ws": "^8.18.1",
@@ -277,6 +278,7 @@
     "run-script-os": "^1.1.6",
     "sass": "^1.85.0",
     "sass-loader": "^16.0.5",
+    "semver": "^7.7.4",
     "source-map-support": "^0.5.21",
     "spdx-correct": "^3.2.0",
     "spdx-expression-parse": "^5.0.0",
