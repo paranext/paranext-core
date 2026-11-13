@@ -223,6 +223,9 @@ async function launchSelfSeededApp(
 ): Promise<{ ctx: ElectronAppContext; restoreSettings: () => void }> {
   const restoreSettings = preConfigureSettings({
     'platform.firstRunComplete': true,
+    // See smokeAppSettingsOverrides in helpers.ts: keeps a Power-mode launch on a machine that
+    // never answered the internet question from opening the Internet & connectivity settings.
+    'platform.internetUseChoiceAsked': true,
     'platform.interfaceLanguage': ['en'],
     'platform.interfaceMode': 'power',
   });
