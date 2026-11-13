@@ -43,6 +43,7 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
+import type { ConnectionIdentity } from '@shared/data/request-access.data';
 
 /**
  * Narrows a handler's error to what requesters need: its `code` and `message`, plus the platform
@@ -112,6 +113,8 @@ type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
  */
 export class RpcServer implements IRpcHandler {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
+  /** Which process is on the other end of this connection, as main determined when accepting it */
+  readonly identity: ConnectionIdentity;
   /**
    * Whether {@link onWebSocketClose} has already run for the current socket.
    *
@@ -151,6 +154,9 @@ export class RpcServer implements IRpcHandler {
    *   carried no `Origin` header. Only such a client may send the request types main refuses to
    *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
    *   them.
+   * @param identity Which process is on the other end, as main determined when accepting the
+   *   connection. Defaults to `'unidentified'`, so a connection nobody vouched for gets no more
+   *   than an unknown client.
    */
   constructor(
     name: string,
@@ -160,6 +166,7 @@ export class RpcServer implements IRpcHandler {
     rpcEventDetailsByEventName: IRpcEventRegistry,
     announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
     isWebSocketWithoutOrigin = false,
+    identity: ConnectionIdentity = 'unidentified',
   ) {
     bindClassMethods.call(this);
     this.name = name;
@@ -167,6 +174,7 @@ export class RpcServer implements IRpcHandler {
     this.propagateEventMethod = propagateEventMethod;
     this.announceClientDisconnectMethod = announceClientDisconnectMethod;
     this.isWebSocketWithoutOrigin = isWebSocketWithoutOrigin;
+    this.identity = identity;
 
     // Uncomment the following to log every message sent
     /*
