@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "c5dcf6e1c34ab59e0e4c30823c9b0b091d806ad42d21475b4c5bf0f34dfdcc90",
+  "documentSha256": "36c7dcf246f537c6cc00e45b9ecaf8ad377efc85c7a24e7d83970752d1fc1ff3",
   "packages": [
     {
       "ecosystem": "npm",
@@ -2041,13 +2041,6 @@
     },
     {
       "ecosystem": "nuget",
-      "name": "Microsoft.Bcl.Cryptography",
-      "version": "9.0.9",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
       "name": "Microsoft.Bcl.HashCode",
       "version": "6.0.0",
       "spdxId": "MIT",
@@ -2363,13 +2356,6 @@
     },
     {
       "ecosystem": "nuget",
-      "name": "System.Formats.Asn1",
-      "version": "9.0.9",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
       "name": "System.IO.FileSystem.AccessControl",
       "version": "5.0.0",
       "spdxId": "MIT",
@@ -2378,13 +2364,6 @@
     {
       "ecosystem": "nuget",
       "name": "System.IO.Packaging",
-      "version": "9.0.9",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
-      "name": "System.IO.Pipelines",
       "version": "9.0.9",
       "spdxId": "MIT",
       "confidence": 0
@@ -2419,29 +2398,8 @@
     },
     {
       "ecosystem": "nuget",
-      "name": "System.Reflection.DispatchProxy",
-      "version": "4.7.1",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
       "name": "System.Runtime.Caching",
       "version": "9.0.9",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
-      "name": "System.Runtime.CompilerServices.Unsafe",
-      "version": "6.0.0",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
-      "name": "System.Security.AccessControl",
-      "version": "5.0.0",
       "spdxId": "MIT",
       "confidence": 0
     },
@@ -2470,13 +2428,6 @@
       "ecosystem": "nuget",
       "name": "System.Security.Permissions",
       "version": "9.0.9",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
-      "name": "System.Security.Principal.Windows",
-      "version": "5.0.0",
       "spdxId": "MIT",
       "confidence": 0
     },
@@ -2532,34 +2483,6 @@
     {
       "ecosystem": "nuget",
       "name": "System.Speech",
-      "version": "9.0.9",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
-      "name": "System.Text.Encoding.CodePages",
-      "version": "9.0.9",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
-      "name": "System.Text.Encodings.Web",
-      "version": "9.0.9",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
-      "name": "System.Text.Json",
-      "version": "9.0.9",
-      "spdxId": "MIT",
-      "confidence": 0
-    },
-    {
-      "ecosystem": "nuget",
-      "name": "System.Threading.AccessControl",
       "version": "9.0.9",
       "spdxId": "MIT",
       "confidence": 0

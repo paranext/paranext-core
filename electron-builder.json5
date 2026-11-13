@@ -22,11 +22,11 @@
     // Rather than creating a universal .NET build, we create one for each architecture
     extraResources: [
       {
-        from: './c-sharp/bin/Release/net8.0/publish/osx-x64/',
+        from: './c-sharp/bin/Release/net10.0/publish/osx-x64/',
         to: './dotnet/osx-x64/',
       },
       {
-        from: './c-sharp/bin/Release/net8.0/publish/osx-arm64/',
+        from: './c-sharp/bin/Release/net10.0/publish/osx-arm64/',
         to: './dotnet/osx-arm64/',
       },
     ],
@@ -64,7 +64,7 @@
     target: ['nsis', 'nsis-web', 'portable'],
     extraResources: [
       {
-        from: './c-sharp/bin/Release/net8.0/publish/win-x64/',
+        from: './c-sharp/bin/Release/net10.0/publish/win-x64/',
         to: './dotnet/',
       },
     ],
@@ -80,7 +80,7 @@
     category: 'Development',
     extraResources: [
       {
-        from: './c-sharp/bin/Release/net8.0/publish/linux-x64/',
+        from: './c-sharp/bin/Release/net10.0/publish/linux-x64/',
         to: './dotnet/',
       },
     ],

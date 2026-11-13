@@ -16,7 +16,7 @@ public class NoTupleReturnTypesAnalyzerTests
     {
         var test = new CSharpAnalyzerTest<NoTupleReturnTypesAnalyzer, DefaultVerifier>
         {
-            ReferenceAssemblies = ReferenceAssemblies.Net.Net80,
+            ReferenceAssemblies = ReferenceAssemblies.Net.Net100,
         };
         test.TestState.Sources.Add(source);
         test.TestState.Sources.Add(AnalyzerTestHelper.NetworkObjectStubs);
