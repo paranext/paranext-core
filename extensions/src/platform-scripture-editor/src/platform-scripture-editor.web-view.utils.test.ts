@@ -3,7 +3,7 @@
 // `document` at module-eval time (it re-exports the whole component library). The default `node`
 // environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom — same fix
 // already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -17,11 +17,13 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   deriveReadOnlyFlags,
+  discardRowEditsAndPendingSave,
   flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   getEditorFocusLocation,
   INSERT_CONTEXT_MENU_STRING_KEYS,
+  isFocusLeavingContainer,
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
@@ -808,6 +810,97 @@ describe('flushRowEditsThenSave', () => {
     const { save, flushedPromise } = makeSave(true);
 
     expect(flushRowEditsThenSave(undefined, save)).toBe(flushedPromise);
+  });
+});
+
+describe('discardRowEditsAndPendingSave', () => {
+  /** A save debouncer whose pending state the row editor's flush can change, like the real one. */
+  function makeSave(initiallyPending: boolean) {
+    let pending = initiallyPending;
+    return {
+      schedule: () => {
+        pending = true;
+      },
+      isPending: () => pending,
+      cancel: vi.fn(() => {
+        pending = false;
+      }),
+    };
+  }
+
+  it('cancels a pending save and reports that edits were thrown away', () => {
+    const save = makeSave(true);
+
+    expect(discardRowEditsAndPendingSave(undefined, save)).toBe(true);
+    expect(save.cancel).toHaveBeenCalledOnce();
+    expect(save.isPending()).toBe(false);
+  });
+
+  // The row's pending keystrokes are what schedules the save, so it was not pending beforehand.
+  it("counts the row editor's pending edits, landing them before checking the save", () => {
+    const save = makeSave(false);
+    const rowEditor = { flushPendingEdits: vi.fn(() => save.schedule()) };
+
+    expect(discardRowEditsAndPendingSave(rowEditor, save)).toBe(true);
+    expect(save.cancel).toHaveBeenCalledOnce();
+  });
+
+  it('reports nothing thrown away when nothing was pending anywhere', () => {
+    const save = makeSave(false);
+    const rowEditor = { flushPendingEdits: vi.fn() };
+
+    expect(discardRowEditsAndPendingSave(rowEditor, save)).toBe(false);
+    expect(rowEditor.flushPendingEdits).toHaveBeenCalledOnce();
+    expect(save.cancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('isFocusLeavingContainer', () => {
+  const attachedNodes: Element[] = [];
+
+  afterEach(() => {
+    attachedNodes.splice(0).forEach((node) => node.remove());
+  });
+
+  function makeTree() {
+    const container = document.createElement('div');
+    const inside = document.createElement('div');
+    const alsoInside = document.createElement('span');
+    const outside = document.createElement('button');
+    container.append(inside, alsoInside);
+    document.body.append(container, outside);
+    attachedNodes.push(container, outside);
+    return { container, inside, alsoInside, outside };
+  }
+
+  it('is true when focus moves from inside the container to an element outside it', () => {
+    const { container, inside, outside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, inside, outside)).toBe(true);
+  });
+
+  it('is true when focus leaves the window altogether', () => {
+    const { container, inside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, inside, undefined)).toBe(true);
+  });
+
+  it('is false when focus moves between elements inside the container', () => {
+    const { container, inside, alsoInside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, inside, alsoInside)).toBe(false);
+  });
+
+  it('is false when the element losing focus is outside the container', () => {
+    const { container, inside, outside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, outside, inside)).toBe(false);
+  });
+
+  it('is false when the container is not rendered', () => {
+    const { inside, outside } = makeTree();
+
+    expect(isFocusLeavingContainer(undefined, inside, outside)).toBe(false);
   });
 });
 

@@ -154,7 +154,7 @@ export function useEditorPdpSync({
   usjSentToPdp,
   setEditorUsj,
   saveUsjToPdpIfUpdated,
-  flushPendingDebouncedSave,
+  discardUnsavedEdits,
   isEditingSessionActive,
   isFootnotesPaneOwner,
   lastLocalEditTimestamp,
@@ -186,14 +186,20 @@ export function useEditorPdpSync({
    */
   saveUsjToPdpIfUpdated: () => void | Promise<boolean>;
   /**
-   * Fires the web view's pending debounced keystroke-driven save NOW, through the normal save
-   * pipeline, and returns that invocation's promise — or `undefined` when no save was pending (or
-   * the capability is not wired). The pending invocation must run SYNCHRONOUSLY during the call
-   * (the flushable debouncer's `flush` contract), so the flushed save reads the editor before the
-   * caller's next statement. Called by the replace path below just before an external update
-   * overwrites the editor — see the "recent typing wins" comment there.
+   * Throws away the editor's unsaved edits, and tells the user, just before the replace path below
+   * overwrites the editor with an incoming chapter it has no claim on: edits whose save has not
+   * started yet, and edits whose save was held back behind a write still in flight. Must run while
+   * `editorDocumentSelector` still names the chapter the editor holds, which is the chapter the
+   * edits belong to. `'replacedByUpdate'` when the incoming chapter is the same document (a change
+   * made outside the editor), `'leftChapter'` when it is another one (navigation). A no-op when
+   * there is nothing unsaved. `lastKnownUsj` is the last chapter delivered to or sent from the
+   * editor before `incomingUsj`, so the edits can be judged against both.
    */
-  flushPendingDebouncedSave?: () => Promise<void> | undefined;
+  discardUnsavedEdits?: (
+    cause: 'replacedByUpdate' | 'leftChapter',
+    lastKnownUsj: Usj | undefined,
+    incomingUsj: Usj,
+  ) => void;
   /**
    * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing SESSION
    * owns the editor's content even though the editor itself is blurred — a marker-palette session
@@ -251,11 +257,9 @@ export function useEditorPdpSync({
   /**
    * True while a Send/Receive blocks this editor. When it turns true the editor gives up its claim
    * to the chapter (the last edit in this view is forgotten), so the merge is applied unless the
-   * user has typed again since the block ended or a footnote popover is still open. While it is
-   * true, a pending debounced save is not flushed before an incoming update replaces the editor: it
-   * holds pre-merge text. The write gate would reject it, and the save-failure path would put that
-   * text back on screen; in the moment the block outlasts the gate, it would be written over the
-   * merge.
+   * user has typed again since the block ended or a footnote popover is still open. Edits still
+   * unsaved when the merge replaces the editor hold pre-merge text, so `discardUnsavedEdits` throws
+   * them away like any other unsaved edits the incoming chapter wins over.
    */
   isSyncBlocked?: boolean;
 }): void {
@@ -450,15 +454,15 @@ export function useEditorPdpSync({
     // has the best data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
     if (isNewFromPdp) {
+      const usjKnownBeforeDelivery = usjSentToPdp.current;
       usjSentToPdp.current = usjFromPdp;
-      // The PDP round-trips USJ through USFM, so a save made
-      // MID-marker-typing (a pending literal like `\q1` still in plain text) echoes back
-      // NORMALIZED-different from what we sent even though nobody else wrote — sometimes across
-      // MULTIPLE subscription deliveries per save (whichUpdates '*'), so a one-shot "our write is
-      // in flight" flag cannot classify them. Hard-replacing the editor with such an echo while
-      // the user is typing nulls the Lexical selection and eats the keystrokes typed during the
-      // round trip (observed live: `\q1<space>` type-through lost q/1/space ~150-250ms after the
-      // `\`).
+      // The PDP round-trips USJ through USFM and the backend rewrites some text on the way (the
+      // data-fidelity catalog's S rows), so a save can echo back different from what we sent even
+      // though nobody else wrote — sometimes across MULTIPLE subscription deliveries per save
+      // (whichUpdates '*'), so a one-shot "our write is in flight" flag cannot classify them.
+      // Half-typed marker text is not a cause: `EditorRef.getUsj()` settles it before it is sent.
+      // Hard-replacing the editor with such an echo while the user is typing nulls the Lexical
+      // selection and eats the keystrokes typed during the round trip.
       //
       // THE CONTRACT: the editor owns the chapter's data for EDITOR_OWNERSHIP_WINDOW_MS after the
       // user's last edit in this view (in the text or in a footnotes-pane row), while focused.
@@ -638,38 +642,20 @@ export function useEditorPdpSync({
       lastEditorUsjPushedWhileDeferring.current = undefined;
       lastIncomingUsjDeferred.current = undefined;
       warnedLossyDifferences.current = [];
-      // Recent typing wins: before this external update replaces the editor, flush any pending
-      // debounced keystroke save so the final keystrokes are WRITTEN rather than silently
-      // discarded. (The mirror case — focus still in the editor — pushes them via the deferral
-      // branch above; without this flush, focus at the delivery instant decided between "pushed"
-      // and "lost".) The ordering here is deliberate:
+      // The incoming chapter wins over edits the editor has not saved: without a claim, writing
+      // them now would overwrite a change made outside the editor with a copy that predates it. So
+      // they are thrown away and the user is told, before the replace below. The web view sends
+      // waiting edits as soon as the editor loses its claim (on blur, focus leaving the editor,
+      // chapter switch, page teardown), so what is still unsaved here is normally only what a
+      // Send/Receive blocked, or what was held back behind a write still in flight.
       //
-      //   - The flush runs its invocation synchronously (see `FlushableDebouncer.flush`), so the
-      //     save reads the editor BEFORE the replace below overwrites it, and its PDP write is
-      //     already in flight — the write-in-flight guard held — when the replace happens. The
-      //     returned promise settles when the invocation completes, not when the PDP write does,
-      //     so awaiting it would only defer the replace to a microtask; the replace proceeds
-      //     synchronously instead, closing any interleaving window.
-      //   - Any pending save here was scheduled for the CURRENT chapter: a cross-chapter pending save is
-      //     flushed by the web view's chapter-switch effect cleanup before a new chapter's first
-      //     delivery can reach this effect.
-      //   - After the flush, this incoming update is STALE relative to the flushed content. It is
-      //     still applied (below); the flushed write's echo then arrives as an ordinary differing
-      //     delivery and replaces the editor through this same path, converging editor and PDP on
-      //     the typed content. Re-recording the incoming update as last-sent is what routes that
-      //     echo here: the flushed write records its own newer content as last-sent, which would
-      //     make the echo look identical-to-sent and take the push-back branch below — re-pushing
-      //     this stale update's content over the just-flushed keystrokes.
-      //   - The editor's document identity moves only AFTER the flush, together with the replace:
-      //     until then the editor still holds the previous document, and the flushed save must see
-      //     that. After navigation, a save pending here was scheduled for the NEW chapter while the
-      //     editor was still showing the old one, and the web view drops it rather than write one
-      //     chapter's content into another.
-      //   - Not while a Send/Receive blocks the editor: the save holds pre-merge text. The write
-      //     gate would reject it, and the save-failure path would put that text back on screen over
-      //     this update; in the moment the block outlasts the gate, it would overwrite the merge.
-      if (!isSyncBlocked && flushPendingDebouncedSave?.() !== undefined)
-        usjSentToPdp.current = usjFromPdp;
+      // The editor's document identity moves only AFTER the discard, together with the replace,
+      // so the discard still names the chapter the edits were typed in.
+      discardUnsavedEdits?.(
+        isSameDocument ? 'replacedByUpdate' : 'leftChapter',
+        usjKnownBeforeDelivery,
+        usjFromPdp,
+      );
       lastAppliedDocumentSelector.current = documentSelector;
       setEditorUsj.current(usjFromPdp);
     }
@@ -702,7 +688,7 @@ export function useEditorPdpSync({
     // refs, `getFocusLocation` and `isFootnotesPaneOwner` are stable, listed for exhaustive-deps.
     documentSelector,
     editorRef,
-    flushPendingDebouncedSave,
+    discardUnsavedEdits,
     focusLocationKey,
     getFocusLocation,
     graceExpiryCount,

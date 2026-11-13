@@ -2,7 +2,9 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { describe, expect, it, vi } from 'vitest';
 import {
   editorHoldsUnsavedChanges,
+  isDiscardingEditsALoss,
   isEditorContentForChapter,
+  isTypingLostToNavigation,
   performDebouncedPdpSave,
   resolveUsjToSaveToPdp,
   withoutZeroWidthNoBreakSpaces,
@@ -415,5 +417,78 @@ describe('isEditorContentForChapter', () => {
 
   it('allows the save when nothing has been applied to the editor yet', () => {
     expect(isEditorContentForChapter(undefined, 'JON|2|')).toBe(true);
+  });
+});
+
+describe('isTypingLostToNavigation', () => {
+  const lastSaved = usjWith('In the beginning');
+
+  // The window after navigation: the editor still shows JON 1, JON 2 is selected, and the user
+  // typed into JON 1, so the save scheduled for JON 2 is refused and the typing is gone.
+  it('is true when the editor lags the selection and holds typing the backend lacks', () => {
+    expect(
+      isTypingLostToNavigation('JON|1|', 'JON|2|', usjWith('In the beginning God'), lastSaved),
+    ).toBe(true);
+  });
+
+  // The user moved on again, to JON 3, before JON 2 loaded: the editor still shows JON 1, and the
+  // save flushed on leaving JON 2 is refused just the same.
+  it('is true when the user moves on again before the next chapter loads', () => {
+    expect(
+      isTypingLostToNavigation('JON|1|', 'JON|3|', usjWith('In the beginning God'), lastSaved),
+    ).toBe(true);
+  });
+
+  // A declined save from JON 1 retries after JON 2 has loaded: the editor's typing is JON 2's own,
+  // and JON 2's save sends it.
+  it('is false for a save from a chapter left earlier once the editor shows the selected chapter', () => {
+    expect(
+      isTypingLostToNavigation('JON|2|', 'JON|2|', usjWith('In the beginning God'), lastSaved),
+    ).toBe(false);
+  });
+
+  it('is false when the editor holds nothing new for its chapter', () => {
+    expect(
+      isTypingLostToNavigation('JON|1|', 'JON|2|', usjWith('In the  beginning'), lastSaved),
+    ).toBe(false);
+  });
+
+  it('is false when the only difference is a zero-width no-break space, which is never a change', () => {
+    expect(
+      isTypingLostToNavigation('JON|1|', 'JON|2|', usjWith('In the\uFEFF beginning'), lastSaved),
+    ).toBe(false);
+  });
+});
+
+describe('isDiscardingEditsALoss', () => {
+  const lastKnown = usjWith('In the beginning');
+  const incoming = usjWith('In the beginning, Find replaced this');
+
+  it('is a loss when the editor differs from both the last known chapter and the incoming one', () => {
+    expect(isDiscardingEditsALoss(usjWith('In the beginning God'), lastKnown, incoming)).toBe(true);
+  });
+
+  it('is not a loss when the editor equals the last known chapter, the edit having been undone', () => {
+    expect(isDiscardingEditsALoss(usjWith('In the beginning'), lastKnown, incoming)).toBe(false);
+  });
+
+  it('is not a loss when the incoming chapter already holds what the editor does', () => {
+    expect(
+      isDiscardingEditsALoss(
+        usjWith('In the beginning God'),
+        lastKnown,
+        usjWith('In the beginning God'),
+      ),
+    ).toBe(false);
+  });
+
+  it('is not a loss when the only difference from the last known chapter is a zero-width no-break space', () => {
+    expect(isDiscardingEditsALoss(usjWith('In the\uFEFF beginning'), lastKnown, incoming)).toBe(
+      false,
+    );
+  });
+
+  it('is a loss when there is no last known chapter and the editor differs from the incoming one', () => {
+    expect(isDiscardingEditsALoss(usjWith('In the beginning God'), undefined, incoming)).toBe(true);
   });
 });
