@@ -108,7 +108,7 @@ export const LinksOpenInNewTab: Story = {
   args: {
     markdown: `Check out these resources:
 
-- [Platform.Bible Documentation](https://platform.bible)
+- [Platform.Bible Documentation](https://paranext.github.io/paranext-core/)
 - [GitHub Repository](https://github.com/paranext/paranext-core)
 - [Community Discord](https://discord.gg/paranext)
 
