@@ -26,3 +26,31 @@ export const EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE = 70;
  * {@link EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE} as a crash, which is what this is reported as.
  */
 export const EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE = 1;
+
+/** `type` of the message main sends a forked extension host carrying its launch secrets */
+export const LAUNCH_SECRETS_MESSAGE_TYPE = 'papiLaunchSecrets';
+
+/**
+ * Sent by main to a forked extension host over the child-process IPC channel, right after forking
+ * it. The extension host presents `clientSecret` when it connects to main's PAPI WebSocket and
+ * expects `serverSecret` back. Never logged.
+ */
+export type LaunchSecretsMessage = {
+  type: typeof LAUNCH_SECRETS_MESSAGE_TYPE;
+  clientSecret: string;
+  serverSecret: string;
+};
+
+/** Whether an IPC message is a well-formed {@link LaunchSecretsMessage} */
+export function isLaunchSecretsMessage(message: unknown): message is LaunchSecretsMessage {
+  return (
+    typeof message === 'object' &&
+    !!message &&
+    'type' in message &&
+    message.type === LAUNCH_SECRETS_MESSAGE_TYPE &&
+    'clientSecret' in message &&
+    typeof message.clientSecret === 'string' &&
+    'serverSecret' in message &&
+    typeof message.serverSecret === 'string'
+  );
+}
