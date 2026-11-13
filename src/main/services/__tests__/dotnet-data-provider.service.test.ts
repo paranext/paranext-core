@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import path from 'path';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
+import { identifyClientSecret } from '@main/services/launch-secrets.service';
 
 const mocks = vi.hoisted(() => ({
   spawn: vi.fn(),
@@ -19,6 +20,7 @@ function fakeChildProcess() {
   return {
     stdout: { on: vi.fn(), removeListener: vi.fn() },
     stderr: { on: vi.fn(), removeListener: vi.fn() },
+    stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
     once: vi.fn(),
     kill: vi.fn(() => true),
   };
@@ -175,6 +177,106 @@ describe('dotnetDataProvider.start', () => {
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.stringContaining('no Debug build was found'),
     );
+  });
+});
+
+describe('dotnetDataProvider launch secrets', () => {
+  const LAUNCH_SECRETS_VARIABLE = 'PAPI_LAUNCH_SECRETS';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.spawn.mockReturnValue(fakeChildProcess());
+    mocks.existsSync.mockReturnValue(true);
+    globalThis.resourcesPath = RESOURCES_PATH;
+    globalThis.isPackaged = false;
+    delete process.env.PT_DOTNET_NO_WATCH;
+  });
+
+  afterEach(() => {
+    dotnetDataProvider.kill();
+    delete process.env.PT_DOTNET_NO_WATCH;
+  });
+
+  /** Asserts `json` holds secrets main currently recognizes as the data provider's */
+  function expectCurrentDataProviderSecrets(json: string) {
+    const secrets = JSON.parse(json);
+    expect(identifyClientSecret(secrets.clientSecret)).toMatchObject({
+      identity: 'dotnetDataProvider',
+      serverSecret: secrets.serverSecret,
+    });
+    return secrets;
+  }
+
+  test.each([
+    ['dotnet watch', undefined],
+    ['the prebuilt assembly', 'true'],
+  ])('passes the secrets by environment in dev with %s', (_description, noWatch) => {
+    if (noWatch) process.env.PT_DOTNET_NO_WATCH = noWatch;
+
+    dotnetDataProvider.start();
+
+    const [, , options] = mocks.spawn.mock.calls[0];
+    expectCurrentDataProviderSecrets(options.env[LAUNCH_SECRETS_VARIABLE]);
+    expect(process.env[LAUNCH_SECRETS_VARIABLE]).toBeUndefined();
+    expect(mocks.spawn.mock.results[0].value.stdin.write).not.toHaveBeenCalled();
+  });
+
+  test('writes the secrets to standard input when packaged', () => {
+    globalThis.isPackaged = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: RESOURCES_PATH,
+      configurable: true,
+    });
+
+    dotnetDataProvider.start();
+
+    const child = mocks.spawn.mock.results[0].value;
+    const [written] = child.stdin.write.mock.calls[0];
+    expect(written.endsWith('\n')).toBe(true);
+    expect(written.trim()).not.toContain('\n');
+    expectCurrentDataProviderSecrets(written);
+    expect(child.stdin.end).toHaveBeenCalled();
+    const [, , options] = mocks.spawn.mock.calls[0];
+    expect(options.env).toBeUndefined();
+  });
+
+  test('logs a failed write to standard input instead of letting it crash main', () => {
+    globalThis.isPackaged = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: RESOURCES_PATH,
+      configurable: true,
+    });
+
+    dotnetDataProvider.start();
+
+    const child = mocks.spawn.mock.results[0].value;
+    const errorListener = child.stdin.on.mock.calls.find(
+      ([eventName]: [string]) => eventName === 'error',
+    )?.[1];
+    expect(errorListener).toBeDefined();
+    errorListener(new Error('write EPIPE'));
+    expect(mocks.loggerError).toHaveBeenCalledWith(expect.stringContaining('EPIPE'));
+  });
+
+  test('never puts the secrets in the arguments', () => {
+    dotnetDataProvider.start();
+    dotnetDataProvider.kill();
+    globalThis.isPackaged = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: RESOURCES_PATH,
+      configurable: true,
+    });
+    dotnetDataProvider.start();
+
+    const [, devArgs, devOptions] = mocks.spawn.mock.calls[0];
+    const { clientSecret, serverSecret } = JSON.parse(devOptions.env[LAUNCH_SECRETS_VARIABLE]);
+    const [, packagedArgs] = mocks.spawn.mock.calls[1];
+    const [written] = mocks.spawn.mock.results[1].value.stdin.write.mock.calls[0];
+    const packaged = JSON.parse(written);
+    [clientSecret, serverSecret, packaged.clientSecret, packaged.serverSecret].forEach((secret) => {
+      expect(JSON.stringify(devArgs)).not.toContain(secret);
+      expect(JSON.stringify(packagedArgs)).not.toContain(secret);
+    });
   });
 });
 
