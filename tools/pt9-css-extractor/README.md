@@ -21,7 +21,7 @@ the editor's view-mode-bucketed SCSS shape.
 ## Requirements
 
 - **Windows.** Paratext 9 is Windows-only, so this tool is too.
-- **.NET 8 SDK** (the SDK can build the `net48` target on Windows).
+- **.NET 10 SDK** (the SDK can build the `net48` target on Windows).
 - **.NET Framework 4.8 Developer Pack.**
 - **Paratext 9** installed. Default install path: `C:\Program Files\Paratext 9`.
 - A Paratext projects directory containing the project or resource you want
