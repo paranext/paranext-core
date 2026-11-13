@@ -10,6 +10,7 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { SerializedRequestType } from '@shared/utils/util';
+import type { RequestCallerProcess } from '@shared/models/network.model';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { PlatformEvent } from 'platform-bible-utils';
 
@@ -107,11 +108,15 @@ export interface IRpcHandler {
  * has been registered with a JSONRPC server.
  */
 export interface IRpcMethodRegistrar extends IRpcHandler {
-  /** Register a method that will be called if an RPC request is made */
+  /**
+   * Register a method that will be called if an RPC request is made. `options.allowedCallers`
+   * limits which processes may call it; see `NetworkMethodHandlerOptions.allowedCallers`.
+   */
   registerMethod: (
     methodName: string,
     method: InternalRequestHandler,
     methodDocs?: SingleMethodDocumentation,
+    options?: RpcMethodRegistrationOptions,
   ) => Promise<boolean>;
   /** Unregister a method so it is no longer available to RPC requests */
   unregisterMethod: (methodName: string) => Promise<boolean>;
@@ -173,7 +178,15 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
 export type RegisteredRpcMethodDetails = {
   handler: IRpcHandler;
   methodDocs?: SingleMethodDocumentation;
+  /** The processes the registrant allowed to call the method, if it restricted them */
+  allowedCallers?: readonly RequestCallerProcess[];
 };
+
+/**
+ * Options a process sends with a method registration. Travels as the third parameter of
+ * `network:registerMethod`.
+ */
+export type RpcMethodRegistrationOptions = { allowedCallers?: RequestCallerProcess[] };
 
 /**
  * Minimal interface for event registries so that {@link RpcServer} can participate in event

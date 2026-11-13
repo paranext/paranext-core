@@ -47,7 +47,9 @@ import {
   ConnectionIdentity,
   isCallAllowed,
   isRegistrationAllowed,
+  parseAllowedCallers,
 } from '@shared/data/request-access.data';
+import type { RequestCallerProcess } from '@shared/models/network.model';
 
 /**
  * Narrows a handler's error to what requesters need: its `code` and `message`, plus the platform
@@ -90,6 +92,21 @@ let isAppShuttingDown: () => boolean = () => false;
  */
 export function setAppShutdownSignal(signal: () => boolean): void {
   isAppShuttingDown = signal;
+}
+
+/**
+ * Reads the options a client sent with `network:registerMethod`, which arrive as untrusted JSON.
+ *
+ * @returns The `allowedCallers` the client declared, or `undefined` when it declared none
+ * @throws When the options are not an object, or `allowedCallers` is malformed
+ */
+function parseRegistrationOptions(options: unknown): RequestCallerProcess[] | undefined {
+  // JSON carries a missing optional parameter as `null`
+  // eslint-disable-next-line no-null/no-null
+  if (options === undefined || options === null) return undefined;
+  if (typeof options !== 'object' || Array.isArray(options))
+    throw new Error('registration options must be an object');
+  return parseAllowedCallers('allowedCallers' in options ? options.allowedCallers : undefined);
 }
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
@@ -261,7 +278,20 @@ export class RpcServer implements IRpcHandler {
     }
   }
 
-  registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean {
+  registerRemoteMethod(
+    methodName: string,
+    methodDocs?: SingleMethodDocumentation,
+    options?: unknown,
+  ): boolean {
+    let allowedCallers: RequestCallerProcess[] | undefined;
+    try {
+      allowedCallers = parseRegistrationOptions(options);
+    } catch (error) {
+      logger.warn(
+        `Refused to register '${methodName}' for ${this.describePeer()}: ${getErrorMessage(error)}`,
+      );
+      return false;
+    }
     if (!isRegistrationAllowed(methodName, this.identity)) {
       logger.warn(
         `Refused to register '${methodName}' for ${this.describePeer()} (${this.identity})`,
@@ -269,7 +299,11 @@ export class RpcServer implements IRpcHandler {
       return false;
     }
     if (this.rpcMethodDetailsByMethodName.has(methodName)) return false;
-    this.rpcMethodDetailsByMethodName.set(methodName, { handler: this, methodDocs });
+    this.rpcMethodDetailsByMethodName.set(methodName, {
+      handler: this,
+      methodDocs,
+      allowedCallers,
+    });
     return true;
   }
 
@@ -437,7 +471,10 @@ export class RpcServer implements IRpcHandler {
         try {
           // Checked before the event branch, so a restricted request type can't be sent on as an
           // event either
-          if (!isCallAllowed(request.method, this.identity)) {
+          const registrantAllowedCallers = this.rpcMethodDetailsByMethodName.get(
+            request.method,
+          )?.allowedCallers;
+          if (!isCallAllowed(request.method, this.identity, registrantAllowedCallers)) {
             logger.warn(
               `Refused '${request.method}' from ${this.describePeer()} (${this.identity})`,
             );

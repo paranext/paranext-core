@@ -105,4 +105,23 @@ describe('a WebSocket client handed over without its handshake request', () => {
     expect(readLog).not.toHaveBeenCalled();
     expect(mockLoggerInfo).toHaveBeenCalledWith(expect.stringContaining('as unidentified'));
   });
+
+  test('is refused a handler main restricted with allowedCallers', async () => {
+    servers.length = 0;
+    const listener = await connectedListener();
+    const handle = vi.fn(() => 'handled');
+    await listener.registerMethod('command:test.restricted', handle, undefined, {
+      allowedCallers: ['extensionHost'],
+    });
+    const onConnection = servers[0]?.getHandler('connection');
+    if (!onConnection) throw new Error('Main never started listening for connections');
+    const client = createFakeWebSocket();
+
+    onConnection(client.webSocket);
+    client.receiveMessage({ jsonrpc: '2.0', id: 1, method: 'command:test.restricted', params: [] });
+
+    await vi.waitFor(() => expect(client.sentPayloads).toHaveLength(1));
+    expect(client.sentPayloads[0]).toContain('not available');
+    expect(handle).not.toHaveBeenCalled();
+  });
 });

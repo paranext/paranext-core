@@ -34,6 +34,9 @@ const mocks = vi.hoisted(() => {
 
     closeCalls = 0;
 
+    /** Every payload the client sent, in order */
+    sent: string[] = [];
+
     url: string;
 
     private listeners = new Map<string, Set<Listener>>();
@@ -73,6 +76,15 @@ const mocks = vi.hoisted(() => {
     accept() {
       this.readyState = 1;
       this.dispatch('open');
+    }
+
+    send(payload: string) {
+      this.sent.push(payload);
+    }
+
+    /** Delivers a message from main to the client */
+    receive(message: unknown) {
+      this.dispatch('message', { data: JSON.stringify(message) });
     }
 
     private dispatch(type: string, payload?: unknown) {
@@ -272,5 +284,62 @@ describe('RpcClient initial connection', () => {
       vi.useRealTimers();
       process.off('unhandledRejection', unhandled);
     }
+  });
+});
+
+describe('RpcClient registering a method', () => {
+  beforeEach(() => {
+    mocks.state.refuseConnection = false;
+    mocks.state.initialReadyState = 0;
+    mocks.sockets.length = 0;
+  });
+
+  /** Connects a client and returns it with its socket */
+  async function connectedClient() {
+    const client = new RpcClient();
+    await expect(client.connect(() => {})).resolves.toBe(true);
+    const socket = mocks.sockets[0];
+    if (!socket) throw new Error('No socket was created');
+    return { client, socket };
+  }
+
+  /** Waits for the client to ask main to register a method, then answers it */
+  async function answerRegistration(
+    socket: InstanceType<typeof mocks.FakeWebSocket>,
+    result: boolean,
+  ): Promise<unknown[]> {
+    let registration: { id: number; params: unknown[] } | undefined;
+    await vi.waitFor(() => {
+      registration = socket.sent
+        .map((payload) => JSON.parse(payload))
+        .find((message) => message.method === 'network:registerMethod');
+      expect(registration).toBeDefined();
+    });
+    if (!registration) throw new Error('No registration was sent');
+    socket.receive({ jsonrpc: '2.0', id: registration.id, result });
+    return registration.params;
+  }
+
+  it('sends allowedCallers as the third registerMethod argument', async () => {
+    const { client, socket } = await connectedClient();
+
+    const registered = client.registerMethod('command:a.b', () => 'b', undefined, {
+      allowedCallers: ['renderer'],
+    });
+    const params = await answerRegistration(socket, true);
+
+    await expect(registered).resolves.toBe(true);
+    expect(params[0]).toBe('command:a.b');
+    expect(params[2]).toEqual({ allowedCallers: ['renderer'] });
+  });
+
+  it('sends no third registerMethod argument without allowedCallers', async () => {
+    const { client, socket } = await connectedClient();
+
+    const registered = client.registerMethod('command:a.b', () => 'b');
+    const params = await answerRegistration(socket, true);
+
+    await expect(registered).resolves.toBe(true);
+    expect(params).toHaveLength(2);
   });
 });

@@ -537,7 +537,13 @@ export async function registerRequestHandler(
 ): Promise<UnsubscriberAsync> {
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
-  const success = await jsonRpc.registerMethod(requestType, requestHandler, requestDocs);
+  const allowedCallers = requestHandlerOptions?.allowedCallers;
+  const success = await jsonRpc.registerMethod(
+    requestType,
+    requestHandler,
+    requestDocs,
+    allowedCallers ? { allowedCallers } : undefined,
+  );
   if (!success) throw new Error(`Could not register request handler for ${requestType}`);
   const customTimeoutMs = requestHandlerOptions?.timeoutMilliseconds;
   if (customTimeoutMs !== undefined) setTimeoutMsForRequestType(requestType, customTimeoutMs);

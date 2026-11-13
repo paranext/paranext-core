@@ -2246,6 +2246,27 @@ declare module 'shared/models/papi-network-event-emitter.model' {
   }
   export default PapiNetworkEventEmitter;
 }
+declare module 'shared/models/network.model' {
+  /** A process main can identify on the PAPI network */
+  export type RequestCallerProcess = 'renderer' | 'extensionHost' | 'dotnetDataProvider';
+  /** Options related to calling a method over the network */
+  export type NetworkMethodHandlerOptions = {
+    /**
+     * Custom timeout to use for callers of a method instead of the platform-wide timeout value. Set
+     * to 0 to disable the timeout.
+     */
+    timeoutMilliseconds?: number;
+    /**
+     * Processes allowed to call this handler. When omitted, any connection may call it. Main can
+     * always call it.
+     *
+     * This identifies processes, not extensions: every extension shares the extension host process,
+     * so `'extensionHost'` admits all of them. A request type that core restricts itself keeps core's
+     * rule; this option cannot widen it.
+     */
+    allowedCallers?: RequestCallerProcess[];
+  };
+}
 declare module 'shared/models/rpc.interface' {
   import {
     ConnectionStatus,
@@ -2259,6 +2280,7 @@ declare module 'shared/models/rpc.interface' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
+  import type { RequestCallerProcess } from 'shared/models/network.model';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   import { PlatformEvent } from 'platform-bible-utils';
   /**
@@ -2353,11 +2375,15 @@ declare module 'shared/models/rpc.interface' {
    * has been registered with a JSONRPC server.
    */
   export interface IRpcMethodRegistrar extends IRpcHandler {
-    /** Register a method that will be called if an RPC request is made */
+    /**
+     * Register a method that will be called if an RPC request is made. `options.allowedCallers`
+     * limits which processes may call it; see `NetworkMethodHandlerOptions.allowedCallers`.
+     */
     registerMethod: (
       methodName: string,
       method: InternalRequestHandler,
       methodDocs?: SingleMethodDocumentation,
+      options?: RpcMethodRegistrationOptions,
     ) => Promise<boolean>;
     /** Unregister a method so it is no longer available to RPC requests */
     unregisterMethod: (methodName: string) => Promise<boolean>;
@@ -2418,6 +2444,15 @@ declare module 'shared/models/rpc.interface' {
   export type RegisteredRpcMethodDetails = {
     handler: IRpcHandler;
     methodDocs?: SingleMethodDocumentation;
+    /** The processes the registrant allowed to call the method, if it restricted them */
+    allowedCallers?: readonly RequestCallerProcess[];
+  };
+  /**
+   * Options a process sends with a method registration. Travels as the third parameter of
+   * `network:registerMethod`.
+   */
+  export type RpcMethodRegistrationOptions = {
+    allowedCallers?: RequestCallerProcess[];
   };
   /**
    * Minimal interface for event registries so that {@link RpcServer} can participate in event
@@ -2929,7 +2964,11 @@ declare module 'client/services/web-socket.factory' {
 }
 declare module 'client/services/rpc-client' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
+  import {
+    IRpcMethodRegistrar,
+    RpcClientDisconnectEvent,
+    RpcMethodRegistrationOptions,
+  } from 'shared/models/rpc.interface';
   import {
     ConnectionStatus,
     EventHandler,
@@ -3023,6 +3062,7 @@ declare module 'client/services/rpc-client' {
       methodName: string,
       method: InternalRequestHandler,
       methodDocs?: SingleMethodDocumentation,
+      options?: RpcMethodRegistrationOptions,
     ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
     registerEvent(
@@ -3063,6 +3103,59 @@ declare module 'client/services/rpc-client' {
   }
   export default RpcClient;
 }
+declare module 'shared/data/request-access.data' {
+  import type { RequestCallerProcess } from 'shared/models/network.model';
+  /**
+   * Which process a PAPI connection belongs to, as main determined it when it accepted the
+   * connection. `'main'` is main's own in-process calls; `'unidentified'` is a WebSocket client that
+   * presented no launch secret.
+   */
+  export type ConnectionIdentity = 'main' | RequestCallerProcess | 'unidentified';
+  /** Who may call and who may register a restricted request type */
+  export type RequestAccessRule = Readonly<{
+    /** Processes allowed to call the request type. Main is always allowed as well. */
+    callers: readonly RequestCallerProcess[];
+    /** The only identity allowed to register a handler for the request type */
+    registrant: Exclude<ConnectionIdentity, 'unidentified'>;
+  }>;
+  /**
+   * Gets the rule restricting a request type, if any.
+   *
+   * @param requestType Serialized request type, e.g. `command:platform.getLogFileContent`
+   * @returns The frozen rule, or `undefined` when the request type is not restricted
+   */
+  export function getRequestAccessRule(requestType: string): RequestAccessRule | undefined;
+  /**
+   * Whether a connection may register a handler for a request type. Anyone may register a request
+   * type with no rule; a restricted one only by its registrant.
+   */
+  export function isRegistrationAllowed(
+    requestType: string,
+    registrant: ConnectionIdentity,
+  ): boolean;
+  /**
+   * Whether a connection may call a request type. Main may always call. A request type with a rule
+   * follows the rule, whatever the registrant declared; otherwise the registrant's `allowedCallers`
+   * applies when it declared one.
+   *
+   * @param requestType Serialized request type
+   * @param caller Identity of the calling connection
+   * @param registrantAllowedCallers The `allowedCallers` the registering process declared, if any
+   */
+  export function isCallAllowed(
+    requestType: string,
+    caller: ConnectionIdentity,
+    registrantAllowedCallers?: readonly RequestCallerProcess[],
+  ): boolean;
+  /**
+   * Validates an `allowedCallers` value that arrived from another process.
+   *
+   * @param value The value to validate
+   * @returns `undefined` when `value` is `undefined`, otherwise a copy of the validated array
+   * @throws When `value` is anything but an array of {@link RequestCallerProcess}
+   */
+  export function parseAllowedCallers(value: unknown): RequestCallerProcess[] | undefined;
+}
 declare module 'main/services/rpc-server' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
   import {
@@ -3076,6 +3169,7 @@ declare module 'main/services/rpc-server' {
     SingleMethodDocumentation,
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
+  import { ConnectionIdentity } from 'shared/data/request-access.data';
   /**
    * Tell socket-close severity how to ask whether the app is shutting down.
    *
@@ -3097,6 +3191,8 @@ declare module 'main/services/rpc-server' {
    */
   export class RpcServer implements IRpcHandler {
     connectionStatus: ConnectionStatus;
+    /** Which process is on the other end of this connection, as main determined when accepting it */
+    readonly identity: ConnectionIdentity;
     /**
      * Whether {@link onWebSocketClose} has already run for the current socket.
      *
@@ -3128,13 +3224,10 @@ declare module 'main/services/rpc-server' {
     private readonly propagateEventMethod;
     /** Called by an RpcServer once its client's methods have been removed from the registry */
     private readonly announceClientDisconnectMethod;
-    /** See the constructor's `isWebSocketWithoutOrigin` */
-    private readonly isWebSocketWithoutOrigin;
     /**
-     * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
-     *   carried no `Origin` header. Only such a client may send the request types main refuses to
-     *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
-     *   them.
+     * @param identity Which process is on the other end, as main determined when accepting the
+     *   connection. Defaults to `'unidentified'`, so a connection nobody vouched for gets no more
+     *   than an unknown client.
      */
     constructor(
       name: string,
@@ -3143,7 +3236,7 @@ declare module 'main/services/rpc-server' {
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
       rpcEventDetailsByEventName: IRpcEventRegistry,
       announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
-      isWebSocketWithoutOrigin?: boolean,
+      identity?: ConnectionIdentity,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -3153,7 +3246,11 @@ declare module 'main/services/rpc-server' {
       skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
-    registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean;
+    registerRemoteMethod(
+      methodName: string,
+      methodDocs?: SingleMethodDocumentation,
+      options?: unknown,
+    ): boolean;
     unregisterRemoteMethod(methodName: string): boolean;
     registerRemoteEvent(
       eventName: string,
@@ -3190,6 +3287,42 @@ declare module 'main/services/rpc-server' {
     private processMessage;
   }
   export default RpcServer;
+}
+declare module 'main/services/launch-secrets.service' {
+  /**
+   * The child processes main launches and identifies by a launch secret. Each presents its client
+   * secret in its PAPI WebSocket handshake and checks main's reply for its server secret.
+   */
+  export type LaunchedIdentity = 'extensionHost' | 'dotnetDataProvider';
+  /** The two secrets main hands a child it launches */
+  export type LaunchSecrets = {
+    clientSecret: string;
+    serverSecret: string;
+  };
+  /**
+   * Creates new secrets for a child about to be launched. Replaces any secrets issued earlier for the
+   * identity, so a connection can no longer be made with those.
+   *
+   * Never log the returned secrets or put them on a command line or in main's own environment.
+   */
+  export function issueLaunchSecrets(identity: LaunchedIdentity): LaunchSecrets;
+  /**
+   * Finds which launched child a presented client secret belongs to. Compares digests in constant
+   * time, so a malformed value of any length is simply not found.
+   *
+   * @param presented The client secret a connection presented
+   * @returns The identity, the server secret to return to it, and a number that changes each time
+   *   secrets are issued for the identity; `undefined` when the secret matches no current launch
+   */
+  export function identifyClientSecret(presented: string):
+    | {
+        identity: LaunchedIdentity;
+        serverSecret: string;
+        launchId: number;
+      }
+    | undefined;
+  /** Forgets the secrets issued for an identity, e.g. when its process has exited */
+  export function revokeLaunchSecrets(identity: LaunchedIdentity): void;
 }
 declare module 'shared/data/network-event-names' {
   /**
@@ -3268,6 +3401,7 @@ declare module 'main/services/rpc-websocket-listener' {
     IRpcMethodRegistrar,
     IRpcWebSocketClientCloser,
     RpcClientDisconnectEvent,
+    RpcMethodRegistrationOptions,
   } from 'shared/models/rpc.interface';
   import {
     OpenRpc,
@@ -3332,6 +3466,10 @@ declare module 'main/services/rpc-websocket-listener' {
     private readonly warnedForeignAnnouncements;
     private readonly clientDisconnectEmitter;
     private readonly connectionLostEmitter;
+    /** Handshakes that presented a valid client secret, kept until their connection is set up */
+    private readonly verifiedLaunchByRequest;
+    /** The one open connection each launched child may have */
+    private readonly openConnectionByLaunchedIdentity;
     /**
      * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
      *   overridden only by tests that need to bind a real socket without colliding with a running
@@ -3350,6 +3488,7 @@ declare module 'main/services/rpc-websocket-listener' {
       methodName: string,
       method: InternalRequestHandler,
       methodDocs?: SingleMethodDocumentation,
+      options?: RpcMethodRegistrationOptions,
     ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
     registerEvent(
@@ -3392,10 +3531,28 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private warnIfInvalidEventAnnouncement;
     /**
+     * Decides whether to complete a WebSocket handshake. A client that presents no secret is served
+     * as `unidentified`. One that presents a secret must present a current launch's client secret,
+     * and that launch must not already have an open connection.
+     *
+     * Never logs the presented header: it may be a real secret sent to the wrong place.
+     */
+    private verifyClient;
+    /** Proves main to a child it identified by returning that launch's server secret */
+    private addServerSecretToHandshakeReply;
+    /**
      * @param upgradeRequest The handshake request, which `ws` always passes. Without one the client
-     *   is treated as having sent `Origin`.
+     *   is served as `unidentified`.
      */
     private onClientConnect;
+    /**
+     * Records the open connection of a launched child. A connection from an earlier launch of the
+     * same child is closed: main has replaced that process, and its socket may not have closed yet.
+     *
+     * @returns `false` when the same launch already has an open connection, which happens only when
+     *   two handshakes with the same secret pass the handshake check together
+     */
+    private trackLaunchedConnection;
     /** Attach an `RpcServer` to a socket and track it until the socket closes */
     private serveClient;
     private announceClientDisconnect;
@@ -3407,27 +3564,6 @@ declare module 'shared/services/rpc-handler.factory' {
   import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
   /** Creates a server or client RPC handler depending on if we're in main or some other process */
   export const createRpcHandler: () => Promise<IRpcMethodRegistrar>;
-}
-declare module 'shared/models/network.model' {
-  /** A process main can identify on the PAPI network */
-  export type RequestCallerProcess = 'renderer' | 'extensionHost' | 'dotnetDataProvider';
-  /** Options related to calling a method over the network */
-  export type NetworkMethodHandlerOptions = {
-    /**
-     * Custom timeout to use for callers of a method instead of the platform-wide timeout value. Set
-     * to 0 to disable the timeout.
-     */
-    timeoutMilliseconds?: number;
-    /**
-     * Processes allowed to call this handler. When omitted, any connection may call it. Main can
-     * always call it.
-     *
-     * This identifies processes, not extensions: every extension shares the extension host process,
-     * so `'extensionHost'` admits all of them. A request type that core restricts itself keeps core's
-     * rule; this option cannot widen it.
-     */
-    allowedCallers?: RequestCallerProcess[];
-  };
 }
 declare module 'shared/services/network.service' {
   /**
