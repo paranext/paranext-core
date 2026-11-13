@@ -101,7 +101,7 @@
   "%firstRun_step_language_placeholder%": "Taalkiezer (binnenkort beschikbaar)",
   "%firstRun_step_syncConsent_body%": "Als je aan gedeelde projecten werkt, werkt synchroniseren je lokale kopie bij en deelt het je wijzigingen met anderen.",
   "%firstRun_step_syncConsent_heading%": "Je projecten syncen",
-  "%firstRun_step_syncConsent_internetBlocked%": "Je internetinstelling staat synchronisatie niet toe. Kies voorlopig “Nog niet synchroniseren”, schakel daarna internettoegang in bij “Internet en connectiviteit” en synchroniseer later.",
+  "%firstRun_step_syncConsent_internetBlocked%": "Je internetinstelling staat synchronisatie niet toe. Kies voorlopig “Nog niet synchroniseren”, schakel daarna internettoegang in bij “Internetverbinding” en synchroniseer later.",
   "%firstRun_step_syncConsent_untilFirstSync%": "Deze stap wordt bij het opstarten van de app getoond totdat een synchronisatie slaagt.",
   "%firstRun_step_syncProgress_body%": "Je projecten worden ingesteld. Dit kan een paar minuten duren.",
   "%firstRun_step_syncProgress_complete_body%": "Je projecten zijn klaar.",
