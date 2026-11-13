@@ -1,4 +1,13 @@
 /**
+ * PARKED — no Playwright config collects this file, and it has never run to completion. It is kept
+ * as the written scenarios for the Markers checklist (epic PT-2049, "Inventory & Checklists"). It
+ * attaches to a running app over CDP in Power mode and needs the `wgPIDGIN` project plus at least
+ * one other project to add as a comparative text; it writes evidence screenshots under
+ * `.context/features/markers-checklist/proofs/e2e-evidence`. To work on it, remove the
+ * markers-checklist glob from `testIgnore` in `e2e-tests/playwright-cdp.config.ts` (the ignore also
+ * applies to a file named on the command line). See `e2e-tests/tests/markers-checklist/README.md`.
+ */
+/**
  * E2E tests for the markers-checklist Theme 5/4/6 wiring (Tasks 4-14).
  *
  * Test list (Test 3 deleted as obsolete under auto-follow — see comment by the gap):

@@ -8,8 +8,8 @@ Running the isolated suite natively on Windows: see `tests/isolated/README.md#ru
 |---|---|---|
 | Core happy path (app launch, basic nav) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
 | Bare-Electron check of an Electron behavior the dev app can't show | `tests/smoke/` (see its README) | `npm run test:e2e:smoke` (also CI) |
-| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>`, or `all` for every subset (the bare form lists the subsets and exits 1) |
-| Tests needing real Marble resources | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` |
+| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>`, or `all` for every spec (the bare form lists the subsets and exits 1) |
+| Tests needing real Marble resources (local-only) | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` (collects only the six local-only specs; the rest are parked, see below) |
 
 On WSL2, prefix a suite that launches its own Electron with `e2e-tests/run-e2e-wsl.sh --wrap` to
 keep its windows off the Windows desktop — e.g.
@@ -17,17 +17,56 @@ keep its windows off the Windows desktop — e.g.
 
 This does nothing for suites that attach to an app you started separately — `fixtures/cdp.fixture.ts`
 over port 9223, and the two `*-commands.spec.ts` files' `fixtures/papi-live.fixture.ts` over port
-8876. Between them that is all of `tests/enhanced-resources/` and `tests/markers-checklist/`, plus
-`tests/attached/`. Start the app with `./.erb/scripts/refresh.sh` — on Linux that already runs it
-under its own Xvfb — and run those suites through `playwright-cdp.config.ts`, which has no
-globalSetup.
+8876. Between them that is `tests/attached/`, the local-only part of `tests/enhanced-resources/`, and
+the parked `tests/markers-checklist/` and `tests/manage-books/`, which no config collects. Start the app with
+`./.erb/scripts/refresh.sh` — on Linux that already runs it under its own Xvfb — and run the
+collected ones through `playwright-cdp.config.ts`, which has no globalSetup.
 
-`tests/manage-books/` also attaches, but is deliberately excluded from that config and is collected
-by nothing: all four of its specs can mutate real project data with no restore. Three do so
-outright; `manage-books-commands.spec.ts` is safe only by environment, since its later tests drive
-real projects discovered from the live app and depend on assumptions (a book already present, a
-non-administrator destination) that need not hold on a given machine. See its README before removing
-the exclusion.
+### Local-only directories
+
+Three directories under `tests/` are not part of any standard run, and no CI job collects them (CI
+runs only `test:e2e:smoke`). Only the local-only specs of `tests/enhanced-resources/` are run by
+hand against a running app; everything else in these directories is parked, meaning no config
+collects it:
+
+- `tests/enhanced-resources/` — two groups.
+  - Runs locally: the Text Collection grid specs `scripture-text-grid-verse-row.spec.ts`,
+    `scripture-text-grid-view-options.spec.ts`, `scripture-text-grid-zoom.spec.ts` and
+    `cell-reorder.spec.ts`, plus `enhanced-resource-content-zoom.spec.ts` and
+    `enhanced-resources-image-render.spec.ts`. They need real Marble resources (paid, not available
+    in CI) and an app started in Power mode (every spec there but
+    `scripture-text-grid-verse-row.spec.ts` asserts it).
+  - Parked, out of date: `scripture-text-grid.spec.ts`. It covers the shipped Text Collection grid,
+    but eight of its assertions are out of date; it comes back when PT-4779 is done. Like the other
+    grid specs it needs Power mode and real Marble resources.
+  - Parked, unfinished feature: `enhanced-resources-functional-UI-PKG-001` to `-008.spec.ts`,
+    `enhanced-resources-journey.spec.ts` and `text-collection-schema.spec.ts`. These are kept as
+    the written scenarios for a feature that is still to be finished (epic PT-2021, "Enhanced
+    Resources"), no CI job runs them, and they have never run as a whole. Many of their tests
+    are `test.fixme`. Before the `enhanced-resources-functional-*` and `-journey` files can run they
+    need an app in Power mode with real Marble resources such as `ESV16UK+`.
+    `text-collection-schema.spec.ts` needs neither: it works in either interface mode and only needs
+    `E2E_TEST_PROJECT_ID` to name an editable admin project (it skips itself otherwise).
+  - No config collects the parked files: both `playwright-cdp.config.ts` and `playwright.config.ts`
+    list them in `testIgnore` through `PARKED_ENHANCED_RESOURCES_SPECS` in
+    `e2e-tests/parked-enhanced-resources.ts`. To work on one, remove its entry from that list and
+    run it against a prepared app. See the directory's README.
+- `tests/markers-checklist/` — all of it is parked, kept as the written scenarios for the Markers
+  checklist (epic PT-2049, "Inventory & Checklists"). The specs have never run to completion and
+  are a record of intent, not coverage. `playwright-cdp.config.ts` testIgnores the directory and
+  `playwright.config.ts` has no project for it, so no config collects it. They attach to a running
+  app and need a real project (`wgPIDGIN`) on the machine. See its README.
+- `tests/manage-books/` — all of it is parked, kept as the written scenarios for the Manage Books
+  feature (epic PT-1779, "Manage Books in a Project"). `playwright-cdp.config.ts` testIgnores the
+  directory and `playwright.config.ts` has no project for it, so no config collects it. It attaches
+  to a running app. `manage-books-commands.spec.ts` checks the wire shape of each `manageBooks`
+  network object method over the live PAPI websocket; its first `describe` writes nothing (its
+  project-specific methods get a made-up project id, `getToProjectFilter` and `filterProjects` read
+  the running app's real project list, and `checkOverlappingFiles` takes no project), its second
+  drives real projects the app already holds. The
+  other three specs (`manage-books-journey`, `-functional-WP-001`, `-functional-WP-002`) change
+  real project data (delete or create books) with no restore. Before any of it can run it needs a
+  disposable project fixture, so it never touches a developer's real projects. See its README.
 
 **An attach-based spec must not live under `tests/isolated/`.** `playwright-cdp.config.ts` ignores
 that tree, and the `isolated` project's globalSetup refuses to start while an app holds port 8876 —
@@ -40,16 +79,17 @@ immediately discoverable and runnable without any config changes.
 
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch
-strategy). If you do, register a named project in `playwright.config.ts` — see
-`enhanced-resources` as the template — and add a `test:e2e:<name>` npm script if the suite is
-meant to be run routinely.
+strategy). If you do, register a named project in `playwright.config.ts` whose specs launch their
+own Electron, as the `isolated` and `smoke` projects do, and add a `test:e2e:<name>` npm script if
+the suite is meant to be run routinely.
 
 ## What NOT to do
 
 - Do not put feature tests in `smoke/` — smoke tests are for the core happy path (plus the
   bare-Electron checks its README describes) and must stay fast and CI-green.
-- Do not use `manage-books/` or `markers-checklist/` as models — those are legacy AI-porting
-  experiments not wired into any standard test run. See the README in each directory.
+- Do not use `manage-books/`, `markers-checklist/` or `enhanced-resources/` as models — those are
+  parked or local-only suites (see "Local-only directories") not wired into any standard test run.
+  See the README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding
   a well-named spec file to `isolated/` instead.
 

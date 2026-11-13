@@ -1,4 +1,11 @@
 /**
+ * PARKED — no Playwright config collects this file, and it has never run as a whole. It is kept as
+ * the written scenarios for the Enhanced Resources feature (epic PT-2021). It needs an app started
+ * in Power mode with real Marble resources installed (such as ESV16UK+). To work on it, remove its
+ * entry from `e2e-tests/parked-enhanced-resources.ts`. See
+ * `e2e-tests/tests/enhanced-resources/README.md`.
+ */
+/**
  * Feature: enhanced-resources
  *
  * Work Package: UI-PKG-004 - MediaImagesTab + MediaMapsTab

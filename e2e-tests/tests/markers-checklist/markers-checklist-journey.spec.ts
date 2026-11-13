@@ -1,4 +1,13 @@
 /**
+ * PARKED — no Playwright config collects this file, and it has never run to completion. It is kept
+ * as the written scenarios for the Markers checklist (epic PT-2049, "Inventory & Checklists"). It
+ * attaches to a running app over CDP in Power mode and needs the `wgPIDGIN` project; it writes
+ * evidence screenshots under `.context/features/markers-checklist/proofs/e2e-evidence`. To work on
+ * it, remove the markers-checklist glob from `testIgnore` in `e2e-tests/playwright-cdp.config.ts`
+ * (the ignore also applies to a file named on the command line). See
+ * `e2e-tests/tests/markers-checklist/README.md`.
+ */
+/**
  * Feature: markers-checklist — Cross-WP Journey Tests (activated)
  *
  * Journey tests exercise flows that span two or more UI work packages so that the user story is

@@ -1,5 +1,5 @@
 /**
- * ⚠ DESTRUCTIVE — this spec writes to REAL project data, and has never run.
+ * ⚠ PARKED and DESTRUCTIVE — this spec writes to REAL project data, and has never run.
  *
  * Its Category 9 tests drive `manageBooks.createBooks` against the rotation projects, which writes
  * USFM stub files into `~/.platform.bible/projects/Paratext 9 Projects/<project>` that persist
