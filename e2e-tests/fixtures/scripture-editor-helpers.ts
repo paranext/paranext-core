@@ -389,20 +389,33 @@ export async function setSampleProjectBookUsfm(
   if (!isWritten) throw new Error(`Sample project did not accept USFM for ${book.book}`);
 }
 
-/** The text after the book code on the `\id` line {@link prepareEmptySampleBook} writes. */
+/**
+ * The default text after the book code and a hyphen on the `\id` line {@link prepareEmptySampleBook}
+ * writes.
+ */
 export const EMPTY_BOOK_ID_TEXT = 'empty book';
 
 /**
- * Makes the sample WEB project editable and cuts one of its books down to its `\id` line, as a
- * newly created book is, then reads it back so a failed write fails here rather than as a later
- * timeout. Writes project data, so it needs `isolatedProjectRoot: true` like
+ * Makes the sample WEB project editable and cuts one of its books down to its `\id` line, plus any
+ * header lines, as a newly created book is, then reads it back so a failed write fails here rather
+ * than as a later timeout. Writes project data, so it needs `isolatedProjectRoot: true` like
  * {@link setSampleProjectBookUsfm}.
  *
  * @param book Any reference in the book; only `book` is read.
+ * @param headerLines The lines that follow the `\id` line, such as `\h JON`, without line endings.
+ *   Defaults to none.
+ * @param idText The text after the book code and a hyphen on the `\id` line. Defaults to
+ *   {@link EMPTY_BOOK_ID_TEXT}.
  * @returns The book's USFM as written, which is also all of its chapter 1.
  */
-export async function prepareEmptySampleBook(book: SampleChapterRef): Promise<string> {
-  const usfm = `\\id ${book.book} - ${EMPTY_BOOK_ID_TEXT}\r\n`;
+export async function prepareEmptySampleBook(
+  book: SampleChapterRef,
+  headerLines: string[] = [],
+  idText: string = EMPTY_BOOK_ID_TEXT,
+): Promise<string> {
+  const usfm = [`\\id ${book.book} - ${idText}`, ...headerLines]
+    .map((line) => `${line}\r\n`)
+    .join('');
   await makeSampleProjectEditable();
   await setSampleProjectBookUsfm(book, usfm);
   const chapterOne = await getSampleProjectChapterUsfm({ ...book, chapterNum: 1 });
