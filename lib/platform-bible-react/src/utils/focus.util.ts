@@ -168,8 +168,9 @@ export function showFocusRing(element: HTMLElement | undefined) {
  *
  * A menu closed with the pointer still hands focus back to its trigger, because the tab order
  * depends on it — but the ring would then sit on a control the pointer is nowhere near. The ring is
- * suppressed in CSS, which works in any browser. Consumers clear the attribute on the next keydown,
- * which is what brings the ring back for keyboard users.
+ * suppressed in CSS rather than with `focus({ focusVisible: false })`, which not every browser
+ * supports. Consumers clear the attribute on the next keydown, which is what brings the ring back
+ * for keyboard users.
  *
  * Focus is drawn through three separate channels, and all three have to go. The ring and the border
  * are the obvious two. The third is `outline`: a host document may set one on `:focus-visible` —

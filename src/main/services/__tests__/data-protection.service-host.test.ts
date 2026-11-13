@@ -88,7 +88,7 @@ describe('data protection service host', () => {
     expect(mocks.warn).not.toHaveBeenCalled();
   });
 
-  it('decrypts ciphertext produced by the synchronous API', async () => {
+  it('passes the stored ciphertext bytes to decryptStringAsync unchanged', async () => {
     const legacyCiphertext = Buffer.from([0x76, 0x31, 0x30, 0x00, 0xff, 0x7f]);
     mocks.safeStorage.decryptStringAsync.mockResolvedValue({
       result: 'stored before the upgrade',
@@ -133,10 +133,54 @@ describe('data protection service host', () => {
     setPlatform('linux');
     vi.stubEnv('ALLOW_BASIC_TEXT_KEYRING', 'true');
     mocks.safeStorage.getSelectedStorageBackend.mockReturnValue('basic_text');
+    mocks.safeStorage.encryptStringAsync.mockResolvedValue(Buffer.from('v10cipher'));
     const service = await getService();
 
     await expect(service.isEncryptionAvailable()).resolves.toBe(true);
-    expect(mocks.safeStorage.setUsePlainTextEncryption).toHaveBeenCalledWith(true);
+    await expect(service.encryptString('plain')).resolves.toBe(
+      Buffer.from('v10cipher').toString('base64'),
+    );
+  });
+
+  describe('Linux with a keyring backend selected', () => {
+    beforeEach(() => {
+      setPlatform('linux');
+      vi.stubEnv('ALLOW_BASIC_TEXT_KEYRING', '');
+      mocks.safeStorage.getSelectedStorageBackend.mockReturnValue('gnome_libsecret');
+    });
+
+    it('refuses when the keyring does not answer and Chromium falls back to its fixed key', async () => {
+      mocks.safeStorage.encryptStringAsync.mockResolvedValue(Buffer.from('v10cipher'));
+      const service = await getService();
+
+      await expect(service.isEncryptionAvailable()).resolves.toBe(false);
+      await expect(service.encryptString('secret')).rejects.toThrow('No keyring service');
+      await expect(service.decryptString('Y2lwaGVy')).rejects.toThrow('No keyring service');
+      expect(mocks.safeStorage.encryptStringAsync).not.toHaveBeenCalledWith('secret');
+      expect(mocks.safeStorage.decryptStringAsync).not.toHaveBeenCalled();
+    });
+
+    it('encrypts when the keyring holds the key', async () => {
+      mocks.safeStorage.encryptStringAsync.mockResolvedValue(Buffer.from('v11cipher'));
+      const service = await getService();
+
+      await expect(service.isEncryptionAvailable()).resolves.toBe(true);
+      await expect(service.encryptString('secret')).resolves.toBe(
+        Buffer.from('v11cipher').toString('base64'),
+      );
+      expect(mocks.safeStorage.encryptStringAsync).toHaveBeenCalledWith('secret');
+    });
+
+    it('allows the fixed key when ALLOW_BASIC_TEXT_KEYRING=true', async () => {
+      vi.stubEnv('ALLOW_BASIC_TEXT_KEYRING', 'true');
+      mocks.safeStorage.encryptStringAsync.mockResolvedValue(Buffer.from('v10cipher'));
+      const service = await getService();
+
+      await expect(service.isEncryptionAvailable()).resolves.toBe(true);
+      await expect(service.encryptString('secret')).resolves.toBe(
+        Buffer.from('v10cipher').toString('base64'),
+      );
+    });
   });
 
   it('isEncryptionAvailable is false when isAsyncEncryptionAvailable resolves false', async () => {
