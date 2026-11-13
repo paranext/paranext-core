@@ -48,6 +48,25 @@ export async function readContentZoomMemory(page: Page): Promise<Record<string, 
   }, CONTENT_ZOOM_MEMORY_SETTING);
 }
 
+/**
+ * Writes `platform.webViewContentZoom` (the Settings default) straight through the renderer's PAPI,
+ * as a Settings change would: the live counterpart to seeding the default before launch with
+ * `seedSettings`. Panes open at the time move to the new default unless they hold a level of their
+ * own, and the value stays in the checkout's settings file until the fixture restores it after the
+ * app closes.
+ */
+export async function setDefaultZoomSetting(page: Page, factor: number): Promise<void> {
+  await page.evaluate((value) => {
+    // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as
+    // `readContentZoomMemory` above).
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as {
+      papi: { settings: { set: (key: string, value: number) => Promise<boolean> } };
+    };
+    return win.papi.settings.set('platform.webViewContentZoom', value);
+  }, factor);
+}
+
 /** Indicator text with whitespace stripped, so the narrow no-break space before `%` doesn't matter. */
 export async function readIndicatorText(frame: Frame): Promise<string | undefined> {
   const text = await frame.locator(INDICATOR_SELECTOR).textContent();

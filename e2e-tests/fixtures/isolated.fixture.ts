@@ -16,6 +16,7 @@ import {
   teardownElectronApp,
   WindowSize,
 } from './helpers';
+import { suppressOnboardingTour } from './onboarding-tour.page';
 
 export { expect } from '@playwright/test';
 
@@ -25,7 +26,7 @@ export { expect } from '@playwright/test';
  * ## One instance per test
  *
  * Every `test()` block launches and tears down its own Electron process. This gives full isolation
- * between tests at the cost of startup time (30+ seconds per test).
+ * between tests at the cost of startup time (several seconds per test, plus teardown).
  *
  * Use these fixtures when tests mutate application state in ways that would affect subsequent
  * tests, or when you need a guaranteed clean slate. For tests that can tolerate shared state,
@@ -34,10 +35,10 @@ export { expect } from '@playwright/test';
  * tests within a single file typically share an instance, but this is a side effect of Playwright's
  * default parallelism settings, not a guarantee of the fixture itself.
  *
- * The renderer connects to a shared webpack dev server (`localhost:1212`), and ES module state
- * (initialization guards, dock layout singletons, etc.) persists across navigations within the same
- * renderer process. A second Electron instance launched against the same dev-server renderer will
- * inherit stale module state, which prevents dock tabs from rendering correctly.
+ * Because the fixture is test-scoped, every `test()` pays its own app start and teardown. Write
+ * checks that can share one launch state as `test.step`s of a single test; give a check that needs
+ * a fresh app or different launch settings its own `test()`, in the same file when it covers the
+ * same behaviour.
  */
 export interface IsolatedFixtures {
   /**
@@ -81,6 +82,14 @@ export interface IsolatedFixtures {
    * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
    */
   windowSize: WindowSize;
+  /**
+   * Set `test.use({ allowOnboardingTour: true })` only in a suite that is ABOUT the onboarding tour
+   * and needs it to show. By default `mainPage` writes the tour's completion flag as soon as the
+   * window loads, so a Simple-mode spec never has its first click intercepted by the tour's
+   * full-screen overlay. A suite that opts in must also pass `allowOnboardingTour` to
+   * `waitForAppReady`, which suppresses the tour by default too.
+   */
+  allowOnboardingTour: boolean;
   electronApp: ElectronApplication;
   mainPage: Page;
 }
@@ -96,6 +105,9 @@ export const test = base.extend<IsolatedFixtures>({
   // Option fixture: extra settings seeded in the same pre-launch write (see IsolatedFixtures doc
   // for why specs must not run their own preConfigureSettings).
   seedSettings: [{}, { option: true }],
+
+  // Option fixture: see the IsolatedFixtures doc; the tour is suppressed unless a suite opts in.
+  allowOnboardingTour: [false, { option: true }],
 
   // Test-scoped fixture: Playwright launches one Electron instance per test() block.
   electronApp: async ({ electronLaunchOptions, interfaceMode, seedSettings }, use) => {
@@ -114,13 +126,18 @@ export const test = base.extend<IsolatedFixtures>({
       ...seedSettings,
     });
     try {
+      const setupStart = Date.now();
       const ctx = await launchElectronApp(electronLaunchOptions);
+      console.log(`[setup +${Date.now() - setupStart}ms] Electron app launch complete`);
       try {
         await use(ctx.electronApp);
       } finally {
-        console.log('[teardown] Test-scoped app teardown starting...');
+        const teardownStart = Date.now();
+        console.log('[teardown +0ms] Test-scoped app teardown starting...');
         await teardownElectronApp(ctx);
-        console.log('[teardown] Test-scoped app teardown complete');
+        console.log(
+          `[teardown +${Date.now() - teardownStart}ms] Test-scoped app teardown complete`,
+        );
       }
     } finally {
       // Restore the developer's settings file only after the app has fully closed so the app's own
@@ -132,8 +149,15 @@ export const test = base.extend<IsolatedFixtures>({
     }
   },
 
-  mainPage: async ({ electronApp, windowSize, interfaceMode }, use, testInfo: TestInfo) => {
+  mainPage: async (
+    { electronApp, windowSize, interfaceMode, allowOnboardingTour },
+    use,
+    testInfo: TestInfo,
+  ) => {
+    const pageSetupStart = Date.now();
+    const stamp = () => `[setup +${Date.now() - pageSetupStart}ms]`;
     const page = await electronApp.firstWindow({ timeout: 90_000 });
+    console.log(`${stamp()} First window available`);
 
     // Ensure the window is large enough for WebView content to be visible.
     // On headless Linux (xvfb) or WSL2 the default window can be very small,
@@ -147,6 +171,7 @@ export const test = base.extend<IsolatedFixtures>({
       'This fixture sets this size at launch; check that the window manager is not overriding it.',
     );
 
+    console.log(`${stamp()} Window size applied`);
     console.log(`Window URL: ${page.url()}`);
     const onPageError = (err: Error) => console.error(`Page error: ${err.message}`);
     const onConsoleMsg = (msg: ConsoleMessage) => {
@@ -157,8 +182,14 @@ export const test = base.extend<IsolatedFixtures>({
 
     await page.waitForLoadState('domcontentloaded');
 
+    // The tour opens on its own, asynchronously, in Simple mode with a fresh profile, and its
+    // overlay intercepts every pointer event. The renderer re-reads the completion flag on each
+    // render, so writing it now, before the dock layout renders, keeps the tour from ever opening.
+    if (!allowOnboardingTour) await suppressOnboardingTour(page);
+
     // Wait for React to mount
     await page.waitForSelector('#root', { state: 'attached', timeout: 30_000 });
+    console.log(`${stamp()} React root mounted`);
 
     // Verify the mode this fixture just seeded actually took effect, before any test runs against a
     // layout it was not written for. Always checked, not opt-in: the fixture knows what it seeded,
@@ -173,6 +204,8 @@ export const test = base.extend<IsolatedFixtures>({
         `preConfigureSettings call — see the IsolatedFixtures doc for why a spec-level seed is ` +
         `both overridden and leaked back into the developer's settings.`,
     );
+
+    console.log(`${stamp()} Interface mode confirmed`);
 
     await use(page);
 

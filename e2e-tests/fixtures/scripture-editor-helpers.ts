@@ -5,10 +5,10 @@ import {
   LAUNCH_PHASE_TIMEOUT_MS,
   requireIsolatedProjectRoot,
   SAMPLE_WEB_PROJECT_ID,
+  sendCommandFromPage,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
-import { suppressOnboardingTour } from './onboarding-tour.page';
 
 // Re-exported so the specs that reach for it through this module keep working: it is defined in
 // helpers.ts, which is the lower-level module and the single home for it.
@@ -133,19 +133,10 @@ export async function sendCommandWithId(
   webViewId: string,
   areaId?: string,
 ): Promise<void> {
-  await page.evaluate(
-    ([cmd, id, area]) => {
-      // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as
-      // scripture-text-grid-zoom.spec.ts's afterEach cleanup).
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const win = window as unknown as {
-        papi: { commands: { sendCommand: (c: string, ...a: unknown[]) => Promise<unknown> } };
-      };
-      return area === undefined
-        ? win.papi.commands.sendCommand(cmd, id)
-        : win.papi.commands.sendCommand(cmd, id, area);
-    },
-    [commandName, webViewId, areaId] as const,
+  await sendCommandFromPage(
+    page,
+    commandName,
+    ...(areaId === undefined ? [webViewId] : [webViewId, areaId]),
   );
 }
 
@@ -518,34 +509,48 @@ function escapeForRegExp(value: string): string {
 }
 
 /**
+ * Pattern for the text of the top-match row's reference span, which holds the formatted reference
+ * and nothing else (the book id is a sibling span). It requires the span to start with `reference`
+ * and the number to have ended there: a following digit means a longer number ("Mark 40:1" for
+ * "Mark 4"), while a numbered book's id never reaches this span.
+ */
+export function topMatchReferencePattern(reference: string): RegExp {
+  return new RegExp(`^${escapeForRegExp(reference)}(?!\\d)`, 'i');
+}
+
+/**
  * Navigate the main toolbar's book-chapter-verse control (drives scroll group A).
  *
  * Commits with Enter only AFTER the top-match row displays the typed reference: the control parses
  * the input asynchronously, so an immediate Enter can race the parse and commit the previous
- * reference (observed as "typed EXO 2:3, still on Genesis 1:1"). The `(?!\d)` anchor keeps a
+ * reference (observed as "typed EXO 2:3, still on Genesis 1:1"). The match is made against the
+ * row's first span alone (see {@link topMatchReferencePattern}), whose `(?!\d)` anchor keeps a
  * wrong-chapter row from false-matching — "Mark 4" accepts "Mark 4:1" but rejects "Mark 40:1".
  *
- * A `\b` anchor cannot do that job here. The row renders the reference and the book id as adjacent
- * spans with no whitespace between them, so `hasText` sees one run of "Jonah 1:1JON" — a digit
- * followed by a letter, which is not a word boundary, so `\b` never matches any verse-level
- * reference. `(?!\d)` asserts what the anchor is actually for: the number must have ended.
+ * The row renders the reference and the book id as two adjacent spans with no whitespace between
+ * them, so the row's whole text reads like "1 Samuel 17:11SA". Matching that run would let a
+ * numbered book's id digit stand in for the end of the verse number; the reference span carries no
+ * id, so the anchor sees only the reference.
  *
  * Deliberately NOT keyed on cmdk's `data-selected` highlight: that highlight sits on a cell of the
  * chapter preview grid below this row, never on the row itself, and Enter submits the row's
  * reference rather than whatever cmdk has highlighted.
  *
  * Pass `reference` with the ENGLISH book name ("Exodus 2:3", not "EXO 2:3"): the row renders the
- * book name localized, and the app under test runs in English, so a book CODE never matches.
+ * book name localized, and the app under test runs in English, so a book CODE never matches. Spell
+ * the name as the row shows it: Daniel and Esther read "Daniel (Hebrew)" and "Esther (Hebrew)".
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
-  // Simple-mode specs never reach `waitForHomeTab` (that layout has no Home tab), so this is the
-  // one place every caller passes through before the tour could block the click below.
-  await suppressOnboardingTour(mainPage);
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
+  // The reference is the row's first DIRECT child span and the book id is its sibling (see the
+  // top-match `CommandItem` in book-chapter-control.component.tsx), so `:scope >` keeps a nested
+  // first-child span from standing in for it.
   const topMatchRow = mainPage.locator('[data-radix-popper-content-wrapper] [cmdk-item]', {
-    hasText: new RegExp(`${escapeForRegExp(reference)}(?!\\d)`, 'i'),
+    has: mainPage.locator(':scope > span:first-child', {
+      hasText: topMatchReferencePattern(reference),
+    }),
   });
   await topMatchRow.first().waitFor({ timeout: 10_000 });
   await input.press('Enter');

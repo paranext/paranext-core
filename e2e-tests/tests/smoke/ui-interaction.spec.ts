@@ -6,6 +6,7 @@ import {
   isLocalizedAboutMenuItem,
   waitForAppReady,
   waitForMainMenuItem,
+  withMainProcessLinkRetry,
 } from '../../fixtures/helpers';
 
 test.describe('UI Interaction', () => {
@@ -15,9 +16,11 @@ test.describe('UI Interaction', () => {
     // platform.interfaceLanguage to English before launch and asserts it took, so menu-item text
     // matchers (e.g. /Help/i) are deterministic without this suite forcing it again here.
     await electronApp.firstWindow({ timeout: 10_000 });
-    await electronApp.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0].maximize();
-    });
+    await withMainProcessLinkRetry(electronApp, () =>
+      electronApp.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0].maximize();
+      }),
+    );
 
     // The menubar's items arrive from the extension host, not the renderer, so none of
     // waitForAppReady's renderer-only signals (dock layout, window-scoped shards, first-run gate,
@@ -130,7 +133,7 @@ test.describe('UI Interaction', () => {
   // iframe). We assert only its rendered + disabled state here — a fresh smoke profile opens no
   // scripture-navigable web view, so the control has nothing to navigate and is disabled. The
   // enabled/interactive flow (open an editor, search, navigate) requires a project + editor, which
-  // is per-feature and belongs in the cdp-fixture verse-navigation spec, not the smoke suite.
+  // is per-feature and belongs in `tests/isolated/navigation-history/navigation-history.spec.ts`, not the smoke suite.
   test('top toolbar book/chapter control renders and is disabled with no scripture web view open', async ({
     mainPage,
   }) => {

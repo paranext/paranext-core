@@ -56,8 +56,8 @@
  *   declared but load-bearing: the list actually caps, actually scrolls, and stays open while doing
  *   so.
  *
- * ONE test() per spec file (isolated-fixture constraint — see standard-default-power-mode.spec.ts).
- * Run: `npm run test:e2e:isolated scripture-editor`.
+ * One test() with test.step()s: the isolated fixture starts a new app for every test(), so the
+ * steps share one launch. Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { setWindowHeight } from '../../../fixtures/helpers';
@@ -96,7 +96,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
 
     // Scoped to the FIRST editor input, not the whole iframe and not every `.editor-input`: the
     // footnote editor auto-opens on insert, carries an `.editor-input.marker-editable` of its own
-    // (see marker-palette-trigger-focus.spec.ts), and renders the note being edited — so a wider
+    // (see marker-palette-typed-commit.spec.ts), and renders the note being edited — so a wider
     // locator counts one inserted note twice.
     const mainEditor = editorInput.first();
     const endnotes = mainEditor.locator('span.note.usfm_fe');

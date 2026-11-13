@@ -17,9 +17,8 @@
  * catalog involved, and `useEffectiveResourceReferenceList` merges the user list in alongside the
  * (empty, for a fresh project) admin one.
  *
- * ONE test() with test.step()s sharing one Electron instance, matching every other content-zoom
- * suite: a second Electron instance against the shared renderer dev server has a documented
- * dock-tab failure mode.
+ * One test() with test.step()s: the isolated fixture starts a new app for every test(), so the
+ * steps share one launch.
  *
  * `npm run test:e2e:isolated resources-content-zoom`
  */

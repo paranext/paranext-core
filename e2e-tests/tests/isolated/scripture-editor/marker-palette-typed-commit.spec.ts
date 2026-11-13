@@ -4,12 +4,31 @@
  * the marker as it settles, so this is the end-to-end check of that hand-off: unit tests cover the
  * editor and the key routing separately, and only the running app puts them together.
  *
- * ONE test() per spec file (isolated-fixture / second-Electron-instance constraint — see
- * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
+ * It also checks that `\` opens the palette over a selection and that Escape dismisses a palette
+ * opened from the editor.
+ *
+ * The same markers typed straight through, without waiting for the palette to appear, are covered
+ * by marker-palette-typed-through.spec.ts.
+ *
+ * The second test covers `\` `f` Space at the end of a paragraph in Standard view: it inserts a
+ * footnote and puts the caret in that footnote's row in the footnotes pane, the same as `\` `f`
+ * Enter (and Paratext 9's marker dropdown, where Space on a note marker runs Insert Footnote). The
+ * order of three things decides where the caret ends up: the palette closing, the overlay service
+ * handing focus back to the main editor as it does, and the note going in (which opens the pane's
+ * row editor). The handback has to come first, because focus leaving the row editor ends its
+ * editing session. Only the real app has the palette in the renderer frame, the editor in the web
+ * view's iframe and the overlay service's handback, so this is asserted end to end.
+ *
+ * Each `test()` starts its own Electron instance: the first leaves typed text and a verse in Jonah
+ * 1, which the second's paragraph-end caret would have to tolerate. The scenarios inside a test run
+ * as test.step()s on its one instance. Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { getMarkerPalette, openMarkerPalette } from '../../../fixtures/marker-palette.page';
 import {
+  clickBeforeGlyph,
   findScriptureEditorFrame,
+  getEditorFrame,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
@@ -21,6 +40,8 @@ test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
+
+const FOOTNOTES_PANE_SELECTOR = '[data-footnotes-pane]';
 
 test.describe('scripture editor marker palette typed commit', () => {
   test('a marker typed through the palette becomes that marker', async ({ mainPage }) => {
@@ -40,7 +61,7 @@ test.describe('scripture editor marker palette typed commit', () => {
     });
 
     // The marker palette renders in the renderer (parent doc), not the editor iframe.
-    const palette = mainPage.locator('[data-overlay-command-palette]').first();
+    const palette = getMarkerPalette(mainPage);
     const editorEvalFrame = await findScriptureEditorFrame(mainPage);
     /** Whether a `\nd` span holds the given text, so that text is styled as `\nd`. */
     const isInNdSpan = async (text: string) =>
@@ -87,14 +108,92 @@ test.describe('scripture editor marker palette typed commit', () => {
       await expect.poll(() => hasVerse('91'), { timeout: 20_000 }).toBe(true);
     });
 
-    await test.step('typed straight through, without waiting for the palette', async () => {
-      await mainPage.keyboard.press('End');
-      await mainPage.keyboard.type('\\nd Rx');
-      await expect.poll(() => isInNdSpan('Rx'), { timeout: 20_000 }).toBe(true);
-      expect(await hasVerse('92')).toBe(false);
-      await mainPage.keyboard.press('End');
-      await mainPage.keyboard.type('\\v 92 Y');
-      await expect.poll(() => hasVerse('92'), { timeout: 20_000 }).toBe(true);
+    await test.step('a selection + backslash opens the marker palette', async () => {
+      // The editor still holds focus after the last commit; select the caret's line.
+      await mainPage.keyboard.press('Home');
+      await mainPage.keyboard.press('Shift+End');
+      const selectedText = await editorEvalFrame.evaluate(
+        () => window.getSelection()?.toString() ?? '',
+      );
+      expect(selectedText.length).toBeGreaterThan(0);
+      await openMarkerPalette(mainPage);
+    });
+
+    await test.step('Escape dismisses the marker palette opened from the editor', async () => {
+      await mainPage.keyboard.press('Escape');
+      await expect(palette).not.toBeAttached({ timeout: 10_000 });
+    });
+  });
+
+  test('`\\` `f` Space at a paragraph end puts the caret in the new footnote in the pane', async ({
+    mainPage,
+  }) => {
+    // Heavy isolated test (own Electron instance + backend-readiness gates). 3x "slow" budget.
+    test.slow();
+
+    await waitForHomeTab(mainPage);
+    await makeSampleProjectEditable();
+    const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+    const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
+    await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+    await navigateToolbarBcv(mainPage, 'Jonah 1:2');
+
+    const editorInput = editorFrame.locator('.editor-input.marker-editable');
+    await expect(editorInput).toContainText('preach against it', { timeout: 60_000 });
+    const pane = editorFrame.locator(FOOTNOTES_PANE_SELECTOR);
+    await expect(pane).toHaveCount(0);
+    // The marker palette renders in the renderer (parent doc), not the editor iframe.
+    const palette = getMarkerPalette(mainPage);
+
+    // Jonah 1: `\p \v 1 … \v 2 … before me.”` then `\p \v 3 …`.
+    const verse2Para = editorInput.locator('p:has(span[data-marker="v"][data-number="2"])');
+    const verse3Para = editorInput.locator('p:has(span[data-marker="v"][data-number="3"])');
+    const frame = await getEditorFrame(mainPage, editorId);
+
+    await test.step('the caret sits at the end of the verse 2 paragraph', async () => {
+      await clickBeforeGlyph(verse3Para.locator('span.opening').first());
+      await mainPage.keyboard.press('ArrowLeft');
+      const atParagraphEnd = await frame.evaluate(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return false;
+        const { anchorNode, anchorOffset } = selection;
+        const para = anchorNode?.parentElement?.closest('p');
+        if (!anchorNode || !para?.lastChild) return false;
+        if (!para.querySelector('span[data-marker="v"][data-number="2"]')) return false;
+        const rest = document.createRange();
+        rest.setStart(anchorNode, anchorOffset);
+        rest.setEndAfter(para.lastChild);
+        return rest.toString().trim() === '';
+      });
+      expect(atParagraphEnd).toBe(true);
+    });
+
+    await test.step('`\\` `f` Space inserts a footnote and opens the pane', async () => {
+      const notesBefore = await verse2Para.locator('.note').count();
+      await mainPage.keyboard.press('\\');
+      await expect(palette).toBeAttached({ timeout: 15_000 });
+      await mainPage.keyboard.press('f');
+      await mainPage.keyboard.press(' ');
+      await expect(palette).not.toBeAttached({ timeout: 10_000 });
+      await expect(pane).toHaveCount(1, { timeout: 20_000 });
+      await expect
+        .poll(() => verse2Para.locator('.note').count(), { timeout: 10_000 })
+        .toBeGreaterThan(notesBefore);
+    });
+
+    await test.step('the caret is in the pane, and typing lands in the new footnote', async () => {
+      await expect
+        .poll(
+          () =>
+            frame.evaluate(
+              (paneSelector) => !!document.activeElement?.closest(paneSelector),
+              FOOTNOTES_PANE_SELECTOR,
+            ),
+          { timeout: 10_000 },
+        )
+        .toBe(true);
+      await mainPage.keyboard.type('zqx');
+      await expect(pane).toContainText('zqx', { timeout: 10_000 });
     });
   });
 });

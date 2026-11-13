@@ -14,9 +14,8 @@
  * Every check is about what the reader sees — which verses sit inside the text's visible area — not
  * about exact pixel offsets, which depend on the window, the font and the pane's stored size.
  *
- * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a second Electron
- * instance against the shared renderer dev server can fail to render new dock tabs (see
- * isolated.fixture.ts). The scenarios run as test.step()s sharing one instance.
+ * One test() with test.step()s: the isolated fixture starts a new app for every test(), so the
+ * scenarios share one launch.
  *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated

@@ -22,6 +22,7 @@ import {
   cleanupCommentTestProject,
   createCommentTestProject,
 } from '../../../fixtures/comment-test-helpers';
+import { sendCommandFromPage } from '../../../fixtures/helpers';
 import {
   openEditableScriptureEditorForProject,
   waitForHomeTab,
@@ -58,7 +59,6 @@ test.use({
 /** The renderer exposes `papi` on `globalThis`; this is the slice the spec uses. */
 type RendererPapi = {
   papi: {
-    commands: { sendCommand: (command: string, ...args: unknown[]) => Promise<unknown> };
     settings: {
       get: (key: string) => Promise<unknown>;
       set: (key: string, value: unknown) => Promise<unknown>;
@@ -68,13 +68,7 @@ type RendererPapi = {
 
 /** Opens Settings; with a web-view id, that web view's project settings. */
 async function openSettings(page: Page, webViewId?: string): Promise<void> {
-  await page.evaluate(async (id) => {
-    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const win = window as unknown as RendererPapi;
-    if (id) await win.papi.commands.sendCommand('platform.openSettings', id);
-    else await win.papi.commands.sendCommand('platform.openSettings');
-  }, webViewId);
+  await sendCommandFromPage(page, 'platform.openSettings', ...(webViewId ? [webViewId] : []));
 }
 
 async function readSetting(page: Page, key: string): Promise<unknown> {

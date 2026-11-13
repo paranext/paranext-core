@@ -6,16 +6,18 @@
  * independent level, and BCV-driven scroll sync still lands on the right card once the list is
  * zoomed.
  *
- * ONE test() per spec file, matching every other suite built on the worker-scoped comment fixture:
- * a second Electron instance against the shared renderer dev server has a documented dock-tab
- * failure mode. Sub-scenarios are test.step()s sharing the one instance.
+ * One test() on the worker-scoped comment fixture, which shares one app per worker; the
+ * sub-scenarios are test.step()s sharing that instance.
  *
  * `npm run test:e2e:isolated notes-content-zoom`
  */
+import fs from 'fs';
+import path from 'path';
 import { type Frame } from '@playwright/test';
 import { test, expect } from '../../../fixtures/comment.fixture';
 import {
   type CommentTestProject,
+  PARATEXT_PROJECTS_ROOT,
   createCommentTestProject,
   cleanupCommentTestProject,
   createCommentThreads,
@@ -32,7 +34,11 @@ import {
   waitForPopupAnimations,
   zoomAreaTo,
 } from '../../../fixtures/content-zoom-helpers';
-import { waitForAppReady, waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
+import {
+  getOpenWebViewDefinitions,
+  waitForAppReady,
+  waitForOpenWebViewIdByType,
+} from '../../../fixtures/helpers';
 import {
   CONTENT_ZOOM_COMMANDS,
   getEditorFrame,
@@ -42,6 +48,34 @@ import {
 } from '../../../fixtures/scripture-editor-helpers';
 
 test.use({ commentAppOwner: 'notes-content-zoom-list' });
+
+/**
+ * Whether the project folder the app scans (`PARATEXT_PROJECTS_ROOT`) holds Paratext projects of
+ * the checkout's own — anything but the installed sample (`WEB`), the resources folder and the
+ * comment suites' own test projects. This suite opens the checkout's real project folder, and with
+ * such projects there Simple mode's start-up default project pick can replace the project the test
+ * opened.
+ */
+function holdsProjectsOfItsOwn(): boolean {
+  if (!fs.existsSync(PARATEXT_PROJECTS_ROOT)) return false;
+  // statSync follows a symlinked or junctioned project folder; a broken link is not a project.
+  const isFolder = (name: string) => {
+    try {
+      return fs.statSync(path.join(PARATEXT_PROJECTS_ROOT, name)).isDirectory();
+    } catch {
+      return false;
+    }
+  };
+  return fs
+    .readdirSync(PARATEXT_PROJECTS_ROOT)
+    .some(
+      (name) =>
+        name !== 'WEB' &&
+        name !== '_Resources' &&
+        !name.startsWith('testComment_') &&
+        isFolder(name),
+    );
+}
 
 /** `webViewType` of the comment list web view (`legacyCommentManager.main.ts`). */
 const COMMENT_LIST_WEBVIEW_TYPE = 'legacyCommentManager.commentList';
@@ -137,6 +171,13 @@ async function expectCardSettledBelowToolbar(
 }
 
 test.describe('comment list content zoom', () => {
+  // TODO(PT-4768): run everywhere again once the Simple-mode start-up project pick can no longer
+  // replace a project opened meanwhile.
+  test.fixme(
+    holdsProjectsOfItsOwn(),
+    "PT-4768: on a checkout with projects of its own, Simple mode's start-up default project pick (openDefaultActiveProjectIfApplicable) can replace the project this test opened",
+  );
+
   let projectA: CommentTestProject;
   let projectB: CommentTestProject;
 
@@ -192,7 +233,25 @@ test.describe('comment list content zoom', () => {
     );
     await openCommentList(mainPage, projectA, { scopeFilterToSet: 'all-books' });
     const listId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_WEBVIEW_TYPE);
-    const editorId = await waitForOpenWebViewIdByType(mainPage, SCRIPTURE_EDITOR_WEBVIEW_TYPE);
+    // Project A's own editor, not whichever editor is open first: Simple mode starts with the
+    // project last used on this checkout in its editor, and the switch to project A can land after
+    // the list has opened. That other project may have a remembered zoom level, so its editor
+    // would not read 1 below.
+    let editorId = '';
+    await expect
+      .poll(
+        async () => {
+          editorId =
+            (await getOpenWebViewDefinitions(mainPage)).find(
+              (definition) =>
+                definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE &&
+                definition.projectId?.toLowerCase() === projectA.projectId.toLowerCase(),
+            )?.id ?? '';
+          return editorId;
+        },
+        { message: "project A's editor is open", timeout: 60_000 },
+      )
+      .not.toBe('');
     const listFrame = await getEditorFrame(mainPage, listId);
     // Set by the "reopening" step below; closed by the next step before it opens project B's list,
     // so that list's own `waitForOpenWebViewIdByType` (a bare find by type) cannot resolve to this

@@ -54,6 +54,8 @@ const SCOPED_SHARD_METHODS = [
 ];
 
 const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
+/** Poll interval of {@link waitForPapiMethodsRegistered}: one `rpc.discover` fetch per round. */
+const RPC_DISCOVER_SET_POLL_INTERVAL_MS = 100;
 export const PROCESS_READY_TIMEOUT = 120_000;
 
 /**
@@ -97,6 +99,15 @@ export interface ElectronAppContext {
 }
 
 /**
+ * Log tag with the milliseconds elapsed since `startMs`, e.g. `[setup +3412ms]`, so one run's
+ * output shows how long each phase of a launch or teardown took. The tag name stays first so a
+ * search for `[setup` or `[teardown` still finds every line.
+ */
+function elapsedTag(tag: string, startMs: number): string {
+  return `[${tag} +${Date.now() - startMs}ms]`;
+}
+
+/**
  * Resolves after `ms` milliseconds. The one function every inline `setTimeout`-backed delay in this
  * file goes through, so a caller that wants to fake or inject the wait has a single seam instead of
  * a `new Promise((resolve) => setTimeout(resolve, ms))` to spot and swap at each site.
@@ -107,6 +118,95 @@ export function sleep(ms: number): Promise<void> {
   });
 }
 
+/** How many times {@link withMainProcessLinkRetry} tries a call that hit a debugger-link error. */
+const MAIN_PROCESS_LINK_ATTEMPTS = 3;
+
+/**
+ * Runs `evaluate` — an `electronApp.evaluate(...)` call — and tries it again when Playwright's link
+ * to the Electron main process drops it. Playwright reports ANY protocol error on that debugger
+ * link as "Execution context was destroyed, most likely because of a navigation." — including one
+ * where nothing was destroyed and the app is still running. Only that error, and only while the app
+ * process is still running, is tried again; anything else, or an app that has exited, is thrown as
+ * is. Use it for calls that can safely run twice, such as reading or writing the clipboard.
+ */
+export async function withMainProcessLinkRetry<R>(
+  electronApp: ElectronApplication,
+  evaluate: () => Promise<R>,
+  /** Waits between attempts; a unit test passes one that resolves at once. */
+  waitBetweenAttempts: (ms: number) => Promise<void> = sleep,
+): Promise<R> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      // Sequential retries of one call
+      // eslint-disable-next-line no-await-in-loop
+      return await evaluate();
+    } catch (error) {
+      const appProcess = electronApp.process();
+      // Node.js ChildProcess.exitCode/signalCode are null until the process exits
+      // eslint-disable-next-line no-null/no-null
+      const isAppRunning = appProcess.exitCode === null && appProcess.signalCode === null;
+      const isLinkError = String(error).includes('Execution context was destroyed');
+      if (!isLinkError || !isAppRunning || attempt >= MAIN_PROCESS_LINK_ATTEMPTS) throw error;
+      // Sequential retries of one call
+      // eslint-disable-next-line no-await-in-loop
+      await waitBetweenAttempts(100);
+    }
+  }
+}
+
+/**
+ * Puts `text` on the real OS clipboard as plain text, from the Electron main process, retrying when
+ * Playwright's link to it drops the call (see {@link withMainProcessLinkRetry}).
+ */
+export function writeClipboardText(electronApp: ElectronApplication, text: string): Promise<void> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), text),
+  );
+}
+
+/** Reads the plain text on the real OS clipboard from the Electron main process, with link retry. */
+export function readClipboardText(electronApp: ElectronApplication): Promise<string> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }) => clipboard.readText()),
+  );
+}
+
+/** Reads the HTML on the real OS clipboard from the Electron main process, with link retry. */
+export function readClipboardHtml(electronApp: ElectronApplication): Promise<string> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }) => clipboard.readHTML()),
+  );
+}
+
+/**
+ * Reads the plain text and the HTML on the real OS clipboard in ONE main-process call, with link
+ * retry, so both flavours come from the same clipboard contents. Use it when the two are asserted
+ * together: two separate reads can straddle a clipboard change.
+ */
+export function readClipboardTextAndHtml(
+  electronApp: ElectronApplication,
+): Promise<{ text: string; html: string }> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }) => ({
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+    })),
+  );
+}
+
+/**
+ * Replaces the real OS clipboard's contents with `data` (`clipboard.write`: each flavour given is
+ * set, the others are cleared), from the Electron main process, with link retry.
+ */
+export function writeClipboard(
+  electronApp: ElectronApplication,
+  data: { text?: string; html?: string },
+): Promise<void> {
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ clipboard }, payload) => clipboard.write(payload), data),
+  );
+}
+
 /**
  * Wait for the given port to stop accepting connections (i.e., be free). Used after teardown to
  * ensure the previous Electron's extension-host WebSocket server has released port 8876 before the
@@ -115,7 +215,11 @@ export function sleep(ms: number): Promise<void> {
  * next `waitForWebSocketReady` connects to the dying extension host rather than the new one,
  * causing "Settings service undefined" errors.
  */
-async function waitForPortFree(port: number, timeout: number): Promise<boolean> {
+async function waitForPortFree(
+  port: number,
+  timeout: number,
+  pollIntervalMs = 250,
+): Promise<boolean> {
   const startTime = Date.now();
   while (Date.now() - startTime < timeout) {
     // Sequential polling: each probe must finish before starting the next.
@@ -143,7 +247,7 @@ async function waitForPortFree(port: number, timeout: number): Promise<boolean> 
     if (isFree) return true;
     // Sequential polling: each probe must complete before the next starts.
     // eslint-disable-next-line no-await-in-loop
-    await sleep(250);
+    await sleep(pollIntervalMs);
   }
   // Do not throw — if the port is never freed within the window, log and proceed; the next
   // launch will fail its own waitForWebSocketReady with a clearer error.
@@ -151,7 +255,72 @@ async function waitForPortFree(port: number, timeout: number): Promise<boolean> 
   return false;
 }
 
-/** Wait for the WebSocket server to be ready on the specified port. */
+/**
+ * Resolves as soon as the launched process has exited or Playwright reports the app closed,
+ * whichever comes first, or after `capMs` if neither does. Never rejects.
+ *
+ * With a live ChildProcess handle the `exit` event is the signal; that matters on Windows, where
+ * the launched pid is a `cmd.exe` wrapper that `taskkill /t` takes down with the rest of the tree.
+ * Without a handle (Playwright disposed it) and with a `pid`, the pid is polled every 100 ms until
+ * the OS reports it dead. `appClosed` is Playwright's own `close` event. The cap only bounds a
+ * process that reports none of these (the port poll that follows is the real readiness check). The
+ * cap timer, the poll and the `exit` listener are all cleaned up when the wait ends.
+ */
+export async function waitForProcessGone(
+  proc: ReturnType<ElectronApplication['process']> | undefined,
+  appClosed: Promise<void>,
+  capMs: number,
+  pid?: number,
+): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  let exitHandler: (() => void) | undefined;
+  let polling = true;
+  const exited = new Promise<void>((resolve) => {
+    if (proc) {
+      // Node.js ChildProcess.exitCode/signalCode are null until the process exits
+      // eslint-disable-next-line no-null/no-null
+      if (proc.exitCode !== null || proc.signalCode !== null) {
+        resolve();
+        return;
+      }
+      exitHandler = () => resolve();
+      proc.once('exit', exitHandler);
+    } else if (pid === undefined) {
+      resolve();
+    } else {
+      const poll = async () => {
+        while (polling && isPidAlive(pid)) {
+          // Sequential polling: each probe follows the previous interval.
+          // eslint-disable-next-line no-await-in-loop
+          await sleep(100);
+        }
+        resolve();
+      };
+      // Never rejects out of this fire-and-forget loop: a throwing probe ends the wait instead of
+      // leaving `exited` pending until the cap.
+      poll().catch(() => resolve());
+    }
+  });
+  const capped = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, capMs);
+  });
+  try {
+    await Promise.race([appClosed, exited, capped]);
+  } finally {
+    clearTimeout(timer);
+    polling = false;
+    if (proc && exitHandler) proc.off('exit', exitHandler);
+  }
+}
+
+/** Delay between failed connects in {@link waitForWebSocketReady}. */
+const WEBSOCKET_READY_RETRY_MS = 100;
+
+/**
+ * Wait for the WebSocket server to be ready on the specified port. Each attempt is capped at 2 s: a
+ * refused connect returns at once, so the cap only bounds a server that accepts the TCP connection
+ * but is slow to finish the handshake.
+ */
 async function waitForWebSocketReady(port: number, timeout: number): Promise<void> {
   const startTime = Date.now();
 
@@ -182,8 +351,9 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
     } catch {
       // Sequential polling: each attempt must finish (or time out) before the next;
       // parallelizing would defeat the retry/backoff.
+      // A refused connect fails immediately, so this is the real retry cadence while the app boots.
       // eslint-disable-next-line no-await-in-loop
-      await sleep(500);
+      await sleep(WEBSOCKET_READY_RETRY_MS);
     }
   }
   throw new Error(`WebSocket server not ready on port ${port} after ${timeout}ms`);
@@ -193,7 +363,7 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
 export interface LaunchElectronAppOptions {
   /**
    * Additional environment variables to merge into the child process environment, applied after the
-   * defaults. Keys present here override the defaults (e.g. `{ DEV_NOISY: 'false' }`).
+   * defaults. Keys present here override the defaults (e.g. `{ DEV_NOISY: 'true' }`).
    */
   envOverrides?: Record<string, string>;
   /**
@@ -296,13 +466,15 @@ export async function applyDeclaredWindowSize(
   size: WindowSize,
   howToFix: string,
 ): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }, declared) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (win) {
-      if (win.isMaximized()) win.unmaximize();
-      win.setSize(declared.width, declared.height);
-    }
-  }, size);
+  await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ BrowserWindow }, declared) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      if (win) {
+        if (win.isMaximized()) win.unmaximize();
+        win.setSize(declared.width, declared.height);
+      }
+    }, size),
+  );
   await expect(async () => {
     await assertDeclaredWindowSize(page, size, howToFix);
   }).toPass({ timeout: 15_000 });
@@ -334,11 +506,13 @@ const WINDOW_WIDTH_RAF_SETTLE_TIMEOUT_MS = 2_000;
  * at the width a user would actually see.
  */
 export async function closeDevTools(electronApp: ElectronApplication): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().forEach((win) => {
-      if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
-    });
-  });
+  await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows().forEach((win) => {
+        if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
+      });
+    }),
+  );
 }
 
 /**
@@ -366,25 +540,27 @@ export async function setWindowWidth(
 ): Promise<void> {
   await closeDevTools(electronApp);
 
-  const settledWidth = await electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
-    // timeout and then fail with a width mismatch, hiding the actual cause.
-    if (!win) throw new Error('No Electron window to resize');
-    if (win.isMaximized()) win.unmaximize();
+  const settledWidth = await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
+      // timeout and then fail with a width mismatch, hiding the actual cause.
+      if (!win) throw new Error('No Electron window to resize');
+      if (win.isMaximized()) win.unmaximize();
 
-    const [outerWidth, height] = win.getSize();
-    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
-    // reading the size back immediately after it returns the width the window still has, not the one
-    // it is moving to. The target is derived instead — the request clamped by the window's own
-    // `minWidth` (main.ts), converted from outer to content width by the frame delta, since the
-    // renderer's `innerWidth` measures the content box.
-    const frameDelta = outerWidth - win.getContentSize()[0];
-    const target = Math.max(requestedWidth, win.getMinimumSize()[0]) - frameDelta;
+      const [outerWidth, height] = win.getSize();
+      // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
+      // reading the size back immediately after it returns the width the window still has, not the one
+      // it is moving to. The target is derived instead — the request clamped by the window's own
+      // `minWidth` (main.ts), converted from outer to content width by the frame delta, since the
+      // renderer's `innerWidth` measures the content box.
+      const frameDelta = outerWidth - win.getContentSize()[0];
+      const target = Math.max(requestedWidth, win.getMinimumSize()[0]) - frameDelta;
 
-    win.setSize(requestedWidth, height);
-    return target;
-  }, width);
+      win.setSize(requestedWidth, height);
+      return target;
+    }, width),
+  );
 
   await expect
     .poll(async () => Math.abs((await page.evaluate(() => window.innerWidth)) - settledWidth), {
@@ -441,26 +617,28 @@ export async function setWindowHeight(
 ): Promise<void> {
   await closeDevTools(electronApp);
 
-  const settledHeight = await electronApp.evaluate(({ BrowserWindow }, requestedHeight) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
-    // timeout and then fail with a height mismatch, hiding the actual cause.
-    if (!win) throw new Error('No Electron window to resize');
-    if (win.isMaximized()) win.unmaximize();
+  const settledHeight = await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ BrowserWindow }, requestedHeight) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
+      // timeout and then fail with a height mismatch, hiding the actual cause.
+      if (!win) throw new Error('No Electron window to resize');
+      if (win.isMaximized()) win.unmaximize();
 
-    const [width, outerHeight] = win.getSize();
-    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
-    // reading the size back immediately after it returns the height the window still has, not the
-    // one it is moving to. The target is derived instead — the request clamped by the window's own
-    // minimum height (main.ts sets no explicit `minHeight`, so this is Electron's own default),
-    // converted from outer to content height by the frame delta, since the renderer's `innerHeight`
-    // measures the content box.
-    const frameDelta = outerHeight - win.getContentSize()[1];
-    const target = Math.max(requestedHeight, win.getMinimumSize()[1]) - frameDelta;
+      const [width, outerHeight] = win.getSize();
+      // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
+      // reading the size back immediately after it returns the height the window still has, not the
+      // one it is moving to. The target is derived instead — the request clamped by the window's own
+      // minimum height (main.ts sets no explicit `minHeight`, so this is Electron's own default),
+      // converted from outer to content height by the frame delta, since the renderer's `innerHeight`
+      // measures the content box.
+      const frameDelta = outerHeight - win.getContentSize()[1];
+      const target = Math.max(requestedHeight, win.getMinimumSize()[1]) - frameDelta;
 
-    win.setSize(width, requestedHeight);
-    return target;
-  }, height);
+      win.setSize(width, requestedHeight);
+      return target;
+    }, height),
+  );
 
   await expect
     .poll(async () => Math.abs((await page.evaluate(() => window.innerHeight)) - settledHeight), {
@@ -613,7 +791,7 @@ export async function assertInterfaceMode(
   let lastReadError: unknown;
   try {
     const remainingForRegistration = Math.max(1000, timeoutMs - (Date.now() - start));
-    await waitForPapiMethodRegistered(SETTINGS_GET_METHOD, undefined, remainingForRegistration);
+    await waitForPapiMethodsRegistered([SETTINGS_GET_METHOD], undefined, remainingForRegistration);
     // Polled, not read once: `set()` calls (including our own pin) are async too, so a single read
     // right as the provider registers can still race a write that landed a moment later.
     await expect
@@ -765,8 +943,9 @@ export async function launchElectronApp(
   opts: LaunchElectronAppOptions = {},
 ): Promise<ElectronAppContext> {
   const rootDir = path.resolve(__dirname, '../..');
+  const launchStart = Date.now();
 
-  console.log(`Launching Electron app from project root: ${rootDir}`);
+  console.log(`[setup +0ms] Launching Electron app from project root: ${rootDir}`);
 
   // Use an isolated user-data directory so the singleton instance lock does not
   // conflict with any already-running Platform.Bible instance. A caller-supplied directory (a
@@ -801,10 +980,11 @@ export async function launchElectronApp(
   const env = {
     ...restEnv,
     NODE_ENV: 'development',
-    // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
-    // Only set if not already defined, so other E2E suites can override (e.g. a suite that needs a
-    // clean layout passes `envOverrides: { DEV_NOISY: 'false' }`, which is spread last below).
-    DEV_NOISY: process.env.DEV_NOISY ?? 'true',
+    // Quiet dev mode by default: the test extensions (helloRock3, helloSomeone, etc.) stay
+    // unloaded, so the window opens on the normal layout and no test-only web views shift iframe
+    // order or slow the launch. A suite that drives a test extension turns it on with
+    // `envOverrides: { DEV_NOISY: 'true' }` (the overlay specs do), which is spread last below.
+    DEV_NOISY: process.env.DEV_NOISY ?? 'false',
     // Keep DevTools out of the window so the renderer is the size the test asked for.
     // Docked DevTools eats ~555px of a 1280px window, leaving specs interacting with a dock
     // they were never sized for. Honored in src/main/main.ts.
@@ -843,7 +1023,9 @@ export async function launchElectronApp(
   }
 
   // Wait for WebSocket server to be ready (port 8876)
-  console.log('Waiting for WebSocket server on port 8876...');
+  console.log(
+    `${elapsedTag('setup', launchStart)} Electron launched; waiting for WebSocket server on port 8876...`,
+  );
   try {
     await waitForWebSocketReady(DEFAULT_WEBSOCKET_PORT, PROCESS_READY_TIMEOUT);
   } catch (error) {
@@ -859,7 +1041,7 @@ export async function launchElectronApp(
     restoreAppGlobalState();
     throw error;
   }
-  console.log('WebSocket server is ready');
+  console.log(`${elapsedTag('setup', launchStart)} WebSocket server is ready`);
 
   // Register the close listener BEFORE yielding to tests. The 'close' event
   // fires once — if we registered it after use(), it could already be gone by
@@ -920,6 +1102,7 @@ export function removeUserDataDirBestEffort(userDataDir: string): void {
  */
 export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void> {
   const { electronApp, userDataDir, appClosed, appPid, preserveUserDataDir } = ctx;
+  const teardownStart = Date.now();
 
   // Teardown: kill the OS process and wait for Playwright to passively detect
   // the disconnection via the 'close' event registered above.
@@ -936,7 +1119,7 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   }
   const pid = electronProcess?.pid ?? appPid;
   console.log(
-    `[teardown] Closing Electron app... pid=${pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
+    `${elapsedTag('teardown', teardownStart)} Closing Electron app... pid=${pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
   );
 
   // On Linux, processLauncher.js spawns Electron with `detached: true`, making Electron the leader
@@ -962,15 +1145,19 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   if (isProcessAlive()) {
     if (!electronProcess)
       console.log(
-        `[teardown] Playwright handle already disposed but pid ${pid} is still alive — killing anyway...`,
+        `${elapsedTag('teardown', teardownStart)} Playwright handle already disposed but pid ${pid} is still alive — killing anyway...`,
       );
-    console.log('[teardown] Sending SIGKILL to process group...');
+    console.log(`${elapsedTag('teardown', teardownStart)} Sending SIGKILL to process group...`);
     if (pid) killProcessTree(pid, 'SIGKILL');
-    console.log('[teardown] Waiting for appClosed after SIGKILL (up to 3s)...');
-    await Promise.race([appClosed, sleep(3_000)]);
-    console.log('[teardown] Done waiting after SIGKILL');
+    console.log(
+      `${elapsedTag('teardown', teardownStart)} Waiting for the process to exit after SIGKILL (up to 3s)...`,
+    );
+    await waitForProcessGone(electronProcess, appClosed, 3_000, pid);
+    console.log(`${elapsedTag('teardown', teardownStart)} Done waiting after SIGKILL`);
   } else if (!electronProcess) {
-    console.log('[teardown] Playwright handle already disposed and the OS process has exited.');
+    console.log(
+      `${elapsedTag('teardown', teardownStart)} Playwright handle already disposed and the OS process has exited.`,
+    );
   }
 
   // Wait for the extension-host's WebSocket server (port 8876) to release the port before the next
@@ -978,20 +1165,22 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // to unbind after being signalled, and keep port 8876 bound in the meantime, causing the next
   // test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
   // preserve-and-return path too, since a relaunch reuses the same fixed port 8876.
-  console.log('[teardown] Waiting for port 8876 to be free...');
-  const portFreed = await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000);
-  if (portFreed) console.log('[teardown] Port 8876 is free');
+  console.log(`${elapsedTag('teardown', teardownStart)} Waiting for port 8876 to be free...`);
+  const portFreed = await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000, 100);
+  if (portFreed) console.log(`${elapsedTag('teardown', teardownStart)} Port 8876 is free`);
 
   // A preserved profile stays on disk so a later launch can relaunch into it (see
   // LaunchElectronAppOptions.preserveUserDataDir). The last teardown of a relaunch chain runs with
   // the flag unset and deletes the directory below.
   if (preserveUserDataDir) {
-    console.log(`[teardown] Preserving user data dir for relaunch: ${userDataDir}`);
-    console.log('[teardown] Complete');
+    console.log(
+      `${elapsedTag('teardown', teardownStart)} Preserving user data dir for relaunch: ${userDataDir}`,
+    );
+    console.log(`${elapsedTag('teardown', teardownStart)} Complete`);
     return;
   }
 
-  console.log('[teardown] Cleaning up user data dir...');
+  console.log(`${elapsedTag('teardown', teardownStart)} Cleaning up user data dir...`);
 
   // Clean up the isolated user-data directory. See removeUserDataDirBestEffort for why this retries
   // rather than trusting the first attempt.
@@ -1003,7 +1192,7 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // never reaches its final, non-preserving teardown — for global teardown's
   // restoreAppGlobalState()/restoreLeakedSettings() call to recover as a safety net.
   restoreAppGlobalState();
-  console.log('[teardown] Complete');
+  console.log(`${elapsedTag('teardown', teardownStart)} Complete`);
 }
 
 /**
@@ -1117,9 +1306,28 @@ export async function waitForPapiMethodRegistered(
   port: number = DEFAULT_WEBSOCKET_PORT,
   timeoutMs = PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
 ): Promise<void> {
-  const isMatch = (name: string) =>
+  await waitForPapiMethodsRegistered([methodName], port, timeoutMs, RPC_DISCOVER_POLL_INTERVAL_MS);
+}
+
+/**
+ * Poll `rpc.discover` until EVERY entry of `methodNames` has a matching registered method, or
+ * `timeoutMs` elapses. One `rpc.discover` fetch per round serves the whole set, so waiting for
+ * several methods costs no more requests than waiting for one. The timeout error names the entries
+ * still missing at the last successful fetch.
+ *
+ * @param methodNames Exact method names or patterns (see {@link waitForPapiMethodRegistered})
+ * @param pollIntervalMs Pause between rounds
+ */
+export async function waitForPapiMethodsRegistered(
+  methodNames: ReadonlyArray<string | RegExp>,
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  timeoutMs = PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  pollIntervalMs = RPC_DISCOVER_SET_POLL_INTERVAL_MS,
+): Promise<void> {
+  const isMatch = (methodName: string | RegExp, name: string) =>
     typeof methodName === 'string' ? name === methodName : methodName.test(name);
   const start = Date.now();
+  let missing: ReadonlyArray<string | RegExp> = methodNames;
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
     try {
@@ -1132,18 +1340,24 @@ export async function waitForPapiMethodRegistered(
         port,
         singleAttemptBudgetMs(remaining),
       );
-      if (result.methods?.some((m) => isMatch(m.name))) return;
+      const registered = result.methods ?? [];
+      missing = methodNames.filter(
+        (methodName) => !registered.some((m) => isMatch(methodName, m.name)),
+      );
+      if (missing.length === 0) return;
     } catch {
       /* next poll */
     }
-    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    const sleepMs = Math.min(pollIntervalMs, timeoutMs - (Date.now() - start));
     if (sleepMs <= 0) break;
     // Sequential polling: each attempt must finish (or time out) before the next;
     // parallelizing would defeat the retry/backoff.
     // eslint-disable-next-line no-await-in-loop
     await sleep(sleepMs);
   }
-  throw new Error(`PAPI method "${methodName}" not listed in rpc.discover within ${timeoutMs}ms`);
+  throw new Error(
+    `PAPI method(s) ${missing.map((m) => (typeof m === 'string' ? `"${m}"` : String(m))).join(', ')} not listed in rpc.discover within ${timeoutMs}ms`,
+  );
 }
 
 /**
@@ -2221,6 +2435,40 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
   await expect(page.locator('.pr-twp [role="status"]')).not.toBeVisible({ timeout });
 }
 
+/**
+ * A window's dock once its initial layout load has finished and React has rendered the result:
+ * `PlatformDockLayout` then sets `data-layout-loaded="true"` on rc-dock's root element
+ * (`LAYOUT_LOADED_ATTRIBUTE` in
+ * `src/renderer/components/docking/platform-dock-layout.component.tsx`). Everything that load
+ * brought is in the DOM by then, and it will not replace the dock again.
+ */
+export const DOCK_LAYOUT_LOADED_SELECTOR = '.dock-layout[data-layout-loaded="true"]';
+
+/**
+ * Wait until a window's initial layout load has finished — see {@link DOCK_LAYOUT_LOADED_SELECTOR}.
+ *
+ * That load can take seconds (it asks the main process for the window's saved layout, with retries)
+ * and replaces the whole dock when it lands, so a tab opened before it is lost or ends up in
+ * another panel. It covers a load that stood down without writing, too: one that found content
+ * already docked (a web view moved into a new window) leaves the dock as it is. It does NOT cover
+ * tabs the main process routes into the window afterwards, such as the Home tab a window born empty
+ * gets.
+ */
+export async function waitForDockLayoutLoaded(page: Page, timeout: number): Promise<void> {
+  try {
+    await page.waitForSelector(DOCK_LAYOUT_LOADED_SELECTOR, { state: 'attached', timeout });
+  } catch (error) {
+    throw new Error(
+      `the dock's initial layout load did not finish within ${timeout} ms (no ` +
+        `${DOCK_LAYOUT_LOADED_SELECTOR}). A load that fails never sets it: a failed initial load ` +
+        'logs "Initial loadLayout failed", and a failed load that replaced it (an interface-mode ' +
+        'switch) logs "Dock layout failed to reload after interface mode change"; look for ' +
+        'either in the renderer log.',
+      { cause: error },
+    );
+  }
+}
+
 /** What the gate is showing, once it is known to be showing something. */
 interface StuckGateObservations {
   escapeHatchVisible: boolean;
@@ -2531,8 +2779,9 @@ export async function buildFirstRunGateSample(
  * signal to do that work.
  *
  * Deliberately loud when it fires, with a stable, greppable tag: this is called from
- * `waitForAppReady`, which is about POST-first-run behaviour, never first-run itself (that is
- * `first-run-wizard.spec.ts`, which documents why it cannot call `waitForAppReady` at all), so
+ * `waitForAppReady`, which is about POST-first-run behaviour, never first-run itself (the specs
+ * under `tests/isolated/first-run/` cannot call `waitForAppReady` at all: the first-run overlay's
+ * loading spinner matches the `role="status"` selector `waitForOverlayGone` waits on), so
  * recovering silently here would hide a real, if rare, product-level race behind a passing test.
  *
  * Takes and respects a caller-supplied budget rather than its own fixed timeout, matching every
@@ -2635,10 +2884,9 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
  * at all.
  *
  * `waitForOverlayGone`'s `.pr-twp [role="status"]` selector also matches the first-run gate's own
- * loading spinner (see its docblock and `first-run-wizard.spec.ts`), so a gate that is still
- * showing at this point times out here with a generic locator message that gives no hint the gate,
- * not the workspace overlay, is what never went away. Exported so the message this builds is
- * checkable without a live Page.
+ * loading spinner (see its docblock), so a gate that is still showing at this point times out here
+ * with a generic locator message that gives no hint the gate, not the workspace overlay, is what
+ * never went away. Exported so the message this builds is checkable without a live Page.
  *
  * @param sampleReadFailure When set, the gate check gave up because samples kept failing to read
  *   anything (see {@link SampleReadFailure}), rather than because it saw the gate and it never
@@ -2673,7 +2921,7 @@ export function describeInconclusiveOverlayTimeout(
 /** Options accepted by {@link waitForAppReady}. */
 export interface WaitForAppReadyOptions {
   /**
-   * Budget for the whole readiness sequence, shared across its three waits.
+   * Budget for the whole readiness sequence, shared across its waits.
    *
    * @default 90_000
    */
@@ -2692,9 +2940,13 @@ export interface WaitForAppReadyOptions {
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
  * platform-dock layout to appear, then for a renderer to finish registering every window-scoped
  * shard the main process routes a command to (the dock can render before that async work
- * completes), then for the rare first-run-gate race to clear if it happened, and finally for the
- * full-screen initialization overlay to clear. The overlay lingers while async services (settings,
- * theme) finish initializing — it must be gone before tests interact with the UI.
+ * completes), then for the rare first-run-gate race to clear if it happened, then for the
+ * full-screen initialization overlay to clear, and finally for the dock's initial layout load to
+ * finish. The overlay lingers while async services (settings, theme) finish initializing — it must
+ * be gone before tests interact with the UI. The layout load can outlast it, and replaces the whole
+ * dock when it lands (see {@link waitForDockLayoutLoaded}). Tab titles may still show `%key%`
+ * localization placeholders when this returns; `waitForFirstLayoutLoad` in `dock-tab-helpers.ts`
+ * also waits for those.
  *
  * Unless `allowOnboardingTour` is set, also suppresses the onboarding tour — see
  * {@link suppressOnboardingTour} for why and how.
@@ -2708,16 +2960,20 @@ export async function waitForAppReady(
     state: 'attached',
     timeout,
   });
-  // Waited on together: the renderer starts them together too, so they arrive within a poll of one
-  // another and waiting one after another would spend the timeout budget several times over
+  console.log(`${elapsedTag('ready', start)} dock layout attached`);
+  // One discover fetch per poll serves every shard: the renderer starts them together, so they
+  // arrive within a poll of one another and waiting one after another would spend the timeout
+  // budget several times over
   const remainingForShards = Math.max(1000, timeout - (Date.now() - start));
-  await Promise.all(
-    SCOPED_SHARD_METHODS.map((scopedShardMethod) =>
-      waitForPapiMethodRegistered(scopedShardMethod, DEFAULT_WEBSOCKET_PORT, remainingForShards),
-    ),
+  await waitForPapiMethodsRegistered(
+    SCOPED_SHARD_METHODS,
+    DEFAULT_WEBSOCKET_PORT,
+    remainingForShards,
   );
+  console.log(`${elapsedTag('ready', start)} scoped shard methods registered`);
   const remainingForFirstRunGate = Math.max(1000, timeout - (Date.now() - start));
   const gateOutcome = await dismissStuckFirstRunGate(page, remainingForFirstRunGate);
+  console.log(`${elapsedTag('ready', start)} first-run gate settled`);
   const remainingForOverlay = Math.max(1000, timeout - (Date.now() - start));
   // Services like settings and theme finish async work after the dock layout mounts and the shards
   // register, so the overlay can outlast both earlier signals.
@@ -2732,7 +2988,14 @@ export async function waitForAppReady(
       throw describeInconclusiveOverlayTimeout(error, gateOutcome.sampleReadFailure);
     throw error;
   }
+  console.log(`${elapsedTag('ready', start)} initialization overlay gone`);
+  // The overlay clears without waiting for the dock's initial layout load, which then replaces the
+  // whole dock when it lands; a test acting on the dock before that loses what it opened
+  const remainingForLayoutLoad = Math.max(1000, timeout - (Date.now() - start));
+  await waitForDockLayoutLoaded(page, remainingForLayoutLoad);
+  console.log(`${elapsedTag('ready', start)} dock layout loaded`);
   if (!allowOnboardingTour) await suppressOnboardingTour(page);
+  console.log(`${elapsedTag('ready', start)} ready`);
 }
 
 /** The fields of an open web view definition these helpers read. */
@@ -2836,6 +3099,64 @@ export async function waitForOpenWebViewIdByType(
 }
 
 /**
+ * The slice of the renderer's `papi` that {@link sendCommandFromPage} uses. Type-only: it is erased
+ * before the callback runs in the page.
+ */
+type PagePapiCommands<T> = {
+  papi: { commands: { sendCommand: (commandName: string, ...args: unknown[]) => Promise<T> } };
+};
+
+/**
+ * Sends a PAPI command from inside the app window and waits for its result, exactly as a menu entry
+ * would (the renderer exposes `papi` on `window`, untyped in Playwright's page context). `T` is the
+ * result type the caller expects, and must be JSON-like so Playwright can serialize it back from
+ * the page; the command name and arguments are not checked against PAPI's command map. The
+ * arguments must survive Playwright's `page.evaluate` serialization too. A command that opens a
+ * dialog answers only once the dialog closes: use {@link sendCommandFromPageWithoutWaiting} for
+ * those. For a client over the websocket instead of the page, see `sendCommand` on
+ * `fixtures/papi.fixture.ts` and `fixtures/papi-live.fixture.ts`.
+ */
+export async function sendCommandFromPage<T = unknown>(
+  page: Page,
+  commandName: string,
+  ...args: unknown[]
+): Promise<T> {
+  return page.evaluate(
+    ([name, commandArgs]) => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { papi } = window as unknown as PagePapiCommands<T>;
+      return papi.commands.sendCommand(name, ...commandArgs);
+    },
+    [commandName, args] as const,
+  );
+}
+
+/**
+ * Sends a PAPI command from inside the app window and resolves once it is sent, without waiting for
+ * its result. A rejection is logged to the page's console as `<command> failed: <error>` so a
+ * failure does not surface only as a later timeout. Same serialization limit as
+ * {@link sendCommandFromPage}.
+ */
+export async function sendCommandFromPageWithoutWaiting(
+  page: Page,
+  commandName: string,
+  ...args: unknown[]
+): Promise<void> {
+  await page.evaluate(
+    ([name, commandArgs]) => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { papi } = window as unknown as PagePapiCommands<unknown>;
+      papi.commands
+        .sendCommand(name, ...commandArgs)
+        .catch((error) => console.error(`${name} failed: ${error}`));
+    },
+    [commandName, args] as const,
+  );
+}
+
+/**
  * Open the Markers Checklist for the open scripture editor by sending
  * `platformScripture.openMarkersChecklist` with the editor's web view id; the handler resolves the
  * project from the web view definition. The editor menu hides the Markers Checklist item in both
@@ -2843,14 +3164,7 @@ export async function waitForOpenWebViewIdByType(
  */
 export async function sendOpenMarkersChecklistCommand(page: Page): Promise<void> {
   const editorWebViewId = await waitForOpenWebViewIdByType(page, 'platformScriptureEditor.react');
-  await page.evaluate(async (webViewId) => {
-    // The renderer exposes `papi` on `window` without a declared type in the e2e project.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const win = window as unknown as {
-      papi: { commands: { sendCommand: (command: string, id: string) => Promise<unknown> } };
-    };
-    await win.papi.commands.sendCommand('platformScripture.openMarkersChecklist', webViewId);
-  }, editorWebViewId);
+  await sendCommandFromPage(page, 'platformScripture.openMarkersChecklist', editorWebViewId);
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */

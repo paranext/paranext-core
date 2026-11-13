@@ -1016,6 +1016,41 @@ async function loadLayout(
   layout?: LayoutInfo | LayoutBase,
   options?: { persist?: boolean },
 ): Promise<void> {
+  const outcome = await runLayoutLoad(layout, options);
+  if (outcome !== 'superseded') reportPendingInitialLayoutLoad();
+}
+
+/**
+ * How a layout load ended, when it did not throw. `applied`: it handed its layout to the dock.
+ * `stood-down`: it deliberately wrote nothing because web views arrived in the dock first, so the
+ * dock already holds its content. `superseded`: a newer load took over, so the dock is NOT settled
+ * — the newer load owns it.
+ */
+type LayoutLoadOutcome = 'applied' | 'stood-down' | 'superseded';
+
+/**
+ * Report of the initial layout load, waiting for a load that settles the dock. Set by
+ * {@link registerDockLayout}; cleared once reported, when the initial load fails before any newer
+ * load started, or when that dock layout is unregistered. A superseded initial load leaves it in
+ * place — whether it then returns or throws — so the load that superseded it (an interface-mode
+ * switch, through {@link loadLayout}) reports instead. If that superseding load fails the report
+ * never fires, which fails closed: no signal is better than a signal for a dock that was never
+ * populated.
+ */
+let pendingInitialLayoutLoadReport: (() => void) | undefined;
+
+/** Fires and clears {@link pendingInitialLayoutLoadReport} */
+function reportPendingInitialLayoutLoad(): void {
+  const report = pendingInitialLayoutLoadReport;
+  pendingInitialLayoutLoadReport = undefined;
+  report?.();
+}
+
+/** Body of {@link loadLayout}; see it for the parameters */
+async function runLayoutLoad(
+  layout?: LayoutInfo | LayoutBase,
+  options?: { persist?: boolean },
+): Promise<LayoutLoadOutcome> {
   layoutLoadGeneration += 1;
   const thisGeneration = layoutLoadGeneration;
   /** Whether a load started after this one, making everything this one has read stale */
@@ -1049,7 +1084,7 @@ async function loadLayout(
         // push with nothing scheduled to reconcile the dock. The caller owning this layout does not
         // make it current; only being the newest load does.
         logger.debug('Dropping an explicit layout load that a newer one superseded');
-        return;
+        return 'superseded';
       }
       dockLayoutVar.loadLayout(layoutAsInfo);
       layoutLoadGenerationInDock = thisGeneration;
@@ -1057,7 +1092,7 @@ async function loadLayout(
       // `loadLayout` doesn't run `onLayoutChange` on a programmatic load, so persist manually —
       // unless the caller explicitly opted out (see the `options.persist` doc above).
       if (options?.persist !== false) await saveLayout(layoutAsInfo);
-      return;
+      return 'applied';
     }
 
     // Pick the layout by interface mode (runs at startup and on every `platform.interfaceMode` change;
@@ -1072,7 +1107,7 @@ async function loadLayout(
       // `saveLayout` the wrong mode, which either drops the user's power-mode layout changes on the
       // floor or lets simple-mode changes clobber their saved power layout.
       logger.debug('Dropping a layout load that a newer one superseded while it read the mode');
-      return;
+      return 'superseded';
     }
     // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
     // subsequent `saveLayout`) sees the current mode without another settings round-trip.
@@ -1092,7 +1127,7 @@ async function loadLayout(
       logger.debug(
         'Dropping a layout load that a newer one superseded while it read the saved layout',
       );
-      return;
+      return 'superseded';
     }
     const { layout: persistedLayout, isPendingContent, isBakedDefault } = persistedResult;
     /**
@@ -1125,14 +1160,14 @@ async function loadLayout(
         logger.debug(
           'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
         );
-        return;
+        return 'stood-down';
       }
       // A window created to receive one specific web view, routed separately, starts with nothing
       // else — skip the default-layout supplement entirely, without even fetching its flags.
       dockLayoutVar.loadLayout(layoutToLoad);
       layoutLoadGenerationInDock = thisGeneration;
       emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
-      return;
+      return 'applied';
     }
     const enabledEntries = await getEnabledSupplementEntries();
     if (isSuperseded()) {
@@ -1140,14 +1175,14 @@ async function loadLayout(
       // request above can take seconds. The newer load has already loaded, or is about to load, the
       // layout that belongs there.
       logger.debug('Dropping a layout load that a newer one superseded before it reached the dock');
-      return;
+      return 'superseded';
     }
     // Same checkpoint for content that arrived instead of a newer load — see the guard's declaration
     if (didDockGainWebViewsDuringLoad()) {
       logger.debug(
         'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
       );
-      return;
+      return 'stood-down';
     }
     if (enabledEntries.length === 0) {
       // Nothing to merge (an empty supplement, or every entry's flag off) — load the base layout
@@ -1156,7 +1191,7 @@ async function loadLayout(
       layoutLoadGenerationInDock = thisGeneration;
       emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
       reportIfLoadedLayoutIsEmpty(layoutToLoad);
-      return;
+      return 'applied';
     }
     // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
     // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
@@ -1187,6 +1222,7 @@ async function loadLayout(
     // Emit close events for pre-existing web views the (supplemented) layout dropped
     emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, supplementedLayoutInfo);
     reportIfLoadedLayoutIsEmpty(supplementedLayoutInfo);
+    return 'applied';
   } finally {
     endTrackedLoad?.();
   }
@@ -1488,9 +1524,27 @@ function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
     });
 }
 
-export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
+/**
+ * Register the dock layout this window's web view service operates on, and start the window's
+ * initial layout load.
+ *
+ * @param dockLayout The dock layout to register
+ * @param onInitialLayoutLoadFinished Called once the initial layout load has finished without
+ *   failing, while this dock layout is still registered. By then that load can no longer change the
+ *   dock: it has either handed its layout to the dock or stood down without writing because content
+ *   arrived in the dock while it read what to restore. When a newer load (an interface-mode switch)
+ *   superseded it, the callback waits for that newer load to settle the dock instead, even if the
+ *   superseded initial load then fails. Not called when the initial load fails before any newer
+ *   load started.
+ * @returns Unsubscriber that unregisters this dock layout
+ */
+export function registerDockLayout(
+  dockLayout: PapiDockLayout,
+  onInitialLayoutLoadFinished?: () => void,
+): Unsubscriber {
   // Save the current async var so we know if it changed before we unsubscribed
   const currentPapiDockLayoutVar = papiDockLayoutVar;
+  let isRegistered = true;
 
   setDockLayout(dockLayout);
 
@@ -1501,7 +1555,28 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // Fire-and-forget so `registerDockLayout` can stay sync. Guard the rejection, though: `loadLayout`
   // awaits settings reads (supplement flags), and an unhandled rejection here would leave the dock
   // unloaded (blank window).
-  loadLayout().catch((err) => logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`));
+  // `loadLayout` reports through `pendingInitialLayoutLoadReport` once a load settles the dock, so
+  // an initial load that a newer load superseded is reported by that newer load instead.
+  const report = () => {
+    if (isRegistered) onInitialLayoutLoadFinished?.();
+  };
+  pendingInitialLayoutLoadReport = onInitialLayoutLoadFinished ? report : undefined;
+  const initialLoad = loadLayout();
+  // `loadLayout` takes its generation before its first await, so this is the initial load's
+  const initialLoadGeneration = layoutLoadGeneration;
+  (async () => {
+    try {
+      await initialLoad;
+    } catch (err) {
+      logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`);
+      // A load that superseded this one owns the report: it fires it once it settles the dock
+      if (
+        initialLoadGeneration === layoutLoadGeneration &&
+        pendingInitialLayoutLoadReport === report
+      )
+        pendingInitialLayoutLoadReport = undefined;
+    }
+  })();
 
   const unsubscribeOnDidOpenWebViewForCache = onDidOpenWebView((event) =>
     cacheLastOpenedSimpleProject(event.webView),
@@ -1590,6 +1665,8 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
     if (papiDockLayoutVar !== currentPapiDockLayoutVar)
       throw new Error('Tried to unregister an old dock layout');
 
+    isRegistered = false;
+    if (pendingInitialLayoutLoadReport === report) pendingInitialLayoutLoadReport = undefined;
     unsubscribeOnDidOpenWebViewForCache();
     unsubscribeOnDidUpdateWebViewForCache();
 

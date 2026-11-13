@@ -88,7 +88,7 @@ async function readActiveArea(frame: Frame): Promise<string | undefined> {
  * chord handler runs on `document.activeElement` (`targetFor` in
  * `web-view-content-zoom.bootstrap-script.ts`). Used for the footnotes step below, where focus is
  * moved by keyboard (`ArrowDown`) rather than by a click. Same shape as `readFocusedAreaId` in
- * `content-zoom-chords.spec.ts`.
+ * `content-zoom.spec.ts`.
  */
 async function readFocusedAreaId(frame: Frame): Promise<string | undefined> {
   return frame.evaluate(() => {
@@ -308,7 +308,7 @@ test.describe('Enhanced Resources content zoom', () => {
         await expect(footnotesList).toBeVisible({ timeout: 20_000 });
         // Keyboard, not a click: clicking a row selects that note and sends the caret back into the
         // Bible text, which would resolve the chord's area from `main` instead (same reasoning as
-        // the Scripture editor's own chord test, content-zoom-chords.spec.ts). Arrowing onto a row
+        // the Scripture editor's own chord test, content-zoom.spec.ts). Arrowing onto a row
         // moves focus into the pane without selecting. The area is already resolvable once the list
         // itself is focused — this list has `role="listbox"` and its own `data-platform-content-zoom-
         // root="footnotes"` ancestor — the ArrowDown is for parity with that precedent, not a

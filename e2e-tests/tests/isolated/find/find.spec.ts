@@ -70,6 +70,7 @@ import {
   sendPapiRequestOnce,
   waitForAppReady,
   waitForOpenWebViewIdByType,
+  withMainProcessLinkRetry,
   PROCESS_READY_TIMEOUT,
 } from '../../../fixtures/helpers';
 import {
@@ -819,10 +820,12 @@ async function setWindowContentSize(
     return { width: originalWidth, height: originalHeight };
   }, newSize);
   return async () => {
-    await electronApp.evaluate(({ BrowserWindow }, size) => {
-      const [appWindow] = BrowserWindow.getAllWindows();
-      appWindow.setContentSize(size.width, size.height);
-    }, original);
+    await withMainProcessLinkRetry(electronApp, () =>
+      electronApp.evaluate(({ BrowserWindow }, size) => {
+        const [appWindow] = BrowserWindow.getAllWindows();
+        appWindow.setContentSize(size.width, size.height);
+      }, original),
+    );
   };
 }
 
@@ -1232,11 +1235,19 @@ test.describe('Search History', () => {
     const term = `histtest-debounce-${Date.now()}`;
     await frame.locator('#search-term').fill(term);
 
-    // Wait for the 5-second debounce timer to fire (+ a small buffer)
-    await mainPage.waitForTimeout(HISTORY_DEBOUNCE_MS + 500);
-
-    await openHistoryDropdown(frame);
-    await expect(frame.getByRole('menuitem', { name: term })).toBeVisible({ timeout: 5_000 });
+    // The idle debounce writes the term to history once it fires. Reopen the history menu until the
+    // term shows, closing it between attempts so each attempt reads the stored history afresh. The
+    // budget covers the debounce plus slack for the write and the menu round trip.
+    const historyItem = frame.getByRole('menuitem', { name: term });
+    await expect(async () => {
+      await openHistoryDropdown(frame);
+      try {
+        await expect(historyItem).toBeVisible({ timeout: 1_000 });
+      } catch (error) {
+        await mainPage.keyboard.press('Escape');
+        throw error;
+      }
+    }).toPass({ timeout: HISTORY_DEBOUNCE_MS + 15_000, intervals: [250, 500, 1_000] });
   });
 
   test('should add search term to history immediately when Enter is pressed', async ({

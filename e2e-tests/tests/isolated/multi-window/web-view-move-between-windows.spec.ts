@@ -78,9 +78,13 @@
  *
  * `npm run test:e2e:isolated multi-window`
  */
-import type { ElectronApplication, Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { sendPapiRequestOnce, waitForAppReady } from '../../../fixtures/helpers';
+import {
+  sendPapiRequestOnce,
+  waitForAppReady,
+  withMainProcessLinkRetry,
+} from '../../../fixtures/helpers';
 import {
   INDICATOR_SELECTOR,
   readContentZoomMemory,
@@ -113,10 +117,31 @@ import {
   homeTabTitle,
   pollUntil,
   quitAndExpectCleanExit,
+  waitForAppWindowCount,
+  WINDOW_COUNT_STABLE_MS,
   waitForRendererRegistered,
   webViewTabTitle,
   withPlatformWindow,
 } from './multi-window.util';
+
+// #region tab menu
+
+/**
+ * Right-clicks `tabTitle` until its context menu offers `item`, and returns `item`. A tab reads its
+ * menu items from the menu data provider once the interface mode is known, so a right-click soon
+ * after its window came up can open no menu at all; the next one finds the items loaded.
+ */
+async function openTabMenuItem(tabTitle: Locator, item: Locator): Promise<Locator> {
+  await expect(async () => {
+    // A menu an earlier attempt left open blocks pointer events outside itself, so close it first.
+    await tabTitle.page().keyboard.press('Escape');
+    await tabTitle.click({ button: 'right', timeout: 5_000 });
+    await expect(item).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 60_000 });
+  return item;
+}
+
+// #endregion
 
 // #region move commands
 
@@ -187,35 +212,6 @@ async function expectWindowToHoldExactly(
   await expect(page.locator('.dock-tab')).toHaveCount(expectedWebViewIds.length);
 }
 
-/**
- * How long to let the window set settle before pinning its size. A window that is about to close —
- * or a second window that is about to be created — looks exactly like a settled set for a moment,
- * so the count is read once the wait is satisfied and then again after this pause.
- */
-const WINDOW_COUNT_SETTLE_MS = 5_000;
-
-/**
- * Wait until the app has exactly `expectedCount` windows, then confirm it still does after a
- * settle.
- */
-async function expectAppWindowCount(
-  electronApp: ElectronApplication,
-  expectedCount: number,
-  timeoutMs: number,
-  label: string,
-): Promise<void> {
-  await pollUntil(
-    async () => getAppPages(electronApp).length,
-    (count) => count === expectedCount,
-    timeoutMs,
-    label,
-  );
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, WINDOW_COUNT_SETTLE_MS);
-  });
-  expect(getAppPages(electronApp).length, label).toBe(expectedCount);
-}
-
 // #endregion
 
 // #region move failure marker
@@ -282,7 +278,9 @@ test.describe('moving a web view between windows', () => {
     const window1Id = getWindowIdOfPage(mainPage);
     await expect(homeTabTitle(mainPage)).toBeVisible({ timeout: 60_000 });
     const webViewId = await getHomeTabWebViewId(mainPage);
-    await expectAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
+    // No hold for this count: each launch gets a fresh user data folder with no saved window
+    // layouts, so the startup restore has no second window to bring back.
+    await waitForAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
 
     // Establish the routing target first, so "focus did not move" is a change that could have been
     // observed rather than a value that was never set.
@@ -291,7 +289,14 @@ test.describe('moving a web view between windows', () => {
     logStep(`window ${window1Id} holds focus before the move`);
 
     await moveWebViewToNewWindow(webViewId);
-    await expectAppWindowCount(electronApp, 2, 60_000, 'the moved web view to get its own window');
+    // Held, so a second window created for the same move cannot pass as the one expected
+    await waitForAppWindowCount(
+      electronApp,
+      2,
+      60_000,
+      'the moved web view to get its own window',
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
+    );
 
     // Matched by the platform's own windowId query parameter, not Electron's numeric
     // `BrowserWindow.id` — see `withPlatformWindow`'s doc comment in `multi-window.util.ts`.
@@ -339,7 +344,9 @@ test.describe('moving a web view between windows', () => {
     await expect(
       mainPage.locator(`iframe[data-web-view-id="${webViewIdBeforeMove}"]`),
     ).toBeAttached({ timeout: 60_000 });
-    await expectAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
+    // No hold for this count: each launch gets a fresh user data folder with no saved window
+    // layouts, so the startup restore has no second window to bring back.
+    await waitForAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
     logStep(`window ${window1Id} holds web view ${webViewIdBeforeMove}`);
 
     // Drive the only route a user actually has today: the tab's own context menu. The window
@@ -350,9 +357,10 @@ test.describe('moving a web view between windows', () => {
       predicate: (page: Page) => page.url().includes('windowId='),
       timeout: 180_000,
     });
-    await homeTabTitle(mainPage).click({ button: 'right' });
-    const moveMenuItem = mainPage.getByRole('menuitem', { name: 'Move tab to new window' });
-    await expect(moveMenuItem).toBeVisible({ timeout: 30_000 });
+    const moveMenuItem = await openTabMenuItem(
+      homeTabTitle(mainPage),
+      mainPage.getByRole('menuitem', { name: 'Move tab to new window' }),
+    );
     await moveMenuItem.click();
     logStep('chose "Move tab to new window" from the tab context menu');
 
@@ -393,28 +401,30 @@ test.describe('moving a web view between windows', () => {
     // came from the tab's OWN CONTEXT MENU, so a person asked for it and the window they asked for
     // must come to the front. Without this, withholding could be applied to every move — including
     // the user's own — and the suite would still be green.
-    const menuMoveFocus = await electronApp.evaluate(
-      ({ BrowserWindow }, { id }) => {
-        // Matched on the `windowId` query parameter, not `BrowserWindow.id`: the platform's id is a
-        // durable GUID with no relationship to Electron's numeric id (see `withPlatformWindow`'s own
-        // doc comment in `multi-window.util.ts` for why).
-        const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
-          try {
-            return (
-              new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined
-            );
-          } catch {
-            return undefined;
-          }
-        };
-        const created = BrowserWindow.getAllWindows().find((win) => platformIdOf(win) !== id);
-        const focusedWindow = BrowserWindow.getFocusedWindow();
-        return {
-          createdIsFocused: created ? created.isFocused() : undefined,
-          focusedWindowId: focusedWindow ? platformIdOf(focusedWindow) : undefined,
-        };
-      },
-      { id: window1Id },
+    const menuMoveFocus = await withMainProcessLinkRetry(electronApp, () =>
+      electronApp.evaluate(
+        ({ BrowserWindow }, { id }) => {
+          // Matched on the `windowId` query parameter, not `BrowserWindow.id`: the platform's id is a
+          // durable GUID with no relationship to Electron's numeric id (see `withPlatformWindow`'s own
+          // doc comment in `multi-window.util.ts` for why).
+          const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
+            try {
+              return (
+                new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined
+              );
+            } catch {
+              return undefined;
+            }
+          };
+          const created = BrowserWindow.getAllWindows().find((win) => platformIdOf(win) !== id);
+          const focusedWindow = BrowserWindow.getFocusedWindow();
+          return {
+            createdIsFocused: created ? created.isFocused() : undefined,
+            focusedWindowId: focusedWindow ? platformIdOf(focusedWindow) : undefined,
+          };
+        },
+        { id: window1Id },
+      ),
     );
     expect(menuMoveFocus.createdIsFocused).toBe(true);
     expect(menuMoveFocus.focusedWindowId).toBe(window2Id);
@@ -446,11 +456,12 @@ test.describe('moving a web view between windows', () => {
     logStep(`window ${window1Id} docked its own Home tab as ${dockedHomeWebViewId}`);
 
     // Two windows, and exactly two: the moved web view's window, plus the window it left.
-    await expectAppWindowCount(
+    await waitForAppWindowCount(
       electronApp,
       2,
       60_000,
       'the app to end the move with exactly two windows',
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
     );
 
     // Nothing about creating a window, emptying another, and reopening a web view across them may
@@ -520,16 +531,17 @@ test.describe('moving a web view between windows', () => {
     // the same thing as closing that last tab. Only its ✕ and the Quit menu close it. Were it to
     // close here, no window would hold the primary role at all, and window 2 — the one the user is
     // now working in — would be a secondary whose ✕ drops its layout.
-    await expectAppWindowCount(
+    // Docked on the fly, so it carries a freshly minted id, distinct from the web view that moved
+    // out — see {@link expectWindowDockHasOnlyHomeTab}.
+    await expectWindowDockHasOnlyHomeTab(mainPage);
+    expect(mainPage.isClosed()).toBe(false);
+    await waitForAppWindowCount(
       electronApp,
       2,
       120_000,
       `window ${window1Id} to stay open after the move emptied it`,
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
     );
-    expect(mainPage.isClosed()).toBe(false);
-    // Docked on the fly, so it carries a freshly minted id, distinct from the web view that moved
-    // out — see {@link expectWindowDockHasOnlyHomeTab}.
-    await expectWindowDockHasOnlyHomeTab(mainPage);
     logStep(`window ${window1Id} docked Home after being emptied, as the primary`);
 
     // MOVE BACK OUT, to a window created for it. The source survives this one: it keeps its own
@@ -567,11 +579,12 @@ test.describe('moving a web view between windows', () => {
     expect(page2.isClosed()).toBe(false);
     logStep(`window ${window2Id} survived the move out, holding only its own Home tab`);
 
-    await expectAppWindowCount(
+    await waitForAppWindowCount(
       electronApp,
       3,
       60_000,
       'the app to end the second move with exactly three windows',
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
     );
 
     // MOVE BACK IN THROUGH THE SUBMENU — the user's route to what the requirement calls docking a
@@ -606,9 +619,10 @@ test.describe('moving a web view between windows', () => {
     const window2Title = await page2.title();
     logStep(`all three windows are named after the tab they show: "${window2Title}"`);
 
-    await webViewTabTitle(page3, idAfterSecondMove).click({ button: 'right' });
-    const moveToWindowItem = page3.getByRole('menuitem', { name: 'Move tab to window' });
-    await expect(moveToWindowItem).toBeVisible({ timeout: 30_000 });
+    const moveToWindowItem = await openTabMenuItem(
+      webViewTabTitle(page3, idAfterSecondMove),
+      page3.getByRole('menuitem', { name: 'Move tab to window' }),
+    );
     await moveToWindowItem.hover();
 
     // TWO targets with three windows open: the window the tab is already in is left out, because
@@ -650,11 +664,12 @@ test.describe('moving a web view between windows', () => {
 
     // The source side, by the same rule the earlier moves assert: this move emptied window 3 while
     // window 2 was standing, so window 3 closes rather than docking a Home tab of its own
-    await expectAppWindowCount(
+    await waitForAppWindowCount(
       electronApp,
       2,
       120_000,
       `window ${window3Id} to close after the submenu move emptied it, leaving the other two`,
+      { stableForMs: WINDOW_COUNT_STABLE_MS },
     );
     expect(page3.isClosed()).toBe(true);
     logStep(`window ${window3Id} closed after the submenu move emptied it`);

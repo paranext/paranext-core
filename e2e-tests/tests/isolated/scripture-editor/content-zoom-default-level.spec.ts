@@ -11,6 +11,7 @@
  * `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { CONTENT_ZOOM_MEMORY_SETTING } from '../../../fixtures/content-zoom-helpers';
 import {
   CONTENT_ZOOM_COMMANDS,
   getEditorFrame,
@@ -27,7 +28,9 @@ test.use({
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
   // The fixture's documented seeding channel — specs must never call preConfigureSettings
   // themselves (see the IsolatedFixtures doc).
-  seedSettings: { 'platform.webViewContentZoom': 1.2 },
+  // An emptied zoom memory, because a level the developer's own app remembered for the sample
+  // project's text area would win over the seeded default
+  seedSettings: { 'platform.webViewContentZoom': 1.2, [CONTENT_ZOOM_MEMORY_SETTING]: {} },
 });
 
 test.describe('scripture editor content zoom — non-default Settings level', () => {

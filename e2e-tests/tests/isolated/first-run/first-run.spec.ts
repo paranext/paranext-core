@@ -1,20 +1,22 @@
 /**
  * E2E tests for the first-run wizard (PT-4175 / PT-4179).
  *
- * These tests use isolated.fixture (fresh Electron per test) because the first-run wizard is a
- * one-time modal that only shows on a clean profile. preConfigureSettings forces
+ * These tests use isolated.fixture (a fresh Electron per test) because the first-run wizard is a
+ * one-time modal that only shows on a clean profile. The fixture's seedSettings force
  * platform.firstRunComplete: false so the wizard always appears even on a dev machine where the
  * developer has already completed first-run.
  *
  * Tests cover:
  *
- * - Wizard appears and localisation resolves
- * - Forward navigation: Language → Internet Settings → Identify (Next hidden at Identify)
- * - Internet Settings step never shows a server picker
- * - "Don't sync yet" on Sync consent closes the wizard (PT-4178)
- * - Sync progress step renders the syncing heading with Finish disabled (PT-4179)
+ * - One walkthrough of the wizard in a single app instance, one step per check: the wizard appears
+ *   and localisation resolves; forward navigation Language → Internet Settings → Identify (Next
+ *   hidden at Identify); the Internet Settings step never shows a server picker; "Use
+ *   Platform.Bible with internet access" saves Unrestricted; the Sync progress step renders the
+ *   syncing heading with its own Finish button (PT-4179); "Don't sync yet" on Sync consent closes
+ *   the wizard (PT-4178)
  * - Choosing "Unrestricted" on Internet Settings starts no Send/Receive before Sync consent, and each
- *   consent choice leaves the automatic sync gate in the state it promises
+ *   consent choice leaves the automatic sync gate in the state it promises (a test per choice, each
+ *   with its own app instance)
  *
  * Navigation note: IdentifyStep hides the shell's Next button and owns its own "Save and restart"
  * primary action (which triggers a real app restart in production). SyncConsentStep (PT-4178)
@@ -45,11 +47,11 @@ import { FirstRunPage } from './first-run.page';
 // locally and persisted platform.firstRunComplete: true. Seeded THROUGH the fixture's options,
 // never with a local preConfigureSettings hook: hooks run before test-scoped fixture setup, so a
 // hand-rolled seed was overridden for shared keys and then leaked back into shared dev-appdata
-// by the fixture's later restore. The fixture is test-scoped, so this re-seeds per test — the
-// "skip setup" test calls completeFirstRun(), which writes firstRunComplete: true back to the
-// file and would otherwise poison every later test in the suite. `interfaceMode: 'simple'` is
-// explicit because the wizard is a simple-mode surface: in power mode the first-run resolution
-// shows the app immediately and the wizard never appears.
+// by the fixture's later restore. The fixture is test-scoped, so this re-seeds per test. Dismissing
+// the wizard can write firstRunComplete: true back to the file, which would otherwise poison every
+// later test in the suite. `interfaceMode: 'simple'` is explicit because the wizard is a
+// simple-mode surface: in power mode the first-run resolution shows the app immediately and the
+// wizard never appears.
 test.use({
   interfaceMode: 'simple',
   seedSettings: { 'platform.firstRunComplete': false },
@@ -88,20 +90,29 @@ async function injectDemoMode(mainPage: import('@playwright/test').Page): Promis
   await mainPage.reload();
 }
 
-test.describe('First-run wizard', () => {
-  // The demo-reload path is fast, but the sub-waits along the worst path are sized for a COLD
-  // start: injectDemoMode waits up to 90 s for the first boot to settle, then waitForWizard
-  // allows 90 s for the dialog plus 75 s for the interactive "Next" — the registration probes
-  // legitimately take tens of seconds (up to 3 attempts x ~10-15 s plus backoffs; see
-  // resolveRegistrationValidity) — and each step advance allows 60 s for its async settings
-  // reads. Those budgets cannot all fit the config's 120 s default, which made the per-step
-  // timeouts unreachable paper limits; 240 s lets the documented probe worst case actually
-  // complete while still failing in bounded time.
-  test.describe.configure({ timeout: 240_000 });
+/** How many steps the wizard walkthrough runs after its first. */
+const WIZARD_WALKTHROUGH_WARM_STEP_COUNT = 5;
 
+/**
+ * The budget of one walkthrough step after the first: the app is already up, so it is the config's
+ * per-test default rather than the cold-start {@link STEP_TIMEOUT_MS}.
+ */
+const WARM_STEP_TIMEOUT_MS = 120_000;
+
+// The demo-reload path is fast, but the sub-waits along the worst path are sized for a COLD
+// start: injectDemoMode waits up to 90 s for the first boot to settle, then waitForWizard
+// allows 90 s for the dialog plus 75 s for the interactive "Next" — the registration probes
+// legitimately take tens of seconds (up to 3 attempts x ~10-15 s plus backoffs; see
+// resolveRegistrationValidity) — and each step advance allows 60 s for its async settings
+// reads. Those budgets cannot all fit the config's 120 s default, which made the per-step
+// timeouts unreachable paper limits; 240 s lets the documented probe worst case actually
+// complete while still failing in bounded time.
+const STEP_TIMEOUT_MS = 240_000;
+
+test.describe('First-run wizard', () => {
   // The Internet Settings step saves the chosen option to ParatextData's own InternetSettings.xml,
   // which the fixture's settings restore does not cover. Put the developer's saved settings back
-  // after each test, so running this spec cannot leave a "Disable access to some Bible translation
+  // after the test, so running this spec cannot leave a "Disable access to some Bible translation
   // services" machine on Unrestricted.
   let savedInternetSettings: SavedInternetSettings | undefined;
   // `mainPage` is requested only so the app is running before the settings are read; a hook that
@@ -115,149 +126,143 @@ test.describe('First-run wizard', () => {
     savedInternetSettings = undefined;
   });
 
-  // Every test runs in demo mode, including these first two: only demo mode makes the wizard's
-  // content machine-independent (see injectDemoMode). The real routing decisions are pinned by
-  // first-run-store's unit tests; what e2e adds is the wizard actually mounting, localizing, and
-  // navigating inside the running app.
-  test('shows wizard dialog on a clean launch', async ({ mainPage }) => {
-    await injectDemoMode(mainPage);
-    const frPage = new FirstRunPage(mainPage);
-    await frPage.waitForWizard();
-    await expect(frPage.dialog).toBeVisible();
-  });
-
-  test('advances forward: Language → Internet Settings → Identify (Next hidden)', async ({
+  // The steps walk the wizard forward in one app instance. Sync progress has no Back, and "Don't
+  // sync yet" closes the wizard, so the last step re-runs the wizard from its first step: demo mode
+  // never persists completion, so a renderer reload brings it back at the language step.
+  //
+  // Every step runs in demo mode: only demo mode makes the wizard's content machine-independent
+  // (see injectDemoMode). The real routing decisions are pinned by first-run-store's unit tests;
+  // what e2e adds is the wizard actually mounting, localizing, and navigating inside the running
+  // app.
+  test('wizard walkthrough: Language → Internet Settings → Identify → Sync consent → Sync progress', async ({
     mainPage,
   }) => {
-    await injectDemoMode(mainPage);
-    const frPage = new FirstRunPage(mainPage);
-    await frPage.waitForWizard();
+    // Only the first step pays the cold start; the rest run on the app it started.
+    test.setTimeout(STEP_TIMEOUT_MS + WIZARD_WALKTHROUGH_WARM_STEP_COUNT * WARM_STEP_TIMEOUT_MS);
 
-    // Language step: Next is enabled immediately (LanguageStep calls setCanProceed(true) on
-    // mount); no Back or "Don't sync yet" yet.
-    const nextBtn = frPage.dialog.getByRole('button', { name: 'Next' });
-    await expect(nextBtn).toBeEnabled();
-    await expect(frPage.dialog.getByRole('button', { name: 'Back' })).not.toBeVisible();
-    await expect(frPage.dontSyncYetButton).not.toBeVisible();
-    await frPage.clickNext(); // Language → Internet Settings
-
-    // Internet Settings step: Back appears; "Don't sync yet" stays hidden. The step offers only its
-    // own two choices, with the sensitive-countries warning, and hides Next, so the saved setting
-    // can't be accepted without a choice.
-    await expect(frPage.dialog.getByRole('button', { name: 'Back' })).toBeVisible({
-      timeout: 5_000,
-    });
-    await expect(frPage.dontSyncYetButton).not.toBeVisible();
-    await expect(frPage.continueWithInternetButton).toBeVisible({ timeout: 60_000 });
-    await expect(frPage.closeAppButton).toBeVisible();
-    await expect(
-      frPage.dialog.getByText(
-        'Platform.Bible uses the internet. Only use Platform.Bible when you are not in a sensitive country.',
-      ),
-    ).toBeVisible();
-    await expect(frPage.dialog.getByRole('radiogroup')).toHaveCount(0);
-    await expect(frPage.dialog.getByRole('button', { name: /^(Next|Finish)$/i })).not.toBeVisible();
-    await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
-
-    // Identify step: Next is hidden entirely (setCanProceed(undefined)) — the step owns its own
-    // "Save and restart" primary action. Back is still visible.
-    await expect(frPage.dialog.getByRole('button', { name: 'Back' })).toBeVisible({
-      timeout: 5_000,
-    });
-    await expect(frPage.dialog.getByRole('button', { name: /^(Next|Finish)$/i })).not.toBeVisible();
-    await expect(frPage.dialog.getByRole('button', { name: /save and restart/i })).toBeVisible();
-  });
-
-  test('internet-settings step never shows a server picker', async ({ mainPage }) => {
-    // A first-run install never offers a server choice during setup: a user who needs a
-    // non-Production server sets it afterward from the profile's Internet Settings dialog, where a
-    // Shift-click gate applies.
-    await injectDemoMode(mainPage);
-    const frPage = new FirstRunPage(mainPage);
-    await frPage.waitForWizard();
-
-    await frPage.clickNext(); // Language → Internet Settings
-
-    // Wait for the step's loaded content (its choices) before asserting on what it does NOT contain
-    // — otherwise the assertion could trivially pass while the step is still showing its loading
-    // spinner.
-    await expect(frPage.continueWithInternetButton).toBeVisible({ timeout: 60_000 });
-    await expect(frPage.dialog.getByRole('button', { name: /Developer only/ })).not.toBeVisible();
-  });
-
-  // Whatever was saved before, including a Paratext 9 setting the app does not support yet.
-  test('"Use Platform.Bible with internet access" saves Unrestricted and moves on to Identify', async ({
-    mainPage,
-  }) => {
     if (!savedInternetSettings) throw new Error('expected the saved internet settings to be read');
-    await restoreSavedInternetSettings({
-      ...savedInternetSettings,
-      permittedInternetUse: 'Disabled',
-    });
-    await injectDemoMode(mainPage);
+    const savedBeforeWalkthrough = savedInternetSettings;
     const frPage = new FirstRunPage(mainPage);
-    await frPage.waitForWizard();
-    await frPage.clickNext(); // Language → Internet Settings
 
-    await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
-
-    await expect(frPage.dialog.getByRole('button', { name: /save and restart/i })).toBeVisible({
-      timeout: 15_000,
+    await test.step('shows wizard dialog on a clean launch', async () => {
+      await injectDemoMode(mainPage);
+      await frPage.waitForWizard();
+      await expect(frPage.dialog).toBeVisible();
     });
-    expect((await readSavedInternetSettings()).permittedInternetUse).toBe('Enabled');
-  });
 
-  test('"Don\'t sync yet" on Sync consent closes the wizard', async ({ mainPage }) => {
-    // Demo mode: "Save and restart" calls onNext() directly without a real backend call.
-    await injectDemoMode(mainPage);
-    const frPage = new FirstRunPage(mainPage);
-    await frPage.waitForWizard();
+    await test.step('advances forward: Language → Internet Settings → Identify (Next hidden)', async () => {
+      // Language step: Next is enabled immediately (LanguageStep calls setCanProceed(true) on
+      // mount); no Back or "Don't sync yet" yet.
+      const nextBtn = frPage.dialog.getByRole('button', { name: 'Next' });
+      await expect(nextBtn).toBeEnabled();
+      await expect(frPage.dialog.getByRole('button', { name: 'Back' })).not.toBeVisible();
+      await expect(frPage.dontSyncYetButton).not.toBeVisible();
+      await frPage.clickNext(); // Language → Internet Settings
 
-    // Navigate to Sync consent.
-    await frPage.clickNext(); // Language → Internet Settings
-    await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
-    await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
+      // Internet Settings step: Back appears; "Don't sync yet" stays hidden. The step offers only
+      // its own two choices, with the sensitive-countries warning, and hides Next, so the saved
+      // setting can't be accepted without a choice.
+      await expect(frPage.dialog.getByRole('button', { name: 'Back' })).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(frPage.dontSyncYetButton).not.toBeVisible();
+      await expect(frPage.continueWithInternetButton).toBeVisible({ timeout: 60_000 });
+      await expect(frPage.closeAppButton).toBeVisible();
+      await expect(
+        frPage.dialog.getByText(
+          'Platform.Bible uses the internet. Only use Platform.Bible when you are not in a sensitive country.',
+        ),
+      ).toBeVisible();
+      await expect(frPage.dialog.getByRole('radiogroup')).toHaveCount(0);
+      await expect(
+        frPage.dialog.getByRole('button', { name: /^(Next|Finish)$/i }),
+      ).not.toBeVisible();
+      await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
 
-    // "Don't sync yet" invokes declineFirstRunSync(), which records the session's sync deferral and
-    // then marks setup complete and unmounts the overlay, without persisting any sync preference.
-    await expect(frPage.dontSyncYetButton).toBeVisible({
-      timeout: 5_000,
+      // Identify step: Next is hidden entirely (setCanProceed(undefined)) — the step owns its own
+      // "Save and restart" primary action. Back is still visible.
+      await expect(frPage.dialog.getByRole('button', { name: 'Back' })).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(
+        frPage.dialog.getByRole('button', { name: /^(Next|Finish)$/i }),
+      ).not.toBeVisible();
+      await expect(frPage.dialog.getByRole('button', { name: /save and restart/i })).toBeVisible();
     });
-    await frPage.clickDontSyncYet();
-    await frPage.waitForDismissed();
-    await expect(frPage.dialog).not.toBeVisible();
-  });
 
-  test('Sync progress step shows "Syncing your projects" and its own Finish button', async ({
-    mainPage,
-  }) => {
-    // Demo mode: "Save and restart" calls onNext() directly without a real backend call.
-    await injectDemoMode(mainPage);
-    const frPage = new FirstRunPage(mainPage);
-    await frPage.waitForWizard();
+    await test.step('internet-settings step never shows a server picker', async () => {
+      // A first-run install never offers a server choice during setup: a user who needs a
+      // non-Production server sets it afterward from the profile's Internet Settings dialog, where
+      // a Shift-click gate applies.
+      await frPage.clickBack(); // Identify → Internet Settings
 
-    // Navigate to Sync progress (the step under test for PT-4179).
-    await frPage.clickNext(); // Language → Internet Settings
-    await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
-    await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
-    // SyncConsentStep (PT-4178) hides Next and shows its own "Sync" primary button. In demo mode,
-    // clicking "Sync" resolves the defaultSyncFn immediately without a real backend call.
-    await frPage.clickSync(); // Sync consent → Sync progress
+      // Wait for the step's loaded content (its choices) before asserting on what it does NOT
+      // contain — otherwise the assertion could trivially pass while the step is still showing its
+      // loading spinner.
+      await expect(frPage.continueWithInternetButton).toBeVisible({ timeout: 60_000 });
+      await expect(frPage.dialog.getByRole('button', { name: /Developer only/ })).not.toBeVisible();
+    });
 
-    // The syncing heading confirms the step rendered correctly.
-    await expect(
-      frPage.dialog.getByRole('heading', { name: /syncing your projects/i }),
-    ).toBeVisible({ timeout: 10_000 });
+    // Whatever was saved before, including a Paratext 9 setting the app does not support yet.
+    await test.step('"Use Platform.Bible with internet access" saves Unrestricted and moves on to Identify', async () => {
+      await restoreSavedInternetSettings({
+        ...savedBeforeWalkthrough,
+        permittedInternetUse: 'Disabled',
+      });
+      // Back to the language step and forward again, so the Internet Settings step mounts afresh
+      // and reads the settings just restored.
+      await frPage.clickBack(); // Internet Settings → Language
+      await frPage.clickNext(); // Language → Internet Settings
 
-    // Deliberately NOT asserting Finish's disabled state: it is a mid-flight state racing two
-    // clocks this test cannot control — the step's own 30 s no-events recovery timer (which
-    // enables Finish as a fallback), and the dev build's placeholder startup sync, whose real
-    // isSyncing true→false cycle enables Finish legitimately within seconds. The
-    // disabled-until-complete gating is pinned deterministically in
-    // sync-progress.component.test.tsx; what e2e adds is the step actually rendering in the
-    // running app with its own primary button.
-    const finishBtn = frPage.dialog.getByRole('button', { name: 'Finish' });
-    await expect(finishBtn).toBeVisible({ timeout: 5_000 });
+      await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
+
+      await expect(frPage.dialog.getByRole('button', { name: /save and restart/i })).toBeVisible({
+        timeout: 15_000,
+      });
+      expect((await readSavedInternetSettings()).permittedInternetUse).toBe('Enabled');
+    });
+
+    await test.step('Sync progress step shows "Syncing your projects" and its own Finish button', async () => {
+      await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
+      // SyncConsentStep (PT-4178) hides Next and shows its own "Sync" primary button. In demo mode,
+      // clicking "Sync" resolves the defaultSyncFn immediately without a real backend call.
+      await frPage.clickSync(); // Sync consent → Sync progress
+
+      // The syncing heading confirms the step rendered correctly.
+      await expect(
+        frPage.dialog.getByRole('heading', { name: /syncing your projects/i }),
+      ).toBeVisible({ timeout: 10_000 });
+
+      // Deliberately NOT asserting Finish's disabled state: it is a mid-flight state racing two
+      // clocks this test cannot control — the step's own 30 s no-events recovery timer (which
+      // enables Finish as a fallback), and the dev build's placeholder startup sync, whose real
+      // isSyncing true→false cycle enables Finish legitimately within seconds. The
+      // disabled-until-complete gating is pinned deterministically in
+      // sync-progress.component.test.tsx; what e2e adds is the step actually rendering in the
+      // running app with its own primary button.
+      const finishBtn = frPage.dialog.getByRole('button', { name: 'Finish' });
+      await expect(finishBtn).toBeVisible({ timeout: 5_000 });
+    });
+
+    await test.step('"Don\'t sync yet" on Sync consent closes the wizard', async () => {
+      // Sync progress has no Back: reload so the wizard starts again at the language step (demo
+      // mode never persists completion), then walk to Sync consent.
+      await mainPage.reload();
+      await frPage.waitForWizard();
+      await frPage.clickNext(); // Language → Internet Settings
+      await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
+      await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
+
+      // "Don't sync yet" invokes declineFirstRunSync(), which records the session's sync deferral
+      // and then marks setup complete and unmounts the overlay, without persisting any sync
+      // preference.
+      await expect(frPage.dontSyncYetButton).toBeVisible({
+        timeout: 5_000,
+      });
+      await frPage.clickDontSyncYet();
+      await frPage.waitForDismissed();
+      await expect(frPage.dialog).not.toBeVisible();
+    });
   });
 });
 

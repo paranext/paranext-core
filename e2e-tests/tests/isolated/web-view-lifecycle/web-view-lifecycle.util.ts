@@ -34,14 +34,23 @@ export async function currentRootChildCount(page: Page, webViewId: string): Prom
   }, iframeSelector(webViewId));
 }
 
-/** Opens a {@link REACT_WEB_VIEW_TYPE} tab and waits until its document has rendered its root */
-export async function openReactWebViewTab(page: Page): Promise<string> {
-  const webViewId = await page.evaluate(async (type) => {
-    // The renderer sets `globalThis.papi`; it is untyped in the Playwright context.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const { papi } = window as unknown as PapiWindow;
-    return papi.webViews.openWebView(type, { type: 'tab' });
-  }, REACT_WEB_VIEW_TYPE);
+/**
+ * Opens a {@link REACT_WEB_VIEW_TYPE} tab and waits until its document has rendered its root.
+ *
+ * @param parentTabGroupId The dock panel to open the tab in. Without one, the dock places it next
+ *   to the tab it last added or updated, which at start-up depends on whether the window's own tab
+ *   updates have landed yet.
+ */
+export async function openReactWebViewTab(page: Page, parentTabGroupId?: string): Promise<string> {
+  const webViewId = await page.evaluate(
+    async ({ type, parent }) => {
+      // The renderer sets `globalThis.papi`; it is untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { papi } = window as unknown as PapiWindow;
+      return papi.webViews.openWebView(type, { type: 'tab', parentTabGroupId: parent });
+    },
+    { type: REACT_WEB_VIEW_TYPE, parent: parentTabGroupId },
+  );
   if (!webViewId) throw new Error('openWebView returned no id');
   await expect
     .poll(() => currentRootChildCount(page, webViewId), {
@@ -50,6 +59,20 @@ export async function openReactWebViewTab(page: Page): Promise<string> {
     })
     .toBeGreaterThan(0);
   return webViewId;
+}
+
+/** Reloads a {@link REACT_WEB_VIEW_TYPE} web view in place and checks the reload keeps its id */
+export async function reloadReactWebView(page: Page, webViewId: string): Promise<void> {
+  const reloadedId = await page.evaluate(
+    async ({ type, id }) => {
+      // The renderer sets `globalThis.papi`; it is untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { papi } = window as unknown as PapiWindow;
+      return papi.webViews.reloadWebView(type, id);
+    },
+    { type: REACT_WEB_VIEW_TYPE, id: webViewId },
+  );
+  expect(reloadedId, 'the reload returns the same web view').toBe(webViewId);
 }
 
 /** Console lines in which `WebViewErrorBoundary` reports one of `webViewIds` crashing */

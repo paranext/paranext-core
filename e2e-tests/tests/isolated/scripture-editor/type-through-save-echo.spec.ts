@@ -14,13 +14,20 @@
  * Robust-by-construction rather than timing-racy: every assertion polls for a stable end state with
  * a generous timeout, so it does not depend on hitting the ~700ms debounce/echo window precisely.
  *
- * ONE test() per spec file on purpose (the isolated fixture is test-scoped and a second Electron
- * instance against the shared renderer dev server has a documented dock-tab failure mode — see
- * standard-default-power-mode.spec.ts). Sub-scenarios are test.step()s sharing the one instance.
+ * Also covers Home and Ctrl+Home on the `\id` line. The line starts with a read-only
+ * `contenteditable="false"` glyph (`\id JON `), so the browser's own Home lands the caret on the
+ * boundary BEFORE it and the editor has to move it past. Text typed in front of the glyph would
+ * render there while the save — which never writes the glyph as its own node — puts it after the
+ * book code, so the line would change shape on the next load. This drives the real keys in the real
+ * browser, the only place that boundary placement happens.
+ *
+ * One test() with test.step()s: the isolated fixture starts a new app for every test(), so the
+ * sub-scenarios share one launch.
  *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated scripture-editor`.
  */
+import type { Locator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   makeSampleProjectEditable,
@@ -31,7 +38,7 @@ import {
 } from '../../../fixtures/scripture-editor-helpers';
 
 // Power mode so the editor opens in Standard view (marker-editable) — the surface these fixes
-// target. DEV_NOISY=false keeps the normal Home layout (see standard-default-power-mode.spec.ts).
+// target. DEV_NOISY=false keeps the normal Home layout (see preview-read-only-power-mode.spec.ts).
 test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
@@ -41,14 +48,27 @@ test.use({
 // unambiguous and any dropped character makes the match fail.
 const FIRST_BURST = 'TYPETHROUGHALPHA';
 const SECOND_BURST = 'TYPETHROUGHBETA';
+const HOME_TOKEN = 'HOMEKEYTOKEN';
+const CTRL_HOME_TOKEN = 'CTRLHOMETOKEN';
+
+// One cold start (Playwright's 3x "slow" budget on the config default) plus the config default for
+// each step that runs on the already-warm app after the first three.
+const COLD_START_TIMEOUT_MS = 360_000;
+const WARM_STEP_TIMEOUT_MS = 120_000;
+const WARM_STEP_COUNT = 3;
+
+/** The line's text with the glyph's trailing NBSP read as a plain space. */
+async function lineText(line: Locator): Promise<string> {
+  return (await line.textContent())?.replace(/\u00a0/g, ' ') ?? '';
+}
 
 test.describe('scripture editor type-through', () => {
   test('preserves every character and the caret across the PDP save/echo round-trip', async ({
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, then several seconds of
-    // deliberately-paced typing). Give it Playwright's 3x "slow" budget for headroom.
-    test.slow();
+    // deliberately-paced typing per step).
+    test.setTimeout(COLD_START_TIMEOUT_MS + WARM_STEP_COUNT * WARM_STEP_TIMEOUT_MS);
 
     await waitForHomeTab(mainPage);
     await makeSampleProjectEditable();
@@ -95,6 +115,44 @@ test.describe('scripture editor type-through', () => {
       // ...and returning to Jonah 1 must still show the saved edits (the flush persisted them).
       await navigateToolbarBcv(mainPage, 'Jonah 1:1');
       await expect(editorInput).toContainText(`${FIRST_BURST}${SECOND_BURST}`, { timeout: 20_000 });
+    });
+
+    const idLine = editorInput.locator('.usfm_id').first();
+    let originalContent = '';
+
+    await test.step('Home then typing lands after the \\id glyph', async () => {
+      await navigateToolbarBcv(mainPage, 'Jonah 1:1');
+      await expect(idLine).toBeAttached({ timeout: 60_000 });
+      const original = await lineText(idLine);
+      expect(original.startsWith('\\id JON ')).toBe(true);
+      originalContent = original.slice('\\id JON '.length);
+
+      await idLine.click();
+      await editorInput.press('End');
+      await editorInput.press('Home');
+      await editorInput.pressSequentially(HOME_TOKEN, { delay: 30 });
+      await expect
+        .poll(() => lineText(idLine), { timeout: 20_000 })
+        .toBe(`\\id JON ${HOME_TOKEN}${originalContent}`);
+    });
+
+    await test.step('Ctrl+Home then typing lands after the \\id glyph', async () => {
+      await editorInput.press('Control+Home');
+      await editorInput.pressSequentially(CTRL_HOME_TOKEN, { delay: 30 });
+      await expect
+        .poll(() => lineText(idLine), { timeout: 20_000 })
+        .toBe(`\\id JON ${CTRL_HOME_TOKEN}${HOME_TOKEN}${originalContent}`);
+    });
+
+    await test.step('the saved line reads back the same', async () => {
+      // Jonah 2 has no `\id` line; its verse text is the positive control that the chapter really
+      // changed before returning re-reads chapter 1 from the saved file.
+      await navigateToolbarBcv(mainPage, 'Jonah 2:1');
+      await expect(editorInput).toContainText('prayed to Yahweh, his God', { timeout: 60_000 });
+      await navigateToolbarBcv(mainPage, 'Jonah 1:1');
+      await expect
+        .poll(() => lineText(idLine), { timeout: 20_000 })
+        .toBe(`\\id JON ${CTRL_HOME_TOKEN}${HOME_TOKEN}${originalContent}`);
     });
   });
 });

@@ -39,9 +39,8 @@
  * small unrelated edit of their own (see `saveAndReadChapter`) and read the chapter once the
  * project data provider has it.
  *
- * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a SECOND Electron
- * instance launched against the shared webpack renderer dev server has a documented failure mode
- * where new dock tabs never render (see isolated.fixture.ts).
+ * One test() with test.step()s: the isolated fixture starts a new app for every test(), so the
+ * steps share one launch.
  *
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into an empty root, and discarded with it): `npm run test:e2e:isolated
@@ -153,7 +152,7 @@ test.describe('scripture editor annotation shapes', () => {
   }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, two chapter loads,
     // several typed edits each awaited through a save). 3x "slow" budget — see
-    // standard-default-power-mode.spec.ts.
+    // preview-read-only-power-mode.spec.ts.
     test.slow();
 
     await waitForHomeTab(mainPage);

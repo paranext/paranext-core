@@ -37,6 +37,7 @@ import path from 'path';
 import type { FrameLocator, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import {
+  sendCommandFromPage,
   sendOpenMarkersChecklistCommand,
   waitForAppReady,
   waitForOpenWebViewIdByType,
@@ -590,14 +591,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
       mainPage,
       'platformScriptureEditor.react',
     );
-    await mainPage.evaluate(async (webViewId) => {
-      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const win = window as unknown as {
-        papi: { commands: { sendCommand: (command: string, id: string) => Promise<unknown> } };
-      };
-      await win.papi.commands.sendCommand('platformScripture.openChecksSidePanel', webViewId);
-    }, editorWebViewId);
+    await sendCommandFromPage(mainPage, 'platformScripture.openChecksSidePanel', editorWebViewId);
 
     // The side panel mounts as a docked panel to the right; its iframe title is "Checks".
     const sidePanelFrame = mainPage.frameLocator('iframe[title*="Checks" i]');

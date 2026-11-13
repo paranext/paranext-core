@@ -15,16 +15,16 @@
  * text, no row editor opens in the footnotes pane, and a closed pane stays closed. The undo is
  * pressed both straight after the close and after clicking elsewhere in the text first.
  *
- * With the footnotes pane closed and with it open. ONE test() per spec file on purpose: the
- * isolated fixture is test-scoped, and a second Electron instance against the shared renderer dev
- * server can fail to render new dock tabs (see isolated.fixture.ts). The cases run as test.step()s
- * sharing one instance, each at the end of its own chapter.
+ * With the footnotes pane closed and with it open. One test() with test.step()s: the isolated
+ * fixture starts a new app for every test(), so the cases share one launch, each at the end of its
+ * own chapter.
  *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated tests/isolated/scripture-editor/unclosed-note-close-undo.spec.ts`.
  */
 import { type ElectronApplication, type Frame, type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { writeClipboardText } from '../../../fixtures/helpers';
 import {
   getEditorFrame,
   makeSampleProjectEditable,
@@ -113,10 +113,7 @@ async function closeThenUndo(
   const text = frame.locator('.editor-input').first();
   await text.click();
   await text.press('Control+End');
-  await electronApp.evaluate(
-    ({ clipboard }, usfm) => clipboard.writeText(usfm),
-    UNCLOSED_NOTE_USFM,
-  );
+  await writeClipboardText(electronApp, UNCLOSED_NOTE_USFM);
   await text.press('Control+V');
   await expect.poll(async () => (await readChapterEnd(frame)).noteText).toContain('as');
   await mainPage.waitForTimeout(PAUSE_MS);

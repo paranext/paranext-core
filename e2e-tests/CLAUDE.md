@@ -1,6 +1,8 @@
 # E2E Test Instructions
 
-Running the isolated suite natively on Windows: see `tests/isolated/README.md#running-on-windows`.
+Linux, including WSL2, is the supported platform for the isolated suite; native Windows and macOS
+are best effort. To run it natively on Windows, see `tests/isolated/README.md#running-on-windows`.
+Run the subset for the area you changed: the full isolated run takes about an hour.
 
 ## Where to put new E2E tests
 
@@ -64,7 +66,7 @@ one of these.
   exception is `window-layout-persistence.spec.ts`, which manages its own launches by hand instead
   of going through a fixture (see its own docblock) and does restore via `test.afterAll`. A
   run whose process is killed outright (Ctrl+C, a crashed worker) never reaches that teardown and
-  never restores. The four `multi-window` specs pin `'platform.interfaceMode': 'power'`, so a killed
+  never restores. The `multi-window` specs pin `'platform.interfaceMode': 'power'`, so a killed
   multi-window run leaves the whole checkout in Power mode. A suite that pins nothing inherits it.
   With no pin at all the app falls back to `'simple'` (`src/renderer/hooks/use-interface-mode.hook.ts`).
   - Check it first when a suite behaves differently than it did yesterday: `cat dev-appdata/data/settings.json`
@@ -93,8 +95,11 @@ one of these.
   15 entries, and survives the test, the Electron process, and the whole run. A history assertion
   that passed yesterday can fail today on what an earlier run left behind.
 - **The real OS clipboard is shared with the developer's desktop, and nothing restores it.**
-  `clipboard-usfm-round-trip.spec.ts` reaches it through `electronApp.evaluate(({ clipboard }) =>
-  …)` — the main-process module, outside the renderer's permission surface — so a run leaves its
+  `clipboard-usfm-round-trip.spec.ts` reaches it through the retrying helpers in
+  `fixtures/helpers.ts` (`writeClipboardText`, `readClipboardText`, `readClipboardHtml`,
+  `readClipboardTextAndHtml`, `writeClipboard`), which call Electron's main-process `clipboard` module from
+  `electronApp.evaluate` — outside the renderer's permission surface. Every main-process clipboard
+  call in `e2e-tests/` goes through them, so a dropped debugger link is retried. A run leaves its
   last payload sitting in the machine-wide clipboard. It is not confined by `isolatedProjectRoot`
   or the temp `userDataDir`, which do contain everything else that spec touches. Two consequences:
   a paste in the developer's own editor after a run yields test USFM, and a spec that reads the

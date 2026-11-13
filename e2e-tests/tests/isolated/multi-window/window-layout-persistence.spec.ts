@@ -103,6 +103,7 @@ import {
   preConfigureSettings,
   teardownElectronApp,
   waitForAppReady,
+  withMainProcessLinkRetry,
 } from '../../../fixtures/helpers';
 import {
   captureAppOutput,
@@ -115,7 +116,9 @@ import {
   homeTabTitle,
   quitAndExpectCleanExit,
   waitForAppPages,
+  waitForAppWindowCount,
   waitForRendererRegistered,
+  waitForInterfaceModeRead,
   withPlatformWindow,
 } from './multi-window.util';
 
@@ -153,7 +156,9 @@ function isContainedInSomeDisplay(bounds: Rectangle, displays: readonly Rectangl
 
 /** Bounds of all connected displays, as the app itself sees them (`screen.getAllDisplays()`). */
 async function getDisplayBounds(electronApp: ElectronApplication): Promise<Rectangle[]> {
-  return electronApp.evaluate(({ screen }) => screen.getAllDisplays().map((d) => d.bounds));
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(({ screen }) => screen.getAllDisplays().map((d) => d.bounds)),
+  );
 }
 
 /**
@@ -191,18 +196,25 @@ async function placeWindowAndSettle(
       },
       targetBounds,
     );
-    // Let the compositor apply the placement and the app's debounced bounds capture observe it
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 1_500);
-    });
+    // The whole attempt re-applies the placement, so a placement the compositor ignored is asked
+    // for again; the read-back then has to match the requested size to end the retries
     const readBack = await getWindowBounds(electronApp, windowId);
     expect(readBack.width, 'settled width').toBe(targetBounds.width);
     expect(readBack.height, 'settled height').toBe(targetBounds.height);
     settled = readBack;
-  }).toPass({ timeout: 30_000, intervals: [1_000] });
+  }).toPass({ timeout: 30_000, intervals: [250, 500, 1_000] });
   if (!settled) throw new Error('placement settled without recording bounds');
   return settled;
 }
+
+/**
+ * How long the window count must hold at one after the interface-mode read answers before "no extra
+ * window came back" is believed. `restoreWindows` in `src/main/main.ts` creates the main window,
+ * awaits that same read, then creates the saved secondary windows one after another, so a window
+ * wrongly restored appears within the first few `createWindow` calls after the read. Five seconds
+ * covers those calls on a slow machine.
+ */
+const RESTORE_QUIET_MS = 5_000;
 
 /**
  * The window size the app falls back to when a saved placement is unusable. Keep in sync with
@@ -438,8 +450,9 @@ test.describe('window layout persistence', () => {
       // DIFFERENT sizes — both also different from the app's fallback size — so the phase-2 size
       // comparison can tell the windows' saved entries apart (a swap changes both) and can tell a
       // restored entry from a fallback re-placement.
-      const workArea = await ctx.electronApp.evaluate(
-        ({ screen }) => screen.getPrimaryDisplay().workArea,
+      const { electronApp: launchedApp } = ctx;
+      const workArea = await withMainProcessLinkRetry(launchedApp, () =>
+        launchedApp.evaluate(({ screen }) => screen.getPrimaryDisplay().workArea),
       );
       // Both widths have to clear WINDOW_MIN_WIDTH: Electron clamps a smaller `setBounds` silently,
       // and `placeWindowAndSettle` asserts the window ended up exactly the width it asked for, so a
@@ -557,10 +570,15 @@ test.describe('window layout persistence', () => {
       // with just that: neither a copy of the main window's layout nor any default layout may
       // appear in it.
       await expectWindowDockHasOnlyHomeTab(secondPage2);
-      // The restore created exactly the saved windows — no duplicates
-      // (expectWindowDockHasOnlyHomeTab's settle has already given a straggler window time to
-      // appear).
-      expect(getAppPages(ctx.electronApp)).toHaveLength(2);
+      // The restore created exactly the saved windows — no duplicates. Both are already up, so a
+      // straggler would come from the same restore; the count has to hold to give one time to appear.
+      await waitForAppWindowCount(
+        ctx.electronApp,
+        2,
+        60_000,
+        'exactly the two saved windows after the restore',
+        { stableForMs: RESTORE_QUIET_MS },
+      );
       logStep(
         'phase 2: main window has its Home tab; second window restored with just its own Home tab',
       );
@@ -626,12 +644,17 @@ test.describe('window layout persistence', () => {
       logStep(`phase 3: window ${mainId3} restored with its Home tab`);
 
       // Exactly ONE window: the deliberately closed window must not come back. Secondary windows
-      // are created late in startup (once the interface mode becomes readable), so give a
-      // wrongly-resurrected window time to appear before asserting the count.
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 10_000);
-      });
-      expect(getAppPages(ctx.electronApp)).toHaveLength(1);
+      // are created late in startup (once the interface mode becomes readable), so wait until the
+      // restore has had that read answered, then require one window to hold for a while: nothing
+      // observes the restore finishing.
+      await waitForInterfaceModeRead();
+      await waitForAppWindowCount(
+        ctx.electronApp,
+        1,
+        60_000,
+        'exactly one window after the restore (the deliberately closed window must not return)',
+        { stableForMs: RESTORE_QUIET_MS },
+      );
       logStep('phase 3: the deliberately closed window did not return');
 
       await quitAndExpectCleanExit(ctx.electronApp, output3, logStep, 'phase 3');
@@ -669,8 +692,9 @@ test.describe('window layout persistence', () => {
       await expect(homeTabTitle(mainPage1)).toBeAttached({ timeout: 60_000 });
       logStep(`phase 1: main window ${mainId1} ready`);
 
-      const workArea = await ctx.electronApp.evaluate(
-        ({ screen }) => screen.getPrimaryDisplay().workArea,
+      const { electronApp: launchedApp } = ctx;
+      const workArea = await withMainProcessLinkRetry(launchedApp, () =>
+        launchedApp.evaluate(({ screen }) => screen.getPrimaryDisplay().workArea),
       );
       // Distinct sizes, all different from each other and from the app's fallback size, so the
       // phase-2 comparison can tell the three entries apart and can tell a restored entry from a
@@ -780,9 +804,15 @@ test.describe('window layout persistence', () => {
       const secondaryPages2 = pages2.filter((_, index) => index !== mainIndex2);
       await expectWindowDockHasOnlyHomeTab(secondaryPages2[0]);
       await expectWindowDockHasOnlyHomeTab(secondaryPages2[1]);
-      // Exactly three — no duplicates, and none of the restored windows closed itself again
-      // (expectWindowDockHasOnlyHomeTab's settle has already given both time to happen).
-      expect(getAppPages(ctx.electronApp)).toHaveLength(3);
+      // Exactly three — no duplicates, and none of the restored windows closed itself again. The
+      // count has to hold to give either time to happen.
+      await waitForAppWindowCount(
+        ctx.electronApp,
+        3,
+        60_000,
+        'exactly the three saved windows after the restore',
+        { stableForMs: RESTORE_QUIET_MS },
+      );
       logStep('phase 2: all three windows restored with their own Home tab');
 
       const app2 = ctx.electronApp;
@@ -869,8 +899,9 @@ test.describe('window layout persistence', () => {
       // The keeper bounds written below sit at the primary display's origin, so the upgrade's
       // on-display validation is guaranteed to accept them (this compositor honors requested
       // sizes, which is the half the assertion uses).
-      const primaryDisplayBounds = await ctx.electronApp.evaluate(
-        ({ screen }) => screen.getPrimaryDisplay().bounds,
+      const { electronApp: launchedApp } = ctx;
+      const primaryDisplayBounds = await withMainProcessLinkRetry(launchedApp, () =>
+        launchedApp.evaluate(({ screen }) => screen.getPrimaryDisplay().bounds),
       );
 
       await quitAndExpectCleanExit(ctx.electronApp, outputA, logStep, 'launch A');
@@ -945,13 +976,17 @@ test.describe('window layout persistence', () => {
       await expect(pageB.locator('.platform-tab-title')).toHaveCount(2);
       logStep('launch B: legacy layout loaded — Home tab and seeded second tab both render');
 
-      // Exactly ONE window: the upgrade rule is one window, not two, not zero. Give a wrongly
-      // created extra window time to appear before asserting the count (secondary windows are
-      // created late in startup, once the interface mode becomes readable).
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 10_000);
-      });
-      expect(getAppPages(ctx.electronApp)).toHaveLength(1);
+      // Exactly ONE window: the upgrade rule is one window, not two, not zero. Wait until the
+      // restore has had the interface-mode read answered (secondary windows are created only after
+      // it) before asserting the count.
+      await waitForInterfaceModeRead();
+      await waitForAppWindowCount(
+        ctx.electronApp,
+        1,
+        60_000,
+        'exactly one window after the upgrade restore',
+        { stableForMs: RESTORE_QUIET_MS },
+      );
       logStep('launch B: exactly one window restored');
 
       // The keeper file's size must be honored (its placement is on-display by construction, so
