@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
 
-/** The editing events held off while editing is paused, besides the keys themselves. */
-const PAUSED_EDIT_EVENTS = ['beforeinput', 'paste', 'cut', 'drop'] as const;
+/**
+ * The editing events held off while editing is paused, besides the keys themselves. `contextmenu`
+ * opens the editor's right-click menu, whose Cut and Paste run as editor commands with no `cut` or
+ * `paste` event to hold off.
+ */
+const PAUSED_EDIT_EVENTS = ['beforeinput', 'paste', 'cut', 'drop', 'contextmenu'] as const;
 
 /** Keys that move the caret, with or without a modifier. */
 const CARET_KEYS = new Set([
@@ -17,18 +21,31 @@ const CARET_KEYS = new Set([
 
 /**
  * Whether a key press is held off while editing is paused: one that edits the document (a key that
- * types a character, Enter, Backspace, Delete, Tab, and the undo, redo and word-delete chords) or
- * moves the caret (the arrow and page keys, Home, End, and select-all). The caret counts because
- * the editor still shows the chapter being left: moving it there reports that chapter's verse as
- * the current reference, which pulls the reference back to the chapter the user just left. Every
- * other chord is let through so the application's shortcuts keep working, and paste and cut are
- * held off as the events they raise rather than by their keys.
+ * types a character, Enter, Backspace, Delete, Tab, and the undo, redo, word-delete, paste and cut
+ * chords) or moves the caret (the arrow and page keys, Home, End, and select-all). The caret counts
+ * because the editor still shows the chapter being left: moving it there reports that chapter's
+ * verse as the current reference, which pulls the reference back to the chapter the user just left.
+ * The paste chords count because the editor takes them itself and reads the clipboard, which raises
+ * no `paste` event to hold off, and whose result could land in the new chapter. The cut chord
+ * counts because the editor takes it itself and dispatches its cut command, with no `cut` event. As
+ * in the editor, Alt with either makes it some other chord, and so does Shift with the cut chord;
+ * unlike the editor, which takes only its platform's modifier, either Ctrl or Cmd counts here, as
+ * for the other chords, so a little more is held off than the editor would act on. Every other
+ * chord is let through so the application's shortcuts keep working.
  */
 function isHeldOffKey(event: KeyboardEvent): boolean {
   if (event.isComposing || CARET_KEYS.has(event.key)) return true;
   if (event.ctrlKey || event.metaKey) {
     const key = event.key.toLowerCase();
-    return key === 'z' || key === 'y' || key === 'a' || key === 'backspace' || key === 'delete';
+    return (
+      key === 'z' ||
+      key === 'y' ||
+      key === 'a' ||
+      (key === 'v' && !event.altKey) ||
+      (key === 'x' && !event.shiftKey && !event.altKey) ||
+      key === 'backspace' ||
+      key === 'delete'
+    );
   }
   if (event.altKey) return false;
   return (
@@ -51,6 +68,20 @@ function isHeldOffKey(event: KeyboardEvent): boolean {
  * stays editable and focused, and the edits themselves are stopped: caught on the way down to the
  * editor root, above the listeners the editor registers there, and cancelled so the browser does
  * not make them either. Copying and the application's shortcuts go on working.
+ *
+ * A paste the browser runs itself is held off as the `paste` event it raises, and the Edit flyout's
+ * Paste is refused by the web view's read-only check while a chapter loads. A right-click opens
+ * neither the editor's own menu nor the browser's, so its Cut and Paste (and Copy) are not offered
+ * until the chapter loads. Nothing here closes a right-click menu already open when the load
+ * begins, and its items still run: what its Cut or Paste does then is not saved, and cut text
+ * returns when the new chapter loads.
+ *
+ * The hold-off starts after the chapter's last save. The chapter-switch flush runs in the commit
+ * that changes the chapter selector, the loading flag is set in an effect after it, and this hook
+ * attaches its listeners a commit later. So a paste or keystroke in that gap, or a clipboard read
+ * that lands after the flush, is not held off and is not saved (`isEditorContentForChapter` refuses
+ * it): it shows in the chapter being left until the new one replaces it. A clipboard read started
+ * in that gap can also outlast a short load, and then lands in the new chapter and is saved there.
  *
  * @param getEditorRoot Returns the editor's root element, or `undefined` while there is none.
  * @param isPaused Whether edits are held off now.

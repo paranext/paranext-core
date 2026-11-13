@@ -166,8 +166,12 @@ const CLIPBOARD_SENTINEL = 'NOUNASKEDEDITSSENTINELNOTCOPIED';
 
 // The OS's own editing chords, spelled per platform (macOS uses Meta).
 const isMac = process.platform === 'darwin';
-const COPY_KEY = isMac ? 'Meta+C' : 'Control+C';
-const PASTE_KEY = isMac ? 'Meta+V' : 'Control+V';
+/** The OS's copy chord. */
+export const COPY_KEY = isMac ? 'Meta+C' : 'Control+C';
+/** The OS's cut chord. */
+export const CUT_KEY = isMac ? 'Meta+X' : 'Control+X';
+/** The OS's paste chord. */
+export const PASTE_KEY = isMac ? 'Meta+V' : 'Control+V';
 const UNDO_KEY = isMac ? 'Meta+Z' : 'Control+Z';
 const DOC_END_KEY = isMac ? 'Meta+ArrowDown' : 'Control+End';
 
@@ -181,7 +185,7 @@ const DOC_END_KEY = isMac ? 'Meta+ArrowDown' : 'Control+End';
  * text, `|` removed, must occur in the book's USFM for the verse, so expectations can be computed
  * from the bytes.
  */
-type TextPoint = string;
+export type TextPoint = string;
 
 /** What a gesture needs to act on the open editor. */
 interface GestureContext {
@@ -289,7 +293,7 @@ function usfmBetween(unitText: string, from: TextPoint, to: TextPoint): string {
  * than once, naming it, so an anchor that stops being unique fails loudly instead of aiming the
  * gesture somewhere else.
  */
-async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoint = from) {
+export async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoint = from) {
   await editorInput.evaluate(
     (root, points) => {
       // Runs in the page, so it cannot call `splitPoint`; the points were checked by it below.
@@ -425,8 +429,7 @@ function typingExpectation(unit: string, point: TextPoint, typed: string): UnitR
 
 /**
  * The copy-and-paste gestures' exact expectation: the destination verse gains the source range's
- * USFM bytes at the paste point, character span or footnote included. `transformCopied` rewrites
- * those bytes for a {@link KnownDeviation} pin.
+ * USFM bytes at the paste point, character span or footnote included.
  */
 function copyPasteExpectation(
   destinationUnit: string,
@@ -435,16 +438,12 @@ function copyPasteExpectation(
   from: TextPoint,
   to: TextPoint,
   destination: TextPoint,
-  transformCopied: (copied: string) => string = (copied) => copied,
 ): UnitReplacements {
   const source = getUsfmUnit(bookBefore, sourceUnit);
   if (source === undefined) throw new Error(`The book has no unit ${sourceUnit}`);
   return {
     [destinationUnit]: [
-      [
-        pointText(destination),
-        insertAtPoint(destination, transformCopied(usfmBetween(source, from, to))),
-      ],
+      [pointText(destination), insertAtPoint(destination, usfmBetween(source, from, to))],
     ],
   };
 }
@@ -538,26 +537,6 @@ const CHAPTERS: ChapterCase[] = [
             NOTE_COPY_TO,
             NOTE_PASTE_POINT,
           ),
-        // TODO(PT-4921): the html flavor carries `closed="false"`; then remove this pin.
-        knownDeviation: {
-          finding: 'CB-3',
-          summary:
-            'a footnote pasted in a hidden-marker view gains explicit `\\fr*`/`\\ft*` closers: the paste reads the copy\'s text/html, whose char spans do not carry `closed="false"`',
-          applies: (view) => !view.areMarkersText,
-          expected: (bookBefore) =>
-            copyPasteExpectation(
-              '3:14',
-              bookBefore,
-              '3:13',
-              NOTE_COPY_FROM,
-              NOTE_COPY_TO,
-              NOTE_PASTE_POINT,
-              (copied) =>
-                copied
-                  .replace('\\fr 3:13 \\ft ', '\\fr 3:13 \\fr*\\ft ')
-                  .replace('River\\f*', 'River\\ft*\\f*'),
-            ),
-        },
       },
       {
         label: 'deleting a selection that runs into the \\wj span (3:15)',
@@ -635,7 +614,7 @@ function expectedAfterFirstSave(installed: Buffer, chapterNum: number): Buffer {
   );
 }
 
-function installedBookPath(bookFile: string): string {
+export function installedBookPath(bookFile: string): string {
   return path.join(requireIsolatedProjectRoot(), INSTALLED_WEB_FOLDER, bookFile);
 }
 
@@ -753,7 +732,7 @@ async function expectChangesOnlyIn(
  * they have held still for {@link SETTLED_QUIET_MS}, so a second write still in flight is not
  * missed. Returns the settled bytes, or `undefined` if no write landed within the timeout.
  */
-async function waitForSaveToSettle(
+export async function waitForSaveToSettle(
   page: Page,
   filePath: string,
   previous: Buffer,
@@ -2003,6 +1982,9 @@ const INVISIBLE_CHARACTERS = {
   'right-to-left mark U+200F': '‏',
   'soft hyphen U+00AD': '­',
   'zero-width no-break space U+FEFF': '﻿',
+  'line separator U+2028': '\u2028',
+  'paragraph separator U+2029': '\u2029',
+  'next line U+0085': '\u0085',
 } as const;
 
 type InvisibleCharacterName = keyof typeof INVISIBLE_CHARACTERS;
@@ -2067,9 +2049,10 @@ function seededVerses(
         'The news reached the king of Nineveh, and he arose from his throne, took off his royal robe, covered himself with sackcloth, and sat in ashes.',
       seeded:
         `The news reached the king of Nine${c['zero-width non-joiner U+200C']}veh, and he ` +
-        `a${c['zero-width joiner U+200D']}rose from his throne, took${c['word joiner U+2060']}off ` +
-        `his royal${c['tilde ~']}robe, covered him${c['soft hyphen U+00AD']}self ` +
-        `with${c['left-to-right mark U+200E']} sackcloth, and sat${c['right-to-left mark U+200F']} ` +
+        `a${c['zero-width joiner U+200D']}rose from${c['next line U+0085']}his throne, ` +
+        `took${c['word joiner U+2060']}off his${c['line separator U+2028']}royal${c['tilde ~']}robe, ` +
+        `covered him${c['soft hyphen U+00AD']}self with${c['left-to-right mark U+200E']} sackcloth, ` +
+        `and${c['paragraph separator U+2029']}sat${c['right-to-left mark U+200F']} ` +
         `in a${c['zero-width no-break space U+FEFF']}shes.`,
     },
     {
@@ -2174,6 +2157,9 @@ const INSERTION_POINTS: Array<{ name: InvisibleCharacterName; unit: string; poin
   { name: 'right-to-left mark U+200F', unit: '3:10', point: 'their wor|ks' },
   { name: 'soft hyphen U+00AD', unit: '3:10', point: 'the disas|ter' },
   { name: 'zero-width no-break space U+FEFF', unit: '3:10', point: 'God sa|w their' },
+  { name: 'line separator U+2028', unit: '3:2', point: 'great ci|ty, and' },
+  { name: 'paragraph separator U+2029', unit: '3:4', point: 'the ci|ty a day' },
+  { name: 'next line U+0085', unit: '3:9', point: 'whe|ther God' },
 ];
 
 /** The gesture that puts a character into the text. */

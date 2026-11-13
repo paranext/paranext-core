@@ -2976,6 +2976,63 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4370 round 9; paranext-core PR #2823, scripture-editors PR
   paranext/scripture-editors#11.
 
+## adr-editor-clipboard-format-in-html-attribute: A hidden-marker view's clipboard format travels in an attribute of the copy's html
+
+- **Date:** 2026-10-30
+- **Status:** Accepted (short term). Long-term direction: USFM on the clipboard, read back with
+  Standard view's tokenizer, so one format serves every view and other programs (PT-4984).
+- **Context:** A view that hides its markers cannot paste what it copied from the copy's text or
+  its html: Lexical's html export carries no char or note attributes, milestones or figures, so a
+  pasted footnote gained closers (catalog row CB-3). The editor's own node copy does hold all of it,
+  but the editor's Ctrl+V and menu Paste start from `navigator.clipboard.read()`, which returns only
+  sanctioned types and drops `application/x-lexical-editor`. The `data-*` attributes of the html do
+  come through that read.
+- **Decision:** The editor writes the node copy into an attribute of the copy's html
+  (`data-platform-editor-node-copy`, on one inline `<span>` around the export) as well as into
+  `application/x-lexical-editor`, and reads it back through today's async read. The mechanics are in
+  `scripture-editors`' `docs/clipboard-semantics.md`, S5. The host has no part in it: paranext-core
+  has no clipboard command.
+- **Alternatives considered:**
+  - _A host command running a native paste (`webContents.paste()`), whose `paste` event carries the
+    flavor._ PAPI commands are reachable over the unauthenticated WebSocket on 8876, so a web page
+    in the user's browser could paste the clipboard (a password just copied) into a focused editor,
+    where it is saved and can be read back. Refusing connections with an `Origin` is a header
+    stopgap, and does not stop such a page sending a notification whose click command the renderer
+    then runs for it. The paste also lands wherever focus is, which needs a focus workaround in the
+    menu component.
+  - _A web custom format (`web application/x-lexical-editor`, through
+    `navigator.clipboard.write`)._ It survives the read, but cannot be written in the copy event, so
+    it needs an async second write: rejected when the document is not focused, broken by concurrent
+    writes on Linux, and unseen by a native paste such as the macOS app menu's.
+  - _Carrying everything in the html's own elements._ Rewrites Lexical's export and import for every
+    node type, and other programs' html still would not have it.
+- **Consequences:**
+  - No main-process surface, and no focus requirement beyond the document having focus, which the
+    read needs anyway.
+  - The attribute holds what the view hides (a figure's caption, a collapsed note's text) and about
+    doubles the html, so any program reading attributes can see those; TJ accepted this
+    (2026-10-30). Any program can also write the attribute, which goes through the same guarded parse
+    as the flavor; TJ does not mind forged data (2026-10-30).
+  - A copy that goes through another editor loses the attribute and pastes as html (catalog row
+    CB-14; open work on PT-4984).
+  - The read raises no `paste` event, so during a chapter load `usePauseEditing` holds off the paste
+    chords by key (and the cut chord, which raises no `cut` event), and the Edit flyout's Paste is
+    refused by the web view's read-only check. The right-click menu runs its Paste and Cut as editor
+    commands, with no event to hold off, so `usePauseEditing` holds off `contextmenu` instead and the
+    menu does not open during the load. A menu already open when the load begins still runs its
+    items; what they do is not saved, and cut text returns when the new chapter loads.
+  - The hold-off starts after the chapter's last save. The chapter-switch flush runs in the commit
+    that changes the chapter selector, the loading flag is set in an effect after it, and
+    `usePauseEditing` attaches its listeners a commit later. A paste or keystroke in that gap, or a
+    clipboard read landing after the flush, is not held off and is not saved
+    (`isEditorContentForChapter` refuses it): it shows in the chapter being left until the new one
+    replaces it. A read started in that gap can also outlast a short load, and then lands in the new
+    chapter and is saved there (seen in `in-editor-paste.spec.ts`). TJ chose to leave this window
+    as it is (2026-10-30): it only affects an edit made after asking to leave the chapter.
+  - Checked on Electron 39 on Linux and on Windows (probes), and end to end on Linux by
+    `in-editor-paste.spec.ts`. macOS was researched, not run.
+- **Source:** PT-4921; paranext-core#2976, paranext/scripture-editors#43.
+
 ## adr-editor-collapsed-note-hides-its-annotations: An annotation inside a collapsed note is not shown, as in Paratext 9
 
 - **Date:** 2026-10-01
@@ -3009,6 +3066,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   by `.claude/agents/pt10-reuse-scout.md`. Deleting it rather than marking it superseded is the
   carve-out described under "Don't rewrite history" above. Git history keeps the text.
 - **What covers this ground instead:** `adr-pop-ups-stay-at-interface-scale`.
+
+## adr-editor-control-characters-entered-as-spaces: Every view takes an entered C0 control character in as a space, and the editors keep U+001A and U+000B for themselves
+
+- **Date:** 2026-11-11
+- **Status:** Accepted (TJ, 2026-11-11: "use U+000B and we don't lose U+2028").
+- **Context:** Standard view's marker settle re-reads a paragraph's text, and spelled the
+  display-only line break a view without spacing shows before a verse as U+2028 in that text,
+  removing every U+2028 before tokenizing. The text holds text nodes' content as it is, so a real
+  U+2028, which Paratext 9 keeps as a character, was removed with the breaks (catalog T-19). The
+  break needs a character that JavaScript's `\s` reads as whitespace, so the positions either side
+  of it stay apart, and that no text can hold. Only Standard view turned entered control characters
+  into spaces (for its U+001A stand-in, `adr-editor-nbsp-spelling-follows-project-setting`), and
+  not U+0000.
+- **Decision:** The settle spells the display-only break as U+000B (vertical tab). Every view takes
+  each C0 control character but tab, LF and CR that the user types, pastes or drops in as a space —
+  plain text, html and a node copy alike — through the rule that drops an entered U+FEFF
+  (`InvisibleCharactersPlugin`, `normalizeEnteredText`; catalog EV-6). ParatextData reads every such
+  character as a space (`ScrText.ProcessBookOrChapterText`), so no loaded text holds one, and so
+  the editors can keep U+001A (Standard view's no-break-space stand-in) and U+000B for their own
+  use. Text a document already holds is never changed on input; a load keeps its own rules.
+- **Alternatives:** **Keep U+2028 and escape a real one in the settle's text** — rejected: every
+  reader of that text that counts positions would have to know the escape. **A noncharacter or
+  private-use code point** — not whitespace to `\s`, so the caret positions either side of the
+  break would collapse; private use also occurs in some projects' text. **Drop an entered control
+  character instead of making it a space** — rejected: it would join the text either side, and the
+  user wrote something there.
+- **Consequences:** A new internal use of a control character can rely on no entered or loaded
+  text holding one, but must say so beside it and name the rule. A library host that loads USJ
+  holding a control character into a view other than Standard (Paratext's reader never gives it
+  one) keeps it until a settle in the Unformatted view, which removes a U+000B. Applied delta ops
+  are not filtered outside Standard view: they carry what another editor already took in through
+  the same rule.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
