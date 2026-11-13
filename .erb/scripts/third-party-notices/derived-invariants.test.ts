@@ -416,6 +416,7 @@ describe('this repository ships none of the downstream-product instruments', () 
       assertExternalExtensionsRecorded(
         externalExtensionNames(REPO, config),
         policy.externalExtensions || {},
+        { checkouts: policy.externalExtensionCheckouts || {}, policyDir: __dirname },
       ),
     ).not.toThrow();
     expect(() =>

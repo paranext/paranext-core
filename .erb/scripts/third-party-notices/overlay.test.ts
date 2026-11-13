@@ -93,6 +93,7 @@ describe('a downstream overlay read from disk', () => {
       assertExternalExtensionsRecorded(
         ['example-private-extension'],
         merged.externalExtensions || {},
+        { checkouts: merged.externalExtensionCheckouts || {}, policyDir: path.dirname(OVERLAY) },
       ),
     ).not.toThrow();
   });

@@ -6,8 +6,9 @@ none but declares an SPDX identifier, the canonical text of that license is repr
 marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are
 accounted for separately in the last section. This file covers the redistributable
 closure of **Paratext 10**, built from paranext-core by `paranext/paratext-10-studio`: the npm
-packages webpack actually compiled into `dist/` (plus the stylesheet-only packages Tailwind
-inlines before webpack runs, and anything `release/app` ships unbundled beside the bundle), the
+packages webpack actually compiled into `dist/` and into the extension zips listed
+below (plus the stylesheet-only packages Tailwind inlines before webpack runs, and
+anything `release/app` ships unbundled beside the bundle), the
 NuGet closure of the bundled .NET data provider, Electron, and the components that
 repository adds, each described in a section of its own below.
 Build and test tooling is excluded because it is not distributed.
@@ -15,7 +16,8 @@ Build and test tooling is excluded because it is not distributed.
 Some of what this application distributes is neither an npm nor a NuGet package - bundled data,
 the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source
 tree, native libraries taken from the machine that built the installer, third-party programs
-redistributed as separate executables, and extensions packed from other repositories. No scan of
+redistributed as separate executables, and extensions packed from other repositories (the zip
+itself, and the bundled packages of a zip whose section says they are not listed). No scan of
 either graph can reach any of them and none appears as a row below, so each is described in a
 section of its own, present only when that build actually carries it: a component that ships
 without a row is indistinguishable from one nobody considered.
@@ -134,12 +136,21 @@ Reviewed by reviewer@example.org on 2026-09-04.
 
 The installer also carries these extensions, built in other repositories and packed as zips
 beside the ones built here. Each bundles every dependency outside the extension host’s
-externals list, and no module manifest describes that bundle, so the packages inside it have no
-rows above. That is an omission this document records rather than hides.
+externals list. The bundled packages of the extensions itemized here have rows under "npm
+production dependencies" below; any extension marked not itemized is an omission this document
+records rather than hides.
+
+### example-itemized-extension and other-itemized-extension (built in example-extensions)
+
+Their bundled npm packages, listed under "npm production dependencies" below, include `beta@2.0.0`, `delta@4.0.0`, `epsilon@5.0.0`.
+
+**example-itemized-extension:** Its assets tree is not scanned by the static-asset gate.
+
+**other-itemized-extension:** Built in the example extensions repository.
 
 ### example-private-extension
 
-Its bundled dependencies are **not itemized** in this document. Built in another repository, which emits no module manifest yet, so its bundle cannot be itemized here - see PT-4604.
+Its bundled dependencies are **not itemized** in this document. Built in another repository whose build is not part of this one, so its bundle cannot be itemized here.
 
 ## .NET data provider (NuGet)
 

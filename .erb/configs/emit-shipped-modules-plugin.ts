@@ -1,3 +1,8 @@
+// Copied into paranext-extension-template and paranext-multi-extension-template as
+// `webpack/emit-shipped-modules-plugin.ts`, and the notices generator reads the manifests those
+// copies write too - so a change to the manifest format or the build-id stamp has to be made in
+// the copies as well. The copies keep this code but have their own comments, which describe the
+// templates' build; the design rationale is recorded here.
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -148,14 +153,19 @@ export class EmitShippedModulesPlugin {
     compiler.hooks.watchRun.tap(NAME, startRun);
 
     // The PARENT compilation only, which is what `thisCompilation` means: `createChildCompiler`
-    // copies every hook's taps to the child EXCEPT the six webpack names in its exclusion list, and
-    // `thisCompilation` is on that list while `compilation` is not. A child compiler runs its
-    // own module graph that this hook never sees, and two kinds exist in webpack: one whose output
-    // ships (`new Worker(new URL(…))`) and one whose output is executed at build time and thrown
-    // away (`HtmlWebpackPlugin`, which compiles `src/renderer/index.ejs` to a function that emits
-    // the HTML). Tapping children indiscriminately would put the second kind's packages into a
-    // legal document as things this project redistributes, which is the same error as omitting the
-    // first kind, inverted.
+    // copies every hook's taps to the child EXCEPT the seven webpack names in its exclusion list
+    // (`make`, `compile`, `emit`, `afterEmit`, `invalid`, `done` and `thisCompilation`), and
+    // `compilation` is not on that list. A child compiler runs its own module graph that this hook
+    // never sees, and two kinds exist: one whose output ships (a plugin or loader that runs its own
+    // child compiler to emit a file the bundle loads, such as `worker-loader`) and one whose output
+    // is executed at build time and thrown away (`HtmlWebpackPlugin`, which compiles
+    // `src/renderer/index.ejs` to a function that emits the HTML). Tapping children
+    // indiscriminately would put the second kind's packages into a legal document as things this
+    // project redistributes, which is the same error as omitting the first kind, inverted.
+    //
+    // Webpack 5's own `new Worker(new URL('./x', import.meta.url))` is not a child compilation:
+    // `WorkerPlugin` adds the worker as an async block with its own entry options in this same
+    // compilation, so the `finishModules` tap below already sees the worker's modules.
     //
     // Measured across all five bundles: `main`, `extension-host`, `extension-main` and
     // `extension-web-view` create no child compilers at all, and `renderer` creates exactly one -
@@ -163,9 +173,9 @@ export class EmitShippedModulesPlugin {
     // repository's own `index.ejs`. Neither is an installed package, so today children contribute
     // nothing the parent graph does not already carry and none of them ship.
     //
-    // What changes that: the first `new Worker(new URL('./x', import.meta.url))` in this codebase.
-    // Its child compilation DOES ship, and it would need tapping - excluding `HtmlWebpackCompiler`
-    // by the name the `childCompiler` hook passes.
+    // What changes that: the first plugin or loader here whose child compiler's output ships. That
+    // child compilation would need tapping - excluding `HtmlWebpackCompiler` by the name the
+    // `childCompiler` hook passes.
     compiler.hooks.thisCompilation.tap(NAME, (compilation) => {
       compilation.hooks.finishModules.tap(NAME, (modules) => {
         // `Iterable<Module>`, not an array: webpack passes a Set at runtime, so `.forEach` happens

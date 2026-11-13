@@ -2600,6 +2600,27 @@ describe('policy overlay', () => {
     expect(merged.product).toEqual({ name: 'P', repository: 'o/r' });
   });
 
+  it('merges externalExtensionCheckouts as a table an overlay can add to but not replace', () => {
+    const minimumPackages = { own: 1, core: 1, stylesheet: 1 };
+    const withBase = {
+      ...basePolicy,
+      externalExtensionCheckouts: { a: { path: '../a', minimumPackages } },
+    };
+    const merged = mergePolicies(
+      withBase,
+      { externalExtensionCheckouts: { b: { path: '../b', minimumPackages } } },
+      NAMES,
+    );
+    expect(Object.keys(merged.externalExtensionCheckouts || {})).toEqual(['a', 'b']);
+    expect(() =>
+      mergePolicies(
+        withBase,
+        { externalExtensionCheckouts: { a: { path: '../elsewhere', minimumPackages } } },
+        NAMES,
+      ),
+    ).toThrow(/redefines externalExtensionCheckouts a\b/);
+  });
+
   it('refuses an overlay key the base already records', () => {
     expect(() =>
       mergePolicies(
@@ -2739,6 +2760,12 @@ describe('every field MERGE_KINDS declares is wired into the merge that reads it
     copiedPlatformLibraries: { 'base-library': { spdx: 'MIT', copyright: 'c' } },
     separatePrograms: { BaseProgram: { spdx: ['MIT'] } },
     externalExtensions: { 'base-extension': { itemized: false, reason: 'r' } },
+    externalExtensionCheckouts: {
+      'base-checkout': {
+        path: '../base-checkout',
+        minimumPackages: { own: 1, core: 1, stylesheet: 1 },
+      },
+    },
   };
   const NAMES = { base: 'base.json', overlay: 'overlay.json' };
 
