@@ -43,18 +43,20 @@ describe('interface mode switcher strings', () => {
     expect(strings['%userProfile_interfaceMode_power_labelWithPreview%']).toMatch(/\{label\}/);
   });
 
-  // A language that has translated a retired description but not its replacement keeps showing
-  // its own translation instead of falling back to English.
-  it.each([
-    [
-      '%userProfile_interfaceMode_simple_description_2%',
+  // A language that has translated the retired Simple description but not its replacement keeps
+  // showing its own translation instead of falling back to English.
+  it('the Simple description falls back to the description it replaces', () => {
+    expect(metadata['%userProfile_interfaceMode_simple_description_2%']?.fallbackKey).toBe(
       '%userProfile_interfaceMode_simple_description%',
-    ],
-    [
-      '%userProfile_interfaceMode_power_description_2%',
-      '%userProfile_interfaceMode_power_description%',
-    ],
-  ])('%s falls back to the description it replaces', (newKey, retiredKey) => {
-    expect(metadata[newKey]?.fallbackKey).toBe(retiredKey);
+    );
+  });
+
+  // The retired Power description calls it the full Paratext interface; the new one says to use it
+  // alongside Paratext 9. The old translation would say something the new text does not, so a
+  // language that has not translated the new description shows English instead.
+  it('the Power description does not fall back to the description it replaces', () => {
+    expect(
+      metadata['%userProfile_interfaceMode_power_description_2%']?.fallbackKey,
+    ).toBeUndefined();
   });
 });

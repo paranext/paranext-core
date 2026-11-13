@@ -66,7 +66,6 @@
     }
   },
   "%firstRun_button_skipSync%": {
-    "fallbackKey": "%firstRun_button_dontSyncYet%",
     "deprecationInfo": {
       "date": "2026-08-16",
       "message": "Reworded to \"Don't sync yet\" per PT-4178's approved labelling: the choice defers every automatic sync for the rest of the session rather than setting a standing preference. The new key is %firstRun_button_dontSyncYet%."
@@ -109,7 +108,6 @@
     "fallbackKey": "%Paratext.Base.ScriptureEditor.NoteCallerForm.NoteCallerForm.Text%"
   },
   "%footnoteEditor_cancelButton_tooltip%": {
-    "fallbackKey": "%general_cancel%",
     "deprecationInfo": {
       "date": "2026-04-22",
       "message": "Prefer the generic %cancelButton_tooltip% key for new code."
@@ -146,7 +144,6 @@
     "fallbackKey": "%mainMenu_feedback_unavailable%"
   },
   "%mainMenu_helpInfo_visitFAQsPage%": {
-    "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%",
     "deprecationInfo": {
       "date": "2026-09-10",
       "message": "Relabeled to \"Community support\" so the name matches the Support.Bible destination the item has always opened. Use %mainMenu_helpInfo_visitCommunitySupportPage% instead."
@@ -163,9 +160,6 @@
       "date": "2026-10-20",
       "message": "Relabeled to \"Browse help\". The new key is %mainMenu_helpInfo_visitGettingStartedPage_2%."
     }
-  },
-  "%mainMenu_helpInfo_visitGettingStartedPage_2%": {
-    "fallbackKey": "%mainMenu_helpInfo_visitGettingStartedPage%"
   },
   "%mainMenu_openNewWindow%": {
     "deprecationInfo": {
@@ -197,9 +191,6 @@
       "message": "The tour's profile stop now also names the Simple / Power switch in the User menu. The new key is %onboardingTour_step_profile_description_2%."
     }
   },
-  "%onboardingTour_step_profile_description_2%": {
-    "fallbackKey": "%onboardingTour_step_profile_description%"
-  },
   "%onboardingTour_step_sendReceive_description%": {
     "deprecationInfo": {
       "date": "2026-10-13",
@@ -212,17 +203,32 @@
   "%product_shortName%": {
     "fallbackKey": "%product_name%"
   },
+  "%projectSelector_boundButClosedTooltip%": {
+    "fallbackKey": "%manageBooks_projectSelector_boundButClosedTooltip%"
+  },
+  "%projectSelector_clearAll%": {
+    "fallbackKey": "%manageBooks_projectSelector_clearAll%"
+  },
+  "%projectSelector_groupSectionLabel%": {
+    "fallbackKey": "%manageBooks_projectSelector_groupSectionLabel%"
+  },
+  "%projectSelector_openButtonLabel%": {
+    "fallbackKey": "%manageBooks_projectSelector_openButtonLabel%"
+  },
+  "%projectSelector_openTabsSectionHeading%": {
+    "fallbackKey": "%manageBooks_projectSelector_openTabsSectionHeading%"
+  },
+  "%projectSelector_otherProjectsSectionHeading%": {
+    "fallbackKey": "%manageBooks_projectSelector_otherProjectsSectionHeading%"
+  },
+  "%projectSelector_searchPlaceholder%": {
+    "fallbackKey": "%manageBooks_projectSelector_searchPlaceholder%"
+  },
   "%project_settings_platform_isEditable_description%": {
     "deprecationInfo": {
       "date": "2026-05-26",
       "message": "The meaning of platform.isEditable was clarified to refer specifically to a project's primary content (e.g. Scripture text). Use %project_settings_platform_isEditable_description_2% for the new wording; the new project setting %project_settings_platform_isPublished_description% captures the 'is this a published reference / resource' distinction."
     }
-  },
-  "%project_settings_project_group1_description%": {
-    "fallbackKey": "%project_settings_platform_group1_description%"
-  },
-  "%project_settings_project_group1_label%": {
-    "fallbackKey": "%project_settings_platform_group1_label%"
   },
   "%projectPicker_toolbar_label_nameAndShortName%": {
     "deprecationInfo": {
@@ -357,9 +363,6 @@
       "message": "The dialog was renamed from \"Share layout with team\" to \"Team layout\". The new key is %shareLayoutDialog_teamLayout_title%."
     }
   },
-  "%submit%": {
-    "fallbackKey": "%yes%"
-  },
   "%submitButton%": {
     "deprecationInfo": {
       "date": "2025-04-15",
@@ -367,38 +370,9 @@
     }
   },
   "%tab_contextMenu_floatTab%": {
-    "fallbackKey": "%tab_contextMenu_floatPanel%",
     "deprecationInfo": {
       "date": "2026-08-25",
       "message": "Reworded because the Spanish read \"Abrir como ventana flotante\" for an action that floats a panel inside the window rather than opening an operating system window. Use %tab_contextMenu_floatPanel% instead."
-    }
-  },
-  "%tab_contextMenu_moveTabToNewWindow_failed%": {
-    "fallbackKey": "%tab_contextMenu_moveTab_failed%",
-    "deprecationInfo": {
-      "date": "2026-08-28",
-      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failed% instead."
-    }
-  },
-  "%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%": {
-    "fallbackKey": "%tab_contextMenu_moveTab_failedMayHaveClosed%",
-    "deprecationInfo": {
-      "date": "2026-08-28",
-      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failedMayHaveClosed% instead."
-    }
-  },
-  "%tab_contextMenu_moveTabToNewWindow_failedNotReopened%": {
-    "fallbackKey": "%tab_contextMenu_moveTab_failedNotReopened%",
-    "deprecationInfo": {
-      "date": "2026-08-28",
-      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failedNotReopened% instead."
-    }
-  },
-  "%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%": {
-    "fallbackKey": "%tab_contextMenu_moveTab_failedReopenedElsewhere%",
-    "deprecationInfo": {
-      "date": "2026-08-28",
-      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failedReopenedElsewhere% instead."
     }
   },
   "%test_deprecated_string%": {
@@ -468,9 +442,6 @@
       "message": "Power mode is now described as a configurable interface to use alongside Paratext 9 rather than the full Paratext interface. The new key is %userProfile_interfaceMode_power_description_2%."
     }
   },
-  "%userProfile_interfaceMode_power_description_2%": {
-    "fallbackKey": "%userProfile_interfaceMode_power_description%"
-  },
   "%userProfile_interfaceMode_simple_description%": {
     "deprecationInfo": {
       "date": "2026-10-20",
@@ -521,9 +492,5 @@
   },
   "%webView_openProjectSettings_2%": {
     "fallbackKey": "%webView_openProjectSettings%"
-  },
-  "%yes%": {
-    "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
-    "fallbackKey": "%confirm%"
   }
 }

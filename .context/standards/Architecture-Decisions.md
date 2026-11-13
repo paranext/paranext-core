@@ -5481,6 +5481,42 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   load-bearing. **Revisit** for any list row whose background already carries state — the same
   overload is the general case, not a comments-specific one.
 
+## adr-localization-fallbackkey-points-new-to-old: A localized string's `fallbackKey` points from a new key to an old one, never the reverse; retired keys keep their values
+
+- **Date:** 2026-11-06
+- **Status:** Accepted
+- **Context:** `metadata.fallbackKey` in a localized-strings contribution was designed so a NEW key
+  can borrow an OLD key's translations "if the meanings are close enough" (the schema description in
+  `lib/platform-bible-utils/src/extension-contributions/localized-strings.model.ts`), Paratext 9 keys
+  included. The lookup (`findLocalizationForFallbackLanguageAndOrKey` in
+  `src/extension-host/services/localization.service-host.ts`) reads a key's `fallbackKey` only in a
+  language where the key itself has no value, tries it in the user's language before English, and
+  follows one hop. During 2026 the Localization Guide taught the opposite direction for a while, and
+  about two dozen keys gained a `fallbackKey` on the OLD key pointing at its replacement, many of them
+  with their own values deleted.
+- **Decision:** `fallbackKey` sits on the newer key and names the older (or Paratext 9) key, and only
+  when the old translation is acceptable for the new text; otherwise the new key has no
+  `fallbackKey`. A key being retired keeps all its values and gets `deprecationInfo`; it is never
+  redirected to its successor. The target may be any key in the combined store: platform metadata
+  can name an extension's key and the reverse.
+- **Alternatives:** **(a) Old→new redirects** (the old key loses its values and falls back to the
+  new key) — rejected: in a language this repo ships, the redirect can fire only if the old values
+  were deleted, which the immutability rule forbids; where it does fire, in a third-party
+  localization that has the new key but not the old one, anyone still requesting the old key for its
+  old meaning silently gets the new meaning instead of the old text in English. **(b) Both
+  directions, chosen case by case** — rejected: the reverse direction has no case where it helps and
+  cannot be told apart from the harmful one in review.
+- **Consequences:** The two purposes `fallbackKey` serves keep working: a lightly reworded key still
+  shows what third-party localizations supplied for the old key, and Paratext 9 translations bridge
+  forward. Old→new redirects whose old key had no value anywhere and never shipped in a release were
+  removed outright; a retired key that shipped with values in a release got those values back,
+  with `deprecationInfo` and no redirect; identical-text and close-meaning pairs were flipped to
+  new→old with the old keys' values and `deprecationInfo` kept. A replacement whose old text means
+  something different gets no fallback, so a language that has not translated the new key shows
+  English; existing new→old entries whose texts clearly differ lost their `fallbackKey`. The rule lives
+  in the Localization Guide ("`fallbackKey` Points From New to Old, Never From Old to New"), its
+  checklist and Blocking Issues, and `.claude/rules/localization-locale-files.md`.
+
 ## adr-log-file-writes-queued: Main's log file writes are queued and coalesced, trading tail durability for an event loop that never blocks on log disk I/O
 
 - **Date:** 2026-09-04
@@ -11318,6 +11354,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   with no value of its own resolving through it) must be re-pointed at the new key, or that key
   keeps showing the old wording.
 - **Source:** PT-4810.
+- **Amended 2026-11-06:** the new key falls back to the old key only when the old translation is
+  acceptable for the new text. The re-pointing consequence above is withdrawn: an older key with no
+  value of its own that resolves through the old key is an old→new redirect, which
+  `adr-localization-fallbackkey-points-new-to-old` rules out. Alternative (b) is rejected for a
+  stronger reason than "never fires": where it can fire, it hands the new meaning to anyone still
+  requesting the old key.
 
 ## adr-text-collection-resources-are-zoom-areas: Each Text Collection resource is its own content zoom area; a click scope and an area label let the platform target and name it
 
