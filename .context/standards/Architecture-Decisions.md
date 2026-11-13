@@ -8229,14 +8229,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `formatProjectName`: a tab strip is the most space-constrained surface in the app, so appending
   the full name would push the short name toward the truncation leading with it is meant to avoid.
   They show the short name alone, which `getTabTitleProjectName` now pins to the `platform.name`
-  setting. DBL resource labels follow the same rule even though a resource carries a
-  `displayName`/`fullName` pair rather than the `platform.name`/`platform.fullName` project
-  settings: `getRefLabel` and Share Layout's `formatResourceDisplayName` pass `displayName` in the
-  helper's `shortName` slot. Sites that merely fill a long-name slot the UI renders after the short
-  name compose no label and keep their own separator — View Options joins with an em dash. The
-  Simple-mode toolbar is the one surface that composes the pair from a localized format string
-  (`%projectPicker_toolbar_label_shortNameAndFullName%` and the trigger's `%..._trigger_label_2%`) rather
-  than calling `formatProjectName`: its label and its accessible name are already localized
+  setting. How a title fills in that name, falling back to the project id, is
+  `adr-project-titles-from-one-formatter`. DBL resource labels follow the same rule even though a
+  resource carries a `displayName`/`fullName` pair rather than the
+  `platform.name`/`platform.fullName` project settings: `getRefLabel` and Share Layout's
+  `formatResourceDisplayName` pass `displayName` in the helper's `shortName` slot. Sites that merely
+  fill a long-name slot the UI renders after the short name compose no label and keep their own
+  separator — View Options joins with an em dash. The Simple-mode toolbar is the one surface that
+  composes the pair from a localized format string
+  (`%projectPicker_toolbar_label_shortNameAndFullName%` and the trigger's `%..._trigger_label_2%`)
+  rather than calling `formatProjectName`: its label and its accessible name are already localized
   sentences, and a locale that needs to reorder or re-punctuate the pair can only do so in the
   string. It is an exempted sweep site, and the English strings render the same order the helper
   does, so the two cannot disagree about which name leads. `ProjectItem`, the renderer picker's row
@@ -8397,6 +8399,39 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   and should be settled before promotion: read-only is consumer-derived through
   `renderProjectIndicator`, which leaves the row tooltip unable to explain the padlock to sighted
   pointer users.
+
+## adr-project-titles-from-one-formatter: Per-project titles are built by one shared formatter, reached through a papi resolver and a matching hook
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** Tabs scoped to one project (Inventories, Markers Checklist, Manage Books, the comment
+  list, the Scripture Editor, and extensions' own tools) each looked up `platform.name` and
+  formatted the title by hand, in a provider, a WebView, or both. The copies disagreed on the
+  fallback (`??` vs `||`, id vs no name, rejecting vs catching a failed lookup) and on the
+  placeholder (`{projectName}` vs the editor's `{projectId}`), and Manage Books carried a comment
+  warning that its provider and WebView had to be kept in sync by hand.
+- **Decision:** One pure formatter, `formatProjectTitle` in `platform-bible-utils` (with
+  `getProjectDisplayName` for the fallback rule), owns the title: `{projectName}` is the project's
+  short name alone, as `adr-project-name-short-name-first` sets for tab titles, when it is
+  non-blank, otherwise its id. Blank (empty or whitespace-only) is absent on the same terms as that
+  ADR's `normalizeFullName`. Two thin callers wrap it: `papi.localization.getLocalizedProjectTitle`
+  for providers and other async code, which never rejects, and the `useLocalizedProjectTitle` hook
+  for WebViews, which returns `undefined` while loading. Because both call the same formatter, a
+  provider's opening title and its WebView's updates cannot drift.
+- **Alternatives:** **A resolver only, no hook** — rejected: WebViews that update their title
+  (unsaved marker, project switch) would keep re-deriving loading and error handling from
+  `useProjectSetting` and `useLocalizedStrings`. **Hosting the resolver on
+  `papi.projectDataProviders`** — rejected: the result is a localized string, and
+  `papi.localization` already hosts a composed helper of this shape
+  (`getLocalizedIdFromBookNumber`). **Putting the lookups in `platform-bible-utils`** — not
+  possible: the library cannot import papi, so only the pure part lives there.
+- **Consequences:** A blank short name now shows the id everywhere, and a failed lookup no longer
+  keeps a tab from opening. Titles that need their own words around the project go through a
+  localized format rather than string concatenation (Manage Books' em-dash and the comment list's
+  `": "` are now localizable). The editor keeps filling `{projectId}` with the name for
+  caller-supplied titles, as its options document. **Revisit** if a title ever needs the full name
+  (`platform.fullName`) rather than the short name, together with the tab-title carve-out in
+  `adr-project-name-short-name-first`.
 
 ## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
 

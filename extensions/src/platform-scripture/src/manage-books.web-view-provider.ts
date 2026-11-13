@@ -10,8 +10,11 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
-import type { ManageBooksAction } from './manage-books-dialog/manage-books-dialog.types';
+import { LocalizeKey } from 'platform-bible-utils';
+import {
+  MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY,
+  type ManageBooksAction,
+} from './manage-books-dialog/manage-books-dialog.types';
 import manageBooksWebView from './manage-books.web-view?inline';
 // Reuse the inventory styles for now — Tailwind classes resolve at the
 // platform-bible-react level; we mainly need the base body styles. If the
@@ -54,6 +57,9 @@ export class ManageBooksWebViewProvider implements IWebViewProvider {
    */
   titleKey: LocalizeKey = '%manageBooks_dialog_title%';
 
+  /** Title key used instead of {@link titleKey} when the dialog is for a project */
+  titleWithProjectKey: LocalizeKey = MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY;
+
   async getWebView(
     savedWebView: SavedWebViewDefinition,
     getWebViewOptions: ManageBooksWebViewOptions,
@@ -66,27 +72,13 @@ export class ManageBooksWebViewProvider implements IWebViewProvider {
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    let projectName: string | undefined;
-    if (projectId) {
-      try {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-        projectName = (await pdp.getSetting('platform.name')) ?? projectId;
-      } catch {
-        // Resolution failed (project may have been removed since the saved
-        // state was persisted). Fall through with no projectName — the
-        // dialog opens with a project picker the user can change.
-      }
-    }
-
-    // Resolve the localized title; "{projectName}" is substituted when set so
-    // tabs read "Manage Books — Greek NT" etc. When projectName is undefined
-    // the substitution helper leaves the placeholder unrendered.
-    const titleTemplate = await papi.localization.getLocalizedString({
-      localizeKey: this.titleKey,
-    });
-    const title = projectName
-      ? formatReplacementString(`${titleTemplate} — {projectName}`, { projectName })
-      : titleTemplate;
+    // Must match the title `manage-books.web-view.tsx` sets when the project changes
+    const title = projectId
+      ? await papi.localization.getLocalizedProjectTitle({
+          localizeKey: this.titleWithProjectKey,
+          projectId,
+        })
+      : await papi.localization.getLocalizedString({ localizeKey: this.titleKey });
 
     return {
       ...savedWebView,
