@@ -3460,6 +3460,75 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (accelerators behind the overlay) is PT-4851 and needs main to notice a window's port dying on
   its own. The `TODO(PT-4435)` reconnect markers are re-homed on PT-4495.
 
+## adr-extensions-load-through-sandbox-loader: Extension files load through the host's own vm wrapper, and the remaining module and code-generation routes are locked at activation
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:** PT-1566. The extension host restricted extension imports only by replacing
+  `Module.prototype.require` with a shim, and loaded each extension's entry file with Node's own
+  `require(dir)`, so extension code ran as an ordinary CommonJS module. That left routes to
+  blocked Node modules the shim never saw: dynamic `import('fs')` (served by the ESM loader, not
+  `require`), Node's loader through `module.constructor._load` and `require.cache`,
+  `process.mainModule`, and the `process` helpers `getBuiltinModule`, `binding`, `_linkedBinding`
+  and `dlopen`. Code could also be built from strings through the `constructor` of any function
+  literal (plain, async, generator, async generator) even though `eval` and `Function` were
+  deleted from the global object. Running this branch's `evil` extension (16 sandbox probes at the
+  time) against the extension host as it was before the change refused only 4 of the 16 probes.
+- **Decision:** (1) **Loader over hooks.** `loadExtensionModule`
+  (`src/extension-host/services/extension-sandbox.util.ts`) reads the entry file and compiles it
+  with `vm.compileFunction` without an `importModuleDynamically` callback, handing it a plain
+  `module`/`exports` and a bare `require` that calls `requireForExtension`
+  (`extension.service.ts`). Extension code never touches Node's CommonJS loader, module cache or
+  dynamic-import machinery, and `import()` rejects. (2) **String-built code is blocked by locking
+  prototypes at activation** (`blockCodeGenerationFromStrings`): `eval` and `Function` are deleted
+  and the four function prototypes' `constructor` is made a non-writable, non-configurable
+  function that throws. Each kind gets its own throwing function carrying the original's `name` and
+  `prototype`, so `.constructor.name`, `instanceof` and `util.inspect` still tell function kinds
+  apart; only a reference to an original constructor taken before the lockdown stops matching
+  `fn.constructor`. (3) **`process` helpers are replaced with throwing stubs at activation**
+  (`blockProcessModuleAccess`: `getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`,
+  `loadEnvFile`, `_getActiveHandles`, `_getActiveRequests`, `execve`), and `process.mainModule` is set to
+  `undefined`. (4) **The
+  `Module.prototype.require` shim stays** as defense in depth, reduced to "extension interface
+  module or throw", since entry files no longer go through it. Refusals from the loader and the
+  lockdowns contain `not allowed in extensions`. The `evil` extension's probes and
+  `extension-sandbox.probes.test.ts` (which runs them in a child Node process with and without the
+  lockdowns) are the regression guard, and `extension.service.sandbox-wiring.test.ts` fails if
+  `extension.service.ts` stops calling the loader or the lockdowns.
+- **Alternatives:** (A) An ESM loader hook (`module.register`) plus caller detection to refuse
+  dynamic imports from extension files — rejected: it closes only `import()`, leaves the loader
+  and cache reachable, and identifying the caller from a resolve hook is fragile. (B) Starting the
+  extension host with `--disallow-code-generation-from-strings` — rejected: it is process-wide
+  from the first line, so it also applies to the host and its bundled libraries, and setting it
+  later with `v8.setFlagsFromString` has no effect (checked in plain Node 22). (C) Process-level
+  isolation (Node's `--permission` model, or a process per extension) — deferred as out of scope:
+  it is the only route to a hard boundary but changes how extensions are hosted.
+- **Consequences:** This is an in-process sandbox. It closes the module-loading and
+  string-compilation routes listed above; it is not a hard security boundary, because every
+  extension shares one JavaScript realm and one `process` with the host. Known to remain open as of
+  2026-11-09: a `net.Socket` built from `process.stdout.constructor` or
+  `process.stderr.constructor`; the rest of the `process` surface (`kill`, `send`,
+  `report.writeReport`, `chdir`, `env`); and, in dev builds, grabbing host functions from stack
+  frames through `Error.prepareStackTrace` and `CallSite.getFunction()`. A follow-up audit of the
+  `process` surface is recommended (not filed as of 2026-11-09). Extensions
+  that relied on string-built code or on Node's `module` beyond `exports` break; neither was
+  supported. The extension module cache is no longer involved: a reloaded extension re-reads its
+  file, and nothing deletes `require.cache` entries. Only CommonJS-shaped entry files load (an ES
+  module entry with `import`/`export` syntax fails to compile); `exports.default` still works.
+  The entry file is resolved literally from the manifest's `main` (with `.ts` changed to `.js`),
+  not by Node's `require(dir)` through the directory's `package.json` `main` or `index.js`: every
+  core extension agrees as of 2026-11-09, but a third-party extension whose `package.json` `main`
+  differs from its manifest `main`, or whose manifest `main` has no file extension or names a
+  directory, now fails to load, with an error saying that `main` must name the built `.js` file
+  exactly. In dev, stack traces for errors inside extensions point at the
+  built `main.js` rather than source-mapped `.ts`, because scripts compiled with
+  `vm.compileFunction` do not get Node's source-map rewriting (debugger breakpoints are expected
+  to still resolve); restoring source-mapped stacks is a candidate follow-up. Packaged builds are
+  checked by hand with the `evil` extension (`Sandbox probes (<phase>): 21/21 refused` for each phase); there is no
+  automated packaged test. Revisit if process isolation is taken up. Supersedes in part the
+  mechanism described in `adr-licensing-boundary` ("shimming `Module.prototype.require`"); the
+  licensing decision there is unchanged.
+
 ## adr-find-block-boundary-whitespace: Find tolerates a whitespace gap only at block boundaries, never mid-paragraph
 
 - **Date:** 2026-09-09
@@ -5425,6 +5494,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   LICENSING.md, "What a third-party extension links against".
 - **Source:** the AGPL relicense (`LICENSING.md`, per-directory `LICENSE` files); rule settled during
   the relicense code review; PAPI question raised in the review of #2654.
+- **Amended 2026-11-09 (PT-1566):** superseded in part by
+  `adr-extensions-load-through-sandbox-loader`. The host now supplies the `@papi/*` modules
+  through the `require` it hands each extension file when it loads it (`requireForExtension`),
+  with the `Module.prototype.require` shim kept as defense in depth. The licensing decision and
+  the Extension Interface it relies on are unchanged.
 
 ## adr-lightweight-decision-log: Keep a lightweight, gate-free architecture-decisions log
 

@@ -7,17 +7,20 @@ import { WEB_VIEW_MODULE_SPECIFIERS } from '@renderer/data/web-view-modules.data
 /*
  * Pins the module specifiers an extension may `require` at runtime.
  *
- * The `Module.prototype.require` shim in `extension.service.ts` is where the Extension Interface is
- * defined in practice, and `LICENSE-EXCEPTION.md` grants an additional permission under section 7
- * of the AGPL to works that reach Platform.Bible only through that interface. The list is therefore
- * the boundary of a published, irrevocable license grant as well as a security control.
+ * The extension `require` the host hands each extension file (`requireForExtension` in
+ * `extension.service.ts`, also installed as the `Module.prototype.require` shim) is where the
+ * Extension Interface is defined in practice, and `LICENSE-EXCEPTION.md` grants an additional
+ * permission under section 7 of the AGPL to works that reach Platform.Bible only through that
+ * interface. The list is therefore the boundary of a published, irrevocable license grant as well
+ * as a security control.
  *
- * The shim itself has no seam - `activateExtensions` installs it as a side effect of loading
- * extensions, and the same function deletes `globalThis.eval`/`Function` and replaces
- * `fetch`/`XMLHttpRequest` - and `extension.service.ts` cannot even be imported here, because it
- * creates directories at module scope. So the shim dispatches from
- * `EXTENSION_INTERFACE_MODULE_SPECIFIERS` instead, in a module that imports nothing, and this
- * compares that VALUE. Any admission has to add a specifier there, in any syntax, and fail this.
+ * That `require` has no seam - it is private to `extension.service.ts`, `activateExtensions`
+ * installs the shim as a side effect of loading extensions, and the same function deletes
+ * `globalThis.eval`/`Function` and replaces `fetch`/`XMLHttpRequest` - and `extension.service.ts`
+ * cannot even be imported here, because it creates directories at module scope. So
+ * `requireForExtension` dispatches from `EXTENSION_INTERFACE_MODULE_SPECIFIERS` instead, in a
+ * module that imports nothing, and this compares that VALUE. Any admission has to add a specifier
+ * there, in any syntax, and fail this.
  *
  * The renderer half is read the same way, and for the same reason: `global-this-web-view.model.ts`
  * pulls in React and `platform-bible-react`, which do not load outside a browser environment, so its
