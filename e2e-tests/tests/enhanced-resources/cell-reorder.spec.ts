@@ -71,30 +71,8 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     await closeAllNonHomeDockTabs(mainPage);
   });
 
-  // Make the grid tab closable then run the shared sweep so later specs start clean.
+  // Run the shared sweep so later specs start clean.
   test.afterEach(async ({ mainPage }) => {
-    await mainPage
-      .evaluate(async (webViewType) => {
-        // The renderer exposes `papi` and `updateWebViewDefinitionById` on `globalThis`; untyped here.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const win = window as unknown as {
-          papi: {
-            webViews: {
-              getAllOpenWebViewDefinitions: () => Promise<{ id: string; webViewType: string }[]>;
-            };
-          };
-          updateWebViewDefinitionById: (id: string, update: { isClosable: boolean }) => unknown;
-        };
-        const defs = await win.papi.webViews.getAllOpenWebViewDefinitions();
-        await Promise.all(
-          defs
-            .filter((d) => d.webViewType === webViewType)
-            .map((d) => win.updateWebViewDefinitionById(d.id, { isClosable: true })),
-        );
-      }, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
-      .catch(() => {
-        // Ignore — cleanup is best-effort and must not fail the test.
-      });
     await closeAllNonHomeDockTabs(mainPage);
     await restoreScriptureTextGridProjectSettings(mainPage);
   });
