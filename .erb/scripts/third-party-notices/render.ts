@@ -1219,7 +1219,7 @@ function pushDotnetSection(
     'package-level view does not reproduce.',
     '',
     'Excluded from the table: packages that contribute no runtime, native, or resource asset (MSBuild',
-    'and analyzer tooling, metapackages), and packages whose assemblies the .NET 8 shared framework',
+    'and analyzer tooling, metapackages), and packages whose assemblies the .NET 10 shared framework',
     'supersedes. Those belong to the .NET runtime itself, which is bundled by the self-contained',
     'publish and is licensed by Microsoft under the MIT License',
     '(<https://github.com/dotnet/runtime/blob/main/LICENSE.TXT>).',

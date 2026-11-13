@@ -92,7 +92,7 @@ internal class MarbleDataLoader : IMarbleDataLoader
     /// <summary>
     /// Core orchestration method. Protected virtual so test doubles can override
     /// it to exercise the catastrophic-failure path in <see cref="LoadAsync"/>
-    /// (Directory APIs on .NET 8 Linux don't reliably throw for invalid paths,
+    /// (Directory.Exists returns false for an invalid path rather than throwing,
     /// so a subclass seam is the stable way to force an exception).
     /// </summary>
     protected virtual MarbleData LoadCore()

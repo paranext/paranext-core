@@ -104,7 +104,7 @@ public class NamespaceDirectoryAnalyzerTests
             class Generated { }
             """;
 
-        await VerifyWithPathAsync(source, "/repo/c-sharp/obj/Debug/net8.0/Generated.cs");
+        await VerifyWithPathAsync(source, "/repo/c-sharp/obj/Debug/net10.0/Generated.cs");
     }
 
     [Test]
