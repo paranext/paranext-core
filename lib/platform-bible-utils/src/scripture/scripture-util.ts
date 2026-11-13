@@ -236,6 +236,12 @@ export function getBookIdsFromBooksPresent(booksPresent: string): string[] {
  * {@link getBookIdsFromBooksPresent}. Useful for handing a list of books to a component that takes
  * the flag string, such as one offering a choice of books that are not a project's.
  *
+ * @example
+ *
+ * ```ts
+ * getBooksPresentFromBookIds(['LEV', 'GEN']); // '101' followed by 120 '0's
+ * ```
+ *
  * @param bookIds Three-letter book ids, in any order. Ids that name no canonical book are ignored.
  * @returns A flag string of full canon length, '1' at each listed book's position and '0' elsewhere
  * @experimental This export is unstable and may change shape or disappear without notice
