@@ -495,6 +495,9 @@ async function resetFindPanel(frame: Frame): Promise<void> {
  * The reset has to follow the activation (a hidden pane cannot be clicked), so the activation's
  * catch-up search may briefly run with the previous test's term. `resetFindPanel` waits for the
  * idle placeholder, which is only reached once that search is gone.
+ *
+ * The reset also puts the scroll group back on the reference the app started with, so a test that
+ * moves the editor elsewhere has to do it after this, not before.
  */
 async function openFindPanel(mainPage: Page): Promise<Frame> {
   const frame = await activateFindTab(mainPage);
@@ -731,6 +734,17 @@ async function showEditorAt(
   await waitForGeometryToSettle(editorFrame, settleText);
   await editorFrame.evaluate(locateEditorScrollerAndAct, { pinTo });
   return waitForGeometryToSettle(editorFrame, settleText);
+}
+
+/**
+ * Waits until the Find panel's scope shows Matthew, so a search typed next runs against the book
+ * the editor was just moved to. The scope button renders the book id (`MAT`) rather than the
+ * localized name, so either matches.
+ */
+async function expectScopeOnMatthew(frame: Frame): Promise<void> {
+  await expect(frame.getByRole('button', { name: /showing/i })).toContainText(/mat(thew)?/i, {
+    timeout: 15_000,
+  });
 }
 
 /**
@@ -1545,6 +1559,7 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
 
   test('same chapter: a match below the fold scrolls into view', async ({ mainPage }) => {
     const editorFrame = await findScriptureEditorFrame(mainPage);
+    const frame = await openFindPanel(mainPage);
     const before = await showEditorAt(
       mainPage,
       editorFrame,
@@ -1555,7 +1570,7 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
     // Positive control: the match starts below the viewport, so an editor that does not scroll fails.
     expect(before.matchTop).toBeGreaterThan(before.viewportHeight);
 
-    const frame = await openFindPanel(mainPage);
+    await expectScopeOnMatthew(frame);
     await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
     await firstResultCard(frame).click();
 
@@ -1598,11 +1613,12 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
     mainPage,
   }) => {
     const editorFrame = await findScriptureEditorFrame(mainPage);
+    const frame = await openFindPanel(mainPage);
     await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
     // Positive control: the match's chapter is not what the editor is showing.
     expect(await readTextGeometry(editorFrame, MID_CHAPTER_TERM)).toBeUndefined();
 
-    const frame = await openFindPanel(mainPage);
+    await expectScopeOnMatthew(frame);
     await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
     await firstResultCard(frame).click();
 
@@ -1613,10 +1629,11 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
     mainPage,
   }) => {
     const editorFrame = await findScriptureEditorFrame(mainPage);
+    const frame = await openFindPanel(mainPage);
     await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
     expect(await readTextGeometry(editorFrame, MID_CHAPTER_TERM)).toBeUndefined();
 
-    const frame = await openFindPanel(mainPage);
+    await expectScopeOnMatthew(frame);
     await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
     await firstResultCard(frame).dblclick();
 
@@ -1665,6 +1682,7 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
     electronApp,
   }) => {
     const editorFrame = await findScriptureEditorFrame(mainPage);
+    const frame = await openFindPanel(mainPage);
     const wide = await showEditorAt(mainPage, editorFrame, 'Matthew 5:1', MID_CHAPTER_TERM, 'top');
     restoreWindowSize = await setWindowContentSize(electronApp, { width: NARROW_WINDOW_WIDTH });
 
@@ -1679,18 +1697,21 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
     expect(narrow.viewportWidth).toBeLessThan(wide.viewportWidth);
     expect(narrow.matchTop).toBeGreaterThan(narrow.viewportHeight);
 
-    const sameChapterFrame = await openFindPanel(mainPage);
-    await fillSearchAndWaitForResults(sameChapterFrame, MID_CHAPTER_TERM);
-    await firstResultCard(sameChapterFrame).click();
+    await expectScopeOnMatthew(frame);
+    await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
+    await firstResultCard(frame).click();
     await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM, MID_CHAPTER_VERSE_START_TERM);
 
     await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
     // Positive control: the match's chapter is not what the editor is showing.
     expect(await readTextGeometry(editorFrame, MID_CHAPTER_TERM)).toBeUndefined();
 
-    const otherChapterFrame = await openFindPanel(mainPage);
-    await fillSearchAndWaitForResults(otherChapterFrame, MID_CHAPTER_TERM);
-    await firstResultCard(otherChapterFrame).click();
+    // Searched afresh rather than re-clicking the first search's card, so the jump is from the
+    // other chapter. The panel stays open: opening it again would put the editor back on the
+    // reference the app started with.
+    await clickClearSearch(frame);
+    await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
+    await firstResultCard(frame).click();
     await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM, MID_CHAPTER_VERSE_START_TERM);
   });
 });

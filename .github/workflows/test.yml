@@ -27,7 +27,7 @@ on:
 
 jobs:
   test:
-    name: Build on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
+    name: Build on ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
@@ -39,7 +39,6 @@ jobs:
       matrix:
         # Make sure these match with the env values above and the `include` entries below
         os: [windows-latest, macos-15, ubuntu-22.04]
-        dotnet_version: [8.0.x]
         # The name each leg uploads its app under, and the name its cleanup step deletes by
         include:
           - os: windows-latest
@@ -159,7 +158,7 @@ jobs:
         timeout-minutes: 90
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet_version }}
+          global-json-file: global.json
 
       # The notices generator restores the .NET closure once per runtime identifier - four passes -
       # on top of the build's own restore. `~/.npm` is cached by setup-node and the bundler gems by
@@ -196,6 +195,17 @@ jobs:
         with:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
+
+      # npm 10 installs a lockfile whose nested entries fall outside the range their workspace
+      # declares. npm 11 (Node.js 24), which the extension repos' CI uses to install this repo,
+      # re-resolves them and fails `npm ci` when that changes a locked version, so whether it breaks
+      # depends on the registry. `npm ls` fails on every such entry under both npm versions, and it
+      # reads only the lockfile, so it runs before `npm ci` and on one OS.
+      # To fix a failure: delete the reported keys from package-lock.json, then run npm 10's
+      # `npm install --package-lock-only --ignore-scripts`. npm will not drop them on its own.
+      - name: Check the lockfile's entries match their declared ranges
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm ls --all --package-lock-only
 
       # licensee (Ruby) identifies license texts for the third-party notices generator. Linux only:
       # the generator writes the artifact only on Linux, and the other legs verify against the

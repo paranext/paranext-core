@@ -299,14 +299,19 @@ export interface PaneEditingSession {
    * `useEditorPdpSync` holds the delivery instead, as it does for the Scripture text.
    */
   focusLocation: EditorFocusLocation;
-  /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
+  /**
+   * `Date.now()` of the last edit made in this view — in the Scripture text or the pane's row
+   * editor — or `undefined` if none was. One stamp for both, so a footnote just inserted from the
+   * text (which puts the caret in its row before anything is typed there) or a row clicked right
+   * after typing in the text is held for the rest of the window.
+   */
   lastEditAtMs: number | undefined;
 }
 
 /**
  * Whether the footnotes pane owns the chapter's content, as the focused Scripture editor does: a
- * note session is open in the pane, focus is in the pane, and a note was edited there within
- * {@link EDITOR_OWNERSHIP_WINDOW_MS}. Says nothing about where the window's focus is;
+ * note session is open in the pane, focus is in the pane, and the view (the text or a pane row) was
+ * edited within {@link EDITOR_OWNERSHIP_WINDOW_MS}. Says nothing about where the window's focus is;
  * {@link resolveEditingSessionActivity} and `useEditorPdpSync` each decide what that means for an
  * incoming update.
  */
@@ -353,14 +358,14 @@ export function doesPaneSessionOwnContent(
  * session suppresses.
  *
  * Tracked as PT-4817. The intended fix is a staleness bound like the note session's refreshed-at
- * bound — a palette session defers only within the editor-ownership window of the last local edit,
- * after which the update applies and the change guard closes the palette — not dismissing the
+ * bound — a palette session defers only within the editor-ownership window of the last edit in this
+ * view, after which the update applies and the change guard closes the palette — not dismissing the
  * palette on unrelated keys. An automatic Send/Receive dismisses the palette before it writes, so
  * that particular collision is closed; other external writers can still be overwritten.
  *
- * A pane session is never reported stale: it stops holding updates back once the user stops editing
- * in it (see {@link EditingSessionActivityInput.paneSession}), and the update it then lets through
- * ends the session itself.
+ * A pane session is never reported stale: it stops holding updates back once nothing in the view
+ * has been edited for the window (see {@link EditingSessionActivityInput.paneSession}), and the
+ * update it then lets through ends the session itself.
  *
  * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
  *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear
