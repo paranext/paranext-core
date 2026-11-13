@@ -24,11 +24,18 @@ on:
         description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
         required: false
         default: false
+      e2e_only:
+        type: choice
+        description: 'PROTOTYPE ONLY: skip the builds and run only end-to-end jobs (core = the core set, full = every isolated spec over five runners)'
+        options: ['no', 'core', 'full']
+        required: false
+        default: 'no'
 
 jobs:
   test:
     name: Build on ${{ matrix.os }}
 
+    if: ${{ !inputs.e2e_only || inputs.e2e_only == 'no' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
 
@@ -568,6 +575,7 @@ jobs:
   # with no retries a timing race in the app would otherwise fail an unrelated pull request.
   e2e-core:
     name: E2E core
+    if: ${{ inputs.e2e_only != 'full' }}
     needs: e2e-core-selection
     uses: ./.github/workflows/e2e-isolated.yml
     with:
@@ -575,3 +583,18 @@ jobs:
       report_only: true
       timeout_minutes: 60
       artifact_name: playwright-results-e2e-core
+
+  # PROTOTYPE ONLY: the nightly run, startable from a branch (a workflow file that is not on main
+  # yet cannot be started by hand). Remove before this goes into a pull request.
+  e2e-full-prototype:
+    name: E2E full, part ${{ matrix.shard }} of 5
+    if: ${{ inputs.e2e_only == 'full' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    uses: ./.github/workflows/e2e-isolated.yml
+    with:
+      shard: ${{ matrix.shard }}/5
+      timeout_minutes: 90
+      artifact_name: playwright-results-e2e-full-${{ matrix.shard }}
