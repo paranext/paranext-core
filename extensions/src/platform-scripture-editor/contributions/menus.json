@@ -93,6 +93,11 @@
             "menuItem": "platformScriptureEditor.editSubmenu",
             "order": 1
           },
+          "platformScriptureEditor.resourceEditActions": {
+            "column": "platformScriptureEditor.edit",
+            "order": 1,
+            "isExperimental": true
+          },
           "platformScriptureEditor.editFind": {
             "menuItem": "platformScriptureEditor.editSubmenu",
             "order": 2,
@@ -117,54 +122,83 @@
           {
             "id": "platformScriptureEditor.editSubmenu",
             "label": "%webView_platformScriptureEditor_edit%",
-            "localizeNotes": "Scripture editor top menu > Edit ▸ — opens the Undo/Redo/Cut/Copy/Paste flyout (plus Find in Power), in its own section with no heading between Project and View",
+            "localizeNotes": "Scripture editor top menu > Edit ▸ — opens the Undo/Redo/Cut/Copy/Paste flyout (plus Find in Power), in its own section with no heading between Project and View. Not shown on a resource, where the Edit section (Copy, plus Find in Power) replaces it",
             "iconNameBefore": "pencil",
             "group": "platformScriptureEditor.simpleEditMenu",
-            "order": 1
+            "order": 1,
+            "when": "!platform.project.{projectId}.isResource"
           },
           {
             "label": "%webView_platformScriptureEditor_undo%",
             "localizeNotes": "Scripture editor top menu > Edit > Undo",
             "group": "platformScriptureEditor.editActions",
             "order": 1,
-            "command": "platformScriptureEditor.undo"
+            "command": "platformScriptureEditor.undo",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_redo%",
             "localizeNotes": "Scripture editor top menu > Edit > Redo",
             "group": "platformScriptureEditor.editActions",
             "order": 2,
-            "command": "platformScriptureEditor.redo"
+            "command": "platformScriptureEditor.redo",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_cut%",
             "localizeNotes": "Scripture editor top menu > Edit > Cut (the selected text)",
             "group": "platformScriptureEditor.editActions",
             "order": 3,
-            "command": "platformScriptureEditor.cutSelection"
+            "command": "platformScriptureEditor.cutSelection",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_copy%",
-            "localizeNotes": "Scripture editor top menu > Edit > Copy (the selected text)",
+            "localizeNotes": "Scripture editor top menu > Edit > Copy (the selected text). Not shown on a resource, which has its own Copy in the Edit section",
             "group": "platformScriptureEditor.editActions",
             "order": 4,
-            "command": "platformScriptureEditor.copySelection"
+            "command": "platformScriptureEditor.copySelection",
+            "when": "!platform.project.{projectId}.isResource"
           },
           {
             "label": "%webView_platformScriptureEditor_paste%",
             "localizeNotes": "Scripture editor top menu > Edit > Paste",
             "group": "platformScriptureEditor.editActions",
             "order": 5,
-            "command": "platformScriptureEditor.pasteAtSelection"
+            "command": "platformScriptureEditor.pasteAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_openFind%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > Edit > Find. Simple offers Find under Tools and resources instead",
+            "localizeNotes": "Scripture editor top menu (Power) > Edit > Find. Simple offers Find under Tools and resources instead. Not shown on a resource, which has its own Find in the Edit section",
             "iconNameBefore": "search",
             "group": "platformScriptureEditor.editFind",
             "order": 1,
-            "command": "platformScripture.openFind"
+            "command": "platformScripture.openFind",
+            "when": "!platform.project.{projectId}.isResource"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_copy%",
+            "localizeNotes": "Scripture editor top menu > Edit (section, resources only) > Copy (the selected text). Other projects have Copy in the Edit ▸ flyout",
+            "group": "platformScriptureEditor.resourceEditActions",
+            "order": 1,
+            "command": "platformScriptureEditor.copySelection",
+            "when": "platform.project.{projectId}.isResource"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_openFind%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > Edit (section, resources only) > Find. Simple offers Find under Tools and resources instead; other projects have Find in the Edit ▸ flyout",
+            "iconNameBefore": "search",
+            "group": "platformScriptureEditor.resourceEditActions",
+            "order": 2,
+            "command": "platformScripture.openFind",
+            "when": "platform.project.{projectId}.isResource"
           },
           {
             "id": "platformScriptureEditor.viewSubmenu",
@@ -221,7 +255,8 @@
             "iconNameBefore": "file-text",
             "group": "platformScriptureEditor.footnotesPane",
             "order": 1,
-            "command": "platformScriptureEditor.toggleFootnotes"
+            "command": "platformScriptureEditor.toggleFootnotes",
+            "checkedWhen": "platformScriptureEditor.webView.{webViewId}.footnotesPaneVisible"
           },
           {
             "label": "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%",
@@ -237,7 +272,9 @@
             "iconNameBefore": "message-square-plus",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 1,
-            "command": "platformScriptureEditor.insertCommentAtSelection"
+            "command": "platformScriptureEditor.insertCommentAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platformScripture.project.{projectId}.canCreateComments && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
@@ -245,7 +282,9 @@
             "iconNameBefore": "square-function",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 2,
-            "command": "platformScriptureEditor.insertFootnoteAtSelection"
+            "command": "platformScriptureEditor.insertFootnoteAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
@@ -253,7 +292,9 @@
             "iconNameBefore": "square-x",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 3,
-            "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
+            "command": "platformScriptureEditor.insertCrossReferenceAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_insertEndnoteAtSelection%",
@@ -261,7 +302,9 @@
             "iconNameBefore": "square-sigma",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 4,
-            "command": "platformScriptureEditor.insertEndnoteAtSelection"
+            "command": "platformScriptureEditor.insertEndnoteAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_legacyCommentManager_openComments_2%",
@@ -270,7 +313,8 @@
             "iconNameBefore": "message-square",
             "group": "platformScriptureEditor.comments",
             "order": 1,
-            "command": "legacyCommentManager.openCommentList"
+            "command": "legacyCommentManager.openCommentList",
+            "when": "!platform.project.{projectId}.isResource"
           },
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
@@ -360,7 +404,7 @@
           {
             "label": "%webView_platformScriptureEditor_openFind%",
             "hiddenInterfaceModes": ["power"],
-            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Find — brings the Find tab in the third column to the front. Power offers Find under Edit instead",
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Find — brings the Find tab in the third column to the front. Power offers Find under Edit instead (in the Edit ▸ flyout, or in the Edit section on a resource)",
             "iconNameBefore": "search",
             "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 5,
@@ -373,7 +417,8 @@
             "iconNameBefore": "message-square",
             "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 6,
-            "command": "legacyCommentManager.showCommentListPanel"
+            "command": "legacyCommentManager.showCommentListPanel",
+            "when": "!platform.project.{projectId}.isResource"
           }
         ]
       },

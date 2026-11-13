@@ -1,9 +1,11 @@
 import { vi } from 'vitest';
+import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { ProcessType } from '@shared/global-this.model';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 import {
   initialize as initializeSharedStore,
+  onDidChangeSharedStore,
   resetForTesting,
   sharedStoreService,
   waitForInitialization,
@@ -17,6 +19,7 @@ vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
   registerRequestHandler: vi.fn(),
+  onDidDisconnectClient: vi.fn(),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -44,9 +47,12 @@ describe('sharedStoreService', () => {
 
   const testKey = 'platform.customNetworkTimeoutMs.test';
 
+  let disconnectHandler: (event: { removedMethodNames: string[] }) => void = () => {};
+
   beforeEach(() => {
     // Reset mocks
     vi.resetAllMocks();
+    disconnectHandler = () => {};
 
     // Mock event emitter creation
     vi.mocked(networkService.createNetworkEventEmitter).mockReturnValue(
@@ -73,6 +79,12 @@ describe('sharedStoreService', () => {
         registeredEmitterPromise: Promise.resolve(mockEmitter),
       } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>,
     );
+
+    // Capture the handler the shared store subscribes to disconnects with
+    vi.mocked(networkService.onDidDisconnectClient).mockImplementation((handler) => {
+      disconnectHandler = handler;
+      return () => true;
+    });
 
     // Set process type to Main by default
     globalThis.processType = ProcessType.Main;
@@ -136,6 +148,57 @@ describe('sharedStoreService', () => {
       expect(vi.mocked(networkService.createCoreMultiSourceEventEmitter).mock.calls.length).toBe(
         createEmitterCallCount,
       );
+    });
+
+    it('still initializes when the owner marker cannot be registered', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      vi.mocked(networkService.registerRequestHandler).mockRejectedValueOnce(
+        new Error('marker boom'),
+      );
+
+      await expect(initializeSharedStore(networkService)).resolves.toBeUndefined();
+
+      expect(sharedStoreService.isInitialized()).toBe(true);
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Could not register the shared store owner marker'),
+      );
+      sharedStoreService.set(testKey, 42);
+      expect(sharedStoreService.get(testKey)).toBe(42);
+    });
+
+    it('applies every key of the initial snapshot even when a subscriber throws', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      vi.mocked(networkService.request).mockResolvedValue({
+        'platform.customNetworkTimeoutMs.k1': {
+          value: 1,
+          clock: { counter: 1, processId: 'main-x' },
+        },
+        'platform.customNetworkTimeoutMs.k2': {
+          value: 2,
+          clock: { counter: 2, processId: 'main-x' },
+        },
+      });
+      const unsubscribe = onDidChangeSharedStore(() => {
+        throw new Error('subscriber failure');
+      });
+      try {
+        await initializeSharedStore(networkService);
+        expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k1')).toBe(1);
+        expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k2')).toBe(2);
+      } finally {
+        unsubscribe();
+      }
+    });
+
+    it('fetches the initial snapshot without waiting for the owner marker', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      vi.mocked(networkService.registerRequestHandler).mockReturnValue(new Promise(() => {}));
+      vi.mocked(networkService.request).mockResolvedValue({});
+      initializeSharedStore(networkService); // never settles; reset in afterEach
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(networkService.request).toHaveBeenCalledWith('shared-store:get');
+      expect(sharedStoreService.isInitialized()).toBe(false);
     });
 
     it('clears the cached promise on failure so a later call can retry', async () => {
@@ -228,7 +291,7 @@ describe('sharedStoreService', () => {
       expect(sharedStoreService.get(testKey)).toBe(testValue);
     });
 
-    it('should remove a value, emitting a deleted change event', () => {
+    it('should remove a value, emitting a released deleted change event', () => {
       const testValue = 5000;
       sharedStoreService.set(testKey, testValue);
 
@@ -241,6 +304,7 @@ describe('sharedStoreService', () => {
         key: testKey,
         value: undefined,
         deleted: true,
+        released: true,
         clock: expect.objectContaining({
           counter: expect.any(Number),
           processId: expect.any(String),
@@ -338,6 +402,124 @@ describe('sharedStoreService', () => {
     });
   });
 
+  describe('onDidChangeSharedStore', () => {
+    beforeEach(async () => {
+      await initializeSharedStore(networkService);
+    });
+
+    it('should fire for local set operations', () => {
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      sharedStoreService.set(testKey, 1234);
+      expect(handler).toHaveBeenCalledWith({ key: testKey, value: 1234 });
+      unsubscribe();
+    });
+
+    it('should fire for local remove operations', () => {
+      sharedStoreService.set(testKey, 1234);
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      sharedStoreService.remove(testKey);
+      expect(handler).toHaveBeenCalledWith({ key: testKey, value: undefined });
+      unsubscribe();
+    });
+
+    it('should not fire for a remove of a key that has no value', () => {
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      sharedStoreService.remove(testKey);
+      expect(handler).not.toHaveBeenCalled();
+      unsubscribe();
+    });
+
+    it('should fire for remote changes that are applied', () => {
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key: testKey,
+        value: 4321,
+        clock: { counter: 100, processId: 'other-process' },
+      });
+      expect(handler).toHaveBeenCalledWith({ key: testKey, value: 4321 });
+      unsubscribe();
+    });
+
+    it('should not fire for stale remote changes that are ignored', () => {
+      sharedStoreService.set(testKey, 1);
+      sharedStoreService.set(testKey, 2);
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key: testKey,
+        value: 999,
+        clock: { counter: 1, processId: 'other-process' },
+      });
+      expect(handler).not.toHaveBeenCalled();
+      unsubscribe();
+    });
+  });
+
+  describe('subscriber isolation', () => {
+    beforeEach(async () => {
+      await initializeSharedStore(networkService);
+    });
+
+    function subscribeThrowerAndSecond() {
+      const throwing = onDidChangeSharedStore(() => {
+        throw new Error('subscriber failure');
+      });
+      const second = vi.fn();
+      const unsubscribeSecond = onDidChangeSharedStore(second);
+      return {
+        second,
+        cleanup: () => {
+          throwing();
+          unsubscribeSecond();
+        },
+      };
+    }
+
+    it('keeps notifying later subscribers when one throws during a local set', () => {
+      const { second, cleanup } = subscribeThrowerAndSecond();
+      try {
+        expect(() => sharedStoreService.set(testKey, 1)).not.toThrow();
+        expect(second).toHaveBeenCalledWith({ key: testKey, value: 1 });
+      } finally {
+        cleanup();
+      }
+    });
+
+    it('keeps notifying later subscribers when one throws during a local remove', () => {
+      sharedStoreService.set(testKey, 1);
+      const { second, cleanup } = subscribeThrowerAndSecond();
+      try {
+        expect(() => sharedStoreService.remove(testKey)).not.toThrow();
+        expect(second).toHaveBeenCalledWith({ key: testKey, value: undefined });
+      } finally {
+        cleanup();
+      }
+    });
+
+    it('keeps notifying later subscribers when one throws during a remote change', () => {
+      const { second, cleanup } = subscribeThrowerAndSecond();
+      try {
+        const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+        expect(() =>
+          changeEventHandler({
+            key: testKey,
+            value: 4321,
+            clock: { counter: 100, processId: 'other-process' },
+          }),
+        ).not.toThrow();
+        expect(second).toHaveBeenCalledWith({ key: testKey, value: 4321 });
+      } finally {
+        cleanup();
+      }
+    });
+  });
+
   describe('conflict resolution with Lamport clocks', () => {
     beforeEach(async () => {
       await initializeSharedStore(networkService);
@@ -363,6 +545,55 @@ describe('sharedStoreService', () => {
       // Local store should be updated to remote value
       const updatedValue = sharedStoreService.get(testKey);
       expect(updatedValue).toEqual(newValue);
+    });
+
+    it('does not emit an equal remote value but keeps its newer clock', () => {
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key: testKey,
+        value: 5,
+        clock: { counter: 10, processId: 'other-process' },
+      });
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      changeEventHandler({
+        key: testKey,
+        value: 5,
+        clock: { counter: 11, processId: 'other-process' },
+      });
+      expect(handler).not.toHaveBeenCalled();
+      // Loses the tie at counter 11 only if counter 11 was stored
+      changeEventHandler({
+        key: testKey,
+        value: 7,
+        clock: { counter: 11, processId: 'aaa-process' },
+      });
+      expect(sharedStoreService.get(testKey)).toBe(5);
+      unsubscribe();
+    });
+
+    it('emits a re-set after a remote removal', () => {
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key: testKey,
+        value: 5,
+        clock: { counter: 10, processId: 'other-process' },
+      });
+      changeEventHandler({
+        key: testKey,
+        value: undefined,
+        deleted: true,
+        clock: { counter: 11, processId: 'other-process' },
+      });
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      changeEventHandler({
+        key: testKey,
+        value: 5,
+        clock: { counter: 12, processId: 'other-process' },
+      });
+      expect(handler).toHaveBeenLastCalledWith({ key: testKey, value: 5 });
+      unsubscribe();
     });
 
     it('should ignore remote changes with lower counter values', () => {
@@ -426,6 +657,270 @@ describe('sharedStoreService', () => {
       // Local store should still have the remote value
       const finalValue = sharedStoreService.get(testKey);
       expect(finalValue).toEqual(newValue);
+    });
+  });
+
+  describe('ownership release', () => {
+    function remoteChange(
+      key: string,
+      value: unknown,
+      counter: number,
+      processIdOfWriter: string,
+      deleted?: boolean,
+      released?: boolean,
+    ) {
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key,
+        value,
+        clock: { counter, processId: processIdOfWriter },
+        ...(deleted ? { deleted: true } : {}),
+        ...(released ? { released: true } : {}),
+      });
+    }
+
+    it('allows any process to set a key released after its owner disconnected', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+
+      sharedStoreService.set(testKey, 7000);
+
+      expect(sharedStoreService.get(testKey)).toBe(7000);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('a key its producer removed is claimable by another process', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+
+      sharedStoreService.set(testKey, 7000);
+
+      expect(sharedStoreService.get(testKey)).toBe(7000);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('applies a refused set once the owner removes the key (late source)', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      sharedStoreService.set(testKey, 2);
+      expect(sharedStoreService.get(testKey)).toBe(1);
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+
+      expect(sharedStoreService.get(testKey)).toBe(2);
+      expect(handler).toHaveBeenCalledWith({ key: testKey, value: 2 });
+      expect(handler).not.toHaveBeenCalledWith({ key: testKey, value: undefined });
+      expect(vi.mocked(mockEmitter.emit).mock.calls[0][0]).toMatchObject({
+        key: testKey,
+        value: 2,
+      });
+      expect(vi.mocked(mockEmitter.emit).mock.calls[0][0].clock.counter).toBeGreaterThan(101);
+      unsubscribe();
+    });
+
+    it('logs a refused set at info with the key and owner, not as an error, and applies it on release', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+
+      sharedStoreService.set(testKey, 2);
+
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledTimes(1);
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining(`Holding set of ${testKey} until other-process releases it`),
+      );
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+      expect(sharedStoreService.get(testKey)).toBe(2);
+    });
+
+    it('applies the latest refused set when the owner releases the key', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      sharedStoreService.set(testKey, 2);
+      sharedStoreService.set(testKey, 3);
+
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+
+      expect(sharedStoreService.get(testKey)).toBe(3);
+    });
+
+    it('applies a refused set when the release arrives after a restart snapshot', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      vi.mocked(networkService.request).mockResolvedValue({
+        [testKey]: { value: 1, clock: { counter: 5, processId: 'extension-host-old' } },
+      });
+      await initializeSharedStore(networkService);
+      sharedStoreService.set(testKey, 2);
+
+      remoteChange(testKey, undefined, 6, 'main-abc', true, true);
+
+      expect(sharedStoreService.get(testKey)).toBe(2);
+    });
+
+    it('a local remove withdraws a pending claim', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      sharedStoreService.set(testKey, 2);
+      sharedStoreService.remove(testKey);
+
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+
+      expect(sharedStoreService.get(testKey)).toBeUndefined();
+    });
+
+    it('applies a refused set held in main when the owner process disconnects', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 10, 'extension-host-abc');
+      sharedStoreService.set(testKey, 2);
+      expect(sharedStoreService.get(testKey)).toBe(1);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
+
+      expect(sharedStoreService.get(testKey)).toBe(2);
+      expect(mockEmitter.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ key: testKey, value: 2 }),
+      );
+    });
+
+    it('registers an owner marker method in non-main processes', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      await initializeSharedStore(networkService);
+      expect(networkService.registerRequestHandler).toHaveBeenCalledWith(
+        expect.stringMatching(/^shared-store:owner:extension-host-/),
+        expect.any(Function),
+        expect.anything(),
+      );
+    });
+
+    it('tombstones every key owned by a process whose owner marker vanished (main only)', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange('platform.customNetworkTimeoutMs.k1', 1, 10, 'extension-host-abc');
+      remoteChange('platform.customNetworkTimeoutMs.k2', 2, 11, 'extension-host-abc');
+      sharedStoreService.set('platform.customNetworkTimeoutMs.k3', 3);
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      disconnectHandler({
+        removedMethodNames: ['shared-store:owner:extension-host-abc', 'command:foo'],
+      });
+
+      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k1')).toBeUndefined();
+      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k2')).toBeUndefined();
+      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k3')).toBe(3);
+      expect(mockEmitter.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: 'platform.customNetworkTimeoutMs.k1',
+          deleted: true,
+          released: true,
+          clock: expect.objectContaining({ counter: expect.any(Number) }),
+        }),
+      );
+      const k1Release = vi
+        .mocked(mockEmitter.emit)
+        .mock.calls.map(([event]) => event)
+        .find((event) => event.key === 'platform.customNetworkTimeoutMs.k1');
+      expect(k1Release?.clock.counter).toBeGreaterThan(10);
+      expect(handler).toHaveBeenCalledWith({
+        key: 'platform.customNetworkTimeoutMs.k1',
+        value: undefined,
+      });
+      unsubscribe();
+    });
+
+    it('still releases the remaining keys when a change subscriber throws', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange('platform.customNetworkTimeoutMs.k1', 1, 10, 'extension-host-abc');
+      remoteChange('platform.customNetworkTimeoutMs.k2', 2, 11, 'extension-host-abc');
+      const unsubscribe = onDidChangeSharedStore(() => {
+        throw new Error('subscriber failure');
+      });
+
+      try {
+        disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
+
+        expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k1')).toBeUndefined();
+        expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k2')).toBeUndefined();
+      } finally {
+        unsubscribe();
+      }
+    });
+
+    it('releases a plain tombstone its disconnected owner still held, so another process can set it', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 10, 'extension-host-abc');
+      remoteChange(testKey, undefined, 11, 'extension-host-abc', true);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
+
+      expect(mockEmitter.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ key: testKey, deleted: true, released: true }),
+      );
+      sharedStoreService.set(testKey, 7000);
+      expect(sharedStoreService.get(testKey)).toBe(7000);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('does not re-release a key that is already released', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, undefined, 11, 'extension-host-abc', true, true);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
+
+      expect(mockEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('lets a non-main process set a key whose initial snapshot entry is a released tombstone', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      vi.mocked(networkService.request).mockResolvedValue({
+        [testKey]: {
+          value: undefined,
+          clock: { counter: 5, processId: 'extension-host-old' },
+          deleted: true,
+          released: true,
+        },
+      });
+      await initializeSharedStore(networkService);
+
+      sharedStoreService.set(testKey, 7000);
+
+      expect(sharedStoreService.get(testKey)).toBe(7000);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('lets another process remove a released key but refuses a foreign plain tombstone', async () => {
+      await initializeSharedStore(networkService);
+      const releasedKey = 'platform.customNetworkTimeoutMs.released';
+      remoteChange(releasedKey, undefined, 20, 'other-process', true, true);
+      sharedStoreService.set(releasedKey, 1);
+      expect(sharedStoreService.get(releasedKey)).toBe(1);
+      sharedStoreService.remove(releasedKey);
+      expect(sharedStoreService.get(releasedKey)).toBeUndefined();
+      expect(logger.error).not.toHaveBeenCalled();
+
+      remoteChange(testKey, undefined, 30, 'other-process', true);
+      sharedStoreService.remove(testKey);
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining(`Ignoring remove of ${testKey}`),
+      );
+    });
+
+    it('does nothing on disconnect in a non-main process', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 10, 'extension-host-abc');
+
+      expect(networkService.onDidDisconnectClient).not.toHaveBeenCalled();
+      expect(sharedStoreService.get(testKey)).toBe(1);
     });
   });
 });
