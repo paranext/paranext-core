@@ -1494,7 +1494,7 @@
       "%webView_platformScriptureEditor_emptyChapter_protectedTooltip%": "De structuur is vergrendeld. Hoofdstuk- en versmarkers kunnen niet worden toegevoegd.",
       "%webView_platformScriptureEditor_emptyState_noProject%": "Geen project geselecteerd",
       "%webView_platformScriptureEditor_emptyState_noProjects_description%": "Om een project te krijgen, stel je Paratext-registratie in via je gebruikersprofiel, of vraag je projectbeheerder om je aan een project toe te voegen.",
-      "%webView_platformScriptureEditor_emptyState_noProjects_description_registered%": "Het is nog niet mogelijk om een project aan te maken in {%product_name%}. Iemand moet een project met je delen, of je moet een project aanmaken in Paratext 9. Gebruik daarna Synchroniseren om het op te halen.",
+      "%webView_platformScriptureEditor_emptyState_noProjects_description_registered%": "Het is nog niet mogelijk om een project aan te maken in {%product_name%}. Iemand moet een project met je delen, of je moet een project aanmaken in Paratext 9. Gebruik daarna Sync om het op te halen.",
       "%webView_platformScriptureEditor_emptyState_noProjects_title%": "Je hebt nog geen eigen projecten",
       "%webView_platformScriptureEditor_error_bookNotFoundResource%": "Dit boek bestaat niet in deze bron.",
       "%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%": "Project {projectName}: de hoofdstukmarker in {book} {chapter} kwam niet overeen met het hoofdstuk en is daarom gecorrigeerd.",
