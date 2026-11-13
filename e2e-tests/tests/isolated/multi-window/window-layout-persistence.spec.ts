@@ -414,6 +414,10 @@ test.describe('window layout persistence', () => {
       // recheck can swap this suite's already-loaded app onto the wizard mid-run — and this test's
       // three-launch, several-minute runtime gives it far longer to do so than a typical spec.
       'platform.showRegistrationReminderOnStartup': false,
+      // See smokeAppSettingsOverrides in helpers.ts: on a machine that never answered the internet
+      // question (any fresh checkout), a Power-mode launch opens the Internet & connectivity
+      // settings by itself, which adds tabs to the docks this test counts.
+      'platform.internetUseChoiceAsked': true,
       'platform.interfaceLanguage': ['en'],
       'platform.interfaceMode': 'power',
     });
