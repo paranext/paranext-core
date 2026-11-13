@@ -1,6 +1,6 @@
 /**
  * Root postinstall: verifies that npm actually installed the staged dev packages' dependencies,
- * then runs the build chain (`postinstall:build`).
+ * then fetches the Electron binary and runs the build chain (`postinstall:build`).
  *
  * Why this exists: npm resolves the dependency tree from the on-disk state it saw at startup. On a
  * fresh clone, `dev-packages/staging/` is only created during this same install (by `preinstall`),
@@ -163,6 +163,11 @@ function getStagedLockMismatches(): string[] {
 }
 
 function runBuildChain(): void {
+  // Electron downloads its binary on first launch rather than at install, so fetch it now: tests and
+  // dev runs then never race a first-run download. This runs here rather than inside
+  // `postinstall:build` because paratext-10-studio's repo patch edits that script's line, and any
+  // change to the line breaks that patch.
+  execSync('npx --no-install install-electron', { stdio: 'inherit', cwd: REPO_ROOT });
   execSync('npm run postinstall:build', { stdio: 'inherit', cwd: REPO_ROOT });
 }
 
