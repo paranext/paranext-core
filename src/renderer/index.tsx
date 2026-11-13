@@ -34,6 +34,7 @@ import { startFirstRunServiceShard } from '@renderer/services/first-run.service-
 import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
 import { isWindowInputBlocked } from '@renderer/services/window-input-blocked.util';
 import { registerContentZoomChromeKeys } from '@renderer/services/web-view-content-zoom.chrome-keys';
+import { registerFrameForCrossFrameDismissal } from '@renderer/services/cross-frame-dismissal.util';
 import {
   adjustContentZoom,
   canContentZoomActOnActiveTarget,
@@ -170,6 +171,8 @@ initExtensionHostStoppedService();
     }).catch((e) =>
       logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
     );
+    // The returned unsubscriber is discarded: this frame stays registered for the window's lifetime.
+    registerFrameForCrossFrameDismissal(window);
     // The returned unsubscriber is discarded: this listener runs for the window's lifetime.
     registerContentZoomChromeKeys({
       adjustContentZoom,
