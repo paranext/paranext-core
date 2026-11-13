@@ -168,11 +168,11 @@ const INSTALLED_WEB_FOLDER = 'WEB';
 // lands at least this long after the step begins — unless something other than the debounce sends
 // it sooner: the editor saves at once when a write's echo comes back while it holds newer edits,
 // and flushes a pending save on a window blur, a chapter switch or an incoming update about to
-// replace the text. A write that lands sooner is therefore taken as the step's save only when no
-// other write to the file follows it in the step (describeUnaskedWrites). The cutoff is
-// approximate to within one recorder poll (RECORDER_POLL_MS): a write is timed by the sample that
-// saw it, so one that landed just under the debounce can be timed just over it — the lenient side,
-// so it cannot cause a false failure.
+// replace the text. Whether a write that lands sooner counts as the step's save is the early-write
+// rule on `WriteRule` in `project-write-judging.ts`. The cutoff is approximate to within one
+// recorder poll (RECORDER_POLL_MS): a write is timed by the sample that saw it, so one that landed
+// just under the debounce can be timed just over it — the lenient side, so it cannot cause a false
+// failure.
 
 /**
  * One round trip between the editor and the .NET backend on a loaded machine, about half a second:

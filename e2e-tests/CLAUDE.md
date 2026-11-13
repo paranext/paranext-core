@@ -64,7 +64,7 @@ the suite is meant to be run routinely.
   See the README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding
   a well-named spec file to `isolated/` instead.
-- Do not give every check in `isolated/` its own `test()`: each one starts its own app. Checks that
+- Do not give every check in `isolated/` its own `test()`: each `test()` on `isolated.fixture` starts its own app. Checks that
   can share one launch state are `test.step()`s of one `test()`; see the docblock at the top of
   `fixtures/isolated.fixture.ts`.
 

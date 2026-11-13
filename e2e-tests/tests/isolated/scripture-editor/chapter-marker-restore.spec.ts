@@ -38,8 +38,9 @@
  *
  * Each test() launches its own Electron instance, and each edits the project's USFM on disk in a
  * way the next could not start from: the first rewrites Ruth 2, the second cuts Jonah back to its
- * first chapter, the third rewrites Ruth 1 to 4 and Jonah 2. The first test also holds the one step
- * bound to a clock (five Backspaces inside the save debounce), so it stays a test of its own.
+ * first chapter, the third rewrites Ruth 1 to 4 (and Jonah 2 once PT-5059 is fixed). The first test
+ * also holds the one step bound to a clock (five Backspaces inside the save debounce), so it stays
+ * a test of its own.
  *
  * Keys go through `mainPage.keyboard` once a click has put the focus in the editor (`locator.press`
  * focuses its target first and is slow per key, and can take over a second a key on a cold

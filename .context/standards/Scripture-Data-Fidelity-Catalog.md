@@ -259,9 +259,8 @@ off, Power's Standard view), `no-unasked-edits-invisible-characters-on-simple-pa
 (on, Power's Standard view). The test body branches on the setting and on the mode
 independently; the product has view-specific paths, so a combination that is not run is not covered
 by the ones that are. `no-unasked-edits-invisible-characters-on-simple-paragraph-structure.spec.ts`
-is switched off until PT-5055 is fixed, and no spec runs Simple's paragraph-structure view with the
-setting off, so Simple's paragraph-structure view has no in-app run with the setting off, and none with
-it on until PT-5055 is fixed. The WEB has none of these characters, so each spec seeds Jonah 3:5–6 (and a second U+FEFF in 4:1) before the app starts
+is switched off until PT-5055 is fixed. Simple's paragraph-structure view has no in-app run: no spec
+exists for the setting off, and the one for the setting on is switched off until PT-5055 is fixed. The WEB has none of these characters, so each spec seeds Jonah 3:5–6 (and a second U+FEFF in 4:1) before the app starts
 (and, for `on`, `<AllowInvisibleChars>T</AllowInvisibleChars>` in `Settings.xml`): a no-break space
 (`~` off, U+00A0 on), a `~` (a literal tilde when on), U+200B, U+200C, U+200D, U+2060, U+202F,
 U+2009, U+2002, U+2003, U+200A, U+3000, U+200E, U+200F, U+00AD and U+FEFF, each between two

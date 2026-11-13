@@ -11,9 +11,9 @@
  * palette offers `\c` alongside what the line itself takes. Picking it inserts chapter 1 after the
  * `\id` line, which saves as inserted. Only the running app puts the palette, the editor's insert
  * and the save together; the editor's own suite covers the insert in detail. The Power test runs as
- * far as the palette offering `\c`, then stops itself until PT-5053 is fixed: a pick made right
- * after a keyboard caret move can be silently dropped, and the pick and the save below it are not
- * shown to hit that.
+ * far as the palette offering `\c`, which PT-5053 is not shown to hit, then stops itself: a pick
+ * made right after a keyboard caret move can be silently dropped, so the pick and the save below it
+ * wait for that fix.
  *
  * The two modes are separate tests because each launch seeds one interface mode, and each rewrites
  * the same book on disk. Every `test.use({ interfaceMode })` sits in its own describe so that each

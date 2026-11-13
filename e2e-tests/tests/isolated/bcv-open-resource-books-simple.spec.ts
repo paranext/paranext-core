@@ -256,14 +256,6 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // The book list is populated from the target project, right up to the book before Revelation.
     await expect(mainPage.locator(GENESIS_ITEM)).toBeVisible({ timeout: 30_000 });
     await expect(mainPage.locator(JUDE_ITEM)).toBeVisible();
-    // Baseline for the phase-2 assertions: Revelation is not reachable yet. Opening the editor
-    // re-points every Column 3 panel at this same project, which the hook excludes as the navigation
-    // target's own. But a panel with nothing of its kind configured shows a resource of that kind
-    // installed on this machine, and offers its books — the Commentaries panel does, wherever a
-    // commentary is installed. So the expansion control may be here, and Revelation must not be
-    // behind it either. Waiting for the panels to publish keeps the control from turning up only
-    // after this check.
-
     // Fails in `waitForColumn3DeclaredProjectIds`, after Phase 1's book list and before Phase 2.
     // Marked here, not at the top of the test, because `test.fail` is satisfied by ANY failure and
     // so would also hide a regression in the steps above. Remove once PT-5011 is fixed.
@@ -271,6 +263,14 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
       true,
       'PT-5011: the Simple-mode Bible texts and Commentaries panels never publish navigableProjectIds',
     );
+
+    // Baseline for the phase-2 assertions: Revelation is not reachable yet. Opening the editor
+    // re-points every Column 3 panel at this same project, which the hook excludes as the navigation
+    // target's own. But a panel with nothing of its kind configured shows a resource of that kind
+    // installed on this machine, and offers its books — the Commentaries panel does, wherever a
+    // commentary is installed. So the expansion control may be here, and Revelation must not be
+    // behind it either. Waiting for the panels to publish keeps the control from turning up only
+    // after this check.
     const otherDeclaredProjectIds = await waitForColumn3DeclaredProjectIds(
       mainPage,
       targetProject.projectId,

@@ -1301,9 +1301,10 @@ Where a spec lives is decided by how it gets its app, and that choice also picks
 - `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
   tests, apart from the bare-Electron checks its README describes.
 
-Each isolated `test()` starts and tears down its own app, so checks that can share one launch
+Each `test()` on `isolated.fixture` starts and tears down its own app (specs on `comment.fixture`,
+and the `find/` and `menu-dismissal/` directories, share one app per worker), so checks that can share one launch
 state go in a single `test()` as `test.step()`s; a check that needs a fresh app or different launch
-settings gets its own `test()`. The "Independent" item in the checklist above applies per `test()`,
+settings gets its own `test()`. The "Independent" item in the Test Quality Checklist above applies per `test()`,
 not per step. Linux, including WSL2, is the supported platform for the isolated suite; native
 Windows and macOS are best effort (see
 [`e2e-tests/tests/isolated/README.md`](../../e2e-tests/tests/isolated/README.md#supported-platform)).
