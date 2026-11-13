@@ -53,7 +53,9 @@ const STEP_ALLOWANCE_MS = 30_000;
 const STEP_COUNT = 12;
 
 test.describe('Internet connectivity settings', () => {
-  test('Internet connectivity settings panel and server gating', async ({ mainPage }) => {
+  test('Internet connectivity panel lists its options and gates the server section', async ({
+    mainPage,
+  }) => {
     test.setTimeout(APP_START_ALLOWANCE_MS + STEP_COUNT * STEP_ALLOWANCE_MS);
 
     await test.step('profile popover shows the "Internet connectivity" label and opens settings panel', async () => {

@@ -50,11 +50,11 @@ import {
 test.use({ commentAppOwner: 'notes-content-zoom-list' });
 
 /**
- * Whether the project folder the app scans (`PARATEXT_PROJECTS_ROOT`) holds Paratext projects of
- * the checkout's own — anything but the installed sample (`WEB`), the resources folder and the
- * comment suites' own test projects. This suite opens the checkout's real project folder, and with
- * such projects there Simple mode's start-up default project pick can replace the project the test
- * opened.
+ * Approximates "this machine holds projects of its own": whether the project folder the app scans
+ * (`PARATEXT_PROJECTS_ROOT`) holds anything but the installed sample (`WEB`), the resources folder
+ * and the comment suites' own test projects. The race this avoids comes from the recently-opened
+ * list (PT-4768): Simple mode's start-up default project pick follows it and can replace the
+ * project the test opened. The folder scan only stands in for that list.
  */
 function holdsProjectsOfItsOwn(): boolean {
   if (!fs.existsSync(PARATEXT_PROJECTS_ROOT)) return false;
@@ -175,7 +175,7 @@ test.describe('comment list content zoom', () => {
   // replace a project opened meanwhile.
   test.fixme(
     holdsProjectsOfItsOwn(),
-    "PT-4768: on a checkout with projects of its own, Simple mode's start-up default project pick (openDefaultActiveProjectIfApplicable) can replace the project this test opened",
+    "PT-4768: on a machine with projects of its own, Simple mode's start-up default project pick (openDefaultActiveProjectIfApplicable), which follows the recently-opened list, can replace the project this test opened",
   );
 
   let projectA: CommentTestProject;

@@ -61,7 +61,7 @@ test.describe('simple mode: Find follows the editor onto an Editable=F project',
   // events only once.
   test.fixme(
     true,
-    'PT-5052: two Simple-mode project switches that overlap register the project-switch events twice, and the second registration is rejected (about 1 run in 10 of this spec)',
+    'PT-5052: two Simple-mode project switches that overlap register the project-switch events twice, and the second registration is rejected',
   );
 
   // App startup plus two editor opens, each of which re-points the whole of Column 3.

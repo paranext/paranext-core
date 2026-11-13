@@ -538,9 +538,8 @@ test.describe('per-window UI isolation', () => {
     // A test of its own rather than a section of the one above, at the cost of a second launch:
     // `test.fail` is satisfied by ANY failure, so marking the test above would also hide a
     // regression in every scenario after this one. The window and editor setup below is the same
-    // as the test above's, which is what asserts it.
-    test.fail(true, "PT-5009: a context menu raised from a second window's web view never renders");
-
+    // as the test above's, which is what asserts it; the marker sits just before the one
+    // assertion that is expected to fail, so a failure in that setup is not hidden by it.
     await waitForAppReady(mainPage, { timeout: 180_000 });
     await expect(homeTabTitle(mainPage)).toBeAttached({ timeout: 60_000 });
     const page2 = await createSecondWindow(electronApp);
@@ -573,7 +572,11 @@ test.describe('per-window UI isolation', () => {
     );
     // The rendered menu, not `[data-overlay-context-menu]`: that marks the trigger, which is a
     // zero-size, opacity-0, aria-hidden anchor button and so is never visible by design.
+    // The request stays pending when the menu never renders; its rejection at teardown must not
+    // surface as an unhandled rejection.
+    contextMenuPromise.catch(() => undefined);
     const contextMenu2 = page2.locator('.overlay-context-menu-content');
+    test.fail(true, "PT-5009: a context menu raised from a second window's web view never renders");
     await expect(contextMenu2).toBeVisible({ timeout: 15_000 });
     await expect(mainPage.locator('.overlay-context-menu-content')).toHaveCount(0);
     // Escape dismisses it, which resolves the pending request with undefined (no command chosen).

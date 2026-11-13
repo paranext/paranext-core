@@ -141,10 +141,17 @@ export async function withMainProcessLinkRetry<R>(
       // eslint-disable-next-line no-await-in-loop
       return await evaluate();
     } catch (error) {
-      const appProcess = electronApp.process();
-      // Node.js ChildProcess.exitCode/signalCode are null until the process exits
-      // eslint-disable-next-line no-null/no-null
-      const isAppRunning = appProcess.exitCode === null && appProcess.signalCode === null;
+      let isAppRunning: boolean;
+      try {
+        const appProcess = electronApp.process();
+        // Node.js ChildProcess.exitCode/signalCode are null until the process exits
+        // eslint-disable-next-line no-null/no-null
+        isAppRunning = appProcess.exitCode === null && appProcess.signalCode === null;
+      } catch {
+        // A disposed application throws from process(): it is not running, so surface the
+        // original error rather than the one from asking.
+        throw error;
+      }
       const isLinkError = String(error).includes('Execution context was destroyed');
       if (!isLinkError || !isAppRunning || attempt >= MAIN_PROCESS_LINK_ATTEMPTS) throw error;
       // Sequential retries of one call

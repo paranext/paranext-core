@@ -68,7 +68,7 @@ run").
   several launches per test to exercise relaunch) — tests for multi-window lifecycle (second-window startup, focus routing, app-global scroll group and theme state reaching every window and surviving any window's close, single shutdown-task run on quit), window layout persistence (windows, layouts, and bounds surviving relaunches; a deliberately closed window staying closed; the pre-multi-window single-window upgrade path), and per-window UI isolation (overlays, dialogs, notifications, navigation targets, and web-view placement staying in their own window; scroll groups deliberately app-global)
 - `navigation-history/` (one Electron per test) — tests for back/forward reference history navigation
 - `notes-content-zoom/` (one worker-scoped Electron per Simple-mode spec via `commentAppOwner`; the Power-mode Comments panel test starts its own app on `isolated.fixture`) — tests for the Notes feature's per-pane content zoom (comment list, Simple-mode Comments panel)
-- `overlay/` (one Electron per test) — tests for the project-switch transition overlay
+- `overlay/` (one Electron per test) — tests for dialogs and overlays opened from web views
 - `resources-content-zoom/` (one Electron per test) — content zoom in the Bible Texts panel
 - `scripture-editor/` (one Electron per test) — tests for scripture editor behaviors that need a real
   editor in a real window: which view a project/mode opens in, marker and paragraph-style palette

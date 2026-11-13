@@ -199,12 +199,6 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
   });
 
   test('offers a book from an open resource, greyed, and navigates to it', async ({ mainPage }) => {
-    // Fails in `waitForColumn3DeclaredProjectIds`, after Phase 1's book list and before Phase 2.
-    // Remove once PT-5011 is fixed.
-    test.fail(
-      true,
-      'PT-5011: the Simple-mode Bible texts and Commentaries panels never publish navigableProjectIds',
-    );
     await waitForAppReady(mainPage, { timeout: 180_000 });
 
     // The fixed layout has to be in the dock before either open below: the editor open replaces the
@@ -269,6 +263,13 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // commentary is installed. So the expansion control may be here, and Revelation must not be
     // behind it either. Waiting for the panels to publish keeps the control from turning up only
     // after this check.
+    // Fails in `waitForColumn3DeclaredProjectIds`, after Phase 1's book list and before Phase 2.
+    // Marked here, not at the top of the test, because `test.fail` is satisfied by ANY failure and
+    // so would also hide a regression in the steps above. Remove once PT-5011 is fixed.
+    test.fail(
+      true,
+      'PT-5011: the Simple-mode Bible texts and Commentaries panels never publish navigableProjectIds',
+    );
     const otherDeclaredProjectIds = await waitForColumn3DeclaredProjectIds(
       mainPage,
       targetProject.projectId,

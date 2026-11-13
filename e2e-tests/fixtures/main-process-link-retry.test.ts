@@ -82,6 +82,24 @@ describe('withMainProcessLinkRetry', () => {
     expect(call).toHaveBeenCalledTimes(1);
   });
 
+  it('rethrows the original error when the app is already disposed', async () => {
+    const call = callThatFailsThen(LINK_ERROR, 'ok');
+    // A disposed ElectronApplication throws from process() instead of returning a process.
+    // The function under test reads only `process()`, so a full ElectronApplication is not built.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const disposed = {
+      process: () => {
+        throw new TypeError('disposed');
+      },
+    } as unknown as ElectronApplication;
+
+    await expect(withMainProcessLinkRetry(disposed, call, () => Promise.resolve())).rejects.toBe(
+      LINK_ERROR,
+    );
+
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
   it('gives up after 3 attempts', async () => {
     const call = callThatFailsThen(LINK_ERROR, LINK_ERROR, LINK_ERROR, 'ok');
     const wait = vi.fn(() => Promise.resolve());

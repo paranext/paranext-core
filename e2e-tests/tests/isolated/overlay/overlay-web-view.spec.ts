@@ -62,6 +62,9 @@ async function openContextMenu(mainPage: Page, frame: Frame) {
   // second `[role="menu"]`, so the returned locator stays on the context menu itself.
   const menu = anyMenu.first();
   await expect(menu).toBeVisible({ timeout: 10_000 });
+  // Exactly one menu: a second one (a stray duplicate, or a submenu opened early) would make
+  // `.first()` ambiguous.
+  await expect(anyMenu).toHaveCount(1, { timeout: 10_000 });
   return menu;
 }
 

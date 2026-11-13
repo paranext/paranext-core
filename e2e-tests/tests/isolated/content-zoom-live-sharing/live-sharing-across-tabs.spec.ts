@@ -24,9 +24,9 @@
  *
  * The source's own doc comment on `syncSiblingsFromMemory` states the contract the sharing test
  * pins: "every open pane whose entries changed is brought in line, silently (no indicator; the pane
- * the user acted on already showed one)" and "an area whose key `previousMemory` had and `memory`
- * no longer does gives up its own level, which is how a reset in one pane returns its siblings with
- * it."
+ * the user acted on already showed one)". It also says that an area whose key the previous memory
+ * had and the new memory lacks gives up its own level, which is how a reset in one pane returns its
+ * siblings with it.
  *
  * The default change is `web-view-content-zoom.service.ts`'s `repushAllPanes` (run from the
  * `platform.webViewContentZoom` subscription): it re-pushes every open pane's effective level — its
@@ -106,6 +106,10 @@ test.describe('content zoom shares live between two already-open tabs of one pro
   test.use({
     interfaceMode: 'power',
     electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+    seedSettings: {
+      'platform.webViewContentZoom': 1,
+      [CONTENT_ZOOM_MEMORY_SETTING]: {},
+    },
   });
 
   test('zooming one editor tab moves the other with no reopen; a reset returns both', async ({

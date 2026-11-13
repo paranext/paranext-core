@@ -14,10 +14,10 @@
  * does not claim them. CDP's `Input.dispatchKeyEvent` (`mainPage.keyboard.press`) is OS-level input
  * that lands on whatever holds focus, including inside an iframe, so it reaches that listener — see
  * `marker-palette-typed-commit.spec.ts` for the same in-iframe CDP precedent. The handler picks the
- * area from the caret's position — except while the platform knows the view itself moved the caret
- * in answer to a pointer gesture, in which case it picks the area the user last pointed at instead,
- * so a pane click keeps the chords on that pane even when the view's own reaction sends the caret
- * elsewhere.
+ * area from the caret's position. The rule that the area the user last pointed at wins after the
+ * view itself moves the caret in answer to a pointer gesture is unit-tested in
+ * `web-view-content-zoom.bootstrap-script.test.ts`; the steps below cover the clicks that reach
+ * it.
  *
  * The sub-scenarios below are test.step()s sharing one Electron instance rather than separate
  * test()s, because each test() launches its own instance and the scenarios start from the same
@@ -31,6 +31,7 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   areaBox,
   boxOf,
+  CONTENT_ZOOM_MEMORY_SETTING,
   ctrlWheel,
   expectPopupBesideTriggerAndInsideFrame,
   expectSettledBeside,
@@ -62,6 +63,10 @@ import {
 test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  seedSettings: {
+    'platform.webViewContentZoom': 1,
+    [CONTENT_ZOOM_MEMORY_SETTING]: {},
+  },
 });
 
 /**
@@ -367,10 +372,10 @@ test.describe('scripture editor content zoom', () => {
     });
 
     await test.step('reset with no area id targets the area the user last clicked in', async () => {
-      // Click a REAL footnote row (`.note-caller`, `footnote-item.component.tsx`), not empty pane
-      // background: the pointerdown listener resolves the clicked element's closest marked
-      // ancestor, and only an actual descendant of the footnotes ContentZoomRoot is guaranteed to
-      // register as the click target under a CSS-zoomed layout. Selecting a row also sends the
+      // Click the caller inside a REAL footnote row (`.note-caller`, `footnote-item.component.tsx`),
+      // not empty pane background: the pointerdown listener resolves the clicked element's closest
+      // marked ancestor, and only an actual descendant of the footnotes ContentZoomRoot is
+      // guaranteed to register as the click target under a CSS-zoomed layout. Selecting a row also sends the
       // caret back into the editor text (`selectNote`), so this click is exactly the case where the
       // pointer and the resulting focus name different areas and the pointer has to win.
       await editorFrame.locator('.note-caller').first().click({ force: true });
@@ -649,8 +654,8 @@ test.describe('scripture editor content zoom', () => {
       );
       await expect(footnotesList).toBeVisible({ timeout: 20_000 });
 
-      // In an editable Power-mode view the pane is the note-editing surface, so clicking a row opens
-      // that note in the pane's row editor and moves the text to the note without taking focus out
+      // In an editable Power-mode view the pane is the note-editing surface, so clicking a row (the
+      // `[role="option"]` element in the footnotes list) opens that note in the pane's row editor and moves the text to the note without taking focus out
       // of the pane (`handleFootnoteEditRequested` -> `navigateToNote` in
       // `platform-scripture-editor.web-view.tsx`). Focus is then in an editable surface inside the
       // footnotes area rather than on the row list, which is what this case adds to the keyboard one

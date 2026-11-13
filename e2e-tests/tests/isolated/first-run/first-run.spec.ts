@@ -1,5 +1,5 @@
 /**
- * E2E tests for the first-run wizard (PT-4175 / PT-4179).
+ * E2E tests for the first-run wizard (PT-4175).
  *
  * These tests use isolated.fixture (a fresh Electron per test) because the first-run wizard is a
  * one-time modal that only shows on a clean profile. The fixture's seedSettings force
@@ -12,19 +12,18 @@
  *   and localisation resolves; forward navigation Language → Internet Settings → Identify (Next
  *   hidden at Identify); the Internet Settings step never shows a server picker; "Use
  *   Platform.Bible with internet access" saves Unrestricted; the Sync progress step renders the
- *   syncing heading with its own Finish button (PT-4179); "Don't sync yet" on Sync consent closes
- *   the wizard (PT-4178)
+ *   syncing heading with its own Finish button; "Don't sync yet" on Sync consent closes the wizard
  * - Choosing "Unrestricted" on Internet Settings starts no Send/Receive before Sync consent, and each
  *   consent choice leaves the automatic sync gate in the state it promises (a test per choice, each
  *   with its own app instance)
  *
  * Navigation note: IdentifyStep hides the shell's Next button and owns its own "Save and restart"
- * primary action (which triggers a real app restart in production). SyncConsentStep (PT-4178)
- * similarly hides Next and owns its own "Sync" primary action (which calls the S/R backend in
- * production). EVERY test here runs in demo mode (`platform-bible.firstRunDemoMode` localStorage
- * flag, set and then applied via a renderer reload — see injectDemoMode): demo starts the wizard at
- * the language step regardless of the machine's registration state, "Save and restart" calls
- * onNext() directly, and "Sync" resolves immediately without a real backend call.
+ * primary action (which triggers a real app restart in production). SyncConsentStep similarly hides
+ * Next and owns its own "Sync" primary action (which calls the S/R backend in production). EVERY
+ * test here runs in demo mode (`platform-bible.firstRunDemoMode` localStorage flag, set and then
+ * applied via a renderer reload — see injectDemoMode): demo starts the wizard at the language step
+ * regardless of the machine's registration state, "Save and restart" calls onNext() directly, and
+ * "Sync" resolves immediately without a real backend call.
  */
 import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
@@ -110,6 +109,11 @@ const WARM_STEP_TIMEOUT_MS = 120_000;
 const STEP_TIMEOUT_MS = 240_000;
 
 test.describe('First-run wizard', () => {
+  // Only the first step of the walkthrough pays the cold start; the rest run on the app it started.
+  test.describe.configure({
+    timeout: STEP_TIMEOUT_MS + WIZARD_WALKTHROUGH_WARM_STEP_COUNT * WARM_STEP_TIMEOUT_MS,
+  });
+
   // The Internet Settings step saves the chosen option to ParatextData's own InternetSettings.xml,
   // which the fixture's settings restore does not cover. Put the developer's saved settings back
   // after the test, so running this spec cannot leave a "Disable access to some Bible translation
@@ -137,14 +141,12 @@ test.describe('First-run wizard', () => {
   test('wizard walkthrough: Language → Internet Settings → Identify → Sync consent → Sync progress', async ({
     mainPage,
   }) => {
-    // Only the first step pays the cold start; the rest run on the app it started.
-    test.setTimeout(STEP_TIMEOUT_MS + WIZARD_WALKTHROUGH_WARM_STEP_COUNT * WARM_STEP_TIMEOUT_MS);
-
     if (!savedInternetSettings) throw new Error('expected the saved internet settings to be read');
     const savedBeforeWalkthrough = savedInternetSettings;
     const frPage = new FirstRunPage(mainPage);
 
     await test.step('shows wizard dialog on a clean launch', async () => {
+      await expect(frPage.dialog).toBeVisible({ timeout: 15_000 });
       await injectDemoMode(mainPage);
       await frPage.waitForWizard();
       await expect(frPage.dialog).toBeVisible();
@@ -224,7 +226,7 @@ test.describe('First-run wizard', () => {
 
     await test.step('Sync progress step shows "Syncing your projects" and its own Finish button', async () => {
       await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
-      // SyncConsentStep (PT-4178) hides Next and shows its own "Sync" primary button. In demo mode,
+      // SyncConsentStep hides Next and shows its own "Sync" primary button. In demo mode,
       // clicking "Sync" resolves the defaultSyncFn immediately without a real backend call.
       await frPage.clickSync(); // Sync consent → Sync progress
 

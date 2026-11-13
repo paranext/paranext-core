@@ -18,6 +18,7 @@
 import { test, expect } from '../../../fixtures/comment.fixture';
 import { test as powerModeTest } from '../../../fixtures/isolated.fixture';
 import {
+  CONTENT_ZOOM_MEMORY_SETTING,
   ctrlWheel,
   INDICATOR_SELECTOR,
   readContentZoomMemory,
@@ -51,7 +52,15 @@ const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
 // fixture starts a fresh worker rather than inheriting another spec's layout/panel state. A worker
 // option must be set at the top level; `isolated.fixture` has no such option, so the Power-mode
 // test below ignores it.
-test.use({ commentAppOwner: 'notes-content-zoom-panel' });
+// The extra settings start the panel from the default level with no remembered levels, so the
+// assertions do not depend on what an earlier run left in the shared settings file.
+test.use({
+  commentAppOwner: 'notes-content-zoom-panel',
+  commentExtraSettings: {
+    'platform.webViewContentZoom': 1,
+    [CONTENT_ZOOM_MEMORY_SETTING]: {},
+  },
+});
 
 test.describe('Comments panel content zoom in Simple mode', () => {
   test.setTimeout(600_000);

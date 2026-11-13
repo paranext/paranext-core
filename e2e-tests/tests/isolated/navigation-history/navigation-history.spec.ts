@@ -103,6 +103,7 @@ test.describe('Reference history', () => {
   const COLD_START_TIMEOUT_MS = 300_000;
   /** The config's per-test default (`e2e-tests/playwright.config.ts`). */
   const WARM_STEP_TIMEOUT_MS = 120_000;
+  test.describe.configure({ timeout: COLD_START_TIMEOUT_MS + WARM_STEP_TIMEOUT_MS });
 
   // Setup, not reset: the isolated fixture hands every test a freshly launched app, so there is no
   // leftover layout or history to clear. What a test does need is something to navigate — the top
@@ -123,9 +124,9 @@ test.describe('Reference history', () => {
     await expect(mainPage.locator(BCV_TRIGGER)).toBeEnabled({ timeout: 30_000 });
   });
 
-  test('reference history navigation', async ({ mainPage }) => {
-    test.setTimeout(COLD_START_TIMEOUT_MS + WARM_STEP_TIMEOUT_MS);
-
+  test('back/forward buttons and the right-click history menu move through visited references', async ({
+    mainPage,
+  }) => {
     const backButton = mainPage.getByTestId('navigation-history-back-button');
     const forwardButton = mainPage.getByTestId('navigation-history-forward-button');
     const bcvTrigger = mainPage.locator(BCV_TRIGGER);
