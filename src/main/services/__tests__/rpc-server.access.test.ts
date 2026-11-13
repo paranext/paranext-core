@@ -301,3 +301,110 @@ describe('main registering a restricted request type', () => {
     ).resolves.toBe(true);
   });
 });
+
+describe('RpcServer enforcing the allowedCallers a registrant declared', () => {
+  async function register(
+    socket: ReturnType<typeof createFakeWebSocket>,
+    params: unknown[],
+  ): Promise<unknown> {
+    const before = socket.sentPayloads.length;
+    socket.receiveMessage({ jsonrpc: '2.0', id: 100 + before, method: REGISTER_METHOD, params });
+    return (await nextReply(socket, before + 1)).result;
+  }
+
+  async function call(socket: ReturnType<typeof createFakeWebSocket>, method: string) {
+    const before = socket.sentPayloads.length;
+    socket.receiveMessage({ jsonrpc: '2.0', id: 200 + before, method, params: [] });
+    return nextReply(socket, before + 1);
+  }
+
+  it('refuses a caller the registrant did not allow', async () => {
+    const { connectClient } = createNetwork();
+    const registrant = await connectClient('extensionHost');
+    const browserPage = await connectClient('unidentified');
+    const renderer = await connectClient('renderer');
+    await expect(
+      register(registrant.socket, ['command:a.b', undefined, { allowedCallers: ['renderer'] }]),
+    ).resolves.toBe(true);
+
+    const refused = await call(browserPage.socket, 'command:a.b');
+    renderer.socket.receiveMessage({ jsonrpc: '2.0', id: 9, method: 'command:a.b', params: [] });
+
+    expect(refused.error?.message).toBe(`'command:a.b' is not available on this connection`);
+    // The renderer's request is routed to the registrant, which receives it to answer
+    await vi.waitFor(() =>
+      expect(
+        registrant.socket.sentPayloads.map((payload) => deserialize(payload).method),
+      ).toContain('command:a.b'),
+    );
+  });
+
+  it('keeps a registration without the option open to everyone', async () => {
+    const { connectClient } = createNetwork();
+    const registrant = await connectClient('extensionHost');
+    const browserPage = await connectClient('unidentified');
+    await expect(register(registrant.socket, ['command:a.b'])).resolves.toBe(true);
+
+    browserPage.socket.receiveMessage({ jsonrpc: '2.0', id: 9, method: 'command:a.b', params: [] });
+
+    await vi.waitFor(() =>
+      expect(
+        registrant.socket.sentPayloads.map((payload) => deserialize(payload).method),
+      ).toContain('command:a.b'),
+    );
+  });
+
+  it.each([
+    ['a bare string', 'renderer'],
+    ['main', ['main']],
+    ['unidentified', ['unidentified']],
+    ['a number', [42]],
+    ['an object', { renderer: true }],
+  ])(
+    'refuses allowedCallers given as %s and registers nothing',
+    async (_description, allowedCallers) => {
+      const { rpcMethodDetailsByMethodName, connectClient } = createNetwork();
+      const registrant = await connectClient('unidentified');
+
+      await expect(
+        register(registrant.socket, ['command:a.b', undefined, { allowedCallers }]),
+      ).resolves.toBe(false);
+      expect(rpcMethodDetailsByMethodName.has('command:a.b')).toBe(false);
+    },
+  );
+
+  it('refuses registration options that are not an object', async () => {
+    const { rpcMethodDetailsByMethodName, connectClient } = createNetwork();
+    const registrant = await connectClient('unidentified');
+
+    await expect(register(registrant.socket, ['command:a.b', undefined, 'renderer'])).resolves.toBe(
+      false,
+    );
+    expect(rpcMethodDetailsByMethodName.has('command:a.b')).toBe(false);
+  });
+
+  it('ignores allowedCallers on a table row', async () => {
+    const setRegistration = 'command:paratextRegistration.setParatextRegistrationData';
+    const { rpcMethodDetailsByMethodName, connectClient } = createNetwork();
+    rpcMethodDetailsByMethodName.delete(setRegistration);
+    const dataProvider = await connectClient('dotnetDataProvider');
+    const renderer = await connectClient('renderer');
+    await expect(
+      register(dataProvider.socket, [
+        setRegistration,
+        undefined,
+        { allowedCallers: ['dotnetDataProvider'] },
+      ]),
+    ).resolves.toBe(true);
+
+    renderer.socket.receiveMessage({ jsonrpc: '2.0', id: 9, method: setRegistration, params: [] });
+    const refused = await call(dataProvider.socket, setRegistration);
+
+    await vi.waitFor(() =>
+      expect(
+        dataProvider.socket.sentPayloads.map((payload) => deserialize(payload).method),
+      ).toContain(setRegistration),
+    );
+    expect(refused.error?.message).toBe(`'${setRegistration}' is not available on this connection`);
+  });
+});

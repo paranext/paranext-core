@@ -24,6 +24,7 @@ import {
   IRpcWebSocketClientCloser,
   RegisteredRpcMethodDetails,
   RpcClientDisconnectEvent,
+  RpcMethodRegistrationOptions,
 } from '@shared/models/rpc.interface';
 import {
   createEmptyOpenRpc,
@@ -334,6 +335,7 @@ export class RpcWebSocketListener
     methodName: string,
     method: InternalRequestHandler,
     methodDocs?: SingleMethodDocumentation,
+    options?: RpcMethodRegistrationOptions,
   ): Promise<boolean> {
     if (!isRegistrationAllowed(methodName, 'main')) {
       logger.warn(`Refused to register '${methodName}' in main: another process owns it`);
@@ -356,7 +358,11 @@ export class RpcWebSocketListener
       return false;
     }
 
-    this.rpcMethodDetailsByMethodName.set(methodName, { handler: this, methodDocs });
+    this.rpcMethodDetailsByMethodName.set(methodName, {
+      handler: this,
+      methodDocs,
+      allowedCallers: options?.allowedCallers ? [...options.allowedCallers] : undefined,
+    });
     this.localMethodsByMethodName.set(methodName, method);
     return true;
   }

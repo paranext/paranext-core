@@ -8,7 +8,11 @@ import {
   JSONRPCServerMiddlewareNext,
 } from 'json-rpc-2.0';
 import { logger } from '@shared/services/logger.service';
-import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
+import {
+  IRpcMethodRegistrar,
+  RpcClientDisconnectEvent,
+  RpcMethodRegistrationOptions,
+} from '@shared/models/rpc.interface';
 import {
   ANNOUNCE_PEER,
   ConnectionStatus,
@@ -277,6 +281,7 @@ export class RpcClient implements IRpcMethodRegistrar {
     methodName: string,
     method: InternalRequestHandler,
     methodDocs?: SingleMethodDocumentation,
+    options?: RpcMethodRegistrationOptions,
   ): Promise<boolean> {
     if (this.jsonRpcServer.hasMethod(methodName)) {
       logger.warn(`RPC method ${methodName} already registered`);
@@ -288,7 +293,10 @@ export class RpcClient implements IRpcMethodRegistrar {
         logger.warn(`RPC method ${methodName} already registered`);
         return false;
       }
-      const success = await this.jsonRpcClient.request(REGISTER_METHOD, [methodName, methodDocs]);
+      const registerParams = options?.allowedCallers
+        ? [methodName, methodDocs, { allowedCallers: options.allowedCallers }]
+        : [methodName, methodDocs];
+      const success = await this.jsonRpcClient.request(REGISTER_METHOD, registerParams);
       if (success)
         this.jsonRpcServer.addMethod(methodName, (params: RequestParams) => method(...params));
       return success;
