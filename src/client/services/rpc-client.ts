@@ -34,6 +34,9 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
+import { getLocalConnectionIdentity } from '@client/services/launch-credentials';
+import { isCallAllowed } from '@shared/data/request-access.data';
+import type { RequestCallerProcess } from '@shared/models/network.model';
 import {
   AsyncVariable,
   getErrorMessage,
@@ -86,6 +89,8 @@ export class RpcClient implements IRpcMethodRegistrar {
   private requestId: number = 1;
   /** Refers to the current process that created this object (i.e., not main) */
   private readonly jsonRpcServer: JSONRPCServer;
+  /** The `allowedCallers` each method registered in this process was registered with */
+  private readonly allowedCallersByLocalMethodName = new Map<string, RequestCallerProcess[]>();
   /** Refers to main */
   private readonly jsonRpcClient: JSONRPCClient<void>;
   private readonly jsonRpcClientServer: JSONRPCServerAndClient;
@@ -258,11 +263,26 @@ export class RpcClient implements IRpcMethodRegistrar {
     requestType: SerializedRequestType,
     requestParams: RequestParams,
   ): Promise<JSONRPCResponse> {
-    const newRequest = createRequest(requestType, requestParams, this.createNextRequestId());
+    const requestId = this.createNextRequestId();
+    const newRequest = createRequest(requestType, requestParams, requestId);
     // Need to use null since it's part of the API
     // eslint-disable-next-line no-null/no-null
     let response: JSONRPCResponse | null = null;
     const isLocal = this.jsonRpcServer.hasMethod(requestType);
+    // A handler in this process runs without asking main, so apply main's rules here too
+    if (
+      isLocal &&
+      !isCallAllowed(
+        requestType,
+        getLocalConnectionIdentity(),
+        this.allowedCallersByLocalMethodName.get(requestType),
+      )
+    )
+      return createErrorResponse(
+        `'${requestType}' is not available on this connection`,
+        JSONRPCErrorCode.MethodNotFound,
+        requestId,
+      );
     if (isLocal) response = await this.jsonRpcServer.receive(newRequest);
     else response = await this.jsonRpcClient.requestAdvanced(newRequest);
     if (response) return response;
@@ -297,8 +317,11 @@ export class RpcClient implements IRpcMethodRegistrar {
         ? [methodName, methodDocs, { allowedCallers: options.allowedCallers }]
         : [methodName, methodDocs];
       const success = await this.jsonRpcClient.request(REGISTER_METHOD, registerParams);
-      if (success)
+      if (success) {
         this.jsonRpcServer.addMethod(methodName, (params: RequestParams) => method(...params));
+        if (options?.allowedCallers)
+          this.allowedCallersByLocalMethodName.set(methodName, [...options.allowedCallers]);
+      }
       return success;
     });
   }
@@ -315,8 +338,10 @@ export class RpcClient implements IRpcMethodRegistrar {
         return false;
       }
       const successful = await this.jsonRpcClient.request(UNREGISTER_METHOD, [methodName]);
-      if (successful) this.jsonRpcServer.removeMethod(methodName);
-      else logger.warn(`Remote failed to unregister RPC method ${methodName}`);
+      if (successful) {
+        this.jsonRpcServer.removeMethod(methodName);
+        this.allowedCallersByLocalMethodName.delete(methodName);
+      } else logger.warn(`Remote failed to unregister RPC method ${methodName}`);
       return successful;
     });
   }
