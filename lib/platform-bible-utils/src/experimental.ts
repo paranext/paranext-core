@@ -13,6 +13,7 @@ export {
   BOOKS_PRESENT_DEFAULT,
   DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
   getBookIdsFromBooksPresent,
+  getBooksPresentFromBookIds,
 } from './scripture/scripture-util';
 export {
   findAdjacentPresentBook,

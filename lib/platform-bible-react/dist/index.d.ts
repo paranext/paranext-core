@@ -2320,6 +2320,25 @@ type SelectBooksPickerProps = {
 	 * otherwise a search for one of its books lands on the bare "no book found".
 	 */
 	disabledSectionExplanations?: Partial<Record<Section, string>>;
+	/** Trigger text while no book is selected. Defaults to the localized "Select books". */
+	placeholder?: string;
+	/**
+	 * Trigger text while books are selected, such as a list of their names. Defaults to the localized
+	 * "Books selected" followed by the count.
+	 */
+	customSelectedText?: string;
+	/** Classes merged onto the trigger button's own, a conflicting class here winning. */
+	buttonClassName?: string;
+	/**
+	 * Classes merged onto the dropdown's own, a conflicting class here winning. The dropdown is a
+	 * fixed 500px wide so the book grid lays out the same wherever it is used; narrow it here only
+	 * where it has to fit somewhere tighter, such as inside another popover.
+	 */
+	popoverContentClassName?: string;
+	/** Variant of the trigger button. Defaults to `outline`. */
+	variant?: VariantProps<typeof buttonVariants>["variant"];
+	/** Id of the trigger button. */
+	id?: string;
 };
 /**
  * A searchable dropdown (combobox) for picking multiple books from the Bible canon. It provides:
@@ -2332,7 +2351,7 @@ type SelectBooksPickerProps = {
  * This is the standalone picker used by {@link SelectBooks}, which additionally renders section
  * quick-select buttons and badges for the current selection.
  */
-export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, disabledSectionExplanations, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
+export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, disabledSectionExplanations, placeholder, customSelectedText, buttonClassName, popoverContentClassName, variant, id: triggerId, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no

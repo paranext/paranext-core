@@ -232,6 +232,24 @@ export function getBookIdsFromBooksPresent(booksPresent: string): string[] {
 }
 
 /**
+ * Builds a `platformScripture.booksPresent` flag string from a list of book ids: the inverse of
+ * {@link getBookIdsFromBooksPresent}. Useful for handing a list of books to a component that takes
+ * the flag string, such as one offering a choice of books that are not a project's.
+ *
+ * @param bookIds Three-letter book ids, in any order. Ids that name no canonical book are ignored.
+ * @returns A flag string of full canon length, '1' at each listed book's position and '0' elsewhere
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export function getBooksPresentFromBookIds(bookIds: readonly string[]): string {
+  const flags = Array.from({ length: Canon.allBookIds.length }, () => '0');
+  bookIds.forEach((bookId) => {
+    const bookNumber = Canon.bookIdToNumber(bookId);
+    if (bookNumber > 0 && bookNumber <= flags.length) flags[bookNumber - 1] = '1';
+  });
+  return flags.join('');
+}
+
+/**
  * Adjusts the book of a Scripture reference by a specified offset.
  *
  * @param scrRef The Scripture reference whose book is to be adjusted.
