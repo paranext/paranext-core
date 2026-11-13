@@ -244,6 +244,7 @@ function DictionaryHarness({ config }: { config: HarnessConfig }) {
       onSelectOccurrence={onSelectOccurrence}
       getEntries={getEntries}
       getFullEntry={getFullEntry}
+      getEntryByLemma={async () => undefined}
     />
   );
 }

@@ -19,6 +19,7 @@ import {
   DictionaryScope,
   getFormatGlossesStringFromDictionaryEntrySenses,
 } from '../utils/dictionary.utils';
+import { toVavHolamOrder } from '../utils/definition-markup.utils';
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
@@ -53,6 +54,8 @@ export type DictionaryProps = {
    * Scripture. This is a callback because the entry to fetch is resolved inside this component.
    */
   getFullEntry: (entry: Entry) => Promise<Entry | undefined>;
+  /** Retrieve an entry by its lemma, used to open entries linked from definitions. */
+  getEntryByLemma: (dictionaryId: string, lemma: string) => Promise<Entry | undefined>;
 };
 
 /**
@@ -67,6 +70,7 @@ export function Dictionary({
   onSelectOccurrence,
   getEntries,
   getFullEntry,
+  getEntryByLemma,
 }: DictionaryProps) {
   const [scope, setScope] = useState<DictionaryScope>('chapter');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -189,6 +193,33 @@ export function Dictionary({
     };
   }, [getFullEntry, displayedEntry]);
 
+  // An entry opened from a definition link. It is kept apart from `selectedEntry` because it is
+  // often outside the current scope, and `selectedEntry` is cleared when it leaves the list.
+  const [linkedEntry, setLinkedEntry] = useState<Entry | undefined>(undefined);
+
+  useEffect(() => {
+    setLinkedEntry(undefined);
+  }, [scope, scrRef.book, scrRef.chapterNum]);
+
+  useEffect(() => {
+    if (linkedEntry) dictionaryEntryRef.current?.scrollTo({ top: 0 });
+  }, [linkedEntry]);
+
+  const handleEntryLinkClick = useCallback(
+    async (dictionaryId: string, lemma: string) => {
+      // Fall back to the current holam spelling for links that still use the old one
+      const currentSpelling = toVavHolamOrder(lemma);
+      const entry =
+        (await getEntryByLemma(dictionaryId, lemma)) ??
+        (currentSpelling !== lemma
+          ? await getEntryByLemma(dictionaryId, currentSpelling)
+          : undefined);
+      if (entry) setLinkedEntry(entry);
+      return !!entry;
+    },
+    [getEntryByLemma],
+  );
+
   const onCharacterPress = useCallback((character: string) => {
     searchInputRef.current?.focus();
     setSearchQuery(character);
@@ -203,6 +234,26 @@ export function Dictionary({
   //   },
   //   [updateWebViewDefinition],
   // );
+
+  if (linkedEntry)
+    return (
+      <div ref={dictionaryEntryRef} className="tw:h-[100dvh] tw:overflow-y-auto tw:p-4">
+        <DictionaryEntryDisplay
+          localizedStrings={localizedStrings}
+          isDrawer={false}
+          dictionaryEntry={linkedEntry}
+          handleBackToListButton={() => setLinkedEntry(undefined)}
+          onSelectOccurrence={(scrRefOfOccurrence) => {
+            // Keeps the entry open if it is in the list for the chapter the reader moves to
+            setSelectedEntry(linkedEntry);
+            setLinkedEntry(undefined);
+            onSelectOccurrence(scrRefOfOccurrence);
+          }}
+          onClickScrollToTop={scrollToTop}
+          onEntryLinkClick={handleEntryLinkClick}
+        />
+      </div>
+    );
 
   return (
     <div className="tw:flex tw:flex-col tw:h-[100dvh]">
@@ -281,6 +332,7 @@ export function Dictionary({
             dictionaryEntry={fullDisplayedEntry ?? entriesFiltered[0]}
             onSelectOccurrence={onSelectOccurrence}
             onClickScrollToTop={scrollToTop}
+            onEntryLinkClick={handleEntryLinkClick}
           />
         </div>
       )}
@@ -295,6 +347,7 @@ export function Dictionary({
           onCharacterPress={onCharacterPress}
           onEntrySelected={setSelectedEntry}
           fullSelectedEntry={fullDisplayedEntry}
+          onEntryLinkClick={handleEntryLinkClick}
         />
       )}
     </div>
