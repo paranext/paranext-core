@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { Activity, ForwardedRef, StrictMode, forwardRef, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
@@ -147,5 +149,16 @@ describe('PlatformDockLayout marks its root once the initial layout load has fin
 
     act(() => registrations[1][1]?.());
     expect(dockRoot.getAttribute(LAYOUT_LOADED_ATTRIBUTE)).toBe('true');
+  });
+
+  it('the e2e helpers wait for this mark by its exact selector', () => {
+    // The helpers live outside the app and cannot import this constant, so the selector they wait on
+    // is a copy; this keeps the copy from drifting
+    const helpers = readFileSync(
+      join(__dirname, '../../../../e2e-tests/fixtures/helpers.ts'),
+      'utf8',
+    );
+
+    expect(helpers).toContain(`.dock-layout[${LAYOUT_LOADED_ATTRIBUTE}="true"]`);
   });
 });

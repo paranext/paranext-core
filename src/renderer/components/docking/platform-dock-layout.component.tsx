@@ -68,8 +68,9 @@ import { installMiddleClickTabBarHandlers } from '@renderer/components/docking/p
  * layout registers again, until that registration's initial load finishes.
  *
  * Nothing in the app reads it. It is what e2e tests wait on before acting on a freshly started
- * window's dock, since a tab they open before that load lands is replaced along with everything
- * else.
+ * window's dock (`waitForDockLayoutLoaded` in `e2e-tests/fixtures/helpers.ts`, which waits for this
+ * attribute by its exact selector; see PT-4755), since a tab they open before that load lands is
+ * replaced along with everything else.
  */
 export const LAYOUT_LOADED_ATTRIBUTE = 'data-layout-loaded';
 

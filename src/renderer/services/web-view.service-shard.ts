@@ -1023,8 +1023,9 @@ async function loadLayout(
 /**
  * How a layout load ended, when it did not throw. `applied`: it handed its layout to the dock.
  * `stood-down`: it deliberately wrote nothing because web views arrived in the dock first, so the
- * dock already holds its content. `superseded`: a newer load took over, so the dock is NOT settled
- * — the newer load owns it.
+ * dock already holds its content (layout pushes stay held until the next load applies; see
+ * {@link saveLayout}). `superseded`: a newer load took over, so the dock is NOT settled — the newer
+ * load owns it.
  */
 type LayoutLoadOutcome = 'applied' | 'stood-down' | 'superseded';
 
@@ -1033,9 +1034,9 @@ type LayoutLoadOutcome = 'applied' | 'stood-down' | 'superseded';
  * {@link registerDockLayout}; cleared once reported, when the initial load fails before any newer
  * load started, or when that dock layout is unregistered. A superseded initial load leaves it in
  * place — whether it then returns or throws — so the load that superseded it (an interface-mode
- * switch, through {@link loadLayout}) reports instead. If that superseding load fails the report
- * never fires, which fails closed: no signal is better than a signal for a dock that was never
- * populated.
+ * switch, through {@link loadLayout}) reports instead. If that superseding load fails, the report
+ * stays pending and the next load that settles the dock fires it. Until then no report is sent,
+ * which fails closed: no signal is better than a signal for a dock that was never populated.
  */
 let pendingInitialLayoutLoadReport: (() => void) | undefined;
 
@@ -1401,7 +1402,9 @@ function reportIfLoadedLayoutIsEmpty(layout: LayoutInfo): void {
  * layoutLoadGeneration`; see that field's doc comment) — the dock in that stretch holds the layout
  * of the mode the user just left, or rc-dock's empty default at startup, and persisting that would
  * overwrite the real saved entry. Nothing is lost by holding: the load on its way replaces the
- * dock's whole contents anyway.
+ * dock's whole contents anyway. A load that stood down (see `LayoutLoadOutcome`) leaves that hold
+ * in place, because it never advances `layoutLoadGenerationInDock`: pushes stay held until the next
+ * load applies.
  *
  * @param layout Layout to persist
  */
