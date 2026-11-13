@@ -2,7 +2,9 @@
 import '@testing-library/jest-dom';
 import { Canon } from '@sillsdev/scripture';
 import { Section } from 'platform-bible-utils';
-import { render, screen } from '@testing-library/react';
+import { getBooksPresentFromBookIds } from 'platform-bible-utils/experimental';
+import { cleanup, render, screen } from '@testing-library/react';
+import { ComponentProps } from 'react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
 import { SelectBooksPicker } from './select-books-picker.component';
@@ -95,7 +97,7 @@ describe('SelectBooksPicker — explanations for omitted sections', () => {
   test('Explains a section that renders no group, so a search for one of its books is not a dead end', async () => {
     // Only OT books are on offer, so the Extra group is absent entirely and searching "glossary"
     // otherwise lands on the bare "No book found" with nothing saying why.
-    const { user } = await renderOpenPicker(booksPresentFor(['GEN', 'EXO']), {
+    const { user } = await renderOpenPicker(getBooksPresentFromBookIds(['GEN', 'EXO']), {
       [Section.Extra]: "Find can't include extra material",
     });
 
@@ -108,24 +110,13 @@ describe('SelectBooksPicker — explanations for omitted sections', () => {
   });
 
   test('Stays quiet about a section that does have books', async () => {
-    await renderOpenPicker(booksPresentFor(['GEN', 'GLO']), {
+    await renderOpenPicker(getBooksPresentFromBookIds(['GEN', 'GLO']), {
       [Section.Extra]: "Find can't include extra material",
     });
 
     expect(screen.queryByText("Find can't include extra material")).not.toBeInTheDocument();
   });
 });
-
-/** Builds a `booksPresent` flag string of full canon length with the given books flagged present */
-function booksPresentFor(bookIds: string[]): string {
-  const flags = Array.from({ length: Canon.allBookIds.length }, () => '0');
-  bookIds.forEach((bookId) => {
-    const bookNumber = Canon.bookIdToNumber(bookId);
-    if (bookNumber <= 0) throw new Error(`booksPresentFor: '${bookId}' is not a canon book id`);
-    flags[bookNumber - 1] = '1';
-  });
-  return flags.join('');
-}
 
 describe('SelectBooksPicker — section separators', () => {
   /** Counts the rules actually in the DOM. The popover portals out of the render container. */
@@ -135,7 +126,9 @@ describe('SelectBooksPicker — section separators', () => {
 
   test('Divides the rendered groups, and keeps doing so while the user is searching', async () => {
     // Two sections with books, so exactly one interior separator is warranted in both states.
-    const { user } = await renderOpenPicker(booksPresentFor(['GEN', 'EXO', 'JHN', 'MRK']));
+    const { user } = await renderOpenPicker(
+      getBooksPresentFromBookIds(['GEN', 'EXO', 'JHN', 'MRK']),
+    );
 
     expect(separatorCount()).toBe(1);
 
@@ -149,8 +142,44 @@ describe('SelectBooksPicker — section separators', () => {
   });
 
   test('Leaves no dangling rule when only one section has books', async () => {
-    await renderOpenPicker(booksPresentFor(['GEN', 'EXO']));
+    await renderOpenPicker(getBooksPresentFromBookIds(['GEN', 'EXO']));
 
     expect(separatorCount()).toBe(0);
+  });
+});
+
+describe('SelectBooksPicker — trigger', () => {
+  function renderPicker(props: Partial<ComponentProps<typeof SelectBooksPicker>> = {}) {
+    render(
+      <SelectBooksPicker
+        availableBookInfo={getBooksPresentFromBookIds(['GEN', 'EXO'])}
+        selectedBookIds={[]}
+        onChangeSelectedBookIds={vi.fn()}
+        localizedStrings={localizedStrings}
+        {...props}
+      />,
+    );
+    return screen.getByRole('combobox');
+  }
+
+  test('Names the selection with the localized defaults when given no text', () => {
+    expect(renderPicker()).toHaveTextContent('Select books');
+    cleanup();
+    expect(renderPicker({ selectedBookIds: ['GEN'] })).toHaveTextContent('books selected: 1');
+  });
+
+  test("Shows the caller's text in place of the defaults", () => {
+    expect(renderPicker({ placeholder: 'Books' })).toHaveTextContent('Books');
+    cleanup();
+    expect(
+      renderPicker({ selectedBookIds: ['GEN'], customSelectedText: 'Books: Genesis' }),
+    ).toHaveTextContent('Books: Genesis');
+  });
+
+  test("Keeps its own classes alongside the caller's, the caller winning a conflict", () => {
+    const trigger = renderPicker({ buttonClassName: 'tw:max-w-none tw:w-full', id: 'books' });
+    expect(trigger).toHaveClass('tw:justify-between', 'tw:max-w-none', 'tw:w-full');
+    expect(trigger).not.toHaveClass('tw:max-w-64');
+    expect(trigger).toHaveAttribute('id', 'books');
   });
 });

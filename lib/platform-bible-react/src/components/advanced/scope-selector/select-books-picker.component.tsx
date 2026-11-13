@@ -1,5 +1,5 @@
 import { BookItem } from '@/components/shared/book-item.component';
-import { Button } from '@/components/shadcn-ui/button';
+import { Button, buttonVariants } from '@/components/shadcn-ui/button';
 import {
   Command,
   CommandEmpty,
@@ -9,6 +9,8 @@ import {
   CommandSeparator,
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import { cn } from '@/utils/shadcn-ui/utils';
+import { type VariantProps } from 'class-variance-authority';
 import { ChevronsUpDown } from 'lucide-react';
 import { getSectionForBook, Section } from 'platform-bible-utils';
 import { getSectionLongName, doesBookMatchQuery } from '@/components/shared/book.utils';
@@ -43,6 +45,25 @@ type SelectBooksPickerProps = {
    * otherwise a search for one of its books lands on the bare "no book found".
    */
   disabledSectionExplanations?: Partial<Record<Section, string>>;
+  /** Trigger text while no book is selected. Defaults to the localized "Select books". */
+  placeholder?: string;
+  /**
+   * Trigger text while books are selected, such as a list of their names. Defaults to the localized
+   * "Books selected" followed by the count.
+   */
+  customSelectedText?: string;
+  /** Classes merged onto the trigger button's own, a conflicting class here winning. */
+  buttonClassName?: string;
+  /**
+   * Classes merged onto the dropdown's own, a conflicting class here winning. The dropdown is a
+   * fixed 500px wide so the book grid lays out the same wherever it is used; narrow it here only
+   * where it has to fit somewhere tighter, such as inside another popover.
+   */
+  popoverContentClassName?: string;
+  /** Variant of the trigger button. Defaults to `outline`. */
+  variant?: VariantProps<typeof buttonVariants>['variant'];
+  /** Id of the trigger button. */
+  id?: string;
 };
 
 /**
@@ -63,6 +84,12 @@ export function SelectBooksPicker({
   localizedStrings,
   localizedBookNames,
   disabledSectionExplanations,
+  placeholder,
+  customSelectedText,
+  buttonClassName,
+  popoverContentClassName,
+  variant = 'outline',
+  id: triggerId,
 }: SelectBooksPickerProps) {
   const booksSelectedText = localizedStrings['%webView_book_selector_books_selected%'];
   const selectBooksText = localizedStrings['%webView_book_selector_select_books%'];
@@ -202,14 +229,15 @@ export function SelectBooksPicker({
     >
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          id={triggerId}
+          variant={variant}
           role="combobox"
           aria-expanded={isBooksSelectorOpen}
-          className="tw:max-w-64 tw:justify-between"
+          className={cn('tw:max-w-64 tw:justify-between', buttonClassName)}
         >
           {selectedBookIds.length > 0
-            ? `${booksSelectedText}: ${selectedBookIds.length}`
-            : selectBooksText}
+            ? (customSelectedText ?? `${booksSelectedText}: ${selectedBookIds.length}`)
+            : (placeholder ?? selectBooksText)}
           <ChevronsUpDown className="tw:ml-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -224,7 +252,10 @@ export function SelectBooksPicker({
           that clips the search input away entirely, leaving no way to filter.
           The list below shrinks instead so the input stays put. */}
       <PopoverContent
-        className="tw:max-h-(--radix-popover-content-available-height) tw:w-[500px] tw:max-w-[calc(100vw-2rem)] tw:p-0"
+        className={cn(
+          'tw:max-h-(--radix-popover-content-available-height) tw:w-[500px] tw:max-w-[calc(100vw-2rem)] tw:p-0',
+          popoverContentClassName,
+        )}
         align="start"
         collisionPadding={8}
       >

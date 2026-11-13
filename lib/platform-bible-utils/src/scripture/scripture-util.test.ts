@@ -8,6 +8,7 @@ import {
   formatScrRefRange,
   formatScrRefWithOptions,
   getBookIdsFromBooksPresent,
+  getBooksPresentFromBookIds,
   getLocalizedIdFromBookNumber,
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
@@ -839,6 +840,27 @@ describe('getBookIdsFromBooksPresent', () => {
     const result = getBookIdsFromBooksPresent(overlong);
     expect(result).toEqual(['GEN']);
     expect(result).not.toContain('***');
+  });
+});
+
+describe('getBooksPresentFromBookIds', () => {
+  test('flags each listed book at its canonical position, at full canon length', () => {
+    const booksPresent = getBooksPresentFromBookIds(['LEV', 'GEN']);
+    expect(booksPresent).toHaveLength(Canon.allBookIds.length);
+    expect(booksPresent.startsWith('101')).toBe(true);
+    expect(booksPresent.slice(3)).not.toContain('1');
+  });
+
+  test('round-trips through getBookIdsFromBooksPresent in canonical order', () => {
+    expect(getBookIdsFromBooksPresent(getBooksPresentFromBookIds(['MAT', 'GEN', 'REV']))).toEqual([
+      'GEN',
+      'MAT',
+      'REV',
+    ]);
+  });
+
+  test('ignores ids that name no canonical book', () => {
+    expect(getBooksPresentFromBookIds(['XYZ', ''])).toBe('0'.repeat(Canon.allBookIds.length));
   });
 });
 

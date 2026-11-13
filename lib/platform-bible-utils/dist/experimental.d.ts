@@ -31,6 +31,22 @@ export declare const ALL_BOOK_IDS: readonly string[];
  */
 export declare function getBookIdsFromBooksPresent(booksPresent: string): string[];
 /**
+ * Builds a `platformScripture.booksPresent` flag string from a list of book ids: the inverse of
+ * {@link getBookIdsFromBooksPresent}. Useful for handing a list of books to a component that takes
+ * the flag string, such as one offering a choice of books that are not a project's.
+ *
+ * @example
+ *
+ * ```ts
+ * getBooksPresentFromBookIds(['LEV', 'GEN']); // '101' followed by 120 '0's
+ * ```
+ *
+ * @param bookIds Three-letter book ids, in any order. Ids that name no canonical book are ignored.
+ * @returns A flag string of full canon length, '1' at each listed book's position and '0' elsewhere
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function getBooksPresentFromBookIds(bookIds: readonly string[]): string;
+/**
  * Default English localizations for scroll group ids: `'Ø'` for `undefined` and `'A'`–`'Z'` for ids
  * 0–25. Keyed by {@link getLocalizeKeyForScrollGroupId}. Used as the fallback map for
  * scroll-group-aware UI (selectors, badges, chips) before user-supplied localized strings load and
