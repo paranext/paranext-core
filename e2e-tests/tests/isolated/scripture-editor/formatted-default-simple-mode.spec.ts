@@ -108,6 +108,31 @@ test.describe('scripture editor default view', () => {
     await expect(editorFrame.locator('.editor-input.marker-editable')).toHaveCount(0);
     await expect(editorFrame.locator('span.opening[data-marker]')).toHaveCount(0);
 
+    await test.step('shows a section heading in the standard style and its typed case', async () => {
+      // The heading shows the case it was typed in (`Heading`) and is bold, as Preview's `\s1`.
+      // Its gutter glyph reads `\s1` at regular weight: `innerText` applies `text-transform`,
+      // small caps are checked on their own, and bold marks a selected row.
+      const heading = () =>
+        editorFrame
+          .locator('.usfm_s1')
+          .first()
+          .evaluate((element) => {
+            const glyph = element.querySelector(':scope > .marker:first-child');
+            return {
+              text: element instanceof HTMLElement ? element.innerText : '',
+              fontWeight: getComputedStyle(element).fontWeight,
+              fontVariantCaps: getComputedStyle(element).fontVariantCaps,
+              glyphWeight: glyph ? getComputedStyle(glyph).fontWeight : '',
+            };
+          });
+      await expect.poll(async () => (await heading()).fontWeight, { timeout: 30_000 }).toBe('700');
+      const { text, fontVariantCaps, glyphWeight } = await heading();
+      expect(text).toContain('\\s1');
+      expect(text).toContain('Heading');
+      expect(fontVariantCaps).toBe('normal');
+      expect(glyphWeight).toBe('400');
+    });
+
     await test.step('uses the project font and size', async () => {
       const computedStyle = (selector: string) =>
         editorFrame
@@ -131,7 +156,7 @@ test.describe('scripture editor default view', () => {
       expect(startsWithProjectFont((await computedStyle('.editor-input.usfm')).fontFamily)).toBe(
         true,
       );
-      // Verse numbers are 13/16 of the project size and headings 0.8 of it.
+      // Verse numbers are 13/16 of the project size, and headings are the project size.
       await expect
         .poll(
           async () => (await computedStyle('span[data-marker="v"][data-number="1"]')).fontSize,
@@ -142,7 +167,7 @@ test.describe('scripture editor default view', () => {
         .toBeCloseTo((PROJECT_FONT_SIZE_PX * 13) / 16, 1);
       await expect
         .poll(async () => (await computedStyle('.usfm_s1')).fontSize, { timeout: 30_000 })
-        .toBeCloseTo(PROJECT_FONT_SIZE_PX * 0.8, 1);
+        .toBeCloseTo(PROJECT_FONT_SIZE_PX, 1);
       // An empty verse's `…` placeholder is a box as wide as the verse number is tall.
       const emptyVerse = editorFrame
         .locator(
