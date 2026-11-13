@@ -34,8 +34,7 @@ test.describe('scripture editor marker palette typed through', () => {
     {
       annotation: {
         type: 'fixme',
-        description:
-          'PT-5050: keys typed while the marker palette is still opening can be lost (fails ~1 run in 4)',
+        description: 'PT-5050: keys typed while the marker palette is still opening can be lost',
       },
     },
     async ({ mainPage }) => {

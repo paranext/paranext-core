@@ -306,7 +306,7 @@ async function sendSampleProjectPdpRequest<T>(method: string, args: unknown[]): 
  * generic any-project wait is racy, and LAUNCH_PHASE_TIMEOUT_MS for why this factory in particular
  * needs the cold-boot budget.
  */
-async function getSampleProjectDataProviderId(): Promise<string> {
+export async function getSampleProjectDataProviderId(): Promise<string> {
   await waitForPapiMethodRegistered(
     'object:platform.Paratext-pdpf.getProjectDataProviderId',
     WEBSOCKET_PORT,

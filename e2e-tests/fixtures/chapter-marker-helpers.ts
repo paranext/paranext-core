@@ -5,7 +5,7 @@
  * specs use to put the caret on a chapter line.
  */
 import { type FrameLocator, type Locator, type Page } from '@playwright/test';
-import { LAUNCH_PHASE_TIMEOUT_MS, sendPapiRequestOnce } from './helpers';
+import { sendPapiRequestOnce } from './helpers';
 import {
   openEditableScriptureEditorForProject,
   SAMPLE_WEB_PROJECT_ID,
@@ -21,16 +21,6 @@ export const PDP_REQUEST_TIMEOUT_MS = 30_000;
  */
 export const chapterMarkerCorrectionMessage = (chapterNum: number, bookName: string) =>
   `The chapter marker in ${bookName} ${chapterNum} did not match the chapter, so it was corrected`;
-
-/** The sample project's project data provider id, once the backend has registered it. */
-export function getSampleProjectDataProviderId(): Promise<string> {
-  return sendPapiRequestOnce<string>(
-    'object:platform.Paratext-pdpf.getProjectDataProviderId',
-    [SAMPLE_WEB_PROJECT_ID],
-    WEBSOCKET_PORT,
-    LAUNCH_PHASE_TIMEOUT_MS,
-  );
-}
 
 /** One chapter of a book as the project data provider holds it, read as USFM. */
 export function getChapterUsfmFromProvider(

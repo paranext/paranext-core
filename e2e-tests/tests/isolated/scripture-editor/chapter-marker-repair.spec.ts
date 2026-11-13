@@ -38,7 +38,6 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   chapterMarkerCorrectionMessage,
   getChapterUsfmFromProvider,
-  getSampleProjectDataProviderId,
   openSampleEditorInStandardView,
   PDP_REQUEST_TIMEOUT_MS,
   WEBSOCKET_PORT,
@@ -46,6 +45,7 @@ import {
 import { sendPapiRequestOnce } from '../../../fixtures/helpers';
 import {
   findScriptureEditorFrame,
+  getSampleProjectDataProviderId,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   waitForHomeTab,

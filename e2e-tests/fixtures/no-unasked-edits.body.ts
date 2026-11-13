@@ -65,6 +65,7 @@ import fs from 'fs';
 import path from 'path';
 import { type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import { test, expect } from './isolated.fixture';
+import { EDITOR_SAVE_DEBOUNCE_MS } from './editor-save-debounce';
 import { TEXT_NOTE_CALLER_SELECTOR } from './content-zoom-helpers';
 import {
   readClipboardText,
@@ -163,42 +164,16 @@ const BUNDLED_WEB_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
 /** Folder the backend installs the sample project into, under the project root. */
 const INSTALLED_WEB_FOLDER = 'WEB';
 
-/** The editor web view's source, where its save debounce is declared. */
-const EDITOR_WEB_VIEW_SOURCE = path.resolve(
-  __dirname,
-  '../../extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
-);
-
-/**
- * Reads `PDP_SAVE_DEBOUNCE_MS` from the editor web view's source, which does not export it. Throws
- * if the declaration is missing or not a plain number, so a change to how the editor declares its
- * debounce fails loudly here instead of leaving {@link ECHO_SETTLED_MS}, the backstop's margin over
- * it and the recording's handling of a write that lands too early to be its step's save all
- * silently wrong.
- */
-function readEditorSaveDebounceMs(): number {
-  const source = fs.readFileSync(EDITOR_WEB_VIEW_SOURCE, 'utf8');
-  const match = /const PDP_SAVE_DEBOUNCE_MS\s*=\s*(\d[\d_]*)\s*;/.exec(source);
-  if (!match)
-    throw new Error(
-      `Could not find "const PDP_SAVE_DEBOUNCE_MS = <number>;" in ${EDITOR_WEB_VIEW_SOURCE}; update readEditorSaveDebounceMs to match how the editor declares its save debounce`,
-    );
-  return Number(match[1].replace(/_/g, ''));
-}
-
-/**
- * The editor's trailing-edge save debounce, read from the editor's own source. It is the only
- * deliberate delay between an edit (or a load) and the write it causes, so a step's own save lands
- * at least this long after the step begins — unless something other than the debounce sends it
- * sooner: the editor saves at once when a write's echo comes back while it holds newer edits, and
- * flushes a pending save on a window blur, a chapter switch or an incoming update about to replace
- * the text. A write that lands sooner is therefore taken as the step's save only when no other
- * write to the file follows it in the step ({@link describeUnaskedWrites}). The cutoff is
- * approximate to within one recorder poll ({@link RECORDER_POLL_MS}): a write is timed by the sample
- * that saw it, so one that landed just under the debounce can be timed just over it — the lenient
- * side, so it cannot cause a false failure.
- */
-const EDITOR_SAVE_DEBOUNCE_MS = readEditorSaveDebounceMs();
+// The editor's save debounce (EDITOR_SAVE_DEBOUNCE_MS, read from the editor's own source) is the
+// only deliberate delay between an edit (or a load) and the write it causes, so a step's own save lands
+// at least this long after the step begins — unless something other than the debounce sends it
+// sooner: the editor saves at once when a write's echo comes back while it holds newer edits, and
+// flushes a pending save on a window blur, a chapter switch or an incoming update about to replace
+// the text. A write that lands sooner is therefore taken as the step's save only when no other
+// write to the file follows it in the step ({@link describeUnaskedWrites}). The cutoff is
+// approximate to within one recorder poll ({@link RECORDER_POLL_MS}): a write is timed by the sample
+// that saw it, so one that landed just under the debounce can be timed just over it — the lenient
+// side, so it cannot cause a false failure.
 
 /**
  * One round trip between the editor and the .NET backend on a loaded machine, about half a second:

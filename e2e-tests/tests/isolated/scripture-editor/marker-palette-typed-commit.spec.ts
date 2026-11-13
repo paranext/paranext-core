@@ -8,7 +8,7 @@
  * opened from the editor.
  *
  * The same markers typed straight through, without waiting for the palette to appear, are covered
- * by marker-palette-typed-through.spec.ts.
+ * by marker-palette-typed-through.spec.ts, which is switched off until PT-5050 is fixed.
  *
  * The second test covers `\` `f` Space at the end of a paragraph in Standard view: it inserts a
  * footnote and puts the caret in that footnote's row in the footnotes pane, the same as `\` `f`

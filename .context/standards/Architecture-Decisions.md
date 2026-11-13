@@ -953,7 +953,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The repair then puts the marker back above them, as Paratext 9 saves the bytes it holds and
   restores the marker at the top of a later chapter; chapter 1 is left without one, as Paratext 9
   leaves it. Text typed ahead of a later chapter's marker is the placement rule's case above,
-  reachable by typing, and `chapter-marker-restore.spec.ts` pins it end to end. Text typed
+  reachable by typing, and `chapter-marker-restore.spec.ts` pins the Ruth `\c` placement cases end
+  to end (its typing-over-a-selection case does not run until PT-5059 is fixed). Text typed
   ahead of a marker with a paragraph before it joins the end of that paragraph instead
   (`\mt1 Ruth X`), because USFM reads text behind a line break with no marker of its own as part of
   the paragraph before it, which is where the save and the reload put it. The caret the user had in
@@ -1066,8 +1067,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the annotation was on is completely deleted", so a consumer acting on it could discard data whose
   text is intact. No annotation set in this repo carries an `interactionCommand` today. Where the
   editor puts a caret target on screen is pinned end to end
-  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`,
-  and `chapter-marker-restore.spec.ts` read the web view's own DOM selection). **Revisit** with
+  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`
+  and `chapter-marker-restore.spec.ts` read the web view's own DOM selection; the restore spec's
+  typing-over-a-selection case does not run until PT-5059 is fixed). **Revisit** with
   PT-4818.
 - **Source:** PT-4608 hand QA.
 
