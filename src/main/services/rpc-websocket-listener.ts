@@ -41,7 +41,7 @@ import { WebSocketServer } from 'ws';
 import { logger } from '@shared/services/logger.service';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
-import type { ConnectionIdentity } from '@shared/data/request-access.data';
+import { ConnectionIdentity, isRegistrationAllowed } from '@shared/data/request-access.data';
 import { RpcServer } from './rpc-server';
 import { identifyClientSecret, LaunchedIdentity } from './launch-secrets.service';
 // RpcEventRegistry was extracted to its own file to satisfy max-classes-per-file
@@ -335,6 +335,10 @@ export class RpcWebSocketListener
     method: InternalRequestHandler,
     methodDocs?: SingleMethodDocumentation,
   ): Promise<boolean> {
+    if (!isRegistrationAllowed(methodName, 'main')) {
+      logger.warn(`Refused to register '${methodName}' in main: another process owns it`);
+      return false;
+    }
     if (
       this.rpcMethodDetailsByMethodName.has(methodName) ||
       this.localMethodsByMethodName.has(methodName)
@@ -399,7 +403,7 @@ export class RpcWebSocketListener
         `The PAPI network is not accepting clients (status ${this.connectionStatus})`,
       );
     // Only renderers connect this way, and a WebView can drive its renderer's connection
-    this.serveClient(socket, name, false, 'renderer');
+    this.serveClient(socket, name, 'renderer');
     logger.info(`PAPI client ${name} connected over a local port as renderer`);
   }
 
@@ -728,7 +732,7 @@ export class RpcWebSocketListener
 
   /**
    * @param upgradeRequest The handshake request, which `ws` always passes. Without one the client
-   *   is treated as having sent `Origin`.
+   *   is served as `unidentified`.
    */
   private onClientConnect(webSocket: WebSocket, upgradeRequest?: IncomingMessage): void {
     const socketId = this.nextSocketId;
@@ -738,13 +742,7 @@ export class RpcWebSocketListener
       webSocket.close(INTENTIONAL_CLOSE_CODE, 'launch already connected');
       return;
     }
-    // TODO(PT-2893): The Origin check is an insecure temporary stopgap; see RpcServer.processMessage
-    this.serveClient(
-      webSocket,
-      socketId,
-      !!upgradeRequest && upgradeRequest.headers.origin === undefined,
-      verified ? verified.identity : 'unidentified',
-    );
+    this.serveClient(webSocket, socketId, verified ? verified.identity : 'unidentified');
     // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
     logger.info(
       `Websocket client ${socketId} connected as ${verified ? verified.identity : 'unidentified'}`,
@@ -779,12 +777,7 @@ export class RpcWebSocketListener
   }
 
   /** Attach an `RpcServer` to a socket and track it until the socket closes */
-  private serveClient(
-    socket: ServerSocketLike,
-    name: string,
-    isWebSocketWithoutOrigin: boolean,
-    identity: ConnectionIdentity,
-  ): void {
+  private serveClient(socket: ServerSocketLike, name: string, identity: ConnectionIdentity): void {
     const rpcServer = new RpcServer(
       name,
       socket,
@@ -792,7 +785,6 @@ export class RpcWebSocketListener
       this.rpcMethodDetailsByMethodName,
       this.rpcEventDetailsByEventName,
       this.announceClientDisconnect,
-      isWebSocketWithoutOrigin,
       identity,
     );
     rpcServer.connect();

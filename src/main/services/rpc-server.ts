@@ -43,7 +43,11 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
-import type { ConnectionIdentity } from '@shared/data/request-access.data';
+import {
+  ConnectionIdentity,
+  isCallAllowed,
+  isRegistrationAllowed,
+} from '@shared/data/request-access.data';
 
 /**
  * Narrows a handler's error to what requesters need: its `code` and `message`, plus the platform
@@ -87,17 +91,6 @@ let isAppShuttingDown: () => boolean = () => false;
 export function setAppShutdownSignal(signal: () => boolean): void {
   isAppShuttingDown = signal;
 }
-
-/**
- * Request types main refuses from connections that could be a browser page, an extension web view
- * or a renderer. See the TODO(PT-2893) in {@link RpcServer.processMessage}.
- */
-const REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS: ReadonlySet<string> = new Set([
-  // REGISTRY_TOKEN_REQUEST_TYPE from `src/node/services/request-registry-tokens.service-model.ts`,
-  // spelled out because importing it would publish that module in `papi.d.ts`. The real-socket
-  // tests send the constant itself, so they fail if the two drift apart.
-  'requestRegistryTokens:getAccessToken',
-]);
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
 
@@ -146,14 +139,8 @@ export class RpcServer implements IRpcHandler {
   private readonly propagateEventMethod: PropagateEventMethod;
   /** Called by an RpcServer once its client's methods have been removed from the registry */
   private readonly announceClientDisconnectMethod: AnnounceClientDisconnectMethod;
-  /** See the constructor's `isWebSocketWithoutOrigin` */
-  private readonly isWebSocketWithoutOrigin: boolean;
 
   /**
-   * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
-   *   carried no `Origin` header. Only such a client may send the request types main refuses to
-   *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
-   *   them.
    * @param identity Which process is on the other end, as main determined when accepting the
    *   connection. Defaults to `'unidentified'`, so a connection nobody vouched for gets no more
    *   than an unknown client.
@@ -165,7 +152,6 @@ export class RpcServer implements IRpcHandler {
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
     rpcEventDetailsByEventName: IRpcEventRegistry,
     announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
-    isWebSocketWithoutOrigin = false,
     identity: ConnectionIdentity = 'unidentified',
   ) {
     bindClassMethods.call(this);
@@ -173,7 +159,6 @@ export class RpcServer implements IRpcHandler {
     this.ws = webSocket;
     this.propagateEventMethod = propagateEventMethod;
     this.announceClientDisconnectMethod = announceClientDisconnectMethod;
-    this.isWebSocketWithoutOrigin = isWebSocketWithoutOrigin;
     this.identity = identity;
 
     // Uncomment the following to log every message sent
@@ -277,6 +262,12 @@ export class RpcServer implements IRpcHandler {
   }
 
   registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean {
+    if (!isRegistrationAllowed(methodName, this.identity)) {
+      logger.warn(
+        `Refused to register '${methodName}' for ${this.describePeer()} (${this.identity})`,
+      );
+      return false;
+    }
     if (this.rpcMethodDetailsByMethodName.has(methodName)) return false;
     this.rpcMethodDetailsByMethodName.set(methodName, { handler: this, methodDocs });
     return true;
@@ -444,18 +435,12 @@ export class RpcServer implements IRpcHandler {
       const requests: JSONRPCRequest[] = isJSONRPCRequest(message) ? [message] : message;
       const promises = requests.map(async (request) => {
         try {
-          // TODO(PT-2893): An insecure temporary stopgap, not a security boundary; replace it with
-          // PT-2893's caller identification. Browsers always send `Origin` on a WebSocket handshake
-          // and page script can't remove it, and web views can drive their renderer's MessagePort,
-          // so this keeps browser pages and extension web views from minting Registry tokens. It
-          // trusts a header instead of identifying the caller, so any local process that leaves
-          // `Origin` out still gets through. Checked before the event branch too, so the request
-          // type can't be sent on as an event either.
-          if (
-            !this.isWebSocketWithoutOrigin &&
-            REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS.has(request.method)
-          ) {
-            logger.warn(`Refused '${request.method}' from ${this.describePeer()}`);
+          // Checked before the event branch, so a restricted request type can't be sent on as an
+          // event either
+          if (!isCallAllowed(request.method, this.identity)) {
+            logger.warn(
+              `Refused '${request.method}' from ${this.describePeer()} (${this.identity})`,
+            );
             if (request.id)
               sendPayloadToWebSocket(
                 this.ws,
