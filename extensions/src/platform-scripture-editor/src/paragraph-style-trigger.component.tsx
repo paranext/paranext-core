@@ -118,8 +118,8 @@ export function ParagraphStyleTrigger({
   // What the floor resolves to is the button's padding plus the WHOLE marker string, because the
   // primary field is nowrap and so contributes its full width to `min-content` — and `min-width`
   // beats `max-width`, so this is what decides whether the button's cap can hold at all.
-  // `blockMarker` is read verbatim off the USJ para node at the caret, NOT from the switcher menu,
-  // and isn't constrained to `selectableParagraphMarkers` (platform-scripture-editor.utils) or even to
+  // `blockMarker` is read verbatim off the USJ para node at the caret (or is `p` for verses outside
+  // any paragraph marker), NOT from the switcher menu, and isn't constrained to `selectableParagraphMarkers` (platform-scripture-editor.utils) or even to
   // `usfm.sty` — a project-custom marker, or one entered by mistake, can be any string at all. The
   // column-floor widths below were measured against `toc1` (4 characters), but some standard USFM
   // markers are longer than that, so the trigger already overruns its zone by a few pixels for
