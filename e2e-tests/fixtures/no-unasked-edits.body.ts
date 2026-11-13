@@ -54,9 +54,8 @@
  * which writes it asks for. A step that saves goes on as soon as its save has landed; a step that
  * saves nothing goes on at once. A write that lands later than its step — a second write chained to
  * a save, or a load that writes after all — lands inside a later step's interval, where nothing
- * asked for it, and fails there — even in a step that asks for a save, since a write that lands
- * sooner after the step began than the editor's save debounce, with another write to the file after
- * it, is not that step's save; the step after the last one gets a single quiet window
+ * asked for it, and fails there, even in a step that asks for a save when the write is too early to
+ * be that step's own ({@link WriteRule}); the step after the last one gets a single quiet window
  * ({@link BACKSTOP_QUIET_MS}) for the same purpose. The recording is judged at the end of the run
  * ({@link ProjectWriteRecorder.finishAndVerify}); what each save holds is judged the moment it
  * lands.
@@ -198,8 +197,7 @@ const LOAD_WRITE_WINDOW_MS = SAVE_PATH_MS;
 /**
  * How long after a step has acted its own save has to land ({@link SAVE_PATH_MS}).
  * {@link ProjectWriteRecorder.waitForSave} gives a write that landed too soon to be the step's save
- * (see {@link EDITOR_SAVE_DEBOUNCE_MS}) this long to be followed by the save it may stand in front
- * of, before taking it as the step's save itself.
+ * this long to be followed by the one that is ({@link WriteRule}).
  */
 const OWN_SAVE_WINDOW_MS = SAVE_PATH_MS;
 
@@ -255,7 +253,7 @@ const SELECTION_ADOPTED_MS = 300;
 /**
  * The longest a selection set on the DOM waits for the document's `selectionchange` event before
  * going on without it. The event fires within a task of the change, so this only bounds a change
- * the browser chose not to report.
+ * the browser chose not to report, and an animation frame that never comes.
  */
 const SELECTION_CHANGE_FALLBACK_MS = 1_000;
 
@@ -440,14 +438,14 @@ async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoi
       if (root instanceof HTMLElement) root.focus({ preventScroll: true });
       selection?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
       if (isUnchanged) return;
+      // This runs in the page, so it cannot share code with its twin in `findEnteredCharacter`.
       // Lexical adopts the selection in its own `selectionchange` listener, registered before this
       // one, and commits that update before the next frame.
       await new Promise<void>((resolve) => {
-        const fallback = setTimeout(resolve, fallbackMs);
+        setTimeout(resolve, fallbackMs);
         document.addEventListener(
           'selectionchange',
           () => {
-            clearTimeout(fallback);
             requestAnimationFrame(() => resolve());
           },
           { once: true },
@@ -1080,17 +1078,18 @@ class ProjectWriteRecorder {
 
   /**
    * Waits for the running phase's save to land on `file`: for its bytes to stop being `from` and,
-   * when `result` is given, to become `result` — or anything else `isPartway` does not accept,
-   * since that is already a finding and the caller judges it. Bytes other than `result` that a
-   * write landed sooner after the phase began than the editor's save debounce (or before it began)
-   * are taken only once {@link OWN_SAVE_WINDOW_MS} has passed since this call with no write after
-   * them: until then the phase's own save may still land after them ({@link WriteRule}). Once it has
-   * landed, leaves the editor alone for `pauseAfterMs` ({@link ECHO_ARRIVAL_MS} unless given).
+   * when `result` is given, to become `result`, or anything else `isPartway` does not accept
+   * (already a finding, which the caller judges). Once it has landed, leaves the editor alone for
+   * `pauseAfterMs` ({@link ECHO_ARRIVAL_MS} unless given).
+   *
    * Returns what landed, the latest bytes if only a partway state did within
-   * {@link SAVE_LANDED_TIMEOUT_MS}, or `undefined` if no write changed the file at all. The bytes
+   * {@link SAVE_LANDED_TIMEOUT_MS}, or `undefined` if no write changed the file at all.
+   *
+   * Bytes a write left sooner after the phase began than the editor's save debounce count only once
+   * {@link OWN_SAVE_WINDOW_MS} has passed with no write after them ({@link WriteRule}). The bytes
    * returned can come from a write an earlier phase made after `from` was taken; that write is
-   * still judged in the phase it landed in by {@link ProjectWriteRecorder.finishAndVerify}, so the
-   * run fails naming that phase, though the caller's own check may fail first, less precisely.
+   * still judged in its own phase by {@link ProjectWriteRecorder.finishAndVerify}, so the run fails
+   * naming that phase, though the caller's own check may fail first, less precisely.
    */
   async waitForSave(
     page: Page,
@@ -2280,6 +2279,8 @@ export async function runFootnotesPaneRowEdits(
               await mainPage.keyboard.press('ArrowRight');
               await mainPage.keyboard.press('ArrowLeft');
             });
+            // A save the leave scheduled lands in this no-write phase and is judged here.
+            await mainPage.waitForTimeout(SAVE_PATH_MS);
           }),
         );
 
@@ -2769,14 +2770,14 @@ async function findEnteredCharacter(
       if (root instanceof HTMLElement) root.focus({ preventScroll: true });
       selection?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
       if (isUnchanged) return 1;
+      // This runs in the page, so it cannot share code with its twin in `selectInEditor`.
       // Lexical adopts the selection in its own `selectionchange` listener, registered before this
       // one, and commits that update before the next frame.
       await new Promise<void>((resolve) => {
-        const fallback = setTimeout(resolve, fallbackMs);
+        setTimeout(resolve, fallbackMs);
         document.addEventListener(
           'selectionchange',
           () => {
-            clearTimeout(fallback);
             requestAnimationFrame(() => resolve());
           },
           { once: true },

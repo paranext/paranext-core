@@ -117,8 +117,7 @@ const WRITE_KIND_DESCRIPTIONS: Record<RecordedWrite['kind'], string> = {
 
 /**
  * Why `write` is not one `rule` allows, given whether the phase's save has already landed and
- * whether `write` landed sooner after the phase began than the editor's save debounce with another
- * write to the file after it in the phase (see {@link WriteRule}).
+ * whether `write` is too early to be that save and followed by another ({@link WriteRule}).
  */
 function whyNotAsked(
   write: RecordedWrite,

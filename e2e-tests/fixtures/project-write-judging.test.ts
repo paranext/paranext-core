@@ -1,7 +1,8 @@
 /**
  * The judgment the `no-unasked-edits` runs rest on: which recorded project writes a step asked for.
- * A mistake here makes those runs pass over an edit nobody asked for, so each rule is pinned by the
- * write it must reject as well as the one it must accept.
+ * A mistake here makes those runs pass over an edit nobody asked for, so the rules that decide
+ * whether a write is asked for are pinned by a write they must reject as well as one they must
+ * accept.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -125,6 +126,17 @@ describe('describeUnaskedWrites', () => {
           bookWrite(1_800, SAVED_AGAIN, { before: SAVED }),
         ]),
       ).toEqual([]);
+    });
+
+    it("rejects a second write after the step's exact result has landed", () => {
+      // The second write holds a state `isPartway` accepts, so only the landed result can reject it
+      const unasked = describeIn(phase, [
+        bookWrite(1_000, SAVED_AGAIN),
+        bookWrite(1_800, SAVED, { before: SAVED_AGAIN }),
+      ]);
+
+      expect(unasked).toHaveLength(1);
+      expect(unasked[0]).toContain("it came after this step's save had already landed");
     });
 
     it('rejects a write holding neither, naming the step before when it lands early', () => {
