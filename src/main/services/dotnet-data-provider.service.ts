@@ -4,6 +4,14 @@ import path from 'path';
 import { logger } from '@shared/services/logger.service';
 import { waitForDuration } from 'platform-bible-utils';
 import { formatLog } from '@shared/utils/logger.utils';
+import { issueLaunchSecrets, revokeLaunchSecrets } from '@main/services/launch-secrets.service';
+
+/**
+ * Environment variable that carries the launch secrets to the data provider in development, where
+ * `dotnet watch` has to pass them on to each process it restarts. The data provider clears its own
+ * copy on reading it. Holds the same JSON a packaged build reads from standard input.
+ */
+const LAUNCH_SECRETS_ENVIRONMENT_VARIABLE = 'PAPI_LAUNCH_SECRETS';
 
 /** Pretty name for the process this service manages. Used in logs */
 const DOTNET_DATA_PROVIDER_NAME = '.net';
@@ -104,6 +112,10 @@ async function waitForDotnetDataProvider(maxWaitTimeInMS: number) {
 function startDotnetDataProvider() {
   if (dotnet) return;
 
+  // Delivered on standard input when packaged and in the spawn environment in development; never on
+  // the command line or in main's own environment
+  const launchSecretsJson = JSON.stringify(issueLaunchSecrets('dotnetDataProvider'));
+
   // default values for development
   let command = 'dotnet';
   let args: string[] = ['watch', '--project', 'c-sharp/ParanextDataProvider.csproj'];
@@ -174,11 +186,32 @@ function startDotnetDataProvider() {
         ...process.env,
         PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT:
           process.env.PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT || 'true',
+        [LAUNCH_SECRETS_ENVIRONMENT_VARIABLE]: launchSecretsJson,
       },
     };
   }
 
-  dotnet = spawn(command, args, options);
+  try {
+    dotnet = spawn(command, args, options);
+  } catch (error) {
+    revokeLaunchSecrets('dotnetDataProvider');
+    throw error;
+  }
+
+  if (globalThis.isPackaged) {
+    // A process that has already died closes its end of the pipe; a write error must not reach
+    // main's uncaught exception handler. The data provider reports its own missing secrets.
+    dotnet.stdin.on('error', (error) => {
+      logger.error(
+        formatLog(
+          `Could not write the launch secrets to standard input: ${error.message}`,
+          DOTNET_DATA_PROVIDER_NAME,
+        ),
+      );
+    });
+    dotnet.stdin.write(`${launchSecretsJson}\n`);
+    dotnet.stdin.end();
+  }
 
   dotnet.stdout.on('data', logProcessInfo);
   dotnet.stderr.on('data', logProcessError);
@@ -192,6 +225,7 @@ function startDotnetDataProvider() {
     dotnet?.stderr?.removeListener('data', logProcessError);
     dotnet?.stdout?.removeListener('data', logProcessInfo);
     dotnet = undefined;
+    revokeLaunchSecrets('dotnetDataProvider');
     resolveClose();
   });
 
