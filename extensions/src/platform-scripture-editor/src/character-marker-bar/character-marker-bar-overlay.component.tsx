@@ -190,12 +190,16 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     let measurementPara = activeLine?.para;
 
     if (!targetRect) {
-      // Before the first caret, anchor to the first paragraph so the bar is visible on load —
-      // discoverability is the point of the feature. After that, no caret in an editor block
-      // means the popover took focus, so HOLD the last position rather than jumping back to the
-      // top of the editor as the popover opens and closes.
+      // Before the first caret, anchor to the first marked paragraph (or, in a chapter without
+      // one, the first block) so the bar is visible on load — discoverability is the point of the
+      // feature. After that, no caret in an editor block means the popover took focus, so HOLD the
+      // last position rather than jumping back to the top of the editor as the popover opens and
+      // closes.
       if (hasPositionedRef.current) return;
-      const firstPara = editorRoot.querySelector<HTMLElement>(EDITOR_PARA_SELECTOR);
+      const firstBlock = editorRoot.firstElementChild;
+      const firstPara =
+        editorRoot.querySelector<HTMLElement>(EDITOR_PARA_SELECTOR) ??
+        (firstBlock instanceof HTMLElement ? firstBlock : undefined);
       if (!firstPara) return;
       targetRect = firstPara.getBoundingClientRect();
       // Measure against the SAME paragraph the position is anchored to, so the two halves of the

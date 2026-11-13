@@ -432,6 +432,34 @@ describe('CharacterMarkerBarOverlay', () => {
     expect(barContainer().style.top).toBe('120px');
   });
 
+  it('anchors to the first block before a caret when no paragraph carries a marker', () => {
+    // A chapter whose verses all sit outside any paragraph marker has no `.para` to anchor to.
+    stubRects(120, 300);
+    render(
+      <CharacterMarkerBarOverlay bar={<button type="button">bd</button>}>
+        <div className="editor-input usfm">
+          <p>this has text</p>
+        </div>
+      </CharacterMarkerBarOverlay>,
+    );
+
+    expect(barContainer().style.top).toBe('300px');
+  });
+
+  it('prefers a marked paragraph to an earlier unmarked block before a caret', () => {
+    stubRects(120, 300);
+    render(
+      <CharacterMarkerBarOverlay bar={<button type="button">bd</button>}>
+        <div className="editor-input usfm">
+          <p>this has text</p>
+          <p className="para usfm_p">The LORD is my shepherd</p>
+        </div>
+      </CharacterMarkerBarOverlay>,
+    );
+
+    expect(barContainer().style.top).toBe('120px');
+  });
+
   it('repositions when the editor resizes', async () => {
     renderOverlay();
     await putCaretInParagraph();
