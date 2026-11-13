@@ -19,9 +19,9 @@
  *   chapter marker. A restore there puts the caret back at the end of the text the user was typing.
  *   Anywhere in the new marker would be worse than no caret: keys typed there become part of the
  *   chapter number, and the next repair corrects them straight back out, silently. The test runs as
- *   far as the toast that tells the user; the caret and save checks after it wait for PT-5059,
- *   since a correction that repeats while the user types can leave the caret on the chapter line,
- *   and those checks are not shown to avoid that.
+ *   far as the toast that tells the user, which PT-5059 is not shown to hit; the caret and save
+ *   checks after it wait for that fix, since a correction that repeats while the user types can
+ *   leave the caret on the chapter line.
  * - A chapter line whose bytes stop being a chapter marker, which Paratext 9 keeps as they are: it
  *   saves the bytes it holds and puts a chapter marker back above them. So the editor saves what
  *   the user left on the line as text, the repair restores the marker at the top of the chapter,
@@ -33,8 +33,8 @@
  *   put it); and selecting from the chapter line into the paragraph below and typing over it merges
  *   the two, so the paragraph moves below the restored marker with the caret still after the
  *   typing. That last case waits for PT-5059 too: the test runs the first four edits, then stops
- *   itself before the typing-over-a-selection step, which is not shown to avoid the same caret
- *   problem.
+ *   itself before the typing-over-a-selection step. PT-5059 is not shown to hit those four edits,
+ *   but it can leave the caret outside the typed line in this one.
  *
  * Each test() launches its own Electron instance, and each edits the project's USFM on disk in a
  * way the next could not start from: the first rewrites Ruth 2, the second cuts Jonah back to its

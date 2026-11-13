@@ -165,15 +165,15 @@ const BUNDLED_WEB_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
 const INSTALLED_WEB_FOLDER = 'WEB';
 
 // The editor's save debounce (EDITOR_SAVE_DEBOUNCE_MS, read from the editor's own source) is the
-// only deliberate delay between an edit (or a load) and the write it causes, so a step's own save lands
-// at least this long after the step begins — unless something other than the debounce sends it
-// sooner: the editor saves at once when a write's echo comes back while it holds newer edits, and
-// flushes a pending save on a window blur, a chapter switch or an incoming update about to replace
-// the text. A write that lands sooner is therefore taken as the step's save only when no other
-// write to the file follows it in the step ({@link describeUnaskedWrites}). The cutoff is
-// approximate to within one recorder poll ({@link RECORDER_POLL_MS}): a write is timed by the sample
-// that saw it, so one that landed just under the debounce can be timed just over it — the lenient
-// side, so it cannot cause a false failure.
+// only deliberate delay between an edit (or a load) and the write it causes, so a step's own save
+// lands at least this long after the step begins — unless something other than the debounce sends
+// it sooner: the editor saves at once when a write's echo comes back while it holds newer edits,
+// and flushes a pending save on a window blur, a chapter switch or an incoming update about to
+// replace the text. A write that lands sooner is therefore taken as the step's save only when no
+// other write to the file follows it in the step (describeUnaskedWrites). The cutoff is
+// approximate to within one recorder poll (RECORDER_POLL_MS): a write is timed by the sample that
+// saw it, so one that landed just under the debounce can be timed just over it — the lenient side,
+// so it cannot cause a false failure.
 
 /**
  * One round trip between the editor and the .NET backend on a loaded machine, about half a second:
