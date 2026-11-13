@@ -35,7 +35,10 @@ test.use({
 
 const FOOTNOTES_PANE_SELECTOR = '[data-footnotes-pane]';
 
-/** The tab title's suffix for an editable text (`%webView_platformScriptureEditor_title_format_2%`). */
+/**
+ * The tab title's suffix for an editable text
+ * (`%webView_platformScriptureEditor_title_editable_indicator%`).
+ */
 const EDITABLE_TITLE = '(Editable)';
 
 /** The tab title's suffix for a read-only text, Preview in Power among them. */
