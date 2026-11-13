@@ -57,9 +57,8 @@ test.describe('scripture editor default view', () => {
   test('a first-open editor keeps the formatted view in simple mode', async ({ mainPage }) => {
     // Heavy isolated test: it launches its own Electron instance, installs the bundled sample
     // project into a fresh root, opens the editor, and polls several backend-readiness gates. A cold
-    // first run measured ~84s against the default 120s budget (~70%), so a colder or
-    // memory-pressured machine could spuriously time out before the calibrated per-step timeouts
-    // fire. Give it Playwright's 3x "slow" budget for headroom (a passing run still exits in seconds).
+    // first run takes a large share of the default 120s budget, so a colder or memory-pressured
+    // machine could spuriously time out before the calibrated per-step timeouts fire. Give it Playwright's 3x "slow" budget for headroom (a passing run still exits in seconds).
     test.slow();
     // This is a Simple-mode spec, so the onboarding tour opens on its own; suppress it before its
     // full-screen overlay can intercept the BCV trigger click below.

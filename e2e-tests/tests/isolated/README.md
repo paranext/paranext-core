@@ -61,7 +61,7 @@ run").
 - `content-zoom-tools/` (one Electron per test) — content zoom in Find, the inventories and Checks
 - `docking/` (one Electron per test) — tests for dropping dragged tabs onto a tab bar's empty space, for tab-row stability while a drag starts, for closing a tab with a middle click on its header, and for Simple mode never docking, merging or moving anything by a drag
 - `find/` (one Electron per worker) — tests for the find/replace flow
-- `first-run/` (one Electron per test) — tests for the first-run wizard (PT-4175 / PT-4179)
+- `first-run/` (one Electron per test) — tests for the first-run wizard
 - `menu-dismissal/` (one Electron per worker) — menus closing when a click lands in another frame
 - `multi-window/` (one Electron per test, except `window-layout-persistence.spec.ts` and two tests
   in `window-close-rule.spec.ts`, which use no fixture and call `launchElectronApp` themselves —

@@ -15,9 +15,8 @@
  * that lands on whatever holds focus, including inside an iframe, so it reaches that listener — see
  * `marker-palette-typed-commit.spec.ts` for the same in-iframe CDP precedent. The handler picks the
  * area from the caret's position. The rule that the area the user last pointed at wins after the
- * view itself moves the caret in answer to a pointer gesture is unit-tested in
- * `web-view-content-zoom.bootstrap-script.test.ts`; the steps below cover the clicks that reach
- * it.
+ * view itself moves focus in answer to a pointer gesture is not driven here; it is unit-tested in
+ * `web-view-content-zoom.bootstrap-script.test.ts`.
  *
  * The sub-scenarios below are test.step()s sharing one Electron instance rather than separate
  * test()s, because each test() launches its own instance and the scenarios start from the same
@@ -375,9 +374,10 @@ test.describe('scripture editor content zoom', () => {
       // Click the caller inside a REAL footnote row (`.note-caller`, `footnote-item.component.tsx`),
       // not empty pane background: the pointerdown listener resolves the clicked element's closest
       // marked ancestor, and only an actual descendant of the footnotes ContentZoomRoot is
-      // guaranteed to register as the click target under a CSS-zoomed layout. Selecting a row also
-      // sends the caret back into the editor text (`selectNote`), so this click is exactly the case
-      // where the pointer and the resulting focus name different areas and the pointer has to win.
+      // guaranteed to register as the click target under a CSS-zoomed layout. The click bubbles to the
+      // row's `onClick` (`handleFootnoteClick`), which in this editable Power view opens the row
+      // editor and keeps focus in the pane, so the pointer and the focus both name the footnotes
+      // area.
       await editorFrame.locator('.note-caller').first().click({ force: true });
       // Wait for the click's effect (the bootstrap's active-area tracking crosses a realm boundary
       // to reach the renderer's resolver) rather than assuming it lands within the click's own tick.
