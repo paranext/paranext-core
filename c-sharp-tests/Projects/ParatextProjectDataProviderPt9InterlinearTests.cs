@@ -998,6 +998,32 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
 
     [Test]
     [Description(
+        "A non-interlinear file a user left inside an Interlinear_* directory (e.g. an exported "
+            + "wordlist) is neither listed nor parsed, so it cannot fail the read."
+    )]
+    public void GetPt9InterlinearData_IgnoresForeignFileInsideAnInterlinearDirectory()
+    {
+        const string foreignPath = "Interlinear_en/lele wordlist paratext.xml";
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+        WriteProjectFile(
+            foreignPath,
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<wordlist>\n  <item word=\"a\" count=\"1\" />\n</wordlist>"
+        );
+
+        var data = _provider.GetPt9InterlinearData();
+
+        Assert.That(
+            data.Books.Select(book => book.FilePath),
+            Is.EqualTo(new[] { "Interlinear_en/Interlinear_en_JAS.xml" })
+        );
+        Assert.That(
+            _provider.GetPt9InterlinearManifest().Files.Keys,
+            Does.Not.Contain(foreignPath)
+        );
+    }
+
+    [Test]
+    [Description(
         "A Send/Receive merge can leave a root-level twin beside the canonical file; both are "
             + "served, distinguished by path, and only the canonical one is marked as the file "
             + "PT9 reads."
