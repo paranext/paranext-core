@@ -166,7 +166,7 @@ describe('isDataProviderRunning', () => {
   it('finds the data provider a dev build starts through dotnet', () => {
     expect(
       isDataProviderRunning(
-        'dotnet exec /home/tester/paranext-core/c-sharp/bin/Debug/net8.0/ParanextDataProvider.dll\n',
+        'dotnet exec /home/tester/paranext-core/c-sharp/bin/Debug/net10.0/ParanextDataProvider.dll\n',
       ),
     ).toBe(true);
   });

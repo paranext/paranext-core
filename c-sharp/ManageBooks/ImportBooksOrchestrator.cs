@@ -297,7 +297,7 @@ public static class ImportBooksOrchestrator
         try
         {
             // XXE-safe: explicitly disable external entity resolution.
-            // Defense-in-depth — .NET 8's default for XmlDocument is already
+            // Defense-in-depth — .NET's default for XmlDocument is already
             // XmlResolver=null, but the explicit assignment makes the safety
             // posture self-documenting and survives future .NET upgrades that
             // might flip the default. USX content comes from user-supplied
