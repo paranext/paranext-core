@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { PlatformDockLayout } from '@renderer/components/docking/platform-dock-layout.component';
 import { TestContext } from '@renderer/context/papi-context/test.context';
-import { Route, MemoryRouter as Router, Routes } from 'react-router-dom';
 import './app.component.scss';
 // PT-3920: emit Tailwind `tw:` utilities from core's own source. See src/renderer/styles/tailwind.css.
 import './styles/tailwind.css';
@@ -50,13 +49,7 @@ function Main() {
 }
 
 export function App() {
-  return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Main />} />
-      </Routes>
-    </Router>
-  );
+  return <Main />;
 }
 
 export default App;

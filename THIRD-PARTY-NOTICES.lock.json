@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "36c7dcf246f537c6cc00e45b9ecaf8ad377efc85c7a24e7d83970752d1fc1ff3",
+  "documentSha256": "ac24aabfc5ebfbf363cb25f9295a874add2ff465d47c3e17b847b78d8e3bcafe",
   "packages": [
     {
       "ecosystem": "npm",
@@ -746,15 +746,6 @@
     },
     {
       "ecosystem": "npm",
-      "name": "@remix-run/router",
-      "version": "1.23.3",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE.md",
-      "textSha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49"
-    },
-    {
-      "ecosystem": "npm",
       "name": "@sillsdev/scripture",
       "version": "2.1.0",
       "spdxId": "MIT",
@@ -1035,7 +1026,7 @@
     {
       "ecosystem": "npm",
       "name": "dompurify",
-      "version": "3.4.12",
+      "version": "3.4.17",
       "spdxId": "Apache-2.0",
       "confidence": 100,
       "matchedFile": "LICENSE",
@@ -1125,7 +1116,7 @@
     {
       "ecosystem": "npm",
       "name": "fast-uri",
-      "version": "3.1.4",
+      "version": "3.1.9",
       "spdxId": "BSD-3-Clause",
       "confidence": 0,
       "matchedFile": "LICENSE",
@@ -1669,24 +1660,6 @@
       "confidence": 100,
       "matchedFile": "LICENSE",
       "textSha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "react-router",
-      "version": "6.30.4",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE.md",
-      "textSha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "react-router-dom",
-      "version": "6.30.4",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE.md",
-      "textSha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49"
     },
     {
       "ecosystem": "npm",
