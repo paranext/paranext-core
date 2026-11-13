@@ -260,7 +260,8 @@ off, Power's Standard view), `no-unasked-edits-invisible-characters-on-simple-pa
 independently; the product has view-specific paths, so a combination that is not run is not covered
 by the ones that are. `no-unasked-edits-invisible-characters-on-simple-paragraph-structure.spec.ts`
 is switched off until PT-5055 is fixed, and no spec runs Simple's paragraph-structure view with the
-setting off, so that view has no in-app run with the setting on or off until PT-5055 is fixed. The WEB has none of these characters, so each spec seeds Jonah 3:5–6 (and a second U+FEFF in 4:1) before the app starts
+setting off, so Simple's paragraph-structure view has no in-app run with the setting off, and none with
+it on until PT-5055 is fixed. The WEB has none of these characters, so each spec seeds Jonah 3:5–6 (and a second U+FEFF in 4:1) before the app starts
 (and, for `on`, `<AllowInvisibleChars>T</AllowInvisibleChars>` in `Settings.xml`): a no-break space
 (`~` off, U+00A0 on), a `~` (a literal tilde when on), U+200B, U+200C, U+200D, U+2060, U+202F,
 U+2009, U+2002, U+2003, U+200A, U+3000, U+200E, U+200F, U+00AD and U+FEFF, each between two
@@ -277,9 +278,8 @@ space as `~` off and U+00A0 on — EV-5), never the U+001A stand-in in either fl
 assertion was shown red with a deliberate break. The three differences from Paratext 9 these specs
 found on 2026-10-29 (a typed U+00A0 in paragraph-structure, U+FEFF, and the paragraph-structure
 copy) were ruled the same day to match Paratext 9 and fixed (T-4, EV-4, EV-5), a stored U+FEFF on
-2026-10-30. As of 2026-10-30, with those expectations, the two Power Standard specs pass and the
-Simple paragraph-structure spec is switched off (PT-5055); so do the five other
-no-unasked-edits specs; no loss found.
+2026-10-30. With those expectations the two Power Standard specs run and the Simple
+paragraph-structure spec is switched off (PT-5055). No loss found as of 2026-10-30.
 
 | ID | View(s) | Finding | Status |
 | --- | --- | --- | --- |
