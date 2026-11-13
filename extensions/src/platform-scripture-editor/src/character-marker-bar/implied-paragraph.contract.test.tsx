@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
-// Verses outside any paragraph marker are an "implied paragraph" in the Scripture editor: a bare
-// `<p>` with no USFM class, whose block marker the editor reports through `onStateChange`. Both
-// halves belong to `@eten-tech-foundation/platform-editor`, not to this repo, and every other test of
-// the character-marker bar builds that DOM and that state by hand. So this renders the REAL editor
-// and checks the two things the bar and its menu rely on: the bar can anchor to the block holding
-// the caret, and the editor reports `p` for it so the menu offers body-text character markers.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Renders the REAL editor with verses outside any paragraph marker (an "implied paragraph", a bare
+// `<p>`), because the other character-marker bar tests build that DOM and the editor's state by
+// hand. Checks what the bar and its menu rely on: the bar can anchor to the block holding the
+// caret, and the editor reports `p` for it so the menu offers body-text character markers.
+import { describe, expect, it, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
 import { Editorial } from '@eten-tech-foundation/platform-editor';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -21,22 +19,6 @@ const impliedParagraphUsj: Usj = {
     'this has text',
   ],
 };
-
-// jsdom lays nothing out, so every element reports no client rects. Give every element one, as a
-// browser does for anything with a layout box.
-const realGetClientRects = Element.prototype.getClientRects;
-beforeEach(() => {
-  Object.defineProperty(Element.prototype, 'getClientRects', {
-    configurable: true,
-    value: () => [new DOMRect()],
-  });
-});
-afterEach(() => {
-  Object.defineProperty(Element.prototype, 'getClientRects', {
-    configurable: true,
-    value: realGetClientRects,
-  });
-});
 
 // jsdom does not implement Range.prototype.getBoundingClientRect, which `resolveActiveLineRect`
 // calls. A real browser returns an all-zero DOMRect for a Range with no client rects, so this

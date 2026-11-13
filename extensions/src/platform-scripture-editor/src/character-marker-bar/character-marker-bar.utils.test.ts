@@ -109,6 +109,13 @@ describe('resolveActiveLineRect', () => {
     return selection;
   };
 
+  /** The element's first child — the text node every fixture here puts the caret in. */
+  const firstChildOf = (element: Element): Node => {
+    const { firstChild } = element;
+    if (!firstChild) throw new Error('expected a text node');
+    return firstChild;
+  };
+
   it('returns undefined when there is no selection', () => {
     const { editorRoot } = buildEditor();
     expect(resolveActiveLineRect(undefined, editorRoot)).toBeUndefined();
@@ -119,10 +126,7 @@ describe('resolveActiveLineRect', () => {
     const outside = document.createElement('p');
     outside.textContent = 'in a sibling panel';
     document.body.appendChild(outside);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = outside.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(outside);
     expect(resolveActiveLineRect(selectionAt(textNode, 3), editorRoot)).toBeUndefined();
   });
 
@@ -142,10 +146,7 @@ describe('resolveActiveLineRect', () => {
     const paraRect = makeRect(42, 200);
     para.getBoundingClientRect = () => paraRect;
     vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue(caretRect);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = para.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(para);
 
     // Identity, not field equality: `toBe` cannot pass by coincidence of matching numbers.
     expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)?.rect).toBe(caretRect);
@@ -161,10 +162,7 @@ describe('resolveActiveLineRect', () => {
     body.className = 'para usfm_p';
     body.textContent = 'I shall not want';
     editorRoot.appendChild(body);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = body.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(body);
 
     // Identity: it must be the very element the caret is in, not merely one that looks like it.
     expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(body);
@@ -176,10 +174,7 @@ describe('resolveActiveLineRect', () => {
     const { editorRoot, para } = buildEditor();
     const paraRect = makeRect(42, 60);
     para.getBoundingClientRect = () => paraRect;
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = para.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(para);
     expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)?.rect).toBe(paraRect);
   });
 
@@ -194,10 +189,7 @@ describe('resolveActiveLineRect', () => {
     const impliedPara = document.createElement('p');
     impliedPara.textContent = 'this has text';
     editorRoot.appendChild(impliedPara);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = impliedPara.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(impliedPara);
 
     expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(impliedPara);
   });
@@ -208,10 +200,7 @@ describe('resolveActiveLineRect', () => {
     bookLine.className = 'book usfm_id';
     bookLine.textContent = 'JDT';
     editorRoot.prepend(bookLine);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = bookLine.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(bookLine);
 
     expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(bookLine);
   });
@@ -223,10 +212,7 @@ describe('resolveActiveLineRect', () => {
     characterMarker.className = 'char usfm_nd';
     characterMarker.textContent = 'Lord';
     para.appendChild(characterMarker);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = characterMarker.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(characterMarker);
 
     expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(para);
   });
