@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const JSON5 = require('json5');
+const { stapleWithRetry } = require('./staple-with-retry');
 
 const build = JSON5.parse(fs.readFileSync('./electron-builder.json5', 'utf8'));
 
@@ -220,9 +221,16 @@ exports.default = async function notarizeMacos(context) {
       appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
       teamId: process.env.APPLE_TEAM_ID,
     });
-    console.log('Notarization completed successfully');
   } catch (error) {
-    console.error(`Notarization failed: ${error.message}`);
-    throw error;
+    // `notarize` staples only after notarytool has accepted the app, so this failure leaves a
+    // notarized app that lacks only its stapled ticket. Retry the staple alone, for longer than
+    // `notarize`'s own retries last.
+    if (!error.message.startsWith('Failed to staple')) {
+      console.error(`Notarization failed: ${error.message}`);
+      throw error;
+    }
+    console.warn(`Notarization was accepted, but stapling its ticket failed: ${error.message}`);
+    await stapleWithRetry(appPath);
   }
+  console.log('Notarization completed successfully');
 };
