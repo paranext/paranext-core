@@ -26,7 +26,7 @@ on:
         default: false
       e2e_only:
         type: choice
-        description: 'PROTOTYPE ONLY: skip the builds and run only end-to-end jobs (core = the core set, full = every isolated spec over five runners)'
+        description: 'PROTOTYPE ONLY: skip the builds and run only end-to-end jobs (core = the core set, full = every isolated spec over eight runners)'
         options: ['no', 'core', 'full']
         required: false
         default: 'no'
@@ -587,14 +587,14 @@ jobs:
   # PROTOTYPE ONLY: the nightly run, startable from a branch (a workflow file that is not on main
   # yet cannot be started by hand). Remove before this goes into a pull request.
   e2e-full-prototype:
-    name: E2E full, part ${{ matrix.shard }} of 5
+    name: E2E full, part ${{ matrix.shard }} of 8
     if: ${{ inputs.e2e_only == 'full' }}
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     uses: ./.github/workflows/e2e-isolated.yml
     with:
-      shard: ${{ matrix.shard }}/5
+      shard: ${{ matrix.shard }}/8
       timeout_minutes: 90
       artifact_name: playwright-results-e2e-full-${{ matrix.shard }}

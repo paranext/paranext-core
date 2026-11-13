@@ -134,7 +134,7 @@ one of these.
   `e2e-tests/core-specs-editor.txt` when the pull request touches the Scripture editor extension,
   `dev-packages.json` or the C# USFM/USJ conversion code. To add or remove a spec, edit the list.
 - **Every night** (`.github/workflows/e2e-nightly.yml`, also startable by hand): every isolated
-  spec, split over five runners.
+  spec, split over eight runners.
 - Both run on Linux with **no retries** and keep a trace of each failing test in the run's
   `playwright-results-…` artifact. `e2e-core` reports without blocking: a failure shows as a
   warning on the run, not as a red check.
