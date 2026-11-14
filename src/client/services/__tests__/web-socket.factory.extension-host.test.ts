@@ -2,7 +2,6 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IncomingMessage } from 'http';
-import type { AddressInfo } from 'net';
 import { WebSocketServer } from 'ws';
 import type { IWebSocket } from '@client/services/web-socket.interface';
 import { PAPI_CLIENT_SECRET_HEADER, PAPI_SERVER_SECRET_HEADER } from '@shared/data/rpc.model';
@@ -28,9 +27,9 @@ async function startServer(replyServerSecret?: string) {
   await new Promise<void>((resolve) => {
     server.once('listening', () => resolve());
   });
-  // A bound `ws` server reports an AddressInfo
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const { port } = server.address() as AddressInfo;
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('The server did not bind a port');
+  const { port } = address;
   return { server, handshakes, url: `ws://localhost:${port}` };
 }
 
