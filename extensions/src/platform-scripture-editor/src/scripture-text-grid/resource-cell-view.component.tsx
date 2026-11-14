@@ -38,7 +38,11 @@ import {
   type MouseEvent,
   type Ref,
 } from 'react';
-import { buildAlignedZoomStyle, getContentZoomLevelValue } from './aligned-grid.styles';
+import {
+  buildAlignedZoomStyle,
+  getContentZoomLevelValue,
+  SCROLL_PORT_FOCUS_RING_CLASSES,
+} from './aligned-grid.styles';
 import { ResourceCellState } from './resource-cell.utils';
 import {
   BOOK_NOT_AVAILABLE_KEY,
@@ -655,6 +659,9 @@ export function ResourceCellView({
     contentOverflow === 'visible'
       ? 'tw:overflow-visible'
       : 'tw:overflow-auto tw:[overflow-anchor:none]';
+  // Only a cell that scrolls itself is a tab stop, so only it shows a focus ring.
+  const scrollPortFocusClass =
+    contentOverflow === 'auto' ? ` ${SCROLL_PORT_FOCUS_RING_CLASSES}` : '';
 
   // The verse row's name is sized to its own text, as in PT9, so line 1 starts right after it. The
   // float exclusion that holds line 1 back lives inside the zoomed editor, which CSS cannot size from
@@ -820,7 +827,15 @@ export function ResourceCellView({
           <div
             ref={setHeaderContentElement}
             data-cell-content
-            className={`tw:flex-1 ${contentOverflowClass}`}
+            // A cell that scrolls itself (a chapter column, the single-resource view, the verse
+            // view's chapter split) makes its scroller a tab stop (WCAG 2.1.1: a scroll container
+            // must be keyboard-reachable), which also lets a reveal or a click focus it so Arrow and
+            // Page keys scroll the text. The rule reads a tabIndex on a non-interactive element as
+            // a mistake; a focusable scroll container is the exception. In the aligned view the
+            // shared grid root is the scroller and carries the tab stop instead.
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+            tabIndex={contentOverflow === 'auto' ? 0 : undefined}
+            className={`tw:flex-1 ${contentOverflowClass}${scrollPortFocusClass}`}
             style={contentStyle}
             dir={textDirection}
           >

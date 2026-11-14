@@ -45,6 +45,8 @@ export type ResourceColumnProps = {
    */
   className: string;
   reorder?: ResourceColumnReorder;
+  /** Whether this column is the one a reveal brought into view, which shows the outline. */
+  isRevealed?: boolean;
   zoom?: ResourceZoomController;
   zoomMenuLabels?: ZoomMenuLabels;
 };
@@ -63,10 +65,22 @@ export function ResourceColumn({
   cellViewMode,
   className,
   reorder,
+  isRevealed,
   zoom,
   zoomMenuLabels,
 }: ResourceColumnProps) {
   const dropTargetRing = reorder?.isDropTarget ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : '';
+  // The drop-target ring wins when both apply. The reveal outline is drawn on an overlay rather than
+  // as an inset ring on this element: an inset ring paints beneath the column's children, and the
+  // editor area's opaque background (and, in the aligned view, the sticky header) covers it. The
+  // overlay ignores the pointer, and its z-index sits above the aligned header's `z-index: 1`. The
+  // ring is a box-shadow, which forced colors (Windows High Contrast) removes, so an outline in the
+  // system `Highlight` color stands in for it there, as `LIST_ITEM_KEYBOARD_FOCUS_RING` does.
+  const revealRing =
+    isRevealed && !reorder?.isDropTarget
+      ? ' tw:relative tw:after:pointer-events-none tw:after:absolute tw:after:inset-0 tw:after:z-2 tw:after:ring-2 tw:after:ring-inset tw:after:ring-ring' +
+        ' tw:forced-colors:after:outline-2 tw:forced-colors:after:outline-[color:Highlight] tw:forced-colors:after:-outline-offset-2'
+      : '';
   const zoomArea = resourceZoomAreaOf(resource.resourceId);
 
   return (
@@ -75,6 +89,10 @@ export function ResourceColumn({
       aria-label={resource.label}
       data-project-id={resource.projectId}
       data-resource-id={resource.resourceId}
+      // Spelled out because JSX cannot take a computed attribute name without spreading; this is the
+      // value of TEXT_COLLECTION_CELL_ATTRIBUTE, which the reveal lookup searches for.
+      data-text-collection-cell=""
+      data-revealed={isRevealed ? 'true' : undefined}
       // The header band and padding are unscaled, so a click or the wheel there has no marked
       // text to resolve its zoom area from; the scope names this resource's area for them.
       data-platform-content-zoom-scope={zoomArea}
@@ -84,7 +102,7 @@ export function ResourceColumn({
       // No onDragLeave — it fires on child elements; the parent clears on drop/dragEnd instead.
       onDragOver={reorder?.onDragOver}
       onDrop={reorder?.onDrop}
-      className={`${className}${dropTargetRing}`}
+      className={`${className}${dropTargetRing}${revealRing}`}
     >
       <ResourceCell
         resourceRef={resource}

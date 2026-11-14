@@ -512,8 +512,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Navigation',
     context:
       'Scripture editor, model text, Bible text, commentary, and Text Collection web views. ' +
-      'In Text Collection it searches the resource holding the caret; in the reference panels, the ' +
-      'displayed resource. Does nothing (logged) until a scripture is resolved.',
+      'In Text Collection it searches the resource last clicked, focused, or revealed by Find; ' +
+      'in the reference panels, the displayed resource. Does nothing (logged) until a scripture ' +
+      'is resolved.',
     // macOS intentionally uses ⌃F (not the usual ⌘F). One shared hook holds the handler; the next
     // entries are the web views that mount it, and the last is the command they invoke.
     keys: { macOS: '⌃F', windows: 'Ctrl+F', linux: 'Ctrl+F' },

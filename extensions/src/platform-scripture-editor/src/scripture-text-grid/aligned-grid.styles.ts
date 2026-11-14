@@ -10,6 +10,14 @@ import type { CSSProperties } from 'react';
 export const ALIGNED_GRID_CLASS = 'scripture-text-grid-aligned';
 
 /**
+ * Focus ring for a focusable scroll port: the aligned grid's root and a chapter column's scroller.
+ * `outline-hidden` rather than `outline-none`: the ring is a box-shadow, which forced colors
+ * (Windows High Contrast) removes, and `outline-hidden` leaves a real outline in that mode.
+ */
+export const SCROLL_PORT_FOCUS_RING_CLASSES =
+  'tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring';
+
+/**
  * Custom property carrying a column's zoom factor down to its verse blocks.
  *
  * In the other views the platform scales a resource by putting `zoom` on the element that marks its

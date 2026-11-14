@@ -138,8 +138,12 @@ const mockResourceCell = vi.fn(
         data-view-mode={viewMode}
         data-zoom-area={zoomArea}
       >
-        <span>{`${resourceRef.label}@${scrRef.verseNum}`}</span>
-        <span data-testid={`verse-text-${resourceRef.projectId}`}>verse text</span>
+        {/* Mirrors the real cell's content box: the chapter view's scroller is a tab stop, and the
+            aligned view's is not (its shared root scrolls). */}
+        <div data-cell-content tabIndex={viewMode === 'chapter' ? 0 : undefined}>
+          <span>{`${resourceRef.label}@${scrRef.verseNum}`}</span>
+          <span data-testid={`verse-text-${resourceRef.projectId}`}>verse text</span>
+        </div>
         {/* The real cell's header band, which is the reorder drag source — the column itself must
             not be draggable, or a click-drag over the text starts a reorder instead of selecting.
             The copyright indicator, which opens the portalled window, sits in it when there is one. */}
@@ -1577,7 +1581,8 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
     });
 
     expect(port).toHaveAttribute('tabindex', '0');
-    expect(port.className).toContain('tw:focus-visible:ring-2');
+    expect(port).toHaveClass('tw:focus-visible:outline-hidden', 'tw:focus-visible:ring-2');
+    expect(port).not.toHaveClass('tw:focus-visible:outline-none');
   });
 
   it('lays out one column per resource', () => {
@@ -1909,4 +1914,376 @@ describe('ScriptureTextGrid — drags inside a window portalled out of a cell', 
       expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
     },
   );
+});
+
+describe('ScriptureTextGrid — reveal a resource', () => {
+  const revealResources = [
+    { resourceId: 'r-1', projectId: 'P1', label: 'WEB' },
+    { resourceId: 'r-2', projectId: 'P2', label: 'KJV' },
+    { resourceId: 'r-3', projectId: 'P3', label: 'ASV' },
+  ];
+
+  type RevealProps = {
+    viewMode?: 'verse' | 'chapter' | 'aligned';
+    gridResources?: typeof revealResources;
+    revealRequest?: { projectId: string; requestId: number };
+    onRevealHandled?: (requestId: number) => void;
+    onRevealed?: (projectId: string) => void;
+    isViewVisible?: boolean;
+    getRevealAnnouncement?: (resourceName: string) => string;
+  };
+
+  function gridElement({
+    viewMode = 'verse',
+    gridResources = revealResources,
+    revealRequest,
+    onRevealHandled,
+    onRevealed,
+    isViewVisible = true,
+    getRevealAnnouncement,
+  }: RevealProps) {
+    return (
+      <ScriptureTextGrid
+        isViewVisible={isViewVisible}
+        getRevealAnnouncement={getRevealAnnouncement}
+        resources={gridResources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode={viewMode}
+        revealRequest={revealRequest}
+        onRevealHandled={onRevealHandled}
+        onRevealed={onRevealed}
+      />
+    );
+  }
+
+  /**
+   * Renders the grid with `props`, then hands it a reveal request for `projectId`, the way the web
+   * view does once the grid has settled.
+   */
+  function renderRevealed(props: RevealProps = {}, projectId = 'P2') {
+    const rendered = render(gridElement(props));
+    rendered.rerender(gridElement({ ...props, revealRequest: { projectId, requestId: 1 } }));
+    return rendered;
+  }
+
+  /** The element production marks as a resource's cell. */
+  function cellOf(projectId: string): HTMLElement {
+    const cell = document.querySelector<HTMLElement>(
+      `[data-text-collection-cell][data-project-id="${projectId}"]`,
+    );
+    if (!cell) throw new Error(`No cell rendered for project "${projectId}"`);
+    return cell;
+  }
+
+  let scrollSpy: ReturnType<typeof vi.spyOn>;
+  let focusSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+  });
+
+  afterEach(() => {
+    scrollSpy.mockRestore();
+    focusSpy.mockRestore();
+  });
+
+  it('scrolls the matching verse-list cell into view and focuses it without scrolling', () => {
+    const onRevealHandled = vi.fn();
+    const { rerender } = render(gridElement({ onRevealHandled }));
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    rerender(gridElement({ revealRequest: { projectId: 'P2', requestId: 1 }, onRevealHandled }));
+
+    const cell = cellOf('P2');
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
+    expect(scrollSpy.mock.contexts[0]).toBe(cell);
+    expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(document.activeElement).toBe(cell);
+    expect(onRevealHandled).toHaveBeenCalledWith(1);
+  });
+
+  it('outlines the revealed cell until focus leaves it', () => {
+    renderRevealed();
+
+    const cell = cellOf('P2');
+    expect(cell).toHaveAttribute('data-revealed', 'true');
+    expect(cell.className).toContain('tw:ring-ring');
+    // The ring is a box-shadow, which forced colors removes; an outline stands in for it there.
+    expect(cell).toHaveClass('tw:forced-colors:outline-2');
+
+    fireEvent.blur(cell);
+    expect(cell).not.toHaveAttribute('data-revealed');
+    expect(cell.className).not.toContain('tw:ring-ring');
+  });
+
+  it('keeps the outline while focus moves to something inside the cell', () => {
+    renderRevealed();
+
+    const cell = cellOf('P2');
+    fireEvent.blur(cell, { relatedTarget: within(cell).getByTestId('verse-text-P2') });
+    expect(cell).toHaveAttribute('data-revealed', 'true');
+  });
+
+  it('lets the drop-target ring win over the reveal ring', () => {
+    const { rerender } = render(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={revealResources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onReorder={vi.fn()}
+      />,
+    );
+    rerender(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={revealResources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onReorder={vi.fn()}
+        revealRequest={{ projectId: 'P2', requestId: 1 }}
+      />,
+    );
+    const [, target] = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    fireEvent.dragStart(screen.getAllByTestId('scripture-text-grid-cell-draggable')[0]);
+    fireEvent.dragOver(target);
+
+    expect(target.className).toContain('tw:ring-primary');
+    expect(target.className).not.toContain('tw:ring-ring');
+  });
+
+  it.each([
+    ['chapter', (column: HTMLElement) => column.querySelector('[data-cell-content]')],
+    ['aligned', () => screen.getByTestId('scripture-text-grid-aligned')],
+  ] as const)(
+    'scrolls to and outlines the column in the %s view and focuses its scroll area',
+    (viewMode, expectedFocus) => {
+      renderRevealed({ viewMode });
+
+      const column = cellOf('P2');
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(scrollSpy.mock.contexts[0]).toBe(column);
+      expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+      expect(column).toHaveAttribute('data-revealed', 'true');
+      // The column's editor area paints an opaque background over the column's own box, so the
+      // outline is drawn on an overlay above the content rather than as an inset ring beneath it.
+      expect(column.className).toContain('tw:after:ring-ring');
+      expect(column.className).not.toContain('tw:ring-ring');
+      // Forced colors removes the ring (a box-shadow), so the overlay draws an outline there too.
+      expect(column).toHaveClass('tw:forced-colors:after:outline-2');
+      // The column's root does not scroll, so focus goes to the element that does: the column's own
+      // scroller in the chapter view, the shared root in the aligned view.
+      expect(document.activeElement).not.toBe(column);
+      expect(column).not.toHaveAttribute('tabindex');
+      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+      expect(document.activeElement).toBe(expectedFocus(column));
+    },
+  );
+
+  it('clears the outline on the next pointerdown inside the grid in the chapter view', () => {
+    renderRevealed({ viewMode: 'chapter' });
+
+    const column = cellOf('P2');
+    expect(column).toHaveAttribute('data-revealed', 'true');
+
+    fireEvent.pointerDown(within(cellOf('P1')).getByTestId('verse-text-P1'));
+    expect(column).not.toHaveAttribute('data-revealed');
+    expect(column.className).not.toContain('ring-ring');
+  });
+
+  it('clears the outline on the next pointerdown inside the grid in the verse view', () => {
+    renderRevealed();
+
+    const cell = cellOf('P2');
+    expect(cell).toHaveAttribute('data-revealed', 'true');
+
+    fireEvent.pointerDown(within(cellOf('P1')).getByTestId('verse-text-P1'));
+    expect(cell).not.toHaveAttribute('data-revealed');
+    expect(cell.className).not.toContain('tw:ring-ring');
+  });
+
+  it('clears the outline on a pointerdown after the view mode changes to aligned', () => {
+    const { rerender } = renderRevealed();
+    expect(cellOf('P2')).toHaveAttribute('data-revealed', 'true');
+
+    rerender(
+      gridElement({ viewMode: 'aligned', revealRequest: { projectId: 'P2', requestId: 1 } }),
+    );
+    const column = cellOf('P2');
+    expect(column).toHaveAttribute('data-revealed', 'true');
+    fireEvent.pointerDown(within(cellOf('P1')).getByTestId('verse-text-P1'));
+    expect(column).not.toHaveAttribute('data-revealed');
+  });
+
+  it('clears the outline on a key press inside the grid in the chapter view', () => {
+    renderRevealed({ viewMode: 'chapter' });
+    const column = cellOf('P2');
+    expect(column).toHaveAttribute('data-revealed', 'true');
+
+    fireEvent.keyDown(within(cellOf('P1')).getByTestId('verse-text-P1'), { key: 'ArrowDown' });
+    expect(column).not.toHaveAttribute('data-revealed');
+  });
+
+  it('clears the outline on a key press while focus is outside the grid, as in the chrome', () => {
+    renderRevealed({ viewMode: 'chapter' });
+    const column = cellOf('P2');
+    expect(column).toHaveAttribute('data-revealed', 'true');
+
+    // Focus can sit outside the grid (restored to the web view's chrome, for example), so a key
+    // press there reaches the document rather than the grid.
+    fireEvent.keyDown(document.body, { key: 'ArrowDown' });
+    expect(column).not.toHaveAttribute('data-revealed');
+  });
+
+  it('clears the outline on a key press inside the grid in the verse view', () => {
+    renderRevealed();
+    const cell = cellOf('P2');
+    expect(cell).toHaveAttribute('data-revealed', 'true');
+
+    fireEvent.keyDown(within(cellOf('P1')).getByTestId('verse-text-P1'), { key: 'ArrowDown' });
+    expect(cell).not.toHaveAttribute('data-revealed');
+  });
+
+  it('clears the outline when the view becomes hidden', () => {
+    const { rerender } = renderRevealed();
+    expect(cellOf('P2')).toHaveAttribute('data-revealed', 'true');
+
+    rerender(
+      gridElement({ revealRequest: { projectId: 'P2', requestId: 1 }, isViewVisible: false }),
+    );
+    expect(cellOf('P2')).not.toHaveAttribute('data-revealed');
+  });
+
+  it('outlines a reveal that arrives as the view becomes visible', () => {
+    const { rerender } = render(gridElement({ isViewVisible: false }));
+    rerender(
+      gridElement({ revealRequest: { projectId: 'P2', requestId: 1 }, isViewVisible: true }),
+    );
+    expect(cellOf('P2')).toHaveAttribute('data-revealed', 'true');
+  });
+
+  it('keeps the outline on a modifier-only key press and clears it on a normal key', () => {
+    renderRevealed();
+    const target = within(cellOf('P1')).getByTestId('verse-text-P1');
+
+    ['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock'].forEach((key) =>
+      fireEvent.keyDown(target, { key }),
+    );
+    expect(cellOf('P2')).toHaveAttribute('data-revealed', 'true');
+
+    fireEvent.keyDown(target, { key: 'ArrowDown' });
+    expect(cellOf('P2')).not.toHaveAttribute('data-revealed');
+  });
+
+  it('does not outline a resource that was removed and then added back', () => {
+    const request = { projectId: 'P2', requestId: 1 };
+    const withoutP2 = revealResources.filter((resource) => resource.projectId !== 'P2');
+    const { rerender } = render(gridElement({}));
+    rerender(gridElement({ revealRequest: request }));
+    expect(cellOf('P2')).toHaveAttribute('data-revealed', 'true');
+
+    rerender(gridElement({ revealRequest: request, gridResources: withoutP2 }));
+    rerender(gridElement({ revealRequest: request }));
+    expect(cellOf('P2')).not.toHaveAttribute('data-revealed');
+  });
+
+  it('keeps the outline across a rerender that leaves the view visible', () => {
+    const { rerender } = renderRevealed({ isViewVisible: true });
+    rerender(
+      gridElement({ revealRequest: { projectId: 'P2', requestId: 1 }, isViewVisible: true }),
+    );
+    expect(cellOf('P2')).toHaveAttribute('data-revealed', 'true');
+  });
+
+  describe('screen-reader announcement', () => {
+    const getRevealAnnouncement = (name: string) => `Showing the result in ${name}`;
+
+    it('announces an aligned reveal, whose focus lands on the shared root, through the live region', () => {
+      renderRevealed({ viewMode: 'aligned', getRevealAnnouncement });
+      expect(screen.getByRole('status')).toHaveTextContent('Showing the result in KJV');
+    });
+
+    it("announces nothing for a chapter reveal, whose focus lands inside the column's named region", () => {
+      renderRevealed({ viewMode: 'chapter', getRevealAnnouncement });
+      expect(cellOf('P2')).toHaveAttribute('data-revealed', 'true');
+      expect(screen.getByRole('status')).toHaveTextContent('');
+    });
+
+    it('announces nothing for a verse-list reveal, whose focused row is read instead', () => {
+      renderRevealed({ getRevealAnnouncement });
+      expect(screen.getByRole('status')).toHaveTextContent('');
+    });
+
+    it('inserts a new live-region node when the same resource is revealed again', () => {
+      const { rerender } = renderRevealed({ viewMode: 'aligned', getRevealAnnouncement });
+      const firstNode = screen.getByText('Showing the result in KJV');
+      rerender(
+        gridElement({
+          viewMode: 'aligned',
+          getRevealAnnouncement,
+          revealRequest: { projectId: 'P2', requestId: 2 },
+        }),
+      );
+      const secondNode = screen.getByText('Showing the result in KJV');
+      // A live region reads inserted nodes, not unchanged text, so the repeat must be a new node.
+      expect(secondNode).not.toBe(firstNode);
+      expect(firstNode.isConnected).toBe(false);
+    });
+  });
+
+  it('does nothing for a resource that is not shown', () => {
+    const onRevealHandled = vi.fn();
+    const { rerender } = render(gridElement({ onRevealHandled }));
+    const focusedBefore = document.activeElement;
+
+    rerender(gridElement({ revealRequest: { projectId: 'NOPE', requestId: 1 }, onRevealHandled }));
+
+    expect(scrollSpy).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(focusedBefore);
+    expect(onRevealHandled).toHaveBeenCalledWith(1);
+  });
+
+  it('reports the revealed project, which focus on the aligned root cannot name', () => {
+    const onRevealed = vi.fn();
+    const { rerender } = renderRevealed({ viewMode: 'aligned', onRevealed }, 'p2');
+    // The cell's own spelling of the id, which is what the displayed-project list holds.
+    expect(onRevealed).toHaveBeenCalledWith('P2');
+
+    onRevealed.mockClear();
+    rerender(
+      gridElement({
+        viewMode: 'aligned',
+        onRevealed,
+        revealRequest: { projectId: 'NOPE', requestId: 2 },
+      }),
+    );
+    expect(onRevealed).not.toHaveBeenCalled();
+  });
+
+  it('does nothing in the single-resource layout', () => {
+    const onRevealHandled = vi.fn();
+    const [only] = revealResources;
+    renderRevealed({ gridResources: [only], onRevealHandled }, 'P1');
+
+    expect(scrollSpy).not.toHaveBeenCalled();
+    expect(onRevealHandled).toHaveBeenCalledWith(1);
+  });
+
+  it('reports each attempt so the owner can clear the request, and reveals nothing without one', () => {
+    const onRevealHandled = vi.fn();
+    const first = render(
+      gridElement({ revealRequest: { projectId: 'P2', requestId: 7 }, onRevealHandled }),
+    );
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
+    expect(onRevealHandled).toHaveBeenCalledWith(7);
+    first.unmount();
+    scrollSpy.mockClear();
+
+    // The owner cleared the request after it was handled, so a fresh mount receives none.
+    render(gridElement({ revealRequest: undefined, onRevealHandled }));
+    expect(scrollSpy).not.toHaveBeenCalled();
+  });
 });
