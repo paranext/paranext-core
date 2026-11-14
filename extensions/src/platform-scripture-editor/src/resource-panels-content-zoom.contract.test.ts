@@ -92,7 +92,7 @@ describe('content zoom markers (Text Collection grid)', () => {
       /<div ref={copyAreaRef} className={`stg-verse-content tw:min-w-0 tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle} ?> <ContentZoomRoot area={zoomArea}/,
     );
     expect(cell).toMatch(
-      /<div ref={setHeaderContentElement} data-cell-content className={`tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle}/,
+      /<div ref={setHeaderContentElement} data-cell-content [^>]*?className={`tw:flex-1 \$\{contentOverflowClass\}[^`]*`} style={contentStyle}/,
     );
     expect(cell).toContain(
       '<div data-cell-pad className="tw:p-2"> <ContentZoomRoot area={zoomArea}',

@@ -33,8 +33,7 @@ import modelTextPanelWebViewStyles from './model-text-panel.web-view.scss?inline
 import modelTextPanelWebView from './model-text-panel.web-view?inline';
 import resourceTextPanelWebViewStyles from './resource-text-panel.web-view.scss?inline';
 import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
-import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
-import scriptureTextGridWebViewStyles from './scripture-text-grid.web-view.scss?inline';
+import { ScriptureTextGridWebViewFactory } from './scripture-text-grid-web-view.factory';
 import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
@@ -47,8 +46,6 @@ import {
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-  buildScriptureTextGridWebView,
-  type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
   showsReadOnlyPreview,
   startDefaultProjectPicker,
@@ -1052,18 +1049,6 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
  */
 const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 
-const scriptureTextGridWebViewProvider: IWebViewProvider = {
-  async getWebView(
-    savedWebView: SavedWebViewDefinition,
-    openWebViewOptions: TextCollectionPanelOptions,
-  ): Promise<WebViewDefinition | undefined> {
-    return buildScriptureTextGridWebView(papi, savedWebView, openWebViewOptions, {
-      content: scriptureTextGridWebView,
-      styles: scriptureTextGridWebViewStyles,
-    });
-  },
-};
-
 /**
  * Creates a resource panel web view provider that injects the given resourceType into web view
  * state so the shared component can filter resources appropriately. Exported for its tests.
@@ -1820,7 +1805,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const scriptureTextGridRegistration = (await isScriptureTextGridEnabledPromise)
     ? await papi.webViewProviders.registerWebViewProvider(
         SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-        scriptureTextGridWebViewProvider,
+        new ScriptureTextGridWebViewFactory(),
       )
     : undefined;
 

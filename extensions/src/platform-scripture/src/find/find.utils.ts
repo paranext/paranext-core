@@ -644,12 +644,13 @@ export function prunePresentBookIds(
  *   tabs left at all.
  * - Returns `undefined` when no tabs are open anywhere.
  *
- * Wherever several tabs qualify, an EDITOR wins over a reference panel. Find drives results through
- * the Scripture editor's web view controller, and `resolveTargetEditorWebViewId` matches on
- * (project, scroll group) — so landing on a panel's group while the project also has an editor open
- * in another group leaves that resolver with no match, silently dropping the editor's select and
- * highlight. Panels became candidates here once the picker started listing resources shown only in
- * a reference panel, and they sort ahead of editors by default because they sit in group 0.
+ * Wherever several tabs qualify, an EDITOR wins over a reference panel or the Text Collection. Find
+ * drives results through the Scripture editor's web view controller, and
+ * `resolveTargetEditorWebViewId` matches on (project, scroll group) — so landing on a panel's group
+ * while the project also has an editor open in another group leaves that resolver with no match,
+ * silently dropping the editor's select and highlight. Panels became candidates here once the
+ * picker started listing resources shown only in a reference panel, and they sort ahead of editors
+ * by default because they sit in group 0.
  *
  * @param currentProjectId Find's current project id.
  * @param currentScrollGroupId The currently selected scroll group, or `undefined` before an initial
@@ -721,21 +722,22 @@ export function resolveSelectedProjectScrollGroup(
  * controller — the tab matching the selected `(project, scroll group)` pair, but ONLY when it is a
  * real Scripture editor.
  *
- * The read-only reference panels (model text, Bible texts, commentaries) are searchable and so are
- * listed in the project picker, but they register no web view controller. Handing one of their ids
- * to `useWebViewController(SCRIPTURE_EDITOR_WEBVIEW_TYPE, ...)` leaves it waiting on a controller
- * that never arrives (~20s, then an unhandled rejection) — the same trap `resolveFindInvocation`
- * avoids for the Ctrl+F path.
+ * The read-only reference panels (model text, Bible texts, commentaries) and the Text Collection
+ * are searchable and so are listed in the project picker, but they register no Scripture editor web
+ * view controller. Handing one of their ids to `useWebViewController(SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+ * ...)` leaves it waiting on a controller that never arrives (~20s, then an unhandled rejection) —
+ * the same trap `resolveFindInvocation` avoids for the Ctrl+F path.
  *
  * `undefined` is a correct, expected answer whenever the selected scripture is only open in a
- * reference panel: both result handlers navigate via `setVerseRefSetting` before consulting the
- * controller, so results still navigate — only the editor-side select/highlight is skipped, which
- * is right when no editor is showing that scripture.
+ * reference panel or the Text Collection: both result handlers navigate via `setVerseRefSetting`
+ * before consulting the controller, so results still navigate — only the editor-side
+ * select/highlight is skipped, which is right when no editor is showing that scripture.
  *
  * @param projectId Find's currently selected project id, or `undefined` when none is selected.
  * @param selectedScrollGroupId The selected scroll group, or `undefined` before an initial
  *   selection.
- * @param openTabs Currently open searchable tabs, editors and reference panels alike.
+ * @param openTabs Currently open searchable tabs, editors, reference panels and the Text Collection
+ *   alike.
  * @param scriptureEditorWebViewType The Scripture editor's web view type.
  * @returns The editor tab's web view id, or `undefined` when no editor tab matches.
  */
@@ -756,45 +758,95 @@ export function resolveTargetEditorWebViewId(
 }
 
 /**
- * Resolve which read-only reference panel tab is displaying the selected scripture, so a "go to
- * result" activation can bring that tab to the front.
+ * Resolve which open tab of the given types is displaying the selected scripture: the first tab
+ * whose type is in `webViewTypes` and whose project is `projectId`, in any scroll group.
  *
- * Used only when {@link resolveTargetEditorWebViewId} finds no editor: a project open in a real
- * editor is driven through the editor's web view controller, which also selects and highlights the
- * match. A reference panel exposes no controller, so activating its tab is the whole interaction —
- * a panel following Find's scroll group has already been moved by the write that precedes the
- * activation, so it renders the right place on its own once shown. A panel detached from every
- * scroll group is the exception: it ignores that write, and `useOpenProjectTabs` reports it as
- * group 0 regardless, so it can still be picked here and revealed at an unrelated reference.
+ * It only finds the tab; whether that tab is activated, and what else is asked of it, is the
+ * caller's choice (see {@link resolveGoToResultTarget}). A tab following a scroll group shows that
+ * group's reference. A tab detached from every scroll group does not, yet `useOpenProjectTabs`
+ * reports it as group 0 regardless, so it can still be returned here while showing an unrelated
+ * reference.
  *
  * Deliberately does NOT match on scroll group, unlike the editor resolver. That resolver's group
  * match picks _which_ of several editor tabs a result click drives; here the only action is
- * activating a tab showing this scripture, and the panel's own group membership is what moves its
+ * activating a tab showing this scripture, and the tab's own group membership is what moves its
  * content.
  *
- * When the same resource is open in more than one panel (Bible texts and Commentaries, or two
- * panels in Power mode), the first match wins. Tab order comes from `useOpenProjectTabs`' `Map`
- * iteration, so which panel is revealed is arbitrary — accepted deliberately, because every
- * candidate is showing the same resource at the same reference, so any of them is a correct
- * destination.
+ * When the same resource is open in more than one matching tab (Bible texts and Commentaries, or
+ * two panels in Power mode), the first match wins. Tab order comes from `useOpenProjectTabs`' `Map`
+ * iteration, so which tab is revealed is arbitrary — accepted deliberately, because every candidate
+ * is showing the same resource at the same reference, so any of them is a correct destination.
  *
  * @param projectId Find's currently selected project id, or `undefined` when none is selected.
- * @param openTabs Currently open searchable tabs, editors and reference panels alike.
- * @param referencePanelWebViewTypes The reference panel web view types.
- * @returns The reference panel tab's web view id, or `undefined` when no panel shows this project.
+ * @param openTabs Currently open searchable tabs, of every type.
+ * @param webViewTypes The web view types to match.
+ * @returns The matching tab's web view id, or `undefined` when no tab of those types shows this
+ *   project.
  */
-export function resolveTargetReferencePanelWebViewId(
+export function resolveTargetTabWebViewId(
   projectId: string | undefined,
   openTabs: readonly OpenProjectTabWithWebView[],
-  referencePanelWebViewTypes: ReadonlySet<string>,
+  webViewTypes: ReadonlySet<string>,
 ): string | undefined {
   if (!projectId) return undefined;
   const normalizedProjectId = normalizeProjectId(projectId);
   return openTabs.find(
     (tab) =>
-      referencePanelWebViewTypes.has(tab.webViewType) &&
+      webViewTypes.has(tab.webViewType) &&
       normalizeProjectId(tab.projectId) === normalizedProjectId,
   )?.webViewId;
+}
+
+/** Which tab a Find "go to result" activation drives, from {@link resolveGoToResultTarget}. */
+export type GoToResultTarget =
+  | { kind: 'editor'; webViewId: string }
+  | { kind: 'referencePanel'; webViewId: string }
+  | { kind: 'textCollection'; webViewId: string; projectId: string }
+  | { kind: 'none' };
+
+/**
+ * Chooses the tab a "go to result" activation (double-click or reference click) drives, in this
+ * order:
+ *
+ * 1. The Scripture editor showing the scripture, once its web view controller is ready. While it is
+ *    not, nothing is targeted, even if another tab shows the scripture too.
+ * 2. A revealable reference panel (Bible texts, Commentaries) showing it.
+ * 3. Nothing when only Model text shows it: never revealed, it already follows the scroll group.
+ * 4. The Text Collection, when it shows it and there is a project to reveal.
+ *
+ * @param targets The tabs Find resolved for the selected scripture: `targetEditorWebViewId` from
+ *   {@link resolveTargetEditorWebViewId}; `hasEditorController` whether that editor's controller is
+ *   available; `targetReferencePanelWebViewId` a revealable reference panel showing it;
+ *   `isShownInReferencePanel` whether any reference panel, Model text included, shows it;
+ *   `targetTextCollectionWebViewId` a Text Collection showing it; `projectId` the selected
+ *   project.
+ * @returns The target, or `{ kind: 'none' }` when the activation only moves the scroll group.
+ */
+export function resolveGoToResultTarget({
+  targetEditorWebViewId,
+  hasEditorController,
+  targetReferencePanelWebViewId,
+  isShownInReferencePanel,
+  targetTextCollectionWebViewId,
+  projectId,
+}: {
+  targetEditorWebViewId: string | undefined;
+  hasEditorController: boolean;
+  targetReferencePanelWebViewId: string | undefined;
+  isShownInReferencePanel: boolean;
+  targetTextCollectionWebViewId: string | undefined;
+  projectId: string | undefined;
+}): GoToResultTarget {
+  if (targetEditorWebViewId)
+    return hasEditorController
+      ? { kind: 'editor', webViewId: targetEditorWebViewId }
+      : { kind: 'none' };
+  if (targetReferencePanelWebViewId)
+    return { kind: 'referencePanel', webViewId: targetReferencePanelWebViewId };
+  if (isShownInReferencePanel) return { kind: 'none' };
+  if (targetTextCollectionWebViewId && projectId)
+    return { kind: 'textCollection', webViewId: targetTextCollectionWebViewId, projectId };
+  return { kind: 'none' };
 }
 
 /**

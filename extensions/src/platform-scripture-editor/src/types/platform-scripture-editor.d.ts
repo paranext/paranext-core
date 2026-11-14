@@ -207,6 +207,50 @@ declare module 'platform-scripture-editor' {
 
   // #endregion editor WebViewController messages
 
+  // #region Text Collection WebViewController
+
+  /** Asks the Text Collection to reveal one resource's cell. */
+  export type TextCollectionMessageRevealResource = {
+    method: 'revealResource';
+    /** The project whose cell to reveal */
+    projectId: string;
+  };
+
+  /**
+   * Messages sent to the Text Collection web view
+   *
+   * @experimental The set of Text Collection messages may expand.
+   */
+  export type TextCollectionWebViewMessage = TextCollectionMessageRevealResource;
+
+  /**
+   * Controller for a Text Collection web view (`platformScriptureEditor.scriptureTextGrid`)
+   *
+   * @experimental The set of Text Collection controller methods may expand.
+   */
+  export type TextCollectionWebViewController = NetworkableObject<{
+    /**
+     * Bring `projectId`'s cell into view and outline it until the next pointer press in the grid,
+     * key press, or reveal, or until the tab is hidden. Keyboard focus moves to the verse-view row,
+     * or to the scroll area holding the text in chapter and aligned views, and the resource is
+     * announced to screen readers when the focused element does not name it.
+     *
+     * The Text Collection holds the request until its tab is shown and its resources have loaded.
+     * It drops the request if the tab stays hidden for more than a few seconds or is hidden again
+     * before the resources load, so a tab shown later does not jump. It is a no-op when the
+     * resource is not shown, and when a single resource is shown in verse or chapter view, which
+     * has no cells to choose between.
+     *
+     * @param projectId The project whose cell to reveal. Matched without regard to case.
+     * @returns Resolves once the request is delivered, not once the cell is revealed, and does not
+     *   say whether a cell was found. Rejects (or, through a revoked proxy, throws) if the request
+     *   cannot be delivered, for example because the web view has closed.
+     */
+    revealResource(projectId: string): Promise<void>;
+  }>;
+
+  // #endregion Text Collection WebViewController
+
   // #region editor selection tracking
 
   /**
@@ -788,6 +832,7 @@ declare module 'papi-shared-types' {
     PlatformScriptureEditorWebViewController,
     SelectionChangeEvent,
     ShowResourceInReferencePanelResult,
+    TextCollectionWebViewController,
   } from 'platform-scripture-editor';
   import type { ResourceType } from 'platform-bible-utils';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -1157,5 +1202,6 @@ declare module 'papi-shared-types' {
 
   export interface WebViewControllers {
     'platformScriptureEditor.react': PlatformScriptureEditorWebViewController;
+    'platformScriptureEditor.scriptureTextGrid': TextCollectionWebViewController;
   }
 }

@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type React from 'react';
+import { Button } from 'platform-bible-react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
@@ -213,4 +215,71 @@ export const AlignedGridView: Story = {
       />
     </GridBox>
   ),
+};
+
+// ---------------------------------------------------------------------------
+// Reveal: scroll a resource's cell into view, focus it, and outline it
+// ---------------------------------------------------------------------------
+
+type RevealStoryProps = Pick<React.ComponentProps<typeof ScriptureTextGrid>, 'viewMode'>;
+
+/**
+ * Wraps the grid with a button that issues a reveal request for the second resource. The request
+ * only exists after a click: the docs page renders every story at once, and a request present at
+ * mount would scroll and focus that story's cell and drag the docs page to it. Each click carries a
+ * new `requestId`, so clicking again reveals again; a pointer press inside the grid or a
+ * non-modifier key press clears the outline.
+ */
+function RevealStory({ viewMode }: RevealStoryProps) {
+  const [requestId, setRequestId] = useState(0);
+  const target = resources[1];
+
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-2">
+      <div>
+        <Button variant="outline" onClick={() => setRequestId((previous) => previous + 1)}>
+          {`Go to result in ${target.label}`}
+        </Button>
+      </div>
+      <GridBox>
+        <ScriptureTextGrid
+          isViewVisible
+          resources={resources}
+          scrRef={scrRef}
+          setScrRef={noop}
+          ariaLabel="Text Collection"
+          viewMode={viewMode}
+          onChapterContextChange={noop}
+          revealRequest={requestId ? { projectId: target.projectId, requestId } : undefined}
+          onRevealHandled={noop}
+          onRevealed={noop}
+          getRevealAnnouncement={(name) => `Showing the result in ${name}`}
+        />
+      </GridBox>
+    </div>
+  );
+}
+
+/**
+ * The verse row after "Go to result": the KJV cell is scrolled into view, focused, and outlined.
+ * Click the button again to reveal again; press in the grid or type to clear the outline.
+ */
+export const RowRevealed: Story = {
+  render: () => <RevealStory viewMode="verse" />,
+};
+
+/**
+ * Chapter view after "Go to result": the KJV column is scrolled into view and outlined, with focus
+ * on its scroll area. Click the button again to reveal again.
+ */
+export const ChapterViewRevealed: Story = {
+  render: () => <RevealStory viewMode="chapter" />,
+};
+
+/**
+ * The aligned Grid view after "Go to result": the KJV column is outlined and the reveal is
+ * announced through a visually hidden live region, since focus lands on the grid's shared root.
+ */
+export const AlignedGridViewRevealed: Story = {
+  render: () => <RevealStory viewMode="aligned" />,
 };

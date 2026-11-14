@@ -3918,6 +3918,61 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `UsjSearchOptions.wordEdges` (`lib/platform-bible-utils/src/scripture/usj-reader-writer.model.ts`).
 - **Source:** PT-4969 (parent PT-4910). PT-3199 for searching with markers.
 
+## adr-find-reveals-text-collection-cell: Find activates the Text Collection and asks it to reveal the matching resource's cell
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** [adr-find-searchable-tabs](#adr-find-searchable-tabs) left the Text Collection out
+  of Find's searchable tabs because "go to result" had no defined behavior there: each cell is its
+  own editor, so activating the grid's tab would not show which cell held the match. Meanwhile the
+  grid already handed its focused resource to Ctrl+F, so Find received a project it had no open tab
+  for, took the reassignment effect's cross-project fallback, and searched an unrelated project.
+- **Decision:** The grid registers a web view controller
+  (`WebViewControllers['platformScriptureEditor.scriptureTextGrid']`) with one method,
+  `revealResource(projectId)`, which brings that resource's cell into view and outlines it; the
+  match itself is not selected. Verse view focuses the row. Chapter view focuses the column's own
+  scroll area (an explicit tab stop, like the aligned view's shared scroll area), and aligned view
+  focuses that shared area, so Arrow and Page Down scroll the text at once; the column itself is
+  never focused, because a focused column root is not a scroller and breaks keyboard scrolling.
+  Aligned view also announces the resource to screen readers, since its shared area is not named
+  for any one resource; a chapter column's scroll area sits inside the column's region, which is.
+  The outline lasts until the user next interacts with the grid or its tab is hidden. Find adds
+  the grid to `FIND_SEARCHABLE_WEB_VIEW_TYPES` and to `DECLARING_WEB_VIEW_TYPES`, so it lists the
+  resources the grid declares. "Go to result" targets one tab, in this order: an editor showing
+  the project (driven through its controller), then any reference panel showing it, then the Text
+  Collection. Any reference panel includes Model text, which is never activated, so a resource
+  shown in Model text activates nothing. For the grid, Find writes the result's verse to the scroll
+  group, activates the grid's tab, and calls `revealResource`. The grid receives the message
+  through a module-scope listener and holds the request until its tab is shown and its resources
+  have loaded. A request that waits hidden for more than 5 s (`REVEAL_REQUEST_MAX_AGE_MS`), or whose
+  tab is hidden again before the resources load, is dropped, so a tab the user shows later by hand
+  does not jump.
+- **Alternatives:** **Activate the tab only** — rejected: in a view with many resources nothing
+  tells the user which cell holds the result. **Select and highlight the match in the cell**, as
+  in an editor — deferred: it needs a range converted for the cell's editor and per-cell
+  annotations, for little gain over an outlined cell at the right verse. **A command instead of a
+  controller** — rejected: a controller is how Find already reaches the editor, and it keeps the
+  message nonce inside the web view provider. **A listener registered in a React effect** —
+  rejected: the renderer buffers messages for a tab that has never been shown and flushes them when
+  its iframe loads, which can happen before any effect runs, so the request would be lost. **A
+  renderer-side ready handshake** (flush a web view's buffered messages only once it says its
+  listener exists) — not done here: it changes delivery for every web view, so it is platform work;
+  the rule for consumers is in `.claude/rules/cross-view-sync-hidden-views.md`.
+- **Consequences:** In Simple mode the grid shares Find's Column 3 stack, so "go to result" on a
+  grid-only resource hides Find, as it does for Bible texts; single-click preview never activates
+  the grid. The grid's container project is dropped from Find's picker like a reference panel's,
+  since the grid does not display it. Rows follow the container project's versification (PT-4897),
+  so a revealed cell can show the wrong verse for a resource whose versification differs.
+- **Key symbols:** `SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE`, `DECLARING_WEB_VIEW_TYPES`,
+  `FIND_SEARCHABLE_WEB_VIEW_TYPES`
+  (`extensions/src/platform-scripture/src/resource-panel-web-view-types.const.ts`);
+  `targetTextCollectionWebViewId`, `handleOpenAtResult`
+  (`extensions/src/platform-scripture/src/find.web-view.tsx`); `TextCollectionWebViewController`
+  (`extensions/src/platform-scripture-editor/src/types/platform-scripture-editor.d.ts`);
+  `installRevealRequestListener`, `useRevealRequest`
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/reveal-request-store.ts`).
+- **Source:** PT-4507.
+
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 
 - **Date:** 2026-09-03
@@ -3960,6 +4015,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   iframe, since PAPI exposes no visibility query for another web view.
   **Revisit** if per-cell reveal is designed for the Text Collection, which would bring it into the
   searchable set.
+- **Amended 2026-11-12:** the Text Collection deferral is resolved by
+  `adr-find-reveals-text-collection-cell`.
 
 ## adr-find-tolerance-as-engine-options: Find expresses whitespace and diacritic tolerance as engine options, never by rewriting the query
 
@@ -7507,6 +7564,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
+- **Amended 2026-11-13:** the Text Collection's resource tracker is now
+  `useActiveResourceProjectId`. Besides focus, it follows a pointer press and the resource Find
+  last revealed: in the aligned view, focus lands on the shared scroll area, outside every cell, so
+  focus alone would leave Ctrl+F with no resource or a stale one. See
+  `adr-find-reveals-text-collection-cell`.
 
 ## adr-per-web-view-state-lives-in-the-definition: Per-web-view state lives in the web view definition; user defaults and cross-instance memory live in settings
 

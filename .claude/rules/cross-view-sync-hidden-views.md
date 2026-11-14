@@ -28,6 +28,12 @@ design for BOTH visibility states, not just the live case.
   evidence the user is still there**: each iframe keeps its own focused element after the user
   clicks into another web view. Ask the window focus subject instead (`papi.window`'s `Focus` data
   type). Reference consumer: `useEditorFocusLocation` in `extensions/src/platform-scripture-editor/`.
+- rc-dock does not mount a tab that has **never been shown**, so a message posted to it
+  (`postMessageToWebView`, e.g. through a web view controller) is buffered by the renderer and
+  flushed as soon as its iframe loads — which can be before any React effect runs. A `message`
+  listener registered in an effect can therefore miss it. Install the listener at module scope and
+  hand the message to React through a store. Reference consumer: `installRevealRequestListener` in
+  `extensions/src/platform-scripture-editor/src/scripture-text-grid/reveal-request-store.ts`.
 
 ## The rule
 

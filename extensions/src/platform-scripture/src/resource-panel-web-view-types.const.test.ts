@@ -2,42 +2,48 @@ import { describe, it, expect } from 'vitest';
 import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
+  DECLARING_WEB_VIEW_TYPES,
   FIND_SEARCHABLE_WEB_VIEW_TYPES,
   REFERENCE_PANEL_WEB_VIEW_TYPES,
   REVEALABLE_REFERENCE_PANEL_WEB_VIEW_TYPES,
   MODEL_TEXT_PANEL_WEBVIEW_TYPE,
+  TEXT_COLLECTION_WEB_VIEW_TYPES,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
 } from './resource-panel-web-view-types.const';
 
 describe('resource panel web view types', () => {
   it('pins this extension’s mirrored copies to the editor’s web view type literals', () => {
     // Extensions can't import each other's source, so these are mirrors of the consts in
-    // platform-scripture-editor's main.ts. Pinning the literals catches an accidental edit to
-    // these copies, which would silently drop the panels back out of Find's project picker.
+    // platform-scripture-editor. Pinning the literals catches an accidental edit to these copies,
+    // which would silently drop the tabs back out of Find's project picker.
     expect(MODEL_TEXT_PANEL_WEBVIEW_TYPE).toBe('platformScriptureEditor.modelText');
     expect(BIBLE_TEXTS_PANEL_WEBVIEW_TYPE).toBe('platformScriptureEditor.bibleTexts');
     expect(COMMENTARIES_PANEL_WEBVIEW_TYPE).toBe('platformScriptureEditor.commentaries');
+    expect(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE).toBe('platformScriptureEditor.scriptureTextGrid');
   });
 });
 
 describe('FIND_SEARCHABLE_WEB_VIEW_TYPES', () => {
-  it('includes the editor and all three read-only reference panels', () => {
+  it('includes the editor, the three reference panels and the Text Collection', () => {
     expect([...FIND_SEARCHABLE_WEB_VIEW_TYPES].sort()).toEqual(
       [
         'platformScriptureEditor.react',
         'platformScriptureEditor.modelText',
         'platformScriptureEditor.bibleTexts',
         'platformScriptureEditor.commentaries',
+        'platformScriptureEditor.scriptureTextGrid',
       ].sort(),
     );
   });
+});
 
-  it('excludes the Text Collection, whose per-cell reveal is not designed yet', () => {
-    // NOT because it has no project to offer — it declares every resource it hosts and latches a
-    // focused one it already hands to Ctrl+F. It is out because "go to result" has no defined
-    // behaviour when each cell is its own editor. Tracked as PT-4507.
-    expect(FIND_SEARCHABLE_WEB_VIEW_TYPES.has('platformScriptureEditor.scriptureTextGrid')).toBe(
-      false,
+describe('DECLARING_WEB_VIEW_TYPES', () => {
+  it('holds the reference panels and the Text Collection, never the editor', () => {
+    expect([...DECLARING_WEB_VIEW_TYPES].sort()).toEqual(
+      [...REFERENCE_PANEL_WEB_VIEW_TYPES, ...TEXT_COLLECTION_WEB_VIEW_TYPES].sort(),
     );
+    expect(DECLARING_WEB_VIEW_TYPES.has('platformScriptureEditor.scriptureTextGrid')).toBe(true);
+    expect(DECLARING_WEB_VIEW_TYPES.has('platformScriptureEditor.react')).toBe(false);
   });
 });
 
