@@ -264,4 +264,116 @@ public class InternetSettingsLogicTests
     {
         Assert.That(InternetSettingsLogic.ParsePermittedInternetUse(xml), Is.Null);
     }
+
+    // ----- PasswordRequiredForChange -----
+
+    private const string PLACEHOLDER = InternetSettingsLogic.PLACEHOLDER_PASSWORD;
+
+    /// <summary>
+    /// Calls <see cref="InternetSettingsLogic.PasswordRequiredForChange"/> with nothing changed, both
+    /// passwords saved and echoed back as the placeholder, unless an argument says otherwise.
+    /// </summary>
+    private static string? Required(
+        string? newProxyHost = "proxy.example.org",
+        int newProxyPort = 8080,
+        string? submittedProxyPassword = PLACEHOLDER,
+        bool hasSavedProxyPassword = true,
+        string? newDblServer = "dbl.example.org",
+        string? newDblApiServer = "api.dbl.example.org",
+        string? submittedDblPassword = PLACEHOLDER,
+        bool hasSavedDblPassword = true
+    ) =>
+        InternetSettingsLogic.PasswordRequiredForChange(
+            currentProxyHost: "proxy.example.org",
+            newProxyHost: newProxyHost,
+            currentProxyPort: 8080,
+            newProxyPort: newProxyPort,
+            submittedProxyPassword: submittedProxyPassword,
+            hasSavedProxyPassword: hasSavedProxyPassword,
+            currentDblServer: "dbl.example.org",
+            newDblServer: newDblServer,
+            currentDblApiServer: "api.dbl.example.org",
+            newDblApiServer: newDblApiServer,
+            submittedDblPassword: submittedDblPassword,
+            hasSavedDblPassword: hasSavedDblPassword
+        );
+
+    [Test]
+    public void ProxyHostChanged_PlaceholderPassword_SavedPassword_RequiresProxyPassword()
+    {
+        Assert.That(
+            Required(newProxyHost: "attacker.example.net"),
+            Is.EqualTo(InternetSettingsLogic.PROXY_PASSWORD)
+        );
+    }
+
+    [Test]
+    public void ProxyPortChanged_PlaceholderPassword_SavedPassword_RequiresProxyPassword()
+    {
+        Assert.That(Required(newProxyPort: 3128), Is.EqualTo(InternetSettingsLogic.PROXY_PASSWORD));
+    }
+
+    [Test]
+    public void ProxyHostChanged_RealPassword_Allowed()
+    {
+        Assert.That(
+            Required(newProxyHost: "attacker.example.net", submittedProxyPassword: "typed-again"),
+            Is.Null
+        );
+    }
+
+    [Test]
+    public void ProxyHostChanged_Placeholder_NoSavedPassword_Allowed()
+    {
+        Assert.That(
+            Required(newProxyHost: "attacker.example.net", hasSavedProxyPassword: false),
+            Is.Null
+        );
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    public void ProxyHostCleared_Placeholder_Allowed(string? newProxyHost)
+    {
+        Assert.That(Required(newProxyHost: newProxyHost, newProxyPort: 0), Is.Null);
+    }
+
+    [Test]
+    public void DblServerChanged_PlaceholderPassword_RequiresDblPassword()
+    {
+        Assert.That(
+            Required(newDblServer: "attacker.example.net"),
+            Is.EqualTo(InternetSettingsLogic.DBL_PASSWORD)
+        );
+    }
+
+    [Test]
+    public void DblApiServerChanged_PlaceholderPassword_RequiresDblPassword()
+    {
+        Assert.That(
+            Required(newDblApiServer: "attacker.example.net"),
+            Is.EqualTo(InternetSettingsLogic.DBL_PASSWORD)
+        );
+    }
+
+    [Test]
+    public void DblServerChanged_RealPassword_Allowed()
+    {
+        Assert.That(
+            Required(newDblServer: "attacker.example.net", submittedDblPassword: "typed-again"),
+            Is.Null
+        );
+    }
+
+    [Test]
+    public void DblServerCleared_Placeholder_Allowed()
+    {
+        Assert.That(Required(newDblServer: null, newDblApiServer: null), Is.Null);
+    }
+
+    [Test]
+    public void NothingChanged_Placeholders_Allowed()
+    {
+        Assert.That(Required(), Is.Null);
+    }
 }

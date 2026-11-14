@@ -33,6 +33,54 @@ internal static class InternetSettingsLogic
     /// <summary>Whether a submitted secret is an actual change (not the unchanged-placeholder).</summary>
     public static bool IsSecretChanged(string? submitted) => submitted != PLACEHOLDER_PASSWORD;
 
+    /// <summary>Name of the proxy password field, as <see cref="PasswordRequiredForChange"/> reports it</summary>
+    public const string PROXY_PASSWORD = "ProxyPassword";
+
+    /// <summary>Name of the DBL password field, as <see cref="PasswordRequiredForChange"/> reports it</summary>
+    public const string DBL_PASSWORD = "DBLPassword";
+
+    /// <summary>
+    /// The password the caller must supply for real for this change, or null when the change is
+    /// fine. Echoing back the placeholder keeps the saved password, so a change of the host that
+    /// password is sent to must come with the password itself: otherwise anyone who can call the
+    /// setter could send the saved password to a host of their choosing.
+    /// </summary>
+    /// <remarks>
+    /// Pass the hosts as they will be saved: a proxy host the mode clears, or an empty server
+    /// override, is null. Clearing a host sends the password nowhere new, so it needs nothing.
+    /// <c>SelectedServer</c> picks among known servers, and the user name, DBL email and GBC
+    /// override reach no saved password, so none of them is an input.
+    /// </remarks>
+    public static string? PasswordRequiredForChange(
+        string? currentProxyHost,
+        string? newProxyHost,
+        int currentProxyPort,
+        int newProxyPort,
+        string? submittedProxyPassword,
+        bool hasSavedProxyPassword,
+        string? currentDblServer,
+        string? newDblServer,
+        string? currentDblApiServer,
+        string? newDblApiServer,
+        string? submittedDblPassword,
+        bool hasSavedDblPassword
+    )
+    {
+        bool proxyTargetChanged =
+            !string.IsNullOrEmpty(newProxyHost)
+            && (newProxyHost != currentProxyHost || newProxyPort != currentProxyPort);
+        if (proxyTargetChanged && hasSavedProxyPassword && !IsSecretChanged(submittedProxyPassword))
+            return PROXY_PASSWORD;
+
+        bool dblTargetChanged =
+            (!string.IsNullOrEmpty(newDblServer) && newDblServer != currentDblServer)
+            || (!string.IsNullOrEmpty(newDblApiServer) && newDblApiServer != currentDblApiServer);
+        if (dblTargetChanged && hasSavedDblPassword && !IsSecretChanged(submittedDblPassword))
+            return DBL_PASSWORD;
+
+        return null;
+    }
+
     /// <summary>The proxy host is only meaningful for ProxyOnly; every other mode clears it.</summary>
     public static bool ShouldClearProxyHost(InternetUse requested) =>
         requested != InternetUse.ProxyOnly;

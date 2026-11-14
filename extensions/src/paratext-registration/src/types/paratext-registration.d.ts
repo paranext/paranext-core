@@ -75,7 +75,10 @@ declare module 'paratext-registration' {
    *
    * Note: these settings only apply to operations ParatextData.dll performs, not the whole app.
    * Note: passwords are returned masked as `********`, and the app must be restarted for changes to
-   * fully take effect.
+   * fully take effect. Sending the mask back keeps the saved password, except that a set which
+   * changes `proxyHost` or `proxyPort` must supply `proxyPassword`, and one that changes
+   * `overrideDBLServer` or `overrideDBLApiServer` must supply `dblPassword`: otherwise it is
+   * refused with `INVALID_ARGUMENT` and nothing is saved.
    */
   export type IInternetSettingsDataProvider = IDataProvider<InternetSettingsDataTypes>;
 }
