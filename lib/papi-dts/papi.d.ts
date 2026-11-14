@@ -1404,6 +1404,10 @@ declare module 'shared/data/rpc.model' {
   } from 'json-rpc-2.0';
   /** Port to use for the WebSocket */
   export const WEBSOCKET_PORT = 8876;
+  /** WebSocket handshake request header in which a child main launched presents its client secret */
+  export const PAPI_CLIENT_SECRET_HEADER = 'x-papi-client-secret';
+  /** WebSocket handshake reply header in which main proves itself to a child it launched */
+  export const PAPI_SERVER_SECRET_HEADER = 'x-papi-server-secret';
   /**
    * Largest message the WebSocket transport carries. A message over this is not a failed request: the
    * receiver closes the connection with 1009, taking down every request in flight on it and, for the
@@ -2684,6 +2688,81 @@ declare module 'client/services/web-socket.interface' {
    */
   export type IWebSocket = WebSocket;
 }
+declare module 'shared/data/request-access.data' {
+  import type { RequestCallerProcess } from 'shared/models/network.model';
+  /**
+   * Which process a PAPI connection belongs to, as main determined it when it accepted the
+   * connection. `'main'` is main's own in-process calls; `'unidentified'` is a WebSocket client that
+   * presented no launch secret.
+   */
+  export type ConnectionIdentity = 'main' | RequestCallerProcess | 'unidentified';
+  /** Who may call and who may register a restricted request type */
+  export type RequestAccessRule = Readonly<{
+    /** Processes allowed to call the request type. Main is always allowed as well. */
+    callers: readonly RequestCallerProcess[];
+    /** The only identity allowed to register a handler for the request type */
+    registrant: Exclude<ConnectionIdentity, 'unidentified'>;
+  }>;
+  /**
+   * Gets the rule restricting a request type, if any.
+   *
+   * @param requestType Serialized request type, e.g. `command:platform.getLogFileContent`
+   * @returns The frozen rule, or `undefined` when the request type is not restricted
+   */
+  export function getRequestAccessRule(requestType: string): RequestAccessRule | undefined;
+  /**
+   * Whether a connection may register a handler for a request type. Anyone may register a request
+   * type with no rule; a restricted one only by its registrant.
+   */
+  export function isRegistrationAllowed(
+    requestType: string,
+    registrant: ConnectionIdentity,
+  ): boolean;
+  /**
+   * Whether a connection may call a request type. Main may always call. A request type with a rule
+   * follows the rule, whatever the registrant declared; otherwise the registrant's `allowedCallers`
+   * applies when it declared one.
+   *
+   * @param requestType Serialized request type
+   * @param caller Identity of the calling connection
+   * @param registrantAllowedCallers The `allowedCallers` the registering process declared, if any
+   */
+  export function isCallAllowed(
+    requestType: string,
+    caller: ConnectionIdentity,
+    registrantAllowedCallers?: readonly RequestCallerProcess[],
+  ): boolean;
+  /**
+   * Validates an `allowedCallers` value that arrived from another process.
+   *
+   * @param value The value to validate
+   * @returns `undefined` when `value` is `undefined`, otherwise a copy of the validated array
+   * @throws When `value` is anything but an array of {@link RequestCallerProcess}
+   */
+  export function parseAllowedCallers(value: unknown): RequestCallerProcess[] | undefined;
+}
+declare module 'client/services/launch-credentials' {
+  import type { ConnectionIdentity } from 'shared/data/request-access.data';
+  /** The secrets a process main launched uses to identify itself to main, and main to it */
+  export type LaunchCredentials = {
+    clientSecret: string;
+    serverSecret: string;
+  };
+  /** Keeps the credentials main handed this process until the connection to main takes them */
+  export function setLaunchCredentials(credentials: LaunchCredentials): void;
+  /**
+   * Returns the credentials once, then forgets them, so nothing that runs after the connection is
+   * made can read them.
+   */
+  export function takeLaunchCredentials(): LaunchCredentials | undefined;
+  /**
+   * Which process main knows this one as. `'unidentified'` until a connection has proven itself: for
+   * the extension host, a handshake whose reply carried the right server secret.
+   */
+  export function getLocalConnectionIdentity(): ConnectionIdentity;
+  /** Records which process main knows this one as, once the connection has proven it */
+  export function markLocalConnectionIdentified(identity: ConnectionIdentity): void;
+}
 declare module 'shared/data/papi-port-close-handshake' {
   import { PapiPortCloseFrame, SyntheticCloseEvent } from 'shared/data/papi-port.model';
   /**
@@ -2946,12 +3025,18 @@ declare module 'renderer/services/renderer-web-socket.service' {
   export default PapiRendererWebSocket;
 }
 declare module 'extension-host/services/extension-host-web-socket.model' {
-  import ws from 'ws';
+  import WebSocket from 'ws';
+  import { LaunchCredentials } from 'client/services/launch-credentials';
   /**
-   * Extension-host client uses ws as its WebSocket client, but the renderer can't use it. So we need
-   * to exclude it from the renderer webpack bundle like this.
+   * Opens the extension host's connection to main presenting its launch secret. The connection only
+   * opens if main's handshake reply carries the matching server secret, proving it is the main that
+   * launched this process; otherwise it is closed before it opens.
+   *
+   * @param url Address of main's PAPI WebSocket
+   * @param credentials The secrets main handed this process. Not kept after the handshake.
    */
-  export default ws;
+  export function createIdentifiedWebSocket(url: string, credentials: LaunchCredentials): WebSocket;
+  export default WebSocket;
 }
 declare module 'client/services/web-socket.factory' {
   import { IWebSocket } from 'client/services/web-socket.interface';
@@ -3019,6 +3104,8 @@ declare module 'client/services/rpc-client' {
     private requestId;
     /** Refers to the current process that created this object (i.e., not main) */
     private readonly jsonRpcServer;
+    /** The `allowedCallers` each method registered in this process was registered with */
+    private readonly allowedCallersByLocalMethodName;
     /** Refers to main */
     private readonly jsonRpcClient;
     private readonly jsonRpcClientServer;
@@ -3102,59 +3189,6 @@ declare module 'client/services/rpc-client' {
     private onMessageReceivedByWebSocket;
   }
   export default RpcClient;
-}
-declare module 'shared/data/request-access.data' {
-  import type { RequestCallerProcess } from 'shared/models/network.model';
-  /**
-   * Which process a PAPI connection belongs to, as main determined it when it accepted the
-   * connection. `'main'` is main's own in-process calls; `'unidentified'` is a WebSocket client that
-   * presented no launch secret.
-   */
-  export type ConnectionIdentity = 'main' | RequestCallerProcess | 'unidentified';
-  /** Who may call and who may register a restricted request type */
-  export type RequestAccessRule = Readonly<{
-    /** Processes allowed to call the request type. Main is always allowed as well. */
-    callers: readonly RequestCallerProcess[];
-    /** The only identity allowed to register a handler for the request type */
-    registrant: Exclude<ConnectionIdentity, 'unidentified'>;
-  }>;
-  /**
-   * Gets the rule restricting a request type, if any.
-   *
-   * @param requestType Serialized request type, e.g. `command:platform.getLogFileContent`
-   * @returns The frozen rule, or `undefined` when the request type is not restricted
-   */
-  export function getRequestAccessRule(requestType: string): RequestAccessRule | undefined;
-  /**
-   * Whether a connection may register a handler for a request type. Anyone may register a request
-   * type with no rule; a restricted one only by its registrant.
-   */
-  export function isRegistrationAllowed(
-    requestType: string,
-    registrant: ConnectionIdentity,
-  ): boolean;
-  /**
-   * Whether a connection may call a request type. Main may always call. A request type with a rule
-   * follows the rule, whatever the registrant declared; otherwise the registrant's `allowedCallers`
-   * applies when it declared one.
-   *
-   * @param requestType Serialized request type
-   * @param caller Identity of the calling connection
-   * @param registrantAllowedCallers The `allowedCallers` the registering process declared, if any
-   */
-  export function isCallAllowed(
-    requestType: string,
-    caller: ConnectionIdentity,
-    registrantAllowedCallers?: readonly RequestCallerProcess[],
-  ): boolean;
-  /**
-   * Validates an `allowedCallers` value that arrived from another process.
-   *
-   * @param value The value to validate
-   * @returns `undefined` when `value` is `undefined`, otherwise a copy of the validated array
-   * @throws When `value` is anything but an array of {@link RequestCallerProcess}
-   */
-  export function parseAllowedCallers(value: unknown): RequestCallerProcess[] | undefined;
 }
 declare module 'main/services/rpc-server' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
