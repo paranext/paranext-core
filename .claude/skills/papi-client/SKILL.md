@@ -27,7 +27,20 @@ cargo install websocat
 
 If `websocat` is not available, ask the user to install it before proceeding.
 
-### 2. Platform.Bible Must Be Running
+### 2. Some Request Types Are Refused to This Client
+
+This client presents no launch secret, so main serves it as `unidentified`. Main refuses an
+unidentified connection these request types (the error is `'<method>' is not available on this
+connection`): `requestRegistryTokens:*`, `command:platform.getLogFileContent`,
+`command:platform.resetFirstRun`, `command:paratextRegistration.setParatextRegistrationData`,
+`command:paratextRegistration.resetForFirstRun`, the internet settings setters
+(`object:paratextRegistration.internetSettingsDataProvider-data.setInternetSettings` and
+`command:paratextRegistration.setParatextDataInternetSettings`) and
+`object:DataProtectionService.encryptString` / `.decryptString`. It also refuses any handler whose
+registrant restricted its callers with `allowedCallers`. The table is `src/shared/data/request-access.data.ts`.
+Everything else works as before. To read the log, read the log file (see the `log-inspector` skill).
+
+### 3. Platform.Bible Must Be Running
 
 **REQUIRED**: The WebSocket server runs on port 8876 as part of Platform.Bible.
 
@@ -196,9 +209,6 @@ lsof -i :8876
 # Get OS platform ("win32", "darwin", "linux")
 (echo '{"jsonrpc":"2.0","id":1,"method":"command:platform.getOSPlatform","params":[]}'; sleep 1) | websocat ws://localhost:8876
 
-# Get current log file content
-(echo '{"jsonrpc":"2.0","id":1,"method":"command:platform.getLogFileContent","params":[]}'; sleep 2) | websocat ws://localhost:8876
-
 # Check if in full screen mode
 (echo '{"jsonrpc":"2.0","id":1,"method":"command:platform.isFullScreen","params":[]}'; sleep 1) | websocat ws://localhost:8876
 ```
@@ -300,10 +310,9 @@ echo "Objects: $(grep -o '"name":"object:[^"]*"' /tmp/papi-schema.json | wc -l)"
 ```bash
 # Get platform info
 (echo '{"jsonrpc":"2.0","id":1,"method":"command:platform.getOSPlatform","params":[]}'; sleep 1) | websocat ws://localhost:8876
-
-# Get recent logs
-(echo '{"jsonrpc":"2.0","id":1,"method":"command:platform.getLogFileContent","params":[]}'; sleep 2) | websocat ws://localhost:8876 | jq -r '.result' | tail -50
 ```
+
+To see recent logs, read the log file itself; the `log-inspector` skill gives its location.
 
 ## Troubleshooting
 

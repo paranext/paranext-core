@@ -110,8 +110,8 @@ test.describe('First-run wizard', () => {
   test.beforeEach(async ({ mainPage }) => {
     savedInternetSettings = await readSavedInternetSettings();
   });
-  test.afterEach(async () => {
-    if (savedInternetSettings) await restoreSavedInternetSettings(savedInternetSettings);
+  test.afterEach(async ({ mainPage }) => {
+    if (savedInternetSettings) await restoreSavedInternetSettings(mainPage, savedInternetSettings);
     savedInternetSettings = undefined;
   });
 
@@ -190,7 +190,7 @@ test.describe('First-run wizard', () => {
     mainPage,
   }) => {
     if (!savedInternetSettings) throw new Error('expected the saved internet settings to be read');
-    await restoreSavedInternetSettings({
+    await restoreSavedInternetSettings(mainPage, {
       ...savedInternetSettings,
       permittedInternetUse: 'Disabled',
     });
@@ -318,15 +318,13 @@ async function getInternetSettings(): Promise<InternetSettings> {
  * writes the user's choice straight to ParatextData's own internet settings, which every
  * Platform.Bible build on this account shares rather than being scoped to the test profile. Writes
  * back what the provider just returned with only that one field changed — the same write the step
- * makes, so the masked secrets in the read are kept as they are.
+ * makes, so the masked secrets in the read are kept as they are. Writes through the app window,
+ * since main refuses the setter to a raw socket from the test runner.
  */
-async function restorePermittedInternetUse(original: string): Promise<void> {
+async function restorePermittedInternetUse(mainPage: Page, original: string): Promise<void> {
   const current = await getInternetSettings();
   if (current.permittedInternetUse === original) return;
-  await sendPapiRequestOnce(`${INTERNET_SETTINGS_OBJECT}.setInternetSettings`, [
-    undefined,
-    { ...current, permittedInternetUse: original },
-  ]);
+  await restoreSavedInternetSettings(mainPage, { ...current, permittedInternetUse: original });
 }
 
 type SyncConsentReached = {
@@ -388,7 +386,7 @@ async function reachSyncConsentAfterUnrestricted(
 
     await choose({ frPage, syncNotificationCount });
   } finally {
-    await restorePermittedInternetUse(originalInternetUse);
+    await restorePermittedInternetUse(mainPage, originalInternetUse);
   }
 }
 

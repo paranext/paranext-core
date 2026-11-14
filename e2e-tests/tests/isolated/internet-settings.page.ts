@@ -35,12 +35,15 @@ export async function readSavedInternetSettings(): Promise<SavedInternetSettings
  * Saves internet settings read by {@link readSavedInternetSettings} back. The proxy and DBL
  * passwords come back masked, and the provider keeps the stored password for a masked one, so the
  * round trip does not change them.
+ *
+ * Writes through the app window: main serves the setter only to the renderer and the extension
+ * host, so a raw socket from the test runner is refused.
  */
-export async function restoreSavedInternetSettings(settings: SavedInternetSettings): Promise<void> {
-  await sendPapiRequestOnce(`${INTERNET_SETTINGS_PROVIDER_METHOD}.setInternetSettings`, [
-    undefined,
-    settings,
-  ]);
+export async function restoreSavedInternetSettings(
+  mainPage: Page,
+  settings: SavedInternetSettings,
+): Promise<void> {
+  await writeInternetSettings(mainPage, settings);
 }
 
 /**
@@ -263,7 +266,7 @@ type RendererPapi = {
             getInternetSettings: (selector: undefined) => Promise<PersistedInternetSettings>;
             setInternetSettings: (
               selector: undefined,
-              settings: PersistedInternetSettings,
+              settings: Record<string, unknown>,
             ) => Promise<unknown>;
           }
         | undefined
@@ -301,4 +304,24 @@ export async function setPersistedServer(mainPage: Page, server: string): Promis
     await provider.setInternetSettings(undefined, { ...current, selectedServer: nextServer });
     return current.selectedServer;
   }, server);
+}
+
+/**
+ * Saves `settings` through the `paratextRegistration.internetSettingsDataProvider` data provider in
+ * the app window, as the internet settings dialog does.
+ */
+async function writeInternetSettings(
+  mainPage: Page,
+  settings: SavedInternetSettings,
+): Promise<void> {
+  await mainPage.evaluate(async (nextSettings) => {
+    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as RendererPapi;
+    const provider = await win.papi.dataProviders.get(
+      'paratextRegistration.internetSettingsDataProvider',
+    );
+    if (!provider) throw new Error('Internet settings data provider is not registered');
+    await provider.setInternetSettings(undefined, nextSettings);
+  }, settings);
 }
