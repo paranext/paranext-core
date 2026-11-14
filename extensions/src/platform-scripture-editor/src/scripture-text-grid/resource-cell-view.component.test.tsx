@@ -1496,6 +1496,25 @@ describe('ResourceCellView content scroll ownership', () => {
     expect(content).toHaveClass('tw:[overflow-anchor:none]');
   });
 
+  it('makes its scroll port a tab stop so the scrolled text is keyboard-reachable', () => {
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).toHaveAttribute('tabindex', '0');
+    // `outline-hidden`, not `outline-none`: it keeps a real outline under forced colors, where the
+    // ring (a box-shadow) is not drawn.
+    expect(content).toHaveClass('tw:focus-visible:outline-hidden', 'tw:focus-visible:ring-2');
+    expect(content).not.toHaveClass('tw:focus-visible:outline-none');
+  });
+
+  it('adds no tab stop when an ancestor owns the scroll port', () => {
+    const { container } = renderCells(
+      <ResourceCellView {...baseProps} contentOverflow="visible" />,
+    );
+
+    expect(container.querySelector('[data-cell-content]')).not.toHaveAttribute('tabindex');
+  });
+
   it('hands scrolling to an ancestor when asked, so an aligned grid can own the scroll port', () => {
     // A scroll container's children cannot participate in an ancestor's grid, so leaving
     // `overflow: auto` here would stop the verse blocks aligning across columns.

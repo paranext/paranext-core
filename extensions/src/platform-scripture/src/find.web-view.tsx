@@ -67,10 +67,11 @@ import {
   isFindQueryValid,
   isSimpleInterfaceMode,
   POLL_INTERVAL_MS,
+  resolveGoToResultTarget,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
-  resolveTargetReferencePanelWebViewId,
+  resolveTargetTabWebViewId,
   selectWrittenBookSnapshots,
   shouldClearResultsForInvalidQuery,
   shouldSearchAgainAfterReplaceAll,
@@ -100,9 +101,12 @@ import { IS_REPLACE_ALL_ENABLED } from './replace-all-enabled.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import {
+  DECLARING_WEB_VIEW_TYPES,
   FIND_SEARCHABLE_WEB_VIEW_TYPES,
   REFERENCE_PANEL_WEB_VIEW_TYPES,
   REVEALABLE_REFERENCE_PANEL_WEB_VIEW_TYPES,
+  TEXT_COLLECTION_WEB_VIEW_TYPES,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
 } from './resource-panel-web-view-types.const';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
 import { useAutoSearchDebounce } from './find/use-auto-search-debounce.hook';
@@ -210,13 +214,14 @@ global.webViewComponent = function FindWebView({
     useWebViewScrollGroupScrRef();
 
   // The project to search. Normally the tab's own — `openFind` sets it from the trigger (the
-  // editor's project, or the resource a reference panel is displaying), and the project selector's
-  // own `handleSelectProjectScrollGroup` keeps it current after that. The simple-mode layout also
-  // seeds a Find tab that carries no projectId at all, so it takes the first project BCV navigation
-  // drives in this window and keeps it until one of those sets an explicit id. Without the fallback,
-  // that seeded tab renders a search box that silently searches nothing until the user's first
-  // Ctrl+F. The fallback only seeds; after that Find is told its project (by `openFind`, the
-  // selector, or a project switch's `updateRelatedFindPanel`) rather than inferring a new one.
+  // editor's project, or the resource a reference panel or Text Collection cell is displaying), and
+  // the project selector's own `handleSelectProjectScrollGroup` keeps it current after that. The
+  // simple-mode layout also seeds a Find tab that carries no projectId at all, so it takes the
+  // first project BCV navigation drives in this window and keeps it until one of those sets an
+  // explicit id. Without the fallback, that seeded tab renders a search box that silently searches
+  // nothing until the user's first Ctrl+F. The fallback only seeds; after that Find is told its
+  // project (by `openFind`, the selector, or a project switch's `updateRelatedFindPanel`) rather
+  // than inferring a new one.
   // Deliberately NOT scroll group 0's source project (`useWebViewScrollGroupScrRef`'s 5th tuple
   // member): that field's only job is tagging which versification frame the current reference is
   // in, and it changes for reasons that have nothing to do with which project is active (Back/
@@ -450,10 +455,11 @@ global.webViewComponent = function FindWebView({
     return reasons;
   }, [projectIdsAndNames]);
 
-  // A reference panel's container project is the editable project whose reference list it shows —
-  // the panel is not displaying that project's text, so Find must not offer it. The hook unions
-  // container and declared projects, per what the shared state key documents; narrowing that to
-  // "what this tab actually displays" is Find's rule, so it is applied here rather than there.
+  // A reference panel's container project is the editable project whose reference list it shows,
+  // and the Text Collection's is the project whose collection of texts it shows — neither tab is
+  // displaying that project's text, so Find must not offer it. The hook unions container and
+  // declared projects, per what the shared state key documents; narrowing that to "what this tab
+  // actually displays" is Find's rule, so it is applied here rather than there.
   //
   // A tab showing a project that cannot be opened has no text to search, so it counts as not open.
   // It still counts until the metadata arrives, which is safe: the fallback waits for the metadata.
@@ -461,17 +467,16 @@ global.webViewComponent = function FindWebView({
     () =>
       openProjectTabs.filter(
         (tab) =>
-          !(
-            REFERENCE_PANEL_WEB_VIEW_TYPES.has(tab.webViewType) && tab.projectSource === 'container'
-          ) && !unsupportedReasonByProjectId.has(normalizeProjectId(tab.projectId)),
+          !(DECLARING_WEB_VIEW_TYPES.has(tab.webViewType) && tab.projectSource === 'container') &&
+          !unsupportedReasonByProjectId.has(normalizeProjectId(tab.projectId)),
       ),
     [openProjectTabs, unsupportedReasonByProjectId],
   );
   const noOpenProjects = allOpenProjectTabs.length === 0;
 
   // Find's project picker only ever lists projects open in a searchable tab — an editor, or a
-  // reference panel displaying that project's text (a project isn't a candidate to search until it
-  // is actually open): once a project's last tab closes, the
+  // reference panel or Text Collection displaying that project's text (a project isn't a candidate
+  // to search until it is actually open): once a project's last tab closes, the
   // reassignment effect below moves the selection to another open project before this list update
   // even renders. A transient "selected but not listed" gap IS possible while the metadata fetch
   // above is in flight or stale — the refetch effect below and the `isLoadingProjects` gate in the
@@ -555,8 +560,8 @@ global.webViewComponent = function FindWebView({
 
   // Which open editor tab a Find result click should scroll: the exact tab the project selector
   // has selected, when that tab is a real Scripture editor. Also `undefined` when the selected
-  // scripture is only open in a read-only reference panel — those register no web view controller.
-  // See `resolveTargetEditorWebViewId`.
+  // scripture is only open in a read-only reference panel or the Text Collection — neither
+  // registers an editor's web view controller. See `resolveTargetEditorWebViewId`.
   const targetEditorWebViewId = useMemo(
     () =>
       resolveTargetEditorWebViewId(
@@ -570,15 +575,35 @@ global.webViewComponent = function FindWebView({
 
   // Which reference panel tab a "go to result" activation should bring to the front, when the
   // selected scripture is showing in one rather than in an editor. See
-  // `resolveTargetReferencePanelWebViewId`.
+  // `resolveTargetTabWebViewId`.
   const targetReferencePanelWebViewId = useMemo(
     () =>
-      resolveTargetReferencePanelWebViewId(
+      resolveTargetTabWebViewId(
         projectId,
         allOpenProjectTabs,
         REVEALABLE_REFERENCE_PANEL_WEB_VIEW_TYPES,
       ),
     [projectId, allOpenProjectTabs],
+  );
+
+  // Whether any reference panel shows the selected scripture, including Model text, which is never
+  // revealed (see `REVEALABLE_REFERENCE_PANEL_WEB_VIEW_TYPES`) but is already on screen.
+  const isShownInReferencePanel = useMemo(
+    () =>
+      resolveTargetTabWebViewId(projectId, allOpenProjectTabs, REFERENCE_PANEL_WEB_VIEW_TYPES) !==
+      undefined,
+    [projectId, allOpenProjectTabs],
+  );
+
+  // Which Text Collection tab a "go to result" activation should bring to the front and reveal the
+  // selected scripture's cell in. `resolveGoToResultTarget` owns the precedence; this gate only
+  // avoids looking up the grid's controller when an editor or reference panel will win anyway.
+  const targetTextCollectionWebViewId = useMemo(
+    () =>
+      targetEditorWebViewId || isShownInReferencePanel
+        ? undefined
+        : resolveTargetTabWebViewId(projectId, allOpenProjectTabs, TEXT_COLLECTION_WEB_VIEW_TYPES),
+    [targetEditorWebViewId, isShownInReferencePanel, projectId, allOpenProjectTabs],
   );
 
   // Set when Find is bound to a project that cannot be opened. Such a project is never searched or
@@ -594,6 +619,10 @@ global.webViewComponent = function FindWebView({
   const editorWebViewController = useWebViewController(
     SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     targetEditorWebViewId,
+  );
+  const textCollectionWebViewController = useWebViewController(
+    SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+    targetTextCollectionWebViewId,
   );
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
@@ -1012,7 +1041,7 @@ global.webViewComponent = function FindWebView({
       );
       if (!resolved) {
         logger.warn(
-          `Find: ignoring project selection for ${newProjectId} — it has no open editor or reference panel tab.`,
+          `Find: ignoring project selection for ${newProjectId} — it has no open tab showing it.`,
         );
         return;
       }
@@ -1844,6 +1873,8 @@ global.webViewComponent = function FindWebView({
       setFocusedResultIndex(index);
       if (!targetEditorWebViewId || !editorWebViewController) {
         // Moved on without the editor: a late failure for an earlier request must not move back.
+        // A Text Collection cell is deliberately not revealed here: that would take focus out of
+        // the result list, which preview must not do.
         lastEditorSelectRequestRef.current = undefined;
         setVerseRefSetting(searchResult.start.verseRef);
         return;
@@ -1888,65 +1919,108 @@ global.webViewComponent = function FindWebView({
   /**
    * Navigate to a result AND shift focus to the tab showing it (double-click / reference-click):
    * the Scripture editor when one is open for the project, otherwise the reference panel displaying
-   * it. Single-click preview (`handleFocusedResultChange`) never changes the active tab.
+   * it, otherwise the Text Collection, which also reveals the cell showing it. Single-click preview
+   * (`handleFocusedResultChange`) never changes the active tab.
    */
   const handleOpenAtResult = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
+      const target = resolveGoToResultTarget({
+        targetEditorWebViewId,
+        hasEditorController: editorWebViewController !== undefined,
+        targetReferencePanelWebViewId,
+        isShownInReferencePanel,
+        targetTextCollectionWebViewId,
+        projectId,
+      });
       // With an editor to ask, the editor moves the scroll group itself — see
       // `handleFocusedResultChange` for why this must not do it too.
-      if (!targetEditorWebViewId || !editorWebViewController) {
+      if (target.kind !== 'editor') {
         lastEditorSelectRequestRef.current = undefined;
         setVerseRefSetting(searchResult.start.verseRef);
       }
-      if (targetReferencePanelWebViewId && !targetEditorWebViewId) {
-        // The scripture is showing in a read-only reference panel, which registers no web view
-        // controller — so activating its tab IS the navigation. `setVerseRefSetting` above already
-        // moved the panel's scroll group, so it renders the result's reference once shown.
-        //
-        // What the user sees depends on where that panel lives. Bible texts and Commentaries share
-        // Find's Column 3 stack in Simple mode, so activating one necessarily hides Find; that is
-        // the point of this gesture, and single-click preview is the way to keep Find in front.
-        // The Model text panel sits alone in Column 1 and is already visible, so this reveals
-        // nothing and only moves keyboard focus off the result list. Find cannot tell the two cases
-        // apart from inside its own iframe — PAPI exposes no visibility query for another web view.
-        papi.window.setFocus({ focusType: 'webView', id: targetReferencePanelWebViewId });
-      }
-      if (targetEditorWebViewId && editorWebViewController) {
-        papi.window.setFocus({ focusType: 'webView', id: targetEditorWebViewId });
-        // Await selectRange before setAnnotation so the websocket is settled (avoids
-        // "Tried to send payload while not connected" races). Wrapped because the tab can close
-        // between this callback being handed to the result list and the user activating it, leaving a
-        // revoked proxy whose property read throws synchronously — see `callControllerSafely`.
-        lastEditorSelectRequestRef.current = searchResult;
-        callControllerSafely(
-          () =>
-            editorWebViewController
-              .selectRange({ start: searchResult.start, end: searchResult.end })
-              .then(
-                () =>
-                  callControllerSafely(
-                    () =>
-                      editorWebViewController.setAnnotation(
-                        { start: searchResult.start, end: searchResult.end },
-                        'find-result-highlight',
-                        'find-current-result',
-                      ),
-                    (e) =>
-                      logger.warn(
-                        `Find: failed to highlight result in editor: ${getErrorMessage(e)}`,
-                      ),
-                  ),
-                (e) => fallBackToResultVerse(searchResult, e),
+      switch (target.kind) {
+        case 'referencePanel':
+          // The scripture is showing in a read-only reference panel, which registers no web view
+          // controller — so activating its tab IS the navigation. `setVerseRefSetting` above
+          // already moved the panel's scroll group, so it renders the result's reference once
+          // shown. Bible texts and Commentaries share Find's Column 3 stack in Simple mode, so
+          // activating one necessarily hides Find; that is the point of this gesture, and
+          // single-click preview is the way to keep Find in front.
+          papi.window.setFocus({ focusType: 'webView', id: target.webViewId });
+          break;
+        case 'textCollection':
+          // The scripture is showing only in a Text Collection cell (never reached when any
+          // reference panel shows it, Model text included). The scroll group has already moved;
+          // activate the grid's tab and ask it to reveal the cell. In Simple mode this hides Find,
+          // as activating Bible texts does. Hidden case: the grid holds the reveal until its tab is
+          // shown and its resources have loaded. setFocus goes first because it restores the
+          // iframe's last focused element and the reveal's focus must land after it; that holds
+          // only because the reveal runs later, in a React effect — do not make it synchronous.
+          papi.window.setFocus({ focusType: 'webView', id: target.webViewId });
+          if (!textCollectionWebViewController) {
+            // The controller resolves asynchronously after the target changes, so it can still be
+            // missing when the result is activated right away.
+            logger.debug(
+              `Find: activated the Text Collection tab without revealing ${target.projectId} because its controller is not available yet`,
+            );
+          }
+          callControllerSafely(
+            () => textCollectionWebViewController?.revealResource(target.projectId),
+            (e) =>
+              logger.warn(
+                `Find: failed to reveal ${target.projectId} in the Text Collection: ${getErrorMessage(e)}`,
               ),
-          (e) => fallBackToResultVerse(searchResult, e),
-        );
+          );
+          break;
+        case 'editor': {
+          // Always set for this target; checked again so the type narrows.
+          if (!editorWebViewController) break;
+          papi.window.setFocus({ focusType: 'webView', id: target.webViewId });
+          // Await selectRange before setAnnotation so the websocket is settled (avoids
+          // "Tried to send payload while not connected" races). Wrapped because the tab can close
+          // between this callback being handed to the result list and the user activating it,
+          // leaving a revoked proxy whose property read throws synchronously — see
+          // `callControllerSafely`.
+          lastEditorSelectRequestRef.current = searchResult;
+          callControllerSafely(
+            () =>
+              editorWebViewController
+                .selectRange({ start: searchResult.start, end: searchResult.end })
+                .then(
+                  () =>
+                    callControllerSafely(
+                      () =>
+                        editorWebViewController.setAnnotation(
+                          { start: searchResult.start, end: searchResult.end },
+                          'find-result-highlight',
+                          'find-current-result',
+                        ),
+                      (e) =>
+                        logger.warn(
+                          `Find: failed to highlight result in editor: ${getErrorMessage(e)}`,
+                        ),
+                    ),
+                  (e) => fallBackToResultVerse(searchResult, e),
+                ),
+            (e) => fallBackToResultVerse(searchResult, e),
+          );
+          break;
+        }
+        default:
+          // Nothing to activate: no tab shows the scripture, only Model text shows it (already
+          // on screen and following the scroll group), or the editor's controller is not ready.
+          break;
       }
     },
     [
       editorWebViewController,
       targetEditorWebViewId,
       targetReferencePanelWebViewId,
+      isShownInReferencePanel,
+      targetTextCollectionWebViewId,
+      textCollectionWebViewController,
+      projectId,
       setVerseRefSetting,
       fallBackToResultVerse,
     ],

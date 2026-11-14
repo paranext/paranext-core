@@ -1,7 +1,7 @@
 import { logger } from '@papi/frontend';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
-import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
+import { formatReplacementString, formatScrRef, MODIFIER_KEYS } from 'platform-bible-utils';
 import { X } from 'lucide-react';
 import {
   useCallback,
@@ -9,6 +9,7 @@ import {
   useId,
   useRef,
   useState,
+  type FocusEvent,
   type KeyboardEvent,
   type MouseEvent,
   type SyntheticEvent,
@@ -25,6 +26,11 @@ import {
 } from './resource-zoom-area.utils';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 import { resolveDisplayVerseNum } from './verse-display.utils';
+import {
+  findRevealFocusTarget,
+  findRevealTargetCell,
+  type RevealRequest,
+} from './reveal-resource.utils';
 import { moveId } from '../scripture-text-grid-order.utils';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
@@ -60,6 +66,18 @@ function isClickOnRowItself(event: MouseEvent<HTMLElement>): boolean {
   if (!isFromWithinHandlingElement(event) || !(event.target instanceof Element)) return false;
   const control = event.target.closest(ROW_INTERACTIVE_SELECTOR);
   return !control || !event.currentTarget.contains(control);
+}
+
+/**
+ * A visually hidden polite live region. Each announcement renders as a new node (keyed by its
+ * `id`), so a repeat of the same words is read again.
+ */
+function LiveAnnouncementRegion({ announcement }: { announcement: { text: string; id: number } }) {
+  return (
+    <div role="status" aria-live="polite" className="tw:sr-only">
+      {announcement.text ? <span key={announcement.id}>{announcement.text}</span> : undefined}
+    </div>
+  );
 }
 
 type ScriptureTextGridProps = {
@@ -113,6 +131,29 @@ type ScriptureTextGridProps = {
    * 3").
    */
   getReorderAnnouncement?: (resourceName: string, position: number, total: number) => string;
+  /**
+   * Builds the live-region announcement for a reveal whose focus lands outside the revealed cell
+   * (the aligned view's shared root), e.g. "Showing the result in KJV". In the verse and chapter
+   * views focus lands inside the cell, which a screen reader already names, so nothing is
+   * announced.
+   */
+  getRevealAnnouncement?: (resourceName: string) => string;
+  /**
+   * Asks the grid to scroll one resource's cell into view and outline it; a verse-list row is also
+   * focused, while a chapter or aligned column focuses its scroll area instead. Each request
+   * carries its own `requestId`, so asking for the same resource again reveals it again.
+   */
+  revealRequest?: RevealRequest;
+  /**
+   * Called with the request's id after each reveal attempt, whether or not a cell was found, so the
+   * owner can clear the request and a remount does not replay it.
+   */
+  onRevealHandled?: (requestId: number) => void;
+  /**
+   * Called with the revealed cell's project id after a reveal that found a cell, so the owner can
+   * track it as the active resource where focus cannot say which one it is (the aligned view).
+   */
+  onRevealed?: (projectId: string) => void;
 };
 
 /**
@@ -154,6 +195,10 @@ export function ScriptureTextGrid({
   getReorderHandleLabel,
   reorderHint,
   getReorderAnnouncement,
+  getRevealAnnouncement,
+  revealRequest,
+  onRevealHandled,
+  onRevealed,
 }: ScriptureTextGridProps) {
   // React's ref API requires `null` as the initial value for DOM refs.
   // eslint-disable-next-line no-null/no-null
@@ -167,8 +212,115 @@ export function ScriptureTextGrid({
   const [dragOverId, setDragOverId] = useState<string | undefined>(undefined);
   // Resource id whose grip should regain focus after a keyboard move re-renders the row.
   const keyboardMovedIdRef = useRef<string | undefined>(undefined);
-  // Visually-hidden live-region text announced after each successful keyboard move.
-  const [reorderAnnouncement, setReorderAnnouncement] = useState('');
+  // What `LiveAnnouncementRegion` announces after a keyboard move or a reveal; a new `id` per
+  // announcement makes each one a new node.
+  const [liveAnnouncement, setLiveAnnouncement] = useState({ text: '', id: 0 });
+  const announce = useCallback(
+    (text: string) => setLiveAnnouncement((previous) => ({ text, id: previous.id + 1 })),
+    [],
+  );
+
+  // Resource id of the cell last revealed, which is outlined; the effect below says when it ends.
+  const [revealedResourceId, setRevealedResourceId] = useState<string | undefined>(undefined);
+  // The reveal effect runs once per request id, so it reads the request, its callbacks and the
+  // resources through a ref instead of listing them: a new identity must not reveal again.
+  const latestRevealRef = useRef({
+    revealRequest,
+    onRevealHandled,
+    onRevealed,
+    getRevealAnnouncement,
+    resources,
+  });
+  latestRevealRef.current = {
+    revealRequest,
+    onRevealHandled,
+    onRevealed,
+    getRevealAnnouncement,
+    resources,
+  };
+  const revealRequestId = revealRequest?.requestId;
+
+  // Reveals the requested resource's cell (the single-resource layout has none): scroll it to the
+  // nearest edge, then focus without scrolling again (see `findRevealFocusTarget`). Focus inside
+  // the cell is already named for the resource; focus on the aligned view's shared root is not, so
+  // that reveal is announced, and reported through `onRevealed` since focus cannot say which one.
+  useEffect(() => {
+    const {
+      revealRequest: request,
+      onRevealHandled: handled,
+      onRevealed: reportRevealed,
+      getRevealAnnouncement: buildAnnouncement,
+      resources: latestResources,
+    } = latestRevealRef.current;
+    if (!request || request.requestId !== revealRequestId) return;
+    const cell = gridRef.current
+      ? findRevealTargetCell(gridRef.current, request.projectId)
+      : undefined;
+    if (cell) {
+      cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const revealedId = cell.getAttribute('data-resource-id') ?? undefined;
+      const focusTarget = findRevealFocusTarget(cell);
+      focusTarget?.focus({ preventScroll: true });
+      const isFocusNamedForResource = focusTarget !== undefined && cell.contains(focusTarget);
+      if (!isFocusNamedForResource && buildAnnouncement) {
+        const label = latestResources.find((resource) => resource.resourceId === revealedId)?.label;
+        if (label !== undefined) announce(buildAnnouncement(label));
+      }
+      setRevealedResourceId(revealedId);
+      const { projectId: revealedProjectId } = cell.dataset;
+      if (revealedProjectId !== undefined) reportRevealed?.(revealedProjectId);
+    }
+    handled?.(request.requestId);
+  }, [revealRequestId, announce]);
+
+  // The outline ends at: a pointer press in the grid; a key press anywhere in the grid's document
+  // other than a bare modifier; the next reveal; the revealed resource leaving the grid; focus
+  // leaving a revealed verse-list row; or the view becoming hidden. A reference change does not end
+  // it: Find moves the reference just before it reveals.
+  // Blur alone cannot end it for a column, whose scroll area keeps focus until something else moves
+  // it. Keys are heard on the whole document because focus can sit outside the grid, for example
+  // restored to the surrounding chrome. A bare modifier does not count: Control alone is how a
+  // screen-reader user silences speech.
+  // Pointer presses are heard on the grid's own element, so a click in the chrome keeps it.
+  // `viewMode` and the single-resource layout pick which element carries `gridRef`, so a change to
+  // either rebinds the listeners to the current root.
+  const isSingleResourceLayout = resources.length === 1;
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || revealedResourceId === undefined) return undefined;
+    const { ownerDocument } = grid;
+    const clearReveal = () => setRevealedResourceId(undefined);
+    const clearRevealOnKey = (event: globalThis.KeyboardEvent) => {
+      if (MODIFIER_KEYS.has(event.key)) return;
+      clearReveal();
+    };
+    grid.addEventListener('pointerdown', clearReveal);
+    ownerDocument.addEventListener('keydown', clearRevealOnKey);
+    return () => {
+      grid.removeEventListener('pointerdown', clearReveal);
+      ownerDocument.removeEventListener('keydown', clearRevealOnKey);
+    };
+  }, [revealedResourceId, viewMode, isSingleResourceLayout]);
+
+  // The web view withholds reveal requests while hidden (`revealRequestForGrid`), so this never
+  // erases a reveal that has just been applied.
+  useEffect(() => {
+    if (isViewVisible === false) setRevealedResourceId(undefined);
+  }, [isViewVisible]);
+
+  // Cleared rather than derived, so a resource removed and added back is not outlined again.
+  useEffect(() => {
+    if (revealedResourceId === undefined) return;
+    if (!resources.some((resource) => resource.resourceId === revealedResourceId))
+      setRevealedResourceId(undefined);
+  }, [resources, revealedResourceId]);
+
+  /** Clears the outline once focus leaves the revealed cell for somewhere outside it. */
+  const handleRevealBlur = useCallback((event: FocusEvent<HTMLElement>) => {
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    setRevealedResourceId(undefined);
+  }, []);
 
   const handleReorderDrop = useCallback(
     (targetId: string) => {
@@ -216,12 +368,10 @@ export function ScriptureTextGrid({
         ),
       );
       if (getReorderAnnouncement) {
-        setReorderAnnouncement(
-          getReorderAnnouncement(resource.label, targetIndex + 1, resources.length),
-        );
+        announce(getReorderAnnouncement(resource.label, targetIndex + 1, resources.length));
       }
     },
-    [onReorder, resources, getReorderAnnouncement],
+    [onReorder, resources, getReorderAnnouncement, announce],
   );
 
   // After a keyboard move the row re-renders with the cell in its new DOM slot; keys are stable by
@@ -304,9 +454,7 @@ export function ScriptureTextGrid({
     return (
       <div ref={gridRef} className="tw:flex tw:h-full tw:min-h-0 tw:flex-col">
         {/* Kept outside the grid root so it never lands in a grid track. */}
-        <div role="status" aria-live="polite" className="tw:sr-only">
-          {reorderAnnouncement}
-        </div>
+        <LiveAnnouncementRegion announcement={liveAnnouncement} />
         <AlignedGrid scrRef={scrRef} isViewVisible={isViewVisible} ariaLabel={ariaLabel}>
           {resources.map((resource) => (
             <ResourceColumn
@@ -317,6 +465,7 @@ export function ScriptureTextGrid({
               setScrRef={setScrRef}
               cellViewMode="aligned"
               className="tw:min-w-0"
+              isRevealed={revealedResourceId === resource.resourceId}
               reorder={buildReorder(resource)}
               zoom={zoom}
               zoomMenuLabels={zoomMenuLabels}
@@ -404,10 +553,7 @@ export function ScriptureTextGrid({
         aria-label={ariaLabel}
         className="tw:flex tw:h-full tw:flex-row tw:divide-x tw:overflow-x-auto tw:overflow-y-hidden"
       >
-        {/* Announce keyboard reorder moves to screen readers without stealing focus. */}
-        <div role="status" aria-live="polite" className="tw:sr-only">
-          {reorderAnnouncement}
-        </div>
+        <LiveAnnouncementRegion announcement={liveAnnouncement} />
         {resources.map((resource, orderIndex) => (
           <ResourceColumn
             key={resource.resourceId}
@@ -418,6 +564,7 @@ export function ScriptureTextGrid({
             orderIndex={orderIndex}
             cellViewMode="chapter"
             className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
+            isRevealed={revealedResourceId === resource.resourceId}
             reorder={buildReorder(resource)}
             zoom={zoom}
             zoomMenuLabels={zoomMenuLabels}
@@ -459,10 +606,7 @@ export function ScriptureTextGrid({
       aria-label={ariaLabel}
       className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:divide-y tw:overflow-y-auto"
     >
-      {/* Announce keyboard reorder moves to screen readers without stealing focus. */}
-      <div role="status" aria-live="polite" className="tw:sr-only">
-        {reorderAnnouncement}
-      </div>
+      <LiveAnnouncementRegion announcement={liveAnnouncement} />
       {resources.map((resource) => {
         const isOpen = chapterContext?.resourceId === resource.resourceId;
         // Activating a verse item latches the focus-restore target and toggles this resource's
@@ -479,6 +623,15 @@ export function ScriptureTextGrid({
         // Same reorder wiring the columns use. The listitem cannot be a `ResourceColumn` — it has
         // its own role and activation — but it must not carry a second copy of the handlers.
         const reorder = buildReorder(resource);
+        const isRevealed = revealedResourceId === resource.resourceId;
+        // The drop-target ring wins when both apply. Forced colors removes a ring (a box-shadow),
+        // so the reveal also draws an outline there, as `ResourceColumn`'s does.
+        let ringClass = '';
+        if (reorder?.isDropTarget) ringClass = ' tw:ring-2 tw:ring-inset tw:ring-primary';
+        else if (isRevealed)
+          ringClass =
+            ' tw:ring-2 tw:ring-inset tw:ring-ring tw:forced-colors:outline-2' +
+            ' tw:forced-colors:outline-[color:Highlight] tw:forced-colors:-outline-offset-2';
         return (
           // The row's click handler is a pointer-only convenience that widens the hit area to the
           // whole row. The keyboard-accessible control is the name button the cell renders (see
@@ -494,9 +647,15 @@ export function ScriptureTextGrid({
             data-project-id={resource.projectId}
             data-resource-id={resource.resourceId}
             data-platform-content-zoom-scope={zoomArea}
+            // Spelled out because JSX cannot take a computed attribute name without spreading; this is
+            // the value of TEXT_COLLECTION_CELL_ATTRIBUTE, which the reveal lookup searches for.
+            data-text-collection-cell=""
+            data-revealed={isRevealed ? 'true' : undefined}
+            onBlur={isRevealed ? handleRevealBlur : undefined}
             // Focusable but out of the tab order: a click on the read-only verse text then focuses
-            // the row, which is how Find learns which resource the user is reading
-            // (useFocusedResourceProjectId follows `focusin`). The cell's controls own the tab stops.
+            // the row, and a reveal can focus it, so keyboard focus sits in the resource the user is
+            // reading (which useActiveResourceProjectId reports to Find). The cell's controls own
+            // the tab stops.
             tabIndex={-1}
             data-testid={onReorder ? 'scripture-text-grid-cell-draggable' : undefined}
             // Named here only when no disclosure control exists to name it: with one, the control
@@ -522,7 +681,7 @@ export function ScriptureTextGrid({
             // attribute lives on the name control inside the cell, and the variant only matches the
             // element carrying it. The focus ring lives on that control too, so the row declares
             // none.
-            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col${activate ? ' tw:cursor-pointer tw:transition-colors tw:hover:bg-muted' : ''}${activate && isOpen ? ' tw:bg-muted/50' : ''}${reorder?.isDropTarget ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
+            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col${activate ? ' tw:cursor-pointer tw:transition-colors tw:hover:bg-muted' : ''}${activate && isOpen ? ' tw:bg-muted/50' : ''}${ringClass}`}
           >
             <ResourceCell
               resourceRef={resource}

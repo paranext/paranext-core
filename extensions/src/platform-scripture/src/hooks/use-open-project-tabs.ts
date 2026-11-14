@@ -34,8 +34,8 @@ export interface UseOpenProjectTabsOptions {
    * The declared list is UNIONED with the container `projectId`, which is what that key documents
    * ("readers just union the lists") and what the toolbar's `useOpenProjectBookIds` does. Each tab
    * carries `projectSource` so a caller can tell the two apart and apply its own rule — Find drops
-   * a reference panel's container project, because the panel is not displaying that project's
-   * text.
+   * a reference panel's or the Text Collection's container project, because neither is displaying
+   * that project's text.
    *
    * Off by default: the existing consumers (checklist, checks-side-panel) ask "which project does
    * this tab belong to", for which the container project is the whole answer.

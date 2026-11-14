@@ -2783,14 +2783,15 @@ export async function openOrUpdateRelatedPanels(
  * change reaches the provider. Declared as a named type rather than passed as an object literal
  * because an inline literal would trip TypeScript's excess-property check.
  *
- * Exported so `scriptureTextGridWebViewProvider` in `main.ts` types its `openWebViewOptions` with
- * this same type, which catches a _rename_ of `projectId` on either side via the object literal's
- * excess-property check. It does NOT catch an omission: `projectId` has to stay optional, so `{
- * bringToFront: false }` still typechecks and the provider's `openWebViewOptions.projectId ??
- * savedWebView.projectId` would quietly fall back to the stale saved id, leaving the panel on the
- * outgoing project with `typecheck` green. `resolveGridProviderProjectId` pins that precedence and
- * `buildScriptureTextGridWebView` is what the provider calls, so both the rule and its use are
- * covered. (Mirrors `FindWebViewOptions`, which Find exports once and uses on both sides.)
+ * Exported so `ScriptureTextGridWebViewFactory` in `scripture-text-grid-web-view.factory.ts` types
+ * its `openWebViewOptions` with this same type, which catches a _rename_ of `projectId` on either
+ * side via the object literal's excess-property check. It does NOT catch an omission: `projectId`
+ * has to stay optional, so `{ bringToFront: false }` still typechecks and the provider's
+ * `openWebViewOptions.projectId ?? savedWebView.projectId` would quietly fall back to the stale
+ * saved id, leaving the panel on the outgoing project with `typecheck` green.
+ * `resolveGridProviderProjectId` pins that precedence and `buildScriptureTextGridWebView` is what
+ * the provider calls, so both the rule and its use are covered. (Mirrors `FindWebViewOptions`,
+ * which Find exports once and uses on both sides.)
  */
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
 

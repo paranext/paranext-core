@@ -22,10 +22,11 @@ import {
   isSimpleInterfaceMode,
   nextPollMissState,
   prunePresentBookIds,
+  resolveGoToResultTarget,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
-  resolveTargetReferencePanelWebViewId,
+  resolveTargetTabWebViewId,
   selectWrittenBookSnapshots,
   shouldSearchAgainAfterReplaceAll,
   shouldClearResultsForInvalidQuery,
@@ -1379,7 +1380,7 @@ describe('resolveTargetEditorWebViewId', () => {
   });
 });
 
-describe('resolveTargetReferencePanelWebViewId', () => {
+describe('resolveTargetTabWebViewId', () => {
   const EDITOR = 'platformScriptureEditor.react';
   const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
   const COMMENTARIES = 'platformScriptureEditor.commentaries';
@@ -1399,16 +1400,12 @@ describe('resolveTargetReferencePanelWebViewId', () => {
 
   it('returns the panel displaying the selected scripture', () => {
     const tabs = [tab('PROJ-A', 0, 'wv-editor', EDITOR), tab('RES-1', 0, 'wv-panel', BIBLE_TEXTS)];
-    expect(resolveTargetReferencePanelWebViewId('RES-1', tabs, REVEALABLE)).toBe('wv-panel');
+    expect(resolveTargetTabWebViewId('RES-1', tabs, REVEALABLE)).toBe('wv-panel');
   });
 
   it('matches the project id case-insensitively', () => {
     expect(
-      resolveTargetReferencePanelWebViewId(
-        'RES-1',
-        [tab('res-1', 0, 'wv-panel', BIBLE_TEXTS)],
-        REVEALABLE,
-      ),
+      resolveTargetTabWebViewId('RES-1', [tab('res-1', 0, 'wv-panel', BIBLE_TEXTS)], REVEALABLE),
     ).toBe('wv-panel');
   });
 
@@ -1416,21 +1413,13 @@ describe('resolveTargetReferencePanelWebViewId', () => {
     // The panel follows the reference through its own group membership; the only action here is
     // activating the tab, so which group it sits in does not decide whether it is the target.
     expect(
-      resolveTargetReferencePanelWebViewId(
-        'RES-1',
-        [tab('RES-1', 3, 'wv-panel', BIBLE_TEXTS)],
-        REVEALABLE,
-      ),
+      resolveTargetTabWebViewId('RES-1', [tab('RES-1', 3, 'wv-panel', BIBLE_TEXTS)], REVEALABLE),
     ).toBe('wv-panel');
   });
 
   it('returns undefined for a project open only in an editor', () => {
     expect(
-      resolveTargetReferencePanelWebViewId(
-        'PROJ-A',
-        [tab('PROJ-A', 0, 'wv-editor', EDITOR)],
-        REVEALABLE,
-      ),
+      resolveTargetTabWebViewId('PROJ-A', [tab('PROJ-A', 0, 'wv-editor', EDITOR)], REVEALABLE),
     ).toBeUndefined();
   });
 
@@ -1438,7 +1427,7 @@ describe('resolveTargetReferencePanelWebViewId', () => {
     // The Model text panel is searchable but withheld from reveal — see
     // REVEALABLE_REFERENCE_PANEL_WEB_VIEW_TYPES.
     const tabs = [tab('RES-1', 0, 'wv-model', 'platformScriptureEditor.modelText')];
-    expect(resolveTargetReferencePanelWebViewId('RES-1', tabs, REVEALABLE)).toBeUndefined();
+    expect(resolveTargetTabWebViewId('RES-1', tabs, REVEALABLE)).toBeUndefined();
   });
 
   it('takes the first match when two panels show the same resource', () => {
@@ -1448,16 +1437,12 @@ describe('resolveTargetReferencePanelWebViewId', () => {
       tab('RES-1', 0, 'wv-bible', BIBLE_TEXTS),
       tab('RES-1', 0, 'wv-comm', COMMENTARIES),
     ];
-    expect(resolveTargetReferencePanelWebViewId('RES-1', tabs, REVEALABLE)).toBe('wv-bible');
+    expect(resolveTargetTabWebViewId('RES-1', tabs, REVEALABLE)).toBe('wv-bible');
   });
 
   it('returns undefined when no project is selected', () => {
     expect(
-      resolveTargetReferencePanelWebViewId(
-        undefined,
-        [tab('RES-1', 0, 'wv-panel', BIBLE_TEXTS)],
-        REVEALABLE,
-      ),
+      resolveTargetTabWebViewId(undefined, [tab('RES-1', 0, 'wv-panel', BIBLE_TEXTS)], REVEALABLE),
     ).toBeUndefined();
   });
 });
@@ -1886,5 +1871,82 @@ describe('buildReplacedAllMessage with results that changed after the search', (
     expect(buildReplacedAllMessage(STRINGS, 2, 1)).toBe(
       'Replaced 2 occurrences. Skipped 1 result that would delete a marker.',
     );
+  });
+});
+
+describe('resolveGoToResultTarget', () => {
+  const noTargets = {
+    targetEditorWebViewId: undefined,
+    hasEditorController: false,
+    targetReferencePanelWebViewId: undefined,
+    isShownInReferencePanel: false,
+    targetTextCollectionWebViewId: undefined,
+    projectId: 'project-1',
+  };
+
+  it('drives the editor when one shows the scripture and its controller is ready', () => {
+    expect(
+      resolveGoToResultTarget({
+        ...noTargets,
+        targetEditorWebViewId: 'editor',
+        hasEditorController: true,
+        targetReferencePanelWebViewId: 'bible-texts',
+        isShownInReferencePanel: true,
+        targetTextCollectionWebViewId: 'grid',
+      }),
+    ).toEqual({ kind: 'editor', webViewId: 'editor' });
+  });
+
+  it('targets nothing while the editor has no controller yet, not a panel showing it too', () => {
+    expect(
+      resolveGoToResultTarget({
+        ...noTargets,
+        targetEditorWebViewId: 'editor',
+        targetReferencePanelWebViewId: 'bible-texts',
+        isShownInReferencePanel: true,
+        targetTextCollectionWebViewId: 'grid',
+      }),
+    ).toEqual({ kind: 'none' });
+  });
+
+  it('activates a revealable reference panel over the Text Collection', () => {
+    expect(
+      resolveGoToResultTarget({
+        ...noTargets,
+        targetReferencePanelWebViewId: 'bible-texts',
+        isShownInReferencePanel: true,
+        targetTextCollectionWebViewId: 'grid',
+      }),
+    ).toEqual({ kind: 'referencePanel', webViewId: 'bible-texts' });
+  });
+
+  it('targets nothing when only Model text shows the scripture, which is already on screen', () => {
+    expect(
+      resolveGoToResultTarget({
+        ...noTargets,
+        isShownInReferencePanel: true,
+        targetTextCollectionWebViewId: 'grid',
+      }),
+    ).toEqual({ kind: 'none' });
+  });
+
+  it('reveals the scripture in the Text Collection when nothing else shows it', () => {
+    expect(
+      resolveGoToResultTarget({ ...noTargets, targetTextCollectionWebViewId: 'grid' }),
+    ).toEqual({ kind: 'textCollection', webViewId: 'grid', projectId: 'project-1' });
+  });
+
+  it('targets nothing in the Text Collection without a project to reveal', () => {
+    expect(
+      resolveGoToResultTarget({
+        ...noTargets,
+        targetTextCollectionWebViewId: 'grid',
+        projectId: undefined,
+      }),
+    ).toEqual({ kind: 'none' });
+  });
+
+  it('targets nothing when no tab shows the scripture', () => {
+    expect(resolveGoToResultTarget(noTargets)).toEqual({ kind: 'none' });
   });
 });

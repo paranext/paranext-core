@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { useRef, useState } from 'react';
@@ -12,6 +12,8 @@ import type { ResourceReferenceList } from 'platform-scripture';
 import './scripture-text-grid.web-view';
 import type { TextCollectionSources } from './scripture-text-grid-contents.utils';
 import type { GridResource } from './scripture-text-grid/resource-cell.component';
+import { resetRevealRequestStoreForTesting } from './scripture-text-grid/reveal-request-store';
+import type { RevealRequest } from './scripture-text-grid/reveal-resource.utils';
 
 /**
  * Covers the behaviors of the Scripture Text Grid web view that only exist once the whole view is
@@ -53,7 +55,13 @@ type GridStandInProps = {
   chapterContext?: GridResource;
   onChapterContextChange?: (context: GridResource) => void;
   onReorder?: (newShownIdSequence: string[]) => void;
+  revealRequest?: RevealRequest;
+  onRevealed?: (projectId: string) => void;
+  getRevealAnnouncement?: (resourceName: string) => string;
 };
+
+/** Every `revealRequest` prop the grid stand-in rendered with, in order (including `undefined`). */
+let gridRevealRequestsSeen: Array<RevealRequest | undefined> = [];
 
 /**
  * Per-project hook results for the render in flight, keyed by the project id the web view asks for.
@@ -96,6 +104,7 @@ const STRINGS: Record<string, string> = {
   '%webView_scriptureTextGrid_cell_zoomOptions%': 'Zoom options for {resourceName}',
   '%webView_scriptureTextGrid_cell_reorderAnnouncement%':
     'Moved {resourceName} to position {position} of {total}',
+  '%webView_scriptureTextGrid_revealAnnouncement%': 'Showing the result in {resourceName}',
   '%webView_scriptureTextGrid_cell_reorderHandle%': 'Reorder {resourceName}',
   '%webView_scriptureTextGrid_cell_reorderHint%': 'Drag or press arrow keys to reorder',
   '%webView_scriptureTextGrid_viewOptions_viewHeader%': 'View',
@@ -118,10 +127,10 @@ const TEXTS_HEADER = 'Texts';
 const GET_RESOURCES_LABEL = 'Get resources…';
 
 /**
- * Stands in for `papi.commands.sendCommand`; the cached-DBL-resource fetch is the only command this
- * render path reaches.
+ * Stands in for `papi.commands.sendCommand`: the cached-DBL-resource fetch, and `openFind` from
+ * Ctrl+F.
  */
-const sendCommand = vi.fn<(commandName: string) => Promise<unknown[]>>();
+const sendCommand = vi.fn<(commandName: string, ...args: unknown[]) => Promise<unknown[]>>();
 const notify = vi.fn();
 
 /**
@@ -130,12 +139,17 @@ const notify = vi.fn();
  */
 let activeEditorProjectId: string | undefined;
 
+/** What `useLocalizedStrings` reports as its loading flag. */
+let isLoadingStrings = false;
+
 /** What `useIsPowerMode` reports: `undefined` while the setting is still loading. */
 let isPowerMode: boolean | undefined;
 
 vi.mock('@papi/frontend', () => ({
   default: {
-    commands: { sendCommand: (commandName: string) => sendCommand(commandName) },
+    commands: {
+      sendCommand: (commandName: string, ...args: unknown[]) => sendCommand(commandName, ...args),
+    },
     notifications: { send: (...args: unknown[]) => notify(...args) },
     // `useTextCollectionProjectId` reads ActiveEditorProjectId off the window data provider.
     window: { dataProviderName: 'platform.windowDataProvider' },
@@ -147,7 +161,7 @@ vi.mock('@papi/frontend', () => ({
 
 vi.mock('@papi/frontend/react', () => ({
   useDataProvider: () => dblResourcesProvider,
-  useLocalizedStrings: () => [STRINGS, false],
+  useLocalizedStrings: () => [STRINGS, isLoadingStrings],
   // The grid never reads the scroll group's source project; its unbound seed comes from the
   // window's ActiveEditorProjectId. Only that data type is exercised here.
   useData: () => ({
@@ -196,41 +210,73 @@ vi.mock('./scripture-text-grid/use-resource-content-zoom.hook', () => ({
 }));
 
 vi.mock('./scripture-text-grid/scripture-text-grid.component', () => ({
-  // The real grid renders a live Scripture editor per cell. This stand-in exposes only the two
-  // gestures these tests need — a verse click that opens the chapter split, and a completed
-  // reorder — and reports whether the split is currently open.
+  // The real grid renders a live Scripture editor per cell. This stand-in exposes only the
+  // gestures these tests need — a verse click that opens the chapter split, a completed reorder,
+  // a press in a cell's text and a reveal report — and reports whether the split is open.
   ScriptureTextGrid: ({
     resources,
     chapterContext,
     onChapterContextChange,
     onReorder,
-  }: GridStandInProps) => (
-    <div>
-      <button
-        type="button"
-        data-testid="open-chapter-split"
-        onClick={() => {
-          const first = resources[0];
-          if (first) onChapterContextChange?.(first);
-        }}
-      >
-        open chapter split
-      </button>
-      {/* Mirrors the real grid, which keys the grip, the `draggable` attribute, and both gesture
-          handlers off `onReorder` (see `showDragHandle={onReorder ? true : undefined}`): with no
-          handler there is no reorder affordance to operate at all. */}
-      {onReorder ? (
+    revealRequest,
+    getRevealAnnouncement,
+    onRevealed,
+  }: GridStandInProps) => {
+    gridRevealRequestsSeen.push(revealRequest);
+    return (
+      <div>
+        <div data-testid="reveal-announcement">{getRevealAnnouncement?.('KJV')}</div>
+        <div data-testid="reveal-request">
+          {revealRequest ? JSON.stringify(revealRequest) : 'none'}
+        </div>
         <button
           type="button"
-          data-testid="reverse-resource-order"
-          onClick={() => onReorder([...resources].reverse().map((resource) => resource.resourceId))}
+          data-testid="open-chapter-split"
+          onClick={() => {
+            const first = resources[0];
+            if (first) onChapterContextChange?.(first);
+          }}
         >
-          reverse resource order
+          open chapter split
         </button>
-      ) : undefined}
-      {chapterContext ? <div data-testid="chapter-split">{chapterContext.label}</div> : undefined}
-    </div>
-  ),
+        {/* Mirrors the real grid, which keys the grip, the `draggable` attribute, and both gesture
+          handlers off `onReorder` (see `showDragHandle={onReorder ? true : undefined}`): with no
+          handler there is no reorder affordance to operate at all. */}
+        {onReorder ? (
+          <button
+            type="button"
+            data-testid="reverse-resource-order"
+            onClick={() =>
+              onReorder([...resources].reverse().map((resource) => resource.resourceId))
+            }
+          >
+            reverse resource order
+          </button>
+        ) : undefined}
+        {chapterContext ? <div data-testid="chapter-split">{chapterContext.label}</div> : undefined}
+        {/* One cell per resource, marked as the real grid marks it, holding its read-only text. */}
+        {resources.map((resource) => (
+          <div key={resource.resourceId} data-project-id={resource.projectId}>
+            <p data-testid={`cell-text-${resource.resourceId}`}>{resource.label}</p>
+          </div>
+        ))}
+        {/* Outside every cell, like the aligned view's shared root: stands in for a reveal whose
+            focus cannot name the resource, so the grid reports it instead. */}
+        {resources.map((resource) => (
+          <button
+            key={resource.resourceId}
+            type="button"
+            data-testid={`report-revealed-${resource.resourceId}`}
+            onClick={() => {
+              if (resource.projectId) onRevealed?.(resource.projectId);
+            }}
+          >
+            report revealed
+          </button>
+        ))}
+      </div>
+    );
+  },
 }));
 
 // jsdom implements none of ResizeObserver, IntersectionObserver, matchMedia, or scrollIntoView, and
@@ -392,6 +438,7 @@ beforeEach(() => {
   fallbackHookResult = unboundResult('noSource');
   activeEditorProjectId = undefined;
   isPowerMode = false;
+  isLoadingStrings = false;
   pickerResult = undefined;
   lastPickerOptions = undefined;
   dblResourcesProvider = { installDblResource: () => Promise.resolve(true) };
@@ -843,5 +890,261 @@ describe('removing a resource in the Get Resources picker', () => {
         }),
       ),
     );
+  });
+});
+
+describe('revealing a resource from Find', () => {
+  const PROJECT_ONE = 'projectOne';
+
+  /** Resolves the in-flight cached-resources fetch, which holds the grid unsettled until then. */
+  let resolveCachedResources: (() => void) | undefined;
+
+  function postRevealRequest(projectId: string) {
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { method: 'revealResource', projectId } }),
+      );
+    });
+  }
+
+  function revealRequestShown() {
+    return screen.getByTestId('reveal-request').textContent;
+  }
+
+  beforeEach(() => {
+    resetRevealRequestStoreForTesting();
+    gridRevealRequestsSeen = [];
+    // jsdom has no layout, so the web view would read as hidden and defer every request.
+    const rect = { x: 0, y: 0, width: 100, height: 100, top: 0, left: 0, right: 100, bottom: 100 };
+    vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue({
+      ...rect,
+      toJSON: () => rect,
+    });
+  });
+
+  afterEach(() => {
+    resetRevealRequestStoreForTesting();
+    vi.restoreAllMocks();
+  });
+
+  it('gives the grid a localized reveal announcement template', async () => {
+    hookResultsByProjectId.set(
+      PROJECT_ONE,
+      readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+    );
+
+    render(<ScriptureTextGridWebView {...makeProps({ projectId: PROJECT_ONE })} />);
+
+    expect(await screen.findByTestId('reveal-announcement')).toHaveTextContent(
+      'Showing the result in KJV',
+    );
+  });
+
+  it('hands the grid the request only once the catalog has settled', async () => {
+    hookResultsByProjectId.set(
+      PROJECT_ONE,
+      readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+    );
+    sendCommand.mockImplementation((commandName) =>
+      commandName === 'platformGetResources.getCachedResources'
+        ? new Promise<unknown[]>((resolve) => {
+            resolveCachedResources = () => resolve([]);
+          })
+        : Promise.resolve([]),
+    );
+
+    render(<ScriptureTextGridWebView {...makeProps({ projectId: PROJECT_ONE })} />);
+    await screen.findByTestId('reveal-request');
+
+    postRevealRequest(ALPHA.id);
+
+    // The cached resources are still loading, so the grid has no complete set of cells to search.
+    expect(revealRequestShown()).toBe('none');
+
+    await act(async () => {
+      resolveCachedResources?.();
+    });
+
+    await waitFor(() =>
+      expect(JSON.parse(revealRequestShown() ?? '')).toEqual({
+        projectId: ALPHA.id,
+        requestId: expect.any(Number),
+      }),
+    );
+  });
+
+  it('holds the request while the localized strings load, so the announcement is never a raw key', async () => {
+    hookResultsByProjectId.set(
+      PROJECT_ONE,
+      readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+    );
+    isLoadingStrings = true;
+    const { rerender } = await renderWebView({ projectId: PROJECT_ONE });
+    await screen.findByTestId('reveal-request');
+    // Let the catalog settle first, so only the loading strings can be what holds the request.
+    await act(async () => {});
+
+    postRevealRequest(ALPHA.id);
+    expect(revealRequestShown()).toBe('none');
+
+    isLoadingStrings = false;
+    rerender(<ScriptureTextGridWebView {...makeProps({ projectId: PROJECT_ONE })} />);
+    await waitFor(() =>
+      expect(JSON.parse(revealRequestShown() ?? '')).toEqual({
+        projectId: ALPHA.id,
+        requestId: expect.any(Number),
+      }),
+    );
+  });
+
+  it('drops a handed-over request when the view is hidden before the grid settles', async () => {
+    const visibilityCallbacks: Array<(entries: Array<{ isIntersecting: boolean }>) => void> = [];
+    const originalIntersectionObserver = globalThis.IntersectionObserver;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      vi.fn((callback: (entries: Array<{ isIntersecting: boolean }>) => void) => {
+        visibilityCallbacks.push(callback);
+        return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn(), takeRecords: () => [] };
+      }),
+    );
+    function setViewVisible(isVisible: boolean) {
+      const size = isVisible ? 100 : 0;
+      const rect = { x: 0, y: 0, width: size, height: size, top: 0, left: 0 };
+      vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue({
+        ...rect,
+        right: size,
+        bottom: size,
+        toJSON: () => rect,
+      });
+      act(() => {
+        visibilityCallbacks.forEach((callback) => callback([{ isIntersecting: isVisible }]));
+      });
+    }
+
+    try {
+      hookResultsByProjectId.set(
+        PROJECT_ONE,
+        readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+      );
+      sendCommand.mockImplementation((commandName) =>
+        commandName === 'platformGetResources.getCachedResources'
+          ? new Promise<unknown[]>((resolve) => {
+              resolveCachedResources = () => resolve([]);
+            })
+          : Promise.resolve([]),
+      );
+
+      render(<ScriptureTextGridWebView {...makeProps({ projectId: PROJECT_ONE })} />);
+      await screen.findByTestId('reveal-request');
+      // Positive control: the view's visibility is wired to the observer this test drives.
+      expect(visibilityCallbacks.length).toBeGreaterThan(0);
+
+      // Visible, so the store hands the request over; the grid is still loading, so it waits.
+      postRevealRequest(ALPHA.id);
+      expect(revealRequestShown()).toBe('none');
+
+      setViewVisible(false);
+      await act(async () => {
+        resolveCachedResources?.();
+      });
+      setViewVisible(true);
+
+      // Let any withheld hand-over land before asserting that none did.
+      await act(async () => {});
+      expect(revealRequestShown()).toBe('none');
+      expect(gridRevealRequestsSeen.filter((request) => request !== undefined)).toEqual([]);
+    } finally {
+      vi.stubGlobal('IntersectionObserver', originalIntersectionObserver);
+    }
+  });
+
+  it('drops a request that arrives while the body has no grid, so a later grid does not reveal it', async () => {
+    hookResultsByProjectId.set(
+      'projectEmpty',
+      readyResult(
+        { adminReferenced: EMPTY_LIST, userReferenced: EMPTY_LIST, overlay: {}, order: [] },
+        createFakeTextConnectionPdp(),
+      ),
+    );
+    hookResultsByProjectId.set(
+      PROJECT_ONE,
+      readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+    );
+
+    const { rerender } = await renderWebView({ projectId: 'projectEmpty' });
+    // Positive control: the empty body renders no grid.
+    await screen.findByText(/No texts to display/);
+    expect(screen.queryByTestId('reveal-request')).not.toBeInTheDocument();
+
+    postRevealRequest(ALPHA.id);
+
+    rerender(<ScriptureTextGridWebView {...makeProps({ projectId: PROJECT_ONE })} />);
+
+    await screen.findByTestId('reveal-request');
+    expect(revealRequestShown()).toBe('none');
+    expect(gridRevealRequestsSeen.filter((request) => request !== undefined)).toEqual([]);
+  });
+});
+
+describe('Ctrl+F in the Text Collection', () => {
+  const PROJECT_ONE = 'projectOne';
+
+  function cellTextOf(projectId: string): HTMLElement {
+    const text = document.querySelector<HTMLElement>(`[data-project-id="${projectId}"] p`);
+    if (!text) throw new Error(`No cell rendered for project "${projectId}"`);
+    return text;
+  }
+
+  function selectTextOf(element: Element) {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+
+  function pressCtrlF() {
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+  }
+
+  function openFindCalls() {
+    return sendCommand.mock.calls.filter(
+      ([commandName]) => commandName === 'platformScripture.openFind',
+    );
+  }
+
+  beforeEach(() => {
+    hookResultsByProjectId.set(
+      PROJECT_ONE,
+      readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+    );
+  });
+
+  afterEach(() => {
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it('opens Find for the resource whose text the pointer last pressed, and not before', async () => {
+    await renderWebView({ projectId: PROJECT_ONE });
+    const betaText = cellTextOf(BETA.id);
+    selectTextOf(betaText);
+
+    pressCtrlF();
+    expect(openFindCalls()).toEqual([]);
+
+    fireEvent.pointerDown(betaText);
+    pressCtrlF();
+    expect(openFindCalls()).toEqual([
+      ['platformScripture.openFind', 'webViewId', BETA.name, BETA.id],
+    ]);
+  });
+
+  it('opens Find for the resource a reveal reported, where focus cannot name it', async () => {
+    await renderWebView({ projectId: PROJECT_ONE });
+    fireEvent.pointerDown(cellTextOf(ALPHA.id));
+
+    fireEvent.click(screen.getByTestId(`report-revealed-${BETA.id}`));
+    pressCtrlF();
+    expect(openFindCalls()).toEqual([['platformScripture.openFind', 'webViewId', '', BETA.id]]);
   });
 });

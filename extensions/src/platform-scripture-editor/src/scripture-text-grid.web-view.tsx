@@ -36,6 +36,11 @@ import {
   reorderShownIds,
   reconcileCellOrder,
 } from './scripture-text-grid-order.utils';
+import {
+  installRevealRequestListener,
+  useRevealRequest,
+} from './scripture-text-grid/reveal-request-store';
+import { revealRequestForGrid } from './scripture-text-grid/reveal-resource.utils';
 import { resolveDblLongName } from './scripture-text-grid/view-options-long-name.utils';
 import {
   DOWNLOADED_NO_PROJECT_KEY,
@@ -54,7 +59,7 @@ import {
 } from './scripture-text-grid-persistence.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useIsPowerMode } from './use-is-power-mode.hook';
-import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
+import { useActiveResourceProjectId } from './use-active-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 import { useTextCollectionProjectId } from './use-text-collection-project-id.hook';
@@ -96,10 +101,15 @@ import {
   type ZoomMenuLabels,
 } from './scripture-text-grid/resource-cell-view.component';
 
+// At module scope, not in an effect, so no early `revealResource` message is missed; see
+// `installRevealRequestListener`.
+installRevealRequestListener(window);
+
 // The tab's visible title, hover tooltip, and accessible name. The title/tooltip themselves are
-// resolved and set by scriptureTextGridWebViewProvider in main.ts (not by this web view); this key
-// is still needed here for the accessible name below.
+// resolved and set by ScriptureTextGridWebViewFactory in scripture-text-grid-web-view.factory.ts
+// (not by this web view); this key is still needed here for the accessible name below.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+
 const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPanel%';
 // Notification keys are localized by the notification service, so they are NOT fetched via
 // `useLocalizedStrings`; only keys rendered directly in JSX go in `ALL_STRING_KEYS` below.
@@ -116,6 +126,7 @@ const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
 const ARIA_CLOSED_KEY = '%webView_scriptureTextGrid_aria_chapterContextClosed%';
 const REORDER_ANNOUNCEMENT_KEY = '%webView_scriptureTextGrid_cell_reorderAnnouncement%';
+const REVEAL_ANNOUNCEMENT_KEY = '%webView_scriptureTextGrid_revealAnnouncement%';
 const REORDER_HANDLE_KEY = '%webView_scriptureTextGrid_cell_reorderHandle%';
 const REORDER_HINT_KEY = '%webView_scriptureTextGrid_cell_reorderHint%';
 
@@ -139,6 +150,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   RESET_ZOOM_KEY,
   ZOOM_OPTIONS_KEY,
   REORDER_ANNOUNCEMENT_KEY,
+  REVEAL_ANNOUNCEMENT_KEY,
   REORDER_HANDLE_KEY,
   REORDER_HINT_KEY,
   // Formatted with the resource's name before it is sent, so it IS fetched here.
@@ -213,6 +225,7 @@ function ScriptureTextGridProjectView({
   initializeOverlayOnce,
   onAnnounce,
 }: ScriptureTextGridProjectViewProps) {
+  const { revealRequest, onRevealHandled } = useRevealRequest(isViewVisible);
   const { sources, textConnectionPdp, textConnectionState, isOrderPending, hasSettingsError } =
     useTextCollectionSources(projectId);
 
@@ -321,9 +334,10 @@ function ScriptureTextGridProjectView({
     [orderedReferences, cachedResources, installLookup, hasCatalogError],
   );
 
-  // Ctrl+F opens Find for the resource the caret is in. Unlike the single-resource reference panels,
-  // this view shows several texts at once, so there is no "displayed resource" to fall back to —
-  // before the user has put the caret in a cell, Ctrl+F is a logged no-op.
+  // Ctrl+F opens Find for the resource the user last clicked or focused in, or that Find last
+  // revealed. Unlike the single-resource reference panels, this view shows several texts at once,
+  // so there is no "displayed resource" to fall back to — before any of those, Ctrl+F is a logged
+  // no-op.
   const displayedProjectIds = useMemo(
     () =>
       resources
@@ -331,8 +345,9 @@ function ScriptureTextGridProjectView({
         .filter((id): id is string => id !== undefined),
     [resources],
   );
-  const caretResourceProjectId = useFocusedResourceProjectId(displayedProjectIds);
-  useOpenFindShortcut(webViewId, caretResourceProjectId);
+  const [activeResourceProjectId, setActiveResourceProjectId] =
+    useActiveResourceProjectId(displayedProjectIds);
+  useOpenFindShortcut(webViewId, activeResourceProjectId);
 
   const gridBodyState = getGridBodyState({
     hasRows: resources.length > 0,
@@ -341,14 +356,27 @@ function ScriptureTextGridProjectView({
     isLoading: isLoadingCachedResources || isLoadingLocalizedStrings,
   });
 
+  // The sources, the cached DBL list and the disk lookup have all answered. Until then `resources`
+  // (and so `displayedProjectIds`) is incomplete, which is indistinguishable from "those projects
+  // were removed", and the grid may have no cell to find.
+  const isGridSettled =
+    sources !== undefined && !isLoadingCachedResources && installLookup.status !== 'pending';
+
+  // Drops the exposed request when there is no grid to reveal into (empty, or the catalog failed),
+  // or when the view is hidden: nothing else expires a request once it is handed over, so a later
+  // show or grid must not jump to it. A loading body counts as 'grid' and keeps it.
+  const exposedRevealRequestId = revealRequest?.requestId;
+  useEffect(() => {
+    if (exposedRevealRequestId !== undefined && (gridBodyState !== 'grid' || !isViewVisible))
+      onRevealHandled(exposedRevealRequestId);
+  }, [exposedRevealRequestId, gridBodyState, isViewVisible, onRevealHandled]);
+
   // The grid is one web view hosting many projects, so its members are invisible to global
-  // navigation UI unless declared here. `resources` — and so `displayedProjectIds` — is incomplete
-  // until the sources, the cached DBL list and the disk lookup have all answered, which is
-  // indistinguishable from "those projects were removed".
+  // navigation UI unless declared here; the list is published only once the grid has settled.
   usePublishNavigableProjectIds(
     useWebViewState,
     displayedProjectIds,
-    sources !== undefined && !isLoadingCachedResources && installLookup.status !== 'pending',
+    isGridSettled,
     // A project switch re-points this panel by reloading it, which reuses the web view id, so the
     // published list would otherwise outlive the project it was built for.
     projectId,
@@ -432,6 +460,12 @@ function ScriptureTextGridProjectView({
         position,
         total,
       }),
+    [localizedStrings],
+  );
+
+  const getRevealAnnouncement = useCallback(
+    (resourceName: string) =>
+      formatReplacementString(localizedStrings[REVEAL_ANNOUNCEMENT_KEY] ?? '', { resourceName }),
     [localizedStrings],
   );
 
@@ -660,6 +694,16 @@ function ScriptureTextGridProjectView({
             scrRef={scrRef}
             setScrRef={setScrRef}
             isViewVisible={isViewVisible}
+            // Hidden case: a hidden grid cannot reveal (no layout), and a loading grid has no cell
+            // yet, so it is not handed the request until the tab is shown and the grid has settled;
+            // the request then fires the grid's requestId-keyed effect. It also waits for the
+            // localized strings, or the reveal announcement would read the raw key.
+            revealRequest={revealRequestForGrid(revealRequest, {
+              isViewVisible,
+              isGridSettled: isGridSettled && !isLoadingLocalizedStrings,
+            })}
+            onRevealHandled={onRevealHandled}
+            onRevealed={setActiveResourceProjectId}
             viewMode={viewMode}
             zoom={zoom}
             zoomMenuLabels={zoomMenuLabels}
@@ -676,6 +720,7 @@ function ScriptureTextGridProjectView({
             getReorderHandleLabel={getReorderHandleLabel}
             reorderHint={localizedStrings[REORDER_HINT_KEY]}
             getReorderAnnouncement={getReorderAnnouncement}
+            getRevealAnnouncement={getRevealAnnouncement}
           />
         )}
       </div>
@@ -875,11 +920,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // "Text Collection" (icon+title when the column is roomy, hidden in favor of the icon alone once
   // it narrows — same responsive behavior as the other Column 3 tabs) is resolved and set directly
-  // by scriptureTextGridWebViewProvider in main.ts, not here: this web view's own render/effects
-  // don't reliably run promptly while its tab is backgrounded, which previously left the header
-  // blank until the tab was activated once, even though updateWebViewDefinition had already pushed
-  // the correct value. Setting it in the provider means the tab shows the right title/tooltip from
-  // its very first render, independent of this web view's own mount timing.
+  // by ScriptureTextGridWebViewFactory in scripture-text-grid-web-view.factory.ts, not here: this
+  // web view's own render/effects don't reliably run promptly while its tab is backgrounded, so a
+  // title set from here can leave the header blank until the tab is first activated. Setting it in
+  // the provider means the tab shows the right title/tooltip from its very first render,
+  // independent of this web view's own mount timing.
 
   const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 
