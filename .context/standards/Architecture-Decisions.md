@@ -2091,7 +2091,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
-## adr-create-element-guard-trusts-call-sites: The renderer's `createElement` guard identifies the caller by V8 call-site file name, built only from references captured at install
+## adr-create-element-guard-trusts-call-sites: The renderer's `createElement` guard identifies the caller by V8 call-site file name, built only from references captured before any web view runs
 
 - **Date:** 2026-11-16
 - **Status:** Accepted
@@ -2110,11 +2110,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   caller's V8 call site, via `isCreateElementCallerAllowed`: the renderer bundle (measured at install
   from the installer's own call site) or a Usersnap widget chunk (`https` only, exact path shape).
   `getFileName()` is `undefined` for `eval` / `new Function` frames, so those are rejected.
-  - **Trust only what was captured at install.** A same-origin frame can rewrite any shared
-    prototype, so the guard keeps its own references (`Error`, `captureStackTrace`, `Reflect.apply`,
-    `String`, string and `RegExp` methods, the original `createElement` / `createElementNS`, the
-    `CallSite` methods) and a null-prototype record for the tag list. The tag argument is coerced
-    once and the original receives the coerced string.
+  - **Trust only what was captured before any web view ran.** A same-origin frame can rewrite any
+    shared global or prototype, and in production the guard module shares its realm with the window
+    it guards, so nothing on the call-time path may be looked up when a call is judged. The
+    installer captures `Error`, `captureStackTrace`, `Object` and its static methods, `String` and
+    its `toLowerCase` / `indexOf` / `slice`, `Reflect.apply` / `Reflect.get`, the original
+    `createElement` / `createElementNS` and the `CallSite` methods; `isCreateElementCallerAllowed`
+    uses `RegExp.prototype.exec` and `Reflect.apply` captured when its module loads. Everything else
+    on the path is an operator (`!!`, not `Boolean(...)`) or an own property of a value the guard
+    created or V8 handed it — no free globals, `.call` / `.apply`, iterators or spread. The tag list
+    is a null-prototype record. The tag argument is coerced once and the original receives the
+    coerced string. If `onRejected` returns instead of throwing, the guard throws its own error.
   - **Own the stack-trace machinery.** The installer makes `Error.prepareStackTrace` a
     non-configurable accessor whose getter returns the guard's formatter only during a guard
     capture, and also locks `window.Error` (non-writable, non-configurable): under an embedder
@@ -2125,8 +2131,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     as a data property, so it is set to 1 and restored rather than locked; if an attacker breaks it,
     the capture yields no frames and the call is rejected (fail closed).
   - **The guard stays until same-origin web views go.** As of 2026-11-16, PT-2912 and PT-2896 are in
-    Triage; until a web view can no longer be same-origin with the renderer, this is the only thing
-    stopping a restricted-tag `createElement` on the renderer document.
+    Triage; until a web view can no longer be same-origin with the renderer, this is the only guard
+    on restricted-tag `createElement` calls.
 - **Alternatives:** (1) A capability (a token the renderer's own code holds) instead of file names:
   not workable, because Usersnap's remote chunks (loaded by `loadSpace` in `usersnap.service.ts`) and
   webpack's chunk loader both call the global `document.createElement` themselves and cannot be
@@ -2135,8 +2141,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   creation in this change: rejected as not cheap side doors; see Consequences.
 - **Consequences:** The guard's claim is only "the caller cannot be faked", not "a web view cannot
   add scripts, frames, forms or links to the app window". Known unguarded paths, tracked in
-  PT-5086: renderer code a web view can reach (the renderer exposes React and `createRoot` to web
-  views, and React from the renderer bundle is a trusted caller); element copying (`cloneNode`,
+  PT-5086: any renderer-bundle code reachable from a web view that calls a function the web view
+  supplies, or creates elements from data it supplies, is a trusted caller — for example
+  `parent.React.Children.map(['script'], parent.document.createElement.bind(parent.document))`,
+  `createRoot` on the app window, webpack's chunk-loading global if one is reachable, and possibly
+  the bundle file itself loaded into the web view's realm (the web view CSP allows
+  `script-src-elem 'self'`); none of these was verified live. Also unguarded: element copying (`cloneNode`,
   `importNode`, `adoptNode`); HTML-text insertion (`innerHTML`, `insertAdjacentHTML`,
   `document.write`, `DOMParser`, `<template>`, and similar); and creating in the web view's own
   document, or via its own `Document.prototype`, and adopting into the app window. Constraints for
@@ -2144,7 +2154,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   throws if `Error` or `Error.prepareStackTrace` is already locked, and refuses a second install, so
   renderer unit tests that call `initialize()` repeatedly mock `installCreateElementGuard` (its real
   behaviour is tested in `renderer-create-element-guard.install.test.ts` against separate jsdom
-  realms). Either trusted caller may create any restricted tag; per-tag rules were not asked for.
+  realms, and with the module evaluated inside the guarded realm as production runs it, attacked by
+  poisoning that realm's builtins). Either trusted caller may create any restricted tag; per-tag rules were not asked for.
   **Revisit** when PT-2912 / PT-2896 land: if web views stop being same-origin, delete the guard.
   - **Live check (2026-11-16, dev build only; the packaged build was not run):** the `evil` web
     view's forgery attempts logged no `<<BAD>>`. A webpack hot update created its script through
@@ -2153,7 +2164,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     chunk loader are also both in `renderer.js`. A `script` created from DevTools-evaluated code
     was rejected. Toolbar SVG icons rendered. The Usersnap path was not exercised, because this
     build has no Usersnap keys. PT-5086 probes: (a) a script that the web view created in its own
-    document and appended to the app window RAN in the app window. (b) an iframe rendered through
+    document and appended to the app window RAN in the app window. So in practice the guard does not
+    stop script injection today: removing `'unsafe-inline'` from the renderer CSP (PT-2801) or
+    landing PT-2896 is the real fix; see PT-5086. (b) an iframe rendered through
     the app window's `createRoot` was allowed by this guard (React in the renderer bundle is a
     trusted caller), but the separate no-sandbox iframe check removed it, so it did not appear.
 - **Source:** PT-4767 (epic PT-2091); design for the `pt-4767-createelement-guard-call-site` branch.
