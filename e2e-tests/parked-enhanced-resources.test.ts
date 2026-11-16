@@ -3,11 +3,14 @@
  *
  * Playwright's `testIgnore` silently skips a glob that matches nothing, so a renamed spec or a
  * mistyped entry would put a parked file back into the runs without any error, and a file carrying
- * a PARKED header could be listed nowhere. The second half checks that both configs still use the
- * list and that no config collects the parked `manage-books/` (destructive to real projects) and
- * `markers-checklist/` directories. It compares `testIgnore` entries and `testDir` paths; it does
- * not model Playwright's glob matching, so a project whose `testMatch` reaches into a parked
- * directory is not caught.
+ * a PARKED header could be listed nowhere. The second half checks that `playwright-cdp.config.ts`
+ * ignores the list and the parked `manage-books/` (destructive to real projects) and
+ * `markers-checklist/` directories, and that no `playwright.config.ts` project collects those two
+ * or `enhanced-resources/`. That last ban is deliberate: the Enhanced Resources specs attach to a
+ * running app, which that config's globalSetup rejects, so a project there could never pass. Give
+ * the directory a project only once its specs launch their own app, and change this test with it.
+ * The checks compare `testIgnore` entries and `testDir` paths; they do not model Playwright's glob
+ * matching, so a project whose `testMatch` reaches into one of those directories is not caught.
  */
 import fs from 'fs';
 import path from 'path';
@@ -20,9 +23,14 @@ const TESTS_DIRECTORY = path.join(__dirname, 'tests');
 const SPEC_DIRECTORY = path.join(TESTS_DIRECTORY, 'enhanced-resources');
 const ENTRY_PREFIX = '**/enhanced-resources/';
 const PARKED_DIRECTORY_GLOBS = ['**/manage-books/**', '**/markers-checklist/**'];
-const PARKED_DIRECTORIES = [
+/**
+ * Directories no `playwright.config.ts` project may collect: the two parked suites, and
+ * `enhanced-resources/`, whose specs attach to a running app that config's globalSetup rejects.
+ */
+const DIRECTORIES_THE_MAIN_CONFIG_MUST_NOT_COLLECT = [
   path.join(TESTS_DIRECTORY, 'manage-books'),
   path.join(TESTS_DIRECTORY, 'markers-checklist'),
+  SPEC_DIRECTORY,
 ];
 
 /** The string patterns of a Playwright `testIgnore` value, whichever of its shapes it takes. */
@@ -87,32 +95,27 @@ describe('parked Enhanced Resources specs', () => {
   });
 });
 
-describe('both Playwright configs keep the parked specs out', () => {
+describe('the Playwright configs keep the parked and attach-only specs out of the wrong runs', () => {
   it('playwright-cdp.config.ts ignores every parked entry and both parked directories', () => {
     expect(stringPatterns(cdpConfig.testIgnore)).toEqual(
       expect.arrayContaining([...PARKED_ENHANCED_RESOURCES_SPECS, ...PARKED_DIRECTORY_GLOBS]),
     );
   });
 
-  it("playwright.config.ts's enhanced-resources project covers that directory and ignores every parked entry", () => {
-    const project = mainConfig.projects?.find(({ name }) => name === 'enhanced-resources');
-
-    expect(project?.testDir && path.resolve(__dirname, project.testDir)).toBe(SPEC_DIRECTORY);
-    expect(stringPatterns(project?.testIgnore)).toEqual(
-      expect.arrayContaining(PARKED_ENHANCED_RESOURCES_SPECS),
-    );
-  });
-
-  it('no playwright.config.ts project collects a parked directory', () => {
+  // If this fails because a project for `tests/enhanced-resources/` was added: its specs attach
+  // to a running app, which `playwright.config.ts`'s globalSetup rejects, so they run through
+  // `playwright-cdp.config.ts` instead (see `tests/enhanced-resources/README.md`). Add a project
+  // there only once those specs launch their own app, and update this test in the same change.
+  it('no playwright.config.ts project collects manage-books, markers-checklist or enhanced-resources', () => {
     const projects = mainConfig.projects ?? [];
-    // A project without its own testDir inherits `tests/`, which holds the parked directories.
+    // A project without its own testDir inherits `tests/`, which holds all three directories.
     const collectingTestDirectories = projects.map(({ name, testDir }) => ({
       name,
       directory: path.resolve(__dirname, testDir ?? mainConfig.testDir ?? '.'),
     }));
     const offending = collectingTestDirectories.filter(({ directory }) =>
-      PARKED_DIRECTORIES.some(
-        (parked) => isSameOrInside(directory, parked) || isSameOrInside(parked, directory),
+      DIRECTORIES_THE_MAIN_CONFIG_MUST_NOT_COLLECT.some(
+        (excluded) => isSameOrInside(directory, excluded) || isSameOrInside(excluded, directory),
       ),
     );
 

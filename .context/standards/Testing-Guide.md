@@ -1463,8 +1463,9 @@ npx playwright show-report e2e-tests/playwright-report
 # Standalone mode (launches its own Electron, port 8876 must be free). Each project in
 # playwright.config.ts has its own testDir, so path-filter inside it: `isolated` →
 # tests/isolated/** (most feature tests), `smoke` → tests/smoke/** (what CI runs, via
-# `npm run test:e2e:smoke`). The `enhanced-resources` project is registered there too, but its
-# specs attach to a running app, which that config's globalSetup rejects: run them in CDP mode.
+# `npm run test:e2e:smoke`). tests/attached/ and tests/enhanced-resources/ have no project there:
+# their specs attach to a running app, which that config's globalSetup rejects, so run them in CDP
+# mode.
 npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated --reporter=list
 
 # WSL2: wrap a standalone-mode run so its Electron windows do not take over the Windows desktop.

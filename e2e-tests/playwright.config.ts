@@ -1,5 +1,4 @@
 import { defineConfig } from '@playwright/test';
-import { PARKED_ENHANCED_RESOURCES_SPECS } from './parked-enhanced-resources';
 
 /**
  * Playwright configuration for paranext-core E2E tests.
@@ -39,19 +38,23 @@ const config = defineConfig({
   globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
   outputDir: './test-results',
-  // Convention: directories under `tests/` should generally be reachable from at least one project
-  // entry below. Most feature-specific e2e tests can be added under `isolated`. If you add a new
-  // test directory, register it here AND wire it into either CI (`test:e2e:smoke`) or a local-only
-  // npm script (`test:e2e:<name>`).
+  // Convention: directories under `tests/` whose specs launch their own Electron should be
+  // reachable from at least one project entry below. Most feature-specific e2e tests can be added
+  // under `isolated`. If you add a new test directory of that kind, register it here AND wire it
+  // into either CI (`test:e2e:smoke`) or a local-only npm script (`test:e2e:<name>`).
   //
   // See the README in each directory for more information about the nature of the tests.
   //
   // Exceptions:
   // `_example/` — reference template for new tests, not a runnable test suite.
+  // `attached/` and `enhanced-resources/` — their specs attach to an app you started, which this
+  // config's globalSetup rejects, so they have no project here; `playwright-cdp.config.ts` collects
+  // them (minus the parked Enhanced Resources specs, see `parked-enhanced-resources.ts`). Give
+  // `enhanced-resources/` a project only once its specs launch their own app;
+  // `parked-enhanced-resources.test.ts` fails on one before that.
   // Parked suites (`manage-books/`, `markers-checklist/`; see "Local-only directories" in
   // `e2e-tests/CLAUDE.md`) have no project here and are testIgnored by `playwright-cdp.config.ts`
-  // too, so no config collects them. `enhanced-resources/` below is registered, but its parked
-  // specs are testIgnored (see `parked-enhanced-resources.ts`).
+  // too, so no config collects them.
   // Nothing else is excluded here: `navigation-history/` is an isolated subset like any other,
   // and `playwright-cdp.config.ts` cannot collect it at all (`testIgnore: ['**/isolated/**']`).
   projects: [
@@ -69,27 +72,13 @@ const config = defineConfig({
       // aborts when port 8876 is bound, which is exactly the state an attach spec needs, so one
       // living here could never run alongside its neighbours. They live in `tests/attached/`.
       //
-      // `tests/attached/` is deliberately NOT a project in this config for that same reason: its
-      // globalSetup would refuse the running app those specs exist to attach to. They are collected
-      // by `playwright-cdp.config.ts`, which has no globalSetup, and run with
-      // `npm run test:e2e:attached` against an app started by ./.erb/scripts/refresh.sh.
+      // `tests/attached/` and `tests/enhanced-resources/` are deliberately NOT projects in this
+      // config for that same reason: its globalSetup would refuse the running app those specs exist
+      // to attach to. Both are collected by `playwright-cdp.config.ts`, which has no globalSetup,
+      // and run against an app started by ./.erb/scripts/refresh.sh — `tests/attached/` with
+      // `npm run test:e2e:attached`.
       name: 'isolated',
       testDir: './tests/isolated',
-    },
-    {
-      // Local-only - NOT wired into CI's `test:e2e:smoke`. The ER tests need real
-      // Marble resources (e.g., ESV16UK+) which are not available in CI. There is no dedicated
-      // npm script. These specs use fixtures/cdp.fixture.ts, so run them through the CDP config,
-      // which has no globalSetup; running them through THIS config fails, because its globalSetup
-      // rejects the very app they need to attach to:
-      //   ./.erb/scripts/refresh.sh
-      //   npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/
-      // The entry below therefore only registers the directory with this config; its practical
-      // effect is that `test:e2e:all` (this config, no --project) cannot pass either.
-      name: 'enhanced-resources',
-      testDir: './tests/enhanced-resources',
-      // The parked specs in this directory are collected by no config.
-      testIgnore: PARKED_ENHANCED_RESOURCES_SPECS,
     },
   ],
 });

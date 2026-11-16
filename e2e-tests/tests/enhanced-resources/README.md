@@ -78,13 +78,18 @@ To bring a parked file back into use:
 
 ### What collects this suite
 
-The 6 locally-run files are registered as a project in `playwright.config.ts`
-(`name: 'enhanced-resources'`) and also collected by `playwright-cdp.config.ts`, which testIgnores
-`smoke`, `isolated`, `_example`, `manage-books` and `markers-checklist` but not this directory. There is no dedicated npm
-script, and nothing in CI runs it. The 11 parked files are testIgnored by both configs
+The 6 locally-run files are collected by `playwright-cdp.config.ts`, which testIgnores `smoke`,
+`isolated`, `_example`, `manage-books` and `markers-checklist` but not this directory. There is no
+dedicated npm script, and nothing in CI runs it. The 11 parked files are testIgnored there
 (`PARKED_ENHANCED_RESOURCES_SPECS`), so no config collects them.
 
-Registered is not the same as runnable. These specs attach through `fixtures/cdp.fixture.ts`, all
+This directory deliberately has no project in `playwright.config.ts`, like `tests/attached/`:
+that config's globalSetup rejects the running app these specs attach to, so a project there could
+never pass, and `npm run test:e2e:all` would collect specs it cannot run. Give it a project only
+once its specs launch their own app, as the `isolated` ones do; until then
+`e2e-tests/parked-enhanced-resources.test.ts` fails if one is added.
+
+These specs attach through `fixtures/cdp.fixture.ts`, all
 but `scripture-text-grid-verse-row.spec.ts` via the `enhanced-resources.fixture.ts` wrapper (that
 one imports `cdp.fixture` directly and so does not assert Power mode), so they attach to an
 already-running app and must go

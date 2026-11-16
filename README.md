@@ -604,9 +604,9 @@ All `test:e2e:*` scripts are there for running variations of the playwright end-
   that attach to an app you started live in `e2e-tests/tests/attached/` instead, so nothing under
   `tests/isolated/` needs a running app
 - `test:e2e-cdp` runs tests that require the application UI to be open already
-- `test:e2e:all` runs every project in `e2e-tests/playwright.config.ts`. It cannot currently pass:
-  `enhanced-resources` attaches to a running app, which that config's global setup refuses to start
-  alongside
+- `test:e2e:all` runs every project in `e2e-tests/playwright.config.ts`: `smoke` and `isolated`.
+  Suites that attach to an app you started (`e2e-tests/tests/attached/` and the local-only part of
+  `e2e-tests/tests/enhanced-resources/`) have no project there and run through `test:e2e-cdp`
 
 ## Storybook
 
