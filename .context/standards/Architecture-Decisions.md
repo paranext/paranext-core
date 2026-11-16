@@ -3343,9 +3343,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   each C0 control character but tab, LF and CR that the user types, pastes or drops in as a space —
   plain text, html and a node copy alike — through the rule that drops an entered U+FEFF
   (`InvisibleCharactersPlugin`, `normalizeEnteredText`; catalog EV-6). ParatextData reads every such
-  character as a space (`ScrText.ProcessBookOrChapterText`), so no loaded text holds one, and so
-  the editors can keep U+001A (Standard view's no-break-space stand-in) and U+000B for their own
-  use. Text a document already holds is never changed on input; a load keeps its own rules.
+  character as a space (`ScrText.ProcessBookOrChapterText`, pinned by
+  `ControlCharacterReadCaptureTests.cs`), so no loaded text holds one, and so the editors can keep
+  U+001A (Standard view's no-break-space stand-in) and U+000B for their own use. If a ParatextData
+  upgrade turns that test red, a stored U+000B would reach the editor and its settle would drop it. Text a document already holds is never changed on input; a load keeps its own rules.
 - **Alternatives:** **Keep U+2028 and escape a real one in the settle's text** — rejected: every
   reader of that text that counts positions would have to know the escape. **A noncharacter or
   private-use code point** — not whitespace to `\s`, so the caret positions either side of the
@@ -3416,9 +3417,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `NBSP_STAND_IN`, U+001A (SUBSTITUTE) — in its tree, in the settle's USFM fragments, in paste and
   for a typed U+00A0 — and `~` is an ordinary character. One helper in the editor
   (`getNbspSpelling`) supplies the spelling to every layer.
-  - **Why U+001A:** ParatextData's `ScrText.GetText` turns U+0001–U+0008 and U+000E–U+001F into
-    spaces on every read (measured), so no project text can hold it and the stand-in collides with
-    nothing. Bidi class BN, line-break class CM (no break before it), one grapheme. Not U+0000 (the
+  - **Why U+001A:** ParatextData's `ScrText.GetText` turns every C0 control character but tab, LF
+    and CR into a space on every read, U+000B and U+000C included (`ScrText.ProcessBookOrChapterText`,
+    pinned by `ControlCharacterReadCaptureTests.cs`), so no project text can hold it and the
+    stand-in collides with nothing. Bidi class BN, line-break class CM (no break before it), one grapheme. Not U+0000 (the
     editor's settle-scope signature separator), U+000B/U+000C (whitespace to JavaScript) or
     U+001C–U+001F (bidi separators).
   - **It looks like a no-break space:** a one-glyph font family, `PlatformEditorNbspStandIn` (an
