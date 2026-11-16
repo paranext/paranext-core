@@ -89,6 +89,32 @@ describe('installCreateElementGuard', () => {
     expect(runTrusted("document.createElement('script').tagName")).toBe('SCRIPT');
   });
 
+  it('ignores a swapped Error binding fed a harvested bundle call site', () => {
+    // Node's stack-trace callback finds the hook through the window's `Error` binding, so a swapped
+    // binding would run this formatter during the guard's own capture: it harvests a call site from
+    // the renderer bundle and hands it to the real hook, which is the guard's formatter right then
+    runForeign(`
+      globalThis.realError = appWindow.Error;
+      const Fake = function () {};
+      Fake.prepareStackTrace = (e, sites) => {
+        for (const site of sites) if (site.getFileName() === bundle) globalThis.saved = site;
+        if (globalThis.saved) {
+          const hook = realError.prepareStackTrace;
+          if (typeof hook === 'function') hook(e, [globalThis.saved]);
+        }
+        return '';
+      };
+      appWindow.Error = Fake;
+    `);
+    expect(runForeign('appWindow.Error === realError')).toBe(true);
+    expect(
+      runTrusted("try { null.x; } catch (e) { e.stack; } document.createElement('iframe').tagName"),
+    ).toBe('IFRAME');
+    expect(() => runForeign("appWindow.document.createElement('script')")).toThrow(
+      /rejected script/,
+    );
+  });
+
   it('legitimate hook still formats other errors', () => {
     expect(runTrusted("Error.prepareStackTrace = () => 'MINE'; new Error().stack")).toBe('MINE');
     expect(runTrusted("document.createElement('script').tagName")).toBe('SCRIPT');
@@ -183,9 +209,11 @@ describe('installCreateElementGuard', () => {
   });
 
   it('forwards options', () => {
-    const code = `document.createElementNS('${XHTML_NAMESPACE}', 'div', { is: 'x-a' }).getAttribute('is')`;
+    // jsdom serializes `is` but does not report it through `getAttribute`, so compare the markup
+    const code = `document.createElementNS('${XHTML_NAMESPACE}', 'div', { is: 'x-a' }).outerHTML`;
     const uninstalled = new JSDOM(HTML, { runScripts: 'outside-only' });
     const nativeResult = vm.runInContext(code, uninstalled.getInternalVMContext());
+    expect(nativeResult).toContain('x-a');
     expect(runTrusted(code)).toBe(nativeResult);
   });
 
@@ -208,6 +236,26 @@ describe('installCreateElementGuard', () => {
     expect(() => runForeign("appWindow.document.createElement('script')")).toThrow(
       /rejected script/,
     );
+  });
+
+  it('refuses to install over a locked Error binding', () => {
+    const locked = new JSDOM(HTML, { runScripts: 'outside-only' });
+    // The vm global drops the value when a redefinition omits it, so restate it
+    Object.defineProperty(locked.window, 'Error', {
+      value: locked.window.Error,
+      writable: false,
+      configurable: false,
+    });
+    expect(() =>
+      installCreateElementGuard({
+        realm: asRealm(locked),
+        restrictedTagNames: ['script'],
+        onAllowed: vi.fn(),
+        onRejected: (tagName) => {
+          throw new Error(`rejected ${tagName}`);
+        },
+      }),
+    ).toThrow(/Error binding/);
   });
 
   it('refuses to install over a locked hook', () => {

@@ -185,12 +185,14 @@ export type CreateElementGuardOptions = {
  * Everything the guard calls later is captured from `realm` here, so code that later replaces a
  * builtin (including a same-origin frame reaching this window as `parent`) cannot change the
  * answer. The guard also takes ownership of `realm.Error.prepareStackTrace`: values assigned to it
- * are stored and served as usual, except while the guard is capturing a call site.
+ * are stored and served as usual, except while the guard is capturing a call site. It also locks
+ * the `realm.Error` binding, since an embedder's stack-trace callback (Node's, for one) finds the
+ * hook through that binding rather than through the intrinsic.
  *
  * @param options The realm to guard, the restricted tags, and the allow and reject callbacks
  * @returns The renderer bundle file name the guard measured for itself
- * @throws If `realm.Error.prepareStackTrace` is already non-configurable or the guard cannot read
- *   its own file name, rather than leave the realm unguarded
+ * @throws If `realm.Error` or `realm.Error.prepareStackTrace` is already non-configurable or the
+ *   guard cannot read its own file name, rather than leave the realm unguarded
  */
 export function installCreateElementGuard(options: CreateElementGuardOptions): {
   rendererBundleFileName: string;
@@ -225,8 +227,13 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
    * Captures up to `depth` call sites below `boundary` through `guardFormatter`, or `undefined` if
    * that fails. V8 picks the realm whose `Error.prepareStackTrace` formats the trail from the
    * holder's realm, so the holder comes from the captured realm `Object`. V8 honors
-   * `stackTraceLimit` only as a data property, so it is written and restored, never redefined. No
-   * code outside the guard runs between clearing `formattedSites` and reading it back.
+   * `stackTraceLimit` only as a data property, so it is written and restored, never redefined.
+   *
+   * Between clearing `formattedSites` and reading it back, only V8 and the embedder's stack-trace
+   * callback run, and both reach a formatter only through `realm.Error.prepareStackTrace`. While
+   * the guard is capturing, that is `guardFormatter`, because the guard owns the hook and has
+   * locked the `realm.Error` binding. So no code outside the guard can deliver call sites of its
+   * own choosing.
    */
   const captureSites = (depth: number, boundary: CaptureBoundary): CallSite[] | undefined => {
     try {
@@ -254,6 +261,10 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
       return undefined;
     }
   };
+
+  // Checked before anything is changed, so a failed install leaves the realm as it found it
+  if (getOwnPropertyDescriptor(realm, 'Error')?.configurable === false)
+    throw new Error('Cannot guard createElement: the Error binding is already non-configurable');
 
   // Step 2: measure this file's name from a real call site, and take the `CallSite` methods from
   // that call site's prototype
@@ -285,7 +296,9 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
   if (typeof rendererBundleFileName !== 'string')
     throw new Error('Cannot guard createElement: could not read its own script file name');
 
-  // Step 3: own the hook so the guard's captures always use the guard's formatter
+  // Step 3: own the hook so the guard's captures always use the guard's formatter, and lock the
+  // `Error` binding so no stack-trace callback can be pointed at a different hook
+  defineProperty(realm, 'Error', { value: RealmError, writable: false, configurable: false });
   defineProperty(RealmError, 'prepareStackTrace', {
     get: () => (isGuardCapturing ? guardFormatter : hookValue),
     set: (value: unknown) => {
