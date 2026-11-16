@@ -4587,6 +4587,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   deleted. `useProjectStylesheet` and `useFootnotePaneFontStylesheet` call it, the latter with
   `FOOTNOTE_ROWS_SELECTOR` as `containerSelector`. The decision itself is unchanged. The
   `release-prep` branch keeps core's copy.
+- **Amended 2026-11-06 (PT-4086, UX review):** Simple's `\s`-`\s3` headings no longer have a size
+  of their own. Their gutter rule now only places them, as upstream
+  (eten-tech-foundation/scripture-editors#486), so they take the formatted view's standard heading
+  styles, as in Preview. Only the verse number and the ellipsis box still derive from
+  `--psc-base-font-size`.
 - **Source:** PT-4966.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
