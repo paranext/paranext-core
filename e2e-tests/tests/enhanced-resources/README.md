@@ -61,19 +61,23 @@ Together the parked files declare 157 `test(...)` / `test.fixme(...)` tests, 45 
 
 To bring a parked file back into use:
 
-- Remove its entry from `PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`;
-  until then no Playwright config collects it.
+- Remove its entry from `PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`
+  and its PARKED header comment together; until then no Playwright config collects it. Remove both
+  in the same change: `e2e-tests/parked-enhanced-resources.test.ts` fails while only one of them is
+  gone.
 - For the `enhanced-resources-functional-*` and `-journey` files, start the app in Power mode with
   the Marble resources the file opens (such as `ESV16UK+`) installed.
 - Replace each `test.fixme` with a real test once the behaviour it describes exists, or delete the
   scenario if the design dropped it. Some `test.fixme` bodies name a missing fixture, such as a
   resource with partial book coverage or a pre-release resource.
-- For `text-collection-schema.spec.ts`, set `E2E_TEST_PROJECT_ID` to an editable project on which
-  you are administrator; the spec skips itself without it. It runs in either interface mode and
-  needs no Marble resource.
+- For `text-collection-schema.spec.ts`, set `E2E_TEST_PROJECT_ID` to a throwaway project you
+  administer; the spec skips itself without it. It overwrites that project's referenced-resources
+  setting (saved to the project's own `Settings.xml`) with one made-up entry and resets your Text
+  Collection overlay for it, and restores neither. It runs in either interface mode and needs no
+  Marble resource.
 - Check the selectors and expectations against the current UI, since the specs were written before
   the feature settled, then run the file and fix what fails.
-- Move the file out of "parked" here and remove its header comment once it passes.
+- Move the file out of "parked" here once it passes.
 
 ### What collects this suite
 
@@ -83,8 +87,10 @@ The 6 locally-run files are registered as a project in `playwright.config.ts`
 script, and nothing in CI runs it. The 11 parked files are testIgnored by both configs
 (`PARKED_ENHANCED_RESOURCES_SPECS`), so no config collects them.
 
-Registered is not the same as runnable. These specs attach through `fixtures/cdp.fixture.ts`, via
-the `enhanced-resources.fixture.ts` wrapper, so they attach to an already-running app and must go
+Registered is not the same as runnable. These specs attach through `fixtures/cdp.fixture.ts`, all
+but `scripture-text-grid-verse-row.spec.ts` via the `enhanced-resources.fixture.ts` wrapper (that
+one imports `cdp.fixture` directly and so does not assert Power mode), so they attach to an
+already-running app and must go
 through the CDP config — `playwright.config.ts`'s `globalSetup` rejects the very app they need. They
 also need real Marble resources (e.g. `ESV16UK+`) that are not available in CI.
 

@@ -1,8 +1,11 @@
 /**
  * PARKED — no Playwright config collects this file, and it has never run as a whole. It is kept as
  * the written scenarios for the Enhanced Resources feature (epic PT-2021). It skips itself unless
- * `E2E_TEST_PROJECT_ID` names an editable admin project. To work on it, remove its entry from
- * `e2e-tests/parked-enhanced-resources.ts`. See `e2e-tests/tests/enhanced-resources/README.md`.
+ * `E2E_TEST_PROJECT_ID` names a project you administer — use a throwaway one: it overwrites that
+ * project's referenced-resources setting (saved to the project's own `Settings.xml`) with one
+ * made-up entry and resets your Text Collection overlay for it, and restores neither. To work on
+ * it, remove its entry from `e2e-tests/parked-enhanced-resources.ts` and this header together. See
+ * `e2e-tests/tests/enhanced-resources/README.md`.
  */
 /**
  * E2E checks for the PT-4050 (A2) two-flag schema + overlay init + admin gate.
@@ -10,10 +13,12 @@
  * MANUAL-ONLY: this spec does not run in CI. It is `test.skip`-gated on `E2E_TEST_PROJECT_ID`,
  * which is set nowhere in the repo. While its entry is in `PARKED_ENHANCED_RESOURCES_SPECS`
  * (`e2e-tests/parked-enhanced-resources.ts`) no Playwright config collects it. To run it locally,
- * remove that entry, boot the app with CDP enabled, set `E2E_TEST_PROJECT_ID` to a known editable
- * admin project, and run it through `e2e-tests/playwright-cdp.config.ts`. Regression protection for
- * this feature comes from the C# unit tests (ParatextProjectDataProviderTextCollectionTests); this
- * spec is a manual smoke check.
+ * remove that entry and the PARKED header together, boot the app with CDP enabled, set
+ * `E2E_TEST_PROJECT_ID` to a throwaway project you administer (the spec overwrites its
+ * referenced-resources setting and resets your Text Collection overlay, and restores neither), and
+ * run it through `e2e-tests/playwright-cdp.config.ts`. Regression protection for this feature comes
+ * from the C# unit tests (ParatextProjectDataProviderTextCollectionTests); this spec is a manual
+ * smoke check.
  *
  * Scope — vanilla-core-observable only:
  *
@@ -29,8 +34,8 @@
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 
-// A stable test project id available in the e2e fixture data. Adjust to the fixture's known
-// editable, admin project id if this constant differs in the harness.
+// The id of a throwaway project the user administers. The test overwrites that project's
+// referenced-resources setting and resets the Text Collection overlay, and restores neither.
 //
 // Investigation: the enhanced-resources test suite (test-helpers.ts and sibling specs) does not
 // expose a known fixture project id constant — it only operates on UI elements (tabs, iframes).

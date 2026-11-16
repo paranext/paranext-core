@@ -3,7 +3,8 @@
  * specs it covers a shipped feature, the Text Collection grid, and is parked because eight of its
  * assertions are out of date. It comes back when PT-4779 is done. Like the other grid specs it
  * needs an app in Power mode with real Marble resources. To work on it, remove its entry from
- * `e2e-tests/parked-enhanced-resources.ts`. See `e2e-tests/tests/enhanced-resources/README.md`.
+ * `e2e-tests/parked-enhanced-resources.ts` and this header together. See
+ * `e2e-tests/tests/enhanced-resources/README.md`.
  */
 /**
  * E2E scaffold checks for the Scripture Text Grid web view (PT-4049).

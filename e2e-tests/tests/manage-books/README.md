@@ -50,11 +50,14 @@ Every file keeps a header comment saying it is parked and, where it applies, des
 
 ## How to run `manage-books-commands.spec.ts` by hand
 
-Only on a machine prepared for its second `describe`; to keep to the half that writes nothing, run it with
-`--grep "wire-level round-trip"`.
+The first command runs only the first `describe`, which writes nothing. The second runs both halves;
+use it only on a machine prepared for the second `describe`.
 
 ```bash
 ./.erb/scripts/refresh.sh
+# Writes nothing:
+npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/manage-books/manage-books-commands.spec.ts --grep "wire-level round-trip"
+# Both halves — only on a machine prepared for the second describe:
 npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/manage-books/manage-books-commands.spec.ts
 ```
 

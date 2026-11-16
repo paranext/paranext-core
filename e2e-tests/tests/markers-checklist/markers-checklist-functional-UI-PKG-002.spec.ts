@@ -1,10 +1,11 @@
 /**
  * PARKED — no Playwright config collects this file, and it has never run to completion. It is kept
  * as the written scenarios for the Markers checklist (epic PT-2049, "Inventory & Checklists"). It
- * attaches to a running app over CDP in Power mode and needs the `wgPIDGIN` project; it writes
- * evidence screenshots under `.context/features/markers-checklist/proofs/e2e-evidence`. To work on
- * it, remove the markers-checklist glob from `testIgnore` in `e2e-tests/playwright-cdp.config.ts`
- * (the ignore also applies to a file named on the command line). See
+ * attaches to a running app over CDP in Power mode and needs the `wgPIDGIN` project. Its evidence
+ * screenshot path (`EVD_DIR`) is relative to the working directory, so from the repo root the
+ * screenshots land outside the repository; fix that path when reviving it. To work on it, remove
+ * the markers-checklist glob from `testIgnore` in `e2e-tests/playwright-cdp.config.ts` (the ignore
+ * also applies to a file named on the command line). See
  * `e2e-tests/tests/markers-checklist/README.md`.
  */
 /**

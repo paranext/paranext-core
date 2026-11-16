@@ -46,11 +46,13 @@ collects it:
     are `test.fixme`. Before the `enhanced-resources-functional-*` and `-journey` files can run they
     need an app in Power mode with real Marble resources such as `ESV16UK+`.
     `text-collection-schema.spec.ts` needs neither: it works in either interface mode and only needs
-    `E2E_TEST_PROJECT_ID` to name an editable admin project (it skips itself otherwise).
+    `E2E_TEST_PROJECT_ID` to name a throwaway project you administer (it skips itself otherwise). It
+    overwrites that project's referenced-resources setting and resets your Text Collection overlay,
+    and restores neither.
   - No config collects the parked files: both `playwright-cdp.config.ts` and `playwright.config.ts`
     list them in `testIgnore` through `PARKED_ENHANCED_RESOURCES_SPECS` in
     `e2e-tests/parked-enhanced-resources.ts`. To work on one, remove its entry from that list and
-    run it against a prepared app. See the directory's README.
+    its PARKED header together, and run it against a prepared app. See the directory's README.
 - `tests/markers-checklist/` — all of it is parked, kept as the written scenarios for the Markers
   checklist (epic PT-2049, "Inventory & Checklists"). The specs have never run to completion and
   are a record of intent, not coverage. `playwright-cdp.config.ts` testIgnores the directory and
@@ -85,6 +87,9 @@ the suite is meant to be run routinely.
 
 ## What NOT to do
 
+- Do not leave a spec that no config runs. Either get it running, or park it: an ignore entry in
+  the config (for `tests/enhanced-resources/`, an entry in `PARKED_ENHANCED_RESOURCES_SPECS`), a
+  PARKED header naming the owner epic, and an entry in the directory README saying what it needs.
 - Do not put feature tests in `smoke/` — smoke tests are for the core happy path (plus the
   bare-Electron checks its README describes) and must stay fast and CI-green.
 - Do not use `manage-books/`, `markers-checklist/` or `enhanced-resources/` as models — those are
