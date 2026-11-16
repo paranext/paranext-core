@@ -132,7 +132,7 @@
   "%firstRun_button_skip%": "跳过设置",
   "%firstRun_button_skipSync%": "跳过自动同步",
   "%firstRun_button_sync%": "同步",
-  "%firstRun_description%": "完成初始设置以开始使用 Platform.Bible。",
+  "%firstRun_description%": "完成初始设置以开始使用 {%product_name%}。",
   "%firstRun_error_body%": "无法连接到注册服务。请检查您的网络连接并重试。",
   "%firstRun_error_body_providerStartingUp%": "{%product_name%} 尚无法验证您的注册信息。可能仍在启动中，请稍候重试，或暂时继续而不完成设置。",
   "%firstRun_error_title%": "无法验证您的注册信息",
@@ -162,5 +162,5 @@
   "%firstRun_step_syncProgress_complete_heading%": "同步完成",
   "%firstRun_step_syncProgress_heading%": "正在同步您的项目",
   "%firstRun_stepIndicator%": "第 {stepNumber} 步，共 {stepCount} 步",
-  "%firstRun_title%": "设置 Platform.Bible"
+  "%firstRun_title%": "设置 {%product_name%}"
 }

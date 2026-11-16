@@ -435,9 +435,8 @@ describe('the two Microsoft compatibility shims contribute nothing to the derive
   // LICENSING.md records the determination: neither package's assembly reaches the publish output,
   // so neither may contribute one - a package that DID would carry the pre-MIT "Excluded License"
   // clause into the derived closure and therefore into THIRD-PARTY-NOTICES.md, raising a question
-  // nobody has answered. The `System.Net.Http` reference exists precisely to say "no assets":
-  // `SIL.Core` pulls it in transitively, and without the exclusion the restore assets file resolves
-  // its netstandard1.6 assembly even though publish discards it.
+  // nobody has answered. `SIL.Core` declares `System.Net.Http` transitively; the .NET 10 SDK prunes
+  // it from the restore graph because the shared framework supplies it.
   const SHIMS = ['System.Net.Http', 'System.Net.WebSockets'];
 
   // The CLOSURE, not the declaration. The invariant is that neither assembly ships, and a shim the
@@ -464,8 +463,9 @@ describe('the two Microsoft compatibility shims contribute nothing to the derive
   });
 
   it.each(SHIMS)('excludes the assets of %s wherever the project does declare it', (id) => {
-    // The mechanism that keeps the closure clean where the reference exists at all, checked so that
-    // deleting `ExcludeAssets="all"` fails here rather than only on the next regeneration.
+    // The project needs no reference to either, but one added later must exclude its assets.
+    // Checked here so a reference without `ExcludeAssets="all"` fails now rather than on the next
+    // regeneration.
     readDirectPackageReferences()
       .filter((reference) => reference.id.toLowerCase() === id.toLowerCase())
       .forEach((reference) => expect(reference.shipsRuntimeAssets).toBe(false));

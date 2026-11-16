@@ -42,6 +42,45 @@ describe('overlay-menu-converter', () => {
       });
     });
 
+    it('carries disabled onto a command item', () => {
+      const menu: Localized<SingleColumnMenu> = {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 1,
+            localizeNotes: '',
+            disabled: true,
+          },
+        ],
+      };
+
+      expect(convertContributionToContextMenuItems(menu)).toStrictEqual([
+        { type: 'item', id: 'ext.cmd', label: 'Cmd', disabled: true },
+      ]);
+    });
+
+    it('leaves disabled off a command item that is not disabled', () => {
+      const menu: Localized<SingleColumnMenu> = {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 1,
+            localizeNotes: '',
+            disabled: false,
+          },
+        ],
+      };
+
+      const [item] = convertContributionToContextMenuItems(menu);
+      expect(item).not.toHaveProperty('disabled');
+    });
+
     it('should order items by their order field', () => {
       const menu: Localized<SingleColumnMenu> = {
         groups: {

@@ -121,6 +121,7 @@ export function convertContributionToContextMenuItems(
             id: item.command,
             label: item.label,
             ...(item.shortcut ? { shortcut: item.shortcut } : {}),
+            ...(item.disabled ? { disabled: true } : {}),
           });
         }
       });

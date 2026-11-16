@@ -1895,8 +1895,8 @@ describe('the npm shipping set has a plausibility floor', () => {
 describe('the shipping set is ordered by byte comparison, not ICU collation', () => {
   it('orders 9.0.0 before 10.0.0, which localeCompare does not', () => {
     // `compare.ts` exists because this pipeline's output is committed and byte-compared. Both
-    // `localeCompare` and plain string order put '10.0.0' before '9.0.0', and this repository really
-    // does ship the same package at two major versions (lucide-react at 0.475.0 and 1.8.0).
+    // `localeCompare` and plain string order put '10.0.0' before '9.0.0', and one package can ship
+    // at two versions.
     writePackage('node_modules/dup', 'dup', '9.0.0');
     writePackage('node_modules/other/node_modules/dup', 'dup', '10.0.0');
     writePackage('node_modules/other', 'other', '1.0.0');
