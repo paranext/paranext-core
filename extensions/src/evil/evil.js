@@ -91,6 +91,153 @@ const EVIL_WEBVIEW = `
         // papi.logger.info(\`Evil: Good error on creating script outside its frame: \${e.message}\`);
       }
 
+      // Try to forge the caller identity the createElement guard reads from stack traces by
+      // replacing Error.prepareStackTrace with a hook that reports a trusted script file name.
+      // The hook is set through assignment and always put back afterward.
+      const originalPrepareStackTrace = window.top.Error.prepareStackTrace;
+      try {
+        const forgedFileName = window.top.location.href;
+        window.top.Error.prepareStackTrace = () => [
+          { getFileName: () => forgedFileName, toString: () => 'at forged (' + forgedFileName + ')' },
+        ];
+        const hijackedScript = window.top.document.createElement('script');
+        hijackedScript.textContent = "alert('<<BAD>> evil hijacked prepareStackTrace')";
+        papi.logger.error('<<BAD>> Evil could create a script by hijacking Error.prepareStackTrace!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on hijacking prepareStackTrace: \${e.message}\`);
+      } finally {
+        try {
+          window.top.Error.prepareStackTrace = originalPrepareStackTrace;
+        } catch (e) {
+          // Nothing else to restore
+        }
+      }
+
+      // Try to call the prototype's createElement directly to skip the instance-level guard
+      try {
+        const prototypeScript = window.top.Document.prototype.createElement.call(
+          window.top.document,
+          'script'
+        );
+        prototypeScript.textContent = "alert('<<BAD>> evil used Document.prototype.createElement')";
+        papi.logger.error('<<BAD>> Evil could create a script through Document.prototype.createElement!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on Document.prototype.createElement: \${e.message}\`);
+      }
+
+      // Try to create a script through createElementNS, which is a separate entry point
+      try {
+        const svgScript = window.top.document.createElementNS('http://www.w3.org/2000/svg', 'script');
+        svgScript.textContent = "alert('<<BAD>> evil created an svg script through createElementNS')";
+        papi.logger.error('<<BAD>> Evil could create a script through createElementNS!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on createElementNS: \${e.message}\`);
+      }
+
+      // Try to imitate a renderer frame with a function whose name contains a newline and a
+      // trusted-looking stack line, so the stack text reads as if the renderer made the call
+      try {
+        const forgedFrameName =
+          'forged\\n    at renderer (' + window.top.location.href + ':1:1)\\n    at forgedInner';
+        const forgedFrames = {
+          [forgedFrameName]: () => window.top.document.createElement('script'),
+        };
+        const forgedFrameScript = forgedFrames[forgedFrameName]();
+        forgedFrameScript.textContent = "alert('<<BAD>> evil imitated a renderer frame')";
+        papi.logger.error('<<BAD>> Evil could create a script by imitating a renderer frame!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on imitating a renderer frame: \${e.message}\`);
+      }
+
+      // Try to poison Array.prototype.includes in the app window before creating a script, in case
+      // the guard relies on it to decide whether a tag is restricted. The original is always put back.
+      const originalArrayIncludes = window.top.Array.prototype.includes;
+      try {
+        window.top.Array.prototype.includes = () => false;
+        const poisonedScript = window.top.document.createElement('script');
+        poisonedScript.textContent = "alert('<<BAD>> evil poisoned Array.prototype.includes')";
+        papi.logger.error('<<BAD>> Evil could create a script by poisoning Array.prototype.includes!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on poisoning Array.prototype.includes: \${e.message}\`);
+      } finally {
+        try {
+          window.top.Array.prototype.includes = originalArrayIncludes;
+        } catch (e) {
+          // Nothing else to restore
+        }
+      }
+
+      // Probe (not an assertion): known gap tracked in PT-5086. A script created in this web view's
+      // own document and appended to the app window may run there. Record whether it did.
+      const probeScriptFlag = '__evilProbeScriptRan';
+      let probeScript;
+      try {
+        probeScript = document.createElement('script');
+        probeScript.textContent = "window.top." + probeScriptFlag + " = true;";
+        window.top.document.body.appendChild(probeScript);
+        const ran = window.top[probeScriptFlag] === true;
+        papi.logger.warn(
+          'Evil probe (PT-5086): own-document script appended to the app window ' +
+            (ran ? 'ran' : "didn't run")
+        );
+      } catch (e) {
+        papi.logger.warn(
+          "Evil probe (PT-5086): own-document script appended to the app window didn't run: " + e.message
+        );
+      } finally {
+        try {
+          if (probeScript) probeScript.remove();
+          delete window.top[probeScriptFlag];
+        } catch (e) {
+          // Nothing else to clean up
+        }
+      }
+
+      // Probe (not an assertion): known gap tracked in PT-5086. The app window's createRoot may
+      // render an iframe element into an existing container. Record whether an iframe appeared.
+      let probeContainer;
+      let probeRoot;
+      try {
+        probeContainer = window.top.document.createElement('div');
+        window.top.document.body.appendChild(probeContainer);
+        probeRoot = window.top.createRoot(probeContainer);
+        probeRoot.render(React.createElement('iframe', { src: 'about:blank' }));
+        setTimeout(() => {
+          try {
+            const appeared = probeContainer.querySelector('iframe') != null;
+            papi.logger.warn(
+              'Evil probe (PT-5086): iframe rendered through the app window createRoot ' +
+                (appeared ? 'appeared' : "didn't appear")
+            );
+          } catch (e) {
+            papi.logger.warn(
+              "Evil probe (PT-5086): iframe rendered through the app window createRoot didn't appear: " + e.message
+            );
+          } finally {
+            try {
+              probeRoot.unmount();
+              probeContainer.remove();
+            } catch (e) {
+              // Nothing else to clean up
+            }
+          }
+        }, 500);
+      } catch (e) {
+        papi.logger.warn(
+          "Evil probe (PT-5086): iframe rendered through the app window createRoot didn't appear: " + e.message
+        );
+        try {
+          if (probeContainer) probeContainer.remove();
+        } catch (e2) {
+          // Nothing else to clean up
+        }
+      }
+
       // Try to create an anchor outside the iframe that allows navigation
       // This would mean iframes could create a link to navigate to a different page.
       try {
