@@ -110,7 +110,7 @@ export const LinksOpenInNewTab: Story = {
 
 - [Platform.Bible Documentation](https://paranext.github.io/paranext-core/)
 - [GitHub Repository](https://github.com/paranext/paranext-core)
-- [Community Discord](https://discord.gg/paranext)
+- [Community Discord](https://discord.gg/Bktnuxpwjv)
 
 All links will open in a new tab.`,
     anchorTarget: '_blank',
