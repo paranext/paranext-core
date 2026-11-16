@@ -114,3 +114,28 @@ export function isCreateElementAllowedByStack(stackTrace: string, isPackaged: bo
     );
   return RENDERER_SCRIPT_REGEX_DEV.test(stackTrace) || RENDERER_USERSNAP_REGEX_DEV.test(stackTrace);
 }
+
+const USERSNAP_CHUNK_FILE_NAME_REGEX =
+  /^https:\/\/resources\.usersnap\.com\/widget-assets\/js\/chunks\/\d+\/\w+\.js$/;
+
+// Captured at module load so code that later replaces `RegExp.prototype.exec` or `Reflect.apply`
+// cannot change the answer.
+const regExpExec = RegExp.prototype.exec;
+const reflectApply = Reflect.apply;
+
+/**
+ * Determines whether a restricted tag may be created on the renderer document, judging by the
+ * script file name V8 reports for the `document.createElement` caller
+ *
+ * @param callerFileName Script file name of the calling frame, or `undefined` if it is unknown
+ * @param rendererBundleFileName Script file name of the running renderer bundle
+ * @returns `true` if the caller is the renderer bundle itself or a Usersnap widget chunk
+ */
+export function isCreateElementCallerAllowed(
+  callerFileName: string | undefined,
+  rendererBundleFileName: string,
+): boolean {
+  if (typeof callerFileName !== 'string') return false;
+  if (callerFileName === rendererBundleFileName) return true;
+  return Boolean(reflectApply(regExpExec, USERSNAP_CHUNK_FILE_NAME_REGEX, [callerFileName]));
+}
