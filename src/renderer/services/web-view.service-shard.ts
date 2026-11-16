@@ -34,7 +34,7 @@ import {
 } from '@renderer/services/web-view-content-zoom.service';
 import { registerWebViewRoot } from '@renderer/services/web-view-root.registry';
 import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
-import { isCreateElementAllowedByStack } from '@renderer/services/renderer-create-element-guard.util';
+import { installCreateElementGuard } from '@renderer/services/renderer-create-element-guard.util';
 import { localThemeService } from '@renderer/services/theme.service';
 import {
   deleteFullWebViewStateById,
@@ -324,13 +324,13 @@ export const IFRAME_SANDBOX_ALLOW_POPUPS = 'allow-popups';
  * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
  * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
  * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
- * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
- * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
- * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
- * with too many privileges from executing as of July 2023. However, this means the sandboxing could
- * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
- * whole renderer due to this issue. We will probably want to stay vigilant on security in this
- * area.
+ * to define their HTML code. We guard `Document.prototype.createElement` and `createElementNS` to
+ * prevent child iframes from creating new iframes and also use a `MutationObserver` in
+ * `web-view.service.ts` to remove any iframes that do not comply with these sandbox requirements.
+ * This successfully prevents iframes with too many privileges from executing as of July 2023.
+ * However, this means the sandboxing could do nothing for a determined hacker if they ever find a
+ * way around all this. We must distrust the whole renderer due to this issue. We will probably want
+ * to stay vigilant on security in this area.
  */
 const ALLOWED_IFRAME_SRC_SANDBOX_VALUES = [
   IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
@@ -383,13 +383,13 @@ export const WEBVIEW_IFRAME_SRC_SANDBOX = ALLOWED_IFRAME_SRC_SANDBOX_VALUES.filt
  * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
  * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
  * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
- * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
- * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
- * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
- * with too many privileges from executing as of July 2023. However, this means the sandboxing could
- * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
- * whole renderer due to this issue. We will probably want to stay vigilant on security in this
- * area.
+ * to define their HTML code. We guard `Document.prototype.createElement` and `createElementNS` to
+ * prevent child iframes from creating new iframes and also use a `MutationObserver` in
+ * `web-view.service.ts` to remove any iframes that do not comply with these sandbox requirements.
+ * This successfully prevents iframes with too many privileges from executing as of July 2023.
+ * However, this means the sandboxing could do nothing for a determined hacker if they ever find a
+ * way around all this. We must distrust the whole renderer due to this issue. We will probably want
+ * to stay vigilant on security in this area.
  */
 export const ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES = [...ALLOWED_IFRAME_SRC_SANDBOX_VALUES];
 
@@ -422,7 +422,7 @@ export const WEBVIEW_IFRAME_SRCDOC_SANDBOX = ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUE
 const FORBIDDEN_HTML_TAGS = ['object', 'embed', 'frame', 'frameset'];
 /**
  * The HTML tags that are only allowed in the main renderer window if created by the renderer. Our
- * monkey-patch on `document.createElement` protects these.
+ * guard on `Document.prototype.createElement` and `createElementNS` protects these.
  *
  * Technically, all elements should really be created only by the renderer, but we must choose the
  * security-related ones to guard closely since this is an inefficient check.
@@ -430,7 +430,7 @@ const FORBIDDEN_HTML_TAGS = ['object', 'embed', 'frame', 'frameset'];
  * Note: this only applies to tags added to the document after initial load, so the document
  * metadata tags are not normally hit.
  *
- * WARNING: A stack trace has to be created each time any of these are created, so it is not very
+ * WARNING: A one-frame stack capture runs each time any of these are created, so it is not very
  * efficient when one of these tags is created. Please avoid using these tags where possible.
  */
 const RESTRICTED_HTML_TAGS = [
@@ -3842,35 +3842,27 @@ export const initialize = () => {
     // WARNING: calling these requires us to generate a call stack, so all of these things should
     // be used as sparingly as possible since they are now less performant than usual
 
-    // Monkey-patch document.createElement so new script tags cannot be added by anything but our
-    // code (since we load renderer files in chunks)
-    const createElementOriginal = document.createElement.bind(document);
-    // If we name this function, we will need to change the regex testing the stack traces, and we
-    // may also have trouble with minifying production code. Leaving this function unnamed keeps
-    // things simpler
-    // eslint-disable-next-line func-names
-    document.createElement = function (...args: Parameters<Document['createElement']>) {
-      const [tagNameCaps] = args;
-
-      const tagName = tagNameCaps.toLowerCase();
-      if (FORBIDDEN_HTML_TAGS.includes(tagName) || RESTRICTED_HTML_TAGS.includes(tagName)) {
-        const stackTrace = Error().stack ?? '';
-        if (isCreateElementAllowedByStack(stackTrace, globalThis.isPackaged)) {
-          logger.debug(
-            `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackTrace}`,
-          );
-        } else {
-          const message = `Rejected creating new ${tagName} tag on renderer document! Not allowed.\nStack: ${stackTrace}`;
-          // LogError puts an error in the console and throws an error. We don't want to scare
-          // anyone with the script and iframe tags evil adds to test this feature, so let's not
-          // log an error in development. But no exceptions when packaged
-          if (globalThis.isPackaged || !stackTrace.includes('at evil.web-view.html'))
-            throw new LogError(message);
-          throw new Error(message);
-        }
-      }
-      return createElementOriginal(...args);
-    };
+    // Guard createElement and createElementNS so restricted tags (such as script tags) cannot be
+    // created by anything but our code (since we load renderer files in chunks) and the Usersnap
+    // widget. The guard also locks `window.Error` and `Error.prepareStackTrace`.
+    installCreateElementGuard({
+      realm: window,
+      restrictedTagNames: [...FORBIDDEN_HTML_TAGS, ...RESTRICTED_HTML_TAGS],
+      onAllowed: (tagName, stackText) => {
+        logger.debug(
+          `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackText}`,
+        );
+      },
+      onRejected: (tagName, stackText) => {
+        const message = `Rejected creating new ${tagName} tag on renderer document! Not allowed.\nStack: ${stackText}`;
+        // LogError puts an error in the console and throws an error. We don't want to scare
+        // anyone with the script and iframe tags evil adds to test this feature, so let's not
+        // log an error in development. But no exceptions when packaged
+        if (globalThis.isPackaged || !stackText.includes('at evil.web-view.html'))
+          throw new LogError(message);
+        throw new Error(message);
+      },
+    });
 
     // #endregion
 

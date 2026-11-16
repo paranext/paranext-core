@@ -72,6 +72,12 @@ vi.mock('@renderer/services/web-view-state.service', () => ({
   getFullWebViewStateById: vi.fn(),
   setFullWebViewStateById: vi.fn(),
 }));
+vi.mock('@renderer/services/renderer-create-element-guard.util', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@renderer/services/renderer-create-element-guard.util')
+  >()),
+  installCreateElementGuard: vi.fn(() => ({ rendererBundleFileName: '' })),
+}));
 vi.mock('@renderer/components/settings-tabs/settings-tab.component', () => ({
   TAB_TYPE_SETTINGS_TAB: 'settings-tab',
 }));
