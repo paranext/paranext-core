@@ -12,8 +12,6 @@ beforeAll(() => {
   );
 });
 
-const LEXICAL_ID = '001555002001000';
-const CONTEXTUAL_ID = '001555002001001';
 const verseRef = (book: string, chapterNum: number) => ({ book, chapterNum, verseNum: 1 });
 
 const sense = (id: string, gloss: string, book: string, chapterNum: number) => ({
@@ -24,28 +22,17 @@ const sense = (id: string, gloss: string, book: string, chapterNum: number) => (
   occurrences: { project: [{ verseRef: verseRef(book, chapterNum), wordNum: 1 }] },
 });
 
-// Only the fields this component reads are filled in; the full Entry type carries many more.
+// Two senses: the first occurs in Exodus 2, the second in Genesis 1. Only the fields this component
+// reads are filled in; the full Entry type carries many more.
 // eslint-disable-next-line no-type-assertion/no-type-assertion
-const ENTRY = {
+const TWO_SENSE_ENTRY = {
   id: 'e1',
   lexicalReferenceTextId: 'SDBH',
   lemma: 'דבר',
   strongsCodes: ['H1696'],
   senses: {
-    [LEXICAL_ID]: sense(LEXICAL_ID, 'to speak', 'GEN', 1),
-    [CONTEXTUAL_ID]: sense(CONTEXTUAL_ID, 'to speak to X', 'EXO', 2),
-  },
-} as unknown as Entry;
-
-// Two lexical meanings: the first occurs in Exodus 2, the second in Genesis 1
-const OTHER_LEXICAL_ID = '001555001001000';
-// Only the fields this component reads are filled in, as in ENTRY
-// eslint-disable-next-line no-type-assertion/no-type-assertion
-const TWO_SENSE_ENTRY = {
-  ...ENTRY,
-  senses: {
-    [OTHER_LEXICAL_ID]: sense(OTHER_LEXICAL_ID, 'word', 'EXO', 2),
-    [LEXICAL_ID]: sense(LEXICAL_ID, 'to speak', 'GEN', 1),
+    s1: sense('s1', 'word', 'EXO', 2),
+    s2: sense('s2', 'to speak', 'GEN', 1),
   },
 } as unknown as Entry;
 
@@ -63,7 +50,7 @@ const senseCard = (gloss: string) =>
     .map((element) => element.closest('button'))
     .find((card) => card);
 
-const renderEntry = (scrRef?: ReturnType<typeof verseRef>, dictionaryEntry = ENTRY) =>
+const renderEntry = (scrRef?: ReturnType<typeof verseRef>, dictionaryEntry = TWO_SENSE_ENTRY) =>
   render(
     <DictionaryEntryDisplay
       localizedStrings={LOCALIZED_STRINGS}
@@ -76,18 +63,6 @@ const renderEntry = (scrRef?: ReturnType<typeof verseRef>, dictionaryEntry = ENT
   );
 
 describe('DictionaryEntryDisplay senses', () => {
-  it('numbers lexical meanings only', () => {
-    renderEntry();
-    expect(screen.getAllByText('to speak').length).toBeGreaterThan(0);
-    expect(screen.queryByText('to speak to X')).not.toBeInTheDocument();
-  });
-
-  it('shows a lexical sense when only its contextual child occurs in the chapter', () => {
-    renderEntry(verseRef('EXO', 2));
-    expect(screen.queryByText('to speak to X')).not.toBeInTheDocument();
-    expect(screen.getAllByText('to speak').length).toBeGreaterThan(0);
-  });
-
   it('lists senses outside the chapter, dimmed', () => {
     renderEntry(verseRef('GEN', 1), TWO_SENSE_ENTRY);
     expect(senseCard('word')).toHaveAttribute('data-less-relevant', 'true');

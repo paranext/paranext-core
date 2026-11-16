@@ -19,7 +19,6 @@ import {
   getDeduplicatedOccurrencesFromSenses,
   DictionaryOccurrenceView,
 } from '../../utils/dictionary.utils';
-import { collapseToLexicalSenses } from '../../utils/lexical-senses.utils';
 import { DefinitionText, EntryLinkClickHandler } from './definition-text.component';
 import { DomainsDisplay } from './domains-display.component';
 import { BackToListButton } from './back-to-list-button.component';
@@ -63,12 +62,13 @@ export function DictionaryEntryDisplay({
   const [selectedSenseIndex, setSelectedSenseIndex] = useState<number | undefined>();
   const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
 
-  const lexicalEntry = useMemo(() => collapseToLexicalSenses(dictionaryEntry), [dictionaryEntry]);
-
   const formattedGlosses = useMemo(
     () =>
-      getFormatGlossesStringFromDictionaryEntrySenses(lexicalEntry, scriptureReferenceToFilterBy),
-    [lexicalEntry, scriptureReferenceToFilterBy],
+      getFormatGlossesStringFromDictionaryEntrySenses(
+        dictionaryEntry,
+        scriptureReferenceToFilterBy,
+      ),
+    [dictionaryEntry, scriptureReferenceToFilterBy],
   );
 
   const occurrencesLabel = useMemo(
@@ -84,8 +84,8 @@ export function DictionaryEntryDisplay({
 
   /** Every sense of the entry, in order; a sense's number is its position here */
   const allSenses = useMemo(
-    () => Object.values(lexicalEntry.senses).filter((sense) => sense !== undefined),
-    [lexicalEntry.senses],
+    () => Object.values(dictionaryEntry.senses).filter((sense) => sense !== undefined),
+    [dictionaryEntry.senses],
   );
 
   const isSenseInChapter = useCallback(

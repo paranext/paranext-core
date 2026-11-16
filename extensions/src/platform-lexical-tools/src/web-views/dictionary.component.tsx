@@ -19,7 +19,6 @@ import {
   DictionaryScope,
   getFormatGlossesStringFromDictionaryEntrySenses,
 } from '../utils/dictionary.utils';
-import { toVavHolamOrder } from '../utils/definition-markup.utils';
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
@@ -207,13 +206,7 @@ export function Dictionary({
 
   const handleEntryLinkClick = useCallback(
     async (dictionaryId: string, lemma: string) => {
-      // Fall back to the current holam spelling for links that still use the old one
-      const currentSpelling = toVavHolamOrder(lemma);
-      const entry =
-        (await getEntryByLemma(dictionaryId, lemma)) ??
-        (currentSpelling !== lemma
-          ? await getEntryByLemma(dictionaryId, currentSpelling)
-          : undefined);
+      const entry = await getEntryByLemma(dictionaryId, lemma);
       if (entry) setLinkedEntry(entry);
       return !!entry;
     },
