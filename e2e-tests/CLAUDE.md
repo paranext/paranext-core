@@ -33,7 +33,7 @@ detailed source — every file, its status, what it needs and how to bring it ba
 |---|---|---|---|
 | `tests/enhanced-resources/` | The local-only specs are run by hand; the rest are parked (`PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`) | Epic PT-2021 "Enhanced Resources"; `scripture-text-grid.spec.ts` comes back with PT-4779 | The local-only specs need real Marble resources (paid, not in CI) and an app in Power mode. The parked `text-collection-schema.spec.ts` overwrites a project setting and your Text Collection overlay, and restores neither — point it only at a throwaway project. |
 | `tests/manage-books/` | All parked | Epic PT-1779 "Manage Books in a Project" | **DESTRUCTIVE.** Three of its specs, and the second `describe` of `manage-books-commands.spec.ts`, delete, create or copy books in the real projects the app holds, with no restore. Only that file's first `describe` writes nothing. |
-| `tests/markers-checklist/` | All parked; never run to completion | Epic PT-2049 "Inventory & Checklists" | Needs an app in Power mode and the `wgPIDGIN` project. |
+| `tests/markers-checklist/` | All parked; never run to completion | Epic PT-2049 "Inventory & Checklists" | The four UI specs need an app in Power mode and the `wgPIDGIN` project; `markers-checklist-commands.spec.ts` needs an app you started yourself (PAPI websocket on port 8876) and any Paratext (USFM) project. |
 
 **An attach-based spec must not live under `tests/isolated/`.** `playwright-cdp.config.ts` ignores
 that tree, and the `isolated` project's globalSetup refuses to start while an app holds port 8876 —
