@@ -130,6 +130,8 @@ import {
  * Right-clicks `tabTitle` until its context menu offers `item`, and returns `item`. A tab reads its
  * menu items from the menu data provider once the interface mode is known, so a right-click soon
  * after its window came up can open no menu at all; the next one finds the items loaded.
+ *
+ * TODO(PT-5082): right-click once instead of retrying when a moved tab's menu is ready on arrival.
  */
 async function openTabMenuItem(tabTitle: Locator, item: Locator): Promise<Locator> {
   await expect(async () => {
