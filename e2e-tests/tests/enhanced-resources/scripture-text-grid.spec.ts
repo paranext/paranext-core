@@ -29,8 +29,7 @@ import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { tabButton } from '../../fixtures/dock-tab-helpers';
 import { waitForAppReady } from '../../fixtures/helpers';
 import {
-  getScrollGroupRef,
-  setScrollGroupRef,
+  saveScrollGroupRef,
   setScrollGroupRefFromRenderer,
 } from '../../fixtures/settled-positions-helpers';
 import { closeAllNonHomeDockTabs } from './test-helpers';
@@ -110,28 +109,13 @@ const MADE_UP_PROJECT_ID_B = 'bbccddeeff0011223344';
 // region, not a list.
 const MADE_UP_LIST_PROJECT_IDS = [MADE_UP_PROJECT_ID_A, MADE_UP_PROJECT_ID_B];
 // A made-up DBL resource uid. A DBL uid is checked against resources installed on disk, so this
-// settles on "Resource not installed" ("Resource unavailable" only if no installed DBL resources
-// are found AND the DBL catalog is not ready or fails).
+// settles on "Resource not installed" ("Resource unavailable" only if that disk scan fails or finds
+// no installed DBL resources AND the DBL catalog is not ready or fails).
 const MISSING_DBL_RESOURCE_ID = 'f'.repeat(48);
 const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
   .split(',')
   .map((id) => id.trim())
   .filter(Boolean);
-
-/**
- * Reads scroll group 0, the running app's shared reference, and returns a function that puts it
- * back. For tests that move it. Best-effort, like the settings restore: cleanup must not fail a
- * test, and a reference that could not be read is left alone. It restores book/chapter/verse only;
- * the group's source project and back/forward history are not restored.
- */
-async function saveScrollGroupRef(): Promise<() => Promise<void>> {
-  const saved = await getScrollGroupRef().catch(() => undefined);
-  return async () => {
-    const { book, chapterNum, verseNum } = saved ?? {};
-    if (book && chapterNum !== undefined && verseNum !== undefined)
-      await setScrollGroupRef({ ...saved, book, chapterNum, verseNum }).catch(() => false);
-  };
-}
 
 test.describe('Scripture Text Grid renderer', () => {
   let restoreScrollGroupRef: (() => Promise<void>) | undefined;
