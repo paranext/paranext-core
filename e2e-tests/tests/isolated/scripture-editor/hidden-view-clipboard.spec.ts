@@ -117,7 +117,7 @@ function countOf(haystack: string, needle: string): number {
 }
 
 test.describe('the clipboard in Simple mode’s paragraph-structure view', () => {
-  test('a copy across a paragraph break pastes as joined text, a URL loses its slashes with a notice, a delete joining two slashes is refused with a notice, and an unlocked cut pastes back byte for byte', async ({
+  test('copy, URL paste, refused delete and unlocked cut in the paragraph-structure view', async ({
     mainPage,
     electronApp,
   }) => {

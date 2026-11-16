@@ -3171,8 +3171,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** The editor writes the node copy into an attribute of the copy's html
   (`data-platform-editor-node-copy`, on one inline `<span>` around the export) as well as into
   `application/x-lexical-editor`, and reads it back through today's async read. The mechanics are in
-  `scripture-editors`' `docs/clipboard-semantics.md`, S5. The host has no part in it: paranext-core
-  has no clipboard command.
+  `scripture-editors`' `docs/clipboard-semantics.md`, S5. A copy from a view that shows markers
+  carries a second attribute, `data-platform-editor-marker-text`, and a paste into a hidden-marker
+  view strips marker tokens from html carrying it, without a notice. The host has no part in it:
+  paranext-core has no clipboard command.
 - **Alternatives considered:**
   - _A host command running a native paste (`webContents.paste()`), whose `paste` event carries the
     flavor._ PAPI commands are reachable over the unauthenticated WebSocket on 8876, so a web page
@@ -3194,6 +3196,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     doubles the html, so any program reading attributes can see those; TJ accepted this
     (2026-10-30). Any program can also write the attribute, which goes through the same guarded parse
     as the flavor; TJ does not mind forged data (2026-10-30).
+  - Any program can likewise write `data-platform-editor-marker-text`, and html carrying it has its
+    marker tokens stripped on paste with no notice (catalog CB-14).
+  - A pasted node copy is accepted only when every node in it is of a type a hidden-marker view's
+    document holds; otherwise the paste falls back to the html.
   - A copy that goes through another editor loses the attribute and pastes as html (catalog row
     CB-14; open work on PT-4984).
   - The read raises no `paste` event, so during a chapter load `usePauseEditing` holds off the paste
@@ -3252,10 +3258,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-11-11
 - **Status:** Accepted (TJ, 2026-11-11: "use U+000B and we don't lose U+2028").
-- **Context:** Standard view's marker settle re-reads a paragraph's text, and spelled the
-  display-only line break a view without spacing shows before a verse as U+2028 in that text,
-  removing every U+2028 before tokenizing. The text holds text nodes' content as it is, so a real
-  U+2028, which Paratext 9 keeps as a character, was removed with the breaks (catalog T-19). The
+- **Context:** Standard view's marker settle rebuilds a paragraph from its text. It wrote the
+  display-only line break (shown before a verse in a view without spacing) as U+2028, then stripped
+  every U+2028 before tokenizing, so a real U+2028 was lost (catalog T-19). The
   break needs a character that JavaScript's `\s` reads as whitespace, so the positions either side
   of it stay apart, and that no text can hold. Only Standard view turned entered control characters
   into spaces (for its U+001A stand-in, `adr-editor-nbsp-spelling-follows-project-setting`), and
@@ -3276,7 +3281,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** A new internal use of a control character can rely on no entered or loaded
   text holding one, but must say so beside it and name the rule. A library host that loads USJ
   holding a control character into a view other than Standard (Paratext's reader never gives it
-  one) keeps it until a settle in the Unformatted view, which removes a U+000B. Applied delta ops
+  one) keeps it until a settle in the Unformatted view (library only), which removes a U+000B. Applied delta ops
   are not filtered outside Standard view: they carry what another editor already took in through
   the same rule.
 

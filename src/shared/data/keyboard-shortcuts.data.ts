@@ -374,14 +374,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
     ],
   },
-  // The paste and cut themselves are the scripture-editors repo's ClipboardPlugin (Ctrl+V reads the
-  // clipboard, Ctrl+X dispatches a cut command); `usePauseEditing` holds the chords off while the
-  // editor still shows the chapter being left, as it does typing, undo and caret moves. The
-  // right-click menu does not open then (it holds off `contextmenu` too), so its Cut and Paste are
-  // not offered; a menu already open when the load begins still runs them, unsaved. The hold-off
-  // starts a moment after the chapter changes: a paste or cut in that moment, or a paste whose
-  // clipboard read finishes then, still shows in the chapter being left but is not saved, or can
-  // land in the new chapter if the load is short (`usePauseEditing` says why).
+  // The paste and cut themselves are the scripture-editors repo's ClipboardPlugin; the hold-off
+  // while a chapter loads, and its gaps, are documented on `usePauseEditing`.
   {
     id: 'scripture-cut-paste-held-off-chapter-loading',
     purpose:
@@ -422,10 +416,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Open the inline markers menu. Does nothing while the editor’s right-click menu is open, in every view. In a view that hides markers, with no menu to open, the editor refuses the key and shows a notice',
     category: 'Editing',
     context: 'Scripture editor web view',
-    // In a view that hides markers the web view, and the footnote editor for its own editor, claim
-    // this key in the capture phase, so the editor (the scripture-editors repo's
-    // UnstorableTextPlugin), which refuses a typed `\` and a typed `/` beside a `/`, sees it only
-    // when no menu opens.
+    // In views that hide markers, the web view and the footnote popover claim `\` in the capture
+    // phase; the editor's "can't be typed" refusal runs only when no menu opens.
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
       'extensions/src/platform-scripture-editor/src/palette-key-routing.util.ts',

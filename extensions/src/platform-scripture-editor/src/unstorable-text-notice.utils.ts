@@ -1,7 +1,7 @@
 /*
  * The notice shown when the editor removes `\` or `//` from text the user pasted, dropped or typed,
- * or refuses a delete that would join two `/` into `//` or a drag-move that would lose a `/` where
- * it lands.
+ * or refuses a delete that would join two `/` into `//` or a drag-move that would put `\` or `//` in
+ * the text where it lands.
  *
  * This module value-imports `@papi/frontend`, which the extension host's `require` shim rejects, so
  * it must stay out of `main.ts`'s import graph — reach it from web views and their components only.
@@ -64,10 +64,11 @@ function messageFor(source: UnstorableTextRemoved['source']): LocalizeKey {
  *
  * The handler sends an `info` notification under {@link UNSTORABLE_TEXT_NOTIFICATION_ID}, with the
  * typing message for typed text, the refused-deletion message for a refused delete, the
- * refused-move message for a refused drag-move, and the pasted-text message for paste and drop.
- * Each message names both `\` and `//` whichever of them was removed (`event.removed` is not read),
- * so one fixed text per source serves every case. A failed send is logged, never thrown: the editor
- * calls the handler from an edit, which a notification failure must not break.
+ * refused-move message for a refused drag-move, and the pasted-text message for paste and drop. The
+ * typing and pasted-text messages name both `\` and `//` whichever of them was removed
+ * (`event.removed` is not read); the refused-deletion message names only `//` and the refused-move
+ * message `\` or `//`. One fixed text per source serves every case. A failed send is logged, never
+ * thrown: the editor calls the handler from an edit, which a notification failure must not break.
  *
  * @param send Sends a notification, normally `papi.notifications.send`.
  * @param webViewId The web view the notification belongs to.

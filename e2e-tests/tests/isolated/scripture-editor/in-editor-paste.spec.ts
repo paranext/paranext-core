@@ -180,7 +180,7 @@ function isEditorFocused(editorInput: Locator): Promise<boolean> {
 }
 
 test.describe('the editor’s own paste in Simple mode’s paragraph-structure view', () => {
-  test('a copied footnote pastes back exactly from Ctrl+V and both menus, a note’s category survives the real clipboard read, a pane copy pastes as text, and a paste held off during a chapter move lands nowhere', async ({
+  test('Ctrl+V and both menus’ Paste reproduce copied Scripture, held off during a chapter load', async ({
     mainPage,
     electronApp,
   }) => {

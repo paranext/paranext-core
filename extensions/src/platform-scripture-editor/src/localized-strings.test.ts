@@ -659,7 +659,7 @@ describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete lab
   });
 });
 
-// The notice shown when the editor removes `\` or `//` from pasted, dropped or typed text.
+// The notice shown when the editor removes `\` or `//`, or refuses an edit that would create one.
 describe.each([...UNSTORABLE_TEXT_NOTICE_STRING_KEYS])('unstorable text notice %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();

@@ -1295,8 +1295,7 @@ export default function FootnoteEditor({
   /**
    * Opens the inline markers menu at the DOM selection.
    *
-   * @returns Whether the menu opened: not without a selection to anchor it or with no marker items
-   *   to offer.
+   * @returns `false` if there is no selection to anchor the menu or no marker items to offer.
    */
   const showInlineMarkersMenu = useCallback((): boolean => {
     // Only shows the markers menu if there is currently a selection in the editor and there are
