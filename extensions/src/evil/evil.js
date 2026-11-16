@@ -91,12 +91,25 @@ const EVIL_WEBVIEW = `
         // papi.logger.info(\`Evil: Good error on creating script outside its frame: \${e.message}\`);
       }
 
+      // The renderer bundle URL as the app window loaded it, which is the file name a trusted frame
+      // reports. Falls back to the page URL if no renderer script is found.
+      const rendererBundleUrl = (() => {
+        try {
+          const rendererScript = Array.from(window.top.document.scripts).find(
+            (script) => script.src && script.src.includes('renderer')
+          );
+          return rendererScript ? rendererScript.src : window.top.location.href;
+        } catch (e) {
+          return window.top.location.href;
+        }
+      })();
+
       // Try to forge the caller identity the createElement guard reads from stack traces by
       // replacing Error.prepareStackTrace with a hook that reports a trusted script file name.
       // The hook is set through assignment and always put back afterward.
       const originalPrepareStackTrace = window.top.Error.prepareStackTrace;
       try {
-        const forgedFileName = window.top.location.href;
+        const forgedFileName = rendererBundleUrl;
         window.top.Error.prepareStackTrace = () => [
           { getFileName: () => forgedFileName, toString: () => 'at forged (' + forgedFileName + ')' },
         ];
@@ -141,7 +154,7 @@ const EVIL_WEBVIEW = `
       // trusted-looking stack line, so the stack text reads as if the renderer made the call
       try {
         const forgedFrameName =
-          'forged\\n    at renderer (' + window.top.location.href + ':1:1)\\n    at forgedInner';
+          'forged\\n    at renderer.createElement (' + rendererBundleUrl + ':1:1)\\n    at forgedInner';
         const forgedFrames = {
           [forgedFrameName]: () => window.top.document.createElement('script'),
         };
