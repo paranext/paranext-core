@@ -51,7 +51,7 @@ import {
 // keeps the normal Home layout the other isolated scripture-editor specs rely on.
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 const FOOTNOTES_PANE_SELECTOR = '[data-footnotes-pane]';

@@ -402,7 +402,7 @@ test.use({
   // id once (getHomeTabWebViewId) and compares against it from then on, rather than relying on any
   // fixed id — mid-session windows dock a freshly minted Home tab of their own too, under a
   // different id from window 1's.
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 test.describe('multi-window lifecycle', () => {

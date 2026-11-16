@@ -47,7 +47,7 @@ import {
 } from '../../../fixtures/scripture-editor-helpers';
 
 test.use({
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 const JONAH_1 = { book: 'JON', chapterNum: 1, verseNum: 1 };

@@ -38,7 +38,7 @@ import {
 // Power mode: the editor opens in Standard view, where notes are edited in the footnotes pane.
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 const FOOTNOTES_PANE_SELECTOR = '[data-footnotes-pane]';

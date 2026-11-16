@@ -80,7 +80,6 @@ import {
 
 const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
   isolatedProjectRoot: true,
-  envOverrides: { DEV_NOISY: 'false' },
 };
 
 /** Index of the "Close all windows" button as the app lays the dialog out; Cancel is the other */
@@ -257,8 +256,8 @@ test.use({
   seedSettings: { 'platform.firstRunComplete': true },
   // The fixture launches with no special options unless a suite says otherwise, and the four
   // tests that take `mainPage` from it need the same app the two that launch explicitly get.
-  // DEV_NOISY=false is the load-bearing half: it gives the first window the single-Home-tab
-  // fallback layout whose fixed web view id the emptied-primary test moves out.
+  // The default quiet layout gives the first window the single-Home-tab fallback layout whose
+  // fixed web view id the emptied-primary test moves out.
   electronLaunchOptions: BASE_LAUNCH_OPTIONS,
 });
 

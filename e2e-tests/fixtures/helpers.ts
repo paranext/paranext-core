@@ -990,7 +990,8 @@ export async function launchElectronApp(
     // Quiet dev mode by default: the test extensions (helloRock3, helloSomeone, etc.) stay
     // unloaded, so the window opens on the normal layout and no test-only web views shift iframe
     // order or slow the launch. A suite that drives a test extension turns it on with
-    // `envOverrides: { DEV_NOISY: 'true' }` (the overlay specs do), which is spread last below.
+    // `envOverrides: { DEV_NOISY: 'true' }` (only `tests/isolated/overlay/overlay-web-view.spec.ts` does),
+    // which is spread last below.
     DEV_NOISY: process.env.DEV_NOISY ?? 'false',
     // Keep DevTools out of the window so the renderer is the size the test asked for.
     // Docked DevTools eats ~555px of a 1280px window, leaving specs interacting with a dock
