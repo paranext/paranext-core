@@ -27,11 +27,10 @@ const CARET_KEYS = new Set([
  * verse as the current reference, which pulls the reference back to the chapter the user just left.
  * The paste chords count because the editor takes them itself and reads the clipboard, which raises
  * no `paste` event to hold off, and whose result could land in the new chapter. The cut chord
- * counts because the editor takes it itself and dispatches its cut command, with no `cut` event. As
- * in the editor, Alt with either makes it some other chord, and so does Shift with the cut chord;
- * unlike the editor, which takes only its platform's modifier, either Ctrl or Cmd counts here, as
- * for the other chords, so a little more is held off than the editor would act on. Every other
- * chord is let through so the application's shortcuts keep working.
+ * counts because the editor takes it itself and dispatches its cut command, with no `cut` event.
+ * Alt with either key, or Shift with X, is a different chord, as in the editor. Unlike the editor,
+ * Ctrl and Cmd both count on every platform, so slightly more is held off than the editor acts on.
+ * Every other chord is let through so the application's shortcuts keep working.
  */
 function isHeldOffKey(event: KeyboardEvent): boolean {
   if (event.isComposing || CARET_KEYS.has(event.key)) return true;

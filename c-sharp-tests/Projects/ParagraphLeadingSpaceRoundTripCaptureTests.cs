@@ -11,6 +11,8 @@ namespace TestParanextDataProvider.Projects
     /// (<see cref="ParatextProjectDataProvider.SetChapterUsx"/>, then the saved USFM and
     /// <see cref="ParatextProjectDataProvider.GetChapterUsx"/>), plus the USFM-in direction and an
     /// NBSP control. Each pin records exactly what ParatextData produced.
+    /// Backs catalog row CB-16: a paragraph's plain leading space is accepted as lost, because
+    /// ParatextData drops it on save.
     /// </summary>
     [ExcludeFromCodeCoverage]
     internal class ParagraphLeadingSpaceRoundTripCaptureTests : PapiTestBase

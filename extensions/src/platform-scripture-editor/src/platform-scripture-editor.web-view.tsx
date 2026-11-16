@@ -591,7 +591,7 @@ function PlatformScriptureEditor({
     [],
   );
 
-  /** Tells the user when the editor removes `\` or `//` from text they pasted, dropped or typed. */
+  /** Tells the user when the editor removes `\` or `//`, or refuses an edit that would create one. */
   const handleUnstorableTextRemoved = useMemo(
     () => createUnstorableTextNotifier(papi.notifications.send, webViewId),
     [webViewId],
@@ -2608,8 +2608,7 @@ function PlatformScriptureEditor({
   /**
    * Opens the inline marker menu at the DOM selection.
    *
-   * @returns Whether the menu opened: not without a DOM selection to anchor it or with no marker
-   *   items to offer.
+   * @returns `false` if there is no selection to anchor the menu or no marker items to offer.
    */
   const showInlineMarkersMenu = useCallback((): boolean => {
     // Only shows the markers menu if there is currently a selection in the editor and there are
@@ -3002,8 +3001,9 @@ function PlatformScriptureEditor({
             (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
     };
 
-    // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
-    // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
+    // CAPTURE phase: the keys this listener claims (the Standard-view `\`/Enter marker palette
+    // triggers and session keys, and the inline marker menu's `\` in a hidden-marker view) must run
+    // BEFORE Lexical's own root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
     // before it can preventDefault. Registering in capture puts this ahead of Lexical.
     // Every claimed key (the `\`/Enter triggers and the whole in-session table: filter
@@ -3013,7 +3013,7 @@ function PlatformScriptureEditor({
     // dismissals) still propagate. The inline marker menu of the other views opens from the
     // bubble-phase `handleKeyDown` below, except in a hidden-marker view, where this listener
     // claims its trigger too (see `shouldClaimInlineMarkersMenuTrigger`).
-    const handleStandardViewTriggers = (event: KeyboardEvent) => {
+    const handleCaptureKeyTriggers = (event: KeyboardEvent) => {
       // Never intercept IME composition keys: an Enter (or `\`) that confirms or feeds a
       // CJK/complex-script candidate arrives with `isComposing` (keyCode 229) and must reach
       // Lexical's own composition-guarded handlers, not open a marker palette. This capture-phase
@@ -3202,11 +3202,11 @@ function PlatformScriptureEditor({
       }
     };
 
-    window.addEventListener('keydown', handleStandardViewTriggers, { capture: true });
+    window.addEventListener('keydown', handleCaptureKeyTriggers, { capture: true });
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('keydown', handleStandardViewTriggers, { capture: true });
+      window.removeEventListener('keydown', handleCaptureKeyTriggers, { capture: true });
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [
