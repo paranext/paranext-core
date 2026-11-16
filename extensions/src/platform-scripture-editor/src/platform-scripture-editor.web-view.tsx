@@ -29,6 +29,7 @@ import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
+  useEvaluatedMenu,
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
@@ -97,6 +98,7 @@ import {
   isLocalizeKey,
   isPlatformError,
   LocalizeKey,
+  createMenuTemplateVars,
   serialize,
 } from 'platform-bible-utils';
 import {
@@ -249,6 +251,7 @@ import {
   shouldProtectAddChapterNumber,
   shouldPublishPaneDocument,
   showCommentThreadForInterfaceMode,
+  showsReadOnlyPreview,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   usesPaneNoteModel,
 } from './platform-scripture-editor.utils';
@@ -262,6 +265,8 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   deriveReadOnlyFlags,
+  getEditorWebViewContextKeyNames,
+  getEditorWebViewContextKeys,
   flushRowEditsThenSave,
   forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
@@ -955,6 +960,29 @@ function PlatformScriptureEditor({
     return isProjectEditablePossiblyError;
   }, [isProjectEditablePossiblyError]);
 
+  // `platform.isPublished` is the project-kind classification (resource vs project); `isReadOnly` /
+  // `platform.isEditable` is Scripture-text edit PERMISSION and says nothing about kind. Only the
+  // former may decide whether the user is told "this book is not in this resource", which is a
+  // statement of fact with no remedy. Same distinction the open path draws in this extension's
+  // `main.ts`, where the comment on `isPublished` spells out why the two must not be conflated.
+  // Defaults to false so an unresolved setting shows the actionable project message rather than
+  // wrongly telling a project owner their project is a resource.
+  const [isPublishedPossiblyError, , , isIsPublishedLoading] = useProjectSetting(
+    projectId,
+    'platform.isPublished',
+    false,
+  );
+
+  const isResource = useMemo(() => {
+    if (isPlatformError(isPublishedPossiblyError)) {
+      logger.warn(
+        `Error getting whether the project is published: ${getErrorMessage(isPublishedPossiblyError)}`,
+      );
+      return false;
+    }
+    return isPublishedPossiblyError;
+  }, [isPublishedPossiblyError]);
+
   const [canUserEditScripturePossiblyError, , canUserEditScriptureLoading] = useProjectData(
     'platformScripture.scriptureEditPermissions',
     projectId,
@@ -1170,6 +1198,31 @@ function PlatformScriptureEditor({
   useEffect(() => {
     footnotesPaneVisibleRef.current = footnotesPaneVisible;
   }, [footnotesPaneVisible]);
+
+  const isPreview = useMemo(
+    () => showsReadOnlyPreview(viewType, isPowerMode),
+    [viewType, isPowerMode],
+  );
+
+  // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
+  // them when this web view closes. Hidden case: a hidden tab keeps publishing and its menu keeps
+  // re-evaluating on every key change (the hook subscribes regardless of visibility), so it is
+  // current whenever the tab is shown; nothing waits for activation.
+  useEffect(() => {
+    const keys = getEditorWebViewContextKeys(webViewId, {
+      isReadOnly,
+      isPreview,
+      isSyncBlocked,
+      footnotesPaneVisible,
+    });
+    Object.entries(keys).forEach(([key, value]) => papi.contextKeys.set(key, value));
+  }, [webViewId, isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible]);
+
+  useEffect(() => {
+    return () => {
+      getEditorWebViewContextKeyNames(webViewId).forEach((key) => papi.contextKeys.remove(key));
+    };
+  }, [webViewId]);
 
   const isPowerModeRef = useRef(isPowerMode);
 
@@ -2135,7 +2188,7 @@ function PlatformScriptureEditor({
           ),
           insertComment: insertCommentAtCurrentSelection,
         },
-        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
+        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked, isResource },
       ),
     }),
     [
@@ -2144,6 +2197,7 @@ function PlatformScriptureEditor({
       handleHiddenContentDelete,
       canUserCreateComments,
       isSyncBlocked,
+      isResource,
       textDirectionEffective,
       nodeOptions,
       viewOptions,
@@ -5180,7 +5234,7 @@ function PlatformScriptureEditor({
     DEFAULT_WEBVIEW_MENU,
   );
 
-  const webViewMenu = useMemo(() => {
+  const webViewMenuRaw = useMemo(() => {
     if (isPlatformError(webViewMenuPossiblyError)) {
       logger.warn(
         `Failed to load web view menu for ${SCRIPTURE_EDITOR_WEBVIEW_TYPE}`,
@@ -5191,11 +5245,25 @@ function PlatformScriptureEditor({
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
 
+  // Context keys embed the project id in its canonical upper-case form, so the id a tab was opened
+  // with must be normalized before it is substituted into a menu condition.
+  const menuTemplateVars = useMemo(
+    () =>
+      createMenuTemplateVars({
+        webViewId,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId,
+      }),
+    [webViewId, projectId],
+  );
+
+  const evaluatedTopMenu = useEvaluatedMenu(webViewMenuRaw.topMenu, menuTemplateVars);
+
   // Menu labels are localized once for every editor, so the project name stays as the
   // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here.
   const projectMenuData = useMemo(
-    () => substituteProjectNameInMenu(webViewMenu.topMenu, projectName),
-    [webViewMenu.topMenu, projectName],
+    () => substituteProjectNameInMenu(evaluatedTopMenu, projectName),
+    [evaluatedTopMenu, projectName],
   );
 
   const [booksPresentPossiblyError] = useProjectSetting(
@@ -5203,29 +5271,6 @@ function PlatformScriptureEditor({
     'platformScripture.booksPresent',
     BOOKS_PRESENT_DEFAULT,
   );
-
-  // `platform.isPublished` is the project-kind classification (resource vs project); `isReadOnly` /
-  // `platform.isEditable` is Scripture-text edit PERMISSION and says nothing about kind. Only the
-  // former may decide whether the user is told "this book is not in this resource", which is a
-  // statement of fact with no remedy. Same distinction the open path draws in this extension's
-  // `main.ts`, where the comment on `isPublished` spells out why the two must not be conflated.
-  // Defaults to false so an unresolved setting shows the actionable project message rather than
-  // wrongly telling a project owner their project is a resource.
-  const [isPublishedPossiblyError, , , isIsPublishedLoading] = useProjectSetting(
-    projectId,
-    'platform.isPublished',
-    false,
-  );
-
-  const isResource = useMemo(() => {
-    if (isPlatformError(isPublishedPossiblyError)) {
-      logger.warn(
-        `Error getting whether the project is published: ${getErrorMessage(isPublishedPossiblyError)}`,
-      );
-      return false;
-    }
-    return isPublishedPossiblyError;
-  }, [isPublishedPossiblyError]);
 
   const booksPresent = useMemo(() => {
     if (isPlatformError(booksPresentPossiblyError)) {
