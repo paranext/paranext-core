@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { polyfillRangeBoundingClientRect } from '../jsdom-range-rect.test-utils';
 import { computeBarTop, resolveActiveLineRect } from './character-marker-bar.utils';
 
 // Mock rect/element factories — mirrors paragraph-marker-tooltip.utils.test.ts. Only
@@ -65,27 +66,8 @@ describe('computeBarTop', () => {
 });
 
 describe('resolveActiveLineRect', () => {
-  // jsdom (26.x) does not implement Range.prototype.getBoundingClientRect at all — it's
-  // undefined, not a zero-filled DOMRect. Per the CSSOM View spec, a real browser returns an
-  // all-zero DOMRect for a Range with no client rects (exactly the degenerate case this module
-  // falls back for), so this polyfills only that spec-compliant zero shape — not a faked non-zero
-  // rect — to let jsdom exercise the same path a real browser would.
-  /* eslint-disable no-type-assertion/no-type-assertion */
-  if (!Range.prototype.getBoundingClientRect) {
-    Range.prototype.getBoundingClientRect = () =>
-      ({
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        width: 0,
-        height: 0,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      }) as DOMRect;
-  }
-  /* eslint-enable no-type-assertion/no-type-assertion */
+  // The all-zero Range rect is exactly the degenerate case this module falls back for.
+  polyfillRangeBoundingClientRect();
 
   const buildEditor = () => {
     const editorRoot = document.createElement('div');
@@ -165,7 +147,7 @@ describe('resolveActiveLineRect', () => {
     const textNode = firstChildOf(body);
 
     // Identity: it must be the very element the caret is in, not merely one that looks like it.
-    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(body);
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.block).toBe(body);
   });
 
   it('falls back to the containing paragraph rect when the caret rect is degenerate', () => {
@@ -191,7 +173,24 @@ describe('resolveActiveLineRect', () => {
     editorRoot.appendChild(impliedPara);
     const textNode = firstChildOf(impliedPara);
 
-    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(impliedPara);
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.block).toBe(impliedPara);
+  });
+
+  it('resolves an empty block when the caret sits on the block element itself', () => {
+    // An empty paragraph has no text node to hold the caret, so the selection anchors on the
+    // paragraph element. Lexical renders the empty paragraph with a lone `<br>`.
+    const { editorRoot } = buildEditor();
+    const emptyPara = document.createElement('p');
+    emptyPara.appendChild(document.createElement('br'));
+    editorRoot.appendChild(emptyPara);
+    const emptyParaRect = makeRect(300, 318);
+    emptyPara.getBoundingClientRect = () => emptyParaRect;
+
+    const activeLine = resolveActiveLineRect(selectionAt(emptyPara, 0), editorRoot);
+
+    expect(activeLine?.block).toBe(emptyPara);
+    // The caret's own rect is degenerate here, so the line falls back to the block's rect.
+    expect(activeLine?.rect).toBe(emptyParaRect);
   });
 
   it('resolves the \\id line as the active line', () => {
@@ -202,7 +201,7 @@ describe('resolveActiveLineRect', () => {
     editorRoot.prepend(bookLine);
     const textNode = firstChildOf(bookLine);
 
-    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(bookLine);
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.block).toBe(bookLine);
   });
 
   it('resolves the top-level block, not an inner element, for a caret inside a character marker', () => {
@@ -214,6 +213,6 @@ describe('resolveActiveLineRect', () => {
     para.appendChild(characterMarker);
     const textNode = firstChildOf(characterMarker);
 
-    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(para);
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.block).toBe(para);
   });
 });

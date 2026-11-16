@@ -16,7 +16,7 @@ export type ActiveLine = {
    * baseline against: the editor's first paragraph is typically a `\mt1` heading at 166% font-size,
    * so measuring that one would misalign the bar on every body line.
    */
-  para: HTMLElement;
+  block: HTMLElement;
 };
 
 /**
@@ -30,11 +30,11 @@ export type ActiveLine = {
  *
  * A NON-COLLAPSED selection anchors to the TOP of the selection, by design — not to the end the
  * user is dragging. The range's union rect spans every selected line, so its `top` is the first
- * selected line's, and the paragraph comes from `anchorNode` (the fixed end) rather than
- * `focusNode` (the moving one). Extending a selection downward therefore leaves the bar where the
- * selection began. That is the right readout for this control: the bar reports the marker coverage
- * of the WHOLE selection, so pinning it to a stable edge keeps it from chasing the pointer while
- * the thing it describes is still being chosen.
+ * selected line's, and the block comes from `anchorNode` (the fixed end) rather than `focusNode`
+ * (the moving one). Extending a selection downward therefore leaves the bar where the selection
+ * began. That is the right readout for this control: the bar reports the marker coverage of the
+ * WHOLE selection, so pinning it to a stable edge keeps it from chasing the pointer while the thing
+ * it describes is still being chosen.
  *
  * @param selection The document's current selection, or `undefined` when there is none
  * @param editorRoot The editor element the selection must be inside to count
@@ -50,11 +50,11 @@ export function resolveActiveLineRect(
   const { anchorNode } = selection;
   if (!anchorNode || !editorRoot.contains(anchorNode)) return undefined;
 
-  const para = findTopLevelEditorBlock(anchorNode, editorRoot);
-  if (!para) return undefined;
+  const block = findTopLevelEditorBlock(anchorNode, editorRoot);
+  if (!block) return undefined;
 
   const caretRect = selection.getRangeAt(0).getBoundingClientRect();
-  return { rect: isDegenerate(caretRect) ? para.getBoundingClientRect() : caretRect, para };
+  return { rect: isDegenerate(caretRect) ? block.getBoundingClientRect() : caretRect, block };
 }
 
 /**

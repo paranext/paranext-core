@@ -85,6 +85,28 @@ export function findTopLevelEditorBlock(
 }
 
 /**
+ * Top-level blocks that hold no text a character marker can apply to: the `\id` line (the editor's
+ * `BookNode` renders it with class `book`) and chapter lines (class `chapter`).
+ */
+const NON_TEXT_BLOCK_SELECTOR = '.book, .chapter';
+
+/**
+ * Finds the first top-level editor block that holds text: a header line, a marked paragraph, or
+ * verses outside any paragraph marker. Skips the `\id` line and chapter lines, so a chapter that
+ * opens with unmarked verses resolves to those verses rather than to a later marked paragraph.
+ *
+ * @param editorRoot The editor's contenteditable element
+ * @returns The first text-holding block; else the first block, when there are only `\id` and
+ *   chapter lines; else `undefined` for an empty editor
+ */
+export function findFirstTextBlock(editorRoot: HTMLElement): HTMLElement | undefined {
+  const blocks = Array.from(editorRoot.children).filter(
+    (block): block is HTMLElement => block instanceof HTMLElement,
+  );
+  return blocks.find((block) => !block.matches(NON_TEXT_BLOCK_SELECTOR)) ?? blocks[0];
+}
+
+/**
  * Finds the USFM paragraph element genuinely rendered at the given viewport coordinates, via the
  * browser's own hit-test (`elementFromPoint`) rather than a specific mouse event's `target` /
  * `relatedTarget`.

@@ -5,6 +5,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import { CSSProperties } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BASELINE_PROBE_ATTRIBUTE } from '../editor-dom.util';
+import { polyfillRangeBoundingClientRect } from '../jsdom-range-rect.test-utils';
 
 // jsdom ships no ResizeObserver; the overlay observes the editor so a panel resize repositions it.
 const resizeCallbacks: ResizeObserverCallback[] = [];
@@ -33,16 +34,8 @@ beforeAll(() => {
   globalThis.ResizeObserver = MockResizeObserver;
 });
 
-// jsdom (26.x) does not implement Range.prototype.getBoundingClientRect at all — it's undefined,
-// not a zero-filled DOMRect. Per the CSSOM View spec, a real browser returns an all-zero DOMRect
-// for a Range with no client rects (exactly the degenerate case resolveActiveLineRect falls back
-// for), so this polyfills only that spec-compliant zero shape — not a faked non-zero rect — to let
-// jsdom exercise the same path a real browser would. Mirrors character-marker-bar.utils.test.ts.
-// A real `DOMRect` (constructible in this repo's jsdom) satisfies the type exactly, so no cast is
-// needed.
-if (!Range.prototype.getBoundingClientRect) {
-  Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
-}
+// The all-zero Range rect is exactly the degenerate case resolveActiveLineRect falls back for.
+polyfillRangeBoundingClientRect();
 
 // Mutable so one test can mount hidden and then flip to visible, which is the whole point.
 const mockVisibility = { isVisible: true };
@@ -432,12 +425,15 @@ describe('CharacterMarkerBarOverlay', () => {
     expect(barContainer().style.top).toBe('120px');
   });
 
-  it('anchors to the first block before a caret when no paragraph carries a marker', () => {
-    // A chapter whose verses all sit outside any paragraph marker has no `.para` to anchor to.
+  it('anchors to verse text, not the chapter line, before a caret when no paragraph carries a marker', () => {
+    // A chapter whose verses all sit outside any paragraph marker. The chapter line comes first, but
+    // the menu has no markers to offer there, so the bar starts beside the verses. stubRects reports
+    // 0 for the chapter line (neither `.para` nor classless).
     stubRects(120, 300);
     render(
       <CharacterMarkerBarOverlay bar={<button type="button">bd</button>}>
         <div className="editor-input usfm">
+          <p className="chapter usfm_c">2</p>
           <p>this has text</p>
         </div>
       </CharacterMarkerBarOverlay>,
@@ -446,18 +442,21 @@ describe('CharacterMarkerBarOverlay', () => {
     expect(barContainer().style.top).toBe('300px');
   });
 
-  it('prefers a marked paragraph to an earlier unmarked block before a caret', () => {
+  it('anchors to unmarked verses that come before a marked paragraph, before a caret', () => {
+    // A chapter that opens with verses outside any paragraph marker and has a `\p` further down:
+    // the bar starts at the first verse text, not beside the later `\p`, which may be off-screen.
     stubRects(120, 300);
     render(
       <CharacterMarkerBarOverlay bar={<button type="button">bd</button>}>
         <div className="editor-input usfm">
+          <p className="chapter usfm_c">2</p>
           <p>this has text</p>
           <p className="para usfm_p">The LORD is my shepherd</p>
         </div>
       </CharacterMarkerBarOverlay>,
     );
 
-    expect(barContainer().style.top).toBe('120px');
+    expect(barContainer().style.top).toBe('300px');
   });
 
   it('repositions when the editor resizes', async () => {

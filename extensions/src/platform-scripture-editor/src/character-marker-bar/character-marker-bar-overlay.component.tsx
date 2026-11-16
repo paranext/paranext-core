@@ -1,10 +1,6 @@
 import { useViewVisibility, Z_INDEX_OVERLAY } from 'platform-bible-react';
 import { ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import {
-  EDITOR_PARA_SELECTOR,
-  findScrollContainer,
-  measureBaselineOffset,
-} from '../editor-dom.util';
+import { findFirstTextBlock, findScrollContainer, measureBaselineOffset } from '../editor-dom.util';
 import { computeBarTop, resolveActiveLineRect } from './character-marker-bar.utils';
 import { useEditorSelectionVersion } from './use-editor-selection-version.hook';
 
@@ -183,36 +179,33 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
 
     const activeLine = resolveActiveLineRect(window.getSelection() ?? undefined, editorRoot);
     let targetRect = activeLine?.rect;
-    // The paragraph whose font metrics the baseline is measured against: the one the caret is
-    // actually in, NOT the editor's first paragraph. On a chapter opening the first paragraph is
-    // typically a `\mt1` at 166% font-size, so measuring it would put the trigger several pixels low
-    // on every body line — the same magnitude of misalignment this alignment exists to fix.
-    let measurementPara = activeLine?.para;
+    // The block whose font metrics the baseline is measured against: the one the caret is actually
+    // in, NOT the editor's first block. On a chapter opening the first block is typically a `\mt1`
+    // at 166% font-size, so measuring it would put the trigger several pixels low on every body
+    // line — the same magnitude of misalignment this alignment exists to fix.
+    let measurementBlock = activeLine?.block;
 
     if (!targetRect) {
-      // Before the first caret, anchor to the first marked paragraph (or, in a chapter without
-      // one, the first block) so the bar is visible on load — discoverability is the point of the
-      // feature. After that, no caret in an editor block means the popover took focus, so HOLD the
-      // last position rather than jumping back to the top of the editor as the popover opens and
-      // closes.
+      // Before the first caret, anchor to the first block that holds text (skipping the `\id` and
+      // chapter lines, where the menu has no markers to offer) so the bar is visible on load —
+      // discoverability is the point of the feature. After that, no caret in an editor block means
+      // the popover took focus, so HOLD the last position rather than jumping back to the top of
+      // the editor as the popover opens and closes.
       if (hasPositionedRef.current) return;
-      const firstBlock = editorRoot.firstElementChild;
-      const firstPara =
-        editorRoot.querySelector<HTMLElement>(EDITOR_PARA_SELECTOR) ??
-        (firstBlock instanceof HTMLElement ? firstBlock : undefined);
-      if (!firstPara) return;
-      targetRect = firstPara.getBoundingClientRect();
-      // Measure against the SAME paragraph the position is anchored to, so the two halves of the
-      // alignment can never describe different paragraphs.
-      measurementPara = firstPara;
+      const firstTextBlock = findFirstTextBlock(editorRoot);
+      if (!firstTextBlock) return;
+      targetRect = firstTextBlock.getBoundingClientRect();
+      // Measure against the SAME block the position is anchored to, so the two halves of the
+      // alignment can never describe different blocks.
+      measurementBlock = firstTextBlock;
     }
 
     hasPositionedRef.current = true;
 
-    // Measured lazily and cached, keyed on the CARET'S paragraph's computed font metrics
+    // Measured lazily and cached, keyed on the CARET'S block's computed font metrics
     // (fontMetricsRef): metrics normally don't change as the caret moves within body text, so this
     // usually runs once per mount rather than once per caret move — but it MUST re-run on an explicit
-    // font-size/zoom change, a `font-family` change, or a caret move between paragraphs with
+    // font-size/zoom change, a `font-family` change, or a caret move between blocks with
     // different metrics (body text ↔ an `\mt1` heading at 166%), so "is the offset set yet" alone is
     // the wrong cache key (it would go stale in exactly the scenario the ResizeObserver below exists
     // to catch). The webfont-load case this key can't see is handled separately — see the
@@ -222,17 +215,17 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     // would align the trigger against a baseline that was never read. Leaving the ref unset is the
     // correct outcome — `computeBarTop`'s default treats it as 0, i.e. the bar stays top-aligned,
     // and the next recompute tries again.
-    const para = measurementPara;
+    const block = measurementBlock;
     const measuringElement = measuringElementRef.current;
     const barContainer = barContainerRef.current;
-    if (para && measuringElement && barContainer) {
-      const paraStyle = window.getComputedStyle(para);
-      const { fontFamily, fontSize, fontWeight, fontStyle, lineHeight, letterSpacing } = paraStyle;
-      // The paragraph sits inside the editor's content-zoom area and this measuring element does
-      // not, so it takes the paragraph's cumulative zoom to report the baseline in the same viewport
-      // pixels as `targetRect`. Part of the cache key: a zoom change leaves the computed metrics
-      // above untouched. jsdom does not implement `currentCSSZoom`.
-      const zoom = String(para.currentCSSZoom ?? 1);
+    if (block && measuringElement && barContainer) {
+      const blockStyle = window.getComputedStyle(block);
+      const { fontFamily, fontSize, fontWeight, fontStyle, lineHeight, letterSpacing } = blockStyle;
+      // The block sits inside the editor's content-zoom area and this measuring element does not,
+      // so it takes the block's cumulative zoom to report the baseline in the same viewport pixels
+      // as `targetRect`. Part of the cache key: a zoom change leaves the computed metrics above
+      // untouched. jsdom does not implement `currentCSSZoom`.
+      const zoom = String(block.currentCSSZoom ?? 1);
       const cachedMetrics = fontMetricsRef.current;
       const metricsChanged =
         !cachedMetrics ||
@@ -246,15 +239,15 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
 
       if (metricsChanged) {
         // Measured HERE rather than above the cache check, even though it is the trigger's half of
-        // the alignment rather than the paragraph's: `iconCenter` feeds nothing but the offset
+        // the alignment rather than the block's: `iconCenter` feeds nothing but the offset
         // below, and it costs two `getBoundingClientRect` reads. With a warm cache — the steady
         // state while scrolling — measuring it before the guard would throw both reads away on
         // every frame. Resolving it before the probe still means a bar with no icon never touches
         // the measuring element at all.
         const iconCenter = measureTriggerIconCenter(barContainer);
         if (iconCenter !== undefined) {
-          // Copy the paragraph's computed text metrics onto the hidden off-editor element so its
-          // line-box strut matches the real paragraph's — no filler text needed, the strut alone is
+          // Copy the block's computed text metrics onto the hidden off-editor element so its
+          // line-box strut matches the real block's — no filler text needed, the strut alone is
           // what gets measured.
           measuringElement.style.fontFamily = fontFamily;
           measuringElement.style.fontSize = fontSize;

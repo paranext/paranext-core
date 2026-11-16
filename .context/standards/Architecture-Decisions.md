@@ -4871,7 +4871,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `.editor-input` that holds it (`findTopLevelEditorBlock`), the DOM twin of Lexical's
   `getTopLevelElement()` and the block `ActiveTextPlugin` outlines — while the paragraph-marker
   tooltip keeps `EDITOR_PARA_SELECTOR`, because it names a marked paragraph. Before the first caret,
-  the bar anchors to the first marked paragraph, or to the first block in a chapter without one.
+  the bar anchors to the first block that holds text (`findFirstTextBlock`): it skips the `\id`
+  line (class `book`) and chapter lines (class `chapter`) and takes the next block whether or not it
+  has a paragraph marker, so a chapter that opens with unmarked verses starts the bar beside them
+  rather than beside a later `\p` that may be off-screen.
 - **Alternatives:** Report `undefined` for an implied paragraph — rejected: the character-marker
   menu returns no items without a parent marker, which disables the button in exactly the place the
   user is typing. Add an `isImpliedPara` field to `StateChangeSnapshot` — rejected: public API growth

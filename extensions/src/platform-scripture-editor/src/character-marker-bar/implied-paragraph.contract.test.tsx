@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
 import { Editorial } from '@eten-tech-foundation/platform-editor';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { polyfillRangeBoundingClientRect } from '../jsdom-range-rect.test-utils';
 import { resolveActiveLineRect } from './character-marker-bar.utils';
 
 const impliedParagraphUsj: Usj = {
@@ -20,12 +21,8 @@ const impliedParagraphUsj: Usj = {
   ],
 };
 
-// jsdom does not implement Range.prototype.getBoundingClientRect, which `resolveActiveLineRect`
-// calls. A real browser returns an all-zero DOMRect for a Range with no client rects, so this
-// polyfills only that spec-compliant shape. Mirrors character-marker-bar.utils.test.ts.
-if (!Range.prototype.getBoundingClientRect) {
-  Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
-}
+// `resolveActiveLineRect` reads the caret's Range rect.
+polyfillRangeBoundingClientRect();
 
 /**
  * Renders the real editor, editable, and puts the caret inside the verse text.
@@ -76,7 +73,7 @@ describe('the character-marker bar against the real editor, in verses outside an
 
     const activeLine = resolveActiveLineRect(window.getSelection() ?? undefined, editorRoot);
 
-    expect(activeLine?.para.contains(verseText)).toBe(true);
+    expect(activeLine?.block.contains(verseText)).toBe(true);
   });
 
   it('reports p as the block marker for a caret in verses outside any paragraph marker', async () => {
