@@ -21,6 +21,14 @@ describe('PapiRendererWebSocket blocking', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    // `replaceTopWindowWebSocket` redefines `constructor` on the native prototype, which here is the
+    // shared fake's, and neither reset above undoes a prototype change
+    Object.defineProperty(FakeWebSocket.prototype, 'constructor', {
+      value: FakeWebSocket,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
   });
 
   it('allows the PAPI port while initialize is pending', async () => {

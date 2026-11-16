@@ -159,7 +159,8 @@ type would hand a credential that works off the machine:
   connections are not authenticated.
 - Any installed extension's web view, privilege or not. The main process blocks it from opening a
   WebSocket to port 8876 (see [The renderer's PAPI port](#the-renderers-papi-port)), but it can
-  still drive its window's PAPI connection.
+  still drive its window's PAPI connection, and reach other renderer internals through
+  `window.top` (for example webpack's chunk-loading global; open work: PT-5065).
 
 The stopgap trusts a header instead of identifying the caller, so any process that leaves `Origin`
 out gets through. Don't treat it as the fix or build on it.

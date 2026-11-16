@@ -7122,7 +7122,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   on the default session replaces this one and silently reopens the port, so any other need for
   `onBeforeRequest` there must be folded into this listener. The renderer is still not a hard
   boundary: a same-origin web view can reach renderer internals through `window.top`, including
-  the window's `MessagePort` bridge. Revisit when PT-2893 identifies callers.
+  the window's `MessagePort` bridge and webpack's chunk-loading global, which hands out its module
+  loader (open work: PT-5065). Revisit when PT-2893 identifies callers.
 
 ## adr-papi-websocket-hostname-bind: The PAPI websocket binds by hostname, and readiness is awaited rather than assumed
 

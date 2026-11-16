@@ -41,10 +41,26 @@ export function isPapiPortWebSocketRequest(details: PapiPortRequestDetails): boo
   return port === `${WEBSOCKET_PORT}`;
 }
 
+/** The parts of Electron's `WebRequestFilter` the block sets */
+export type PapiPortRequestFilter = {
+  urls: string[];
+  types: 'webSocket'[];
+};
+
+/**
+ * Only WebSocket handshakes reach the listener, so other requests (scripts, chunks, images,
+ * extension assets) don't wait on the main process's thread
+ */
+export const PAPI_PORT_REQUEST_FILTER: PapiPortRequestFilter = {
+  urls: ['<all_urls>'],
+  types: ['webSocket'],
+};
+
 /** The part of Electron's `Session` that registers an `onBeforeRequest` listener */
 export type PapiPortRequestSession = {
   webRequest: {
     onBeforeRequest(
+      filter: PapiPortRequestFilter,
       listener: (
         details: PapiPortRequestDetails,
         callback: (response: { cancel?: boolean }) => void,
@@ -63,7 +79,7 @@ export type PapiPortRequestSession = {
  * @param session The session the renderer windows use
  */
 export function registerPapiPortRequestBlock(session: PapiPortRequestSession): void {
-  session.webRequest.onBeforeRequest((details, callback) => {
+  session.webRequest.onBeforeRequest(PAPI_PORT_REQUEST_FILTER, (details, callback) => {
     const cancel = isPapiPortWebSocketRequest(details);
     if (cancel)
       logger.warn(`Blocked a WebSocket from a renderer window to the PAPI port: ${details.url}`);

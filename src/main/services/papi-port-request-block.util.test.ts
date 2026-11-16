@@ -2,6 +2,7 @@ import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
 import { describe, expect, it, vi } from 'vitest';
 import {
   isPapiPortWebSocketRequest,
+  PapiPortRequestFilter,
   PapiPortRequestDetails,
   registerPapiPortRequestBlock,
 } from './papi-port-request-block.util';
@@ -47,20 +48,30 @@ describe('isPapiPortWebSocketRequest', () => {
 });
 
 describe('registerPapiPortRequestBlock', () => {
-  function registerAndGetListener() {
+  function register() {
+    let filter: PapiPortRequestFilter | undefined;
     let listener:
       | ((details: PapiPortRequestDetails, callback: (r: { cancel?: boolean }) => void) => void)
       | undefined;
     registerPapiPortRequestBlock({
       webRequest: {
-        onBeforeRequest: (registered) => {
+        onBeforeRequest: (registeredFilter, registered) => {
+          filter = registeredFilter;
           listener = registered;
         },
       },
     });
-    if (!listener) throw new Error('No onBeforeRequest listener was registered');
-    return listener;
+    if (!filter || !listener) throw new Error('No onBeforeRequest listener was registered');
+    return { filter, listener };
   }
+
+  function registerAndGetListener() {
+    return register().listener;
+  }
+
+  it('asks only for WebSocket requests to any URL', () => {
+    expect(register().filter).toEqual({ urls: ['<all_urls>'], types: ['webSocket'] });
+  });
 
   it('cancels a WebSocket to the PAPI port', () => {
     const callback = vi.fn();
