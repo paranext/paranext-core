@@ -235,7 +235,10 @@ global.webViewComponent = function ChecklistWebView({
 }: WebViewProps) {
   // The provider titles the tab only when it opens; the project picker retargets the tab without
   // reopening it. Same localize key as `checklist.web-view-provider.ts`, so the title keeps its shape.
-  const tabTitle = useLocalizedProjectTitle(projectId, '%markersChecklist_windowTitle%');
+  const tabTitle = useLocalizedProjectTitle({
+    localizeKey: '%markersChecklist_windowTitle%',
+    projectId,
+  });
   useEffect(() => {
     if (tabTitle !== undefined) updateWebViewDefinition({ title: tabTitle });
   }, [tabTitle, updateWebViewDefinition]);

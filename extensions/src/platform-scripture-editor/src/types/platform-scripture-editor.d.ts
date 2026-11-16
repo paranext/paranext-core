@@ -397,9 +397,8 @@ declare module 'platform-scripture-editor' {
      * - `{projectName}`: The name of the project opened in the editor (`platform.name` setting), or
      *   its id when the name is unavailable
      * - `{projectId}`: Same as `{projectName}`. Prefer `{projectName}`.
-     * - `{editable}`: Will be replaced with an empty string for non-editable projects and the
-     *   localized value of `%webView_platformScriptureEditor_title_editable_indicator%` (in
-     *   English, `(Editable)`) for editable projects.
+     * - `{editable}`: The localized editable or read-only indicator (in English, `(Editable)` or
+     *   `(Read-only)`).
      */
     title?: string | LocalizeKey;
     /** Tooltip that is shown when hovering over the webview title */

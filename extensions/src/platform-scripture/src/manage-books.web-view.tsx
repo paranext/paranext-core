@@ -458,8 +458,6 @@ global.webViewComponent = function ManageBooksWebView({
   // Pull all the localization strings the dialog + picker need in one batch. Including the
   // picker keys here ensures the inline-rendered picker reads from the same string map and
   // localization fetches happen as a single round-trip.
-  // (Hoisted above the project-change effect so the effect can read the localized title
-  // template when computing the new tab title.)
   const stringKeys = useMemo(
     () => [
       ...MANAGE_BOOKS_DIALOG_STRING_KEYS,
@@ -476,8 +474,6 @@ global.webViewComponent = function ManageBooksWebView({
   // invocation), seed the projectId from the first available scripture project
   // once the manage-books NetworkObject resolves. The setter is a no-op when
   // projectId is already set so this only fires for the cold-open case.
-  // Kept as its own effect so persisting the projectId does not re-run the
-  // title update below.
   useEffect(() => {
     if (projectId && projectId !== persistedProjectId) {
       setPersistedProjectId(projectId);
@@ -487,7 +483,10 @@ global.webViewComponent = function ManageBooksWebView({
   // Keep the dock-tab title (and projectId) in step with the selected project.
   // Built from the same localize key `manage-books.web-view-provider.ts` uses for
   // the initial title, so the title does not change shape on a project switch.
-  const tabTitle = useLocalizedProjectTitle(projectId, MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY);
+  const tabTitle = useLocalizedProjectTitle({
+    localizeKey: MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY,
+    projectId,
+  });
   useEffect(() => {
     if (!projectId || tabTitle === undefined) return;
     try {

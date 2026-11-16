@@ -146,12 +146,7 @@ export type ILocalizationService = {
      * // 'My Tool: WEB'
      * ```
      *
-     * @param options.localizeKey Key of the localized title format. The format should contain a
-     *   `{projectName}` placeholder.
-     * @param options.projectId Id of the project the title is for
-     * @param options.replacements Values for any other `{key}` placeholders in the format
-     * @param options.locales BCP 47 language codes to look the format up in, as for
-     *   `getLocalizedString`. Defaults to the interface languages.
+     * @param options What to title; see {@link LocalizedProjectTitleOptions}.
      * @returns The formatted title
      */
     getLocalizedProjectTitle(options: LocalizedProjectTitleOptions): Promise<string>;

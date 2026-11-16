@@ -27,7 +27,7 @@ export function useSetting<T>(
  * to avoid `any` - consumers live in separate files and resolve against the real papi.d.ts.
  */
 export const useProjectSetting = (): unknown[] => [undefined, async () => undefined];
-/** Never resolves a title, as while the real hook is still loading. */
+/** Always `undefined`, like the real hook while it is loading. */
 export const useLocalizedProjectTitle = (): string | undefined => undefined;
 export const useProjectDataProvider = (): unknown => undefined;
 export const useData = (): unknown[] => [undefined, async () => undefined, false];

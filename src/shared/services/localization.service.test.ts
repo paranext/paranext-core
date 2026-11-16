@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { get as getProjectDataProvider } from '@shared/services/project-data-provider.service';
 import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
 
-vi.mock('@shared/services/logger.service');
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
 
 vi.mock('@shared/services/data-provider.service', () => ({
   __esModule: true,
@@ -87,6 +90,7 @@ describe('getLocalizedProjectTitle', () => {
         projectId: 'abc123',
       }),
     ).resolves.toBe('Character Inventory: abc123');
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('abc123'));
   });
 
   it('shows the key when it has no localization', async () => {
@@ -107,6 +111,9 @@ describe('getLocalizedProjectTitle', () => {
         projectId: 'abc123',
       }),
     ).resolves.toBe('WEB');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('%webView_characterInventory_title%'),
+    );
   });
 
   it('resolves to the project id when both lookups fail', async () => {

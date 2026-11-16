@@ -27,6 +27,9 @@
     "%webView_legacyCommentManager_commentList_title%": {
       "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_11CommentListForm_ShortTitle%"
     },
+    "%webView_legacyCommentManager_commentList_titleWithProject%": {
+      "notes": "Tab title of the comment list for one project. {commentListTitle} is the already-translated comment list title (%webView_legacyCommentManager_commentList_title%, in English \"Comments\"). {projectName} is the project's short name, such as \"WEB\"."
+    },
     "%webView_legacyCommentManager_commentListPanel_title%": {
       "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_11CommentListForm_ShortTitle%"
     },

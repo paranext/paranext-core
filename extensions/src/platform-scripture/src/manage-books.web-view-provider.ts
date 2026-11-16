@@ -57,9 +57,6 @@ export class ManageBooksWebViewProvider implements IWebViewProvider {
    */
   titleKey: LocalizeKey = '%manageBooks_dialog_title%';
 
-  /** Title key used instead of {@link titleKey} when the dialog is for a project */
-  titleWithProjectKey: LocalizeKey = MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY;
-
   async getWebView(
     savedWebView: SavedWebViewDefinition,
     getWebViewOptions: ManageBooksWebViewOptions,
@@ -72,10 +69,9 @@ export class ManageBooksWebViewProvider implements IWebViewProvider {
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    // Must match the title `manage-books.web-view.tsx` sets when the project changes
     const title = projectId
       ? await papi.localization.getLocalizedProjectTitle({
-          localizeKey: this.titleWithProjectKey,
+          localizeKey: MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY,
           projectId,
         })
       : await papi.localization.getLocalizedString({ localizeKey: this.titleKey });

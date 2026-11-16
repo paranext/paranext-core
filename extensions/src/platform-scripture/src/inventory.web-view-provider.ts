@@ -35,7 +35,7 @@ export class InventoryWebViewProvider implements IWebViewProvider {
       ? await papi.localization.getLocalizedProjectTitle({ localizeKey: this.titleKey, projectId })
       : formatReplacementString(
           await papi.localization.getLocalizedString({ localizeKey: this.titleKey }),
-          { projectName: undefined },
+          { projectName: '' },
         );
 
     return {

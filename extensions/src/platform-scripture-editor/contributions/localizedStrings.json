@@ -1433,6 +1433,9 @@
         "message": "The project's name now fills a {projectName} placeholder, matching other per-project titles, rather than {projectId}. The new key is %webView_platformScriptureEditor_title_format_2%."
       }
     },
+    "%webView_platformScriptureEditor_title_format_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_title_format%"
+    },
     "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": {
       "deprecationInfo": {
         "date": "2026-10-26",

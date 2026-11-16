@@ -43,7 +43,9 @@ beforeEach(() => {
 
 describe('useLocalizedProjectTitle', () => {
   it("formats the localized title with the project's short name", () => {
-    const { result } = renderHook(() => useLocalizedProjectTitle('abc123', TITLE_KEY));
+    const { result } = renderHook(() =>
+      useLocalizedProjectTitle({ localizeKey: TITLE_KEY, projectId: 'abc123' }),
+    );
     expect(result.current).toBe('Character Inventory: WEB');
     expect(useProjectDataProviderState).toHaveBeenCalledWith('platform.base', 'abc123');
     expect(useProjectSetting).toHaveBeenCalledWith(pdp, 'platform.name', '');
@@ -52,7 +54,11 @@ describe('useLocalizedProjectTitle', () => {
   it('fills extra replacements', () => {
     mockTitleFormat('Results ({resultsCount}): {projectName}');
     const { result } = renderHook(() =>
-      useLocalizedProjectTitle('abc123', TITLE_KEY, { resultsCount: 3 }),
+      useLocalizedProjectTitle({
+        localizeKey: TITLE_KEY,
+        projectId: 'abc123',
+        replacements: { resultsCount: 3 },
+      }),
     );
     expect(result.current).toBe('Results (3): WEB');
   });
@@ -63,50 +69,66 @@ describe('useLocalizedProjectTitle', () => {
     ['an error', newPlatformError('Setting failed')],
   ])('shows the project id when the short name is %s', (_description, projectName) => {
     mockProjectName(projectName);
-    const { result } = renderHook(() => useLocalizedProjectTitle('abc123', TITLE_KEY));
+    const { result } = renderHook(() =>
+      useLocalizedProjectTitle({ localizeKey: TITLE_KEY, projectId: 'abc123' }),
+    );
     expect(result.current).toBe('Character Inventory: abc123');
   });
 
   it('returns undefined while the short name is loading', () => {
     mockProjectName('', true);
-    const { result } = renderHook(() => useLocalizedProjectTitle('abc123', TITLE_KEY));
+    const { result } = renderHook(() =>
+      useLocalizedProjectTitle({ localizeKey: TITLE_KEY, projectId: 'abc123' }),
+    );
     expect(result.current).toBeUndefined();
   });
 
   it("returns undefined while the project's data provider is loading", () => {
     // `useProjectSetting` still reports the previous project's name, as it does after a switch
     vi.mocked(useProjectDataProviderState).mockReturnValue({ status: 'loading' });
-    const { result } = renderHook(() => useLocalizedProjectTitle('abc123', TITLE_KEY));
+    const { result } = renderHook(() =>
+      useLocalizedProjectTitle({ localizeKey: TITLE_KEY, projectId: 'abc123' }),
+    );
     expect(result.current).toBeUndefined();
   });
 
   it("shows the project id when the project's data provider is unavailable", () => {
     vi.mocked(useProjectDataProviderState).mockReturnValue({ status: 'unavailable' });
     mockProjectName('', true);
-    const { result } = renderHook(() => useLocalizedProjectTitle('abc123', TITLE_KEY));
+    const { result } = renderHook(() =>
+      useLocalizedProjectTitle({ localizeKey: TITLE_KEY, projectId: 'abc123' }),
+    );
     expect(result.current).toBe('Character Inventory: abc123');
   });
 
   it('returns undefined while the format is loading', () => {
     mockTitleFormat(TITLE_KEY, true);
-    const { result } = renderHook(() => useLocalizedProjectTitle('abc123', TITLE_KEY));
+    const { result } = renderHook(() =>
+      useLocalizedProjectTitle({ localizeKey: TITLE_KEY, projectId: 'abc123' }),
+    );
     expect(result.current).toBeUndefined();
   });
 
   it('returns undefined when the loaded strings do not yet include the key', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
-    const { result } = renderHook(() => useLocalizedProjectTitle('abc123', TITLE_KEY));
+    const { result } = renderHook(() =>
+      useLocalizedProjectTitle({ localizeKey: TITLE_KEY, projectId: 'abc123' }),
+    );
     expect(result.current).toBeUndefined();
   });
 
   it('shows the key once loaded when the key has no localization', () => {
     mockTitleFormat(TITLE_KEY);
-    const { result } = renderHook(() => useLocalizedProjectTitle('abc123', TITLE_KEY));
+    const { result } = renderHook(() =>
+      useLocalizedProjectTitle({ localizeKey: TITLE_KEY, projectId: 'abc123' }),
+    );
     expect(result.current).toBe(TITLE_KEY);
   });
 
   it('returns undefined with no project', () => {
-    const { result } = renderHook(() => useLocalizedProjectTitle(undefined, TITLE_KEY));
+    const { result } = renderHook(() =>
+      useLocalizedProjectTitle({ localizeKey: TITLE_KEY, projectId: undefined }),
+    );
     expect(result.current).toBeUndefined();
   });
 });

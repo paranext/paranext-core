@@ -4932,7 +4932,7 @@ export declare function normalizeFullName(fullName: unknown): string | undefined
  * Accepts the raw setting value so callers need no checks of their own: a missing name, a blank
  * name, and a `PlatformError` (as `useProjectSetting` reports a failed read) all fall back to the
  * id. Blank means empty or whitespace-only, the same rule {@link normalizeFullName} applies to the
- * full name: such a name is present but invisible, so it would leave the title without a project.
+ * full name: such a name is present but invisible, so it would leave the project unnamed.
  *
  * @example
  *
@@ -4952,12 +4952,11 @@ export declare function getProjectDisplayName(projectId: string, projectName: un
 /**
  * Formats a title for something scoped to one project, such as a WebView's tab, by replacing
  * `{projectName}` in `titleFormat` with the project's display name (see
- * {@link getProjectDisplayName}). Use it wherever a provider and its WebView both build the same
- * title, so the two always agree.
+ * {@link getProjectDisplayName}).
  *
- * To look up the name and the localized format as well, use
- * `papi.localization.getLocalizedProjectTitle` (in a WebView provider or other async code) or the
- * `useLocalizedProjectTitle` hook (in a WebView).
+ * Most callers want `papi.localization.getLocalizedProjectTitle` (in a WebView provider) or the
+ * `useLocalizedProjectTitle` hook (in a WebView), which also look up the name and the localized
+ * format. Call this directly only when you already have both.
  *
  * @example
  *
@@ -4971,7 +4970,7 @@ export declare function getProjectDisplayName(projectId: string, projectName: un
  * ```
  *
  * @param titleFormat Title containing a `{projectName}` placeholder, typically a localized string.
- * @param projectId The project's id, shown when `projectName` is not a non-blank string.
+ * @param projectId The project's id, shown when `projectName` is missing, blank, or not a string.
  * @param projectName The project's `platform.name` setting value, or anything else a lookup
  *   produced (`undefined`, an error, etc.).
  * @param replacements Values for any other `{key}` placeholders in `titleFormat`. A `projectName`

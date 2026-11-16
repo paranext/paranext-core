@@ -46,7 +46,7 @@ const { mockRecentProjects, mockWireProjects, mockUseLocalizedProjectTitle } = v
   return {
     mockRecentProjects: recentProjects,
     mockWireProjects: wireProjects,
-    mockUseLocalizedProjectTitle: vi.fn((): string | undefined => undefined),
+    mockUseLocalizedProjectTitle: vi.fn<(options: { projectId?: string }) => string | undefined>(),
   };
 });
 
@@ -186,6 +186,7 @@ function getGroupByTrigger(popover: HTMLElement): HTMLElement {
 
 afterEach(() => {
   vi.clearAllMocks();
+  mockUseLocalizedProjectTitle.mockReturnValue(undefined);
 });
 
 describe('ManageBooksWebView sidebar project grouping', () => {
@@ -301,10 +302,45 @@ describe('ManageBooksWebView tab title', () => {
         title: 'Manage books — A',
       }),
     );
-    expect(mockUseLocalizedProjectTitle).toHaveBeenCalledWith(
-      'PROJECT-A',
-      '%manageBooks_dialog_titleWithProject%',
+    expect(mockUseLocalizedProjectTitle).toHaveBeenCalledWith({
+      localizeKey: '%manageBooks_dialog_titleWithProject%',
+      projectId: 'PROJECT-A',
+    });
+  });
+
+  it('retitles the tab when another project is picked', async () => {
+    mockRecentProjects.value = [];
+    mockWireProjects.value = [
+      wireProject({ projectId: 'PROJECT-A', name: 'A', fullName: 'Project A' }),
+      wireProject({ projectId: 'PROJECT-B', name: 'B', fullName: 'Project B' }),
+    ];
+    mockUseLocalizedProjectTitle.mockImplementation(({ projectId }) =>
+      projectId === 'PROJECT-B' ? 'Manage books — B' : 'Manage books — A',
     );
+
+    const ManageBooksWebView = getManageBooksWebView();
+    const props = makeProps();
+    render(<ManageBooksWebView {...props} />);
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenLastCalledWith({
+        projectId: 'PROJECT-A',
+        title: 'Manage books — A',
+      }),
+    );
+
+    const { user, popover } = await openSidebarPicker();
+    await user.click(await within(popover).findByRole('option', { name: /Project B/ }));
+
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenLastCalledWith({
+        projectId: 'PROJECT-B',
+        title: 'Manage books — B',
+      }),
+    );
+    expect(mockUseLocalizedProjectTitle).toHaveBeenLastCalledWith({
+      localizeKey: '%manageBooks_dialog_titleWithProject%',
+      projectId: 'PROJECT-B',
+    });
   });
 
   it('leaves the tab title alone while the title is loading', async () => {

@@ -1,7 +1,8 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks/use-localized-strings-hook';
 import { useProjectDataProviderState } from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import { useProjectSetting } from '@renderer/hooks/papi-hooks/use-project-setting.hook';
-import { formatProjectTitle, LocalizeKey } from 'platform-bible-utils';
+import type { LocalizedProjectTitleOptions } from '@shared/services/localization.service-model';
+import { formatProjectTitle } from 'platform-bible-utils';
 import { useMemo } from 'react';
 
 /**
@@ -11,37 +12,37 @@ import { useMemo } from 'react';
  * with the project id when the name cannot be read or is blank.
  *
  * This is the WebView counterpart of `papi.localization.getLocalizedProjectTitle`, which a WebView
- * provider uses to give the tab its title on open. Both produce the same title, so the tab does not
- * change when the WebView takes over.
+ * provider uses to give the tab its title on open. It takes the same options, except `locales` (the
+ * title follows the interface languages) and a `projectId` that may be `undefined`. When their
+ * lookups succeed, both produce the same title, so the tab does not change when the WebView takes
+ * over.
  *
  * @example
  *
  * ```tsx
  * // With `"%myExtension_tabTitle%": "My Tool: {projectName}"` contributed
- * const tabTitle = useLocalizedProjectTitle(projectId, '%myExtension_tabTitle%');
+ * const tabTitle = useLocalizedProjectTitle({
+ *   localizeKey: '%myExtension_tabTitle%',
+ *   projectId,
+ * });
  * useEffect(() => {
  *   if (tabTitle === undefined) return;
  *   updateWebViewDefinition({ title: hasUnsavedChanges ? `${tabTitle} ●` : tabTitle });
  * }, [tabTitle, hasUnsavedChanges, updateWebViewDefinition]);
  * ```
  *
- * @param projectId Id of the project the title is for. With no project there is no title, so the
- *   hook returns `undefined`.
- * @param localizeKey Key of the localized title format. The format should contain a `{projectName}`
- *   placeholder.
- * @param replacements Values for any other `{key}` placeholders in the format. Changing it does not
- *   trigger any lookups, so it need not be stable.
- * @returns The formatted title, or `undefined` while the short name or the localized format is
- *   still loading (or when there is no `projectId`). Leave the title as it is while this is
- *   `undefined` rather than showing a placeholder. A project whose data provider cannot be found
- *   gets its id as the name. A key with no localization produces the key itself, as
- *   `getLocalizedProjectTitle` does.
+ * @param options What to title; see `LocalizedProjectTitleOptions`. With no `projectId` there is no
+ *   title. The options need not be stable: changing `replacements` triggers no lookups.
+ * @returns The formatted title, or `undefined` while loading or with no `projectId`; keep the
+ *   current title until it is defined.
  */
-export function useLocalizedProjectTitle(
-  projectId: string | undefined,
-  localizeKey: LocalizeKey,
-  replacements?: { [key: string]: unknown },
-): string | undefined {
+export function useLocalizedProjectTitle({
+  localizeKey,
+  projectId,
+  replacements,
+}: Omit<LocalizedProjectTitleOptions, 'projectId' | 'locales'> & {
+  projectId: string | undefined;
+}): string | undefined {
   // `useProjectSetting(projectId, ...)` alone would answer a project switch with the previous
   // project's name until the new provider arrives, and stay loading forever if it never does
   const pdpState = useProjectDataProviderState('platform.base', projectId);

@@ -82,7 +82,7 @@ const {
     mockRecentProjects: { value: undefined as unknown },
     mockProjects: projects,
     mockOpenTabs: openTabs,
-    mockUseLocalizedProjectTitle: vi.fn((): string | undefined => undefined),
+    mockUseLocalizedProjectTitle: vi.fn<(options: { projectId?: string }) => string | undefined>(),
   };
 });
 
@@ -306,10 +306,38 @@ describe('ChecklistWebView tab title', () => {
         title: 'Markers Checklist - P1',
       }),
     );
-    expect(mockUseLocalizedProjectTitle).toHaveBeenCalledWith(
-      'project-1',
-      '%markersChecklist_windowTitle%',
+    expect(mockUseLocalizedProjectTitle).toHaveBeenCalledWith({
+      localizeKey: '%markersChecklist_windowTitle%',
+      projectId: 'project-1',
+    });
+  });
+
+  it('retitles the tab when the project changes', async () => {
+    mockRecentProjects.value = [];
+    mockUseLocalizedProjectTitle.mockImplementation(({ projectId }) =>
+      projectId === 'P2' ? 'Markers Checklist - P2' : 'Markers Checklist - P1',
     );
+
+    const ChecklistWebView = getChecklistWebView();
+    const props = { ...makeProps(), projectId: 'P1' };
+    const { rerender } = render(<ChecklistWebView {...props} />);
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenLastCalledWith({
+        title: 'Markers Checklist - P1',
+      }),
+    );
+
+    rerender(<ChecklistWebView {...props} projectId="P2" />);
+
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenLastCalledWith({
+        title: 'Markers Checklist - P2',
+      }),
+    );
+    expect(mockUseLocalizedProjectTitle).toHaveBeenLastCalledWith({
+      localizeKey: '%markersChecklist_windowTitle%',
+      projectId: 'P2',
+    });
   });
 
   it('leaves the tab title alone while the title is loading', async () => {

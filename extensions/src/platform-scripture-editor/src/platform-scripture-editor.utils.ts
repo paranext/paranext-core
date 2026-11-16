@@ -960,8 +960,8 @@ const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no
  * with the editable or read-only indicator. `{projectId}` is replaced with the short name too, for
  * titles written before `{projectName}` existed.
  *
- * @param getProjectName Gets the project's `platform.name` setting. Whatever it resolves to that is
- *   not a non-blank string shows the project id instead.
+ * @param getProjectName Gets the project's `platform.name` setting. When it resolves to something
+ *   missing, blank, or not a string, the title shows the project id instead.
  */
 export async function formatEditorTitle(
   unformattedTitle: string | undefined,
@@ -1008,11 +1008,9 @@ export async function formatEditorTitle(
  * setting feeds them; without this seam, a swap to `platform.fullName` changes every tab title and
  * no test notices.
  *
- * The project-id fallback is defensive rather than reachable in production: the C# data provider
- * special-cases `platform.name` to `scrText.Name`, and the setting carries a contribution default,
- * so a project served by it always answers. It guards a third-party project data provider that does
- * not, and an unavailable provider. The fallback rule is `getProjectDisplayName`'s, so the tab
- * agrees with every other per-project title.
+ * The id fallback covers a provider with no `platform.name` (for example a third-party provider)
+ * and a failed lookup, such as a project removed while the app was closed. It uses
+ * `getProjectDisplayName`'s rule, so the tab agrees with every other per-project title.
  *
  * @param papi The PAPI backend.
  * @param projectId The project whose name the tab shows.
@@ -1026,7 +1024,9 @@ export async function getTabTitleProjectName(
     const pdp = await papi.projectDataProviders.get('platform.base', projectId);
     return getProjectDisplayName(projectId, await pdp.getSetting('platform.name'));
   } catch (e) {
-    papi.logger.warn(`Error getting project name for title: ${getErrorMessage(e)}`);
+    papi.logger.warn(
+      `Error getting the name of project ${projectId} for its title: ${getErrorMessage(e)}`,
+    );
     return projectId;
   }
 }

@@ -46,20 +46,25 @@ export const localizationService = createSyncProxyForAsyncObject<ILocalizationSe
       replacements,
       locales,
     }: LocalizedProjectTitleOptions): Promise<string> {
-      let projectName: string | undefined;
-      try {
-        const pdp = await getProjectDataProvider('platform.base', projectId);
-        projectName = await pdp.getSetting('platform.name');
-      } catch (e) {
-        logger.warn(`Could not read the name of project ${projectId}: ${getErrorMessage(e)}`);
-      }
-
-      let titleFormat = '{projectName}';
-      try {
-        titleFormat = await localizationService.getLocalizedString({ localizeKey, locales });
-      } catch (e) {
-        logger.warn(`Could not localize project title ${localizeKey}: ${getErrorMessage(e)}`);
-      }
+      const [projectName, titleFormat] = await Promise.all([
+        (async () => {
+          try {
+            const pdp = await getProjectDataProvider('platform.base', projectId);
+            return await pdp.getSetting('platform.name');
+          } catch (e) {
+            logger.warn(`Could not read the name of project ${projectId}: ${getErrorMessage(e)}`);
+            return undefined;
+          }
+        })(),
+        (async () => {
+          try {
+            return await localizationService.getLocalizedString({ localizeKey, locales });
+          } catch (e) {
+            logger.warn(`Could not localize project title ${localizeKey}: ${getErrorMessage(e)}`);
+            return '{projectName}';
+          }
+        })(),
+      ]);
 
       return formatProjectTitle(titleFormat, projectId, projectName, replacements);
     },
