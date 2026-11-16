@@ -1,17 +1,41 @@
 /**
- * Unit test that keeps `PARKED_ENHANCED_RESOURCES_SPECS` in step with the spec files on disk.
+ * Unit test that keeps the parked specs out of every Playwright run.
  *
  * Playwright's `testIgnore` silently skips a glob that matches nothing, so a renamed spec or a
  * mistyped entry would put a parked file back into the runs without any error, and a file carrying
- * a PARKED header could be listed nowhere.
+ * a PARKED header could be listed nowhere. The second half checks that both configs still use the
+ * list and that no config collects the parked `manage-books/` (destructive to real projects) and
+ * `markers-checklist/` directories. It compares `testIgnore` entries and `testDir` paths; it does
+ * not model Playwright's glob matching, so a project whose `testMatch` reaches into a parked
+ * directory is not caught.
  */
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { PARKED_ENHANCED_RESOURCES_SPECS } from './parked-enhanced-resources';
+import cdpConfig from './playwright-cdp.config';
+import mainConfig from './playwright.config';
 
-const SPEC_DIRECTORY = path.join(__dirname, 'tests', 'enhanced-resources');
+const TESTS_DIRECTORY = path.join(__dirname, 'tests');
+const SPEC_DIRECTORY = path.join(TESTS_DIRECTORY, 'enhanced-resources');
 const ENTRY_PREFIX = '**/enhanced-resources/';
+const PARKED_DIRECTORY_GLOBS = ['**/manage-books/**', '**/markers-checklist/**'];
+const PARKED_DIRECTORIES = [
+  path.join(TESTS_DIRECTORY, 'manage-books'),
+  path.join(TESTS_DIRECTORY, 'markers-checklist'),
+];
+
+/** The string patterns of a Playwright `testIgnore` value, whichever of its shapes it takes. */
+function stringPatterns(value: string | RegExp | (string | RegExp)[] | undefined): string[] {
+  if (value === undefined) return [];
+  return [value].flat().filter((pattern): pattern is string => typeof pattern === 'string');
+}
+
+/** Whether `inner` is `outer` itself or a path inside it. */
+function isSameOrInside(inner: string, outer: string): boolean {
+  const relative = path.relative(outer, inner);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
 
 const specFileNames = fs.readdirSync(SPEC_DIRECTORY).filter((name) => name.endsWith('.spec.ts'));
 
@@ -60,5 +84,39 @@ describe('parked Enhanced Resources specs', () => {
 
   it('finds the PARKED headers it checks against, so the header checks cannot pass on nothing', () => {
     expect(specFileNames.filter(hasParkedHeader).length).toBeGreaterThan(0);
+  });
+});
+
+describe('both Playwright configs keep the parked specs out', () => {
+  it('playwright-cdp.config.ts ignores every parked entry and both parked directories', () => {
+    expect(stringPatterns(cdpConfig.testIgnore)).toEqual(
+      expect.arrayContaining([...PARKED_ENHANCED_RESOURCES_SPECS, ...PARKED_DIRECTORY_GLOBS]),
+    );
+  });
+
+  it("playwright.config.ts's enhanced-resources project covers that directory and ignores every parked entry", () => {
+    const project = mainConfig.projects?.find(({ name }) => name === 'enhanced-resources');
+
+    expect(project?.testDir && path.resolve(__dirname, project.testDir)).toBe(SPEC_DIRECTORY);
+    expect(stringPatterns(project?.testIgnore)).toEqual(
+      expect.arrayContaining(PARKED_ENHANCED_RESOURCES_SPECS),
+    );
+  });
+
+  it('no playwright.config.ts project collects a parked directory', () => {
+    const projects = mainConfig.projects ?? [];
+    // A project without its own testDir inherits `tests/`, which holds the parked directories.
+    const collectingTestDirectories = projects.map(({ name, testDir }) => ({
+      name,
+      directory: path.resolve(__dirname, testDir ?? mainConfig.testDir ?? '.'),
+    }));
+    const offending = collectingTestDirectories.filter(({ directory }) =>
+      PARKED_DIRECTORIES.some(
+        (parked) => isSameOrInside(directory, parked) || isSameOrInside(parked, directory),
+      ),
+    );
+
+    expect(projects.length).toBeGreaterThan(0);
+    expect(offending).toEqual([]);
   });
 });
