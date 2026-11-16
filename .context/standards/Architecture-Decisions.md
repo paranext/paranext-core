@@ -2146,7 +2146,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   behaviour is tested in `renderer-create-element-guard.install.test.ts` against separate jsdom
   realms). Either trusted caller may create any restricted tag; per-tag rules were not asked for.
   **Revisit** when PT-2912 / PT-2896 land: if web views stop being same-origin, delete the guard.
-  - **Live check:** {live-check result}
+  - **Live check (2026-11-16, dev build only; the packaged build was not run):** the `evil` web
+    view's forgery attempts logged no `<<BAD>>`. A webpack hot update created its script through
+    `__webpack_require__.l` in `renderer.dev.js` and was allowed, which confirms that the guard
+    measured the bundle that holds the chunk loader. In the production build, the guard and the
+    chunk loader are also both in `renderer.js`. A `script` created from DevTools-evaluated code
+    was rejected. Toolbar SVG icons rendered. The Usersnap path was not exercised, because this
+    build has no Usersnap keys. PT-5086 probes: (a) a script that the web view created in its own
+    document and appended to the app window RAN in the app window. (b) an iframe rendered through
+    the app window's `createRoot` was allowed by this guard (React in the renderer bundle is a
+    trusted caller), but the separate no-sandbox iframe check removed it, so it did not appear.
 - **Source:** PT-4767 (epic PT-2091); design for the `pt-4767-createelement-guard-call-site` branch.
 ## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
 
