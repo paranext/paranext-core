@@ -185,6 +185,44 @@ const EVIL_WEBVIEW = `
         }
       }
 
+      // Try to poison Boolean in the app window before creating a script, in case the guard calls
+      // it to turn its match result into a decision. The original is always put back.
+      const originalBoolean = window.top.Boolean;
+      try {
+        window.top.Boolean = () => true;
+        const booleanScript = window.top.document.createElement('script');
+        booleanScript.textContent = "alert('<<BAD>> evil poisoned Boolean')";
+        papi.logger.error('<<BAD>> Evil could create a script by poisoning Boolean!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on poisoning Boolean: \${e.message}\`);
+      } finally {
+        try {
+          window.top.Boolean = originalBoolean;
+        } catch (e) {
+          // Nothing else to restore
+        }
+      }
+
+      // Try to poison String.prototype.toLowerCase in the app window before creating a script, in
+      // case the guard looks it up to normalize the tag name. The original is always put back.
+      const originalToLowerCase = window.top.String.prototype.toLowerCase;
+      try {
+        window.top.String.prototype.toLowerCase = () => 'div';
+        const lowerCaseScript = window.top.document.createElement('script');
+        lowerCaseScript.textContent = "alert('<<BAD>> evil poisoned String.prototype.toLowerCase')";
+        papi.logger.error('<<BAD>> Evil could create a script by poisoning String.prototype.toLowerCase!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on poisoning toLowerCase: \${e.message}\`);
+      } finally {
+        try {
+          window.top.String.prototype.toLowerCase = originalToLowerCase;
+        } catch (e) {
+          // Nothing else to restore
+        }
+      }
+
       // Probe (not an assertion): known gap tracked in PT-5086. A script created in this web view's
       // own document and appended to the app window may run there. Record whether it did.
       const probeScriptFlag = '__evilProbeScriptRan';
