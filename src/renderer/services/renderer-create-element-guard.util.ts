@@ -7,8 +7,10 @@
 const USERSNAP_CHUNK_FILE_NAME_REGEX =
   /^https:\/\/resources\.usersnap\.com\/widget-assets\/js\/chunks\/\d+\/\w+\.js$/;
 
-// Captured at module load so code that later replaces `RegExp.prototype.exec` or `Reflect.apply`
-// cannot change the answer.
+// `isCreateElementCallerAllowed` runs while a restricted tag is being judged, and in production
+// this module shares its realm with the guarded window, so anything it looked up at call time could
+// have been replaced by a same-origin frame. These two are captured when the module loads, which is
+// before any web view exists; everything else it does is operators on the arguments.
 const regExpExec = RegExp.prototype.exec;
 const reflectApply = Reflect.apply;
 
@@ -26,7 +28,8 @@ export function isCreateElementCallerAllowed(
 ): boolean {
   if (typeof callerFileName !== 'string') return false;
   if (callerFileName === rendererBundleFileName) return true;
-  return Boolean(reflectApply(regExpExec, USERSNAP_CHUNK_FILE_NAME_REGEX, [callerFileName]));
+  // `!!` rather than `Boolean(...)`: an operator cannot be replaced, and the global `Boolean` can
+  return !!reflectApply(regExpExec, USERSNAP_CHUNK_FILE_NAME_REGEX, [callerFileName]);
 }
 
 /** The parts of a V8 `CallSite` the guard reads */
@@ -58,7 +61,8 @@ export type CreateElementGuardOptions = {
    */
   onAllowed: (tagName: string, stackText: string) => void;
   /**
-   * Called instead of creating a restricted tag for any other caller. Must throw.
+   * Called instead of creating a restricted tag for any other caller. Must throw; if it returns
+   * anyway, the guard throws its own error and still does not create the tag.
    *
    * @param tagName Lower-cased local name of the tag
    * @param stackText The calling trail, for logging
@@ -71,12 +75,22 @@ export type CreateElementGuardOptions = {
  * let only the renderer bundle and the Usersnap widget create restricted tags. The caller is
  * identified by the script file name V8 reports for its frame, never by stack text.
  *
- * Everything the guard calls later is captured from `realm` here, so code that later replaces a
- * builtin (including a same-origin frame reaching this window as `parent`) cannot change the
- * answer. The guard also takes ownership of `realm.Error.prepareStackTrace`: values assigned to it
- * are stored and served as usual, except while the guard is capturing a call site. It also locks
- * the `realm.Error` binding, since an embedder's stack-trace callback (Node's, for one) finds the
- * hook through that binding rather than through the intrinsic.
+ * Code that later replaces a builtin (including a same-origin frame reaching this window as
+ * `parent`) cannot change the answer, because the guarded methods never look a builtin up when they
+ * run. This installer captures from `realm` the `Error` constructor and its `captureStackTrace`,
+ * the `Object` constructor and its `create`, `defineProperty`, `getOwnPropertyDescriptor` and
+ * `getPrototypeOf`, the `String` constructor and its prototype's `toLowerCase`, `indexOf` and
+ * `slice`, `Reflect.apply` and `Reflect.get`, and the original `createElement` and
+ * `createElementNS`; it takes `getFileName` and `toString` from the prototype of a real V8 call
+ * site. {@link isCreateElementCallerAllowed} uses `RegExp.prototype.exec` and `Reflect.apply`
+ * captured when this module loads. Everything else on that path is an operator or an own property
+ * of a value the guard created or V8 handed it. The one property it reads off a shared object is
+ * `realm.Error.stackTraceLimit`; an accessor planted there runs before the capture starts and V8
+ * ignores it, so the capture finds no caller and the call is rejected. The guard also takes
+ * ownership of `realm.Error.prepareStackTrace`: values assigned to it are stored and served as
+ * usual, except while the guard is capturing a call site. It also locks the `realm.Error` binding,
+ * since an embedder's stack-trace callback (Node's, for one) finds the hook through that binding
+ * rather than through the intrinsic.
  *
  * @param options The realm to guard, the restricted tags, and the allow and reject callbacks
  * @returns The renderer bundle file name the guard measured for itself
@@ -217,7 +231,7 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
     return text;
   };
 
-  /** Calls `onAllowed` for a trusted caller of `boundary`, or `onRejected` (which throws) */
+  /** Calls `onAllowed` for a trusted caller of `boundary`; otherwise calls `onRejected` and throws */
   const judgeCaller = (tagName: string, boundary: CaptureBoundary) => {
     const callerSites = captureSites(1, boundary);
     let callerFileName: unknown;
@@ -237,6 +251,8 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
       return;
     }
     onRejected(tagName, formatSites(captureSites(REJECTED_LOG_DEPTH, boundary)));
+    // `onRejected` is typed to throw, but nothing enforces that at runtime
+    throw new RealmError(`Rejected creating new ${tagName} tag on renderer document`);
   };
 
   /**

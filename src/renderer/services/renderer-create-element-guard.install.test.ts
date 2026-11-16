@@ -1,5 +1,8 @@
 import { JSDOM } from 'jsdom';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import vm from 'node:vm';
+import ts from 'typescript';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { installCreateElementGuard } from './renderer-create-element-guard.util';
 
@@ -238,6 +241,30 @@ describe('installCreateElementGuard', () => {
     );
   });
 
+  it('refuses creation even if onRejected returns', () => {
+    const returning = new JSDOM(HTML, { runScripts: 'outside-only' });
+    // An unimplemented mock returns, breaking the `never` contract on purpose
+    const onRejected = vi.fn<(tagName: string, stackText: string) => never>();
+    const { rendererBundleFileName: bundle } = installCreateElementGuard({
+      realm: asRealm(returning),
+      restrictedTagNames: ['script'],
+      onAllowed: vi.fn(),
+      onRejected,
+    });
+    const foreign = new JSDOM(HTML, { runScripts: 'outside-only' });
+    Object.assign(foreign.window, { appWindow: returning.window });
+    expect(() =>
+      vm.runInContext(
+        "appWindow.document.createElement('script')",
+        foreign.getInternalVMContext(),
+        { filename: 'about:srcdoc' },
+      ),
+    ).toThrow(/Rejected creating new script/);
+    expect(onRejected).toHaveBeenCalledWith('script', expect.any(String));
+    expect(returning.window.document.getElementsByTagName('script')).toHaveLength(0);
+    expect(bundle).toEqual(expect.any(String));
+  });
+
   it('refuses to install over a locked Error binding', () => {
     const locked = new JSDOM(HTML, { runScripts: 'outside-only' });
     // The vm global drops the value when a redefinition omits it, so restate it
@@ -274,5 +301,116 @@ describe('installCreateElementGuard', () => {
         },
       }),
     ).toThrow();
+  });
+});
+
+/** Script file name the same-realm harness gives the guard module and trusted code */
+const SAME_REALM_BUNDLE = 'http://localhost:1212/renderer.dev.js';
+
+/** The guard module compiled to a CommonJS body that assigns its exports to `exports` */
+const GUARD_MODULE_SOURCE = ts.transpileModule(
+  readFileSync(path.join(__dirname, 'renderer-create-element-guard.util.ts'), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+).outputText;
+
+/**
+ * Poisons a same-origin frame can apply to the app window's builtins. Each one would let the
+ * foreign `createElement('script')` below through if the guard looked that builtin up at call
+ * time.
+ */
+const SAME_REALM_POISONS: [string, string][] = [
+  ['Boolean', 'appWindow.Boolean = () => true;'],
+  ['String.prototype.toLowerCase', "appWindow.String.prototype.toLowerCase = () => 'div';"],
+  ['RegExp.prototype.exec', "appWindow.RegExp.prototype.exec = () => [''];"],
+  [
+    'Reflect.apply',
+    `const realApply = appWindow.Reflect.apply;
+     const realExec = appWindow.RegExp.prototype.exec;
+     appWindow.Reflect.apply = (f, t, a) => (f === realExec ? [''] : realApply(f, t, a));`,
+  ],
+  [
+    'Array.prototype[Symbol.iterator]',
+    "appWindow.Array.prototype[Symbol.iterator] = function* () { yield 'div'; };",
+  ],
+  ['Function.prototype.call', "appWindow.Function.prototype.call = () => [''];"],
+  ['Function.prototype.apply', "appWindow.Function.prototype.apply = () => [''];"],
+];
+
+describe('installCreateElementGuard in the realm it guards', () => {
+  // In production the guard module is part of the renderer bundle, so it shares its builtins with
+  // the window a same-origin web view can reach as `parent`. This harness evaluates the module inside
+  // the app window's realm to reproduce that.
+  let app: JSDOM;
+  let rendererBundleFileName: string;
+  let runTrusted: (code: string) => unknown;
+  let runForeign: (code: string) => unknown;
+
+  beforeEach(() => {
+    app = new JSDOM(HTML, { runScripts: 'outside-only' });
+    const appContext = app.getInternalVMContext();
+    vm.runInContext(
+      `(function (exports) {\n${GUARD_MODULE_SOURCE}\n})(globalThis.guardModule = {});`,
+      appContext,
+      { filename: SAME_REALM_BUNDLE },
+    );
+    const guardModule: { installCreateElementGuard: typeof installCreateElementGuard } =
+      vm.runInContext('guardModule', appContext);
+    ({ rendererBundleFileName } = guardModule.installCreateElementGuard({
+      realm: asRealm(app),
+      restrictedTagNames: ['script', 'iframe'],
+      onAllowed: vi.fn(),
+      onRejected: (tagName) => {
+        throw new Error(`rejected ${tagName}`);
+      },
+    }));
+    runTrusted = (code) => vm.runInContext(code, appContext, { filename: SAME_REALM_BUNDLE });
+
+    const web = new JSDOM(HTML, { runScripts: 'outside-only' });
+    vm.runInContext('0', web.getInternalVMContext());
+    Object.assign(web.window, { appWindow: app.window });
+    runForeign = (code) =>
+      vm.runInContext(code, web.getInternalVMContext(), {
+        filename: 'http://localhost:1212/evil.web-view.html',
+      });
+  });
+
+  it('allows the bundle and rejects another realm', () => {
+    expect(rendererBundleFileName).toBe(SAME_REALM_BUNDLE);
+    expect(runTrusted("document.createElement('script').tagName")).toBe('SCRIPT');
+    expect(() => runForeign("appWindow.document.createElement('script')")).toThrow(
+      /rejected script/,
+    );
+  });
+
+  it.each(SAME_REALM_POISONS)(
+    'still rejects a foreign call after poisoning %s',
+    (_name, poison) => {
+      runForeign(poison);
+      expect(() => runForeign("appWindow.document.createElement('script')")).toThrow(
+        /rejected script/,
+      );
+      expect(() => runForeign("appWindow.document.createElementNS('x', 'svg:script')")).toThrow(
+        /rejected script/,
+      );
+      expect(runTrusted("document.createElement('script').tagName")).toBe('SCRIPT');
+    },
+  );
+
+  it('still rejects a foreign call after poisoning String', () => {
+    // No trusted create is checked here: jsdom converts tag names with the window's own `String`,
+    // so after this poison it creates whatever the poison returns, whoever calls
+    runForeign("appWindow.String = () => 'div';");
+    expect(() => runForeign("appWindow.document.createElement('script')")).toThrow(
+      /rejected script/,
+    );
+  });
+
+  it('rejects when Error.stackTraceLimit is replaced by an accessor', () => {
+    runForeign(
+      "Object.defineProperty(appWindow.Error, 'stackTraceLimit', { get: () => 10, set() {} });",
+    );
+    expect(() => runForeign("appWindow.document.createElement('script')")).toThrow(
+      /rejected script/,
+    );
   });
 });

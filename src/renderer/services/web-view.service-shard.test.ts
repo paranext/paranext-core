@@ -156,15 +156,16 @@ vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
   setContentZoomActiveArea: setContentZoomActiveAreaMock,
 }));
 
-// The host only needs the `TAB_TYPE_SETTINGS_TAB` string constant from this component file, but
-// the real file transitively imports the entire `papi-frontend.service` service graph (dozens of
-// unrelated services). Stub it directly rather than mocking that whole graph.
 vi.mock('@renderer/services/renderer-create-element-guard.util', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@renderer/services/renderer-create-element-guard.util')
   >()),
   installCreateElementGuard: vi.fn(() => ({ rendererBundleFileName: '' })),
 }));
+
+// The host only needs the `TAB_TYPE_SETTINGS_TAB` string constant from this component file, but
+// the real file transitively imports the entire `papi-frontend.service` service graph (dozens of
+// unrelated services). Stub it directly rather than mocking that whole graph.
 vi.mock('@renderer/components/settings-tabs/settings-tab.component', () => ({
   TAB_TYPE_SETTINGS_TAB: 'settings-tab',
 }));
