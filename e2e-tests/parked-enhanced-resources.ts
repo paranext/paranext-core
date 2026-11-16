@@ -1,27 +1,15 @@
 /**
- * The Enhanced Resources specs that are parked: kept as the written test scenarios for a feature
- * that is still to be finished (epic PT-2021, "Enhanced Resources"), and collected by no Playwright
- * config. Both `playwright.config.ts` and `playwright-cdp.config.ts` list these globs in
- * `testIgnore`.
+ * The parked Enhanced Resources specs: kept as written test scenarios, and collected by no
+ * Playwright config. `playwright-cdp.config.ts` spreads this list into its `testIgnore`;
+ * `playwright.config.ts` sets it as the `enhanced-resources` project's `testIgnore`. Specs in that
+ * directory that are not listed stay collected.
  *
- * They have never run as a whole, and many of their tests are `test.fixme`. The
- * `enhanced-resources-functional-*` and `enhanced-resources-journey` entries need an app started in
- * Power mode with real Marble resources installed (such as `ESV16UK+`).
- * `text-collection-schema.spec.ts` needs neither: it works in either interface mode and needs only
- * `E2E_TEST_PROJECT_ID` to name a throwaway project you administer, since it overwrites that
- * project's referenced-resources setting and resets your Text Collection overlay, and restores
- * neither. See `tests/enhanced-resources/README.md`.
+ * One entry per file. To work on one, remove its entry here and its PARKED header together, then
+ * run it against a prepared app. `parked-enhanced-resources.test.ts` checks this list against the
+ * spec files and their headers, and checks that both configs use it.
  *
- * `scripture-text-grid.spec.ts` is parked for a different reason: it belongs to the Text Collection
- * grid, a shipped feature, and eight of its assertions are out of date. It comes back when PT-4779
- * is done. Like the other grid specs it needs Power mode and real Marble resources.
- *
- * One entry per file: to work on one, remove its entry here and its PARKED header together, then
- * run it against a prepared app. Finishing the feature means removing the entries one by one. The
- * local-only specs in the same directory (`scripture-text-grid-verse-row`,
- * `scripture-text-grid-view-options`, `scripture-text-grid-zoom`, `cell-reorder`,
- * `enhanced-resource-content-zoom`, `enhanced-resources-image-render`) are not listed and stay
- * collected.
+ * Why each file is parked and what it needs before it can run:
+ * `tests/enhanced-resources/README.md`.
  */
 export const PARKED_ENHANCED_RESOURCES_SPECS: string[] = [
   '**/enhanced-resources/enhanced-resources-functional-UI-PKG-001.spec.ts',

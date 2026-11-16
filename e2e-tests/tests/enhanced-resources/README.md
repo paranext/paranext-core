@@ -56,9 +56,6 @@ do not exist yet:
 - `enhanced-resources-journey.spec.ts` — flows that cross several of those packages.
 - `text-collection-schema.spec.ts` — the Text Collection flags and per-user overlay of a project.
 
-Together the parked files declare 157 `test(...)` / `test.fixme(...)` tests, 45 of them
-`test.fixme`.
-
 To bring a parked file back into use:
 
 - Remove its entry from `PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`
