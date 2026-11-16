@@ -71,10 +71,10 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     await closeAllNonHomeDockTabs(mainPage);
   });
 
-  // Run the shared sweep so later specs start clean.
+  // Restore the seeded settings, then close the grid so later specs start clean.
   test.afterEach(async ({ mainPage }) => {
-    await closeAllNonHomeDockTabs(mainPage);
     await restoreScriptureTextGridProjectSettings(mainPage);
+    await closeAllNonHomeDockTabs(mainPage);
   });
 
   // ---------------------------------------------------------------------------

@@ -10,16 +10,16 @@
  * E2E checks for the Scripture Text Grid (Text Collection) web view, attached to a running app in
  * Power mode (`enhanced-resources.fixture.ts` asserts the mode).
  *
- * Covered: the tab (opened by the `platformScriptureEditor.showTextCollectionPanel` command, is
- * titled "Text Collection" and is closable), the verse-list and single-resource layouts, the
- * chapter-context split, partial resource failure, the empty state, keyboard and screen-reader
- * behavior, and the verse-aligned Grid view. In Simple mode the tab is not closable; the
+ * Covered: the tab (opened by the `platformScriptureEditor.showTextCollectionPanel` command; titled
+ * "Text Collection" and closable), the verse-list and single-resource layouts, the chapter-context
+ * split, partial resource failure, the empty state, keyboard and screen-reader behavior, and the
+ * verse-aligned Grid view. In Simple mode the tab is not closable; the
  * `buildScriptureTextGridWebView` unit tests in `platform-scripture-editor.utils.test.ts` pin that,
  * since this fixture cannot run in Simple mode.
  *
  * The command's menu item ("Text collection") is shown only in Simple mode, so the tab test sends
  * the command directly; the other tests open the grid through the page object, which also binds it
- * to the project they seed. The `closeAllNonHomeDockTabs` calls are per-test dock hygiene.
+ * to the project they seed.
  *
  * NOT covered (need an app relaunch the CDP fixture can't do; verified manually): `useWebViewState`
  * restart-persistence, and feature-flag-OFF hiding the view (registration happens at activation).
@@ -27,7 +27,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { tabButton } from '../../fixtures/dock-tab-helpers';
-import { sendPapiCommand, waitForAppReady } from '../../fixtures/helpers';
+import { waitForAppReady } from '../../fixtures/helpers';
 import {
   getScrollGroupRef,
   setScrollGroupRef,
@@ -51,25 +51,33 @@ test.describe('Scripture Text Grid tab', () => {
     await closeAllNonHomeDockTabs(mainPage);
   });
 
-  test('the Text collection command opens a closable tab titled "Text Collection"', async ({
+  test('showTextCollectionPanel opens a closable tab titled "Text Collection"', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
 
     // The command behind the "Text collection" menu item; it shows the tab, opening it if needed,
-    // and returns the tab's web view id.
-    const webViewId = await sendPapiCommand<string | undefined>(
-      'platformScriptureEditor.showTextCollectionPanel',
-    );
+    // and returns the tab's web view id. Sent through the renderer's `papi`, as
+    // `sendOpenEnhancedResourceCommand` does.
+    const webViewId = await mainPage.evaluate(async () => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: { commands: { sendCommand: (command: string) => Promise<string | undefined> } };
+      };
+      return win.papi.commands.sendCommand('platformScriptureEditor.showTextCollectionPanel');
+    });
     expect(webViewId).toBeTruthy();
 
     const tab = tabButton(mainPage, webViewId ?? '');
     await expect(tab).toBeVisible({ timeout: 15_000 });
     await expect(tab.locator('.platform-tab-title-text')).toHaveText(SCRIPTURE_TEXT_GRID_TAB_TITLE);
 
-    // Closable: the close button is present, and using it removes the tab.
+    // Closable: the close button shows (CSS hides it on a tab that is neither active nor hovered,
+    // and a newly opened tab is active), and using it removes the tab. The click is dispatched, as
+    // in `closeDockTab`.
     const closeButton = tab.locator('.dock-tab-close-btn');
-    await expect(closeButton).toHaveCount(1);
+    await expect(closeButton).toBeVisible();
     await closeButton.dispatchEvent('click');
     await expect(tab).toHaveCount(0);
   });
@@ -86,22 +94,24 @@ test.describe('Scripture Text Grid tab', () => {
 // Env vars:
 // - E2E_TEST_PROJECT_ID — pin an admin-writable text-connection project (optional)
 // - E2E_TEST_RESOURCE_IDS — comma-separated downloaded Bible-text project IDs for multi-resource
-//   tests; each must contain Matthew 5 (`TEXT_REFERENCE`) as verses in paragraphs
+//   tests; each must contain Matthew 5 (`TEXT_REFERENCE`) with its verses inside paragraph markers,
+//   or the Grid view shows "No verses to show"
 // ---------------------------------------------------------------------------
 /**
- * The reference the tests that read resource text pin scroll group 0 to. Unpinned, the grid shows
- * whatever an earlier test or session left there, and a resource without that chapter, or without
- * verse-structured text in it, shows a placeholder instead.
+ * Where tests that read resource text pin scroll group 0. Left unpinned, the grid shows wherever an
+ * earlier test or session left the group, and a resource lacking that chapter shows a placeholder.
  */
 const TEXT_REFERENCE = { book: 'MAT', chapterNum: 5, verseNum: 9 };
 // Made-up project ids: no project has them, so their cells stay in the loading state. That suits
 // tests that check row structure rather than text, and needs no installed resource.
 const MADE_UP_PROJECT_ID_A = 'aabbccddeeff00112233';
 const MADE_UP_PROJECT_ID_B = 'bbccddeeff0011223344';
-// A made-up DBL resource uid. Unlike a made-up project id, which loads forever, a DBL reference
-// is checked against the installed resources on disk, so this one settles on "not installed".
-// It would read "Resource unavailable" instead only if that disk scan never answered AND the DBL
-// catalog fetch failed with an error (no DBL credentials is not an error).
+// Tests of the verse list seed two resources: one shown resource renders as a single chapter
+// region, not a list.
+const MADE_UP_LIST_PROJECT_IDS = [MADE_UP_PROJECT_ID_A, MADE_UP_PROJECT_ID_B];
+// A made-up DBL resource uid. A DBL uid is checked against resources installed on disk, so this
+// settles on "Resource not installed" ("Resource unavailable" only if no installed DBL resources
+// are found AND the DBL catalog is not ready or fails).
 const MISSING_DBL_RESOURCE_ID = 'f'.repeat(48);
 const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
   .split(',')
@@ -111,7 +121,8 @@ const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
 /**
  * Reads scroll group 0, the running app's shared reference, and returns a function that puts it
  * back. For tests that move it. Best-effort, like the settings restore: cleanup must not fail a
- * test, and a reference that could not be read is left alone.
+ * test, and a reference that could not be read is left alone. It restores book/chapter/verse only;
+ * the group's source project and back/forward history are not restored.
  */
 async function saveScrollGroupRef(): Promise<() => Promise<void>> {
   const saved = await getScrollGroupRef().catch(() => undefined);
@@ -157,8 +168,8 @@ test.describe('Scripture Text Grid renderer', () => {
     await expect(
       stg.frame.locator(`[role="region"][data-resource-id="${MADE_UP_PROJECT_ID_A}"]`),
     ).toBeVisible({ timeout: 15_000 });
-    // The region and the verse list are exclusive layouts, so once the region is up, none of the
-    // list's parts can still be on their way.
+    // The region and the verse list are separate render branches, so once the region is visible
+    // these zero counts can't be racing a slower render.
     await expect(stg.frame.locator('[role="list"]')).toHaveCount(0);
     await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(0);
     await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
@@ -173,12 +184,12 @@ test.describe('Scripture Text Grid renderer', () => {
     const projectId = await discoverAdminTextConnectionProject(mainPage);
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
-    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'STG split A', id: MADE_UP_PROJECT_ID_A, isInTextCollection: true },
-      { type: 'project', name: 'STG split B', id: MADE_UP_PROJECT_ID_B, isInTextCollection: true },
-    ]);
-
-    const stg = await openScriptureTextGrid(mainPage, projectId);
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'STG split',
+    );
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
@@ -201,12 +212,12 @@ test.describe('Scripture Text Grid renderer', () => {
     const projectId = await discoverAdminTextConnectionProject(mainPage);
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
-    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'STG esc A', id: MADE_UP_PROJECT_ID_A, isInTextCollection: true },
-      { type: 'project', name: 'STG esc B', id: MADE_UP_PROJECT_ID_B, isInTextCollection: true },
-    ]);
-
-    const stg = await openScriptureTextGrid(mainPage, projectId);
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'STG esc',
+    );
     await stg.frame.locator('[role="listitem"]').first().click();
     await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
       timeout: 15_000,
@@ -258,7 +269,7 @@ test.describe('Scripture Text Grid renderer', () => {
       'Set E2E_TEST_RESOURCE_IDS with at least one downloaded resource',
     );
 
-    // The valid rows must show text. Scroll group 0 is what a freshly opened grid follows.
+    // Pin the reference so the valid rows have text; a freshly opened grid follows scroll group 0.
     await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       ...validIds.map((id, index) => ({
@@ -297,7 +308,7 @@ test.describe('Scripture Text Grid renderer', () => {
     );
   });
 
-  test('scrRef sync: all row cells remain visible after reference change', async ({ mainPage }) => {
+  test('scrRef sync: rows follow a reference change and stay visible', async ({ mainPage }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
 
@@ -308,25 +319,29 @@ test.describe('Scripture Text Grid renderer', () => {
       'Set E2E_TEST_RESOURCE_IDS with two downloaded resource IDs',
     );
 
-    await flagResourcesAndOpenScriptureTextGrid(
+    // Start from a known reference, so the move below always changes it: moving to the reference
+    // the group already holds sends no change at all.
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
+    const stg = await flagResourcesAndOpenGrid(
       mainPage,
       projectId,
-      REAL_RESOURCE_IDS.slice(0, 2).map((id, index) => ({
-        type: 'project' as const,
-        name: `Sync ${index + 1}`,
-        id,
-        isInTextCollection: true,
-      })),
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Sync',
     );
-
-    const stg = await openScriptureTextGrid(mainPage, projectId);
-    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(2, { timeout: 15_000 });
+    const rows = stg.frame.locator('[role="listitem"]');
+    const rowNames = stg.frame.locator('[data-disclosure-control]');
+    await expect(rows).toHaveCount(2, { timeout: 15_000 });
+    await expect(rowNames.first()).toHaveAttribute('aria-label', /, MAT 5:9$/);
 
     await setScrollGroupRefFromRenderer(mainPage, { book: 'MAT', chapterNum: 5, verseNum: 4 });
 
-    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(2);
-    await expect(stg.frame.locator('[role="listitem"]').first()).toBeVisible();
-    await expect(stg.frame.locator('[role="listitem"]').nth(1)).toBeVisible();
+    // Each row's accessible name ends with the reference it shows, so these wait for the grid to
+    // take up the new reference; the rows must still be there and visible afterwards.
+    await expect(rowNames.first()).toHaveAttribute('aria-label', /, MAT 5:4$/);
+    await expect(rowNames.nth(1)).toHaveAttribute('aria-label', /, MAT 5:4$/);
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toBeVisible();
+    await expect(rows.nth(1)).toBeVisible();
   });
 
   test('frame budget: verse row renders >=5 cells under threshold (split closed)', async ({
@@ -562,12 +577,12 @@ test.describe('Scripture Text Grid accessibility', () => {
     const projectId = await discoverAdminTextConnectionProject(mainPage);
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
-    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'AccName A', id: MADE_UP_PROJECT_ID_A, isInTextCollection: true },
-      { type: 'project', name: 'AccName B', id: MADE_UP_PROJECT_ID_B, isInTextCollection: true },
-    ]);
-
-    const stg = await openScriptureTextGrid(mainPage, projectId);
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'AccName',
+    );
     // The name lives on the row's disclosure control, not the row: the row is a `listitem` and the
     // control owns the accessible name, the tab stop and `aria-expanded`.
     const firstCell = stg.frame.locator('[data-disclosure-control]').first();
@@ -584,12 +599,12 @@ test.describe('Scripture Text Grid accessibility', () => {
     const projectId = await discoverAdminTextConnectionProject(mainPage);
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
-    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'Tab A', id: MADE_UP_PROJECT_ID_A, isInTextCollection: true },
-      { type: 'project', name: 'Tab B', id: MADE_UP_PROJECT_ID_B, isInTextCollection: true },
-    ]);
-
-    const stg = await openScriptureTextGrid(mainPage, projectId);
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'Tab',
+    );
     const firstCell = stg.frame.locator('[data-disclosure-control]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
 
@@ -626,12 +641,12 @@ test.describe('Scripture Text Grid accessibility', () => {
     const projectId = await discoverAdminTextConnectionProject(mainPage);
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
-    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'Ring A', id: MADE_UP_PROJECT_ID_A, isInTextCollection: true },
-      { type: 'project', name: 'Ring B', id: MADE_UP_PROJECT_ID_B, isInTextCollection: true },
-    ]);
-
-    const stg = await openScriptureTextGrid(mainPage, projectId);
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'Ring',
+    );
     const firstCell = stg.frame.locator('[data-disclosure-control]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // The ring is `focus-visible`-gated, which Chromium applies only for keyboard-originated focus —
@@ -652,12 +667,12 @@ test.describe('Scripture Text Grid accessibility', () => {
     const projectId = await discoverAdminTextConnectionProject(mainPage);
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
-    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'Announce A', id: MADE_UP_PROJECT_ID_A, isInTextCollection: true },
-      { type: 'project', name: 'Announce B', id: MADE_UP_PROJECT_ID_B, isInTextCollection: true },
-    ]);
-
-    const stg = await openScriptureTextGrid(mainPage, projectId);
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'Announce',
+    );
     // The grid has other polite regions (reorder moves, the catalog banner); the chapter-context
     // announcer is the atomic one.
     const status = stg.frame.locator('[role="status"][aria-atomic="true"]');
@@ -705,9 +720,8 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
   });
 
   /**
-   * Shared prerequisites: a local admin-writable project and enough downloaded resources, with the
-   * grid pinned to `TEXT_REFERENCE` so every column has verses to lay out. Returns the project id,
-   * or skips the test with a warning naming what is missing.
+   * Shared prerequisites: a local admin-writable project and enough downloaded resources. Returns
+   * the project id, or skips the test with a warning naming what is missing.
    */
   async function requireProjectAndResources(mainPage: Page, resourceCount: number) {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
@@ -719,12 +733,12 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
       REAL_RESOURCE_IDS.length < resourceCount,
       `Set E2E_TEST_RESOURCE_IDS with at least ${resourceCount} downloaded resource IDs`,
     );
-    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
     return projectId;
   }
 
   test('verse N of every resource shares a row, natively', async ({ mainPage }) => {
     const projectId = await requireProjectAndResources(mainPage, 2);
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
     const stg = await openAlignedGridWithResources(
       mainPage,
       projectId,
@@ -757,6 +771,7 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
 
   test('no interior grid lines between columns', async ({ mainPage }) => {
     const projectId = await requireProjectAndResources(mainPage, 2);
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
     const stg = await openAlignedGridWithResources(
       mainPage,
       projectId,
@@ -779,6 +794,7 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
 
   test('columns run right-to-left under an RTL locale', async ({ mainPage }) => {
     const projectId = await requireProjectAndResources(mainPage, 2);
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
     const stg = await openAlignedGridWithResources(
       mainPage,
       projectId,
@@ -813,6 +829,7 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
     mainPage,
   }) => {
     const projectId = await requireProjectAndResources(mainPage, 5);
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
     // Opened in Verse view, so the switch into Grid is a statement of its own that the measurement
     // can bracket. `openAlignedGridWithResources` would switch and then await the grid, and the
     // columns are the grid's own children from the same React pass — nothing left to measure.

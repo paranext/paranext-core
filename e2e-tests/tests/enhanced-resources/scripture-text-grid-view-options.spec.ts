@@ -6,8 +6,8 @@
  * The panel renders these controls without a bound project (the TEXTS list is simply empty), so
  * this does not depend on project fixtures.
  *
- * The test opens the grid directly via `window.papi.webViews.openWebView` and addresses the web
- * view iframe by its `data-web-view-id`, which identifies this instance whatever the tab shows.
+ * The test opens the grid with `papi.webViews.openWebView` and finds its iframe by
+ * `data-web-view-id`.
  *
  * NOT covered here (needs an app relaunch the CDP fixture can't do, plus resource fixtures;
  * verified manually): the user-scope round-trip — add via Get Resources, hover-✕ to remove, uncheck
