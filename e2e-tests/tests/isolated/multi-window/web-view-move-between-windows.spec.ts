@@ -256,9 +256,9 @@ test.use({
   interfaceMode: 'power',
   seedSettings: { 'platform.firstRunComplete': true },
   // Same options as the sibling multi-window specs — see the `test.use` comment in
-  // `multi-window.spec.ts` for the rationale. DEV_NOISY=false is what gives window 1 the
+  // `multi-window.spec.ts` for the rationale. The default quiet layout gives window 1 the
   // single-Home-tab layout every identity assertion here keys on.
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 test.describe('moving a web view between windows', () => {
