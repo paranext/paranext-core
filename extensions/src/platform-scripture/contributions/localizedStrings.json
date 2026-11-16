@@ -1228,6 +1228,7 @@
       "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos tienen marcadores idénticos.",
       "%markersChecklist_menu_openTool%": "Lista de verificación de marcadores…",
       "%manageBooks_openMenuItem%": "Administrar libros",
+      "%manageBooks_dialog_titleWithProject%": "Administrar libros — {projectName}",
       "%manageBooks_view_disabledStub_notYetAvailable%": "Aún no disponible — próximamente",
       "%manageBooks_view_disabledStub_notYetAvailable_2%": "Aún no disponible",
       "%manageBooks_grid_canonGroup_DC%": "Deuterocanónicos",
