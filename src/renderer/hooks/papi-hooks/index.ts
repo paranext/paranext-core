@@ -15,3 +15,4 @@ export { default as useLocalizedProjectTitle } from '@renderer/hooks/papi-hooks/
 export { default as useLocalizedStrings } from '@renderer/hooks/papi-hooks/use-localized-strings-hook';
 export { default as useWebViewController } from '@renderer/hooks/papi-hooks/use-web-view-controller.hook';
 export { default as useRecentScriptureRefs } from '@renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
+export { default as useEvaluatedMenu } from '@renderer/hooks/papi-hooks/use-evaluated-menu.hook';

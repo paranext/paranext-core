@@ -2,6 +2,7 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
 import {
   useData,
+  useEvaluatedMenu,
   useLocalizedProjectTitle,
   useLocalizedStrings,
   useProjectDataProvider,
@@ -28,6 +29,7 @@ import {
   type ScopeWithRange,
 } from 'platform-bible-react/experimental';
 import {
+  createMenuTemplateVars,
   defaultScrRef,
   formatReplacementString,
   formatScrRef,
@@ -225,6 +227,7 @@ export function toChecklistSelectorRows(
  *   component, backing per-web-view persistence for the checklist settings.
  */
 global.webViewComponent = function ChecklistWebView({
+  id: webViewId,
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
@@ -586,6 +589,18 @@ global.webViewComponent = function ChecklistWebView({
     }
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
+
+  const menuTemplateVars = useMemo(
+    () =>
+      createMenuTemplateVars({
+        webViewId,
+        webViewType: MARKERS_CHECKLIST_WEB_VIEW_TYPE,
+        projectId,
+      }),
+    [webViewId, projectId],
+  );
+
+  const projectMenuData = useEvaluatedMenu(webViewMenu.topMenu, menuTemplateVars);
 
   // ─── Subscribe to the "open settings" network event (UI-PKG-003) ─────────
 
@@ -1079,7 +1094,7 @@ global.webViewComponent = function ChecklistWebView({
         onShowVerseTextChange={handleShowVerseTextChange}
         matchCountLabel={matchCountLabel}
         onRetry={handleRetry}
-        projectMenuData={webViewMenu.topMenu}
+        projectMenuData={projectMenuData}
         onSelectProjectMenuItem={handleSelectProjectMenuItem}
         onGotoLinkClick={handleGotoLinkClick}
         // onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003).

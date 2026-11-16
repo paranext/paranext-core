@@ -442,6 +442,13 @@ export type OverlayEntry =
       webViewId: string;
       /** Menu items to render */
       items: OverlayContextMenuItem[];
+      /**
+       * Keys for every item the menu can show, collected from the unevaluated menu so that an item
+       * that appears while the menu is open already has its label localized.
+       *
+       * @experimental This field is unstable and may change or disappear without notice
+       */
+      localizeKeys?: LocalizeKey[];
       /** Document-relative position (already translated from iframe coordinates and clamped) */
       position: { x: number; y: number };
       /** Settles the caller's promise with the selected command string, or `undefined` if dismissed */
