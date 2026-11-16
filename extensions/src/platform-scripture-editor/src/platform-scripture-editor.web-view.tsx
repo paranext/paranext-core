@@ -3031,6 +3031,7 @@ function PlatformScriptureEditor({
           isMenuShown: showMarkersMenu,
           isEditorFocused: !!editorRef.current?.isFocused(),
           isReadOnly: isReadOnlyEffective,
+          isChapterLoading: isChapterLoadingRef.current,
           viewType,
           markerMode: viewMarkerMode,
         })
@@ -3130,6 +3131,7 @@ function PlatformScriptureEditor({
             isMenuShown: showMarkersMenu,
             isEditorFocused: !!editorRef.current?.isFocused(),
             isReadOnly: isReadOnlyEffective,
+            isChapterLoading: isChapterLoadingRef.current,
             viewType,
           })
         ) {

@@ -59,6 +59,7 @@ describe('shouldOpenInlineMarkersMenu', () => {
     isMenuShown: false,
     isEditorFocused: true,
     isReadOnly: false,
+    isChapterLoading: false,
     viewType: 'formatted',
   };
 
@@ -83,6 +84,11 @@ describe('shouldOpenInlineMarkersMenu', () => {
     expect(shouldOpenInlineMarkersMenu({ ...menuBase, isReadOnly: true })).toBe(false);
   });
 
+  it('does not open while the next chapter loads', () => {
+    // A pick made after the load would land in the new chapter at the old chapter's position.
+    expect(shouldOpenInlineMarkersMenu({ ...menuBase, isChapterLoading: true })).toBe(false);
+  });
+
   it('does not open in Standard view, which has the palette instead', () => {
     expect(shouldOpenInlineMarkersMenu({ ...menuBase, viewType: 'standard' })).toBe(false);
   });
@@ -94,6 +100,7 @@ describe('shouldClaimInlineMarkersMenuTrigger', () => {
     isMenuShown: false,
     isEditorFocused: true,
     isReadOnly: false,
+    isChapterLoading: false,
     viewType: 'formatted',
     markerMode: 'hidden',
   };
@@ -125,6 +132,14 @@ describe('shouldClaimInlineMarkersMenuTrigger', () => {
       false,
     );
     expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, isReadOnly: true })).toBe(false);
+  });
+
+  it('does not claim while the next chapter loads, leaving the key to `usePauseEditing`', () => {
+    // This listener runs on `window` in the capture phase, ahead of the hook's listener, so a
+    // claim here would stop the hook ever holding the key off.
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, isChapterLoading: true })).toBe(
+      false,
+    );
   });
 
   it('never claims in Standard view, whose palette owns the key', () => {
