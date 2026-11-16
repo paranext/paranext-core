@@ -68,4 +68,37 @@ describe('DefinitionText', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.getByText('moth')).toBeInTheDocument();
   });
+
+  it('goes to the verse of a Bible reference on click', () => {
+    const onScriptureLinkClick = vi.fn();
+    render(
+      <DefinitionText
+        definition="see {S:04200600300000}"
+        onScriptureLinkClick={onScriptureLinkClick}
+      />,
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Luke 6:3' }));
+    expect(onScriptureLinkClick).toHaveBeenCalledWith({ book: 'LUK', chapterNum: 6, verseNum: 3 });
+  });
+
+  it('shows a Bible reference as plain text without a callback', () => {
+    render(<DefinitionText definition="see {S:04200600300000}" />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getByText(/Luke 6:3/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['i', 'EM'],
+    ['u', 'U'],
+    ['b', 'STRONG'],
+  ])('styles |%s text', (marker, tagName) => {
+    render(<DefinitionText definition={`a |${marker}Quercus|${marker}* tree`} />);
+    expect(screen.getByText('Quercus').tagName).toBe(tagName);
+  });
+
+  it('breaks the line at a bar', () => {
+    const { container } = render(<DefinitionText definition="majesty || honor" />);
+    expect(container.querySelectorAll('br')).toHaveLength(1);
+    expect(container).toHaveTextContent('majestyhonor');
+  });
 });

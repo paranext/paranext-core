@@ -50,14 +50,18 @@ const senseCard = (gloss: string) =>
     .map((element) => element.closest('button'))
     .find((card) => card);
 
-const renderEntry = (scrRef?: ReturnType<typeof verseRef>, dictionaryEntry = TWO_SENSE_ENTRY) =>
+const renderEntry = (
+  scrRef?: ReturnType<typeof verseRef>,
+  dictionaryEntry = TWO_SENSE_ENTRY,
+  onSelectOccurrence = vi.fn(),
+) =>
   render(
     <DictionaryEntryDisplay
       localizedStrings={LOCALIZED_STRINGS}
       dictionaryEntry={dictionaryEntry}
       isDrawer={false}
       scriptureReferenceToFilterBy={scrRef}
-      onSelectOccurrence={vi.fn()}
+      onSelectOccurrence={onSelectOccurrence}
       onClickScrollToTop={vi.fn()}
     />,
   );
@@ -92,5 +96,32 @@ describe('DictionaryEntryDisplay senses', () => {
     renderEntry(undefined, TWO_SENSE_ENTRY);
     expect(senseCard('word')).toHaveAttribute('data-less-relevant', 'false');
     expect(screen.queryByRole('button', { name: /less-relevant/ })).not.toBeInTheDocument();
+  });
+
+  it('shows glosses without their markup', () => {
+    // Only the fields this component reads are filled in; the full Entry type carries many more.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const entry = {
+      ...TWO_SENSE_ENTRY,
+      senses: { s1: { ...sense('s1', 'hearing{N:001}', 'GEN', 1) } },
+    } as unknown as Entry;
+    renderEntry(undefined, entry);
+    expect(senseCard('hearing')).toBeTruthy();
+    expect(screen.queryByText(/\{N:/)).not.toBeInTheDocument();
+  });
+
+  it('goes to the verse of a Bible reference in a definition', () => {
+    const onSelectOccurrence = vi.fn();
+    // Only the fields this component reads are filled in; the full Entry type carries many more.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const entry = {
+      ...TWO_SENSE_ENTRY,
+      senses: {
+        s1: { ...sense('s1', 'a place', 'GEN', 1), definition: 'see {S:04200600300000}' },
+      },
+    } as unknown as Entry;
+    renderEntry(undefined, entry, onSelectOccurrence);
+    fireEvent.click(screen.getByRole('link', { name: 'Luke 6:3' }));
+    expect(onSelectOccurrence).toHaveBeenCalledWith({ book: 'LUK', chapterNum: 6, verseNum: 3 });
   });
 });

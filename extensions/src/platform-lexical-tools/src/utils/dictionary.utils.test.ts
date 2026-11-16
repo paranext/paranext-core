@@ -64,6 +64,19 @@ describe('dictionary.util.ts', () => {
       const result = getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef);
       expect(result).toBe('joy');
     });
+    it('shows glosses without their markup', () => {
+      // These are not fully constructed Entry objects, but they are sufficient for testing so I asserted them.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const entry: Entry = {
+        senses: {
+          s1: { glosses: ['hearing{N:001}', 'majesty || honor'], occurrences: {} },
+          s2: { glosses: ['{L:storehouses<SDBH:אוֹצָר>}'], occurrences: {} },
+        },
+      } as unknown as Entry;
+
+      const result = getFormatGlossesStringFromDictionaryEntrySenses(entry);
+      expect(result).toBe('hearing, majesty / honor, storehouses');
+    });
   });
 
   describe('getCombinedOccurrencesCountFromDictionaryEntrySenses', () => {

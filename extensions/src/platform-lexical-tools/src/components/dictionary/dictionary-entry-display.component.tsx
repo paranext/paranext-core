@@ -11,7 +11,7 @@ import {
 } from 'platform-bible-react';
 import { ChevronUpIcon } from 'lucide-react';
 import { Entry, Sense } from 'platform-lexical-tools';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, formatScrRef, LanguageStrings } from 'platform-bible-utils';
 import {
@@ -268,7 +268,18 @@ export function DictionaryEntryDisplay({
                     {getSenseNumber(sense)}
                   </span>
                   <ContentZoomRoot as="span" className="tw:text-base">
-                    {sense.glosses.join(', ')}
+                    {sense.glosses.map((gloss, glossIndex) => (
+                      // Glosses come from one list that never reorders, so their index is a stable key
+                      // eslint-disable-next-line react/no-array-index-key
+                      <Fragment key={glossIndex}>
+                        {glossIndex > 0 && ', '}
+                        <DefinitionText
+                          definition={gloss}
+                          onEntryLinkClick={onEntryLinkClick}
+                          onScriptureLinkClick={onSelectOccurrence}
+                        />
+                      </Fragment>
+                    ))}
                   </ContentZoomRoot>
                 </div>
                 {sense.definition && (
@@ -279,6 +290,7 @@ export function DictionaryEntryDisplay({
                     <DefinitionText
                       definition={sense.definition}
                       onEntryLinkClick={onEntryLinkClick}
+                      onScriptureLinkClick={onSelectOccurrence}
                     />
                   </ContentZoomRoot>
                 )}

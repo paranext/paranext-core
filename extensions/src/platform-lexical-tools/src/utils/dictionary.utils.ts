@@ -1,6 +1,7 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Entry, Occurrence, Sense } from 'platform-lexical-tools';
 import { LocalizeKey } from 'platform-bible-utils';
+import { markupToPlainText } from './definition-markup.utils';
 
 // Regex to remove any parenthetical statements (including nested)
 const REMOVE_PARENTHETICAL_STATEMENTS_REGEX = /\([^()]*\)/g;
@@ -53,7 +54,7 @@ export function getFormatGlossesStringFromDictionaryEntrySenses(
       senses.flatMap(
         (sense) =>
           sense?.glosses?.flatMap((gloss) =>
-            gloss
+            markupToPlainText(gloss)
               .replace(REMOVE_PARENTHETICAL_STATEMENTS_REGEX, '')
               .split(',')
               .map((g) => g.trim())
