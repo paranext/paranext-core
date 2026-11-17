@@ -16,17 +16,23 @@
   },
   "comment-assignment": {
     "main": ["extensions/src/legacy-comment-manager/", "c-sharp/Projects/CommentThreadSelector.cs"],
-    "incidental": ["c-sharp/Projects/ParatextProjectDataProvider.cs"]
+    "incidental": [
+      "c-sharp/Projects/ParatextProjectDataProvider.cs",
+      "lib/platform-bible-react/src/components/advanced/comment-list/"
+    ]
   },
   "comments-tab.spec.ts": {
     "main": [
       "extensions/src/legacy-comment-manager/",
       "src/renderer/components/docking/simple-layout.builder.ts",
-      "src/renderer/components/docking/simple-layout.data.ts"
+      "src/renderer/components/docking/simple-layout.data.ts",
+      "lib/platform-bible-react/src/components/advanced/comment-list/",
+      "lib/platform-bible-react/src/components/advanced/comment-editor/"
     ],
     "incidental": [
       "src/renderer/components/platform-bible-toolbar.tsx",
-      "src/renderer/components/projects/project-picker.component.tsx"
+      "src/renderer/components/projects/project-picker.component.tsx",
+      "lib/platform-bible-react/src/components/shadcn-ui/select.tsx"
     ]
   },
   "content-zoom-live-sharing": {
@@ -46,7 +52,8 @@
       "src/extension-host/data/core-settings-info.data.ts",
       "src/extension-host/services/settings.service-host.ts",
       "src/renderer/components/docking/",
-      "src/shared/services/settings.service.ts"
+      "src/shared/services/settings.service.ts",
+      "lib/platform-bible-react/src/components/advanced/comment-list/"
     ]
   },
   "content-zoom-restart": {
@@ -65,7 +72,8 @@
       "extensions/src/platform-scripture-editor/src/",
       "src/extension-host/data/core-settings-info.data.ts",
       "src/extension-host/services/settings.service-host.ts",
-      "src/shared/services/settings.service.ts"
+      "src/shared/services/settings.service.ts",
+      "lib/platform-bible-react/src/components/advanced/comment-list/"
     ]
   },
   "content-zoom-tools": {
@@ -118,7 +126,9 @@
       "extensions/src/platform-scripture/src/find.model.ts",
       "extensions/src/platform-scripture/src/project-data-provider/",
       "extensions/src/platform-scripture-editor/src/find-trigger.util.ts",
-      "extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts"
+      "extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts",
+      "lib/platform-bible-react/src/components/advanced/recent-searches.component.tsx",
+      "lib/platform-bible-react/src/components/advanced/scope-selector/"
     ],
     "incidental": [
       "src/renderer/components/docking/simple-layout.builder.ts",
@@ -148,13 +158,15 @@
       "src/renderer/services/first-run-store.ts",
       "src/renderer/services/first-run.reducer.ts",
       "src/main/services/first-run.service-router.ts",
-      "src/main/first-run-consent.util.ts"
+      "src/main/first-run-consent.util.ts",
+      "lib/platform-bible-react/src/components/advanced/interface-language-picker/"
     ],
     "incidental": [
       "c-sharp/Users/",
       "c-sharp/Projects/SendReceive/",
       "src/main/startup-tasks.ts",
-      "src/shared/services/internet.service.ts"
+      "src/shared/services/internet.service.ts",
+      "src/renderer/components/overlays/overlay-workspace-updating.component.tsx"
     ]
   },
   "internet-settings.spec.ts": {
@@ -165,7 +177,8 @@
       "src/renderer/components/internet-settings.constants.ts",
       "src/shared/services/internet.service.ts",
       "c-sharp/JsonUtils/InternetSettingsMementoConverter.cs",
-      "src/renderer/services/internet-use-choice-store.ts"
+      "src/renderer/services/internet-use-choice-store.ts",
+      "lib/platform-bible-react/src/components/advanced/internet-access-option-list/"
     ],
     "incidental": []
   },
@@ -188,7 +201,8 @@
       "src/renderer/services/book-chapter-control.service-shard.ts",
       "src/main/services/book-chapter-control.service-router.ts",
       "src/renderer/components/platform-bible-toolbar.tsx",
-      "src/renderer/components/docking/tab-menu.util.ts"
+      "src/renderer/components/docking/tab-menu.util.ts",
+      "lib/platform-bible-react/src/components/advanced/comment-list/"
     ]
   },
   "multi-window": {
@@ -224,7 +238,11 @@
       "src/renderer/components/overlay-host.component.tsx",
       "src/renderer/services/overlays/",
       "src/renderer/components/platform-bible-toolbar.tsx",
-      "src/main/main.ts"
+      "src/main/main.ts",
+      "lib/platform-bible-react/src/components/advanced/book-chapter-control/",
+      "src/renderer/services/book-chapter-control.registry.ts",
+      "src/renderer/services/book-chapter-control.service-shard.ts",
+      "src/main/services/book-chapter-control.service-router.ts"
     ]
   },
   "navigation-history": {
@@ -234,7 +252,8 @@
       "src/shared/services/reference-history.util.ts",
       "src/main/services/scroll-group.service-host.ts",
       "src/renderer/services/scroll-group.service.ts",
-      "src/shared/services/scroll-group.service.ts"
+      "src/shared/services/scroll-group.service.ts",
+      "lib/platform-bible-react/src/components/advanced/navigation-history-buttons/navigation-history-buttons.component.tsx"
     ],
     "incidental": [
       "src/renderer/components/platform-bible-toolbar.tsx",
@@ -264,13 +283,17 @@
       "src/main/services/web-view.service-router.ts",
       "src/renderer/hooks/use-is-content-zoomable.hook.ts",
       "lib/platform-bible-react/src/components/advanced/content-zoom-root.component.tsx",
-      "lib/platform-bible-react/src/context/content-zoom-text.context.tsx"
+      "lib/platform-bible-react/src/context/content-zoom-text.context.tsx",
+      "lib/platform-bible-react/src/components/advanced/comment-list/"
     ],
     "incidental": [
       "src/extension-host/data/core-settings-info.data.ts",
       "src/shared/services/settings.service.ts",
       "src/extension-host/services/settings.service-host.ts",
-      "extensions/src/platform-scripture-editor/src/"
+      "extensions/src/platform-scripture-editor/src/",
+      "lib/platform-bible-react/src/components/shadcn-ui/dropdown-menu.tsx",
+      "lib/platform-bible-react/src/components/shadcn-ui/popover.tsx",
+      "lib/platform-bible-react/src/components/shadcn-ui/command.tsx"
     ]
   },
   "onboarding-tour.spec.ts": {
@@ -324,7 +347,21 @@
       "extensions/src/platform-scripture-editor/src/",
       "extensions/src/platform-scripture-editor/contributions/",
       "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "c-sharp/Projects/ChapterMarkerCorrection.cs"
+      "c-sharp/Projects/ChapterMarkerCorrection.cs",
+      "lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx",
+      "lib/platform-bible-react/src/components/advanced/marker-palette-change-guard.util.ts",
+      "lib/platform-bible-react/src/components/advanced/marker-palette-filter.util.ts",
+      "lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts",
+      "lib/platform-bible-react/src/components/advanced/marker-palette-keys.util.ts",
+      "lib/platform-bible-react/src/components/advanced/marker-palette-session.util.ts",
+      "lib/platform-bible-react/src/components/advanced/use-marker-palette-composition-close.hook.ts",
+      "lib/platform-bible-react/src/components/advanced/use-marker-palette-focus-out-capture.hook.ts",
+      "lib/platform-bible-react/src/components/advanced/use-marker-palette-session-writers.hook.ts",
+      "lib/platform-bible-react/src/components/advanced/editor/",
+      "lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts",
+      "lib/platform-bible-react/src/components/advanced/footnote-editor/",
+      "lib/platform-bible-react/src/components/advanced/footnotes/",
+      "src/renderer/services/overlays/overlay-palette-filter.util.ts"
     ],
     "incidental": [
       "src/renderer/services/web-view-content-zoom.service.ts",
@@ -337,7 +374,13 @@
       "lib/platform-bible-react/src/context/content-zoom-text.context.tsx",
       "src/extension-host/data/core-settings-info.data.ts",
       "src/shared/services/settings.service.ts",
-      "src/extension-host/services/settings.service-host.ts"
+      "src/extension-host/services/settings.service-host.ts",
+      "lib/platform-bible-react/src/components/advanced/book-chapter-control/",
+      "src/renderer/services/book-chapter-control.registry.ts",
+      "src/renderer/services/book-chapter-control.service-shard.ts",
+      "src/main/services/book-chapter-control.service-router.ts",
+      "lib/platform-bible-react/src/components/shadcn-ui/popover.tsx",
+      "src/renderer/components/overlays/overlay-command-palette.component.tsx"
     ]
   },
   "scripture-editor/chapter-marker-repair.spec.ts": {
@@ -345,14 +388,24 @@
       "extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts",
       "c-sharp/Projects/ChapterMarkerCorrection.cs"
     ],
-    "incidental": []
+    "incidental": [
+      "lib/platform-bible-react/src/components/advanced/book-chapter-control/",
+      "src/renderer/services/book-chapter-control.registry.ts",
+      "src/renderer/services/book-chapter-control.service-shard.ts",
+      "src/main/services/book-chapter-control.service-router.ts"
+    ]
   },
   "scripture-editor/chapter-marker-restore.spec.ts": {
     "main": [
       "extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts",
       "c-sharp/Projects/ChapterMarkerCorrection.cs"
     ],
-    "incidental": []
+    "incidental": [
+      "lib/platform-bible-react/src/components/advanced/book-chapter-control/",
+      "src/renderer/services/book-chapter-control.registry.ts",
+      "src/renderer/services/book-chapter-control.service-shard.ts",
+      "src/main/services/book-chapter-control.service-router.ts"
+    ]
   },
   "scripture-editor/no-unasked-edits-footnotes-pane-power-standard.spec.ts": {
     "main": ["c-sharp/Projects/ParatextProjectDataProvider.cs"],
@@ -433,7 +486,8 @@
       "src/renderer/components/user-profile-popover/",
       "src/renderer/components/reference-history-buttons.component.tsx",
       "src/renderer/components/sync-status-button.component.tsx",
-      "lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx"
+      "lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx",
+      "lib/platform-bible-react/src/components/advanced/toolbar.component.tsx"
     ],
     "incidental": [
       "lib/platform-bible-react/src/components/advanced/book-chapter-control/",
