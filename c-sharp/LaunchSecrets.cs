@@ -20,6 +20,13 @@ internal sealed class LaunchSecrets
     /// </summary>
     public const string ENVIRONMENT_VARIABLE = "PAPI_LAUNCH_SECRETS";
 
+    /// <summary>
+    /// Command-line argument with which main tells a packaged build to read the secrets from standard
+    /// input. Without it this process never waits on standard input, so a data provider started by
+    /// another tool that redirects standard input is not held up.
+    /// </summary>
+    public const string STANDARD_INPUT_FLAG = "--launch-secrets-on-stdin";
+
     /// <summary>How long to wait for main to write the secrets to standard input</summary>
     public static readonly TimeSpan StandardInputTimeout = TimeSpan.FromSeconds(5);
 
@@ -37,14 +44,23 @@ internal sealed class LaunchSecrets
     /// <summary>
     /// Reads the secrets main handed this process: from <see cref="ENVIRONMENT_VARIABLE"/>, which is
     /// then cleared so processes this one starts do not inherit it, or else from one line of
-    /// standard input when it is redirected.
+    /// standard input when main asked for that (see <see cref="ShouldReadStandardInput"/>).
     /// </summary>
     public static LaunchSecrets? ReadForThisProcess() =>
         ReadFromEnvironmentOrStandardInput(
             Environment.GetEnvironmentVariable,
             name => Environment.SetEnvironmentVariable(name, null),
-            Console.IsInputRedirected ? ReadStandardInputLine : null
+            ShouldReadStandardInput(Environment.GetCommandLineArgs(), Console.IsInputRedirected)
+                ? ReadStandardInputLine
+                : null
         );
+
+    /// <summary>
+    /// Whether to wait for the secrets on standard input: only when main passed
+    /// <see cref="STANDARD_INPUT_FLAG"/> and standard input is redirected
+    /// </summary>
+    public static bool ShouldReadStandardInput(string[] commandLineArgs, bool isInputRedirected) =>
+        isInputRedirected && commandLineArgs.Contains(STANDARD_INPUT_FLAG);
 
     /// <summary>
     /// Reads the environment variable (and clears it), else one line of standard input when
@@ -105,7 +121,7 @@ internal sealed class LaunchSecrets
     {
         // Console.In blocks even through its async API, so read on a pool thread and stop waiting
         // after the timeout. A read that never completes leaves that thread blocked, which only
-        // happens when standard input is redirected but main wrote nothing to it.
+        // happens when main passed the flag but wrote nothing to standard input.
         try
         {
             return ThreadingUtils.GetTaskResult(
