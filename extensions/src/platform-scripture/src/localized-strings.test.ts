@@ -141,6 +141,18 @@ describe.each(Object.entries(NOT_YET_AVAILABLE_KEYS))(
   },
 );
 
+describe('Manage Books tab title with a project', () => {
+  const key = '%manageBooks_dialog_titleWithProject%';
+
+  it.each(['en', 'es'])('fills the project name in %s', (language) => {
+    expect(localizedStrings[language][key]).toContain('{projectName}');
+  });
+
+  it('Spanish string differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
 describe('not-yet-available toolbar tooltip', () => {
   it('Spanish string differs from English', () => {
     const key = '%manageBooks_view_disabledStub_notYetAvailable_2%';

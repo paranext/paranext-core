@@ -1078,7 +1078,10 @@ export async function runNoUnaskedEdits(
 
 // #region Power mode's read-only Preview
 
-/** The tab title's suffix for a read-only text (`%webView_platformScriptureEditor_title_format%`). */
+/**
+ * The tab title's suffix for a read-only text
+ * (`%webView_platformScriptureEditor_title_readonly_indicator%`).
+ */
 const READ_ONLY_TITLE = '(Read-only)';
 
 /** Power mode's chord that switches between Standard view and Preview (Control on macOS too). */

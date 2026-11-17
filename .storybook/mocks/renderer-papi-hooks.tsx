@@ -40,6 +40,7 @@ export {
   useDataProviderMulti,
   useWebViewController,
   useRecentScriptureRefs,
+  useLocalizedProjectTitle,
   useEvaluatedMenu,
 } from '../../src/renderer/hooks/papi-hooks';
 

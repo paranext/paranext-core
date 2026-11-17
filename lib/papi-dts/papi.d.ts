@@ -11765,7 +11765,59 @@ declare module 'shared/services/localization.service-model' {
        * the book so that the book name can be displayed in the UI language within the UI
        */
       getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+      /**
+       * Builds a localized title for something scoped to one project, such as a WebView's tab: looks
+       * up the localized format for `localizeKey` and the project's short name (its `platform.name`
+       * setting), then replaces `{projectName}` in the format with that name. Use it in a WebView
+       * provider's `getWebView` so the tab opens with its final title; in the WebView itself, use the
+       * `useLocalizedProjectTitle` hook to keep the title up to date.
+       *
+       * Never rejects, so a failed lookup cannot keep a WebView from opening:
+       *
+       * - If the short name cannot be read, or is blank, the project id is shown in its place.
+       * - If the format lookup fails, the title is just the project's name (or id).
+       *
+       * Both failures are logged as warnings. A key with no localization is not a failure: as with
+       * `getLocalizedString`, the title is the key itself, so the missing string is noticed.
+       *
+       * @example
+       *
+       * ```typescript
+       * // With `"%myExtension_tabTitle%": "My Tool: {projectName}"` contributed
+       * const title = await papi.localization.getLocalizedProjectTitle({
+       *   localizeKey: '%myExtension_tabTitle%',
+       *   projectId,
+       * });
+       * // 'My Tool: WEB'
+       * ```
+       *
+       * @param options What to title; see {@link LocalizedProjectTitleOptions}.
+       * @returns The formatted title
+       */
+      getLocalizedProjectTitle(options: LocalizedProjectTitleOptions): Promise<string>;
     } & IDataProvider<LocalizationDataDataTypes>;
+  /** Options for `papi.localization.getLocalizedProjectTitle`. */
+  export type LocalizedProjectTitleOptions = {
+    /**
+     * Key of the localized title format. The format should contain a `{projectName}` placeholder,
+     * which is replaced with the project's short name (or its id when the name is unavailable).
+     */
+    localizeKey: LocalizeKey;
+    /** Id of the project the title is for */
+    projectId: string;
+    /**
+     * Values for any other `{key}` placeholders in the format. A `projectName` entry is ignored in
+     * favor of the project's name.
+     */
+    replacements?: {
+      [key: string]: unknown;
+    };
+    /**
+     * BCP 47 language codes to look the format up in, as for `getLocalizedString`. Defaults to the
+     * interface languages.
+     */
+    locales?: string[];
+  };
 }
 declare module 'shared/services/localization.service' {
   import { ILocalizationService } from 'shared/services/localization.service-model';
@@ -12392,6 +12444,48 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
   ) => [localizedStrings: LocalizationData, isLoading: boolean];
   export default useLocalizedStrings;
 }
+declare module 'renderer/hooks/papi-hooks/use-localized-project-title.hook' {
+  import type { LocalizedProjectTitleOptions } from 'shared/services/localization.service-model';
+  /**
+   * Builds a localized title for something scoped to one project, such as a WebView's tab, and keeps
+   * it up to date as the project's short name (its `platform.name` setting) or the interface language
+   * changes. `{projectName}` in the localized format is replaced with the project's short name, or
+   * with the project id when the name cannot be read or is blank.
+   *
+   * This is the WebView counterpart of `papi.localization.getLocalizedProjectTitle`, which a WebView
+   * provider uses to give the tab its title on open. It takes the same options, except `locales` (the
+   * title follows the interface languages) and a `projectId` that may be `undefined`. When their
+   * lookups succeed, both produce the same title, so the tab does not change when the WebView takes
+   * over.
+   *
+   * @example
+   *
+   * ```tsx
+   * // With `"%myExtension_tabTitle%": "My Tool: {projectName}"` contributed
+   * const tabTitle = useLocalizedProjectTitle({
+   *   localizeKey: '%myExtension_tabTitle%',
+   *   projectId,
+   * });
+   * useEffect(() => {
+   *   if (tabTitle === undefined) return;
+   *   updateWebViewDefinition({ title: hasUnsavedChanges ? `${tabTitle} ●` : tabTitle });
+   * }, [tabTitle, hasUnsavedChanges, updateWebViewDefinition]);
+   * ```
+   *
+   * @param options What to title; see `LocalizedProjectTitleOptions`. With no `projectId` there is no
+   *   title. The options need not be stable: changing `replacements` triggers no lookups.
+   * @returns The formatted title, or `undefined` while loading or with no `projectId`; keep the
+   *   current title until it is defined.
+   */
+  export function useLocalizedProjectTitle({
+    localizeKey,
+    projectId,
+    replacements,
+  }: Omit<LocalizedProjectTitleOptions, 'projectId' | 'locales'> & {
+    projectId: string | undefined;
+  }): string | undefined;
+  export default useLocalizedProjectTitle;
+}
 declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
   import { NetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
@@ -12649,6 +12743,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
+  export { default as useLocalizedProjectTitle } from 'renderer/hooks/papi-hooks/use-localized-project-title.hook';
   export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
   export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
@@ -14278,6 +14373,7 @@ declare module '@papi/core' {
     LocalizationData,
     LocalizationSelector,
     LocalizationSelectors,
+    LocalizedProjectTitleOptions,
   } from 'shared/services/localization.service-model';
   export type {
     SimultaneousProjectSettingsChanges,
