@@ -77,11 +77,13 @@ const ISOLATED_PREFIX = 'e2e-tests/tests/isolated/';
 const SOURCE_ROOTS = ['src/', 'extensions/src/', 'c-sharp/'];
 
 /**
- * Matches added or removed lines that register a command (`registerCommand(`, or a C# request
- * handler named `"command:…`) or a web view provider (`registerWebViewProvider(`). Passed to `git
- * diff -G` and tested against the content of untracked files.
+ * Matches added or removed lines that register a command (`registerCommand(`, or the C#
+ * `RegisterRequestHandlerAsync(` call that registers a request handler) or a web view provider
+ * (`registerWebViewProvider(`). Passed to `git diff -G` (POSIX extended regular expression) and
+ * tested against the content of untracked files.
  */
-export const REGISTRATION_PATTERN = 'registerCommand\\(|registerWebViewProvider\\(|"command:';
+export const REGISTRATION_PATTERN =
+  'registerCommand\\(|registerWebViewProvider\\(|RegisterRequestHandlerAsync\\(';
 
 /**
  * Paths that are not runtime code: tests, stories, docs, type declarations, build metadata and
@@ -211,9 +213,9 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-function git(...args: string[]): string[] {
+function git(repoRoot: string, ...args: string[]): string[] {
   return execFileSync('git', args, {
-    cwd: REPO_ROOT,
+    cwd: repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024,
@@ -234,6 +236,50 @@ function listSpecFiles(directory: string): string[] {
 }
 
 /**
+ * The working tree's changes against `mergeBase`, read from the git repository at `repoRoot`.
+ * `--no-renames` lists a rename's old and new path; untracked files never appear in `git diff`, so
+ * they come from `git ls-files` and their content is tested for a registration directly.
+ * `--end-of-options` makes a ref that starts with `-` a ref, not an option.
+ */
+export function readGitChanges(
+  repoRoot: string,
+  mergeBase: string,
+): Pick<RecommendInput, 'changedFiles' | 'filesAddingCommandRegistrations'> {
+  const untrackedFiles = git(repoRoot, 'ls-files', '--others', '--exclude-standard');
+  const registrationRegExp = new RegExp(REGISTRATION_PATTERN);
+  const untrackedRegistering = untrackedFiles
+    .filter((file) => isInSourceRoot(file) && !isNonRuntime(file))
+    .filter((file) => {
+      try {
+        return registrationRegExp.test(fs.readFileSync(path.join(repoRoot, file), 'utf8'));
+      } catch {
+        return false;
+      }
+    });
+  return {
+    changedFiles: [
+      ...new Set([
+        ...git(repoRoot, 'diff', '--no-renames', '--name-only', '--end-of-options', mergeBase),
+        ...untrackedFiles,
+      ]),
+    ],
+    filesAddingCommandRegistrations: [
+      ...git(
+        repoRoot,
+        'diff',
+        '--no-renames',
+        '--name-only',
+        '-G',
+        REGISTRATION_PATTERN,
+        '--end-of-options',
+        mergeBase,
+      ),
+      ...untrackedRegistering,
+    ],
+  };
+}
+
+/**
  * Prints the {@link E2eRecommendationReport} for the working tree against `mergeBase` as JSON on
  * stdout.
  */
@@ -248,38 +294,8 @@ function runCli(mergeBase: string): void {
       specFilesBySubset[key] = listSpecFiles(path.join(REPO_ROOT, ISOLATED_PREFIX, key));
     });
 
-  // `--no-renames` lists a rename's old and new path; untracked files never appear in `git diff`.
-  const untrackedFiles = git('ls-files', '--others', '--exclude-standard');
-  const registrationRegExp = new RegExp(REGISTRATION_PATTERN);
-  const untrackedRegistering = untrackedFiles
-    .filter((file) => isInSourceRoot(file) && !isNonRuntime(file))
-    .filter((file) => {
-      try {
-        return registrationRegExp.test(fs.readFileSync(path.join(REPO_ROOT, file), 'utf8'));
-      } catch {
-        return false;
-      }
-    });
-
   const report = recommendE2eTests({
-    changedFiles: [
-      ...new Set([
-        ...git('diff', '--no-renames', '--name-only', '--end-of-options', mergeBase),
-        ...untrackedFiles,
-      ]),
-    ],
-    filesAddingCommandRegistrations: [
-      ...git(
-        'diff',
-        '--no-renames',
-        '--name-only',
-        '-G',
-        REGISTRATION_PATTERN,
-        '--end-of-options',
-        mergeBase,
-      ),
-      ...untrackedRegistering,
-    ],
+    ...readGitChanges(REPO_ROOT, mergeBase),
     sources,
     coreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs.txt')),
     editorCoreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs-editor.txt')),

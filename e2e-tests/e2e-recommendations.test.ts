@@ -5,10 +5,17 @@
  * branch's changed files. A subset or spec missing from it would never be recommended, and a prefix
  * pointing at a moved path would silently stop matching, so these tests keep it complete and real.
  */
+import { execFileSync } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { recommendE2eTests, RecommendInput, SubsetSources } from './e2e-recommendations';
+import {
+  readGitChanges,
+  recommendE2eTests,
+  RecommendInput,
+  SubsetSources,
+} from './e2e-recommendations';
 
 const REPOSITORY_ROOT = path.join(__dirname, '..');
 const ISOLATED_DIRECTORY = path.join(__dirname, 'tests', 'isolated');
@@ -333,5 +340,77 @@ describe('recommendE2eTests', () => {
     expect(changed('e2e-tests/tests/isolated/subset-sources.json')).toBe(false);
     expect(changed('e2e-tests/e2e-recommendations.test.ts')).toBe(false);
     expect(changed('src/main/new-thing.ts')).toBe(false);
+  });
+});
+
+describe('readGitChanges', () => {
+  const runGit = (cwd: string, ...args: string[]) =>
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], {
+      cwd,
+      encoding: 'utf8',
+    }).trim();
+
+  function writeFile(repoRoot: string, file: string, content: string) {
+    fs.mkdirSync(path.dirname(path.join(repoRoot, file)), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, file), content);
+  }
+
+  /** Runs `body` against a throwaway repository with one commit, then removes it. */
+  function withTemporaryRepository(body: (repoRoot: string, baseSha: string) => void) {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-recommendations-'));
+    try {
+      runGit(repoRoot, 'init', '--quiet');
+      writeFile(repoRoot, 'src/renderer/components/docking/dock.tsx', 'export const dock = 1;\n');
+      writeFile(repoRoot, 'c-sharp/Projects/Service.cs', 'Send(\n"command:a");\n');
+      runGit(repoRoot, 'add', '-A');
+      runGit(repoRoot, 'commit', '--quiet', '-m', 'base');
+      body(repoRoot, runGit(repoRoot, 'rev-parse', 'HEAD'));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  }
+
+  it('lists a renamed file under its old path as well as its new one', () => {
+    withTemporaryRepository((repoRoot, baseSha) => {
+      fs.mkdirSync(path.join(repoRoot, 'src/main'), { recursive: true });
+      runGit(repoRoot, 'mv', 'src/renderer/components/docking/dock.tsx', 'src/main/dock.tsx');
+      const { changedFiles } = readGitChanges(repoRoot, baseSha);
+      expect(changedFiles).toContain('src/renderer/components/docking/dock.tsx');
+      expect(changedFiles).toContain('src/main/dock.tsx');
+    });
+  });
+
+  it('includes an untracked file and the registration it contains', () => {
+    withTemporaryRepository((repoRoot, baseSha) => {
+      writeFile(repoRoot, 'src/main/new.ts', "registerCommand('a', b);\n");
+      writeFile(repoRoot, 'src/main/plain.ts', 'export const a = 1;\n');
+      const changes = readGitChanges(repoRoot, baseSha);
+      expect(changes.changedFiles).toEqual(
+        expect.arrayContaining(['src/main/new.ts', 'src/main/plain.ts']),
+      );
+      expect(changes.filesAddingCommandRegistrations).toEqual(['src/main/new.ts']);
+    });
+  });
+
+  it('flags a C# request handler registration, not a call that only sends a command', () => {
+    withTemporaryRepository((repoRoot, baseSha) => {
+      writeFile(
+        repoRoot,
+        'c-sharp/Projects/Service.cs',
+        'Send(\n"command:a");\nawait Client.RegisterRequestHandlerAsync(\n"command:b", h);\n',
+      );
+      writeFile(repoRoot, 'c-sharp/Other/Sender.cs', 'Send("command:c");\n');
+      runGit(repoRoot, 'add', '-N', 'c-sharp/Other/Sender.cs');
+      expect(readGitChanges(repoRoot, baseSha).filesAddingCommandRegistrations).toEqual([
+        'c-sharp/Projects/Service.cs',
+      ]);
+    });
+  });
+
+  it('treats a ref that starts with a dash as a ref, not an option', () => {
+    withTemporaryRepository((repoRoot) => {
+      expect(() => readGitChanges(repoRoot, '--output=injected.txt')).toThrow(/injected\.txt/);
+      expect(fs.existsSync(path.join(repoRoot, 'injected.txt'))).toBe(false);
+    });
   });
 });
