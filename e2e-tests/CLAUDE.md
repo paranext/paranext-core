@@ -51,7 +51,10 @@ A new subset directory or loose spec under `tests/isolated/` also needs an entry
 `incidental` the source it only drives. `e2e-recommendations.test.ts` fails when an entry is
 missing, and when a prefix names a file that no longer exists (moving or deleting a source file a
 prefix names means updating the prefix); `/review-paratext` uses the map to recommend which subsets
-to run.
+to run. A new `scripture-editor/no-unasked-edits-*.spec.ts` needs a key of its own too, and
+`/review-paratext` stops asking whether a branch needs a new e2e test once the branch changes any
+e2e support file (a `.ts` under `tests/`, `fixtures/` or `reporters/`, the global setup or
+teardown, or a Playwright config).
 
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch

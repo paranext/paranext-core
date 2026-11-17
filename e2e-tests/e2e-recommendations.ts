@@ -68,9 +68,10 @@ export interface E2eRecommendationReport {
   entryPointFiles: string[];
   /**
    * Whether an e2e spec or its support code changed: any `.ts` file under `e2e-tests/tests/`
-   * (specs, page objects, spec helpers), under `e2e-tests/fixtures/`, `e2e-tests/global-setup.ts`
-   * or an `e2e-tests/playwright*.config.ts`, except a unit test (`*.test.ts`). READMEs and mapping
-   * files do not count.
+   * (specs, page objects, spec helpers), `e2e-tests/fixtures/` or `e2e-tests/reporters/`, plus
+   * `e2e-tests/global-setup.ts`, `e2e-tests/global-teardown.ts` and
+   * `e2e-tests/playwright*.config.ts` (the harness files the Playwright configuration loads),
+   * except a unit test (`*.test.ts`). READMEs and mapping files do not count.
    */
   specsChanged: boolean;
 }
@@ -115,8 +116,8 @@ export const REGISTRATION_PATTERN =
  */
 const NON_RUNTIME = new RegExp(
   [
-    // Unit tests, their helpers and Storybook stories.
-    String.raw`\.test\.|\.test-util\.|\.stories\.`,
+    // Unit tests, their helpers and fixtures, and Storybook stories.
+    String.raw`\.test\.|\.test-utils?\.|\.fixtures\.|\.stories\.`,
     // Documentation.
     String.raw`\.md$|\.mdx$`,
     // Type declarations only exist at compile time.
@@ -130,8 +131,10 @@ const NON_RUNTIME = new RegExp(
     // Package and extension metadata: a design decision, not an oversight (a version or
     // dependency bump changes no behaviour an e2e spec can see).
     String.raw`(^|\/)package\.json$|(^|\/)manifest\.json$`,
-    // .NET build metadata.
-    String.raw`\.csproj$|\.props$`,
+    // .NET build metadata: projects, shared build properties, the solution and IDE settings.
+    String.raw`\.csproj$|\.props$|\.sln$|\.DotSettings$`,
+    // Formatter, linter and editor configuration, which no running app reads.
+    String.raw`(^|\/)(\.globalconfig|\.csharpierrc\.yml|\.lintstagedrc\.yml|\.editorconfig)$`,
   ].join('|'),
 );
 const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
@@ -141,7 +144,9 @@ const isE2eSpecSupport = (file: string) =>
   !file.endsWith('.test.ts') &&
   (file.startsWith('e2e-tests/tests/') ||
     file.startsWith('e2e-tests/fixtures/') ||
+    file.startsWith('e2e-tests/reporters/') ||
     file === 'e2e-tests/global-setup.ts' ||
+    file === 'e2e-tests/global-teardown.ts' ||
     /^e2e-tests\/playwright[^/]*\.config\.ts$/.test(file));
 
 /** Menu contributions of the extensions and the core menu data. */
@@ -233,7 +238,8 @@ function collapseSpecGroups(
     if (longest.length <= subset.length) return;
     // The path filter also runs every other spec of the subset that starts with the prefix, so it
     // must run exactly the members (checked whenever the subset's spec files are known).
-    const subsetSpecs = input.specFilesBySubset[subset.slice(0, -1)];
+    // `specFilesBySubset` is keyed by the top-level group, also for a key nested deeper.
+    const subsetSpecs = input.specFilesBySubset[members[0].key.split('/')[0]];
     const runsExactlyMembers = (prefix: string) =>
       !subsetSpecs ||
       subsetSpecs.filter((spec) => spec.startsWith(`${ISOLATED_PREFIX}${prefix}`)).length ===
