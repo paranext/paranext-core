@@ -9,63 +9,76 @@ const STACK_TRACES_UTIL = path.join(__dirname, 'extension-stack-traces.util.ts')
 const SANDBOX_UTIL = path.join(__dirname, 'extension-sandbox.util.ts');
 
 /**
- * Inline source map with one mapping: generated line 2, column 0 maps to line 42, column 0 of
- * `original-extension.ts`
+ * Builds an extension file whose line 2 throws, with an inline source map that maps the start of
+ * line 2 to `originalLine` of `originalSource`
+ *
+ * @param mappings The source map's `mappings` for that one mapping
  */
-const EXTENSION_SOURCE_MAP = {
-  version: 3,
-  sources: ['original-extension.ts'],
-  names: [],
-  mappings: ';AAyCA',
-};
+function extensionFile(originalSource: string, mappings: string): string {
+  const sourceMap = { version: 3, sources: [originalSource], names: [], mappings };
+  return [
+    'module.exports.activate = function activate() {',
+    "  throw new Error('thrown from the extension');",
+    '};',
+    // Split so tools reading this test file's own source map do not take this line as its map
+    `//# ${'sourceMappingURL'}=data:application/json;base64,${Buffer.from(
+      JSON.stringify(sourceMap),
+    ).toString('base64')}`,
+  ].join('\n');
+}
 
-const EXTENSION_FILE = [
-  'module.exports.activate = function activate() {',
-  "  throw new Error('thrown from the extension');",
-  '};',
-  // Split so tools reading this test file's own source map do not take this line as its map
-  `//# ${'sourceMappingURL'}=data:application/json;base64,${Buffer.from(
-    JSON.stringify(EXTENSION_SOURCE_MAP),
-  ).toString('base64')}`,
-].join('\n');
+/** Line 2 maps to line 42 of `original-extension.ts` */
+const FIRST_BUILD = extensionFile('original-extension.ts', ';AAyCA');
+/** Line 2 maps to line 77 of `rebuilt-extension.ts` */
+const SECOND_BUILD = extensionFile('rebuilt-extension.ts', ';AA4EA');
 
 /** Line in `hostScript` that throws, counted from 1 */
-const HOST_THROW_LINE = 9;
+const HOST_THROW_LINE = 10;
+
+type Frames = {
+  host: string;
+  extension: string;
+  extensionConstructor: string;
+  rebuiltExtension: string;
+};
 
 /**
  * Host code run under tsx, as the dev extension host is. The type annotations make tsx's output
- * differ from the source, so an unmapped host frame shows a different position.
+ * differ from the source, so an unmapped host frame shows a different position. It loads the
+ * extension file, rewrites it as a rebuild would, and loads it again.
  */
-function hostScript(extensionFile: string, install: boolean): string {
+function hostScript(extensionPath: string, install: boolean): string {
   return [
+    "import fs from 'node:fs';",
     `import { loadExtensionModule } from ${JSON.stringify(SANDBOX_UTIL)};`,
     `import { installSourceMappedStackTraces } from ${JSON.stringify(STACK_TRACES_UTIL)};`,
     `if (${install}) installSourceMappedStackTraces();`,
     'type Shape = { size: number };',
     'const shape: Shape = { size: 1 };',
-    'function frameLine(error: unknown): string {',
-    "  return (error instanceof Error && error.stack?.split('\\n')[1]) || '';",
+    'function frameLine(run: () => void): string {',
+    "  try { run(); } catch (e) { return (e instanceof Error && e.stack?.split('\\n')[1]) || ''; } return '';",
     '}',
     "function hostFunction(): never { throw new Error('thrown from the host ' + shape.size); }",
-    'let host = "";',
-    'try { hostFunction(); } catch (e) { host = frameLine(e); }',
-    'const extension = loadExtensionModule(',
-    `  ${JSON.stringify(extensionFile)},`,
-    '  () => undefined,',
-    ') as { activate: () => void };',
-    'let extensionFrame = "";',
-    'try { extension.activate(); } catch (e) { extensionFrame = frameLine(e); }',
-    'console.log(JSON.stringify({ host, extension: extensionFrame }));',
+    'const host = frameLine(hostFunction);',
+    'type Extension = { activate: () => void };',
+    `const load = () => loadExtensionModule(${JSON.stringify(extensionPath)}, () => undefined) as Extension;`,
+    'const extension = load();',
+    'const extensionFrame = frameLine(() => extension.activate());',
+    'const extensionConstructor = frameLine(() => { new (extension.activate as unknown as new () => object)(); });',
+    `fs.writeFileSync(${JSON.stringify(extensionPath)}, ${JSON.stringify(SECOND_BUILD)});`,
+    'const rebuilt = load();',
+    'const rebuiltExtension = frameLine(() => rebuilt.activate());',
+    'console.log(JSON.stringify({ host, extension: extensionFrame, extensionConstructor, rebuiltExtension }));',
   ].join('\n');
 }
 
-function runHost(install: boolean): { host: string; extension: string } {
+function runHost(install: boolean): Frames {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extension-stack-traces-test-'));
   try {
-    const extensionFile = path.join(tempDir, 'main.js');
-    fs.writeFileSync(extensionFile, EXTENSION_FILE);
+    const extensionPath = path.join(tempDir, 'main.js');
+    fs.writeFileSync(extensionPath, FIRST_BUILD);
     const scriptFile = path.join(tempDir, 'host.ts');
-    fs.writeFileSync(scriptFile, hostScript(extensionFile, install));
+    fs.writeFileSync(scriptFile, hostScript(extensionPath, install));
 
     const child = spawnSync(process.execPath, ['--import', 'tsx', scriptFile], {
       cwd: REPO_ROOT,
@@ -85,6 +98,11 @@ function runHost(install: boolean): { host: string; extension: string } {
   }
 }
 
+/** A frame line without its location, so mapped and unmapped frames can be compared */
+function withoutLocation(frame: string): string {
+  return frame.replace(/ \(.*\)$/, '');
+}
+
 describe('installSourceMappedStackTraces', () => {
   it('maps extension frames to the source named in the inline source map', () => {
     const { extension } = runHost(true);
@@ -92,10 +110,28 @@ describe('installSourceMappedStackTraces', () => {
     expect(extension).toMatch(/original-extension\.ts:42:\d+\)$/);
   }, 60_000);
 
+  it('maps a rebuilt extension file through its new source map', () => {
+    const { rebuiltExtension } = runHost(true);
+
+    expect(rebuiltExtension).toMatch(/rebuilt-extension\.ts:77:\d+\)$/);
+  }, 60_000);
+
   it('keeps host frames mapped to their TypeScript source', () => {
     const { host } = runHost(true);
 
     expect(host).toMatch(new RegExp(`host\\.ts:${HOST_THROW_LINE}:\\d+\\)$`));
+  }, 60_000);
+
+  it('describes mapped frames the way Node does', () => {
+    const mapped = runHost(true);
+    const unmapped = runHost(false);
+
+    expect(withoutLocation(mapped.extension)).toBe('    at Object.activate');
+    expect(withoutLocation(mapped.extension)).toBe(withoutLocation(unmapped.extension));
+    expect(withoutLocation(mapped.extensionConstructor)).toBe(
+      withoutLocation(unmapped.extensionConstructor),
+    );
+    expect(withoutLocation(mapped.extensionConstructor)).toBe('    at new activate');
   }, 60_000);
 
   it('without it, extension frames point at the built file', () => {
