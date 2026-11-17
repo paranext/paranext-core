@@ -64,9 +64,9 @@ the suite is meant to be run routinely.
   See the README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding
   a well-named spec file to `isolated/` instead.
-- Do not give every check in `isolated/` its own `test()`: each `test()` on `isolated.fixture` starts its own app. Checks that
-  can share one launch state are `test.step()`s of one `test()`; see the docblock at the top of
-  `fixtures/isolated.fixture.ts`.
+- Do not give every check in `isolated/` its own `test()`: each `test()` on `isolated.fixture`
+  starts its own app. Checks that can share one launch state are `test.step()`s of one `test()`;
+  see the docblock at the top of `fixtures/isolated.fixture.ts`.
 
 ## State that leaks between runs
 
@@ -146,7 +146,9 @@ one of these.
 - **Every pull request:** the smoke suite (in the build jobs of `.github/workflows/test.yml`), and
   the `e2e-core` job: the isolated specs listed in `e2e-tests/core-specs.txt`, plus those in
   `e2e-tests/core-specs-editor.txt` when the pull request touches the Scripture editor extension,
-  `dev-packages.json` or the C# USFM/USJ conversion code. To add or remove a spec, edit the list.
+  `dev-packages.json`, the C# USFM/USJ conversion code, or the editor list itself, the two specs it
+  names and `fixtures/no-unasked-edits.body.ts`. If the changed-files lookup fails, both lists run.
+  To add or remove a spec, edit the list.
 - **Every night** (`.github/workflows/e2e-nightly.yml`, also startable by hand): every isolated
   spec, split over eight runners.
 - Both run on Linux with **one retry**. A test that passed only on its retry is named in a warning

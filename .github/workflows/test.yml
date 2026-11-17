@@ -535,7 +535,8 @@ jobs:
 
   # Which spec lists the `e2e-core` job below runs. The core list always; the editor list as well
   # when a pull request touches the editor extension, the editor package pin or the C# code that
-  # converts Scripture between USFM and USJ, and on every run that is not a pull request.
+  # converts Scripture between USFM and USJ, or the editor list, its specs or their shared body, and
+  # on every run that is not a pull request.
   e2e-core-selection:
     name: E2E core, pick the spec lists
     runs-on: ubuntu-22.04
@@ -553,13 +554,19 @@ jobs:
         run: |
           spec_lists="e2e-tests/core-specs.txt"
           # The C# side of USFM<->USJ lives in ParatextProjectDataProvider.cs (over ParatextData);
-          # the Usfm*/Usj* names catch any converter split out of it later.
-          editor_paths='^(extensions/src/platform-scripture-editor/|dev-packages\.json$|c-sharp/Projects/ParatextProjectDataProvider\.cs$|c-sharp/(.*/)?Us(fm|j)[^/]*$)'
+          # the Usfm*/Usj* names catch any converter split out of it later. The editor list, the
+          # specs it names and their shared body are on the list too, so a change to them runs them.
+          editor_paths='^(extensions/src/platform-scripture-editor/|dev-packages\.json$|e2e-tests/core-specs-editor\.txt$|e2e-tests/fixtures/no-unasked-edits\.body\.ts$|e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-(power-standard|simple-paragraph-structure)\.spec\.ts$|c-sharp/Projects/ParatextProjectDataProvider\.cs$|c-sharp/(.*/)?Us(fm|j)[^/]*$)'
           if [ -z "$PULL_REQUEST_NUMBER" ]; then
             spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
           else
-            changed_files=$(gh api "repos/${{ github.repository }}/pulls/$PULL_REQUEST_NUMBER/files" --paginate --jq '.[].filename')
-            if printf '%s\n' "$changed_files" | grep -q -E "$editor_paths"; then
+            # If the lookup fails, run both lists: failing here would skip the whole e2e-core job.
+            if changed_files=$(gh api "repos/${{ github.repository }}/pulls/$PULL_REQUEST_NUMBER/files" --paginate --jq '.[].filename'); then
+              if printf '%s\n' "$changed_files" | grep -q -E "$editor_paths"; then
+                spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
+              fi
+            else
+              echo "::warning title=Changed files unavailable::Could not list the pull request's changed files, so the editor spec list runs too."
               spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
             fi
           fi
@@ -568,7 +575,7 @@ jobs:
 
   # The isolated end-to-end specs that guard data loss and core flows, on every pull request. A
   # job of its own beside the builds, so it adds no waiting time. It reports without blocking.
-  # TODO(PT-5015): make it blocking (drop `report_only`) and a required check once it has run for
+  # TODO(PT-NEWKEY): make it blocking (drop `report_only`) and a required check once it has run for
   # about two weeks without failing a pull request that did not cause the failure.
   e2e-core:
     name: E2E core

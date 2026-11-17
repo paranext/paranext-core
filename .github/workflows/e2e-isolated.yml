@@ -6,6 +6,10 @@ name: E2E isolated specs
 #
 # It builds for itself: a job cannot reuse another job's output without an artifact hand-over, and
 # the development bundles the specs need are built by e2e-tests/global-setup.ts on first use.
+#
+# Every setup step has its own timeout, well under the job's: a hang there fails that step and
+# leaves the job time for the steps that run on `!cancelled()` (the warnings, the artifact upload).
+# With `report_only`, the job as a whole is non-blocking, not only the spec step.
 
 on:
   workflow_call:
@@ -33,6 +37,7 @@ on:
         required: false
         default: false
       timeout_minutes:
+        description: 'Time limit of the whole job, in minutes.'
         type: number
         required: false
         default: 60
@@ -46,17 +51,23 @@ jobs:
     name: ubuntu-22.04
     runs-on: ubuntu-22.04
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    # A failure anywhere in the job (checkout, install, build, timeout) must not turn a report-only
+    # check red. The step-level `continue-on-error` below stays so the warning step sees the outcome.
+    continue-on-error: ${{ inputs.report_only }}
 
     steps:
       - name: Check out Git repository
+        timeout-minutes: 20
         uses: actions/checkout@v4
 
       - name: Install .NET
+        timeout-minutes: 20
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
 
       - name: Cache NuGet packages
+        timeout-minutes: 20
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
@@ -74,25 +85,31 @@ jobs:
         uses: volta-cli/action@v4
 
       - name: Install Node.js and NPM
+        timeout-minutes: 20
         uses: actions/setup-node@v4
         with:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
 
       - name: Install packages
+        timeout-minutes: 20
         run: npm ci
 
       - name: Build
+        timeout-minutes: 20
         run: npm run build
 
-      # Installs the system libraries Electron needs on a bare runner, as the smoke step relies on.
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
+      # Installs only the system libraries Electron needs on a bare runner: the specs launch the
+      # app's own Electron, so no Playwright browser download is needed.
+      - name: Install Playwright system libraries
+        timeout-minutes: 20
+        run: npx playwright install-deps chromium
 
       # One Xvfb at 1920x1080x24: xvfb-run's default screen (1280x1024, 8-bit colour) is too small
       # for the docking specs. One retry, so a single timing race does not fail the run (unless
-      # `fail_on_flaky` is set); the next step names every test that needed it. `--trace=retain-on-failure` keeps the trace of the
-      # failed attempt, which the config's `on-first-retry` would replace with the passing one.
+      # `fail_on_flaky` is set); the next step names every test that needed it.
+      # `--trace=retain-on-failure` keeps the trace of the failed attempt, which the config's
+      # `on-first-retry` would replace with the passing one.
       - name: Run the specs
         id: specs
         continue-on-error: ${{ inputs.report_only }}

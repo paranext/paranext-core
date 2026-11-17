@@ -1285,8 +1285,9 @@ async function clickEditorMenuItem(page: Page, projectName: string, itemLabel: R
 Where a spec lives is decided by how it gets its app, and that choice also picks its config:
 
 - `tests/isolated/{feature}/` — the default. Each spec launches its own Electron (one per test, or
-  one per worker in a few subsets such as `find`), so specs are self-contained. CI does not run
-  this project. Uses `isolated.fixture` and `playwright.config.ts`.
+  one per worker in a few subsets such as `find`), so specs are self-contained. CI runs the core
+  lists on every pull request and every isolated spec nightly (see "What CI runs" in
+  `e2e-tests/CLAUDE.md`). Uses `isolated.fixture` and `playwright.config.ts`.
 - `tests/attached/` — for specs that must attach to an app you started yourself (`refresh.sh`),
   because they cannot own its lifecycle. Uses `cdp.fixture` and `playwright-cdp.config.ts`.
   Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
@@ -1298,8 +1299,9 @@ Where a spec lives is decided by how it gets its app, and that choice also picks
   (`e2e-tests/parked-enhanced-resources.ts`) in `tests/enhanced-resources/`. See "Local-only directories" in `e2e-tests/CLAUDE.md` and each
   directory's README, and put new work in `tests/isolated/` or `tests/attached/` rather than
   extending them.
-- `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
-  tests, apart from the bare-Electron checks its README describes.
+- `tests/smoke/` — what CI's build jobs run on every pull request. Launch-based,
+  `app.fixture`/`papi.fixture`; not for per-feature tests, apart from the bare-Electron checks its
+  README describes.
 
 Each `test()` on `isolated.fixture` starts and tears down its own app (specs on `comment.fixture`,
 and the `find/` and `menu-dismissal/` directories, share one app per worker), so checks that can share one launch
@@ -1326,7 +1328,7 @@ e2e-tests/
     │   └── {feature}/
     │       └── {feature}.spec.ts
     ├── attached/                 # Attaches to an app you started (playwright-cdp.config.ts)
-    ├── smoke/                    # What CI runs
+    ├── smoke/                    # Run by CI's build jobs
     └── _example/                 # Templates
 ```
 
