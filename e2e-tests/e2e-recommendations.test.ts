@@ -190,6 +190,75 @@ describe('recommendE2eTests', () => {
     expect(recommendedKeys(report).filter(isZoomKey)).toEqual([]);
   });
 
+  it('collapses the no-unasked-edits specs into one command in the real mapping', () => {
+    const real: SubsetSources = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
+    const report = recommend(['c-sharp/Projects/ParatextProjectDataProvider.cs'], {
+      sources: real,
+    });
+    const collapsed = report.recommendations.filter(
+      (recommendation) => recommendation.key === 'scripture-editor/no-unasked-edits-',
+    );
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0].command).toBe(
+      'npm run test:e2e:isolated e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-',
+    );
+    expect(collapsed[0].memberKeys).toHaveLength(8);
+    expect(collapsed[0].ci).toMatchObject({ kind: 'subset', specCount: 8 });
+    expect(recommendedKeys(report).filter((key) => key.includes('no-unasked-edits-'))).toEqual([
+      'scripture-editor/no-unasked-edits-',
+    ]);
+  });
+
+  it('collapses spec keys of one subset only when they matched the same files', () => {
+    const sources: SubsetSources = {
+      'a/x-one.spec.ts': { main: ['src/a/'], incidental: [] },
+      'a/x-two.spec.ts': { main: ['src/a/', 'src/b/'], incidental: [] },
+      'a/y.spec.ts': { main: ['src/a/'], incidental: [] },
+    };
+    const sameFiles = recommend(['src/a/f.ts'], { sources });
+    // x-one, x-two and y share only "a/", which is not longer than the subset, so nothing collapses.
+    expect(recommendedKeys(sameFiles)).toEqual([
+      'a/x-one.spec.ts',
+      'a/x-two.spec.ts',
+      'a/y.spec.ts',
+    ]);
+
+    const differentFiles = recommend(['src/a/f.ts', 'src/b/g.ts'], { sources });
+    expect(differentFiles.recommendations.map((r) => r.memberKeys)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+
+    const split = recommend(['src/a/f.ts', 'src/b/g.ts'], {
+      sources: {
+        'a/x-one.spec.ts': { main: ['src/a/'], incidental: [] },
+        'a/x-two.spec.ts': { main: ['src/b/'], incidental: [] },
+      },
+    });
+    expect(recommendedKeys(split)).toEqual(['a/x-one.spec.ts', 'a/x-two.spec.ts']);
+  });
+
+  it('collapses spec keys that matched the same files, counting CI specs', () => {
+    const sources: SubsetSources = {
+      'a/x-one.spec.ts': { main: ['src/a/'], incidental: [] },
+      'a/x-two.spec.ts': { main: ['src/a/'], incidental: [] },
+    };
+    const report = recommend(['src/a/f.ts'], {
+      sources,
+      coreSpecs: ['e2e-tests/tests/isolated/a/x-one.spec.ts'],
+    });
+    expect(report.recommendations).toEqual([
+      {
+        key: 'a/x-',
+        command: 'npm run test:e2e:isolated e2e-tests/tests/isolated/a/x-',
+        matchedFiles: ['src/a/f.ts'],
+        ci: { kind: 'subset', coreSpecCount: 1, specCount: 2 },
+        memberKeys: ['a/x-one.spec.ts', 'a/x-two.spec.ts'],
+      },
+    ]);
+  });
+
   it('matches a deleted path that is not on disk', () => {
     expect(recommendedKeys(recommend(['src/renderer/components/docking/gone.tsx']))).toEqual([
       'docking',

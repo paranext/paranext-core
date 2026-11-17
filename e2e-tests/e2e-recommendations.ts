@@ -31,6 +31,12 @@ export interface E2eRecommendation {
   /** The changed files that matched, sorted. */
   matchedFiles: string[];
   ci: CiStatus;
+  /**
+   * Present on a collapsed item: the spec keys it stands for. Spec keys of one subset that matched
+   * the same changed files collapse into one item whose `key` is their longest common prefix, run
+   * as a path filter, when that prefix is longer than `<subset>/`.
+   */
+  memberKeys?: string[];
 }
 
 /** The result of matching changed files against the isolated e2e tests. */
@@ -146,6 +152,66 @@ function ciStatus(key: string, input: RecommendInput): CiStatus {
   };
 }
 
+function commonPrefix(strings: string[]): string {
+  return strings.reduce((prefix, value) => {
+    let length = 0;
+    while (length < prefix.length && prefix[length] === value[length]) length += 1;
+    return prefix.slice(0, length);
+  });
+}
+
+/**
+ * Collapses spec-level recommendations of one subset that matched the same changed files into one
+ * recommendation keyed by the longest common prefix of their keys, which Playwright accepts as a
+ * path filter. Only when that prefix is longer than `<subset>/`; otherwise they stay separate.
+ */
+function collapseSpecGroups(
+  recommendations: E2eRecommendation[],
+  input: RecommendInput,
+): E2eRecommendation[] {
+  const groups = new Map<string, E2eRecommendation[]>();
+  recommendations
+    .filter((recommendation) => isSpecKey(recommendation.key) && recommendation.key.includes('/'))
+    .forEach((recommendation) => {
+      const groupId = `${recommendation.key.slice(0, recommendation.key.lastIndexOf('/'))}\n${recommendation.matchedFiles.join('\n')}`;
+      groups.set(groupId, [...(groups.get(groupId) ?? []), recommendation]);
+    });
+
+  const collapsed = new Map<E2eRecommendation, E2eRecommendation>();
+  groups.forEach((members) => {
+    if (members.length < 2) return;
+    const key = commonPrefix(members.map((member) => member.key));
+    const subset = members[0].key.slice(0, members[0].key.lastIndexOf('/') + 1);
+    if (key.length <= subset.length) return;
+    const merged: E2eRecommendation = {
+      key,
+      command: `npm run test:e2e:isolated ${ISOLATED_PREFIX}${key}`,
+      matchedFiles: members[0].matchedFiles,
+      ci: {
+        kind: 'subset',
+        coreSpecCount: members.filter((member) => {
+          const specPath = `${ISOLATED_PREFIX}${member.key}`;
+          return input.coreSpecs.includes(specPath) || input.editorCoreSpecs.includes(specPath);
+        }).length,
+        specCount: members.length,
+      },
+      memberKeys: members.map((member) => member.key),
+    };
+    members.forEach((member) => collapsed.set(member, merged));
+  });
+
+  const emitted = new Set<E2eRecommendation>();
+  return recommendations
+    .flatMap((recommendation) => {
+      const merged = collapsed.get(recommendation);
+      if (!merged) return [recommendation];
+      if (emitted.has(merged)) return [];
+      emitted.add(merged);
+      return [merged];
+    })
+    .sort((a, b) => (a.key < b.key ? -1 : Number(a.key > b.key)));
+}
+
 /** Matches the changed files to the isolated e2e keys that cover them. */
 export function recommendE2eTests(input: RecommendInput): E2eRecommendationReport {
   const keys = Object.keys(input.sources);
@@ -168,7 +234,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
 
   const sorted = (files: Set<string> | undefined) => [...(files ?? [])].sort();
 
-  const recommendations = [...mainMatches.keys()].sort().map((key) => ({
+  const singles: E2eRecommendation[] = [...mainMatches.keys()].sort().map((key) => ({
     key,
     command: isSpecKey(key)
       ? `npm run test:e2e:isolated ${ISOLATED_PREFIX}${key}`
@@ -176,6 +242,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     matchedFiles: sorted(mainMatches.get(key)),
     ci: ciStatus(key, input),
   }));
+  const recommendations = collapseSpecGroups(singles, input);
 
   const alsoExercised = [...incidentalMatches.keys()]
     .filter((key) => !mainMatches.has(key))
