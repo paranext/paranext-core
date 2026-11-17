@@ -337,11 +337,13 @@ This step never starts a test run and never blocks the review. It has three case
 - `kind: 'spec'`, `coreList: 'none'` → "is in neither pull-request list (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))"
 - `kind: 'subset'` → "CI runs `coreSpecCount` of its `specCount` spec files on pull requests"
 
+A recommendation with `memberKeys` is several specs of one subset that matched the same files, collapsed into one command (its `key` is a path prefix that runs them all). List it once, as one item, and say how many specs it runs (`ci.specCount`); name the member keys only in the summary.
+
 Then ask:
 
 > "These isolated e2e tests cover files you changed: [list]. Did you run them? (ran and passed / ran and failed / not run, and why)"
 
-Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>: not run: <reason>".
+Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>: not run: <reason>". For a collapsed item, record one line for the item and name its `memberKeys` beside it.
 
 **Also-exercised line** (no question) — applies whenever `alsoExercised` is non-empty, whether or not `recommendations` is: print one line naming those keys: "These also open the code you changed, if you want to run more: <keys>."
 
