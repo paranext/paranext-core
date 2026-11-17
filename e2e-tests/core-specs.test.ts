@@ -69,7 +69,7 @@ describe('the editor list trigger in test.yml', () => {
     'lib/platform-bible-react/src/components/advanced/use-marker-palette-session-writers.hook.ts',
     'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
     'lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css',
-  ])('runs the editor list when %s changes', (changedPath) => {
+  ])('matches a pattern alternative for %s', (changedPath) => {
     expect(editorPaths.test(changedPath)).toBe(true);
   });
 

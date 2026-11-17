@@ -557,9 +557,10 @@ jobs:
           # The C# side of USFM<->USJ lives in ParatextProjectDataProvider.cs (over ParatextData);
           # the Usfm*/Usj* names catch any converter split out of it later. The editor list, the
           # specs it names and their shared body are on the list too, so a change to them runs them.
-          # The platform-bible-react folders are the parts of the library the Scripture editor web
-          # view renders: the footnote editor, the marker menu and palette helpers, the editor
+          # The platform-bible-react folders are a curated, non-exhaustive subset of what the editor
+          # web view renders: the footnote editor, the marker menu and palette helpers, the editor
           # keyboard shortcuts, and the demo editor stylesheets the extension imports by path.
+          # Other shared components, hooks and primitives it uses do not trigger the editor list.
           editor_paths='^(extensions/src/platform-scripture-editor/|dev-packages\.json$|e2e-tests/core-specs-editor\.txt$|e2e-tests/fixtures/no-unasked-edits\.body\.ts$|e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-(power-standard|simple-paragraph-structure)\.spec\.ts$|c-sharp/Projects/ParatextProjectDataProvider\.cs$|c-sharp/(.*/)?Us(fm|j)[^/]*$|lib/platform-bible-react/src/components/advanced/(footnote-editor/|marker-menu\.|(use-)?marker-palette-)|lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts\.|lib/platform-bible-react/src/components/demo/scripture-editor/)'
           if [ -z "$PULL_REQUEST_NUMBER" ]; then
             spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
