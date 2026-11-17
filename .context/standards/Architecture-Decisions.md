@@ -7004,7 +7004,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-panel-open-joins-the-group-beside-it: A `'panel'` open joins the tab group beside its target when that group can take it; a target that is not docked gets a new group at the reading-end edge of the dock
 
 - **Date:** 2026-10-12
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-11-17 for `before-tab` and `after-tab`.
 - **Context:** A `{ type: 'panel' }` open docked the new tab beside its target with rc-dock's
   `dockMove(tab, targetTabGroup, direction)`. Beside a floating or maximized target, rc-dock wrapped
   both tab groups in a new box inside the floating or maximized layer, which draws only the tab
@@ -7028,7 +7028,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     top-level docked group; in a vertical one rc-dock's own 30% share stands (`dockAtReadingEndEdge`).
     A floating target that would cover it is slid sideways, narrowed when the room beside the new
     group is narrower than the float, and left alone when there is no room at all
-    (`moveFloatingTabGroupClear`).
+    (`moveFloatingTabGroupClear`). *(Amended 2026-11-17: this holds for `left`, `right`, `top`, and
+    `bottom` only; `before-tab` and `after-tab` join the target's own group wherever it is. See the
+    amendment below.)*
   - `direction` is in reading order: core swaps `left` and `right` in a right-to-left UI
     (`resolvePanelDirection`), since rc-dock lays the dock out left to right whatever the UI
     direction.
@@ -7057,6 +7059,23 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   may be split from slightly early; a neighbour narrower than the group a split would create is
   never joined.
 - **Source:** PT-3138 (PR #2881 and its review).
+- **Amended 2026-11-17 (sillsdev/interlinearizer-extension#611, PR #2994):** `before-tab` and
+  `after-tab` add the new tab to the target's own tab group, as its active tab, just before or after
+  the target (rc-dock's `addNextToTab`), when that group can take it (`canTabGroupTakeTab`: it is of
+  the new tab's rc-dock group and not `panelLock`). This is checked before whether the target is
+  docked, so it applies to floating and maximized groups too. A group that cannot take the tab falls
+  back to `left` for `before-tab` and `right` for `after-tab`, which then follow the rules above.
+  Joining a group outside the dock does not bring back the bug the reading-end-edge rule exists for:
+  `addNextToTab` only splices the tab into the existing group and never wraps a new box around it,
+  and rc-dock's `restorePanel` brings the new tab back with a maximized group when it is restored.
+  The placement is a `PanelLayout` direction rather than a target-tab option on `TabLayout` because
+  it needs no new public API (`before-tab` and `after-tab` were already `PanelDirection` values),
+  and the fallback needs a direction, which `TabLayout` does not have. `before-tab` and `after-tab`
+  follow the tab order, which core treats as reading order, as `DirectionFromTab` does: `after-tab`
+  inserts where `nextTab` from the target goes. Their fallbacks are sides, mirrored like any other,
+  so both paths land on the same reading side. rc-dock draws the tab strip left to right whatever
+  the UI direction, so in a right-to-left UI a joined tab is drawn to the target's right today, just
+  as `nextTab` moves right. Mirroring the strip with CSS would correct both together.
 
 ## adr-panel-readiness-from-sources: Panel readiness is derived from whether data sources arrived, never from a filtered result
 
