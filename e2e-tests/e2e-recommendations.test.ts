@@ -13,9 +13,16 @@ const REPOSITORY_ROOT = path.join(__dirname, '..');
 const ISOLATED_DIRECTORY = path.join(__dirname, 'tests', 'isolated');
 const MAPPING_PATH = path.join(ISOLATED_DIRECTORY, 'subset-sources.json');
 
-const mapping: Record<string, string[]> = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
+/** `main` is the source a subset's specs exist to test; `incidental` is source they only drive. */
+type SubsetSources = { main: string[]; incidental: string[] };
+
+const mapping: Record<string, SubsetSources> = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
 const keys = Object.keys(mapping);
-const prefixEntries = keys.flatMap((key) => mapping[key].map((prefix) => [key, prefix]));
+const prefixEntries = keys.flatMap((key) =>
+  [...mapping[key].main, ...mapping[key].incidental].map((prefix) => [key, prefix]),
+);
+const EDITOR_WEB_VIEW =
+  'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx';
 
 describe('subset-sources.json', () => {
   it('has an entry for every subset directory and every loose spec', () => {
@@ -39,9 +46,32 @@ describe('subset-sources.json', () => {
     else expect(stat?.isFile()).toBe(true);
   });
 
-  it('lists each prefix once per key', () => {
+  it.each(keys)('%s has exactly the lists main and incidental', (key) => {
+    expect(Object.keys(mapping[key]).sort()).toEqual(['incidental', 'main']);
+    expect(Array.isArray(mapping[key].main)).toBe(true);
+    expect(Array.isArray(mapping[key].incidental)).toBe(true);
+  });
+
+  it('lists each prefix once per key, across main and incidental', () => {
     keys.forEach((key) => {
-      expect(new Set(mapping[key]).size, key).toBe(mapping[key].length);
+      const all = [...mapping[key].main, ...mapping[key].incidental];
+      expect(new Set(all).size, key).toBe(all.length);
+    });
+  });
+
+  it('does not count the editor web view as main source for the zoom subsets', () => {
+    const zoomKeys = keys.filter(
+      (key) =>
+        key.startsWith('content-zoom-') ||
+        key === 'notes-content-zoom' ||
+        key === 'resources-content-zoom',
+    );
+    expect(zoomKeys.length).toBeGreaterThan(0);
+    zoomKeys.forEach((key) => {
+      const covering = mapping[key].main.filter((prefix) =>
+        prefix.endsWith('/') ? EDITOR_WEB_VIEW.startsWith(prefix) : prefix === EDITOR_WEB_VIEW,
+      );
+      expect(covering, key).toEqual([]);
     });
   });
 });
