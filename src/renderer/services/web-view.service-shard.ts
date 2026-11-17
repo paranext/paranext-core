@@ -3845,6 +3845,12 @@ export const initialize = () => {
     // Guard createElement and createElementNS so restricted tags (such as script tags) cannot be
     // created by anything but our code (since we load renderer files in chunks) and the Usersnap
     // widget. The guard also locks `window.Error` and `Error.prepareStackTrace`.
+    // `onRejected` runs in a realm a web view shares, so it uses these captured values rather than
+    // looking up `isPackaged` or `String.prototype.includes` when a call is rejected; otherwise a
+    // web view could change which error is thrown.
+    const isPackagedAtInstall = globalThis.isPackaged;
+    const stringIncludes = String.prototype.includes;
+    const reflectApply = Reflect.apply;
     installCreateElementGuard({
       realm: window,
       restrictedTagNames: [...FORBIDDEN_HTML_TAGS, ...RESTRICTED_HTML_TAGS],
@@ -3858,7 +3864,10 @@ export const initialize = () => {
         // LogError puts an error in the console and throws an error. We don't want to scare
         // anyone with the script and iframe tags evil adds to test this feature, so let's not
         // log an error in development. But no exceptions when packaged
-        if (globalThis.isPackaged || !stackText.includes('at evil.web-view.html'))
+        if (
+          isPackagedAtInstall ||
+          !reflectApply(stringIncludes, stackText, ['at evil.web-view.html'])
+        )
           throw new LogError(message);
         throw new Error(message);
       },

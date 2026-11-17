@@ -2091,6 +2091,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
+
 ## adr-create-element-guard-trusts-call-sites: The renderer's `createElement` guard identifies the caller by V8 call-site file name, built only from references captured before any web view runs
 
 - **Date:** 2026-11-16
@@ -2128,7 +2129,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     `window.Error` let a frame call the guard's formatter with a harvested renderer-bundle call
     site. V8 picks the `prepareStackTrace` realm from the holder passed to `captureStackTrace`, so
     the holder is built with the window's captured `Object`. `Error.stackTraceLimit` is honored only
-    as a data property, so it is set to 1 and restored rather than locked; if an attacker breaks it,
+    as a data property, so it is set to the capture depth (1 for the decision; a deeper capture only for the log on a rejected call) and restored rather than locked; if an attacker breaks it,
     the capture yields no frames and the call is rejected (fail closed).
   - **The guard stays until same-origin web views go.** As of 2026-11-16, PT-2912 and PT-2896 are in
     Triage; until a web view can no longer be same-origin with the renderer, this is the only guard
@@ -2169,7 +2170,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     landing PT-2896 is the real fix; see PT-5086. (b) an iframe rendered through
     the app window's `createRoot` was allowed by this guard (React in the renderer bundle is a
     trusted caller), but the separate no-sandbox iframe check removed it, so it did not appear.
-- **Source:** PT-4767 (epic PT-2091); design for the `pt-4767-createelement-guard-call-site` branch.
+- **Source:** PT-4767 (epic PT-2091).
+
 ## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
 
 - **Date:** 2026-09-21

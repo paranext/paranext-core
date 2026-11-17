@@ -27,7 +27,9 @@ export function isCreateElementCallerAllowed(
   rendererBundleFileName: string,
 ): boolean {
   if (typeof callerFileName !== 'string') return false;
+
   if (callerFileName === rendererBundleFileName) return true;
+
   // `!!` rather than `Boolean(...)`: an operator cannot be replaced, and the global `Boolean` can
   return !!reflectApply(regExpExec, USERSNAP_CHUNK_FILE_NAME_REGEX, [callerFileName]);
 }
@@ -76,15 +78,12 @@ export type CreateElementGuardOptions = {
  * identified by the script file name V8 reports for its frame, never by stack text.
  *
  * Code that later replaces a builtin (including a same-origin frame reaching this window as
- * `parent`) cannot change the answer, because the guarded methods never look a builtin up when they
- * run. This installer captures from `realm` the `Error` constructor and its `captureStackTrace`,
- * the `Object` constructor and its `create`, `defineProperty`, `getOwnPropertyDescriptor` and
- * `getPrototypeOf`, the `String` constructor and its prototype's `toLowerCase`, `indexOf` and
- * `slice`, `Reflect.apply` and `Reflect.get`, and the original `createElement` and
- * `createElementNS`; it takes `getFileName` and `toString` from the prototype of a real V8 call
- * site. {@link isCreateElementCallerAllowed} uses `RegExp.prototype.exec` and `Reflect.apply`
- * captured when this module loads. Everything else on that path is an operator or an own property
- * of a value the guard created or V8 handed it. The one property it reads off a shared object is
+ * `parent`) cannot change the answer, because nothing on the call path is looked up at call time.
+ * The installer captures every builtin it uses from `realm` at install (see the Step 1 captures)
+ * and takes `getFileName` and `toString` from the prototype of a real V8 call site.
+ * {@link isCreateElementCallerAllowed} uses `RegExp.prototype.exec` and `Reflect.apply` captured
+ * when this module loads. Everything else on that path is an operator or an own property of a value
+ * the guard created or V8 handed it. The one property it reads off a shared object is
  * `realm.Error.stackTraceLimit`; an accessor planted there runs before the capture starts and V8
  * ignores it, so the capture finds no caller and the call is rejected. The guard also takes
  * ownership of `realm.Error.prepareStackTrace`: values assigned to it are stored and served as
@@ -113,7 +112,7 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
     getPrototypeOf,
   } = RealmObject;
   const RealmString = realm.String;
-  const { apply, get: reflectGet } = realm.Reflect;
+  const { apply, deleteProperty, get: reflectGet } = realm.Reflect;
   const { toLowerCase, indexOf, slice } = RealmString.prototype;
   const documentPrototype = realm.Document.prototype;
   const originalCreateElement = documentPrototype.createElement;
@@ -189,7 +188,7 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
   } finally {
     if (originalHookDescriptor)
       defineProperty(RealmError, 'prepareStackTrace', originalHookDescriptor);
-    else delete RealmError.prepareStackTrace;
+    else deleteProperty(RealmError, 'prepareStackTrace');
   }
   if (!installerSite)
     throw new Error('Cannot guard createElement: could not capture its own call site');
@@ -222,6 +221,7 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
   const formatSites = (sites: CallSite[] | undefined): string => {
     let text = 'Error';
     if (!sites) return text;
+
     try {
       for (let index = 0; index < sites.length; index += 1)
         text += `\n    at ${RealmString(apply(callSiteToString, sites[index], []))}`;
@@ -270,6 +270,7 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
 
   function createElement(this: Document, ...args: unknown[]): unknown {
     if (args.length === 0) return apply(originalCreateElement, this, args);
+
     const tagName: string = RealmString(args[0]);
     const lowerTagName: string = apply(toLowerCase, tagName, []);
     if (restrictedTags[lowerTagName] === true) judgeCaller(lowerTagName, createElement);
@@ -278,6 +279,7 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
 
   function createElementNS(this: Document, ...args: unknown[]): unknown {
     if (args.length < 2) return apply(originalCreateElementNS, this, args);
+
     const qualifiedName: string = RealmString(args[1]);
     const colonIndex: number = apply(indexOf, qualifiedName, [':']);
     const localName: string =

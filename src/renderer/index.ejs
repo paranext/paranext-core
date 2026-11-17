@@ -14,7 +14,7 @@
 
       default-src 'none' so things can't happen unless we allow them
       script-src-elem allows script tags but not in-line attribute scripts. That way, we can remove
-        scripts we don't want using monkey-patched `document.createElement` and not have to worry
+        scripts we don't want using the guarded `Document.prototype.createElement` and `createElementNS` and not have to worry
         about in-line scripts
         'self' so scripts can be loaded from us
         'wasm-unsafe-eval' because webview iframes want to use wasm

@@ -127,7 +127,7 @@ const EVIL_WEBVIEW = `
         }
       }
 
-      // Try to call the prototype's createElement directly to skip the instance-level guard
+      // Try to create a script by calling \`Document.prototype.createElement\` directly instead of through the document instance
       try {
         const prototypeScript = window.top.Document.prototype.createElement.call(
           window.top.document,
