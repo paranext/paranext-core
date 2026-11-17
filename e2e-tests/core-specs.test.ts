@@ -10,22 +10,12 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
+import { readSpecList } from './e2e-recommendations';
 
 const REPOSITORY_ROOT = path.join(__dirname, '..');
 const EDITOR_LIST = 'core-specs-editor.txt';
 const SPEC_LISTS = ['core-specs.txt', EDITOR_LIST];
 const ISOLATED_PREFIX = 'e2e-tests/tests/isolated/';
-
-/**
- * The entries of a spec list: one repository path per line; `#` starts a comment line. Lines are
- * returned untrimmed, as the workflow reads them.
- */
-function readSpecList(listName: string): string[] {
-  return fs
-    .readFileSync(path.join(__dirname, listName), 'utf8')
-    .split('\n')
-    .filter((line) => line.trim() !== '' && !line.startsWith('#'));
-}
 
 /**
  * The entries of `editor_paths` in `.github/workflows/test.yml`'s `e2e-core-selection` job, one per
@@ -120,7 +110,7 @@ describe('the editor list trigger in test.yml', () => {
 
   // A pull request that changes one of the editor-list specs, or the list itself, must run that
   // list; the pattern names them by hand, so it has to follow the list.
-  it.each([...readSpecList(EDITOR_LIST), `e2e-tests/${EDITOR_LIST}`])(
+  it.each([...readSpecList(path.join(__dirname, EDITOR_LIST)), `e2e-tests/${EDITOR_LIST}`])(
     'runs the editor list when %s changes',
     (changedPath) => {
       expect(editorPaths.test(changedPath)).toBe(true);
@@ -167,7 +157,7 @@ describe('the editor list trigger in test.yml', () => {
 });
 
 describe.each(SPEC_LISTS)('%s', (listName) => {
-  const entries = readSpecList(listName);
+  const entries = readSpecList(path.join(__dirname, listName));
 
   it('lists at least one spec', () => {
     expect(entries.length).toBeGreaterThan(0);
@@ -195,6 +185,6 @@ describe.each(SPEC_LISTS)('%s', (listName) => {
 });
 
 it('lists no spec twice across the core lists', () => {
-  const all = SPEC_LISTS.flatMap(readSpecList);
+  const all = SPEC_LISTS.flatMap((listName) => readSpecList(path.join(__dirname, listName)));
   expect(new Set(all).size).toBe(all.length);
 });
