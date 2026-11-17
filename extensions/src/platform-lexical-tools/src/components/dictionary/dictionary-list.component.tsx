@@ -43,7 +43,7 @@ type DictionaryListProps = {
    * occurrences and such info in the entire Scripture for this entry, not just the occurrences that
    * match the current verse/chapter filter. This is optional because it requires an additional data
    * fetch, so if it's not provided, the entry details view will just use the filtered data for the
-   * selected entry instead of the full data.
+   * selected entry instead of the full data, without numbering its senses.
    */
   fullSelectedEntry?: Entry;
   /** Callback function to open an entry linked from a definition */
@@ -143,8 +143,10 @@ export function DictionaryList({
             <DictionaryEntryDisplay
               localizedStrings={localizedStrings}
               scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
+              scope={scope}
               isDrawer={false}
               dictionaryEntry={fullSelectedEntry ?? selectedEntry}
+              hasAllSenses={!!fullSelectedEntry}
               handleBackToListButton={handleOptionSelect}
               onSelectOccurrence={onSelectOccurrence}
               onClickScrollToTop={scrollToTop}
@@ -167,8 +169,10 @@ export function DictionaryList({
                 <DictionaryEntryDisplay
                   localizedStrings={localizedStrings}
                   scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
+                  scope={scope}
                   isDrawer
                   dictionaryEntry={fullSelectedEntry ?? selectedEntry}
+                  hasAllSenses={!!fullSelectedEntry}
                   handleBackToListButton={() => onEntrySelected(undefined)}
                   onSelectOccurrence={onSelectOccurrence}
                   onClickScrollToTop={scrollToTop}

@@ -34,6 +34,16 @@ describe('parseDefinitionMarkup', () => {
     ]);
   });
 
+  it.each([['{L:Moab<SDBH:>}'], ['{L:Moab<SDBG::000000>}']])(
+    'shows the text of a link with no target, %s',
+    (markup) => {
+      expect(parseDefinitionMarkup(`see ${markup}`)).toEqual([
+        { kind: 'text', text: 'see ' },
+        { kind: 'text', text: 'Moab' },
+      ]);
+    },
+  );
+
   it('accepts hyphenated dictionary IDs', () => {
     expect(parseDefinitionMarkup('{L:moth<BT-OT:עָשׁ>}')).toEqual([
       { kind: 'entryLink', text: 'moth', dictionaryId: 'BT-OT', targetLemma: 'עָשׁ' },

@@ -1,4 +1,4 @@
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { Entry, Occurrence, Sense } from 'platform-lexical-tools';
 import { LocalizeKey } from 'platform-bible-utils';
 import { markupToPlainText } from './definition-markup.utils';
@@ -23,31 +23,49 @@ export type DictionaryOccurrenceView = 'chapter' | 'all';
 export type DictionaryProjectOption = { projectId: string | undefined; projectShortName: string };
 
 /**
+ * Whether a sense occurs where the dictionary list is filtered to: the verse in verse scope, the
+ * chapter otherwise. Senses that do not are less relevant, and are dimmed.
+ *
+ * @param sense - The sense to check.
+ * @param scrRef - The current reference. Every sense is in scope when there is none.
+ * @param scope - The scope the dictionary list is filtered by.
+ * @returns `true` if the sense has an occurrence in scope.
+ */
+export function isSenseInScope(
+  sense: Sense,
+  scrRef: SerializedVerseRef | undefined,
+  scope: DictionaryScope,
+): boolean {
+  if (!scrRef) return true;
+  return Object.values(sense.occurrences).some((occurrences) =>
+    occurrences?.some(
+      ({ verseRef }) =>
+        verseRef.book === scrRef.book &&
+        verseRef.chapterNum === scrRef.chapterNum &&
+        (scope !== 'verse' || verseRef.verseNum === scrRef.verseNum),
+    ),
+  );
+}
+
+/**
  * Takes a dictionary entry and returns an array of its glosses, with parenthetical statements
  * removed and individual glosses separated by commas. Not intended for a long term solution, will
  * not play well with other data.
  *
  * @param dictionaryEntry - The dictionary entry to format.
+ * @param scrRef - If provided, only glosses of senses in scope (see {@link isSenseInScope}) are
+ *   included.
+ * @param scope - The scope the dictionary list is filtered by.
  * @returns An array of glosses.
  */
 export function getFormatGlossesStringFromDictionaryEntrySenses(
   dictionaryEntry: Entry,
   scrRef?: SerializedVerseRef,
+  scope: DictionaryScope = 'chapter',
 ): string {
-  // If scrRef is provided, filter senses to those with occurrences in the current book/chapter
-  const senses = scrRef
-    ? Object.values(dictionaryEntry.senses).filter((sense) =>
-        Object.values(sense?.occurrences ?? {}).some((arr) =>
-          Array.isArray(arr)
-            ? arr.some(
-                (occ) =>
-                  occ.verseRef.book === scrRef.book &&
-                  occ.verseRef.chapterNum === scrRef.chapterNum,
-              )
-            : false,
-        ),
-      )
-    : Object.values(dictionaryEntry.senses);
+  const senses = Object.values(dictionaryEntry.senses).filter(
+    (sense): sense is Sense => !!sense && isSenseInScope(sense, scrRef, scope),
+  );
 
   return [
     ...new Set(
@@ -123,19 +141,34 @@ function getChapterOrAllOccurrencesForSense(
     .filter((arr): arr is Occurrence[] => Array.isArray(arr))
     .forEach((arr) => occurrences.push(...arr));
 
-  const filteredOccurrences = scrRef
+  return scrRef
     ? occurrences.filter(
         (occ) => occ.verseRef.book === scrRef.book && occ.verseRef.chapterNum === scrRef.chapterNum,
       )
     : occurrences;
-
-  return deduplicateOccurrencesByVerseRef(filteredOccurrences);
 }
 
+/** Orders occurrences as they appear in the Bible */
+function compareOccurrences(a: Occurrence, b: Occurrence): number {
+  return (
+    Canon.bookIdToNumber(a.verseRef.book) - Canon.bookIdToNumber(b.verseRef.book) ||
+    a.verseRef.chapterNum - b.verseRef.chapterNum ||
+    a.verseRef.verseNum - b.verseRef.verseNum ||
+    a.wordNum - b.wordNum
+  );
+}
+
+/**
+ * Gathers the occurrences of several senses, one per verse, in Bible order.
+ *
+ * @param senses - The senses whose occurrences to gather.
+ * @param scrRef - If provided, only occurrences in this book and chapter are included.
+ * @returns The occurrences in Bible order.
+ */
 export function getDeduplicatedOccurrencesFromSenses(
   senses: Sense[],
   scrRef?: SerializedVerseRef,
 ): Occurrence[] {
   const occurrences = senses.flatMap((sense) => getChapterOrAllOccurrencesForSense(sense, scrRef));
-  return deduplicateOccurrencesByVerseRef(occurrences);
+  return deduplicateOccurrencesByVerseRef(occurrences.sort(compareOccurrences));
 }

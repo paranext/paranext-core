@@ -211,7 +211,10 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
                 ($verseNum IS NULL OR VerseNum = $verseNum) AND
                 ($lemma IS NULL OR Lemma = $lemma) AND
                 ($itemId IS NULL OR EntryId = $itemId OR SenseId = $itemId) AND
-                ($wordNum IS NULL OR WordNum = $wordNum);`,
+                ($wordNum IS NULL OR WordNum = $wordNum)
+              -- Senses in import order, which is the dictionary's own order (sense numbers in
+              -- definitions count in this order), and each sense's occurrences in Bible order
+              ORDER BY SenseKey, BookNum, ChapterNum, VerseNum, WordNum;`,
           {
             // Using || instead of ?? so falsy values like empty string are not used
             $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,

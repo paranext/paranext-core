@@ -71,14 +71,18 @@ export function parseDefinitionMarkup(definition: string): DefinitionSegment[] {
     textStart = match.index + match[0].length;
 
     const groups = match.groups ?? {};
-    if (groups.dictionaryId !== undefined)
-      segments.push({
-        kind: 'entryLink',
-        text: groups.linkText,
-        dictionaryId: groups.dictionaryId,
-        targetLemma: groups.target.replace(TARGET_NUMERIC_SUFFIX_REGEX, ''),
-      });
-    else if (groups.abbreviation !== undefined) addText(groups.abbreviation);
+    if (groups.dictionaryId !== undefined) {
+      const targetLemma = groups.target.replace(TARGET_NUMERIC_SUFFIX_REGEX, '');
+      // With no target there is no entry to open
+      if (!targetLemma) addText(groups.linkText);
+      else
+        segments.push({
+          kind: 'entryLink',
+          text: groups.linkText,
+          dictionaryId: groups.dictionaryId,
+          targetLemma,
+        });
+    } else if (groups.abbreviation !== undefined) addText(groups.abbreviation);
     else if (groups.bibleRefs !== undefined) {
       const bibleRefs = groups.bibleRefs.split(/[ -]/);
       const verseRefs = bibleRefs.map(toVerseRef);

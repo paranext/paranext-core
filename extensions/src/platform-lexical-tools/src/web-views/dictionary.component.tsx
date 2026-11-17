@@ -23,6 +23,23 @@ import { DictionaryList } from '../components/dictionary/dictionary-list.compone
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
+function isSameEntry(a: Entry, b: Entry): boolean {
+  return a.id === b.id && a.lexicalReferenceTextId === b.lexicalReferenceTextId;
+}
+
+/** Whether the entries listed for `scrRef` in `scope` are the ones listed for `otherScrRef` */
+function isSameListReference(
+  scrRef: SerializedVerseRef,
+  otherScrRef: SerializedVerseRef,
+  scope: DictionaryScope,
+): boolean {
+  return (
+    scrRef.book === otherScrRef.book &&
+    scrRef.chapterNum === otherScrRef.chapterNum &&
+    (scope !== 'verse' || scrRef.verseNum === otherScrRef.verseNum)
+  );
+}
+
 /** Result of a scope-filtered entries read. */
 export type DictionaryEntriesResult = {
   /** Entries mapped by ID for the requested scope/reference. */
@@ -82,6 +99,12 @@ export function Dictionary({
   // eslint-disable-next-line no-null/no-null
   const dictionaryEntryRef = useRef<HTMLDivElement>(null);
 
+  // An entry to keep open once the list for the reference the reader is going to has loaded. It is
+  // a ref because the list it waits for is loaded by an effect, after the reference changes.
+  const pendingSelectionRef = useRef<{ entry: Entry; scrRef: SerializedVerseRef } | undefined>(
+    undefined,
+  );
+
   const scrollToTop = () => {
     dictionaryEntryRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -119,6 +142,17 @@ export function Dictionary({
       } else {
         setEntriesById(result.entriesById);
       }
+
+      // Keep the entry the reader was looking at open, if it is listed here too
+      const pendingSelection = pendingSelectionRef.current;
+      if (pendingSelection && isSameListReference(pendingSelection.scrRef, scrRef, scope)) {
+        pendingSelectionRef.current = undefined;
+        setSelectedEntry(
+          Object.values(result.entriesById)
+            .flat()
+            .find((listedEntry) => listedEntry && isSameEntry(listedEntry, pendingSelection.entry)),
+        );
+      }
     };
     load().catch(() => {
       if (!isActive) return;
@@ -147,45 +181,56 @@ export function Dictionary({
         const matchesSearch =
           entry.lemma.toLowerCase().includes(search) ||
           entry.strongsCodes.some((code) => code.toLowerCase().includes(search)) ||
-          getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef)
+          getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef, scope)
             .toLowerCase()
             .includes(search);
         return matchesSearch;
       });
-  }, [entriesById, searchQuery, scrRef]);
+  }, [entriesById, searchQuery, scrRef, scope]);
 
-  // Clear the selected entry if it is no longer in the filtered list (e.g. after a chapter change)
+  // Clear the selected entry if it is no longer in the filtered list (e.g. after a chapter change).
+  // While a list is loading, or an entry is waiting for the next list, it is not known yet.
   useEffect(() => {
-    if (
-      selectedEntry &&
-      !entriesFiltered.some(
-        (e) =>
-          e.id === selectedEntry.id &&
-          e.lexicalReferenceTextId === selectedEntry.lexicalReferenceTextId,
-      )
-    ) {
+    if (isLoadingEntriesById || pendingSelectionRef.current) return;
+    if (selectedEntry && !entriesFiltered.some((e) => isSameEntry(e, selectedEntry)))
       setSelectedEntry(undefined);
-    }
-  }, [entriesFiltered, selectedEntry]);
+  }, [entriesFiltered, selectedEntry, isLoadingEntriesById]);
+
+  /**
+   * Goes to an occurrence, keeping `entry` open there if it is listed there too. Used for the
+   * occurrences of an entry and the Bible references in its definitions.
+   */
+  const selectOccurrenceKeepingEntry = useCallback(
+    (entry: Entry, scrRefOfOccurrence: SerializedVerseRef) => {
+      if (isSameListReference(scrRefOfOccurrence, scrRef, scope)) setSelectedEntry(entry);
+      // The list for the occurrence has yet to load, so the entry is selected once it has
+      else pendingSelectionRef.current = { entry, scrRef: scrRefOfOccurrence };
+      onSelectOccurrence(scrRefOfOccurrence);
+    },
+    [onSelectOccurrence, scrRef, scope],
+  );
 
   // Entry displayed in DictionaryEntryDisplay: always the single entry, or whatever is selected in the list
   const displayedEntry = entriesFiltered.length === 1 ? entriesFiltered[0] : selectedEntry;
 
-  // Fetch the full (unfiltered) data for the displayed entry
-  const [fullDisplayedEntry, setFullDisplayedEntry] = useState<Entry | undefined>(undefined);
+  // Fetch the full (unfiltered) data for the displayed entry. Until it arrives, or if it cannot be
+  // fetched, the entry is shown with only its senses in scope, and they are not numbered.
+  const [fullEntry, setFullEntry] = useState<Entry | undefined>(undefined);
+  const fullDisplayedEntry =
+    displayedEntry && fullEntry && isSameEntry(fullEntry, displayedEntry) ? fullEntry : undefined;
 
   useEffect(() => {
     if (!displayedEntry) {
-      setFullDisplayedEntry(undefined);
+      setFullEntry(undefined);
       return undefined;
     }
     let isActive = true;
     const load = async () => {
       const entry = await getFullEntry(displayedEntry);
-      if (isActive) setFullDisplayedEntry(entry);
+      if (isActive) setFullEntry(entry);
     };
     load().catch(() => {
-      if (isActive) setFullDisplayedEntry(undefined);
+      if (isActive) setFullEntry(undefined);
     });
     return () => {
       isActive = false;
@@ -206,6 +251,8 @@ export function Dictionary({
 
   const handleEntryLinkClick = useCallback(
     async (dictionaryId: string, lemma: string) => {
+      // An empty lemma would look up every entry in the dictionary
+      if (!lemma) return false;
       const entry = await getEntryByLemma(dictionaryId, lemma);
       if (entry) setLinkedEntry(entry);
       return !!entry;
@@ -235,12 +282,12 @@ export function Dictionary({
           localizedStrings={localizedStrings}
           isDrawer={false}
           dictionaryEntry={linkedEntry}
+          scriptureReferenceToFilterBy={scrRef}
+          scope={scope}
           handleBackToListButton={() => setLinkedEntry(undefined)}
           onSelectOccurrence={(scrRefOfOccurrence) => {
-            // Keeps the entry open if it is in the list for the chapter the reader moves to
-            setSelectedEntry(linkedEntry);
             setLinkedEntry(undefined);
-            onSelectOccurrence(scrRefOfOccurrence);
+            selectOccurrenceKeepingEntry(linkedEntry, scrRefOfOccurrence);
           }}
           onClickScrollToTop={scrollToTop}
           onEntryLinkClick={handleEntryLinkClick}
@@ -321,9 +368,13 @@ export function Dictionary({
           <DictionaryEntryDisplay
             localizedStrings={localizedStrings}
             scriptureReferenceToFilterBy={scrRef}
+            scope={scope}
             isDrawer={false}
             dictionaryEntry={fullDisplayedEntry ?? entriesFiltered[0]}
-            onSelectOccurrence={onSelectOccurrence}
+            hasAllSenses={!!fullDisplayedEntry}
+            onSelectOccurrence={(scrRefOfOccurrence) =>
+              selectOccurrenceKeepingEntry(entriesFiltered[0], scrRefOfOccurrence)
+            }
             onClickScrollToTop={scrollToTop}
             onEntryLinkClick={handleEntryLinkClick}
           />
@@ -336,7 +387,11 @@ export function Dictionary({
           scriptureReferenceToFilterBy={scrRef}
           scope={scope}
           selectedEntry={selectedEntry}
-          onSelectOccurrence={onSelectOccurrence}
+          onSelectOccurrence={(scrRefOfOccurrence) =>
+            selectedEntry
+              ? selectOccurrenceKeepingEntry(selectedEntry, scrRefOfOccurrence)
+              : onSelectOccurrence(scrRefOfOccurrence)
+          }
           onCharacterPress={onCharacterPress}
           onEntrySelected={setSelectedEntry}
           fullSelectedEntry={fullDisplayedEntry}

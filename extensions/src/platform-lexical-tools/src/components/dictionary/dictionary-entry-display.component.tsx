@@ -18,6 +18,8 @@ import {
   getFormatGlossesStringFromDictionaryEntrySenses,
   getDeduplicatedOccurrencesFromSenses,
   DictionaryOccurrenceView,
+  DictionaryScope,
+  isSenseInScope as isSenseInScopeOfReference,
 } from '../../utils/dictionary.utils';
 import { DefinitionText, EntryLinkClickHandler } from './definition-text.component';
 import { DomainsDisplay } from './domains-display.component';
@@ -35,6 +37,17 @@ export type DictionaryEntryDisplayProps = {
   handleBackToListButton?: (option: ListboxOption) => void;
   /** Scripture reference to filter occurrences by */
   scriptureReferenceToFilterBy?: SerializedVerseRef;
+  /**
+   * Scope the dictionary list is filtered by. Senses that do not occur in it (the verse in verse
+   * scope, the chapter otherwise) are dimmed. Defaults to `'chapter'`.
+   */
+  scope?: DictionaryScope;
+  /**
+   * Whether `dictionaryEntry` has all of the entry's senses, rather than only those in scope.
+   * Senses are numbered and dimmed only when it does, so their numbers never change. Defaults to
+   * `true`.
+   */
+  hasAllSenses?: boolean;
   /** Callback function to handle occurrence selection */
   onSelectOccurrence: (scrRefOfOccurrence: SerializedVerseRef) => void;
   /** Callback function to handle scroll to top */
@@ -54,12 +67,13 @@ export function DictionaryEntryDisplay({
   isDrawer,
   handleBackToListButton,
   scriptureReferenceToFilterBy,
+  scope = 'chapter',
+  hasAllSenses = true,
   onSelectOccurrence,
   onClickScrollToTop,
   onEntryLinkClick,
 }: DictionaryEntryDisplayProps) {
   const [selectedSense, setSelectedSense] = useState<Sense | undefined>();
-  const [selectedSenseIndex, setSelectedSenseIndex] = useState<number | undefined>();
   const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
 
   const formattedGlosses = useMemo(
@@ -67,19 +81,9 @@ export function DictionaryEntryDisplay({
       getFormatGlossesStringFromDictionaryEntrySenses(
         dictionaryEntry,
         scriptureReferenceToFilterBy,
+        scope,
       ),
-    [dictionaryEntry, scriptureReferenceToFilterBy],
-  );
-
-  const occurrencesLabel = useMemo(
-    () =>
-      selectedSenseIndex
-        ? formatReplacementString(
-            localizedStrings['%platformLexicalTools_dictionary_occurrencesForSenseLabel%'],
-            { index: selectedSenseIndex.toString() },
-          )
-        : localizedStrings['%platformLexicalTools_dictionary_allOccurrencesLabel%'],
-    [localizedStrings, selectedSenseIndex],
+    [dictionaryEntry, scriptureReferenceToFilterBy, scope],
   );
 
   /** Every sense of the entry, in order; a sense's number is its position here */
@@ -88,83 +92,55 @@ export function DictionaryEntryDisplay({
     [dictionaryEntry.senses],
   );
 
-  const isSenseInChapter = useCallback(
+  // Like Paratext 9, senses that do not occur in scope are listed but dimmed, and can be hidden.
+  // Without all of the entry's senses, which senses are less relevant is not known.
+  const isSenseInScope = useCallback(
     (sense: Sense) =>
-      !scriptureReferenceToFilterBy ||
-      Object.values(sense.occurrences ?? {}).some((occurrences) =>
-        occurrences?.some(
-          (occurrence) =>
-            occurrence.verseRef.book === scriptureReferenceToFilterBy.book &&
-            occurrence.verseRef.chapterNum === scriptureReferenceToFilterBy.chapterNum,
-        ),
-      ),
-    [scriptureReferenceToFilterBy],
+      !hasAllSenses || isSenseInScopeOfReference(sense, scriptureReferenceToFilterBy, scope),
+    [hasAllSenses, scriptureReferenceToFilterBy, scope],
+  );
+  const [areLessRelevantSensesHidden, setAreLessRelevantSensesHidden] = useState(false);
+  const lessRelevantSenseCount = allSenses.filter((sense) => !isSenseInScope(sense)).length;
+  const getSenseNumber = (sense: Sense) => allSenses.indexOf(sense) + 1;
+  const selectedSenseNumber =
+    selectedSense && hasAllSenses ? getSenseNumber(selectedSense) : undefined;
+
+  const occurrencesLabel = selectedSenseNumber
+    ? formatReplacementString(
+        localizedStrings['%platformLexicalTools_dictionary_occurrencesForSenseLabel%'],
+        { index: selectedSenseNumber.toString() },
+      )
+    : localizedStrings['%platformLexicalTools_dictionary_allOccurrencesLabel%'];
+
+  const sensesInScope = useMemo(
+    () => allSenses.filter(isSenseInScope),
+    [allSenses, isSenseInScope],
   );
 
-  // Like Paratext 9, senses that do not occur in the chapter are listed but dimmed, and can be hidden
-  const [areLessRelevantSensesHidden, setAreLessRelevantSensesHidden] = useState(false);
-  const lessRelevantSenseCount = allSenses.filter((sense) => !isSenseInChapter(sense)).length;
-  const getSenseNumber = (sense: Sense) => allSenses.indexOf(sense) + 1;
+  // Like Paratext 9, with no sense selected the occurrences are those of every sense; the
+  // "chapter" view limits them to the chapter itself
+  const getOccurrences = useCallback(
+    (localOccurrenceView: DictionaryOccurrenceView) =>
+      getDeduplicatedOccurrencesFromSenses(
+        selectedSense ? [selectedSense] : allSenses,
+        localOccurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
+      ),
+    [allSenses, scriptureReferenceToFilterBy, selectedSense],
+  );
 
-  const sensesFilteredByScrRef = useMemo(() => {
-    const result: { [uniqueSenseId: string]: Sense[] } = {};
-    allSenses
-      .filter((sense) => sense.occurrences && isSenseInChapter(sense))
-      .forEach((sense) => {
-        if (!sense) return;
-        const key = `${sense.lexicalReferenceTextId}-sense-${sense.id}`;
-        if (!result[key]) {
-          result[key] = [];
-        }
-        result[key].push(sense);
-      });
-    return result;
-  }, [allSenses, isSenseInChapter]);
-
-  const deduplicatedOccurrences = useMemo(() => {
-    return selectedSense
-      ? getDeduplicatedOccurrencesFromSenses(
-          [selectedSense],
-          occurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
-        )
-      : getDeduplicatedOccurrencesFromSenses(
-          Object.values(sensesFilteredByScrRef).flat(),
-          occurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
-        );
-  }, [selectedSense, occurrenceView, scriptureReferenceToFilterBy, sensesFilteredByScrRef]);
+  const deduplicatedOccurrences = useMemo(
+    () => getOccurrences(occurrenceView),
+    [getOccurrences, occurrenceView],
+  );
 
   // Cannot use Drawer components when there is no Drawer, if the screen is considered wide it will render Button and span here.
   const TitleComponent = isDrawer ? DrawerTitle : 'span';
   const DescriptionComponent = isDrawer ? DrawerDescription : 'span';
 
-  // Automatically select the only sense if there is exactly one; otherwise clear selection
+  // Automatically select the only sense in scope if there is exactly one; otherwise clear selection
   useEffect(() => {
-    const sensesFlat = Object.values(sensesFilteredByScrRef).flat();
-    if (sensesFlat.length === 1) {
-      setSelectedSense(sensesFlat[0]);
-      setSelectedSenseIndex(allSenses.indexOf(sensesFlat[0]) + 1);
-    } else {
-      setSelectedSense(undefined);
-      setSelectedSenseIndex(undefined);
-    }
-  }, [sensesFilteredByScrRef, allSenses, dictionaryEntry]);
-
-  const getOccurrenceCountsFromSenses = useCallback(
-    (localOccurrenceView: DictionaryOccurrenceView) => {
-      const senses = Object.values(sensesFilteredByScrRef).flat();
-
-      return selectedSense
-        ? getDeduplicatedOccurrencesFromSenses(
-            [selectedSense],
-            localOccurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
-          ).length
-        : getDeduplicatedOccurrencesFromSenses(
-            senses,
-            localOccurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
-          ).length;
-    },
-    [scriptureReferenceToFilterBy, selectedSense, sensesFilteredByScrRef],
-  );
+    setSelectedSense(sensesInScope.length === 1 ? sensesInScope[0] : undefined);
+  }, [sensesInScope, dictionaryEntry]);
 
   return (
     <>
@@ -213,14 +189,8 @@ export function DictionaryEntryDisplay({
               aria-expanded={!areLessRelevantSensesHidden}
               onClick={() => {
                 // A sense that is about to be hidden can no longer be deselected, so deselect it now
-                if (
-                  !areLessRelevantSensesHidden &&
-                  selectedSense &&
-                  !isSenseInChapter(selectedSense)
-                ) {
+                if (!areLessRelevantSensesHidden && selectedSense && !isSenseInScope(selectedSense))
                   setSelectedSense(undefined);
-                  setSelectedSenseIndex(undefined);
-                }
                 setAreLessRelevantSensesHidden(!areLessRelevantSensesHidden);
               }}
             >
@@ -245,28 +215,30 @@ export function DictionaryEntryDisplay({
           value={
             selectedSense ? `${selectedSense.lexicalReferenceTextId}-sense-${selectedSense.id}` : ''
           }
-          onValueChange={(value) => {
-            const index = allSenses.findIndex(
-              (sense) => `${sense.lexicalReferenceTextId}-sense-${sense.id}` === value,
-            );
-            setSelectedSenseIndex(index >= 0 ? index + 1 : undefined);
-            setSelectedSense(index >= 0 ? allSenses[index] : undefined);
-          }}
+          onValueChange={(value) =>
+            setSelectedSense(
+              allSenses.find(
+                (sense) => `${sense.lexicalReferenceTextId}-sense-${sense.id}` === value,
+              ),
+            )
+          }
           className="tw:flex tw:w-full tw:flex-col tw:gap-3"
         >
           {allSenses
-            .filter((sense) => !areLessRelevantSensesHidden || isSenseInChapter(sense))
+            .filter((sense) => !areLessRelevantSensesHidden || isSenseInScope(sense))
             .map((sense) => (
               <ToggleGroupItem
                 key={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
                 value={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
-                data-less-relevant={!isSenseInChapter(sense)}
+                data-less-relevant={!isSenseInScope(sense)}
                 className="tw:flex tw:w-full tw:h-fit tw:flex-col tw:items-start tw:whitespace-normal tw:text-start tw:border tw:rounded-lg tw:shadow-sm tw:p-4 tw:cursor-pointer tw:data-[state=on]:border-accent tw:data-[state=on]:shadow-md tw:transition-colors tw:data-[less-relevant=true]:opacity-60"
               >
                 <div className="tw:flex tw:items-baseline tw:gap-2">
-                  <span className="tw:font-bold tw:text-accent-foreground">
-                    {getSenseNumber(sense)}
-                  </span>
+                  {hasAllSenses && (
+                    <span className="tw:font-bold tw:text-accent-foreground">
+                      {getSenseNumber(sense)}
+                    </span>
+                  )}
                   <ContentZoomRoot as="span" className="tw:text-base">
                     {sense.glosses.map((gloss, glossIndex) => (
                       // Glosses come from one list that never reorders, so their index is a stable key
@@ -319,7 +291,7 @@ export function DictionaryEntryDisplay({
               onClick={() => setOccurrenceView('chapter')}
             >
               {localizedStrings['%platformLexicalTools_dictionary_occurrencesToggleChapter%']} (
-              {getOccurrenceCountsFromSenses('chapter')})
+              {getOccurrences('chapter').length})
             </button>
             <button
               type="button"
@@ -331,7 +303,7 @@ export function DictionaryEntryDisplay({
               onClick={() => setOccurrenceView('all')}
             >
               {localizedStrings['%platformLexicalTools_dictionary_occurrencesToggleAll%']} (
-              {getOccurrenceCountsFromSenses('all')})
+              {getOccurrences('all').length})
             </button>
           </div>
         </div>
