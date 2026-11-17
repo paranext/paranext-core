@@ -12,8 +12,9 @@
  * (`platform-scripture-editor.web-view.tsx`) hands Enter DOWN to the menu whenever
  * `isEditorContextMenuOpen()` is true, on the assumption that the menu's own capture-phase listener
  * claims it either way — that assumption is untestable from this repo's own unit tests, which mock
- * the editor, and CI's per-pull-request runs do not execute the isolated e2e spec that would catch
- * it either (the nightly run of every isolated spec does). Two more editor-side behaviors this
+ * the editor. The isolated spec `endnote-insert-context-menu.spec.ts` (under
+ * `e2e-tests/tests/isolated/scripture-editor/`) covers it end to end; "What CI runs" in
+ * `e2e-tests/CLAUDE.md` says which CI runs execute it. Two more editor-side behaviors this
  * extension leans on for the same menu are guarded alongside it: a scroll whose target is inside
  * the menu must not close it (needed for the context menu's scrollable option list,
  * `_editor-overrides.scss`), and the highlighted item must follow `mousemove`, not `mouseenter`

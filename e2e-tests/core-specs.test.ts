@@ -52,8 +52,35 @@ describe('the editor list trigger in test.yml', () => {
     },
   );
 
-  it('does not run it for an unrelated change', () => {
-    expect(editorPaths.test('src/renderer/components/docking/tab.tsx')).toBe(false);
+  // One row per alternative of the pattern, so dropping any one of them fails its own row.
+  it.each([
+    'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    'dev-packages.json',
+    'e2e-tests/core-specs-editor.txt',
+    'e2e-tests/fixtures/no-unasked-edits.body.ts',
+    'e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-power-standard.spec.ts',
+    'e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-simple-paragraph-structure.spec.ts',
+    'c-sharp/Projects/ParatextProjectDataProvider.cs',
+    'c-sharp/Projects/UsfmConverter.cs',
+    'c-sharp/Projects/Conversion/UsjWriter.cs',
+    'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    'lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx',
+    'lib/platform-bible-react/src/components/advanced/marker-palette-keys.util.ts',
+    'lib/platform-bible-react/src/components/advanced/use-marker-palette-session-writers.hook.ts',
+    'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+    'lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css',
+  ])('runs the editor list when %s changes', (changedPath) => {
+    expect(editorPaths.test(changedPath)).toBe(true);
+  });
+
+  it.each([
+    'src/renderer/components/docking/tab.tsx',
+    'lib/platform-bible-react/src/components/basics/button.component.tsx',
+    'lib/platform-bible-react/src/components/advanced/book-chapter-control.component.tsx',
+    'c-sharp/Projects/Other.cs',
+    'e2e-tests/tests/isolated/docking/other.spec.ts',
+  ])('does not run the editor list when %s changes', (changedPath) => {
+    expect(editorPaths.test(changedPath)).toBe(false);
   });
 });
 

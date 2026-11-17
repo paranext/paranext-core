@@ -7,8 +7,10 @@ name: E2E isolated specs
 # It builds for itself: a job cannot reuse another job's output without an artifact hand-over, and
 # the development bundles the specs need are built by e2e-tests/global-setup.ts on first use.
 #
-# Every setup step has its own timeout, well under the job's: a hang there fails that step and
-# leaves the job time for the steps that run on `!cancelled()` (the warnings, the artifact upload).
+# Every setup step has its own 20-minute timeout, well under the caller's job budget: a hang there
+# fails that step and leaves the job time for the steps that run on `!cancelled()` (the warnings,
+# the artifact upload). Recent runs take about two minutes per step.
+# The setup steps mirror the build job's setup in test.yml: keep the two in step.
 # With `report_only`, the job as a whole is non-blocking, not only the spec step.
 
 on:
@@ -123,7 +125,16 @@ jobs:
         run: |
           selection=(all)
           if [ -n "$SPEC_LISTS" ]; then
+            # A list that cannot be read would otherwise fail inside the process substitution below
+            # and leave the other list running alone, with no error.
             # $SPEC_LISTS is split into its file names on purpose
+            # shellcheck disable=SC2086
+            for spec_list in $SPEC_LISTS; do
+              if [ ! -r "$spec_list" ]; then
+                echo "::error title=Spec list missing::$spec_list"
+                exit 1
+              fi
+            done
             # shellcheck disable=SC2086
             mapfile -t selection < <(cat $SPEC_LISTS | grep -v -e '^#' -e '^[[:space:]]*$')
             # An empty selection would run the whole suite instead of the listed specs
