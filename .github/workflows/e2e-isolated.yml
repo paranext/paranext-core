@@ -27,6 +27,11 @@ on:
         type: boolean
         required: false
         default: false
+      fail_on_flaky:
+        description: 'A spec that passes only on its retry fails the run (the retry and its trace still run).'
+        type: boolean
+        required: false
+        default: false
       timeout_minutes:
         type: number
         required: false
@@ -85,8 +90,8 @@ jobs:
         run: npx playwright install --with-deps
 
       # One Xvfb at 1920x1080x24: xvfb-run's default screen (1280x1024, 8-bit colour) is too small
-      # for the docking specs. One retry, so a single timing race does not fail the run; the next
-      # step names every test that needed it. `--trace=retain-on-failure` keeps the trace of the
+      # for the docking specs. One retry, so a single timing race does not fail the run (unless
+      # `fail_on_flaky` is set); the next step names every test that needed it. `--trace=retain-on-failure` keeps the trace of the
       # failed attempt, which the config's `on-first-retry` would replace with the passing one.
       - name: Run the specs
         id: specs
@@ -94,6 +99,7 @@ jobs:
         env:
           SPEC_LISTS: ${{ inputs.spec_lists }}
           SHARD: ${{ inputs.shard }}
+          FAIL_ON_FLAKY: ${{ inputs.fail_on_flaky }}
           E2E_JSON_REPORT: ${{ github.workspace }}/e2e-tests/e2e-results.json
         run: |
           selection=(all)
@@ -110,6 +116,9 @@ jobs:
           playwright_args=(--retries=1 --trace=retain-on-failure)
           if [ -n "$SHARD" ]; then
             playwright_args+=("--shard=$SHARD")
+          fi
+          if [ "$FAIL_ON_FLAKY" = "true" ]; then
+            playwright_args+=(--fail-on-flaky-tests)
           fi
           echo "Selection: ${#selection[@]} entries; Playwright arguments: ${playwright_args[*]}"
           xvfb-run --auto-servernum -s '-screen 0 1920x1080x24' \

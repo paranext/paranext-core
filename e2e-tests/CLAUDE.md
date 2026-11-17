@@ -133,7 +133,7 @@ one of these.
   strings they stand for, so geometry assertions report overflow that is not real.
 - **Fail-then-pass is reported as "flaky", and flaky is a defect.** `retries` is 1 locally and 2 in
   CI's smoke run; the `e2e-core` and nightly jobs allow one retry and name each test that needed
-  it in a warning. Never re-run to get green: an order-dependent test is telling you it depends on state it does
+  it in a warning, and the nightly run fails on such a test. Never re-run to get green: an order-dependent test is telling you it depends on state it does
   not control.
 - **`PAPI websocket server failed to bind: listen EADDRINUSE …` or `Settings service undefined`** —
   a previous app instance still holds port 8876, so the new app's server can't bind and its
@@ -150,8 +150,10 @@ one of these.
 - **Every night** (`.github/workflows/e2e-nightly.yml`, also startable by hand): every isolated
   spec, split over eight runners.
 - Both run on Linux with **one retry**. A test that passed only on its retry is named in a warning
-  on the run ("E2E test passed only on its retry"): treat it as a defect, like any flaky test. The
-  trace of each failed attempt is kept in the run's `playwright-results-…` artifact. `e2e-core` reports without blocking: a failure shows as a
+  on the run ("E2E test passed only on its retry"): treat it as a defect, like any flaky test. On
+  the nightly run it also fails the run (`--fail-on-flaky-tests`), since nobody opens a green nightly
+  run and it blocks no pull request. The trace of each failed attempt is kept in the run's
+  `playwright-results-…` artifact. `e2e-core` reports without blocking: a failure shows as a
   warning on the run, not as a red check.
 
 ## Window size and DevTools

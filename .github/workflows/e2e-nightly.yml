@@ -26,5 +26,8 @@ jobs:
     uses: ./.github/workflows/e2e-isolated.yml
     with:
       shard: ${{ matrix.shard }}/8
+      # Nobody opens a green nightly run, so a retry warning there would go unseen; and this run
+      # blocks no pull request. A spec that passes only on its retry fails it instead.
+      fail_on_flaky: true
       timeout_minutes: 90
       artifact_name: playwright-results-e2e-nightly-${{ matrix.shard }}
