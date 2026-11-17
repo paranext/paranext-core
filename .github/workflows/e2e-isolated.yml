@@ -101,6 +101,11 @@ jobs:
             # $SPEC_LISTS is split into its file names on purpose
             # shellcheck disable=SC2086
             mapfile -t selection < <(cat $SPEC_LISTS | grep -v -e '^#' -e '^[[:space:]]*$')
+            # An empty selection would run the whole suite instead of the listed specs
+            if [ "${#selection[@]}" -eq 0 ]; then
+              echo "::error title=No specs selected::$SPEC_LISTS list no specs"
+              exit 1
+            fi
           fi
           playwright_args=(--retries=1 --trace=retain-on-failure)
           if [ -n "$SHARD" ]; then
@@ -114,17 +119,22 @@ jobs:
         if: ${{ steps.specs.outcome == 'failure' }}
         run: echo "::warning title=E2E isolated specs failed (not blocking)::Isolated end-to-end specs failed but did not fail the build. See the ${{ inputs.artifact_name }} artifact."
 
-      # A test that passed only on its retry is a defect to look at, not a pass to forget.
+      # A test that passed only on its retry is a defect to look at, not a pass to forget. Only a
+      # report, so it never decides the job's result; a run cut short can leave the file unreadable.
       - name: Warn about tests that passed only on their retry
         if: ${{ !cancelled() && hashFiles('e2e-tests/e2e-results.json') != '' }}
+        continue-on-error: true
         run: |
-          set -o pipefail
-          jq -r '.. | objects | select(has("tests") and has("file") and has("title")) | . as $spec
-            | .tests[] | select(.status == "flaky") | "\($spec.file): \($spec.title)"' \
-            e2e-tests/e2e-results.json |
-            while IFS= read -r flaky_test; do
-              echo "::warning title=E2E test passed only on its retry::$flaky_test (trace of the failed attempt in the ${{ inputs.artifact_name }} artifact)"
-            done
+          if ! flaky_tests=$(jq -r '.. | objects | select(has("tests") and has("file") and has("title"))
+            | . as $spec | .tests[] | select(.status == "flaky") | "\($spec.file): \($spec.title)"' \
+            e2e-tests/e2e-results.json); then
+            echo "::warning title=E2E report unreadable::Could not read e2e-tests/e2e-results.json, so tests that passed only on their retry are not listed."
+            exit 0
+          fi
+          while IFS= read -r flaky_test; do
+            [ -n "$flaky_test" ] || continue
+            echo "::warning title=E2E test passed only on its retry::$flaky_test (trace of the failed attempt in the ${{ inputs.artifact_name }} artifact)"
+          done <<< "$flaky_tests"
 
       - name: Upload Playwright test results
         if: ${{ !cancelled() }}

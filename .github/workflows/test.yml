@@ -566,8 +566,9 @@ jobs:
           echo "spec_lists=$spec_lists" >> "$GITHUB_OUTPUT"
 
   # The isolated end-to-end specs that guard data loss and core flows, on every pull request. A
-  # job of its own beside the builds, so it adds no waiting time. It reports without blocking
-  # until it has run for about two weeks without failing a pull request that did not cause it.
+  # job of its own beside the builds, so it adds no waiting time. It reports without blocking.
+  # TODO(PT-5015): make it blocking (drop `report_only`) and a required check once it has run for
+  # about two weeks without failing a pull request that did not cause the failure.
   e2e-core:
     name: E2E core
     needs: e2e-core-selection
