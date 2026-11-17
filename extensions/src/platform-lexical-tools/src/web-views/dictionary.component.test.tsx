@@ -27,6 +27,7 @@ const LOCALIZED_STRINGS = {
   '%platformLexicalTools_dictionary_allOccurrencesLabel%': 'Occurrences',
   '%platformLexicalTools_dictionary_occurrencesForSenseLabel%': 'Occurrences for {index}',
   '%platformLexicalTools_dictionary_backToList%': BACK_LABEL,
+  '%platformLexicalTools_dictionary_entryNotFound%': 'No entry was found for {lemma}',
   '%platformLexicalTools_dictionary_hideLessRelevantSenses%': 'Hide less-relevant senses ({count})',
   '%platformLexicalTools_dictionary_occurrencesToggleChapter%': 'Chapter',
   '%platformLexicalTools_dictionary_occurrencesToggleAll%': 'All',
@@ -127,6 +128,13 @@ describe('Dictionary entry links', () => {
     expect(getEntryByLemma).toHaveBeenCalledWith('SDBH', 'בֵּית לֶחֶם');
   });
 
+  it('says so when a linked entry cannot be found', async () => {
+    render(<DictionaryInScrollGroup getEntryByLemma={async () => undefined} />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Bethlehem' }));
+    expect(await screen.findByText('No entry was found for בֵּית לֶחֶם')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Bethlehem' })).not.toBeInTheDocument();
+  });
+
   it('returns to the original entry from the back button', async () => {
     renderDictionary();
     fireEvent.click(await screen.findByRole('link', { name: 'Bethlehem' }));
@@ -179,6 +187,41 @@ describe('Dictionary entry links', () => {
     // Ruth 4 lists three entries; Elimelech stays open beside them
     expect(await screen.findByText('Boaz')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Bethlehem' })).toBeInTheDocument();
+  });
+
+  it('still clears the selection when the reader goes elsewhere before a followed reference loads', async () => {
+    const entriesByChapter: Record<number, Entry[]> = {
+      1: [ELIMELECH],
+      2: [BETHLEHEM, BOAZ],
+      3: [ELIMELECH, BETHLEHEM],
+    };
+    const getEntriesByChapter = async (_scope: string, scrRef: SerializedVerseRef) => ({
+      entriesById: Object.fromEntries(
+        (entriesByChapter[scrRef.chapterNum] ?? []).map((e) => [e.id, [e]]),
+      ),
+    });
+    const renderAt = (scrRef: SerializedVerseRef) => (
+      <Dictionary
+        localizedStrings={LOCALIZED_STRINGS}
+        scrRef={scrRef}
+        // The scroll group does not follow, so the list for Ruth 4 never loads
+        onSelectOccurrence={vi.fn()}
+        getEntries={getEntriesByChapter}
+        getFullEntry={async (e) => e}
+        getEntryByLemma={async () => BETHLEHEM}
+      />
+    );
+    const { rerender } = render(renderAt(SCR_REF));
+    fireEvent.click(await screen.findByRole('link', { name: 'Ruth 4:3' }));
+
+    rerender(renderAt({ ...SCR_REF, chapterNum: 2 }));
+    fireEvent.click(await screen.findByText(BOAZ.lemma));
+    expect(await screen.findByText('a man of Bethlehem')).toBeInTheDocument();
+
+    // Boaz is not listed in Ruth 3, so it is no longer selected there
+    rerender(renderAt({ ...SCR_REF, chapterNum: 3 }));
+    expect(await screen.findByText(ELIMELECH.lemma)).toBeInTheDocument();
+    expect(screen.queryByText('a man of Bethlehem')).not.toBeInTheDocument();
   });
 
   it('numbers senses only once the full entry has loaded', async () => {

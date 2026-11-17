@@ -94,6 +94,14 @@ describe('DictionaryEntryDisplay senses', () => {
     expect(screen.getByText('word')).toBeInTheDocument();
   });
 
+  it('points the hide control at the senses it hides', () => {
+    renderEntry(verseRef('GEN', 1), TWO_SENSE_ENTRY);
+    const hideControl = screen.getByRole('button', { name: 'Hide less-relevant senses (1)' });
+    const controlledId = hideControl.getAttribute('aria-controls');
+    expect(controlledId).toBeTruthy();
+    expect(document.getElementById(controlledId ?? '')).toContainElement(senseCard('word'));
+  });
+
   it('deselects a selected sense when it is hidden', () => {
     renderEntry(verseRef('GEN', 1), TWO_SENSE_ENTRY);
     // Only the sense card shows this gloss; the header lists glosses of senses in the chapter

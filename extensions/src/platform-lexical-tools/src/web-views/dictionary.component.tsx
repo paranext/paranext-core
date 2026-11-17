@@ -10,10 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
+  Sonner,
+  sonner,
 } from 'platform-bible-react';
 import { Entry, LexicalEntriesById } from 'platform-lexical-tools';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { LanguageStrings } from 'platform-bible-utils';
+import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import { DictionaryEntryDisplay } from '../components/dictionary/dictionary-entry-display.component';
 import {
   DictionaryScope,
@@ -133,6 +135,13 @@ export function Dictionary({
     let isActive = true;
     setEntriesById(undefined);
     setEntriesError(undefined);
+    // This load ends the wait of an entry that was already waiting when it started, even if it is
+    // for another reference, because while an entry is waiting the selection is never cleared. An
+    // entry that starts waiting while this load is under way waits for the list after it.
+    const pendingSelection = pendingSelectionRef.current;
+    const endPendingSelection = () => {
+      if (pendingSelectionRef.current === pendingSelection) pendingSelectionRef.current = undefined;
+    };
     const load = async () => {
       const result = await getEntries(scope, scrRef);
       if (!isActive) return;
@@ -144,9 +153,8 @@ export function Dictionary({
       }
 
       // Keep the entry the reader was looking at open, if it is listed here too
-      const pendingSelection = pendingSelectionRef.current;
+      endPendingSelection();
       if (pendingSelection && isSameListReference(pendingSelection.scrRef, scrRef, scope)) {
-        pendingSelectionRef.current = undefined;
         setSelectedEntry(
           Object.values(result.entriesById)
             .flat()
@@ -156,6 +164,7 @@ export function Dictionary({
     };
     load().catch(() => {
       if (!isActive) return;
+      endPendingSelection();
       setEntriesById({});
     });
     return () => {
@@ -255,9 +264,16 @@ export function Dictionary({
       if (!lemma) return false;
       const entry = await getEntryByLemma(dictionaryId, lemma);
       if (entry) setLinkedEntry(entry);
+      else
+        sonner(
+          formatReplacementString(
+            localizedStrings['%platformLexicalTools_dictionary_entryNotFound%'],
+            { lemma },
+          ),
+        );
       return !!entry;
     },
-    [getEntryByLemma],
+    [getEntryByLemma, localizedStrings],
   );
 
   const onCharacterPress = useCallback((character: string) => {
@@ -278,6 +294,7 @@ export function Dictionary({
   if (linkedEntry)
     return (
       <div ref={dictionaryEntryRef} className="tw:h-[100dvh] tw:overflow-y-auto tw:p-4">
+        <Sonner />
         <DictionaryEntryDisplay
           localizedStrings={localizedStrings}
           isDrawer={false}
@@ -297,6 +314,7 @@ export function Dictionary({
 
   return (
     <div className="tw:flex tw:flex-col tw:h-[100dvh]">
+      <Sonner />
       <div className="tw:sticky tw:bg-background tw:top-0 tw:z-10 tw:shrink-0 tw:p-2 tw:border-b tw:h-auto">
         <div className="tw:flex tw:items-center tw:gap-2">
           <div className="tw:max-w-56">

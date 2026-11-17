@@ -11,6 +11,7 @@ export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_backToList%',
   '%platformLexicalTools_dictionary_definitionLabel%',
   '%platformLexicalTools_dictionary_domainTaxonomyLabel%',
+  '%platformLexicalTools_dictionary_entryNotFound%',
   '%platformLexicalTools_dictionary_hideLessRelevantSenses%',
   '%platformLexicalTools_dictionary_noResults%',
   '%platformLexicalTools_dictionary_occurrencesInChapterLabel%',

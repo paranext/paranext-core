@@ -11,7 +11,7 @@ import {
 } from 'platform-bible-react';
 import { ChevronUpIcon } from 'lucide-react';
 import { Entry, Sense } from 'platform-lexical-tools';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, formatScrRef, LanguageStrings } from 'platform-bible-utils';
 import {
@@ -100,6 +100,7 @@ export function DictionaryEntryDisplay({
     [hasAllSenses, scriptureReferenceToFilterBy, scope],
   );
   const [areLessRelevantSensesHidden, setAreLessRelevantSensesHidden] = useState(false);
+  const sensesListId = useId();
   const lessRelevantSenseCount = allSenses.filter((sense) => !isSenseInScope(sense)).length;
   const getSenseNumber = (sense: Sense) => allSenses.indexOf(sense) + 1;
   const selectedSenseNumber =
@@ -187,6 +188,7 @@ export function DictionaryEntryDisplay({
               variant="link"
               className="tw:h-auto tw:p-0 tw:text-xs"
               aria-expanded={!areLessRelevantSensesHidden}
+              aria-controls={sensesListId}
               onClick={() => {
                 // A sense that is about to be hidden can no longer be deselected, so deselect it now
                 if (!areLessRelevantSensesHidden && selectedSense && !isSenseInScope(selectedSense))
@@ -211,6 +213,7 @@ export function DictionaryEntryDisplay({
             definition past the pane's edge, so the group fills the pane and the cards wrap. Each
             card is a button, so its wrapped lines would center unless aligned to the start. */}
         <ToggleGroup
+          id={sensesListId}
           type="single"
           value={
             selectedSense ? `${selectedSense.lexicalReferenceTextId}-sense-${selectedSense.id}` : ''

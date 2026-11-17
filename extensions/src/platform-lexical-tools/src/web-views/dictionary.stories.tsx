@@ -172,6 +172,57 @@ const longTextEntry: Entry = {
   },
 };
 
+/**
+ * An entry whose definitions use the markup MARBLE writes: links to other entries (one of which is
+ * not in the dictionary), Bible references, italics, an abbreviation and a line break. Its second
+ * sense occurs only in GEN 2, so in GEN 1 it is dimmed and can be hidden.
+ */
+const markupEntry: Entry = {
+  id: 'H776',
+  lexicalReferenceTextId: 'SDBH',
+  lexicalReferenceTextVersion: VERSION,
+  lemma: 'אֶרֶץ',
+  strongsCodes: ['H776'],
+  domains: [{ taxonomy: 'Lexical Semantic Domains', code: '004', label: 'Land' }],
+  occurrences: {
+    WLC: [
+      { verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, wordNum: 7 },
+      { verseRef: { book: 'GEN', chapterNum: 2, verseNum: 4 }, wordNum: 6 },
+    ],
+  },
+  senses: {
+    s1: {
+      id: 's1',
+      entryId: 'H776',
+      lexicalReferenceTextId: 'SDBH',
+      lexicalReferenceTextVersion: VERSION,
+      bcp47Code: 'en',
+      definition:
+        '= the dry land, |ias opposed to|i* the sea, as {L:created<SDBH:בָּרָא>} by God; see {S:00100101000000 00100101200000} and {S:00100100100000-00100100200000} | {A:cf.} {L:a word not in this dictionary<SDBH:לֹא־נִמְצָא>}',
+      glosses: ['earth', 'land'],
+      strongsCodes: ['H776'],
+      domains: [{ taxonomy: 'Lexical Semantic Domains', code: '004', label: 'Land' }],
+      occurrences: {
+        WLC: [{ verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, wordNum: 7 }],
+      },
+    },
+    s2: {
+      id: 's2',
+      entryId: 'H776',
+      lexicalReferenceTextId: 'SDBH',
+      lexicalReferenceTextVersion: VERSION,
+      bcp47Code: 'en',
+      definition: '= the whole world, |bincluding|b* the people who live in it',
+      glosses: ['world'],
+      strongsCodes: ['H776'],
+      domains: [{ taxonomy: 'Lexical Semantic Domains', code: '004', label: 'Land' }],
+      occurrences: {
+        WLC: [{ verseRef: { book: 'GEN', chapterNum: 2, verseNum: 4 }, wordNum: 6 }],
+      },
+    },
+  },
+};
+
 /** Whether an entry has any occurrence matching the scope-filtered selector. */
 function entryMatchesScope(
   entry: Entry,
@@ -201,7 +252,8 @@ type HarnessConfig = {
 
 /**
  * Thin in-memory service container: serves the seed entries scoped to the current reference,
- * returns the full entry on demand, and announces occurrence navigation via `alertCommand`.
+ * returns the full entry on demand, looks up entries opened from definition links, and announces
+ * occurrence navigation via `alertCommand`.
  */
 function DictionaryHarness({ config }: { config: HarnessConfig }) {
   const entries = config.entries ?? seedEntries;
@@ -231,6 +283,15 @@ function DictionaryHarness({ config }: { config: HarnessConfig }) {
     [entries],
   );
 
+  // Links can point at any entry in the dictionary, not only those in the current chapter
+  const getEntryByLemma = useCallback(
+    async (dictionaryId: string, lemma: string) =>
+      [...entries, ...seedEntries].find(
+        (e) => e.lexicalReferenceTextId === dictionaryId && e.lemma === lemma,
+      ),
+    [entries],
+  );
+
   const onSelectOccurrence = useCallback((scrRefOfOccurrence: SerializedVerseRef) => {
     // In the app the webview navigates the scroll group; here we announce it and update local state.
     alertCommand('platformScriptureEditor.selectRange', { verseRef: scrRefOfOccurrence });
@@ -244,7 +305,7 @@ function DictionaryHarness({ config }: { config: HarnessConfig }) {
       onSelectOccurrence={onSelectOccurrence}
       getEntries={getEntries}
       getFullEntry={getFullEntry}
-      getEntryByLemma={async () => undefined}
+      getEntryByLemma={getEntryByLemma}
     />
   );
 }
@@ -272,6 +333,15 @@ export const EntryList: Story = {
 /** Exactly one entry matches — the detail view renders directly without the list. */
 export const SingleEntry: Story = {
   decorators: [createDecorator({ entries: [seedEntries[0]] })],
+};
+
+/**
+ * Definitions with MARBLE markup. Follow "created" to open another entry, or a Bible reference to
+ * go to it. "a word not in this dictionary" turns into plain text once its lookup finds nothing.
+ * The second sense occurs only in GEN 2, so it is dimmed here and can be hidden.
+ */
+export const DefinitionMarkup: Story = {
+  decorators: [createDecorator({ entries: [markupEntry] })],
 };
 
 /**
