@@ -225,15 +225,16 @@ jobs:
       - name: Code signing - Windows
         if: ${{ matrix.os == env.OS_WINDOWS }}
         timeout-minutes: 90
-        # See https://github.com/cognitedata/code-sign-action/blob/main/README.md for descriptions
+        # See https://github.com/cognitedata/code-sign-action/blob/a29458b69495966f90920f07aeed5acfe03e1f45/README.md
+        # for descriptions. This step receives the signing secrets, so the action is pinned to a
+        # reviewed commit rather than a tag its owner could move. Review the new code before bumping.
         env:
           CERTIFICATE_HOST: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST }}
           CERTIFICATE_HOST_API_KEY: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST_API_KEY }}
-          CERTIFICATE_SHA1_HASH: ${{ secrets.WIN_CERTIFICATE_SHA1_HASH }}
           CLIENT_CERTIFICATE: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT }}
           CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT_PASSWORD }}
           KEYPAIR_ALIAS: ${{ secrets.WIN_CODE_SIGNING_KEYPAIR_ALIAS }}
-        uses: cognitedata/code-sign-action/@v3
+        uses: cognitedata/code-sign-action@a29458b69495966f90920f07aeed5acfe03e1f45 # v5
         with:
           path-to-binary: 'release\\staged'
 
@@ -334,22 +335,22 @@ jobs:
           updateOnlyUnreleased: true
 
       - name: Upload release assets to S3
-        id: upload_s3
         if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
         timeout-minutes: 90
-        uses: shallwefootball/upload-s3-action@v1.3.3
-        with:
-          aws_key_id: ${{ secrets.AWS_S3_RELEASE_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.AWS_S3_RELEASE_SECRET_ACCESS_KEY}}
-          aws_bucket: ${{ vars.AWS_S3_RELEASE_BUCKET_NAME }}
-          source_dir: release/staged
-          # runner.os is Windows or macOS
-          destination_dir: ${{ vars.AWS_S3_RELEASE_DIRECTORY }}/${{ inputs.version}}/${{ runner.os }}
-
-      - name: Print S3 upload result
-        if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
+        # The AWS CLI is preinstalled on GitHub-hosted runners, so the S3 keys reach no third-party
+        # action. Objects must be public-read: the installers are downloaded anonymously.
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_S3_RELEASE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_S3_RELEASE_SECRET_ACCESS_KEY }}
+          S3_BUCKET: ${{ vars.AWS_S3_RELEASE_BUCKET_NAME }}
+          S3_DIRECTORY: ${{ vars.AWS_S3_RELEASE_DIRECTORY }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        # RUNNER_OS is Windows or macOS
         run: |
-          echo "S3 upload object_key: ${{ steps.upload_s3.outputs.object_key }}; object_locations: ${{ steps.upload_s3.outputs.object_locations }}"
+          set -euo pipefail
+          aws s3 cp release/staged "s3://$S3_BUCKET/$S3_DIRECTORY/$RELEASE_VERSION/$RUNNER_OS/" \
+            --recursive --acl public-read --no-progress
 
       - name: Checkout bump ref
         if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
