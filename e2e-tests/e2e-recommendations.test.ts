@@ -19,10 +19,7 @@ const keys = Object.keys(mapping);
 const prefixEntries = keys.flatMap((key) =>
   [...mapping[key].main, ...mapping[key].incidental].map((prefix) => [key, prefix]),
 );
-const isZoomKey = (key: string) =>
-  key.startsWith('content-zoom-') ||
-  key === 'notes-content-zoom' ||
-  key === 'resources-content-zoom';
+const isZoomKey = (key: string) => key.includes('zoom');
 const EDITOR_WEB_VIEW =
   'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx';
 
@@ -50,6 +47,14 @@ describe('subset-sources.json', () => {
     expect(Object.keys(mapping[key]).sort()).toEqual(['incidental', 'main']);
     expect(Array.isArray(mapping[key].main)).toBe(true);
     expect(Array.isArray(mapping[key].incidental)).toBe(true);
+  });
+
+  // A key without main prefixes is never recommended, and nothing else would notice.
+  it.each(keys)('%s lists main prefixes, each a non-empty string', (key) => {
+    expect(mapping[key].main.length).toBeGreaterThan(0);
+    [...mapping[key].main, ...mapping[key].incidental].forEach((prefix) => {
+      expect(typeof prefix === 'string' && prefix.length > 0).toBe(true);
+    });
   });
 
   it('lists each prefix once per key, across main and incidental', () => {
@@ -269,6 +274,35 @@ describe('recommendE2eTests', () => {
       ],
     });
     expect(report.entryPointFiles).toEqual(['extensions/src/foo/src/main.ts']);
+  });
+
+  it('reports runtime data under an assets directory as uncovered, not images', () => {
+    expect(recommend(['c-sharp/assets/usfm.sty']).uncoveredFiles).toEqual([
+      'c-sharp/assets/usfm.sty',
+    ]);
+  });
+
+  it('counts a spec listed only in the editor core list toward its subset', () => {
+    const report = recommend(['src/renderer/components/docking/dock.tsx'], {
+      editorCoreSpecs: ['e2e-tests/tests/isolated/docking/a.spec.ts'],
+      specFilesBySubset: {
+        docking: [
+          'e2e-tests/tests/isolated/docking/a.spec.ts',
+          'e2e-tests/tests/isolated/docking/b.spec.ts',
+        ],
+      },
+    });
+    expect(report.recommendations[0].ci).toEqual({
+      kind: 'subset',
+      coreSpecCount: 1,
+      specCount: 2,
+    });
+  });
+
+  it('does not report a file only an incidental prefix lists as uncovered', () => {
+    const report = recommend(['src/shared/services/x.ts']);
+    expect(report.uncoveredFiles).toEqual([]);
+    expect(recommendedKeys(report)).toEqual([]);
   });
 
   it('reports a source file that matches no prefix as uncovered', () => {

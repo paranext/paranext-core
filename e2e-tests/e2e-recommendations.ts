@@ -83,9 +83,12 @@ const SOURCE_ROOTS = ['src/', 'extensions/src/', 'c-sharp/'];
  */
 export const REGISTRATION_PATTERN = 'registerCommand\\(|registerWebViewProvider\\(|"command:';
 
-/** Paths that are not runtime code: tests, stories, docs, type declarations, build metadata. */
+/**
+ * Paths that are not runtime code: tests, stories, docs, type declarations, build metadata and
+ * image or font assets (other files under `assets/`, such as style sheets and data, are runtime).
+ */
 const NON_RUNTIME =
-  /\.test\.|\.test-util\.|\.stories\.|\.md$|\.mdx$|\.d\.ts$|(^|\/)(__tests__|__mocks__|assets|\.config)\/|(^|\/)[^/]*Tests\/|(^|\/)package\.json$|(^|\/)manifest\.json$|\.csproj$|\.props$/;
+  /\.test\.|\.test-util\.|\.stories\.|\.md$|\.mdx$|\.d\.ts$|(^|\/)(__tests__|__mocks__|\.config)\/|(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$|(^|\/)[^/]*Tests\/|(^|\/)package\.json$|(^|\/)manifest\.json$|\.csproj$|\.props$/;
 const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
 const isE2eSpecSupport = (file: string) =>
@@ -247,15 +250,16 @@ function runCli(mergeBase: string): void {
 
   // `--no-renames` lists a rename's old and new path; untracked files never appear in `git diff`.
   const untrackedFiles = git('ls-files', '--others', '--exclude-standard');
-  const untrackedRegistering = untrackedFiles.filter((file) => {
-    try {
-      return new RegExp(REGISTRATION_PATTERN).test(
-        fs.readFileSync(path.join(REPO_ROOT, file), 'utf8'),
-      );
-    } catch {
-      return false;
-    }
-  });
+  const registrationRegExp = new RegExp(REGISTRATION_PATTERN);
+  const untrackedRegistering = untrackedFiles
+    .filter((file) => isInSourceRoot(file) && !isNonRuntime(file))
+    .filter((file) => {
+      try {
+        return registrationRegExp.test(fs.readFileSync(path.join(REPO_ROOT, file), 'utf8'));
+      } catch {
+        return false;
+      }
+    });
 
   const report = recommendE2eTests({
     changedFiles: [

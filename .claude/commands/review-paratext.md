@@ -320,10 +320,10 @@ Record the author's responses as `MINOR_FINDINGS_RESPONSE` (e.g., "Author said n
 
 ### Step 3.5 — End-to-end tests
 
-Run, as a single bash command, with the `MERGE_BASE` from Step 1.3:
+Run, as a single bash command, substituting the literal `MERGE_BASE` SHA stored in Step 1.3 for `<MERGE_BASE>` (shell variables do not persist between bash calls; an empty value makes the command print a usage error):
 
 ```bash
-npx tsx "$(git rev-parse --show-toplevel)/e2e-tests/e2e-recommendations.ts" "$MERGE_BASE"
+npx tsx "$(git rev-parse --show-toplevel)/e2e-tests/e2e-recommendations.ts" <MERGE_BASE>
 ```
 
 It prints a JSON report: `recommendations` (isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`), `alsoExercised` (keys whose specs only drive the changed files along the way), `uncoveredFiles` (changed source files no key lists), `entryPointFiles` (changed menu, web view provider and command-registration files) and `specsChanged` (whether the branch changes an e2e spec or its support code: a `*.spec.ts`, a `*.page.ts` or a fixture file). If the command fails, say so in one line, record `E2E_TEST_NOTES` as "not checked: <error>", and continue.
@@ -333,8 +333,8 @@ This step never starts a test run and never blocks the review. It has three case
 **Run part** (a question) — applies when `recommendations` is non-empty. List each key with its `command` and its CI status in words, from `ci`:
 
 - `kind: 'spec'`, `coreList: 'always'` → "also runs in CI on every pull request"
-- `kind: 'spec'`, `coreList: 'editor'` → "also runs in CI when a pull request touches the Scripture editor extension, `dev-packages.json` or the C# USFM/USJ code"
-- `kind: 'spec'`, `coreList: 'none'` → "does not run in CI on pull requests (nightly only)"
+- `kind: 'spec'`, `coreList: 'editor'` → "also runs in CI on some pull requests (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))"
+- `kind: 'spec'`, `coreList: 'none'` → "is in neither pull-request list (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))"
 - `kind: 'subset'` → "CI runs `coreSpecCount` of its `specCount` spec files on pull requests"
 
 Then ask:
