@@ -7038,7 +7038,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   and rc-dock's `restorePanel` brings the new tab back with a maximized group when it is restored.
   The placement is a `PanelLayout` direction rather than a target-tab option on `TabLayout` because
   it needs no new public API (`before-tab` and `after-tab` were already `PanelDirection` values),
-  and the fallback needs a direction, which `TabLayout` does not have.
+  and the fallback needs a direction, which `TabLayout` does not have. `before-tab` and `after-tab`
+  follow the tab order, which core treats as reading order, as `DirectionFromTab` does: `after-tab`
+  inserts where `nextTab` from the target goes. Their fallbacks are sides, mirrored like any other,
+  so both paths land on the same reading side. rc-dock draws the tab strip left to right whatever
+  the UI direction, so in a right-to-left UI a joined tab is drawn to the target's right today, just
+  as `nextTab` moves right. Mirroring the strip with CSS would correct both together.
 
 ## adr-panel-readiness-from-sources: Panel readiness is derived from whether data sources arrived, never from a filtered result
 

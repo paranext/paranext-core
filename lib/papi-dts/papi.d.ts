@@ -5105,7 +5105,8 @@ declare module 'shared/models/docking-framework.model' {
    * before or after the target. This holds whether that group is docked, floating, or maximized. A
    * group that cannot take the tab gets it beside the group instead, as `left` would for
    * `before-tab`, or `right` for `after-tab`. Such a group is one of Simple mode's fixed columns, or
-   * a group that holds another kind of tab.
+   * a group that holds another kind of tab. Either way, `before-tab` lands on the target's
+   * reading-start side and `after-tab` on its reading-end side.
    *
    * For `left`, `right`, `top`, or `bottom`, when the target's tab group is docked, the tab is added,
    * as its active tab, to the tab group directly on the `direction` side instead of a new group being
@@ -5127,7 +5128,9 @@ declare module 'shared/models/docking-framework.model' {
     /**
      * Where to open, in reading order. A side opens beside the target's tab group: `right` is the
      * reading-end side, which is the left in a right-to-left UI. `before-tab` and `after-tab` open in
-     * the target's own tab group, beside the target.
+     * the target's own tab group, just before or after the target in its tab order, which is reading
+     * order as for {@link DirectionFromTab}: `after-tab` puts the tab where `nextTab` from the target
+     * goes.
      */
     direction?: PanelDirection;
     /**

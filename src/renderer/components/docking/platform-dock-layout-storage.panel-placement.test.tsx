@@ -1157,6 +1157,41 @@ describe('opening a tab as a panel in a right-to-left UI', () => {
       children: [['project-a'], ['notes', 'find']],
     });
   });
+
+  it('puts an after-tab tab next in the target’s tab order, where nextTab goes', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('target-group', ['home', 'project-a', 'notes'])],
+      },
+    });
+
+    openPanel(dockLayout, 'find', {
+      type: 'panel',
+      direction: 'after-tab',
+      targetTabId: 'project-a',
+    });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['home', 'project-a', 'find', 'notes']],
+    });
+  });
+
+  it('adds a tab group on the reading-start side when asked for before a tab it cannot join', () => {
+    const dockLayout = renderDock(simpleShapedLayout());
+
+    openPanel(dockLayout, 'headless-new', {
+      type: 'panel',
+      direction: 'before-tab',
+      targetTabId: 'headless-editor',
+    });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['headless-model'], ['headless-editor'], ['headless-new'], ['resources-bible']],
+    });
+  });
 });
 
 describe('opening a tab as a panel beside a tab', () => {
