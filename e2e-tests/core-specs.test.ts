@@ -25,6 +25,38 @@ function readSpecList(listName: string): string[] {
     .filter((line) => line.trim() !== '' && !line.startsWith('#'));
 }
 
+/**
+ * The `editor_paths` pattern in `.github/workflows/test.yml`'s `e2e-core-selection` job: the paths
+ * whose change makes the pull-request job run `core-specs-editor.txt` too. It is POSIX ERE (for
+ * `grep -E`), which this pattern's syntax shares with JavaScript.
+ */
+function readEditorPathsPattern(): RegExp {
+  const workflow = fs.readFileSync(
+    path.join(REPOSITORY_ROOT, '.github', 'workflows', 'test.yml'),
+    'utf8',
+  );
+  const match = /^\s*editor_paths='([^']+)'/m.exec(workflow);
+  if (!match) throw new Error('test.yml no longer sets editor_paths');
+  return new RegExp(match[1]);
+}
+
+describe('the editor list trigger in test.yml', () => {
+  const editorPaths = readEditorPathsPattern();
+
+  // A pull request that changes one of the editor-list specs, or the list itself, must run that
+  // list; the pattern names them by hand, so it has to follow the list.
+  it.each([...readSpecList('core-specs-editor.txt'), 'e2e-tests/core-specs-editor.txt'])(
+    'runs the editor list when %s changes',
+    (changedPath) => {
+      expect(editorPaths.test(changedPath)).toBe(true);
+    },
+  );
+
+  it('does not run it for an unrelated change', () => {
+    expect(editorPaths.test('src/renderer/components/docking/tab.tsx')).toBe(false);
+  });
+});
+
 describe.each(SPEC_LISTS)('%s', (listName) => {
   const entries = readSpecList(listName);
 
