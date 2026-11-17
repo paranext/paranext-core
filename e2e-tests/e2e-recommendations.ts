@@ -239,7 +239,8 @@ function collapseSpecGroups(
       subsetSpecs.filter((spec) => spec.startsWith(`${ISOLATED_PREFIX}${prefix}`)).length ===
         members.length;
     if (!runsExactlyMembers(longest)) return;
-    // Prefer a key that ends at a word boundary over one that stops mid-word.
+    // Prefer a key that ends at a word boundary over one that stops mid-word, but only when the
+    // subset's spec files are known, so the shorter prefix can be checked.
     const boundary = Math.max(
       longest.lastIndexOf('-'),
       longest.lastIndexOf('.'),
@@ -247,7 +248,9 @@ function collapseSpecGroups(
     );
     const atBoundary = longest.slice(0, boundary + 1);
     const key =
-      atBoundary.length > subset.length && runsExactlyMembers(atBoundary) ? atBoundary : longest;
+      subsetSpecs && atBoundary.length > subset.length && runsExactlyMembers(atBoundary)
+        ? atBoundary
+        : longest;
     const merged: E2eRecommendation = {
       key,
       command: `npm run test:e2e:isolated ${ISOLATED_PREFIX}${key}`,

@@ -318,6 +318,16 @@ describe('recommendE2eTests', () => {
     ]);
   });
 
+  it('keeps the full common prefix when the subset spec list is unknown', () => {
+    const report = recommend(['src/a/f.ts'], {
+      sources: {
+        'a/chapter-marker-repair.spec.ts': { main: ['src/a/'], incidental: [] },
+        'a/chapter-marker-restore.spec.ts': { main: ['src/a/'], incidental: [] },
+      },
+    });
+    expect(recommendedKeys(report)).toEqual(['a/chapter-marker-re']);
+  });
+
   it('trims a collapsed key back to a word boundary when that still runs only the members', () => {
     const sources: SubsetSources = {
       'a/chapter-marker-repair.spec.ts': { main: ['src/a/'], incidental: [] },
@@ -642,47 +652,54 @@ describe('readGitChanges', () => {
     });
   });
 
-  it('says on stderr when it cannot read an untracked file, and still lists the file', () => {
-    withTemporaryRepository((repoRoot, baseSha) => {
-      // A dangling symbolic link is untracked and cannot be read.
-      fs.symlinkSync(
-        path.join(repoRoot, 'missing-target'),
-        path.join(repoRoot, 'src/main-link.ts'),
-      );
-      const written: string[] = [];
-      const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
-        written.push(String(chunk));
-        return true;
+  // Creating a symbolic link needs elevated rights on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'says on stderr when it cannot read an untracked file, and still lists the file',
+    () => {
+      withTemporaryRepository((repoRoot, baseSha) => {
+        // A dangling symbolic link is untracked and cannot be read.
+        fs.symlinkSync(
+          path.join(repoRoot, 'missing-target'),
+          path.join(repoRoot, 'src/main-link.ts'),
+        );
+        const written: string[] = [];
+        const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+          written.push(String(chunk));
+          return true;
+        });
+        try {
+          const { changedFiles } = readGitChanges(repoRoot, baseSha);
+          expect(changedFiles).toContain('src/main-link.ts');
+        } finally {
+          spy.mockRestore();
+        }
+        expect(written.join('')).toContain(
+          'e2e-recommendations: could not read untracked file src/main-link.ts: ',
+        );
       });
-      try {
-        const { changedFiles } = readGitChanges(repoRoot, baseSha);
-        expect(changedFiles).toContain('src/main-link.ts');
-      } finally {
-        spy.mockRestore();
-      }
-      expect(written.join('')).toContain('src/main-link.ts');
-    });
-  });
+    },
+  );
 });
 
 describe('command-line entry point', () => {
-  it('runs when started through a symbolic link to the module', () => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-recommendations-link-'));
-    try {
-      const link = path.join(directory, 'linked-recommendations.ts');
-      fs.symlinkSync(path.join(__dirname, 'e2e-recommendations.ts'), link);
-      const output = execFileSync(
-        path.join(REPOSITORY_ROOT, 'node_modules', '.bin', 'tsx'),
-        [link, 'HEAD'],
-        {
+  // Creating a symbolic link needs elevated rights on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'runs when started through a symbolic link to the module',
+    () => {
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-recommendations-link-'));
+      try {
+        const link = path.join(directory, 'linked-recommendations.ts');
+        fs.symlinkSync(path.join(__dirname, 'e2e-recommendations.ts'), link);
+        const output = execFileSync(process.execPath, ['--import', 'tsx', link, 'HEAD'], {
           cwd: REPOSITORY_ROOT,
           encoding: 'utf8',
           timeout: 120_000,
-        },
-      );
-      expect(JSON.parse(output)).toHaveProperty('recommendations');
-    } finally {
-      fs.rmSync(directory, { recursive: true, force: true });
-    }
-  }, 150_000);
+        });
+        expect(JSON.parse(output)).toHaveProperty('recommendations');
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    },
+    150_000,
+  );
 });
