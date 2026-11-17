@@ -24,7 +24,7 @@ describe('subset-sources.json', () => {
       .filter((entry) => entry.isDirectory() || entry.name.endsWith('.spec.ts'))
       .map((entry) => entry.name);
     expect(expectedKeys.length).toBeGreaterThan(0);
-    expect(keys).toEqual(expect.arrayContaining(expectedKeys));
+    expect(expectedKeys.filter((name) => !keys.includes(name))).toEqual([]);
   });
 
   it.each(keys)('%s names a subset or spec that exists', (key) => {
