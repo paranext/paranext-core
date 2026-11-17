@@ -116,7 +116,6 @@
       "extensions/src/platform-scripture/src/find.web-view.tsx",
       "extensions/src/platform-scripture/src/find.web-view-provider.ts",
       "extensions/src/platform-scripture/src/find.model.ts",
-      "extensions/src/platform-scripture/src/main.ts",
       "extensions/src/platform-scripture/src/project-data-provider/",
       "extensions/src/platform-scripture-editor/src/find-trigger.util.ts",
       "extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts"
@@ -124,6 +123,7 @@
     "incidental": [
       "src/renderer/components/docking/simple-layout.builder.ts",
       "src/renderer/components/docking/simple-layout.data.ts",
+      "extensions/src/platform-scripture/src/main.ts",
       "c-sharp/Projects/ParatextProjectDataProvider.cs"
     ]
   },
@@ -209,7 +209,6 @@
       "src/main/window-bounds.util.ts",
       "src/main/window-entry-disposition.util.ts",
       "src/main/window-activation.util.ts",
-      "src/main/main.ts",
       "src/shared/data/window-layout-persistence.model.ts",
       "src/shared/services/window.service.ts"
     ],
@@ -224,7 +223,8 @@
       "src/renderer/services/theme.service.ts",
       "src/renderer/components/overlay-host.component.tsx",
       "src/renderer/services/overlays/",
-      "src/renderer/components/platform-bible-toolbar.tsx"
+      "src/renderer/components/platform-bible-toolbar.tsx",
+      "src/main/main.ts"
     ]
   },
   "navigation-history": {

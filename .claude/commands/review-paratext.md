@@ -323,17 +323,17 @@ Record the author's responses as `MINOR_FINDINGS_RESPONSE` (e.g., "Author said n
 Run, as a single bash command, with the `MERGE_BASE` from Step 1.3:
 
 ```bash
-npx tsx e2e-tests/e2e-recommendations.ts "$MERGE_BASE"
+npx tsx "$(git rev-parse --show-toplevel)/e2e-tests/e2e-recommendations.ts" "$MERGE_BASE"
 ```
 
-It prints a JSON report: `recommendations` (isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`), `alsoExercised` (keys whose specs only drive the changed files along the way), `uncoveredFiles` (changed source files no key lists), `entryPointFiles` (changed menu, web view provider and command-registration files) and `specsChanged` (whether the branch touches `e2e-tests/tests/`). If the command fails, say so in one line, record `E2E_TEST_NOTES` as "not checked: <error>", and continue.
+It prints a JSON report: `recommendations` (isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`), `alsoExercised` (keys whose specs only drive the changed files along the way), `uncoveredFiles` (changed source files no key lists), `entryPointFiles` (changed menu, web view provider and command-registration files) and `specsChanged` (whether the branch changes an e2e spec or its support code: a `*.spec.ts`, a `*.page.ts` or a fixture file). If the command fails, say so in one line, record `E2E_TEST_NOTES` as "not checked: <error>", and continue.
 
-This step never starts a test run and never blocks the review. It has two parts; ask a part's question only when it applies, each as a separate message after the response to Step 3.4, waiting for the author's response before the next. If neither part applies, print nothing and leave `E2E_TEST_NOTES` empty (the summary then gets no heading).
+This step never starts a test run and never blocks the review. It has three cases; ask a question only when its case applies, each question as a separate message after the response to Step 3.4, waiting for the author's response before the next. If none applies, print nothing and leave `E2E_TEST_NOTES` empty (the summary then gets no heading).
 
-**Run part** — applies when `recommendations` is non-empty. List each key with its `command` and its CI status in words, from `ci`:
+**Run part** (a question) — applies when `recommendations` is non-empty. List each key with its `command` and its CI status in words, from `ci`:
 
 - `kind: 'spec'`, `coreList: 'always'` → "also runs in CI on every pull request"
-- `kind: 'spec'`, `coreList: 'editor'` → "also runs in CI when the editor list applies"
+- `kind: 'spec'`, `coreList: 'editor'` → "also runs in CI when a pull request touches the Scripture editor extension, `dev-packages.json` or the C# USFM/USJ code"
 - `kind: 'spec'`, `coreList: 'none'` → "does not run in CI on pull requests (nightly only)"
 - `kind: 'subset'` → "CI runs `coreSpecCount` of its `specCount` spec files on pull requests"
 
@@ -343,9 +343,9 @@ Then ask:
 
 Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>: not run: <reason>".
 
-When `alsoExercised` is non-empty, add one line naming those keys, with no question: "These also open the code you changed, if you want to run more: <keys>."
+**Also-exercised line** (no question) — applies whenever `alsoExercised` is non-empty, whether or not `recommendations` is: print one line naming those keys: "These also open the code you changed, if you want to run more: <keys>."
 
-**Add part** — applies only when the diff has a runtime change (not docs, tests or stories alone) and `specsChanged` is false, and then only when at least one of these holds:
+**Add part** (a question) — applies only when the diff has a runtime change (not docs, tests or stories alone) and `specsChanged` is false, and then only when at least one of these holds:
 
 1. `uncoveredFiles` is non-empty: name those files in the question.
 2. `entryPointFiles` is non-empty and the diff shows an entry point was **added** (a new menu item, web view provider or command registration), not only edited.
@@ -357,7 +357,7 @@ Never ask it for a behaviour-keeping refactor, a docs-only or tests-only change,
 
 Record the answer as "added: <spec>", "extended: <spec>", "not needed: <reason>" or "to do: <where it is tracked>".
 
-Store both parts' records as `E2E_TEST_NOTES` for the output phase.
+Store the answers as `E2E_TEST_NOTES` for the output phase.
 
 **Complete this step and receive the author's response(s) before proceeding to Step 3.6.**
 
@@ -513,7 +513,8 @@ Include **ALL** findings in each section — open, dismissed, and fixed.
 
 ## End-to-end tests
 
-[Only present when `E2E_TEST_NOTES` is not empty. One bullet per recommended key with the
+[Only present when `E2E_TEST_NOTES` is not empty. It can also hold a single "not checked: <error>"
+line when the recommendations command could not run. Otherwise, one bullet per recommended key with the
 author's answer ("ran, passed", "ran, failed: …", "not run: …"), then the add-part answer
 ("added: …", "extended: …", "not needed: …", "to do: …") if it was asked. Omit this heading
 entirely otherwise.]

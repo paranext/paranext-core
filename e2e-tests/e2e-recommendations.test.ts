@@ -8,20 +8,21 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { recommendE2eTests, RecommendInput, SubsetSources as Sources } from './e2e-recommendations';
+import { recommendE2eTests, RecommendInput, SubsetSources } from './e2e-recommendations';
 
 const REPOSITORY_ROOT = path.join(__dirname, '..');
 const ISOLATED_DIRECTORY = path.join(__dirname, 'tests', 'isolated');
 const MAPPING_PATH = path.join(ISOLATED_DIRECTORY, 'subset-sources.json');
 
-/** `main` is the source a subset's specs exist to test; `incidental` is source they only drive. */
-type SubsetSources = { main: string[]; incidental: string[] };
-
-const mapping: Record<string, SubsetSources> = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
+const mapping: SubsetSources = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
 const keys = Object.keys(mapping);
 const prefixEntries = keys.flatMap((key) =>
   [...mapping[key].main, ...mapping[key].incidental].map((prefix) => [key, prefix]),
 );
+const isZoomKey = (key: string) =>
+  key.startsWith('content-zoom-') ||
+  key === 'notes-content-zoom' ||
+  key === 'resources-content-zoom';
 const EDITOR_WEB_VIEW =
   'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx';
 
@@ -59,12 +60,7 @@ describe('subset-sources.json', () => {
   });
 
   it('does not count the editor web view as main source for the zoom subsets', () => {
-    const zoomKeys = keys.filter(
-      (key) =>
-        key.startsWith('content-zoom-') ||
-        key === 'notes-content-zoom' ||
-        key === 'resources-content-zoom',
-    );
+    const zoomKeys = keys.filter(isZoomKey);
     expect(zoomKeys.length).toBeGreaterThan(0);
     zoomKeys.forEach((key) => {
       const covering = mapping[key].main.filter((prefix) =>
@@ -75,7 +71,7 @@ describe('subset-sources.json', () => {
   });
 });
 
-const FIXTURE_SOURCES: Sources = {
+const FIXTURE_SOURCES: SubsetSources = {
   docking: { main: ['src/renderer/components/docking/'], incidental: [] },
   'scripture-editor': { main: ['extensions/src/platform-scripture-editor/'], incidental: [] },
   'scripture-editor/no-unasked.spec.ts': {
@@ -177,16 +173,9 @@ describe('recommendE2eTests', () => {
   });
 
   it('does not recommend zoom subsets for the editor web view in the real mapping', () => {
-    const real: Sources = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
+    const real: SubsetSources = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
     const report = recommend([EDITOR_WEB_VIEW], { sources: real });
-    const zoomKeys = (candidates: string[]) =>
-      candidates.filter(
-        (key) =>
-          key.startsWith('content-zoom-') ||
-          key === 'notes-content-zoom' ||
-          key === 'resources-content-zoom',
-      );
-    expect(zoomKeys(recommendedKeys(report))).toEqual([]);
+    expect(recommendedKeys(report).filter(isZoomKey)).toEqual([]);
   });
 
   it('matches a deleted path that is not on disk', () => {
@@ -210,15 +199,76 @@ describe('recommendE2eTests', () => {
     expect(recommend(files).recommendations[0].ci).toEqual({ kind: 'spec', coreList: 'none' });
   });
 
-  it('ignores files outside the source roots, tests, docs and localized strings', () => {
+  it('ignores files outside the source roots and localized strings as uncovered', () => {
     const report = recommend([
       'README.md',
       'lib/platform-bible-utils/src/x.ts',
-      'src/a.test.ts',
       'extensions/src/x/contributions/localizedStrings.json',
     ]);
     expect(report.recommendations).toEqual([]);
     expect(report.uncoveredFiles).toEqual([]);
+  });
+
+  it.each([
+    'src/x/a.test.ts',
+    'src/x/a.test-util.ts',
+    'src/x/y.stories.tsx',
+    'src/x/README.md',
+    'src/x/guide.mdx',
+    'src/x/types.d.ts',
+    'src/x/__mocks__/z.ts',
+    'src/x/__tests__/z.ts',
+    'c-sharp/Foo.Tests/Bar.cs',
+    'src/x/assets/logo.svg',
+    'extensions/src/x/package.json',
+    'extensions/src/x/manifest.json',
+    'c-sharp/Foo.csproj',
+    'c-sharp/Directory.Build.props',
+    'src/x/.config/settings.ts',
+  ])('treats %s as non-runtime: uncovered nowhere, recommends nothing', (file) => {
+    const report = recommend([file], {
+      sources: {
+        everything: { main: ['src/', 'extensions/src/', 'c-sharp/'], incidental: [] },
+        other: { main: [], incidental: ['src/', 'extensions/src/', 'c-sharp/'] },
+      },
+      filesAddingCommandRegistrations: [file],
+    });
+    expect(report.recommendations).toEqual([]);
+    expect(report.alsoExercised).toEqual([]);
+    expect(report.uncoveredFiles).toEqual([]);
+    expect(report.entryPointFiles).toEqual([]);
+  });
+
+  it('stays silent for a test-only, stories-only or docs-only change in a covered area', () => {
+    [
+      'src/renderer/components/docking/dock.component.test.tsx',
+      'src/renderer/components/docking/dock.stories.tsx',
+      'src/shared/services/README.md',
+    ].forEach((file) => {
+      const report = recommend([file]);
+      expect({ file, keys: recommendedKeys(report) }).toEqual({ file, keys: [] });
+      expect({ file, alsoExercised: report.alsoExercised }).toEqual({ file, alsoExercised: [] });
+    });
+  });
+
+  it('still matches localized strings so visible-text locators are covered', () => {
+    const report = recommend([
+      'extensions/src/platform-scripture/contributions/localizedStrings.json',
+    ]);
+    expect(recommendedKeys(report)).toEqual(['find']);
+    expect(report.uncoveredFiles).toEqual([]);
+  });
+
+  it('only counts registrations inside the source roots', () => {
+    const report = recommend([], {
+      filesAddingCommandRegistrations: [
+        'lib/platform-bible-react/dist/index.js',
+        'lib/eslint-rules/x.ts',
+        'src/main/commands.test.ts',
+        'extensions/src/foo/src/main.ts',
+      ],
+    });
+    expect(report.entryPointFiles).toEqual(['extensions/src/foo/src/main.ts']);
   });
 
   it('reports a source file that matches no prefix as uncovered', () => {
@@ -240,8 +290,14 @@ describe('recommendE2eTests', () => {
     ]);
   });
 
-  it('flags a changed e2e spec', () => {
-    expect(recommend(['e2e-tests/tests/isolated/docking/x.spec.ts']).specsChanged).toBe(true);
-    expect(recommend(['src/main/new-thing.ts']).specsChanged).toBe(false);
+  it('flags a changed e2e spec or its support code, not other files under e2e-tests', () => {
+    const changed = (file: string) => recommend([file]).specsChanged;
+    expect(changed('e2e-tests/tests/isolated/docking/x.spec.ts')).toBe(true);
+    expect(changed('e2e-tests/tests/isolated/docking/x.page.ts')).toBe(true);
+    expect(changed('e2e-tests/fixtures/isolated.fixture.ts')).toBe(true);
+    expect(changed('e2e-tests/tests/isolated/README.md')).toBe(false);
+    expect(changed('e2e-tests/tests/isolated/subset-sources.json')).toBe(false);
+    expect(changed('e2e-tests/e2e-recommendations.test.ts')).toBe(false);
+    expect(changed('src/main/new-thing.ts')).toBe(false);
   });
 });

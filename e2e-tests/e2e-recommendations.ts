@@ -1,9 +1,10 @@
 /**
  * Matches a branch's changed files to the isolated e2e tests that cover them.
  *
- * The mapping lives in `tests/isolated/subset-sources.json`. This module is pure: it takes the
- * changed files, the mapping and the CI spec lists, and returns a report. Reading git and printing
- * are the caller's job.
+ * The mapping lives in `tests/isolated/subset-sources.json`. {@link recommendE2eTests} is pure: it
+ * takes the changed files, the mapping and the CI spec lists, and returns a report. The
+ * command-line entry point at the bottom of the file reads git and the spec lists and prints the
+ * report as JSON.
  */
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -46,7 +47,10 @@ export interface E2eRecommendationReport {
   uncoveredFiles: string[];
   /** Changed files that add or change a menu, web view or command registration, sorted. */
   entryPointFiles: string[];
-  /** Whether any changed file is under `e2e-tests/tests/`. */
+  /**
+   * Whether an e2e spec or its support code changed: a `*.spec.ts`, a `*.page.ts` or a fixture
+   * `.ts` file under `e2e-tests/` (not a unit test, README or mapping file).
+   */
   specsChanged: boolean;
 }
 
@@ -54,7 +58,11 @@ export interface E2eRecommendationReport {
 export interface RecommendInput {
   /** Repository-relative changed paths, deleted ones included. */
   changedFiles: string[];
-  /** Changed files whose diff adds a command registration. */
+  /**
+   * Changed files whose diff adds or removes a command or web view provider registration
+   * ({@link REGISTRATION_PATTERN}). Files outside the source roots or that are not runtime code are
+   * ignored.
+   */
   filesAddingCommandRegistrations: string[];
   sources: SubsetSources;
   /** Entries of `e2e-tests/core-specs.txt`. */
@@ -67,8 +75,25 @@ export interface RecommendInput {
 
 const ISOLATED_PREFIX = 'e2e-tests/tests/isolated/';
 const SOURCE_ROOTS = ['src/', 'extensions/src/', 'c-sharp/'];
-const UNCOVERED_EXCLUSIONS =
-  /\.test\.|\.stories\.|\.md$|localizedStrings\.json$|(^|\/)(__tests__|__mocks__)\//;
+
+/**
+ * Matches added or removed lines that register a command (`registerCommand(`, or a C# request
+ * handler named `"command:…`) or a web view provider (`registerWebViewProvider(`). Passed to `git
+ * diff -G` and tested against the content of untracked files.
+ */
+export const REGISTRATION_PATTERN = 'registerCommand\\(|registerWebViewProvider\\(|"command:';
+
+/** Paths that are not runtime code: tests, stories, docs, type declarations, build metadata. */
+const NON_RUNTIME =
+  /\.test\.|\.test-util\.|\.stories\.|\.md$|\.mdx$|\.d\.ts$|(^|\/)(__tests__|__mocks__|assets|\.config)\/|(^|\/)[^/]*Tests\/|(^|\/)package\.json$|(^|\/)manifest\.json$|\.csproj$|\.props$/;
+const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
+const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
+const isE2eSpecSupport = (file: string) =>
+  file.startsWith('e2e-tests/') &&
+  !file.endsWith('.test.ts') &&
+  (file.endsWith('.spec.ts') ||
+    file.endsWith('.page.ts') ||
+    (file.startsWith('e2e-tests/fixtures/') && file.endsWith('.ts')));
 
 /**
  * The entries of a spec list: one repository path per line; `#` starts a comment line. Lines are
@@ -120,7 +145,10 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
   const mainMatches = new Map<string, Set<string>>();
   const incidentalMatches = new Map<string, Set<string>>();
 
-  input.changedFiles.forEach((file) => {
+  // Localized strings stay matchable (e2e locators use visible text) but are never "uncovered".
+  const runtimeFiles = input.changedFiles.filter((file) => !isNonRuntime(file));
+
+  runtimeFiles.forEach((file) => {
     const mainKeys = keys.filter((key) => matchesAny(file, input.sources[key].main));
     mainKeys
       // A subset yields to a file-level key inside it that this same file reaches.
@@ -151,19 +179,21 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     ...input.sources[key].main,
     ...input.sources[key].incidental,
   ]);
-  const uncoveredFiles = input.changedFiles
-    .filter((file) => SOURCE_ROOTS.some((root) => file.startsWith(root)))
-    .filter((file) => !UNCOVERED_EXCLUSIONS.test(file))
+  const uncoveredFiles = runtimeFiles
+    .filter(isInSourceRoot)
+    .filter((file) => !file.endsWith('localizedStrings.json'))
     .filter((file) => !matchesAny(file, allPrefixes))
     .sort();
 
   const entryPointFiles = [
     ...new Set([
-      ...input.changedFiles.filter(
+      ...runtimeFiles.filter(
         (file) =>
           file.endsWith('contributions/menus.json') || file.endsWith('.web-view-provider.ts'),
       ),
-      ...input.filesAddingCommandRegistrations,
+      ...input.filesAddingCommandRegistrations
+        .filter(isInSourceRoot)
+        .filter((file) => !isNonRuntime(file)),
     ]),
   ].sort();
 
@@ -172,7 +202,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     alsoExercised,
     uncoveredFiles,
     entryPointFiles,
-    specsChanged: input.changedFiles.some((file) => file.startsWith('e2e-tests/tests/')),
+    specsChanged: input.changedFiles.some(isE2eSpecSupport),
   };
 }
 
@@ -182,6 +212,7 @@ function git(...args: string[]): string[] {
   return execFileSync('git', args, {
     cwd: REPO_ROOT,
     encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024,
   })
     .split('\n')
@@ -214,15 +245,37 @@ function runCli(mergeBase: string): void {
       specFilesBySubset[key] = listSpecFiles(path.join(REPO_ROOT, ISOLATED_PREFIX, key));
     });
 
+  // `--no-renames` lists a rename's old and new path; untracked files never appear in `git diff`.
+  const untrackedFiles = git('ls-files', '--others', '--exclude-standard');
+  const untrackedRegistering = untrackedFiles.filter((file) => {
+    try {
+      return new RegExp(REGISTRATION_PATTERN).test(
+        fs.readFileSync(path.join(REPO_ROOT, file), 'utf8'),
+      );
+    } catch {
+      return false;
+    }
+  });
+
   const report = recommendE2eTests({
-    changedFiles: git('diff', '--name-only', mergeBase),
-    filesAddingCommandRegistrations: git(
-      'diff',
-      '--name-only',
-      '-G',
-      'registerCommand\\(|RegisterCommand\\(',
-      mergeBase,
-    ),
+    changedFiles: [
+      ...new Set([
+        ...git('diff', '--no-renames', '--name-only', '--end-of-options', mergeBase),
+        ...untrackedFiles,
+      ]),
+    ],
+    filesAddingCommandRegistrations: [
+      ...git(
+        'diff',
+        '--no-renames',
+        '--name-only',
+        '-G',
+        REGISTRATION_PATTERN,
+        '--end-of-options',
+        mergeBase,
+      ),
+      ...untrackedRegistering,
+    ],
     sources,
     coreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs.txt')),
     editorCoreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs-editor.txt')),
