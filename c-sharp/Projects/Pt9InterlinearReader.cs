@@ -309,8 +309,6 @@ internal static class Pt9InterlinearReader
             using var reader = OpenPt9File(fileManager, relativePath);
             sizeCap.Add(reader.BaseStream.Length);
 
-            // The whole relative path is compared, so a same-named file inside an Interlinear_*
-            // directory stays a book file.
             switch (relativePath.ToLowerInvariant())
             {
                 case Pt9LexiconFileNameLower:
