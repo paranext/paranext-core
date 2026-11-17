@@ -551,7 +551,9 @@ jobs:
           PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           spec_lists="e2e-tests/core-specs.txt"
-          editor_paths='^(extensions/src/platform-scripture-editor/|dev-packages\.json$|c-sharp/(.*/)?Us(fm|j)[^/]*$)'
+          # The C# side of USFM<->USJ lives in ParatextProjectDataProvider.cs (over ParatextData);
+          # the Usfm*/Usj* names catch any converter split out of it later.
+          editor_paths='^(extensions/src/platform-scripture-editor/|dev-packages\.json$|c-sharp/Projects/ParatextProjectDataProvider\.cs$|c-sharp/(.*/)?Us(fm|j)[^/]*$)'
           if [ -z "$PULL_REQUEST_NUMBER" ]; then
             spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
           else
@@ -564,8 +566,8 @@ jobs:
           echo "spec_lists=$spec_lists" >> "$GITHUB_OUTPUT"
 
   # The isolated end-to-end specs that guard data loss and core flows, on every pull request. A
-  # job of its own beside the builds, so it adds no waiting time. It reports without blocking:
-  # with no retries a timing race in the app would otherwise fail an unrelated pull request.
+  # job of its own beside the builds, so it adds no waiting time. It reports without blocking
+  # until it has run for about two weeks without failing a pull request that did not cause it.
   e2e-core:
     name: E2E core
     needs: e2e-core-selection
