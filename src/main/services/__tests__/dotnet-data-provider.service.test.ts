@@ -121,9 +121,10 @@ describe('dotnetDataProvider.start', () => {
     dotnetDataProvider.start();
 
     const [command, args] = mocks.spawn.mock.calls[0];
-    // Packaged runs the shipped binary with no arguments, whatever the dev flag says
+    // Packaged runs the shipped binary, told only to read its secrets from standard input, whatever
+    // the dev flag says
     expect(command).not.toBe('dotnet');
-    expect(args).toEqual([]);
+    expect(args).toEqual(['--launch-secrets-on-stdin']);
   });
 
   test('opts a dev run into the sample project and keeps the rest of the environment', () => {

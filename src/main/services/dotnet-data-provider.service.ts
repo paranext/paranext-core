@@ -13,6 +13,12 @@ import { issueLaunchSecrets, revokeLaunchSecrets } from '@main/services/launch-s
  */
 const LAUNCH_SECRETS_ENVIRONMENT_VARIABLE = 'PAPI_LAUNCH_SECRETS';
 
+/**
+ * Tells a packaged data provider to read its launch secrets from standard input. Without it the
+ * data provider never waits on standard input, so one started by another tool is not held up.
+ */
+const LAUNCH_SECRETS_ON_STANDARD_INPUT_ARG = '--launch-secrets-on-stdin';
+
 /** Pretty name for the process this service manages. Used in logs */
 const DOTNET_DATA_PROVIDER_NAME = '.net';
 
@@ -167,11 +173,10 @@ function startDotnetDataProvider() {
 
     if (process.platform === 'win32') {
       command = path.join(dotnetPath, 'ParanextDataProvider.exe');
-      args = [];
     } else {
       command = path.join(dotnetPath, 'ParanextDataProvider');
-      args = [];
     }
+    args = [LAUNCH_SECRETS_ON_STANDARD_INPUT_ARG];
     options = { cwd: dotnetPath };
   } else {
     // Dev runs, which include the E2E tests, get the bundled sample project when no projects are
