@@ -146,8 +146,10 @@ one of these.
 - **Every pull request:** the smoke suite (in the build jobs of `.github/workflows/test.yml`), and
   the `e2e-core` job: the isolated specs listed in `e2e-tests/core-specs.txt`, plus those in
   `e2e-tests/core-specs-editor.txt` when the pull request touches the Scripture editor extension,
-  `dev-packages.json`, the C# USFM/USJ conversion code, or the editor list itself, the two specs it
-  names and `fixtures/no-unasked-edits.body.ts`. If the changed-files lookup fails, both lists run.
+  `dev-packages.json`, the C# USFM/USJ conversion code, the `platform-bible-react` parts the editor
+  web view renders (the footnote editor, the marker menu and palette helpers, the editor keyboard
+  shortcuts, the demo editor stylesheets), or the editor list itself, the two specs it names and
+  `fixtures/no-unasked-edits.body.ts`. If the changed-files lookup fails, both lists run.
   To add or remove a spec, edit the list.
 - **Every night** (`.github/workflows/e2e-nightly.yml`, also startable by hand): every isolated
   spec, split over eight runners.
