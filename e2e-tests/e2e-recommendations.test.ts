@@ -9,7 +9,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   readGitChanges,
   recommendE2eTests,
@@ -131,7 +131,8 @@ describe('recommendE2eTests', () => {
     expect(report.recommendations[0].command).toBe('npm run test:e2e:isolated docking');
     expect(report.recommendations[0].ci).toEqual({
       kind: 'subset',
-      coreSpecCount: 2,
+      alwaysCoreSpecCount: 2,
+      editorCoreSpecCount: 0,
       specCount: 3,
     });
     expect(report.recommendations[0].matchedFiles).toEqual([
@@ -190,16 +191,44 @@ describe('recommendE2eTests', () => {
     expect(recommendedKeys(report).filter(isZoomKey)).toEqual([]);
   });
 
+  // A spec's test ids live in the component that renders them, often in `lib/`; the entry must list
+  // that file or a change to the component recommends nothing.
+  it.each([
+    [
+      'lib/platform-bible-react/src/components/advanced/navigation-history-buttons/navigation-history-buttons.component.tsx',
+      'navigation-history',
+    ],
+    ['lib/platform-bible-react/src/components/advanced/toolbar.component.tsx', 'title-bar'],
+    [
+      'lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx',
+      'scripture-editor',
+    ],
+    [
+      'lib/platform-bible-react/src/components/advanced/comment-list/comment-item.component.tsx',
+      'comments-tab.spec.ts',
+    ],
+  ])('recommends the key whose spec drives %s in the real mapping', (file, expectedKey) => {
+    const real: SubsetSources = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
+    expect(recommendedKeys(recommend([file], { sources: real }))).toContain(expectedKey);
+  });
+
   it('collapses the no-unasked-edits specs into one command in the real mapping', () => {
     const real: SubsetSources = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
     const editorDirectory = path.join(ISOLATED_DIRECTORY, 'scripture-editor');
+    const specNames = fs
+      .readdirSync(editorDirectory)
+      .filter((name) => name.endsWith('.spec.ts'))
+      .sort();
+    const expectedMembers = specNames
+      .filter((name) => name.startsWith('no-unasked-edits-'))
+      .map((name) => `scripture-editor/${name}`);
+    expect(expectedMembers.length).toBeGreaterThan(1);
     const report = recommend(['c-sharp/Projects/ParatextProjectDataProvider.cs'], {
       sources: real,
       specFilesBySubset: {
-        'scripture-editor': fs
-          .readdirSync(editorDirectory)
-          .filter((name) => name.endsWith('.spec.ts'))
-          .map((name) => `e2e-tests/tests/isolated/scripture-editor/${name}`),
+        'scripture-editor': specNames.map(
+          (name) => `e2e-tests/tests/isolated/scripture-editor/${name}`,
+        ),
       },
     });
     const collapsed = report.recommendations.filter(
@@ -209,8 +238,8 @@ describe('recommendE2eTests', () => {
     expect(collapsed[0].command).toBe(
       'npm run test:e2e:isolated e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-',
     );
-    expect(collapsed[0].memberKeys).toHaveLength(8);
-    expect(collapsed[0].ci).toMatchObject({ kind: 'subset', specCount: 8 });
+    expect(collapsed[0].memberKeys).toEqual(expectedMembers);
+    expect(collapsed[0].ci).toMatchObject({ kind: 'subset', specCount: expectedMembers.length });
     expect(recommendedKeys(report).filter((key) => key.includes('no-unasked-edits-'))).toEqual([
       'scripture-editor/no-unasked-edits-',
     ]);
@@ -230,12 +259,16 @@ describe('recommendE2eTests', () => {
       'a/y.spec.ts',
     ]);
 
-    const differentFiles = recommend(['src/a/f.ts', 'src/b/g.ts'], { sources });
-    expect(differentFiles.recommendations.map((r) => r.memberKeys)).toEqual([
-      undefined,
-      undefined,
-      undefined,
-    ]);
+    // x-one matched only f.ts, x-two matched f.ts and g.ts: their prefix "a/x-" is longer than the
+    // subset, so only the differing files keep them apart.
+    const differentFiles = recommend(['src/a/f.ts', 'src/b/g.ts'], {
+      sources: {
+        'a/x-one.spec.ts': { main: ['src/a/'], incidental: [] },
+        'a/x-two.spec.ts': { main: ['src/a/', 'src/b/'], incidental: [] },
+      },
+    });
+    expect(recommendedKeys(differentFiles)).toEqual(['a/x-one.spec.ts', 'a/x-two.spec.ts']);
+    expect(differentFiles.recommendations.map((r) => r.memberKeys)).toEqual([undefined, undefined]);
 
     const split = recommend(['src/a/f.ts', 'src/b/g.ts'], {
       sources: {
@@ -272,16 +305,45 @@ describe('recommendE2eTests', () => {
     const report = recommend(['src/a/f.ts'], {
       sources,
       coreSpecs: ['e2e-tests/tests/isolated/a/x-one.spec.ts'],
+      editorCoreSpecs: ['e2e-tests/tests/isolated/a/x-two.spec.ts'],
     });
     expect(report.recommendations).toEqual([
       {
         key: 'a/x-',
         command: 'npm run test:e2e:isolated e2e-tests/tests/isolated/a/x-',
         matchedFiles: ['src/a/f.ts'],
-        ci: { kind: 'subset', coreSpecCount: 1, specCount: 2 },
+        ci: { kind: 'subset', alwaysCoreSpecCount: 1, editorCoreSpecCount: 1, specCount: 2 },
         memberKeys: ['a/x-one.spec.ts', 'a/x-two.spec.ts'],
       },
     ]);
+  });
+
+  it('trims a collapsed key back to a word boundary when that still runs only the members', () => {
+    const sources: SubsetSources = {
+      'a/chapter-marker-repair.spec.ts': { main: ['src/a/'], incidental: [] },
+      'a/chapter-marker-restore.spec.ts': { main: ['src/a/'], incidental: [] },
+    };
+    const members = [
+      'e2e-tests/tests/isolated/a/chapter-marker-repair.spec.ts',
+      'e2e-tests/tests/isolated/a/chapter-marker-restore.spec.ts',
+    ];
+    const report = recommend(['src/a/f.ts'], {
+      sources,
+      specFilesBySubset: { a: members },
+    });
+    expect(recommendedKeys(report)).toEqual(['a/chapter-marker-']);
+    expect(report.recommendations[0].command).toBe(
+      'npm run test:e2e:isolated e2e-tests/tests/isolated/a/chapter-marker-',
+    );
+
+    // The boundary prefix would also run a third spec, so the longer key stays.
+    const withThird = recommend(['src/a/f.ts'], {
+      sources,
+      specFilesBySubset: {
+        a: [...members, 'e2e-tests/tests/isolated/a/chapter-marker-empty.spec.ts'],
+      },
+    });
+    expect(recommendedKeys(withThird)).toEqual(['a/chapter-marker-re']);
   });
 
   it('matches a deleted path that is not on disk', () => {
@@ -395,8 +457,33 @@ describe('recommendE2eTests', () => {
     });
     expect(report.recommendations[0].ci).toEqual({
       kind: 'subset',
-      coreSpecCount: 1,
+      alwaysCoreSpecCount: 0,
+      editorCoreSpecCount: 1,
       specCount: 2,
+    });
+  });
+
+  it('counts always-run and editor-list specs of a subset separately', () => {
+    const report = recommend(['src/renderer/components/docking/dock.tsx'], {
+      coreSpecs: ['e2e-tests/tests/isolated/docking/a.spec.ts'],
+      editorCoreSpecs: [
+        'e2e-tests/tests/isolated/docking/b.spec.ts',
+        'e2e-tests/tests/isolated/docking/c.spec.ts',
+      ],
+      specFilesBySubset: {
+        docking: [
+          'e2e-tests/tests/isolated/docking/a.spec.ts',
+          'e2e-tests/tests/isolated/docking/b.spec.ts',
+          'e2e-tests/tests/isolated/docking/c.spec.ts',
+          'e2e-tests/tests/isolated/docking/d.spec.ts',
+        ],
+      },
+    });
+    expect(report.recommendations[0].ci).toEqual({
+      kind: 'subset',
+      alwaysCoreSpecCount: 1,
+      editorCoreSpecCount: 2,
+      specCount: 4,
     });
   });
 
@@ -425,15 +512,38 @@ describe('recommendE2eTests', () => {
     ]);
   });
 
-  it('flags a changed e2e spec or its support code, not other files under e2e-tests', () => {
-    const changed = (file: string) => recommend([file]).specsChanged;
-    expect(changed('e2e-tests/tests/isolated/docking/x.spec.ts')).toBe(true);
-    expect(changed('e2e-tests/tests/isolated/docking/x.page.ts')).toBe(true);
-    expect(changed('e2e-tests/fixtures/isolated.fixture.ts')).toBe(true);
-    expect(changed('e2e-tests/tests/isolated/README.md')).toBe(false);
-    expect(changed('e2e-tests/tests/isolated/subset-sources.json')).toBe(false);
-    expect(changed('e2e-tests/e2e-recommendations.test.ts')).toBe(false);
-    expect(changed('src/main/new-thing.ts')).toBe(false);
+  it('reports the core menu data file as an entry point', () => {
+    expect(recommend(['src/extension-host/data/menu.data.json']).entryPointFiles).toEqual([
+      'src/extension-host/data/menu.data.json',
+    ]);
+  });
+
+  it.each([
+    'e2e-tests/tests/isolated/docking/x.spec.ts',
+    'e2e-tests/tests/isolated/docking/x.page.ts',
+    'e2e-tests/tests/isolated/docking/docking-helpers.ts',
+    'e2e-tests/tests/isolated/multi-window/multi-window.util.ts',
+    'e2e-tests/tests/isolated/internet-settings.page.ts',
+    'e2e-tests/fixtures/isolated.fixture.ts',
+    'e2e-tests/global-setup.ts',
+    'e2e-tests/playwright.config.ts',
+    'e2e-tests/playwright-cdp.config.ts',
+  ])('flags %s as a changed e2e spec or its support code', (file) => {
+    expect(recommend([file]).specsChanged).toBe(true);
+  });
+
+  it.each([
+    'e2e-tests/tests/isolated/README.md',
+    'e2e-tests/tests/isolated/subset-sources.json',
+    'e2e-tests/tests/isolated/docking/x.test.ts',
+    'e2e-tests/e2e-recommendations.test.ts',
+    'e2e-tests/e2e-recommendations.ts',
+    'e2e-tests/global-setup.test.ts',
+    'e2e-tests/fixtures/poll-retry.test.ts',
+    'e2e-tests/core-specs.txt',
+    'src/main/new-thing.ts',
+  ])('does not flag %s as a changed e2e spec or its support code', (file) => {
+    expect(recommend([file]).specsChanged).toBe(false);
   });
 });
 
@@ -519,4 +629,60 @@ describe('readGitChanges', () => {
       expect(fs.existsSync(path.join(repoRoot, 'injected.txt'))).toBe(false);
     });
   });
+
+  it('lists a file with a non-ASCII name as written, tracked or untracked', () => {
+    withTemporaryRepository((repoRoot, baseSha) => {
+      writeFile(repoRoot, 'src/main/café.ts', 'export const a = 1;\n');
+      runGit(repoRoot, 'add', '-N', 'src/main/café.ts');
+      writeFile(repoRoot, 'src/main/naïve.ts', 'export const b = 1;\n');
+      const { changedFiles } = readGitChanges(repoRoot, baseSha);
+      expect(changedFiles).toEqual(
+        expect.arrayContaining(['src/main/café.ts', 'src/main/naïve.ts']),
+      );
+    });
+  });
+
+  it('says on stderr when it cannot read an untracked file, and still lists the file', () => {
+    withTemporaryRepository((repoRoot, baseSha) => {
+      // A dangling symbolic link is untracked and cannot be read.
+      fs.symlinkSync(
+        path.join(repoRoot, 'missing-target'),
+        path.join(repoRoot, 'src/main-link.ts'),
+      );
+      const written: string[] = [];
+      const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+        written.push(String(chunk));
+        return true;
+      });
+      try {
+        const { changedFiles } = readGitChanges(repoRoot, baseSha);
+        expect(changedFiles).toContain('src/main-link.ts');
+      } finally {
+        spy.mockRestore();
+      }
+      expect(written.join('')).toContain('src/main-link.ts');
+    });
+  });
+});
+
+describe('command-line entry point', () => {
+  it('runs when started through a symbolic link to the module', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-recommendations-link-'));
+    try {
+      const link = path.join(directory, 'linked-recommendations.ts');
+      fs.symlinkSync(path.join(__dirname, 'e2e-recommendations.ts'), link);
+      const output = execFileSync(
+        path.join(REPOSITORY_ROOT, 'node_modules', '.bin', 'tsx'),
+        [link, 'HEAD'],
+        {
+          cwd: REPOSITORY_ROOT,
+          encoding: 'utf8',
+          timeout: 120_000,
+        },
+      );
+      expect(JSON.parse(output)).toHaveProperty('recommendations');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  }, 150_000);
 });

@@ -20,7 +20,14 @@ export type SubsetSources = Record<string, { main: string[]; incidental: string[
 /** How CI treats a recommended key. */
 export type CiStatus =
   | { kind: 'spec'; coreList: 'always' | 'editor' | 'none' }
-  | { kind: 'subset'; coreSpecCount: number; specCount: number };
+  | {
+      kind: 'subset';
+      /** Specs CI runs on every pull request. */
+      alwaysCoreSpecCount: number;
+      /** Further specs CI runs only when the pull request touches the Scripture editor. */
+      editorCoreSpecCount: number;
+      specCount: number;
+    };
 
 /** One isolated key recommended for the changed files. */
 export interface E2eRecommendation {
@@ -50,13 +57,20 @@ export interface E2eRecommendationReport {
   recommendations: E2eRecommendation[];
   /** Keys matched only through `incidental`, sorted by key. */
   alsoExercised: { key: string; matchedFiles: string[] }[];
-  /** Changed source files that no key lists, so no recommendation can cover them. */
+  /**
+   * Changed source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists, so no
+   * recommendation can cover them. `lib/` is never reported here: library code is reached through
+   * the extensions and renderer components that consume it, so a library-only change with no `lib/`
+   * prefix in any entry can produce no recommendation and no uncovered file.
+   */
   uncoveredFiles: string[];
   /** Changed files that add or change a menu, web view or command registration, sorted. */
   entryPointFiles: string[];
   /**
-   * Whether an e2e spec or its support code changed: a `*.spec.ts`, a `*.page.ts` or a fixture
-   * `.ts` file under `e2e-tests/` (not a unit test, README or mapping file).
+   * Whether an e2e spec or its support code changed: any `.ts` file under `e2e-tests/tests/`
+   * (specs, page objects, spec helpers), under `e2e-tests/fixtures/`, `e2e-tests/global-setup.ts`
+   * or an `e2e-tests/playwright*.config.ts`, except a unit test (`*.test.ts`). READMEs and mapping
+   * files do not count.
    */
   specsChanged: boolean;
 }
@@ -97,17 +111,42 @@ export const REGISTRATION_PATTERN =
 /**
  * Paths that are not runtime code: tests, stories, docs, type declarations, build metadata and
  * image or font assets (other files under `assets/`, such as style sheets and data, are runtime).
+ * One alternative group per line, each with its reason.
  */
-const NON_RUNTIME =
-  /\.test\.|\.test-util\.|\.stories\.|\.md$|\.mdx$|\.d\.ts$|(^|\/)(__tests__|__mocks__|\.config)\/|(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$|(^|\/)[^/]*Tests\/|(^|\/)package\.json$|(^|\/)manifest\.json$|\.csproj$|\.props$/;
+const NON_RUNTIME = new RegExp(
+  [
+    // Unit tests, their helpers and Storybook stories.
+    String.raw`\.test\.|\.test-util\.|\.stories\.`,
+    // Documentation.
+    String.raw`\.md$|\.mdx$`,
+    // Type declarations only exist at compile time.
+    String.raw`\.d\.ts$`,
+    // Test, mock and tool-configuration directories.
+    String.raw`(^|\/)(__tests__|__mocks__|\.config)\/`,
+    // Images and fonts; style sheets and data under assets/ stay runtime.
+    String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
+    // C# test projects (`Foo.Tests/`).
+    String.raw`(^|\/)[^/]*Tests\/`,
+    // Package and extension metadata: a design decision, not an oversight (a version or
+    // dependency bump changes no behaviour an e2e spec can see).
+    String.raw`(^|\/)package\.json$|(^|\/)manifest\.json$`,
+    // .NET build metadata.
+    String.raw`\.csproj$|\.props$`,
+  ].join('|'),
+);
 const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
 const isE2eSpecSupport = (file: string) =>
-  file.startsWith('e2e-tests/') &&
+  file.endsWith('.ts') &&
   !file.endsWith('.test.ts') &&
-  (file.endsWith('.spec.ts') ||
-    file.endsWith('.page.ts') ||
-    (file.startsWith('e2e-tests/fixtures/') && file.endsWith('.ts')));
+  (file.startsWith('e2e-tests/tests/') ||
+    file.startsWith('e2e-tests/fixtures/') ||
+    file === 'e2e-tests/global-setup.ts' ||
+    /^e2e-tests\/playwright[^/]*\.config\.ts$/.test(file));
+
+/** Menu contributions of the extensions and the core menu data. */
+const isMenuFile = (file: string) =>
+  file.endsWith('contributions/menus.json') || file === 'src/extension-host/data/menu.data.json';
 
 /**
  * The entries of a spec list: one repository path per line; `#` starts a comment line. Lines are
@@ -136,6 +175,17 @@ function addFile(map: Map<string, Set<string>>, key: string, file: string) {
   map.set(key, files);
 }
 
+/** How many of `specPaths` each CI core list runs. */
+function countCoreSpecs(
+  specPaths: string[],
+  input: RecommendInput,
+): { alwaysCoreSpecCount: number; editorCoreSpecCount: number } {
+  return {
+    alwaysCoreSpecCount: specPaths.filter((spec) => input.coreSpecs.includes(spec)).length,
+    editorCoreSpecCount: specPaths.filter((spec) => input.editorCoreSpecs.includes(spec)).length,
+  };
+}
+
 function ciStatus(key: string, input: RecommendInput): CiStatus {
   if (isSpecKey(key)) {
     const specPath = `${ISOLATED_PREFIX}${key}`;
@@ -144,13 +194,7 @@ function ciStatus(key: string, input: RecommendInput): CiStatus {
     return { kind: 'spec', coreList: 'none' };
   }
   const specs = input.specFilesBySubset[key] ?? [];
-  return {
-    kind: 'subset',
-    coreSpecCount: specs.filter(
-      (spec) => input.coreSpecs.includes(spec) || input.editorCoreSpecs.includes(spec),
-    ).length,
-    specCount: specs.length,
-  };
+  return { kind: 'subset', ...countCoreSpecs(specs, input), specCount: specs.length };
 }
 
 function commonPrefix(strings: string[]): string {
@@ -163,10 +207,11 @@ function commonPrefix(strings: string[]): string {
 
 /**
  * Collapses spec-level recommendations of one subset that matched the same changed files into one
- * recommendation keyed by the longest common prefix of their keys, which Playwright accepts as a
- * path filter. Only when that prefix is longer than `<subset>/` and, if the subset's spec files are
- * known, matches no spec other than the members; otherwise they stay separate. One member with an
- * unrelated name keeps the whole group separate.
+ * recommendation keyed by the common prefix of their keys, which Playwright accepts as a path
+ * filter. The prefix is cut back to the last `-`, `.` or `/` when that still runs exactly the
+ * members, so a key does not stop mid-word. Only when the prefix is longer than `<subset>/` and, if
+ * the subset's spec files are known, matches no spec other than the members; otherwise they stay
+ * separate. One member with an unrelated name keeps the whole group separate.
  */
 function collapseSpecGroups(
   recommendations: E2eRecommendation[],
@@ -183,29 +228,36 @@ function collapseSpecGroups(
   const collapsed = new Map<E2eRecommendation, E2eRecommendation>();
   groups.forEach((members) => {
     if (members.length < 2) return;
-    const key = commonPrefix(members.map((member) => member.key));
+    const longest = commonPrefix(members.map((member) => member.key));
     const subset = members[0].key.slice(0, members[0].key.lastIndexOf('/') + 1);
-    if (key.length <= subset.length) return;
+    if (longest.length <= subset.length) return;
     // The path filter also runs every other spec of the subset that starts with the prefix, so it
     // must run exactly the members (checked whenever the subset's spec files are known).
     const subsetSpecs = input.specFilesBySubset[subset.slice(0, -1)];
-    if (
-      subsetSpecs &&
-      subsetSpecs.filter((spec) => spec.startsWith(`${ISOLATED_PREFIX}${key}`)).length !==
-        members.length
-    ) {
-      return;
-    }
+    const runsExactlyMembers = (prefix: string) =>
+      !subsetSpecs ||
+      subsetSpecs.filter((spec) => spec.startsWith(`${ISOLATED_PREFIX}${prefix}`)).length ===
+        members.length;
+    if (!runsExactlyMembers(longest)) return;
+    // Prefer a key that ends at a word boundary over one that stops mid-word.
+    const boundary = Math.max(
+      longest.lastIndexOf('-'),
+      longest.lastIndexOf('.'),
+      longest.lastIndexOf('/'),
+    );
+    const atBoundary = longest.slice(0, boundary + 1);
+    const key =
+      atBoundary.length > subset.length && runsExactlyMembers(atBoundary) ? atBoundary : longest;
     const merged: E2eRecommendation = {
       key,
       command: `npm run test:e2e:isolated ${ISOLATED_PREFIX}${key}`,
       matchedFiles: members[0].matchedFiles,
       ci: {
         kind: 'subset',
-        coreSpecCount: members.filter((member) => {
-          const specPath = `${ISOLATED_PREFIX}${member.key}`;
-          return input.coreSpecs.includes(specPath) || input.editorCoreSpecs.includes(specPath);
-        }).length,
+        ...countCoreSpecs(
+          members.map((member) => `${ISOLATED_PREFIX}${member.key}`),
+          input,
+        ),
         specCount: members.length,
       },
       memberKeys: members.map((member) => member.key),
@@ -274,10 +326,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
 
   const entryPointFiles = [
     ...new Set([
-      ...runtimeFiles.filter(
-        (file) =>
-          file.endsWith('contributions/menus.json') || file.endsWith('.web-view-provider.ts'),
-      ),
+      ...runtimeFiles.filter((file) => isMenuFile(file) || file.endsWith('.web-view-provider.ts')),
       ...input.filesAddingCommandRegistrations
         .filter(isInSourceRoot)
         .filter((file) => !isNonRuntime(file)),
@@ -296,7 +345,8 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function git(repoRoot: string, ...args: string[]): string[] {
-  return execFileSync('git', args, {
+  // `core.quotePath=false` keeps a non-ASCII file name as written instead of a quoted escape.
+  return execFileSync('git', ['-c', 'core.quotePath=false', ...args], {
     cwd: repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -334,7 +384,10 @@ export function readGitChanges(
     .filter((file) => {
       try {
         return registrationRegExp.test(fs.readFileSync(path.join(repoRoot, file), 'utf8'));
-      } catch {
+      } catch (error) {
+        process.stderr.write(
+          `e2e-recommendations: could not read untracked file ${file}: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
         return false;
       }
     });
@@ -386,7 +439,18 @@ function runCli(mergeBase: string): void {
   process.stdout.write(`${JSON.stringify(report, undefined, 2)}\n`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+/** Whether this module is the program's entry point, also when started through a symbolic link. */
+function isEntryPoint(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return fs.realpathSync(entry) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   const mergeBase = process.argv[2];
   if (!mergeBase) {
     process.stderr.write('Usage: tsx e2e-tests/e2e-recommendations.ts <merge-base>\n');
