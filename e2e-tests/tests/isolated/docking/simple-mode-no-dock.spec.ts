@@ -31,6 +31,7 @@ import {
   tabCountOf,
   tabPaddingPoint,
   visibleCenterOf,
+  waitForFirstLayoutLoad,
 } from '../../../fixtures/dock-tab-helpers';
 import {
   SIMPLE_PANEL_ID_PROJECT,
@@ -62,6 +63,9 @@ test.setTimeout(300_000);
 
 test.beforeEach(async ({ mainPage: page }) => {
   await waitForAppReady(page, { timeout: 180_000 });
+  // The drags below press on tab padding measured from the tab bar, which shifts when `%key%` tab
+  // titles are localized
+  await waitForFirstLayoutLoad(page);
 });
 
 /**

@@ -532,3 +532,81 @@ export const WithSubmenus: Story = {
     },
   },
 };
+
+export const DynamicItemStates: Story = {
+  render: () => {
+    const [lastCommand, setLastCommand] = useState<string>('');
+
+    const dynamicMenuData: Localized<MultiColumnMenu> = {
+      columns: { 'tab.dynamic': { label: 'Dynamic', order: 1 } },
+      groups: { 'tab.dynamic.group': { column: 'tab.dynamic', order: 1 } },
+      items: [
+        {
+          label: 'Disabled (enabledWhen was falsy)',
+          localizeNotes: 'Disabled item',
+          group: 'tab.dynamic.group',
+          order: 1,
+          command: 'tab.disabled',
+          disabled: true,
+        },
+        {
+          label: 'Checked toggle (checkedWhen was truthy)',
+          localizeNotes: 'Checked item',
+          group: 'tab.dynamic.group',
+          order: 2,
+          command: 'tab.checked',
+          checked: true,
+        },
+        {
+          label: 'Unchecked toggle',
+          localizeNotes: 'Unchecked item',
+          group: 'tab.dynamic.group',
+          order: 3,
+          command: 'tab.unchecked',
+          checked: false,
+        },
+        {
+          label: 'Disabled and checked',
+          localizeNotes: 'Disabled checked item',
+          group: 'tab.dynamic.group',
+          order: 4,
+          command: 'tab.disabledChecked',
+          checked: true,
+          disabled: true,
+        },
+      ],
+    };
+
+    const handleSelectMenuItem = (item: MenuItemContainingCommand) => {
+      setLastCommand(item.command);
+    };
+
+    return (
+      <div className="tw:space-y-4">
+        <TabDropdownMenu
+          menuData={dynamicMenuData}
+          onSelectMenuItem={handleSelectMenuItem}
+          tabLabel="Dynamic item states"
+          icon={<FileText className="tw:h-4 tw:w-4" />}
+        />
+
+        <div className="tw:rounded tw:border tw:bg-gray-50 tw:p-4">
+          <div className="tw:text-sm">
+            <strong>Last Command:</strong> {lastCommand || 'None'}
+          </div>
+          <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
+            Open the tab menu to see disabled, checked, unchecked and disabled-checked items.
+          </p>
+        </div>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Runtime-computed disabled and checked states in a tab dropdown menu. Disabled items are dimmed and unclickable; checkbox items show a checkmark when checked.',
+      },
+    },
+  },
+};

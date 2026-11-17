@@ -151,6 +151,15 @@ internal sealed class SharedStore(PapiClient papiClient) : ISharedStore
                     : JsonSerializer.SerializeToElement(value, _serializationOptions);
             lock (_localStoreLock.GetOrAdd(key, new object()))
             {
+                // Equal raw text means the event would change nothing; differently-formatted equal
+                // values only cost a redundant send. Undefined (a TS tombstone) has no raw text.
+                if (
+                    _localStore.TryGetValue(key, out var existing)
+                    && existing.Value.ValueKind != JsonValueKind.Undefined
+                    && existing.Value.GetRawText() == serializedValue.GetRawText()
+                )
+                    return;
+
                 var clock = GetNextClock();
                 _localStore[key] = new StoreEntry(serializedValue, clock);
                 _ = _papiClient.SendEventAsync(

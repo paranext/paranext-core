@@ -9,10 +9,8 @@
  * by the C# backend into the empty root). Any developer can run this suite: `npm run
  * test:e2e:isolated scroll-groups`. No machine-local projects are read or written.
  *
- * Both scenarios run in ONE test() on purpose: the isolated fixture is test-scoped, and a SECOND
- * Electron instance launched against the shared webpack renderer dev server has a documented
- * failure mode where new dock tabs never render (see comment.fixture.ts and isolated.fixture.ts).
- * One test = one Electron instance per spec file, matching every other isolated-fixture suite.
+ * Both scenarios run in one test() as test.step()s: the isolated fixture starts a new app for every
+ * test(), so the steps share one launch.
  *
  * Chapter choice: Lamentations 3 — 66 verses of poetry, each laid out over two display lines, so
  * the chapter is several screens tall in the 1280x800 test window and the verses these scenarios
@@ -34,7 +32,7 @@ import {
 // options), so reusing that name throws "Fixture ... has already been registered as a
 // { scope: 'worker' } fixture". See e2e-tests/fixtures/isolated.fixture.ts.
 //
-// DEV_NOISY=false (fixture default is true): in noisy dev mode the renderer uses the test layout
+// DEV_NOISY=false (the fixture default): in noisy dev mode the renderer uses the test layout
 // (src/renderer/testing/test-layout.data.ts), which has NO Home tab — app-ready detection and a
 // clean single-pane layout for the viewport assertions both need the normal Home layout. Same
 // approach as comment.fixture.ts.
