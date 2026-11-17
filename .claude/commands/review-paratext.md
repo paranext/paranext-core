@@ -326,18 +326,18 @@ Run, as a single bash command, substituting the literal `MERGE_BASE` SHA stored 
 npx tsx "$(git rev-parse --show-toplevel)/e2e-tests/e2e-recommendations.ts" <MERGE_BASE>
 ```
 
-It prints a JSON report: `recommendations` (isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`), `alsoExercised` (keys whose specs only drive the changed files along the way), `uncoveredFiles` (changed source files no key lists), `entryPointFiles` (changed menu, web view provider and command-registration files) and `specsChanged` (whether the branch changes an e2e spec or its support code: a `*.spec.ts`, a `*.page.ts` or a fixture file). If the command fails, say so in one line, record `E2E_TEST_NOTES` as "not checked: <error>", and continue.
+It prints a JSON report: `recommendations` (isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`), `alsoExercised` (keys whose specs only drive the changed files along the way), `uncoveredFiles` (changed source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists; `lib/` is never listed, because library code is reached through its consumers, so a library-only change can produce no output at all), `entryPointFiles` (changed menu, web view provider and command-registration files) and `specsChanged` (whether the branch changes an e2e spec or its support code: any `.ts` under `e2e-tests/tests/`, `e2e-tests/fixtures/`, the global setup or a Playwright config, except unit tests). If the command fails, say so in one line, record `E2E_TEST_NOTES` as "not checked: <error>", and continue.
 
-This step never starts a test run and never blocks the review. It has three cases; ask a question only when its case applies, each question as a separate message after the response to Step 3.4, waiting for the author's response before the next. If none applies, print nothing and leave `E2E_TEST_NOTES` empty (the summary then gets no heading).
+This step never starts a test run and never blocks the review. It has three parts: the Run part (one question), the Add part (one question) and the also-exercised line (printed, no question). Ask a question only when its part applies, each question as a separate message after the response to Step 3.4, waiting for the author's response before the next. If none of the three applies, print nothing and leave `E2E_TEST_NOTES` empty (the summary then gets no heading).
 
 **Run part** (a question) — applies when `recommendations` is non-empty. List each key with its `command` and its CI status in words, from `ci`:
 
 - `kind: 'spec'`, `coreList: 'always'` → "also runs in CI on every pull request"
 - `kind: 'spec'`, `coreList: 'editor'` → "also runs in CI on some pull requests (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))"
 - `kind: 'spec'`, `coreList: 'none'` → "is in neither pull-request list (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))"
-- `kind: 'subset'` → "CI runs `coreSpecCount` of its `specCount` spec files on pull requests"
+- `kind: 'subset'` → "CI runs `alwaysCoreSpecCount` of its `specCount` spec files on every pull request, plus `editorCoreSpecCount` when a pull request touches the Scripture editor" (leave out the "plus" clause when `editorCoreSpecCount` is 0)
 
-A recommendation with `memberKeys` is several specs of one subset that matched the same files, collapsed into one command (its `key` is a path prefix that runs them all). List it once, as one item, and say how many specs it runs (`ci.specCount`); name the member keys only in the summary.
+A recommendation with `memberKeys` is several specs of one subset that matched the same files, collapsed into one command (its `key` is a path prefix that runs them all). List it once, as one item, say how many specs it runs (`ci.specCount`) with the same CI wording, and name the member keys only in the summary.
 
 Then ask:
 
@@ -347,7 +347,7 @@ Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>:
 
 **Also-exercised line** (no question) — applies whenever `alsoExercised` is non-empty, whether or not `recommendations` is: print one line naming those keys: "These also open the code you changed, if you want to run more: <keys>."
 
-**Add part** (a question) — applies only when the diff has a runtime change (not docs, tests or stories alone) and `specsChanged` is false, and then only when at least one of these holds:
+**Add part** (a question) — applies only when the diff has a runtime change (not docs, tests or stories alone) and `specsChanged` is false (any changed e2e spec, page object, fixture or spec helper suppresses the question), and then only when at least one of these holds:
 
 1. `uncoveredFiles` is non-empty: name those files in the question.
 2. `entryPointFiles` is non-empty and the diff shows an entry point was **added** (a new menu item, web view provider or command registration), not only edited.
