@@ -38,6 +38,10 @@ npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e
 e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 ```
 
+A new subset directory or loose spec needs an entry in `subset-sources.json` (`main` = the source
+the group is about, `incidental` = source it only drives); `e2e-recommendations.test.ts` fails
+without one.
+
 ## Spec files directly under `tests/isolated/`
 
 These belong to no subset, but `all` includes them; to run one alone, give its path (see "How to
