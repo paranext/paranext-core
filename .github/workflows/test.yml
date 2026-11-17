@@ -532,3 +532,46 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: true
+
+  # Which spec lists the `e2e-core` job below runs. The core list always; the editor list as well
+  # when a pull request touches the editor extension, the editor package pin or the C# code that
+  # converts Scripture between USFM and USJ, and on every run that is not a pull request.
+  e2e-core-selection:
+    name: E2E core, pick the spec lists
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      spec_lists: ${{ steps.pick.outputs.spec_lists }}
+
+    steps:
+      - name: Pick the spec lists
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          spec_lists="e2e-tests/core-specs.txt"
+          editor_paths='^(extensions/src/platform-scripture-editor/|dev-packages\.json$|c-sharp/(.*/)?Us(fm|j)[^/]*$)'
+          if [ -z "$PULL_REQUEST_NUMBER" ]; then
+            spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
+          else
+            changed_files=$(gh api "repos/${{ github.repository }}/pulls/$PULL_REQUEST_NUMBER/files" --paginate --jq '.[].filename')
+            if printf '%s\n' "$changed_files" | grep -q -E "$editor_paths"; then
+              spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
+            fi
+          fi
+          echo "Spec lists: $spec_lists"
+          echo "spec_lists=$spec_lists" >> "$GITHUB_OUTPUT"
+
+  # The isolated end-to-end specs that guard data loss and core flows, on every pull request. A
+  # job of its own beside the builds, so it adds no waiting time. It reports without blocking:
+  # with no retries a timing race in the app would otherwise fail an unrelated pull request.
+  e2e-core:
+    name: E2E core
+    needs: e2e-core-selection
+    uses: ./.github/workflows/e2e-isolated.yml
+    with:
+      spec_lists: ${{ needs.e2e-core-selection.outputs.spec_lists }}
+      report_only: true
+      timeout_minutes: 60
+      artifact_name: playwright-results-e2e-core
