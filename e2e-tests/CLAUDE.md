@@ -1,6 +1,8 @@
 # E2E Test Instructions
 
-Running the isolated suite natively on Windows: see `tests/isolated/README.md#running-on-windows`.
+Linux, including WSL2, is the supported platform for the isolated suite; native Windows and macOS
+are best effort. To run it natively on Windows, see `tests/isolated/README.md#running-on-windows`.
+Run the subset for the area you changed: the full isolated run takes about an hour.
 
 ## Where to put new E2E tests
 
@@ -8,8 +10,8 @@ Running the isolated suite natively on Windows: see `tests/isolated/README.md#ru
 |---|---|---|
 | Core happy path (app launch, basic nav) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
 | Bare-Electron check of an Electron behavior the dev app can't show | `tests/smoke/` (see its README) | `npm run test:e2e:smoke` (also CI) |
-| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>`, or `all` for every subset (the bare form lists the subsets and exits 1) |
-| Tests needing real Marble resources | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` |
+| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>`, or `all` for every spec (the bare form lists the subsets and exits 1) |
+| Tests needing real Marble resources (local-only) | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` (collects only its local-only specs; the rest are parked, see below) |
 
 On WSL2, prefix a suite that launches its own Electron with `e2e-tests/run-e2e-wsl.sh --wrap` to
 keep its windows off the Windows desktop — e.g.
@@ -17,17 +19,23 @@ keep its windows off the Windows desktop — e.g.
 
 This does nothing for suites that attach to an app you started separately — `fixtures/cdp.fixture.ts`
 over port 9223, and the two `*-commands.spec.ts` files' `fixtures/papi-live.fixture.ts` over port
-8876. Between them that is all of `tests/enhanced-resources/` and `tests/markers-checklist/`, plus
-`tests/attached/`. Start the app with `./.erb/scripts/refresh.sh` — on Linux that already runs it
-under its own Xvfb — and run those suites through `playwright-cdp.config.ts`, which has no
-globalSetup.
+8876. Between them that is `tests/attached/`, the local-only part of `tests/enhanced-resources/`, and
+the parked `tests/markers-checklist/` and `tests/manage-books/`, which no config collects. Start the app with
+`./.erb/scripts/refresh.sh` — on Linux that already runs it under its own Xvfb — and run the
+collected ones through `playwright-cdp.config.ts`, which has no globalSetup.
 
-`tests/manage-books/` also attaches, but is deliberately excluded from that config and is collected
-by nothing: all four of its specs can mutate real project data with no restore. Three do so
-outright; `manage-books-commands.spec.ts` is safe only by environment, since its later tests drive
-real projects discovered from the live app and depend on assumptions (a book already present, a
-non-administrator destination) that need not hold on a given machine. See its README before removing
-the exclusion.
+### Local-only directories
+
+These three directories under `tests/` are not part of any standard run, and no CI job collects
+them (CI runs only `test:e2e:smoke`). "Parked" means no config collects the file: it is kept as the
+written scenarios for work still to be done, and its header says so. Each directory's README is the
+detailed source — every file, its status, what it needs and how to bring it back into use.
+
+| Directory | Status | Owner | What you must know before running anything |
+|---|---|---|---|
+| `tests/enhanced-resources/` | The local-only specs are run by hand; the rest are parked (`PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`) | Epic PT-2021 "Enhanced Resources"; `scripture-text-grid.spec.ts` comes back with PT-4779 | The local-only specs need real Marble resources (paid, not in CI) and an app in Power mode. The parked `text-collection-schema.spec.ts` overwrites a project setting and your Text Collection overlay, and restores neither — point it only at a throwaway project. |
+| `tests/manage-books/` | All parked | Epic PT-1779 "Manage Books in a Project" | **DESTRUCTIVE.** Three of its specs, and the second `describe` of `manage-books-commands.spec.ts`, delete, create or copy books in the real projects the app holds, with no restore. Only that file's first `describe` writes nothing. |
+| `tests/markers-checklist/` | All parked; never run to completion | Epic PT-2049 "Inventory & Checklists" | The four UI specs need an app in Power mode and the `wgPIDGIN` project; `markers-checklist-commands.spec.ts` needs an app you started yourself (PAPI websocket on port 8876) and any Paratext (USFM) project. |
 
 **An attach-based spec must not live under `tests/isolated/`.** `playwright-cdp.config.ts` ignores
 that tree, and the `isolated` project's globalSetup refuses to start while an app holds port 8876 —
@@ -40,18 +48,25 @@ immediately discoverable and runnable without any config changes.
 
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch
-strategy). If you do, register a named project in `playwright.config.ts` — see
-`enhanced-resources` as the template — and add a `test:e2e:<name>` npm script if the suite is
-meant to be run routinely.
+strategy). If you do, register a named project in `playwright.config.ts` whose specs launch their
+own Electron, as the `isolated` and `smoke` projects do, and add a `test:e2e:<name>` npm script if
+the suite is meant to be run routinely.
 
 ## What NOT to do
 
+- Do not leave a spec that no config runs. Either get it running, or park it: an ignore entry in
+  the config (for `tests/enhanced-resources/`, an entry in `PARKED_ENHANCED_RESOURCES_SPECS`), a
+  PARKED header naming the owner epic, and an entry in the directory README saying what it needs.
 - Do not put feature tests in `smoke/` — smoke tests are for the core happy path (plus the
   bare-Electron checks its README describes) and must stay fast and CI-green.
-- Do not use `manage-books/` or `markers-checklist/` as models — those are legacy AI-porting
-  experiments not wired into any standard test run. See the README in each directory.
+- Do not use `manage-books/`, `markers-checklist/` or `enhanced-resources/` as models — those are
+  parked or local-only suites (see "Local-only directories") not wired into any standard test run.
+  See the README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding
   a well-named spec file to `isolated/` instead.
+- Do not give every check in `isolated/` its own `test()`: each `test()` on `isolated.fixture` starts its own app. Checks that
+  can share one launch state are `test.step()`s of one `test()`; see the docblock at the top of
+  `fixtures/isolated.fixture.ts`.
 
 ## State that leaks between runs
 
@@ -64,7 +79,7 @@ one of these.
   exception is `window-layout-persistence.spec.ts`, which manages its own launches by hand instead
   of going through a fixture (see its own docblock) and does restore via `test.afterAll`. A
   run whose process is killed outright (Ctrl+C, a crashed worker) never reaches that teardown and
-  never restores. The four `multi-window` specs pin `'platform.interfaceMode': 'power'`, so a killed
+  never restores. The `multi-window` specs pin `'platform.interfaceMode': 'power'`, so a killed
   multi-window run leaves the whole checkout in Power mode. A suite that pins nothing inherits it.
   With no pin at all the app falls back to `'simple'` (`src/renderer/hooks/use-interface-mode.hook.ts`).
   - Check it first when a suite behaves differently than it did yesterday: `cat dev-appdata/data/settings.json`
@@ -93,8 +108,11 @@ one of these.
   15 entries, and survives the test, the Electron process, and the whole run. A history assertion
   that passed yesterday can fail today on what an earlier run left behind.
 - **The real OS clipboard is shared with the developer's desktop, and nothing restores it.**
-  `clipboard-usfm-round-trip.spec.ts` reaches it through `electronApp.evaluate(({ clipboard }) =>
-  …)` — the main-process module, outside the renderer's permission surface — so a run leaves its
+  `clipboard-usfm-round-trip.spec.ts` reaches it through the retrying helpers in
+  `fixtures/helpers.ts` (`writeClipboardText`, `readClipboardText`, `readClipboardHtml`,
+  `readClipboardTextAndHtml`, `writeClipboard`), which call Electron's main-process `clipboard` module from
+  `electronApp.evaluate` — outside the renderer's permission surface. Every main-process clipboard
+  call in `e2e-tests/` goes through them, so a dropped debugger link is retried. A run leaves its
   last payload sitting in the machine-wide clipboard. It is not confined by `isolatedProjectRoot`
   or the temp `userDataDir`, which do contain everything else that spec touches. Two consequences:
   a paste in the developer's own editor after a run yields test USFM, and a spec that reads the

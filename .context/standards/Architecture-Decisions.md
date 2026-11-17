@@ -953,7 +953,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The repair then puts the marker back above them, as Paratext 9 saves the bytes it holds and
   restores the marker at the top of a later chapter; chapter 1 is left without one, as Paratext 9
   leaves it. Text typed ahead of a later chapter's marker is the placement rule's case above,
-  reachable by typing, and `chapter-line-left-as-text.spec.ts` pins it end to end. Text typed
+  reachable by typing, and `chapter-marker-restore.spec.ts` pins the Ruth `\c` placement cases end
+  to end (its typing-over-a-selection case does not run until PT-5059 is fixed). Text typed
   ahead of a marker with a paragraph before it joins the end of that paragraph instead
   (`\mt1 Ruth X`), because USFM reads text behind a line break with no marker of its own as part of
   the paragraph before it, which is where the save and the reload put it. The caret the user had in
@@ -1066,9 +1067,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the annotation was on is completely deleted", so a consumer acting on it could discard data whose
   text is intact. No annotation set in this repo carries an `interactionCommand` today. Where the
   editor puts a caret target on screen is pinned end to end
-  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`,
-  `chapter-marker-deleted.spec.ts` and `chapter-line-left-as-text.spec.ts` read the web view's own
-  DOM selection). **Revisit** with PT-4818.
+  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`
+  and `chapter-marker-restore.spec.ts` read the web view's own DOM selection; the restore spec's
+  typing-over-a-selection case does not run until PT-5059 is fixed). **Revisit** with
+  PT-4818.
 - **Source:** PT-4608 hand QA.
 
 ## adr-chapter-one-skips-only-the-personal-structure-lock: "Add chapter number" on chapter 1 passes the user's own structure lock, never the team lock
@@ -4587,6 +4589,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   deleted. `useProjectStylesheet` and `useFootnotePaneFontStylesheet` call it, the latter with
   `FOOTNOTE_ROWS_SELECTOR` as `containerSelector`. The decision itself is unchanged. The
   `release-prep` branch keeps core's copy.
+- **Amended 2026-11-06 (PT-4086, UX review):** Simple's `\s`-`\s3` headings no longer have a size
+  of their own. Their gutter rule now only places them, as upstream
+  (eten-tech-foundation/scripture-editors#486), so they take the formatted view's standard heading
+  styles, as in Preview. Only the verse number and the ellipsis box still derive from
+  `--psc-base-font-size`.
 - **Source:** PT-4966.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
@@ -5955,7 +5962,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0003
 - **Date:** 2026-06-18
-- **Status:** Accepted
+- **Status:** Superseded in part by adr-menus-gate-declaratively-with-context-keys (the
+  menu-availability half); the DataProvider-vs-NetworkObject half stays accepted.
 - **Context:** Two placement questions recur when porting a PT9 tool that mutates project data.
   (a) PT9 menu items hide/disable themselves via predicate evaluation before render
   (permission checks, project-state guards). paranext-core's menu system has **no arbitrary
@@ -5996,6 +6004,97 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** manage-books port (menu-availability deferred); keyboard-switching port (OS-keyboard
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
+
+## adr-menus-gate-declaratively-with-context-keys: Menu items may be gated by when-expressions over context keys; handlers keep submission-time checks
+
+- **Date:** 2026-10-28
+- **Status:** Accepted, amended 2026-11-02, with the D3 amendment (menus updating while open, and
+  the `when` vs `enabledWhen`/`checkedWhen` authoring rule) provisional until UX review (PT-5037)
+  confirms it (see D3)
+- **Context:** Menu items that cannot act (Insert footnote in a read-only project, Sync on a
+  resource, Insert comment without the comment role) were clickable and failed only at submission
+  with an error, which users read as a dead click. The earlier decision
+  (`adr-menus-always-available-gate-at-submission`) kept menus always-available because the menu
+  system had no way to express a condition. A prototype added `when`/`enabledWhen`/`checkedWhen`
+  expressions that the consumer of a menu document (main menu, web view top menu, tab menu,
+  overlay context menu, the scripture editor's self-rendered toolbar) evaluates against a flat
+  store of context keys (`papi.contextKeys`, backed by the shared store). Evaluation sits with the
+  consumer, not the menu data provider, because the facts change at a rate and in processes the
+  menu data provider does not see: a producer only writes a scalar, and every surface re-evaluates
+  from its own copy of the store without a round trip.
+- **Decision:** Menu items may be gated declaratively by when-expressions over context keys, for
+  state the platform or an extension already knows reactively.
+  - Keys are plain facts (booleans and scalars such as `platform.project.{projectId}.isEditable`),
+    never pre-computed menu answers; the expression combines them.
+  - Each key has exactly one producer process: a TypeScript process refuses (logs, does not throw)
+    a write to a key another process wrote first; the .NET store does not check, so a C# write to
+    another process's key takes it over. A key released after its writer disconnected is
+    claimable by any process. Either way two producers on one key race, so keep exactly one.
+  - Items are disabled (`enabledWhen`), not hidden (`when`), when the user could fix the cause or
+    would otherwise wonder where an item went.
+  - Command handlers keep their own guards and `PlatformError`s: keyboard shortcuts and direct
+    PAPI calls bypass menus, and a key can lag the state it describes.
+  - **Amended 2026-11-02 (D3, provisional).** Originally: overlay context menus applied `when` only
+    and tab menus evaluated once when read, with `enabledWhen`/`checkedWhen` rejected there.
+  - A key that no producer has published reads as unknown, which counts as false.
+- **Alternatives:** Evaluate expressions in the menu data provider (producer side): rejected, since
+  it would need every key change to travel to the provider and back to every window, and the
+  provider has no per-web-view or per-window facts. Keep gate-at-submission only: rejected, since
+  it leaves the dead clicks. Expose the shared store directly to extensions: rejected, since it
+  has no key-format rule, no namespacing convention and no typed values.
+- **Consequences:** A new public surface (`papi.contextKeys`, the `when`/`enabledWhen`/`checkedWhen`
+  menu properties, `evaluateMenu`, `useEvaluatedMenu`), all experimental. The shared store releases
+  a disconnected process's keys so a restarted producer can republish. Until a producer publishes,
+  a gate on that key reads as false, so an item gated on a positive fact is disabled for a moment
+  after startup; a gate on a negated fact is enabled for that moment. **Amended 2026-11-02
+  (D3, provisional).** Originally: "Revisit when a second surface needs `enabledWhen` (overlay
+  context menus) or when key volume becomes noticeable." Tab menus and overlay context menus now
+  honor `enabledWhen` on command items; revisit when key volume becomes noticeable.
+- **Amendments (2026-11-02, review of #2959):**
+  - **D1:** A producer's `remove` releases its key for any process. A `set` refused because another
+    live process owns the key is held (and logged at info on each refused set) and applied when that key is released
+    (`applyPendingClaim` in `shared-store.service.ts`). This covers a moved tab whose old
+    renderer's cleanup (the deferred `setTimeout` `unmountRoot` in `web-view.component.tsx`, or the
+    late "unload never ran" path) lands after the new renderer's first set, and a restarted
+    producer that fetched the store before main released the old process's keys
+    (`releaseKeysOfDisconnectedProcesses`). Release applies to every shared-store caller,
+    including the network request timeouts and the dialog router. C# `SharedStore.Remove<T>`
+    writes a live default value (for example `null`, or `false` for a bool) through `Set`, never a
+    released tombstone, so release semantics do not apply to keys written from C#.
+  - **D2:** There is no public change subscription: keys are menu facts, not a state bus. A
+    self-rendered menu uses `useEvaluatedMenu`, and menus re-evaluate only when a key they READ
+    changes (`evaluateMenuRecordingReads` records the keys; the same holds for the tab menu, the
+    overlay context menu and the macOS menubar).
+  - **D3 (provisional until UX review confirms it; as of 2026-11-05 that review has not
+    happened):** what follows is what the code does, not yet a settled convention. UX is to decide
+    whether a menu may change under the pointer while it is open, and with it whether the authoring
+    rule below stands. TODO(PT-5037): settle or change D3 per that review, then drop this note.
+    Every surface updates while open: toolbar, web view top menus, self-rendered menus, tab menus
+    and overlay context menus. On the macOS menubar, enabled/checked update in place on the
+    existing native items; a visibility or structure change rebuilds the menubar, because
+    evaluation removes hidden items and prunes emptied containers. Behaviour while a native menu is
+    open is unverified on a real Mac as of 2026-11-02. `enabledWhen` became allowed on tab-menu and
+    overlay-context-menu command items; `checkedWhen` there, and `enabledWhen` on their submenu
+    items, stay rejected when the contribution loads (`limitedSurface` in
+    `menu-document-combiner.ts`): those surfaces show no check marks and can disable only command
+    items, so there the authoring rule below has these exceptions. Authoring rule: use `enabledWhen`/`checkedWhen` for state
+    that can change while a menu is open, and `when` for state that does not. Handlers keep their
+    own guards. A tab's zoomability is held for one open, as layout state.
+  - **D4:** No network call while building a menu, with one exception: the overlay context menu
+    looks up the web view's `{projectId}` once per open, only when an item's expression uses it
+    (`menuExpressionsUseTemplateVar`). If the lookup fails, the menu is evaluated without a project
+    for that open (positive project gates read as unset).
+  - **D5:** Release depends on the network method registry: main releases on removal of
+    `shared-store:owner:<id>` at disconnect, and .NET registers no marker. Live-checked
+    2026-11-02 in the dev app: after `platform.restartExtensionHost`, main removed the old
+    extension host's owner-marker method and the open editor's keys and menu state stayed
+    correct; an editor tab moved with `platform.moveWebViewToNewWindow` had its keys re-owned by
+    the new window's process. As of 2026-11-02 no bundled extension-host producer exists in this
+    repo, so a restarted producer re-claiming its own keys is covered by unit tests only.
+  - **D6:** C# `SharedStore.Set` skips a publish whose JSON equals the stored value, and TS
+    `setFromRemote` does not emit an equal remote value. There is still no ownership check in C#;
+    keeping one producer per key is the producer's job.
+- **Source:** PT-4805 / PT-4732; prototype spec attached to PT-4805.
 
 ## adr-mode-switch-sends-one-send-receive-for-all-closing-windows: A mode switch starts ONE send/receive covering every window it closes, not one per window
 
@@ -8229,7 +8328,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `formatProjectName`: a tab strip is the most space-constrained surface in the app, so appending
   the full name would push the short name toward the truncation leading with it is meant to avoid.
   They show the short name alone, which `getTabTitleProjectName` now pins to the `platform.name`
-  setting. DBL resource labels follow the same rule even though a resource carries a
+  setting. How a title fills in that name, falling back to the project id, is
+  `adr-project-titles-from-one-formatter`. DBL resource labels follow the same rule even though a resource carries a
   `displayName`/`fullName` pair rather than the `platform.name`/`platform.fullName` project
   settings: `getRefLabel` and Share Layout's `formatResourceDisplayName` pass `displayName` in the
   helper's `shortName` slot. Sites that merely fill a long-name slot the UI renders after the short
@@ -8397,6 +8497,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   and should be settled before promotion: read-only is consumer-derived through
   `renderProjectIndicator`, which leaves the row tooltip unable to explain the padlock to sighted
   pointer users.
+
+## adr-project-titles-from-one-formatter: Per-project titles are built by one shared formatter, reached through a papi resolver and a matching hook
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** Tabs scoped to one project (Inventories, Markers Checklist, Manage Books, the comment
+  list, the Scripture Editor, and extensions' own tools) each looked up `platform.name` and
+  formatted the title by hand, in a provider, a WebView, or both. The copies disagreed on the
+  fallback (`??` vs `||`, id vs no name, rejecting vs catching a failed lookup) and on the
+  placeholder (`{projectName}` vs the editor's `{projectId}`), and Manage Books carried a comment
+  warning that its provider and WebView had to be kept in sync by hand.
+- **Decision:** One pure formatter, `formatProjectTitle` in `platform-bible-utils` (with
+  `getProjectDisplayName` for the fallback rule), owns the title: `{projectName}` is the project's
+  short name alone, as `adr-project-name-short-name-first` sets for tab titles, when it is
+  non-blank, otherwise its id. Blank (empty or whitespace-only) is absent on the same terms as that
+  ADR's `normalizeFullName`. Two thin callers wrap it: `papi.localization.getLocalizedProjectTitle`
+  for providers and other async code, which never rejects, and the `useLocalizedProjectTitle` hook
+  for WebViews, which returns `undefined` while loading. Because both call the same formatter, a
+  provider's opening title and its WebView's updates agree whenever their lookups succeed.
+- **Alternatives:** **A resolver only, no hook** — rejected: WebViews that update their title
+  (unsaved marker, project switch) would keep re-deriving loading and error handling from
+  `useProjectSetting` and `useLocalizedStrings`. **Hosting the resolver on
+  `papi.projectDataProviders`** — rejected: the result is a localized string, and
+  `papi.localization` already hosts a composed helper of this shape
+  (`getLocalizedIdFromBookNumber`). **Putting the lookups in `platform-bible-utils`** with the
+  papi calls injected as callbacks, as `getLocalizedIdFromBookNumber` takes `getLocalizedString`
+  — rejected: this method needs both a localization lookup and a project data provider lookup, so
+  every caller would pass two callbacks to get what one papi method gives them.
+- **Consequences:** A blank short name now shows the id everywhere, and a failed lookup no longer
+  keeps a tab from opening. Titles that need their own words around the project go through a
+  localized format rather than string concatenation (Manage Books' em-dash and the comment list's
+  `": "` are now localizable). The editor keeps filling `{projectId}` with the name for
+  caller-supplied titles, as its options document. **Revisit** if a title ever needs the full name
+  (`platform.fullName`) rather than the short name, together with the tab-title carve-out in
+  `adr-project-name-short-name-first`.
 
 ## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
 

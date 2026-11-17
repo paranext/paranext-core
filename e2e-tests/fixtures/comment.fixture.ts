@@ -2,9 +2,7 @@
  * Playwright fixture for comment-related isolated E2E tests.
  *
  * Uses a **worker-scoped** Electron app so all tests in a describe block share a single Electron
- * instance. This avoids a known issue where the second Electron instance launched against the
- * webpack renderer dev server fails to render new dock tabs (`openResourceViewer` returns an ID but
- * the editor iframe never appears in the DOM).
+ * instance, so the launch cost is paid once per worker and the tests share the app's state.
  *
  * Worker-scoped means worker, not file: with `workers: 1` one worker runs every spec, so without
  * {@link CommentWorkerFixtures.commentAppOwner} a second spec would inherit the first spec's app —
@@ -50,6 +48,12 @@ interface CommentWorkerFixtures {
    * does.
    */
   commentAppOwner: string;
+  /**
+   * Settings seeded before launch on top of the fixture's own pins; set with `test.use({
+   * commentExtraSettings: {...} })`. A key set here replaces the fixture's value for that key only.
+   * Defaults to none.
+   */
+  commentExtraSettings: Record<string, unknown>;
   commentElectronApp: ElectronApplication;
   /** Stored so teardown can clean up the user-data dir. */
   commentAppContext: ElectronAppContext;
@@ -67,10 +71,11 @@ interface CommentTestFixtures {
 
 export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
   commentAppOwner: ['', { scope: 'worker', option: true }],
+  commentExtraSettings: [{}, { scope: 'worker', option: true }],
 
   // Worker-scoped: one Electron process per owning spec (see commentAppOwner).
   commentAppContext: [
-    async ({ commentAppOwner }, use) => {
+    async ({ commentAppOwner, commentExtraSettings }, use) => {
       // Enforced, not merely documented: two specs sharing the default would share one worker and
       // one app, so the second would inherit the first's layout changes — the leak this option
       // exists to prevent, and one that shows up as an unrelated assertion failure much later.
@@ -98,6 +103,7 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
         // See smokeAppSettingsOverrides in helpers.ts for why this is pinned alongside
         // firstRunComplete rather than left to the app's default.
         'platform.showRegistrationReminderOnStartup': false,
+        ...commentExtraSettings,
       });
       // Nested try/finally: restoreSettings must run only after teardown has fully finished (so the
       // app's own shutdown writes cannot clobber it), and must run even if launch, `use`, or

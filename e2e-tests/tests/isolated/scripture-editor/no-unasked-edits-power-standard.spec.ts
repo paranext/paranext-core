@@ -3,8 +3,8 @@
  * path carries the most conversion (markers as editable text, notes collapsed to callers).
  *
  * The body, and what each step proves, is `e2e-tests/fixtures/no-unasked-edits.body.ts`; its
- * sibling specs run the same body in the other editable views. ONE test() per spec file on purpose
- * (the isolated fixture is test-scoped).
+ * sibling specs run the same body in the other editable views. One test() on its own launch (the
+ * isolated fixture starts a new app for every test()).
  *
  * Runs against an isolated project root: `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/no-unasked-edits-power-standard.spec.ts`.
