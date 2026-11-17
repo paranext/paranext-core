@@ -73,6 +73,14 @@ test.use({
  * step every time, on every machine.
  */
 async function injectDemoMode(mainPage: import('@playwright/test').Page): Promise<void> {
+  // First prove the gate showed itself rather than sending this fresh Simple user into the app: the
+  // demo reload below always lands in the wizard, so it would hide that. The dialog is up while the
+  // gate is still loading too, and only the loading screen has no level-1 heading; the wizard and
+  // the error screen each render one, and the app unmounts the dialog. Same budget as
+  // `waitForWizard`: a cold first boot is slow.
+  await expect(new FirstRunPage(mainPage).dialog.getByRole('heading', { level: 1 })).toBeVisible({
+    timeout: 90_000,
+  });
   // Let the initial boot fully settle BEFORE reloading. Reloading mid-boot intermittently left the
   // reloaded renderer with unresolved LocalizeKeys (`%firstRun_button_next%`) for over a minute —
   // the re-fetch raced the still-starting services. Wait for RESOLVED LOCALIZED TEXT, which proves
@@ -146,8 +154,6 @@ test.describe('First-run wizard', () => {
     const frPage = new FirstRunPage(mainPage);
 
     await test.step('shows wizard dialog on a clean launch', async () => {
-      // Same budget as `waitForWizard`: a cold first boot is slow.
-      await expect(frPage.dialog).toBeVisible({ timeout: 90_000 });
       await injectDemoMode(mainPage);
       await frPage.waitForWizard();
       await expect(frPage.dialog).toBeVisible();
