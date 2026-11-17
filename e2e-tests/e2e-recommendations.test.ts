@@ -40,6 +40,16 @@ describe('subset-sources.json', () => {
     expect(expectedKeys.filter((name) => !keys.includes(name))).toEqual([]);
   });
 
+  // The recommender collapses these specs into one command only when each has a key of its own.
+  it('has a key for every no-unasked-edits spec of the scripture editor', () => {
+    const missing = fs
+      .readdirSync(path.join(ISOLATED_DIRECTORY, 'scripture-editor'))
+      .filter((name) => name.startsWith('no-unasked-edits-') && name.endsWith('.spec.ts'))
+      .map((name) => `scripture-editor/${name}`)
+      .filter((key) => !keys.includes(key));
+    expect(missing).toEqual([]);
+  });
+
   it.each(keys)('%s names a subset or spec that exists', (key) => {
     const stat = fs.statSync(path.join(ISOLATED_DIRECTORY, key), { throwIfNoEntry: false });
     expect(key.endsWith('.spec.ts') ? stat?.isFile() : stat?.isDirectory()).toBe(true);
@@ -318,6 +328,24 @@ describe('recommendE2eTests', () => {
     ]);
   });
 
+  it('checks the exact members of a nested spec key against the top-level group', () => {
+    const sources: SubsetSources = {
+      'a/b/x-one.spec.ts': { main: ['src/a/'], incidental: [] },
+      'a/b/x-two.spec.ts': { main: ['src/a/'], incidental: [] },
+    };
+    const report = recommend(['src/a/f.ts'], {
+      sources,
+      specFilesBySubset: {
+        a: [
+          'e2e-tests/tests/isolated/a/b/x-one.spec.ts',
+          'e2e-tests/tests/isolated/a/b/x-two.spec.ts',
+          'e2e-tests/tests/isolated/a/b/x-three.spec.ts',
+        ],
+      },
+    });
+    expect(recommendedKeys(report)).toEqual(['a/b/x-one.spec.ts', 'a/b/x-two.spec.ts']);
+  });
+
   it('keeps the full common prefix when the subset spec list is unknown', () => {
     const report = recommend(['src/a/f.ts'], {
       sources: {
@@ -403,6 +431,15 @@ describe('recommendE2eTests', () => {
     'c-sharp/Foo.csproj',
     'c-sharp/Directory.Build.props',
     'src/x/.config/settings.ts',
+    'src/x/y.test-utils.ts',
+    'src/x/y.fixtures.ts',
+    'c-sharp/ParanextDataProvider.sln',
+    'c-sharp/ParanextDataProvider.sln.DotSettings',
+    'c-sharp/.globalconfig',
+    'c-sharp/.csharpierrc.yml',
+    'extensions/src/x/.lintstagedrc.yml',
+    'src/x/.editorconfig',
+    'c-sharp/.editorconfig',
   ])('treats %s as non-runtime: uncovered nowhere, recommends nothing', (file) => {
     const report = recommend([file], {
       sources: {
@@ -538,6 +575,8 @@ describe('recommendE2eTests', () => {
     'e2e-tests/global-setup.ts',
     'e2e-tests/playwright.config.ts',
     'e2e-tests/playwright-cdp.config.ts',
+    'e2e-tests/global-teardown.ts',
+    'e2e-tests/reporters/no-silent-skips.reporter.ts',
   ])('flags %s as a changed e2e spec or its support code', (file) => {
     expect(recommend([file]).specsChanged).toBe(true);
   });
@@ -549,6 +588,7 @@ describe('recommendE2eTests', () => {
     'e2e-tests/e2e-recommendations.test.ts',
     'e2e-tests/e2e-recommendations.ts',
     'e2e-tests/global-setup.test.ts',
+    'e2e-tests/reporters/no-silent-skips.reporter.test.ts',
     'e2e-tests/fixtures/poll-retry.test.ts',
     'e2e-tests/core-specs.txt',
     'src/main/new-thing.ts',
