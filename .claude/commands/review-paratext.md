@@ -12,7 +12,7 @@ This command:
 
 1. Analyzes all changes on your branch since it diverged from the base branch
 2. Runs four parallel analysis passes (API/correctness, style/patterns, coverage/compliance, UX design guide)
-3. Interviews you about the changes to verify understanding and surface issues
+3. Interviews you about the changes to verify understanding and surface issues, including which end-to-end tests to run and whether the change needs a new one
 4. Writes `.review/summary.md` with findings and interview notes
 5. Optionally creates or updates a PR with the summary as the description
 
@@ -318,15 +318,58 @@ Record the author's responses as `MINOR_FINDINGS_RESPONSE` (e.g., "Author said n
 
 **Complete this step and receive the author's response(s) before proceeding to Step 3.5.**
 
-### Step 3.5 — Wrap-up
+### Step 3.5 — End-to-end tests
 
-Ask (as a separate question, after receiving the response to Step 3.4):
+Run, as a single bash command, with the `MERGE_BASE` from Step 1.3:
+
+```bash
+npx tsx e2e-tests/e2e-recommendations.ts "$MERGE_BASE"
+```
+
+It prints a JSON report: `recommendations` (isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`), `alsoExercised` (keys whose specs only drive the changed files along the way), `uncoveredFiles` (changed source files no key lists), `entryPointFiles` (changed menu, web view provider and command-registration files) and `specsChanged` (whether the branch touches `e2e-tests/tests/`). If the command fails, say so in one line, record `E2E_TEST_NOTES` as "not checked: <error>", and continue.
+
+This step never starts a test run and never blocks the review. It has two parts; ask a part's question only when it applies, each as a separate message after the response to Step 3.4, waiting for the author's response before the next. If neither part applies, print nothing and leave `E2E_TEST_NOTES` empty (the summary then gets no heading).
+
+**Run part** — applies when `recommendations` is non-empty. List each key with its `command` and its CI status in words, from `ci`:
+
+- `kind: 'spec'`, `coreList: 'always'` → "also runs in CI on every pull request"
+- `kind: 'spec'`, `coreList: 'editor'` → "also runs in CI when the editor list applies"
+- `kind: 'spec'`, `coreList: 'none'` → "does not run in CI on pull requests (nightly only)"
+- `kind: 'subset'` → "CI runs `coreSpecCount` of its `specCount` spec files on pull requests"
+
+Then ask:
+
+> "These isolated e2e tests cover files you changed: [list]. Did you run them? (ran and passed / ran and failed / not run, and why)"
+
+Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>: not run: <reason>".
+
+When `alsoExercised` is non-empty, add one line naming those keys, with no question: "These also open the code you changed, if you want to run more: <keys>."
+
+**Add part** — applies only when the diff has a runtime change (not docs, tests or stories alone) and `specsChanged` is false, and then only when at least one of these holds:
+
+1. `uncoveredFiles` is non-empty: name those files in the question.
+2. `entryPointFiles` is non-empty and the diff shows an entry point was **added** (a new menu item, web view provider or command registration), not only edited.
+3. Reading the diff against [E2E Testing — Intended Use](../../.context/standards/Testing-Guide.md#e2e-testing), a covered area's user-visible or cross-process behaviour changed in a way its matched specs do not exercise. Name that behaviour in the question.
+
+Never ask it for a behaviour-keeping refactor, a docs-only or tests-only change, or a library-only change with no new behaviour. Ask:
+
+> "Does this change need a new or extended e2e test? [the files, entry point or behaviour that triggered the question]"
+
+Record the answer as "added: <spec>", "extended: <spec>", "not needed: <reason>" or "to do: <where it is tracked>".
+
+Store both parts' records as `E2E_TEST_NOTES` for the output phase.
+
+**Complete this step and receive the author's response(s) before proceeding to Step 3.6.**
+
+### Step 3.6 — Wrap-up
+
+Ask (as a separate question, after receiving the response to Step 3.5, or to Step 3.4 when Step 3.5 asked nothing):
 
 > "Is there anything else you want to flag or discuss before I write up the summary? Any tradeoffs you made, things you're uncertain about, or context a reviewer should know?"
 
 Record the author's response.
 
-### Step 3.6 — Collect interview notes
+### Step 3.7 — Collect interview notes
 
 Synthesize from the conversation:
 
@@ -335,6 +378,7 @@ Synthesize from the conversation:
 - Any explanations provided for flagged items
 - Any unresolved items (Critical/Important findings the author could not explain)
 - The author's design explanation from Step 3.3 (if that question was asked), including any uncertainties they expressed
+- The end-to-end test answers from Step 3.5 (`E2E_TEST_NOTES`; keep them separate, they get their own summary section)
 - **Areas the author did not understand or deferred to AI**: if the author said something like "the AI handled it", "I'm not sure how this works", or could not explain a section, list those areas explicitly as "Author does not understand: [area]". Do NOT reframe this as satisfaction or acceptance.
 - Any additional context the author volunteered
 
@@ -395,7 +439,7 @@ If there are unfixable failures, notify the author before proceeding:
 
 ### Step 4.2 — Write .review/summary.md
 
-Always write a completely fresh `.review/summary.md` — never read and merge with any existing file. Use the Write tool to create or overwrite `.review/summary.md` with this structure, filling in all values from the analysis and interview. Use `MERGED_FINDINGS` for the Findings sections, `TEMPLATE_PROPAGATION` for the Template Propagation section, `POSITIVE_OBSERVATIONS` for the Positive Observations section, `INTERVIEW_NOTES` for the Interview Notes section, and `QUALITY_CHECK_RESULTS` for the In-Review Quality Check section (omit that section if Step 4.1 was skipped):
+Always write a completely fresh `.review/summary.md` — never read and merge with any existing file. Use the Write tool to create or overwrite `.review/summary.md` with this structure, filling in all values from the analysis and interview. Use `MERGED_FINDINGS` for the Findings sections, `TEMPLATE_PROPAGATION` for the Template Propagation section, `POSITIVE_OBSERVATIONS` for the Positive Observations section, `E2E_TEST_NOTES` for the End-to-end tests section (omit that section when it is empty), `INTERVIEW_NOTES` for the Interview Notes section, and `QUALITY_CHECK_RESULTS` for the In-Review Quality Check section (omit that section if Step 4.1 was skipped):
 
 ```markdown
 # Code Review Summary
@@ -466,6 +510,13 @@ Include **ALL** findings in each section — open, dismissed, and fixed.
 
 - [ ] `file` — propagate to `repo`
 - [n/a] `file` — extension-specific, no propagation needed
+
+## End-to-end tests
+
+[Only present when `E2E_TEST_NOTES` is not empty. One bullet per recommended key with the
+author's answer ("ran, passed", "ran, failed: …", "not run: …"), then the add-part answer
+("added: …", "extended: …", "not needed: …", "to do: …") if it was asked. Omit this heading
+entirely otherwise.]
 
 ## Positive Observations
 
