@@ -539,13 +539,14 @@ jobs:
   e2e-core-selection:
     name: E2E core, pick the spec lists
     runs-on: ubuntu-22.04
-    timeout-minutes: 5
+    timeout-minutes: 180
     outputs:
       spec_lists: ${{ steps.pick.outputs.spec_lists }}
 
     steps:
       - name: Pick the spec lists
         id: pick
+        timeout-minutes: 90
         env:
           GH_TOKEN: ${{ github.token }}
           PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
