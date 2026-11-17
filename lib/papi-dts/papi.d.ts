@@ -2780,6 +2780,11 @@ declare module 'shared/data/request-access.data' {
     registrantAllowedCallers?: readonly RequestCallerProcess[],
   ): boolean;
   /**
+   * The error message a refused request is answered with. It says the request type is not available
+   * rather than that it is forbidden, and is sent with `MethodNotFound`.
+   */
+  export function getRefusedRequestMessage(requestType: string): string;
+  /**
    * Validates an `allowedCallers` value that arrived from another process.
    *
    * @param value The value to validate
@@ -3101,6 +3106,38 @@ declare module 'renderer/services/renderer-web-socket.service' {
   export function replaceTopWindowWebSocket(target: { WebSocket: unknown }): void;
   export default PapiRendererWebSocket;
 }
+declare module 'node/utils/crypto-util' {
+  export function createUuid(): string;
+  /**
+   * Create a cryptographically secure nonce that is at least 128 bits long. See nonce spec at
+   * https://w3c.github.io/webappsec-csp/#security-nonces
+   *
+   * @param encoding: "base64url" (HTML safe, shorter string) or "hex" (longer string) From
+   *   https://base64.guru/standards/base64url, the purpose of this encoding is "the ability to use
+   *   the encoding result as filename or URL address"
+   * @param numberOfBytes: Number of bytes the resulting nonce should contain
+   * @returns Cryptographically secure, pseudo-randomly generated value encoded as a string
+   */
+  export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
+  /**
+   * Calculates the hash of a given data buffer
+   *
+   * @param hashAlgorithm Name of the hash algorithm to use, such as "sha512"
+   * @param encodingType String encoding to use for returning the binary hash value that is calculated
+   * @param buffer Raw data to be fed into the hash algorithm
+   * @returns String encoded value of the digest (https://csrc.nist.gov/glossary/term/hash_digest)
+   */
+  export function generateHashFromBuffer(
+    hashAlgorithm: string,
+    encodingType: 'base64' | 'base64url' | 'hex' | 'binary',
+    buffer: Buffer,
+  ): string;
+  /**
+   * SHA-256 digest of a string's UTF-8 bytes. Two digests are the same length whatever the inputs, so
+   * they can be compared with `crypto.timingSafeEqual`.
+   */
+  export function sha256Digest(value: string): Buffer;
+}
 declare module 'extension-host/services/extension-host-web-socket.model' {
   import WebSocket from 'ws';
   import { LaunchCredentials } from 'client/services/launch-credentials';
@@ -3113,6 +3150,10 @@ declare module 'extension-host/services/extension-host-web-socket.model' {
    * @param credentials The secrets main handed this process. Not kept after the handshake.
    */
   export function createIdentifiedWebSocket(url: string, credentials: LaunchCredentials): WebSocket;
+  /**
+   * Extension-host client uses ws as its WebSocket client, but the renderer can't use it. So we need
+   * to exclude it from the renderer webpack bundle like this.
+   */
   export default WebSocket;
 }
 declare module 'client/services/web-socket.factory' {
@@ -9664,33 +9705,6 @@ declare module 'node/services/node-file-system.service' {
    * @returns Promise that resolves when the delete operation finishes
    */
   export function deleteDir(uri: Uri): Promise<void>;
-}
-declare module 'node/utils/crypto-util' {
-  export function createUuid(): string;
-  /**
-   * Create a cryptographically secure nonce that is at least 128 bits long. See nonce spec at
-   * https://w3c.github.io/webappsec-csp/#security-nonces
-   *
-   * @param encoding: "base64url" (HTML safe, shorter string) or "hex" (longer string) From
-   *   https://base64.guru/standards/base64url, the purpose of this encoding is "the ability to use
-   *   the encoding result as filename or URL address"
-   * @param numberOfBytes: Number of bytes the resulting nonce should contain
-   * @returns Cryptographically secure, pseudo-randomly generated value encoded as a string
-   */
-  export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
-  /**
-   * Calculates the hash of a given data buffer
-   *
-   * @param hashAlgorithm Name of the hash algorithm to use, such as "sha512"
-   * @param encodingType String encoding to use for returning the binary hash value that is calculated
-   * @param buffer Raw data to be fed into the hash algorithm
-   * @returns String encoded value of the digest (https://csrc.nist.gov/glossary/term/hash_digest)
-   */
-  export function generateHashFromBuffer(
-    hashAlgorithm: string,
-    encodingType: 'base64' | 'base64url' | 'hex' | 'binary',
-    buffer: Buffer,
-  ): string;
 }
 declare module 'shared/models/extension-basic-data.model' {
   /** Represents an object that contains the most basic information about an extension */

@@ -4,7 +4,12 @@ import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import { RpcServer } from '@main/services/rpc-server';
 import { RpcEventRegistry } from '@main/services/rpc-event-registry';
 import { RpcWebSocketListener } from '@main/services/rpc-websocket-listener';
-import { createSuccessResponse, REGISTER_METHOD } from '@shared/data/rpc.model';
+import {
+  createSuccessResponse,
+  MAX_REQUEST_ATTEMPTS,
+  REGISTER_METHOD,
+  REQUEST_ATTEMPT_WAIT_TIME_MS,
+} from '@shared/data/rpc.model';
 import { IRpcHandler, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
 import type { ConnectionIdentity } from '@shared/data/request-access.data';
 import { logger } from '@shared/services/logger.service';
@@ -352,6 +357,40 @@ describe('RpcServer enforcing the allowedCallers a registrant declared', () => {
         registrant.socket.sentPayloads.map((payload) => deserialize(payload).method),
       ).toContain('command:a.b'),
     );
+  });
+
+  it('refuses a caller whose request was waiting for the handler to register', async () => {
+    vi.useFakeTimers();
+    try {
+      const { connectClient } = createNetwork();
+      const registrant = await connectClient('extensionHost');
+      const browserPage = await connectClient('unidentified');
+      browserPage.socket.receiveMessage({
+        jsonrpc: '2.0',
+        id: 9,
+        method: 'command:late.restricted',
+        params: [],
+      });
+      await expect(
+        register(registrant.socket, [
+          'command:late.restricted',
+          undefined,
+          { allowedCallers: ['renderer'] },
+        ]),
+      ).resolves.toBe(true);
+
+      await vi.advanceTimersByTimeAsync(MAX_REQUEST_ATTEMPTS * REQUEST_ATTEMPT_WAIT_TIME_MS);
+
+      const refused = await nextReply(browserPage.socket);
+      expect(refused.error?.message).toBe(
+        `'command:late.restricted' is not available on this connection`,
+      );
+      expect(
+        registrant.socket.sentPayloads.map((payload) => deserialize(payload).method),
+      ).not.toContain('command:late.restricted');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([

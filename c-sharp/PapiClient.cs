@@ -126,6 +126,10 @@ internal class PapiClient : IDisposable
     /// If false is returned, then there is no need to call <see cref="DisconnectAsync"/> before calling <see cref="Dispose"/>.
     /// </summary>
     /// <returns><see cref="Task"/> that will resolve to true if the connection initialized properly, false otherwise</returns>
+    /// <exception cref="WebSocketException">When the handshake fails, including when main refuses
+    /// the launch secret or this launch's previous connection stays open through every retry</exception>
+    /// <exception cref="InvalidOperationException">When main's reply does not carry the server
+    /// secret, so it cannot be the main that launched this process</exception>
     public virtual async Task<bool> ConnectAsync()
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);

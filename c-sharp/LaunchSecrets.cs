@@ -42,9 +42,10 @@ internal sealed class LaunchSecrets
     public override string ToString() => nameof(LaunchSecrets);
 
     /// <summary>
-    /// Reads the secrets main handed this process: from <see cref="ENVIRONMENT_VARIABLE"/>, which is
-    /// then cleared so processes this one starts do not inherit it, or else from one line of
-    /// standard input when main asked for that (see <see cref="ShouldReadStandardInput"/>).
+    /// Reads the secrets main handed this process: from one line of standard input when main asked
+    /// for that (see <see cref="ShouldReadStandardInput"/>), or else from
+    /// <see cref="ENVIRONMENT_VARIABLE"/>. The variable is cleared either way, so processes this one
+    /// starts do not inherit it.
     /// </summary>
     public static LaunchSecrets? ReadForThisProcess() =>
         ReadFromEnvironmentOrStandardInput(
@@ -63,8 +64,10 @@ internal sealed class LaunchSecrets
         isInputRedirected && commandLineArgs.Contains(STANDARD_INPUT_FLAG);
 
     /// <summary>
-    /// Reads the environment variable (and clears it), else one line of standard input when
-    /// <paramref name="readStandardInputLine"/> is given. Null when neither holds valid secrets.
+    /// Reads one line of standard input when <paramref name="readStandardInputLine"/> is given, else
+    /// the environment variable, and clears the variable. Null when the source read holds no valid
+    /// secrets. Standard input wins because main asks for it only when it writes the secrets there,
+    /// and a variable that is set as well can only have been inherited from elsewhere.
     /// </summary>
     /// <param name="readStandardInputLine">Reads one line of standard input, waiting at most the
     /// given time; returns null when nothing arrived. Null when standard input is not redirected.</param>
@@ -76,12 +79,9 @@ internal sealed class LaunchSecrets
     {
         string? fromEnvironment = getEnvironmentVariable(ENVIRONMENT_VARIABLE);
         if (fromEnvironment != null)
-        {
             clearEnvironmentVariable(ENVIRONMENT_VARIABLE);
-            return Parse(fromEnvironment);
-        }
         return readStandardInputLine is null
-            ? null
+            ? Parse(fromEnvironment)
             : Parse(readStandardInputLine(StandardInputTimeout));
     }
 
