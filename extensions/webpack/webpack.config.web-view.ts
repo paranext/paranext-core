@@ -3,14 +3,19 @@
 // either breaks the template on the next merge or is silently reverted by one - and reverting the
 // plugin registration below stops `extension-web-view.json` being written at all, which drops
 // `react-reverse-portal` (reached only through an extension web view) from the notices document
-// with the build still exiting 0. `path` leads because `import/order` puts built-ins first, and
-// `terser-webpack-plugin` follows it for the same reason: an external import may not sit below the
-// relative ones the shared region ends with, so the only place outside that region for it is above.
+// with the build still exiting 0. `path` leads because `import/order` puts built-ins first.
+//
+// The shared config below keeps web-view license comments inline. The other bundles under
+// `release/app/dist` are files rather than strings, so their `.LICENSE.txt` files ship beside them.
+//
+// TODO(PT-4477): each extension's own build (`extensions/src/<name>/webpack/`) gets that setting
+// only when `npm run update-from-templates` pulls it in from the templates; until then, packaging
+// one extension on its own still leaves a pointer to a license file the zip does not carry.
 import path from 'path';
-import TerserPlugin from 'terser-webpack-plugin';
 
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.config.web-view.ts
 
+import TerserPlugin from 'terser-webpack-plugin';
 import webpack from 'webpack';
 import merge from 'webpack-merge';
 import configBase, { rootDir } from './webpack.config.base';
@@ -44,6 +49,23 @@ const configWebView: webpack.Configuration = merge(configBase, {
     // Build all the WebViews in the folders where they are with the temp dir appended
     path: rootDir,
   },
+  // Keep license comments INSIDE each web view's code. A web view does not ship as a file: it is
+  // pasted into the extension's `main.js` as a string. By default terser-webpack-plugin moves
+  // license comments into a separate `temp-build/<name>.js.LICENSE.txt`, which never ships, and
+  // leaves `/*! For license information please see <name>.js.LICENSE.txt */` behind, so the packed
+  // extension would point to a license file it does not carry. `comments: 'some'` keeps them in
+  // place: it is terser's filter for `@license`, `@preserve`, `@copyright`, `@cc_on` and `/*!`.
+  //
+  // `compress: { passes: 2 }` restates webpack's own default: an explicit `minimizer` list replaces
+  // webpack's default minifier, so leaving it out would quietly minify every web view less.
+  optimization: {
+    minimizer: [
+      new TerserPlugin({
+        extractComments: false,
+        terserOptions: { format: { comments: 'some' }, compress: { passes: 2 } },
+      }),
+    ],
+  },
 
   // #endregion
 
@@ -71,49 +93,6 @@ const configWebView: webpack.Configuration = merge(configBase, {
       outputDir: path.join(rootDir, '..', '.notices', 'modules'),
     }),
   ],
-
-  // Keep the license banners terser preserves INSIDE the bundle instead of extracting them to a
-  // sidecar file.
-  //
-  // A web view is not shipped as a file: `web-view-resolve-webpack-plugin` inlines
-  // `temp-build/<name>.js` into the extension's `main.js` as a string. terser-webpack-plugin's
-  // default (`extractComments: true`, `format.comments: false`) moves every `@license`/`@preserve`
-  // banner out of that file into `temp-build/<name>.js.LICENSE.txt` and leaves behind a pointer -
-  // `/*! For license information please see <name>.js.LICENSE.txt */`. Only the string is inlined,
-  // `temp-build` is a gitignored build intermediate that `copy-webpack-plugin` never copies into
-  // `extensions/dist`, and `electron-builder.json5` packs `extensions/dist` into every installer.
-  // The result is a redistributed artifact that points at a license file it does not carry.
-  //
-  // `format.comments: 'some'` is terser's own "keep `@license`, `@preserve` and `/*!` banners"
-  // rule, so the notices those packages require travel inside the bundle that ships them. The
-  // three bundles under `release/app/dist` are files rather than strings, so their sidecars are
-  // packed beside them and are left extracted.
-  //
-  // TODO(PT-4477): this is the AGGREGATE build only. Each extension also has its own `package`
-  // script that builds a redistributable zip from its own `webpack/webpack.config.web-view.ts`, and
-  // none of those set this - so that path still ships the dangling pointer. The fix belongs in
-  // `paranext-multi-extension-template` rather than here: each of those files is 29 lines and the
-  // shared region is the WHOLE file, `#region` on line 1 to `#endregion` on line 29, so there is
-  // nowhere in one to put this block that is not a divergence from the template. Their
-  // `webpack.config.main.ts` siblings are the contrast that makes the rule visible - the shared
-  // region there ends at `:47` and the copy patterns start below it, which is why a per-extension
-  // change was possible in that file and is not in this one.
-  //
-  // `compress.passes` restates a webpack DEFAULT rather than choosing a new setting. Webpack applies
-  // its own `new TerserPlugin({ terserOptions: { compress: { passes: 2 } } })` only when
-  // `optimization.minimizer` is undefined (`webpack/lib/config/defaults.js`), so supplying an
-  // explicit array with no `'...'` spread replaces that default outright instead of extending it.
-  // Without this line the banner fix above would silently drop every production extension web-view
-  // bundle to single-pass minification, and those bundles ship inlined into each extension's
-  // `main.js` in every installer.
-  optimization: {
-    minimizer: [
-      new TerserPlugin({
-        extractComments: false,
-        terserOptions: { format: { comments: 'some' }, compress: { passes: 2 } },
-      }),
-    ],
-  },
 
   // Its own cache directory, not the one `webpack.config.base.ts` names for every extension bundle
   // - see `extensionCacheDirectory` for why the manifest above cannot be trusted without that.
