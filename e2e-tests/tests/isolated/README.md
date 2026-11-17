@@ -40,7 +40,8 @@ e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 
 A new subset directory or loose spec needs an entry in `subset-sources.json` (`main` = the source
 the group is about, `incidental` = source it only drives); `e2e-recommendations.test.ts` fails
-without one.
+without one. It also fails when a prefix names a file that no longer exists, so moving or deleting a
+source file a prefix names means updating the prefix.
 
 ## Spec files directly under `tests/isolated/`
 
