@@ -1,9 +1,15 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { compareByNameThenVersion, compareStrings } from './compare';
 import type { ItemizedCheckout } from './external-extensions';
 import { platformProvidedPackages } from './platform-provided';
 import { messageOf } from './read-json';
-import { collectShippedPackages, importedPackages, missingImportedPackages } from './shipping-set';
+import {
+  collectShippedPackages,
+  extensionSourceRoots,
+  importedPackages,
+  missingImportedPackages,
+} from './shipping-set';
 import type { ExternalExtensionListing, ShippedPackage } from './types';
 
 /**
@@ -19,6 +25,35 @@ import type { ExternalExtensionListing, ShippedPackage } from './types';
 
 /** The bundles every extension repository's build writes a manifest for. */
 export const EXTENSION_REQUIRED_BUNDLES: string[] = ['extension-main', 'extension-web-view'];
+
+/** The bundle the extension templates compile from `*.web-view.tsx` files, and only from them. */
+const WEB_VIEW_BUNDLE = 'extension-web-view';
+
+/**
+ * Whether the checkout holds a `*.web-view.tsx` file where the extension templates' web-view build
+ * looks for one.
+ *
+ * That build globs `*.web-view.tsx` files at any depth under the checkout, ignoring the top-level
+ * `node_modules` (`getWebViewEntries` in the templates' `webpack/webpack.util.ts`), and glob's `**`
+ * enters no dot-folder and follows no symlinked folder. This walks the same tree. A checkout with
+ * no such file builds a web-view bundle with no entries, and its plugin truthfully writes an empty
+ * module list.
+ *
+ * Walking more than the build reads would be the safe direction (an empty list is then refused),
+ * and walking less the unsafe one, so the walk is not narrowed to the extensions' source folders: a
+ * web-view file anywhere the build finds it makes an empty list a manifest written without the
+ * plugin observing the compilation.
+ */
+export function hasWebViewSource(root: string): boolean {
+  const search = (dir: string, top: boolean): boolean =>
+    fs.readdirSync(dir, { withFileTypes: true }).some((entry) => {
+      if (entry.name.startsWith('.')) return false;
+      if (entry.isDirectory())
+        return !(top && entry.name === 'node_modules') && search(path.join(dir, entry.name), false);
+      return entry.isFile() && entry.name.endsWith('.web-view.tsx');
+    });
+  return search(root, true);
+}
 
 /** What one itemized checkout's bundles ship. */
 export type CheckoutPackages = {
@@ -75,6 +110,11 @@ function collectFromCheckout(
       requireUnbundledClosure: false,
       warmCache,
       requiredMode: 'production',
+      extensionCheckout: true,
+      // A checkout whose extensions have no React web view legitimately builds an empty web-view
+      // bundle. Checked only when that list is empty, and against the source rather than taken on
+      // the manifest's word, so an empty list from a checkout that has web views is still refused.
+      bundleMayBeEmpty: (bundle) => bundle === WEB_VIEW_BUNDLE && !hasWebViewSource(root),
     });
   } catch (err) {
     throw new Error(
@@ -160,21 +200,26 @@ export function collectCheckoutPackages({
     );
 
   const stylesheetCount = packages.filter((pkg) => pkg.reachedVia.includes('stylesheet')).length;
-  if (stylesheetCount < minimumPackages.stylesheet)
+  if (stylesheetCount < minimumPackages.stylesheet) {
+    const scanned = extensionSourceRoots(root).map((dir) => path.relative(root, dir));
     throw new Error(
       `${name}: the extensions reach ${stylesheetCount} package(s) through a stylesheet, below ` +
-        `the minimum of ${minimumPackages.stylesheet}. The stylesheet scan reads src/*/src under ` +
-        `${root}; a short count means it found the stylesheets missing or their packages not ` +
-        `installed.\nRun in the checkout: cd ${root} && npm ci\n` +
+        `the minimum of ${minimumPackages.stylesheet}. The stylesheet scan reads each ` +
+        "extension's source folder: each workspace's src (src/<extension>/src) when the " +
+        "checkout's package.json declares workspaces, or src itself when it declares none. Under " +
+        `${root} it read ${scanned.length ? scanned.join(', ') : 'no folder'}; a short count ` +
+        'means it found the stylesheets missing or their packages not installed.\n' +
+        `Run in the checkout: cd ${root} && npm ci\n` +
         `${minimumHint(checkout, 'stylesheet')}`,
     );
+  }
 
   // The exemption is the platform-provided names alone: `importedPackages` does not report where
   // a name resolved, so a package resolved into paranext-core is exempt only when the platform
   // provides it (`platform-bible-react`, `platform-bible-utils`).
   const missing = missingImportedPackages(
     packages,
-    importedPackages(root, { workspaceSourcesOnly: true }),
+    importedPackages(root, { extensionCheckout: true }),
     platformProvidedPackages(),
   ).sort((a, b) => compareStrings(a.name, b.name));
   if (missing.length)

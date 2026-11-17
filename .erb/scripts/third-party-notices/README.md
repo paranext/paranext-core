@@ -62,8 +62,17 @@ omission, and only for what this repository itself declares or imports.
 An itemized external extension (see "Downstream products") adds checks of its own, run against its
 checkout's module manifests with the same machinery and the same reasoning:
 
+- **The extensions' source folders.** The stylesheet scan and the import check read each
+  extension's source and nothing else: each workspace's `src` (`src/<extension>/src`) when the
+  checkout's root `package.json` declares `workspaces` (paranext-multi-extension-template's layout),
+  or the checkout's own `src/` when it declares none (paranext-extension-template's layout, where
+  `src/main.ts` is the extension).
 - **Production manifests only.** A manifest written by a development build is refused, because the
   installer packs production zips and a development graph can differ.
+- **Non-empty manifests, with one exception.** As for this repository's own bundles, an empty module
+  list is refused. The exception is `extension-web-view` in a checkout with no `*.web-view.tsx`
+  file: its web-view build has no entries, so its empty list is accepted. Where such a file exists,
+  an empty list is still refused, and an empty `extension-main` list always is.
 - **The core-folder check.** The checkout's web views compile code from this repository through a
   `file:` link. Every package folder a module belongs to under this repository must be one of this
   repository's own shipping-set folders, so the packages are listed from this repository's set
@@ -72,8 +81,8 @@ checkout's module manifests with the same machinery and the same reasoning:
   packages, the package folders from this repository that its bundles reach, and the packages
   reached through a stylesheet. A short count means the manifests or the stylesheet scan missed part
   of the build.
-- **The import check.** Every package the checkout's workspace sources (`src/*/src`) import must be
-  in a bundle or be one the platform itself provides (`platform-provided.ts`). Files outside those
+- **The import check.** Every package the extensions' source folders (above) import must be in a
+  bundle or be one the platform itself provides (`platform-provided.ts`). Files outside those
   folders are not read.
 - **The pointer check** (`license-pointers.ts`). A minifier's license comment
   (`For license information please see x.LICENSE.txt`) must name a file that ships beside the

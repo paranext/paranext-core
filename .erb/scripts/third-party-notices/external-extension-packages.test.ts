@@ -334,6 +334,102 @@ describe('collectCheckoutPackages', () => {
   });
 });
 
+describe('a checkout with no React web view', () => {
+  // The templates' web-view build has no entries without a `*.web-view.tsx` file, and its plugin
+  // truthfully writes an empty module list. The web views' packages go with it, so the minimums are
+  // lowered to what the main bundle and the stylesheet reach.
+  const collectWithoutWebViews = () => collect({ own: 2, core: 0 });
+
+  it('accepts an empty extension-web-view list when the checkout has no *.web-view.tsx file', () => {
+    writeManifest('extension-web-view', []);
+
+    const result = collectWithoutWebViews();
+
+    expect(result.packages.map((pkg) => pkg.name)).toEqual(['css-only', 'own-a']);
+    expect(result.linkedPackages).toEqual([]);
+  });
+
+  it('ignores a *.web-view.tsx file under the top-level node_modules, which the build ignores too', () => {
+    writeManifest('extension-web-view', []);
+    fs.writeFileSync(path.join(ownA, 'thing.web-view.tsx'), '');
+
+    expect(() => collectWithoutWebViews()).not.toThrow();
+  });
+
+  it.each([
+    ['in an extension', ['src', 'ext', 'src', 'thing.web-view.tsx']],
+    ['outside the extensions, where the build still finds it', ['lib', 'thing.web-view.tsx']],
+  ])(
+    'still refuses an empty extension-web-view list when a web-view file exists %s',
+    (_label, at) => {
+      writeManifest('extension-web-view', []);
+      const file = path.join(root, ...at);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '');
+
+      expect(() => collectWithoutWebViews()).toThrow(
+        /^example-extensions: [\s\S]*empty module list for extension-web-view\./,
+      );
+    },
+  );
+
+  it('still refuses an empty extension-main list', () => {
+    writeManifest('extension-main', []);
+    writeManifest('extension-web-view', []);
+
+    expect(() => collectWithoutWebViews()).toThrow(
+      /^example-extensions: [\s\S]*empty module list for extension-main\./,
+    );
+  });
+});
+
+describe('a checkout in the single-extension layout', () => {
+  // paranext-extension-template's layout: no `workspaces`, and the one extension is the checkout's
+  // own `src/` - `src/main.ts` and `src/tailwind.css`.
+  beforeEach(() => {
+    fs.rmSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'one-extension' }));
+    fs.mkdirSync(path.join(root, 'src'));
+    fs.writeFileSync(
+      path.join(root, 'src', 'main.ts'),
+      "import a from 'own-a';\nimport react from 'platform-bible-react';\nexport default [a, react];\n",
+    );
+    fs.writeFileSync(path.join(root, 'src', 'tailwind.css'), '@import "css-only";\n');
+  });
+
+  it('is itemized, with its stylesheet read from src', () => {
+    const result = collect();
+
+    expect(result.packages.map((pkg) => `${pkg.name} ${pkg.reachedVia.join(',')}`)).toEqual([
+      'css-only stylesheet',
+      'own-a extension-main',
+      'own-b extension-web-view',
+    ]);
+    expect(result.corePackageCount).toBe(2);
+  });
+
+  it('cross-checks the imports of src/main.ts', () => {
+    writePackage(root, 'node_modules/dropped', 'dropped', '1.0.0');
+    fs.writeFileSync(
+      path.join(root, 'src', 'main.ts'),
+      "import a from 'own-a';\nimport dropped from 'dropped';\nexport default [a, dropped];\n",
+    );
+
+    expect(() => collect()).toThrow(
+      /^example-extensions[\s\S]*dropped \(imported in src\/main\.ts\)/,
+    );
+  });
+
+  it('names src as the folder the stylesheet scan read when the count is short', () => {
+    fs.rmSync(path.join(root, 'src', 'tailwind.css'));
+
+    // `css-only` was one of the three own packages, so that minimum drops with it.
+    expect(() => collect({ own: 2 })).toThrow(
+      `or src itself when it declares none. Under ${root} it read src;`,
+    );
+  });
+});
+
 describe('mergeCheckoutPackages', () => {
   const pkg = (dir: string, name: string, version: string): ShippedPackage => ({
     ecosystem: 'npm',

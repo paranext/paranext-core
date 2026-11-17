@@ -6764,7 +6764,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   same safety checks as for this repository's own build: production manifests only, the packages
   compiled from this repository found in its own shipping set, the minimums, an import
   cross-check, and a refusal of any license pointer to a `.LICENSE.txt` file that does not ship.
-  `"itemized": false` remains for zips built elsewhere. Rejected: packing the package list inside
+  The stylesheet scan and the import cross-check read the extensions' source in either template's
+  layout: each workspace's `src` folder when the checkout declares `workspaces`, or its own `src/`
+  when it declares none. A required manifest with an empty module list is refused as it is here,
+  except an `extension-web-view` list in a checkout with no `*.web-view.tsx` file, whose web-view
+  build has nothing to compile. `"itemized": false` remains for zips built elsewhere. Rejected: packing the package list inside
   each zip and reading it from there. A zip carries package names but no license files, so every
   row would lack its notice, and without the extension's source the stylesheet scan and import
   cross-check that confirm the list is complete cannot run. How the extension templates come to

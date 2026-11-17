@@ -227,7 +227,7 @@ export function itemizedCheckoutSetup(fixture: ItemizedCheckoutFixture): string 
       // paranext-core's own source imports far more than this fixture's set; the checkout's
       // workspace scan stays real.
       importedPackages: (repo, options) =>
-        options && options.workspaceSourcesOnly ? realShipping.importedPackages(repo, options) : [],
+        options && options.extensionCheckout ? realShipping.importedPackages(repo, options) : [],
       collectShippedPackages: (options) => {
         if (!options.linkedRepo)
           return { packages: ${JSON.stringify(core)}, unresolvedStylesheetSpecifiers: [], warmBundles: [] };

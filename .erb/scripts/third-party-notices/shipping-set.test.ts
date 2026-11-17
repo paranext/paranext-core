@@ -2319,7 +2319,7 @@ describe('missingImportedPackages', () => {
 });
 
 describe('importedPackages', () => {
-  it('scans only each workspace child source tree when asked for workspace sources only', () => {
+  it('scans only each workspace child source tree for an extension checkout that declares workspaces', () => {
     fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ workspaces: ['src/*'] }));
     writePackage('node_modules/webpack', 'webpack', '5.0.0');
     writePackage('node_modules/diff', 'diff', '5.0.0');
@@ -2330,10 +2330,31 @@ describe('importedPackages', () => {
     fs.writeFileSync(build, "import webpack from 'webpack';\nexport default webpack;\n");
     fs.writeFileSync(main, "import diff from 'diff';\nexport default diff;\n");
 
-    expect(importedPackages(repo, { workspaceSourcesOnly: true })).toEqual([
+    expect(importedPackages(repo, { extensionCheckout: true })).toEqual([
       { name: 'diff', importedIn: 'src/ext/src/main.ts' },
     ]);
     expect(importedPackages(repo).map((entry) => entry.name)).toEqual(['diff', 'webpack']);
+  });
+
+  // paranext-extension-template's layout: no `workspaces`, and `src/main.ts` is the extension.
+  it('scans src itself for an extension checkout that declares no workspaces', () => {
+    fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'one-extension' }));
+    writePackage('node_modules/diff', 'diff', '5.0.0');
+    writePackage('node_modules/webpack', 'webpack', '5.0.0');
+    fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(repo, 'webpack'), { recursive: true });
+    fs.writeFileSync(
+      path.join(repo, 'src/main.ts'),
+      "import diff from 'diff';\nexport default diff;\n",
+    );
+    fs.writeFileSync(
+      path.join(repo, 'webpack/x.ts'),
+      "import webpack from 'webpack';\nexport default webpack;\n",
+    );
+
+    expect(importedPackages(repo, { extensionCheckout: true })).toEqual([
+      { name: 'diff', importedIn: 'src/main.ts' },
+    ]);
   });
 
   it('names a third-party package an extension imports, and where it imports it', () => {

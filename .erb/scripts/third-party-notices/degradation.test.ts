@@ -987,7 +987,7 @@ describe('an itemized external extension checkout in the full run', () => {
       stub('./shipping-set', {
         ...fixtureShipping,
         importedPackages: (repo, options) =>
-          options && options.workspaceSourcesOnly
+          options && options.extensionCheckout
             ? fixtureShipping.importedPackages(repo, options)
             : [{ name: 'own-a', importedIn: 'src/main/main.ts' }],
       });`,
