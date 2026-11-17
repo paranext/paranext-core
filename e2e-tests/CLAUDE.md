@@ -46,6 +46,11 @@ config. Put it in `tests/attached/`.
 The `isolated` project covers the whole `tests/isolated/` tree, so a new spec file there is
 immediately discoverable and runnable without any config changes.
 
+A new subset directory or loose spec under `tests/isolated/` also needs an entry in
+`tests/isolated/subset-sources.json`: `main` lists the source prefixes the group is about,
+`incidental` the source it only drives. `e2e-recommendations.test.ts` fails when an entry is
+missing; `/review-paratext` uses the map to recommend which subsets to run.
+
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch
 strategy). If you do, register a named project in `playwright.config.ts` whose specs launch their
