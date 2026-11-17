@@ -45,6 +45,7 @@ import {
 import { getErrorMessage } from 'platform-bible-utils';
 import {
   ConnectionIdentity,
+  getRefusedRequestMessage,
   isCallAllowed,
   isRegistrationAllowed,
   parseAllowedCallers,
@@ -469,20 +470,25 @@ export class RpcServer implements IRpcHandler {
       const requests: JSONRPCRequest[] = isJSONRPCRequest(message) ? [message] : message;
       const promises = requests.map(async (request) => {
         try {
-          // Checked before the event branch, so a restricted request type can't be sent on as an
-          // event either
-          const registrantAllowedCallers = this.rpcMethodDetailsByMethodName.get(
-            request.method,
-          )?.allowedCallers;
-          if (!isCallAllowed(request.method, this.identity, registrantAllowedCallers)) {
+          const isAllowed = () =>
+            isCallAllowed(
+              request.method,
+              this.identity,
+              this.rpcMethodDetailsByMethodName.get(request.method)?.allowedCallers,
+            );
+          const logRefusal = () =>
             logger.warn(
               `Refused '${request.method}' from ${this.describePeer()} (${this.identity})`,
             );
+          // Checked before the event branch, so a restricted request type can't be sent on as an
+          // event either
+          if (!isAllowed()) {
+            logRefusal();
             if (request.id)
               sendPayloadToWebSocket(
                 this.ws,
                 createErrorResponse(
-                  `'${request.method}' is not available on this connection`,
+                  getRefusedRequestMessage(request.method),
                   JSONRPCErrorCode.MethodNotFound,
                   request.id,
                 ),
@@ -494,12 +500,30 @@ export class RpcServer implements IRpcHandler {
             this.propagateEventMethod(this, request.method, request.params);
             return;
           }
-          const response = await this.request(
-            // Assert the required type
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            request.method as SerializedRequestType,
-            request.params,
+          // Checked again on every attempt: the handler a request waits for may restrict its
+          // callers when it registers. A refusal is answered as a missing handler, so it is retried
+          // like one and sent once the attempts run out.
+          let isRefused = false;
+          const response = await requestWithRetry(
+            async () => {
+              isRefused = !isAllowed();
+              if (isRefused)
+                return createErrorResponse(
+                  getRefusedRequestMessage(request.method),
+                  JSONRPCErrorCode.MethodNotFound,
+                );
+              return this.request(
+                // Assert the required type
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                request.method as SerializedRequestType,
+                request.params,
+                true,
+              );
+            },
+            this.name,
+            request.method,
           );
+          if (isRefused) logRefusal();
           const payload =
             'result' in response
               ? createSuccessResponse(response.result, request.id)

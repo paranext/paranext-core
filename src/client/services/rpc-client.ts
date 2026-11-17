@@ -35,7 +35,7 @@ import {
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
 import { getLocalConnectionIdentity } from '@client/services/launch-credentials';
-import { isCallAllowed } from '@shared/data/request-access.data';
+import { getRefusedRequestMessage, isCallAllowed } from '@shared/data/request-access.data';
 import type { RequestCallerProcess } from '@shared/models/network.model';
 import {
   AsyncVariable,
@@ -279,7 +279,7 @@ export class RpcClient implements IRpcMethodRegistrar {
       )
     )
       return createErrorResponse(
-        `'${requestType}' is not available on this connection`,
+        getRefusedRequestMessage(requestType),
         JSONRPCErrorCode.MethodNotFound,
         requestId,
       );

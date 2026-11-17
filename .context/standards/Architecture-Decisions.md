@@ -9633,7 +9633,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `Origin`-header stopgap this entry described is removed, and its description deleted here so it
   does not read as an available approach; git history keeps it. The request type was never out of
   extension code's reach: extensions share the extension host's connection, so the allowlist is
-  what stands between an extension and a token.
+  what stands between an extension and a token. This meets the WebSocket-authentication revisit
+  condition the 2026-11-03 amendment refers to; the consent-prompt and PT-4884 conditions remain.
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
 
