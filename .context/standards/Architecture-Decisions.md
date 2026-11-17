@@ -3706,11 +3706,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   differs from its manifest `main`, or whose manifest `main` has no file extension or names a
   directory, now fails to load, with an error saying that `main` must name the built `.js` file
   exactly. Scripts compiled with `vm.compileFunction` do not get Node's source-map rewriting, so
-  the dev extension host installs `source-map-support` (`installSourceMappedStackTraces`) to map
-  extension stack frames through each bundle's inline source map. That replaces Node's own mapping
-  for every frame, so host frames are mapped through the source maps Node recorded when tsx
-  transpiled them. Packaged builds install neither, since extensions ship without source maps
-  there. Packaged builds are
+  the dev extension host installs its own `Error.prepareStackTrace`
+  (`installSourceMappedStackTraces`). `loadExtensionModule` records each extension file's inline
+  source map every time it loads the file, so a rebuilt extension is mapped through its new map;
+  host frames are mapped through the source maps Node recorded when tsx transpiled them.
+  `source-map-support` was rejected because it caches maps by path for the life of the process, so
+  extensions rebuilt in dev were mapped through their old map. Packaged builds install none of
+  this, since extensions ship without source maps there. Packaged builds are
   checked by hand with the `evil` extension (`Sandbox probes (<phase>): 21/21 refused` for each phase); there is no
   automated packaged test. Revisit if process isolation is taken up. Supersedes in part the
   mechanism described in `adr-licensing-boundary` ("shimming `Module.prototype.require`"); the

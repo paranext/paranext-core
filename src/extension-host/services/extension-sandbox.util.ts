@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { rememberExtensionSourceMap } from './extension-stack-traces.util';
 
 /** Resolves a module name the way an extension's `require` call should. */
 export type ExtensionRequire = (moduleName: string) => unknown;
@@ -41,6 +42,7 @@ export function loadExtensionModule(
       { cause: e },
     );
   }
+  rememberExtensionSourceMap(entryFilePath, source);
   const compiled = vm.compileFunction(
     source,
     ['exports', 'require', 'module', '__filename', '__dirname'],
