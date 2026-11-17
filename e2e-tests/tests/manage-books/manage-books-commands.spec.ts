@@ -1,24 +1,26 @@
 /**
- * ⚠ DESTRUCTIVE — this spec writes to REAL project data, and has never run.
+ * ⚠ PARKED, and its second `describe` is DESTRUCTIVE — it can write to REAL project data.
  *
- * It drives book-mutating actions against whatever projects the running app has, with no restore.
+ * The first `describe` writes nothing: its project-specific methods get a made-up project id,
+ * `getToProjectFilter` and `filterProjects` read the running app's real project list, and
+ * `checkOverlappingFiles` takes no project. The second `describe` drives real projects it discovers
+ * in the running app (`createBooks`, `copyBooks`, `copyCustomVersification`) and is safe only on a
+ * machine prepared for it: it assumes particular projects exist, that a book is already present in
+ * one, and that the user is not an administrator on another. Nothing restores what it changes.
+ *
  * `playwright-cdp.config.ts` testIgnores this whole directory for that reason, and it is not a
  * project in `playwright.config.ts` either, so nothing collects it. Do not remove either exclusion
- * until these specs have a disposable project fixture of their own.
- *
- * Nothing reports on this file, so read it as a record of intent rather than as coverage. See
+ * until these specs have a disposable project fixture of their own. This file has never run as a
+ * whole; read it as the written scenarios for finishing the feature, not as coverage. See
  * `e2e-tests/tests/manage-books/README.md`.
  */
 /**
- * === NEW IN PT10 ===
- *
  * Runtime verification tests for the manage-books feature. These tests exercise every PAPI
  * NetworkObject method registered under `object:platformScripture.manageBooks` against a
  * live-running Platform.Bible instance.
  *
- * The purpose is NOT to validate business logic — that is covered by the C# unit test suite (216
- * ManageBooks tests, all green) and the golden-master tests. The purpose here is to catch the
- * runtime-integration bugs that unit tests cannot see:
+ * The purpose is NOT to validate business logic — the C# unit tests cover that. The purpose here is
+ * to catch the runtime-integration bugs that unit tests cannot see:
  *
  * - Parameter count / shape mismatches between the TS wire contract and the C# handler delegate
  * - Serialization / deserialization round-trips (including AlertEntry[] in ImportBooksResult)
@@ -28,16 +30,19 @@
  *   unavailable, permission denied) surface as user errors with a distinct code (-32000 under
  *   StreamJsonRpc), meaning the handler was reached and executed.
  *
- * See backend-smoke-tests.md Smoke Test 4 for the canonical error-code rubric.
+ * Scope of the first `describe`:
  *
- * Scope:
+ * - 1 method-discovery test (rpc.discover) over the 12 methods registered on the network object
+ * - 12 per-method round-trip tests, one per registered NetworkObject function, each called with a
+ *   made-up project id (`BOGUS_PROJECT_ID`) where the method takes a project, so no real project is
+ *   written; `getToProjectFilter` and `filterProjects` read the running app's real project list,
+ *   and `checkOverlappingFiles` takes no project
  *
- * - 1 method-discovery test (rpc.discover) over the set documented in data-contracts.md §7
- * - 12 per-method round-trip tests, one per registered NetworkObject function
+ * The second `describe` checks the permission, versification and error-shape paths against real
+ * projects found through `filterProjects`, and skips a test when the project it needs is absent.
  *
- * All 12 methods are exposed on the wire prefix `object:platformScripture.manageBooks`. See
- * `.context/features/manage-books/proofs/runtime-verification/param-alignment.md` for the TS-vs-C#
- * parameter-alignment matrix.
+ * All 12 methods are exposed on the wire prefix `object:platformScripture.manageBooks`; their
+ * parameter shapes are those of the C# handler delegates the network object registers.
  */
 import { test, expect, canConnectToPapi } from '../../fixtures/papi-live.fixture';
 
