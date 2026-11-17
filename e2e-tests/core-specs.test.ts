@@ -14,13 +14,15 @@ const REPOSITORY_ROOT = path.join(__dirname, '..');
 const SPEC_LISTS = ['core-specs.txt', 'core-specs-editor.txt'];
 const ISOLATED_PREFIX = 'e2e-tests/tests/isolated/';
 
-/** The entries of a spec list: one repository path per line; `#` starts a comment line. */
+/**
+ * The entries of a spec list: one repository path per line; `#` starts a comment line. Lines are
+ * returned untrimmed, as the workflow reads them.
+ */
 function readSpecList(listName: string): string[] {
   return fs
     .readFileSync(path.join(__dirname, listName), 'utf8')
     .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line !== '' && !line.startsWith('#'));
+    .filter((line) => line.trim() !== '' && !line.startsWith('#'));
 }
 
 describe.each(SPEC_LISTS)('%s', (listName) => {
@@ -28,6 +30,12 @@ describe.each(SPEC_LISTS)('%s', (listName) => {
 
   it('lists at least one spec', () => {
     expect(entries.length).toBeGreaterThan(0);
+  });
+
+  // The workflow reads each line as it is, so an entry with a trailing space or a carriage return
+  // would pass a trimming reader here and silently match nothing in CI.
+  it('has only entries identical to their trimmed form (no stray whitespace or CR)', () => {
+    expect(entries.filter((entry) => entry !== entry.trim())).toEqual([]);
   });
 
   it.each(entries)('%s is an isolated spec file that exists', (entry) => {

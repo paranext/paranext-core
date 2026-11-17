@@ -12,17 +12,17 @@
  * (`platform-scripture-editor.web-view.tsx`) hands Enter DOWN to the menu whenever
  * `isEditorContextMenuOpen()` is true, on the assumption that the menu's own capture-phase listener
  * claims it either way — that assumption is untestable from this repo's own unit tests, which mock
- * the editor, and CI's `test:e2e:smoke` project does not run the isolated e2e spec that would catch
- * it either. Two more editor-side behaviors this extension leans on for the same menu are guarded
- * alongside it: a scroll whose target is inside the menu must not close it (needed for the context
- * menu's scrollable option list, `_editor-overrides.scss`), and the highlighted item must follow
- * `mousemove`, not `mouseenter` alone (needed so a menu clamped under a stationary pointer doesn't
- * pre-highlight an item the user never moved onto). (b) A book (`\id`) whose content is more than a
- * single string (e.g. `[text, a note]`) must survive a settle round-trip. The three
- * insert-context-menu entry points this extension adds (footnote/cross-reference/endnote) are gated
- * only on read-only, not on "is this an `\id` line", so an editor that truncates multi-item book
- * content on settle silently loses project text the moment any of them is used at the start of a
- * book.
+ * the editor, and CI's per-pull-request runs do not execute the isolated e2e spec that would catch
+ * it either (the nightly run of every isolated spec does). Two more editor-side behaviors this
+ * extension leans on for the same menu are guarded alongside it: a scroll whose target is inside
+ * the menu must not close it (needed for the context menu's scrollable option list,
+ * `_editor-overrides.scss`), and the highlighted item must follow `mousemove`, not `mouseenter`
+ * alone (needed so a menu clamped under a stationary pointer doesn't pre-highlight an item the user
+ * never moved onto). (b) A book (`\id`) whose content is more than a single string (e.g. `[text, a
+ * note]`) must survive a settle round-trip. The three insert-context-menu entry points this
+ * extension adds (footnote/cross-reference/endnote) are gated only on read-only, not on "is this an
+ * `\id` line", so an editor that truncates multi-item book content on settle silently loses project
+ * text the moment any of them is used at the start of a book.
  *
  * Both are genuine merge-order gates, not a fixed-in-this-repo regression test: whether they pass
  * depends entirely on what `dev-packages.json` currently resolves for `platform-editor`, and
