@@ -36,7 +36,7 @@ import {
 } from '@extension-host/announce-extension-host-started';
 import { distrustLeakedCertificateRootsInNode } from '@node/utils/leaked-certificates.util';
 import { markStartup } from '@shared/utils/startup-timing.util';
-import { setLaunchCredentials } from '@client/services/launch-credentials';
+import { setLaunchSecrets } from '@client/services/launch-secrets';
 import { receiveLaunchSecrets } from '@extension-host/receive-launch-secrets';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
@@ -55,7 +55,7 @@ distrustLeakedCertificateRootsInNode();
 // and the connection to main presents them. No extension loads before that connection is made.
 const launchSecretsReceived = receiveLaunchSecrets({
   process,
-  setLaunchCredentials,
+  setLaunchSecrets,
   exitProcess: (code) => process.exit(code),
 });
 

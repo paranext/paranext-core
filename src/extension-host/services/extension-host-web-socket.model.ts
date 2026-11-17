@@ -1,12 +1,13 @@
 import WebSocket from 'ws';
 import { timingSafeEqual } from 'crypto';
 import { sha256Digest } from '@node/utils/crypto-util';
-import { PAPI_CLIENT_SECRET_HEADER, PAPI_SERVER_SECRET_HEADER } from '@shared/data/rpc.model';
-import { logger } from '@shared/services/logger.service';
 import {
-  LaunchCredentials,
-  markLocalConnectionIdentified,
-} from '@client/services/launch-credentials';
+  LaunchSecrets,
+  PAPI_CLIENT_SECRET_HEADER,
+  PAPI_SERVER_SECRET_HEADER,
+} from '@shared/data/rpc.model';
+import { logger } from '@shared/services/logger.service';
+import { markLocalConnectionIdentified } from '@client/services/launch-secrets';
 
 /**
  * Opens the extension host's connection to main presenting its launch secret. The connection only
@@ -14,13 +15,13 @@ import {
  * launched this process; otherwise it is closed before it opens.
  *
  * @param url Address of main's PAPI WebSocket
- * @param credentials The secrets main handed this process. Not kept after the handshake.
+ * @param secrets The secrets main handed this process. Not kept after the handshake.
  */
-export function createIdentifiedWebSocket(url: string, credentials: LaunchCredentials): WebSocket {
+export function createIdentifiedWebSocket(url: string, secrets: LaunchSecrets): WebSocket {
   const socket = new WebSocket(url, {
-    headers: { [PAPI_CLIENT_SECRET_HEADER]: credentials.clientSecret },
+    headers: { [PAPI_CLIENT_SECRET_HEADER]: secrets.clientSecret },
   });
-  const expectedServerSecretDigest = sha256Digest(credentials.serverSecret);
+  const expectedServerSecretDigest = sha256Digest(secrets.serverSecret);
   socket.once('upgrade', (response) => {
     const presented = response.headers[PAPI_SERVER_SECRET_HEADER];
     if (

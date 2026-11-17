@@ -4,7 +4,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { logger } from '@shared/services/logger.service';
 import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import { RpcClient } from '@client/services/rpc-client';
-import { markLocalConnectionIdentified } from '@client/services/launch-credentials';
+import { markLocalConnectionIdentified } from '@client/services/launch-secrets';
 import type { RequestCallerProcess } from '@shared/models/network.model';
 
 /**

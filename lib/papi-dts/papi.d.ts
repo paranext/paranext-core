@@ -1404,10 +1404,26 @@ declare module 'shared/data/rpc.model' {
   } from 'json-rpc-2.0';
   /** Port to use for the WebSocket */
   export const WEBSOCKET_PORT = 8876;
-  /** WebSocket handshake request header in which a child main launched presents its client secret */
+  /**
+   * WebSocket handshake request header in which a child main launched presents its client secret.
+   * Mirrored by `CLIENT_SECRET_HEADER` in `c-sharp/PapiClient.cs`.
+   */
   export const PAPI_CLIENT_SECRET_HEADER = 'x-papi-client-secret';
-  /** WebSocket handshake reply header in which main proves itself to a child it launched */
+  /**
+   * WebSocket handshake reply header in which main proves itself to a child it launched. Mirrored by
+   * `SERVER_SECRET_HEADER` in `c-sharp/PapiClient.cs`.
+   */
   export const PAPI_SERVER_SECRET_HEADER = 'x-papi-server-secret';
+  /**
+   * The two secrets main hands a child it launches: the client secret the child presents in
+   * {@link PAPI_CLIENT_SECRET_HEADER}, and the server secret main returns in
+   * {@link PAPI_SERVER_SECRET_HEADER}. The .NET data provider parses the same JSON shape
+   * (`LaunchSecrets.Parse` in `c-sharp/LaunchSecrets.cs`).
+   */
+  export type LaunchSecrets = {
+    clientSecret: string;
+    serverSecret: string;
+  };
   /**
    * Largest message the WebSocket transport carries. A message over this is not a failed request: the
    * receiver closes the connection with 1009, taking down every request in flight on it and, for the
@@ -2313,9 +2329,9 @@ declare module 'shared/models/network.model' {
      *
      * This identifies processes, not extensions: every extension shares the extension host process,
      * so `'extensionHost'` admits all of them. A request type that core restricts itself keeps core's
-     * rule; this option cannot widen it.
+     * rule; this option is ignored for it.
      */
-    allowedCallers?: RequestCallerProcess[];
+    allowedCallers?: readonly RequestCallerProcess[];
   };
 }
 declare module 'shared/models/rpc.interface' {
@@ -2331,7 +2347,10 @@ declare module 'shared/models/rpc.interface' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
-  import type { RequestCallerProcess } from 'shared/models/network.model';
+  import type {
+    NetworkMethodHandlerOptions,
+    RequestCallerProcess,
+  } from 'shared/models/network.model';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   import { PlatformEvent } from 'platform-bible-utils';
   /**
@@ -2502,9 +2521,7 @@ declare module 'shared/models/rpc.interface' {
    * Options a process sends with a method registration. Travels as the third parameter of
    * `network:registerMethod`.
    */
-  export type RpcMethodRegistrationOptions = {
-    allowedCallers?: RequestCallerProcess[];
-  };
+  export type RpcMethodRegistrationOptions = Pick<NetworkMethodHandlerOptions, 'allowedCallers'>;
   /**
    * Minimal interface for event registries so that {@link RpcServer} can participate in event
    * registration without importing from `rpc-websocket-listener.ts` (which would create a circular
@@ -2793,20 +2810,16 @@ declare module 'shared/data/request-access.data' {
    */
   export function parseAllowedCallers(value: unknown): RequestCallerProcess[] | undefined;
 }
-declare module 'client/services/launch-credentials' {
+declare module 'client/services/launch-secrets' {
   import type { ConnectionIdentity } from 'shared/data/request-access.data';
-  /** The secrets a process main launched uses to identify itself to main, and main to it */
-  export type LaunchCredentials = {
-    clientSecret: string;
-    serverSecret: string;
-  };
-  /** Keeps the credentials main handed this process until the connection to main takes them */
-  export function setLaunchCredentials(credentials: LaunchCredentials): void;
+  import type { LaunchSecrets } from 'shared/data/rpc.model';
+  /** Keeps the secrets main handed this process until the connection to main takes them */
+  export function setLaunchSecrets(secrets: LaunchSecrets): void;
   /**
-   * Returns the credentials once, then forgets them, so nothing that runs after the connection is
+   * Returns the secrets once, then forgets them, so nothing that runs after the connection is
    * made can read them.
    */
-  export function takeLaunchCredentials(): LaunchCredentials | undefined;
+  export function takeLaunchSecrets(): LaunchSecrets | undefined;
   /**
    * Which process main knows this one as. `'unidentified'` until a connection has proven itself: for
    * the extension host, a handshake whose reply carried the right server secret.
@@ -3140,16 +3153,16 @@ declare module 'node/utils/crypto-util' {
 }
 declare module 'extension-host/services/extension-host-web-socket.model' {
   import WebSocket from 'ws';
-  import { LaunchCredentials } from 'client/services/launch-credentials';
+  import { LaunchSecrets } from 'shared/data/rpc.model';
   /**
    * Opens the extension host's connection to main presenting its launch secret. The connection only
    * opens if main's handshake reply carries the matching server secret, proving it is the main that
    * launched this process; otherwise it is closed before it opens.
    *
    * @param url Address of main's PAPI WebSocket
-   * @param credentials The secrets main handed this process. Not kept after the handshake.
+   * @param secrets The secrets main handed this process. Not kept after the handshake.
    */
-  export function createIdentifiedWebSocket(url: string, credentials: LaunchCredentials): WebSocket;
+  export function createIdentifiedWebSocket(url: string, secrets: LaunchSecrets): WebSocket;
   /**
    * Extension-host client uses ws as its WebSocket client, but the renderer can't use it. So we need
    * to exclude it from the renderer webpack bundle like this.
@@ -3441,15 +3454,18 @@ declare module 'main/services/rpc-server' {
   export default RpcServer;
 }
 declare module 'main/services/launch-secrets.service' {
+  import type { LaunchSecrets } from 'shared/data/rpc.model';
+  import type { RequestCallerProcess } from 'shared/models/network.model';
   /**
    * The child processes main launches and identifies by a launch secret. Each presents its client
    * secret in its PAPI WebSocket handshake and checks main's reply for its server secret.
    */
-  export type LaunchedIdentity = 'extensionHost' | 'dotnetDataProvider';
-  /** The two secrets main hands a child it launches */
-  export type LaunchSecrets = {
-    clientSecret: string;
+  export type LaunchedIdentity = Exclude<RequestCallerProcess, 'renderer'>;
+  /** What a presented client secret tells main about the connection that presented it */
+  export type IdentifiedLaunch = {
+    identity: LaunchedIdentity;
     serverSecret: string;
+    launchId: number;
   };
   /**
    * Creates new secrets for a child about to be launched. Replaces any secrets issued earlier for the
@@ -3466,13 +3482,7 @@ declare module 'main/services/launch-secrets.service' {
    * @returns The identity, the server secret to return to it, and a number that changes each time
    *   secrets are issued for the identity; `undefined` when the secret matches no current launch
    */
-  export function identifyClientSecret(presented: string):
-    | {
-        identity: LaunchedIdentity;
-        serverSecret: string;
-        launchId: number;
-      }
-    | undefined;
+  export function identifyClientSecret(presented: string): IdentifiedLaunch | undefined;
   /** Forgets the secrets issued for an identity, e.g. when its process has exited */
   export function revokeLaunchSecrets(identity: LaunchedIdentity): void;
 }
@@ -6751,7 +6761,10 @@ declare module 'papi-shared-types' {
     'platform.restart': () => Promise<void>;
     /** Get the operating system platform */
     'platform.getOSPlatform': () => Promise<string | undefined>;
-    /** Get the current log file content for debugging purposes */
+    /**
+     * Get the current log file content for debugging purposes. Only the app's windows may call it;
+     * the extension host and other connections are refused with `MethodNotFound`.
+     */
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
@@ -6996,7 +7009,9 @@ declare module 'papi-shared-types' {
      * without Send/Receive, where no sync can clear it, so afterwards
      * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
      * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
-     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console. Only the
+     * app's windows may call it; the extension host and other connections are refused with
+     * `MethodNotFound`.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice
