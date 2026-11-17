@@ -335,7 +335,7 @@ This step never starts a test run and never blocks the review. It has three part
 - `kind: 'spec'`, `coreList: 'always'` → "also runs in CI on every pull request"
 - `kind: 'spec'`, `coreList: 'editor'` → "also runs in CI on some pull requests (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))"
 - `kind: 'spec'`, `coreList: 'none'` → "is in neither pull-request list (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))"
-- `kind: 'subset'` → "CI runs `alwaysCoreSpecCount` of its `specCount` spec files on every pull request, plus `editorCoreSpecCount` when a pull request touches the Scripture editor" (leave out the "plus" clause when `editorCoreSpecCount` is 0)
+- `kind: 'subset'` → "CI runs `alwaysCoreSpecCount` of its `specCount` spec files on every pull request, plus `editorCoreSpecCount` on pull requests that trigger the editor list (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))" (leave out the "plus" clause when `editorCoreSpecCount` is 0; when `specCount` is 0 the spec list is unknown, so say the spec count is unknown instead of "0 of 0")
 
 A recommendation with `memberKeys` is several specs of one subset that matched the same files, collapsed into one command (its `key` is a path prefix that runs them all). List it once, as one item, say how many specs it runs (`ci.specCount`) with the same CI wording, and name the member keys only in the summary.
 
