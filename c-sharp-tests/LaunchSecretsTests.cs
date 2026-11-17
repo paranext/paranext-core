@@ -84,6 +84,21 @@ internal class LaunchSecretsTests
         Assert.That(limit, Is.EqualTo(TimeSpan.FromSeconds(5)));
     }
 
+    [TestCase(new[] { "ParanextDataProvider", LaunchSecrets.STANDARD_INPUT_FLAG }, true, true)]
+    [TestCase(new[] { "ParanextDataProvider" }, true, false)]
+    [TestCase(new[] { "ParanextDataProvider", LaunchSecrets.STANDARD_INPUT_FLAG }, false, false)]
+    public void ShouldReadStandardInput_NeedsTheFlagAndRedirectedInput(
+        string[] commandLineArgs,
+        bool isInputRedirected,
+        bool expected
+    )
+    {
+        Assert.That(
+            LaunchSecrets.ShouldReadStandardInput(commandLineArgs, isInputRedirected),
+            Is.EqualTo(expected)
+        );
+    }
+
     [Test]
     public void Read_Neither_ReturnsNull()
     {

@@ -7628,7 +7628,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   work (PT-4495) will need a way to obtain a fresh secret. The secret-delivery channel is the one a
   dynamic port (PT-4109) can reuse. Event ownership is unchanged (PT-5073). A new sensitive request
   type goes in the table, with a test that its string matches the constant its handler registers.
-- **Source:** design `.context/designs/2026-11-13-papi-connection-identity-design.md`.
+- **Source:** PT-2893; the Marketplace's use of `allowedCallers` is PT-5074.
 
 ## adr-papi-port-blocked-at-the-session: Renderer windows are kept off the PAPI port by the main process's session, not by the renderer alone
 
