@@ -192,8 +192,15 @@ describe('recommendE2eTests', () => {
 
   it('collapses the no-unasked-edits specs into one command in the real mapping', () => {
     const real: SubsetSources = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
+    const editorDirectory = path.join(ISOLATED_DIRECTORY, 'scripture-editor');
     const report = recommend(['c-sharp/Projects/ParatextProjectDataProvider.cs'], {
       sources: real,
+      specFilesBySubset: {
+        'scripture-editor': fs
+          .readdirSync(editorDirectory)
+          .filter((name) => name.endsWith('.spec.ts'))
+          .map((name) => `e2e-tests/tests/isolated/scripture-editor/${name}`),
+      },
     });
     const collapsed = report.recommendations.filter(
       (recommendation) => recommendation.key === 'scripture-editor/no-unasked-edits-',
@@ -237,6 +244,24 @@ describe('recommendE2eTests', () => {
       },
     });
     expect(recommendedKeys(split)).toEqual(['a/x-one.spec.ts', 'a/x-two.spec.ts']);
+  });
+
+  it('does not collapse when the prefix would also run a spec that did not match', () => {
+    const sources: SubsetSources = {
+      'a/x-one.spec.ts': { main: ['src/a/'], incidental: [] },
+      'a/x-two.spec.ts': { main: ['src/a/'], incidental: [] },
+    };
+    const report = recommend(['src/a/f.ts'], {
+      sources,
+      specFilesBySubset: {
+        a: [
+          'e2e-tests/tests/isolated/a/x-one.spec.ts',
+          'e2e-tests/tests/isolated/a/x-two.spec.ts',
+          'e2e-tests/tests/isolated/a/x-three.spec.ts',
+        ],
+      },
+    });
+    expect(recommendedKeys(report)).toEqual(['a/x-one.spec.ts', 'a/x-two.spec.ts']);
   });
 
   it('collapses spec keys that matched the same files, counting CI specs', () => {
