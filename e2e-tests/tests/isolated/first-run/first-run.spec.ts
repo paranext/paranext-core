@@ -408,7 +408,7 @@ async function reachSyncConsentAfterUnrestricted(
 
 test.describe('First-run sync consent gate', () => {
   // The isolated project root gives the editor switch a project that exists on every machine.
-  // DEV_NOISY=false keeps the Simple layout's own editor slot, which the switch replaces.
+  // The default quiet layout keeps the Simple layout's own editor slot, which the switch replaces.
   test.use({
     electronLaunchOptions: { isolatedProjectRoot: true },
   });
