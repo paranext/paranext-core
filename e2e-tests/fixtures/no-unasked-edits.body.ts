@@ -2693,7 +2693,8 @@ export function invisibleCharactersTestOptions(
 
 /**
  * Where each character is typed and pasted: the middle of a word of Jonah 3 (each point's text
- * occurs once in the chapter), so no whitespace run forms around it.
+ * occurs once in the chapter), so no whitespace run forms around it. The zero-width no-break space
+ * stays last: its paste is not waited for, so a clipboard write after it would race its paste.
  */
 const INSERTION_POINTS: Array<{ name: InvisibleCharacterName; unit: string; point: TextPoint }> = [
   { name: 'no-break space U+00A0', unit: '3:1', point: 'the sec|ond time' },
@@ -2711,10 +2712,10 @@ const INSERTION_POINTS: Array<{ name: InvisibleCharacterName; unit: string; poin
   { name: 'left-to-right mark U+200E', unit: '3:9', point: 'not per|ish' },
   { name: 'right-to-left mark U+200F', unit: '3:10', point: 'their wor|ks' },
   { name: 'soft hyphen U+00AD', unit: '3:10', point: 'the disas|ter' },
-  { name: 'zero-width no-break space U+FEFF', unit: '3:10', point: 'God sa|w their' },
   { name: 'line separator U+2028', unit: '3:2', point: 'great ci|ty, and' },
   { name: 'paragraph separator U+2029', unit: '3:4', point: 'the ci|ty a day' },
   { name: 'next line U+0085', unit: '3:9', point: 'whe|ther God' },
+  { name: 'zero-width no-break space U+FEFF', unit: '3:10', point: 'God sa|w their' },
 ];
 
 /** The gesture that puts a character into the text. */
