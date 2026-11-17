@@ -1,4 +1,5 @@
 import { expect, type FrameLocator, type Locator, type Page } from '@playwright/test';
+import { closeDockTab } from '../../fixtures/content-zoom-helpers';
 import {
   isPopoverTriggerExpanded,
   sendPapiRequestOnce,
@@ -164,6 +165,19 @@ export async function openInternetSettingsPanel(mainPage: Page): Promise<FrameLo
   await waitForAppReady(mainPage);
   await openInternetSettings(mainPage);
   return internetSettingsFrame(mainPage);
+}
+
+/**
+ * Closes the open settings panel through its dock tab and waits for its frame to go. The next open
+ * then loads the panel afresh: reopening an open one only refocuses it, which would keep its
+ * unsaved selection and the server section's lock as they were.
+ */
+export async function closeInternetSettings(mainPage: Page): Promise<void> {
+  const iframe = mainPage.locator('iframe[title*="Internet" i]');
+  const webViewId = await iframe.getAttribute('data-web-view-id');
+  if (!webViewId) throw new Error('The Internet settings frame has no data-web-view-id');
+  await closeDockTab(mainPage, webViewId);
+  await expect(iframe).toHaveCount(0);
 }
 
 /** A radio button in the internet-access option list, by its visible label. */

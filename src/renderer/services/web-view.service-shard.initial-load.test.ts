@@ -30,13 +30,15 @@ const mocks = vi.hoisted(() => ({
   loggerDebug: vi.fn(),
   loggerWarn: vi.fn(),
   loggerError: vi.fn(),
+  // The default layout supplement the shard reads; tests that need an entry set `tabs`
+  supplement: { tabs: Array.from<unknown>([]) },
 }));
 
 // Same file-level mock set as `web-view.service-shard.test.ts` — this file imports the same
 // module, which still needs its whole dependency graph stubbed to import cleanly, even though
 // these tests never exercise most of it.
 vi.mock('@renderer/components/docking/default-layout-supplement.json', () => ({
-  default: { tabs: [] },
+  default: mocks.supplement,
 }));
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: mocks.settingsGet, subscribe: mocks.settingsSubscribe },
@@ -58,7 +60,8 @@ vi.mock('@shared/services/network.service', () => ({
     mocks.bufferedEmitters.set(eventName, emitter);
     return emitter;
   },
-  getNetworkEvent: () => vi.fn(),
+  // Subscribing answers an unsubscriber, so a test can unregister the dock layout
+  getNetworkEvent: () => vi.fn(() => () => true),
   request: mocks.networkRequest,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
@@ -309,6 +312,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
   mocks.bufferedEmitters.clear();
+  mocks.supplement.tabs = [];
   globalThis.open = openWindow;
   localStorage.clear();
   globalThis.windowId = '7';
@@ -1170,5 +1174,305 @@ describe('content admitted to the dock after the entry point had its say', () =>
 
     await expect(addingTab).rejects.toThrow(/closing/);
     expect(dockedTabs.map((tab) => tab.id)).not.toContain('late-tab');
+  });
+});
+
+describe('registerDockLayout reports when the initial layout load has finished', () => {
+  /**
+   * Register over a live dock layout with a finish callback while `windowLayout:get` hangs until
+   * the test answers it, so the test controls when the initial load can finish.
+   */
+  async function registerWithFinishCallback() {
+    let answerLayoutGet: (response: unknown) => void = () => {};
+    mocks.networkRequest.mockImplementation(
+      async (requestType: string) =>
+        new Promise((resolve) => {
+          if (requestType === 'windowLayout:get') answerLayoutGet = resolve;
+          // `stay`, so an empty layout's born-empty report docks nothing unasked
+          else if (requestType === 'windowLayout:emptied') resolve({ action: 'stay' });
+          else resolve(undefined);
+        }),
+    );
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { networkObjectService } = await import('@shared/services/network-object.service');
+    const { dockLayout, loadedLayouts } = makeLiveDockLayout();
+    const loadedLayoutCountAtFinish: number[] = [];
+    const onInitialLayoutLoadFinished = vi.fn(() => {
+      loadedLayoutCountAtFinish.push(loadedLayouts.length);
+    });
+    const unregister = module.registerDockLayout(dockLayout, onInitialLayoutLoadFinished);
+    await module.startWebViewServiceShard();
+    await primeProvider();
+    await vi.waitFor(() =>
+      expect(
+        mocks.networkRequest.mock.calls.some(([requestType]) => requestType === 'windowLayout:get'),
+      ).toBe(true),
+    );
+    const [, shard] = vi.mocked(networkObjectService.set).mock.calls[0];
+    return {
+      shard: shard as unknown as RoutedShard,
+      loadedLayouts,
+      loadedLayoutCountAtFinish,
+      onInitialLayoutLoadFinished,
+      unregister,
+      answerLayoutGet: (response: unknown) => answerLayoutGet(response),
+    };
+  }
+
+  test('does not report while the load still waits on the saved layout', async () => {
+    const { onInitialLayoutLoadFinished, loadedLayouts } = await registerWithFinishCallback();
+
+    await settle();
+
+    expect(loadedLayouts).toEqual([]);
+    expect(onInitialLayoutLoadFinished).not.toHaveBeenCalled();
+  });
+
+  test('reports once, after the load has handed its layout to the dock', async () => {
+    const { onInitialLayoutLoadFinished, loadedLayoutCountAtFinish, answerLayoutGet } =
+      await registerWithFinishCallback();
+
+    answerLayoutGet({ kind: 'empty' });
+
+    await vi.waitFor(() => expect(onInitialLayoutLoadFinished).toHaveBeenCalledTimes(1));
+    await settle();
+    expect(onInitialLayoutLoadFinished).toHaveBeenCalledTimes(1);
+    expect(loadedLayoutCountAtFinish).toEqual([1]);
+  });
+
+  test('reports when the load stands down because a web view arrived first', async () => {
+    // A routed move into a new window lands while that window's load is still waiting on main. The
+    // load then writes nothing, and never will, so the dock already holds its startup content.
+    const { shard, loadedLayouts, onInitialLayoutLoadFinished, answerLayoutGet } =
+      await registerWithFinishCallback();
+    await shard.adoptWebView({ id: 'moved-view', webViewType: 'test.type' });
+
+    answerLayoutGet({ kind: 'pending-content' });
+
+    await vi.waitFor(() => expect(onInitialLayoutLoadFinished).toHaveBeenCalledTimes(1));
+    expect(loadedLayouts).toEqual([]);
+  });
+
+  test('reports when the initial load stands down at the second checkpoint', async () => {
+    // A non-pending saved layout reads the supplement's flags before it reaches the dock, and that
+    // read is a second stretch in which a web view can arrive. The load then writes nothing.
+    mocks.supplement.tabs = [{ flagSetting: 'test.supplementFlag', tab: { id: 'supplement-tab' } }];
+    let releaseFlag: (value: unknown) => void = () => {};
+    mocks.settingsGet.mockImplementation(async (key: string) => {
+      if (key === 'test.supplementFlag')
+        return new Promise((resolve) => {
+          releaseFlag = resolve;
+        });
+      return key === 'platform.interfaceMode' ? 'power' : false;
+    });
+    const { shard, loadedLayouts, onInitialLayoutLoadFinished, answerLayoutGet } =
+      await registerWithFinishCallback();
+
+    answerLayoutGet({ kind: 'empty' });
+    // Positive control: the load reached the flag read, past the first checkpoint
+    await vi.waitFor(() => expect(mocks.settingsGet).toHaveBeenCalledWith('test.supplementFlag'));
+    await shard.adoptWebView({ id: 'moved-view', webViewType: 'test.type' });
+    releaseFlag(true);
+
+    await vi.waitFor(() => expect(onInitialLayoutLoadFinished).toHaveBeenCalledTimes(1));
+    await settle();
+    expect(onInitialLayoutLoadFinished).toHaveBeenCalledTimes(1);
+    expect(loadedLayouts).toEqual([]);
+  });
+
+  test('does not report when the load fails', async () => {
+    mocks.settingsGet.mockImplementation(async (key: string) => {
+      if (key === 'platform.interfaceMode') throw new Error('settings are unreachable');
+      return false;
+    });
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout } = makeLiveDockLayout();
+    const onInitialLayoutLoadFinished = vi.fn();
+
+    module.registerDockLayout(dockLayout, onInitialLayoutLoadFinished);
+
+    // Positive control: the load did run and fail, so the missing report is the failure's doing
+    await vi.waitFor(() =>
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        expect.stringMatching(/Initial loadLayout failed/),
+      ),
+    );
+    await settle();
+    expect(onInitialLayoutLoadFinished).not.toHaveBeenCalled();
+  });
+
+  test('does not report to a dock layout unregistered before the load finished', async () => {
+    const { loadedLayouts, onInitialLayoutLoadFinished, unregister, answerLayoutGet } =
+      await registerWithFinishCallback();
+
+    unregister();
+    answerLayoutGet({ kind: 'empty' });
+
+    // Positive control: the load still ran to the dock, so the missing report is the unregister's
+    // doing rather than a load that never finished
+    await vi.waitFor(() => expect(loadedLayouts.length).toBe(1));
+    await settle();
+    expect(onInitialLayoutLoadFinished).not.toHaveBeenCalled();
+  });
+
+  test('leaves the report to the load that superseded the initial one', async () => {
+    // An interface-mode switch at startup starts a newer load while the initial one still reads the
+    // mode. The initial load then returns without touching the dock, so it must not report: the
+    // newer load is the one that settles the dock.
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    let readInitialMode: (mode: string) => void = () => {};
+    let modeReads = 0;
+    mocks.settingsGet.mockImplementation(async (key: string) => {
+      if (key !== 'platform.interfaceMode') return false;
+      modeReads += 1;
+      if (modeReads > 1) return 'power';
+      return new Promise((resolve) => {
+        readInitialMode = resolve;
+      });
+    });
+    let answerSwitchLayoutGet: (response: unknown) => void = () => {};
+    let layoutGetCount = 0;
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:emptied') return { action: 'stay' };
+      if (requestType !== 'windowLayout:get') return undefined;
+      layoutGetCount += 1;
+      return new Promise((resolve) => {
+        answerSwitchLayoutGet = resolve;
+      });
+    });
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout, loadedLayouts } = makeLiveDockLayout();
+    const onInitialLayoutLoadFinished = vi.fn();
+    module.registerDockLayout(dockLayout, onInitialLayoutLoadFinished);
+    await vi.waitFor(() => expect(interfaceModeCallback).toBeDefined());
+
+    const switching = interfaceModeCallback?.('power');
+    await vi.waitFor(() => expect(layoutGetCount).toBe(1));
+    readInitialMode('power');
+    await settle();
+
+    // The initial load has returned, superseded, with the dock still empty
+    expect(onInitialLayoutLoadFinished).not.toHaveBeenCalled();
+    expect(loadedLayouts).toEqual([]);
+
+    answerSwitchLayoutGet({ kind: 'empty' });
+    await switching;
+
+    expect(loadedLayouts.length).toBe(1);
+    expect(onInitialLayoutLoadFinished).toHaveBeenCalledTimes(1);
+  });
+
+  test('leaves the report to the load that superseded the initial one when the initial one then fails', async () => {
+    // As above, but the initial load's mode read fails after the switch's load has started: the
+    // failure belongs to a load that no longer owns the dock, so the report still waits for the
+    // newer load.
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    let failInitialModeRead: (error: Error) => void = () => {};
+    let modeReads = 0;
+    mocks.settingsGet.mockImplementation(async (key: string) => {
+      if (key !== 'platform.interfaceMode') return false;
+      modeReads += 1;
+      if (modeReads > 1) return 'power';
+      return new Promise((_resolve, reject) => {
+        failInitialModeRead = reject;
+      });
+    });
+    let answerSwitchLayoutGet: (response: unknown) => void = () => {};
+    let layoutGetCount = 0;
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:emptied') return { action: 'stay' };
+      if (requestType !== 'windowLayout:get') return undefined;
+      layoutGetCount += 1;
+      return new Promise((resolve) => {
+        answerSwitchLayoutGet = resolve;
+      });
+    });
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout, loadedLayouts } = makeLiveDockLayout();
+    const onInitialLayoutLoadFinished = vi.fn();
+    module.registerDockLayout(dockLayout, onInitialLayoutLoadFinished);
+    await vi.waitFor(() => expect(interfaceModeCallback).toBeDefined());
+
+    const switching = interfaceModeCallback?.('power');
+    await vi.waitFor(() => expect(layoutGetCount).toBe(1));
+    failInitialModeRead(new Error('settings are unreachable'));
+
+    // Positive control: the initial load did run and fail
+    await vi.waitFor(() =>
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        expect.stringMatching(/Initial loadLayout failed/),
+      ),
+    );
+    expect(onInitialLayoutLoadFinished).not.toHaveBeenCalled();
+
+    answerSwitchLayoutGet({ kind: 'empty' });
+    await switching;
+
+    expect(loadedLayouts.length).toBe(1);
+    expect(onInitialLayoutLoadFinished).toHaveBeenCalledTimes(1);
+  });
+
+  test('a failed superseding load leaves the report for the next load that settles the dock', async () => {
+    // The initial load is superseded by a mode switch whose own load then fails, so nothing has
+    // settled the dock yet: the report stays pending until a third load applies.
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    let readInitialMode: (mode: string) => void = () => {};
+    let modeReads = 0;
+    mocks.settingsGet.mockImplementation(async (key: string) => {
+      if (key !== 'platform.interfaceMode') return false;
+      modeReads += 1;
+      if (modeReads === 2) throw new Error('settings are unreachable');
+      if (modeReads > 2) return 'simple';
+      return new Promise((resolve) => {
+        readInitialMode = resolve;
+      });
+    });
+    mocks.networkRequest.mockImplementation(async (requestType: string) =>
+      requestType === 'windowLayout:emptied' ? { action: 'stay' } : undefined,
+    );
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout, loadedLayouts } = makeLiveDockLayout();
+    const onInitialLayoutLoadFinished = vi.fn();
+    module.registerDockLayout(dockLayout, onInitialLayoutLoadFinished);
+    await vi.waitFor(() => expect(interfaceModeCallback).toBeDefined());
+
+    // The switch's load starts after the initial one and throws on its mode read
+    await interfaceModeCallback?.('power');
+    readInitialMode('power');
+    await settle();
+
+    // Positive control: the switch's load failed, and the initial load ran on to return superseded
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      expect.stringMatching(/settings are unreachable/),
+    );
+    expect(modeReads).toBe(2);
+    expect(loadedLayouts).toEqual([]);
+    expect(onInitialLayoutLoadFinished).not.toHaveBeenCalled();
+
+    // A third load applies (simple mode loads its static layout) and fires the report that stayed
+    // pending
+    await interfaceModeCallback?.('simple');
+    await settle();
+
+    expect(loadedLayouts.length).toBe(1);
+    expect(onInitialLayoutLoadFinished).toHaveBeenCalledTimes(1);
   });
 });

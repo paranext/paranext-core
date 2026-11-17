@@ -12,12 +12,8 @@
  * ## Worker-scoped Electron instance
  *
  * The `comment.fixture` uses a **worker-scoped** Electron app so all tests in a describe block
- * share one Electron instance. This avoids a known issue where the **second** Electron instance
- * launched against the webpack renderer dev server fails to render new dock tabs:
- * `openResourceViewer` returns a webview ID but the editor iframe never appears in the DOM (only
- * the Home tab renders). The root cause is outside the renderer — reloading the page with cleared
- * localStorage does not help — and appears related to the dev server's HMR WebSocket state after
- * the first instance is SIGKILL'd. Sharing one instance sidesteps the issue entirely.
+ * share one Electron instance, so the launch cost is paid once per worker and the tests share the
+ * app's state.
  *
  * ## Prerequisites
  *

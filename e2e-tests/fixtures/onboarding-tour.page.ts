@@ -15,9 +15,9 @@ import path from 'path';
  * match other content in the app. Button names are resolved from the English localization file
  * through {@link englishLabel}, so a relabel in `en.json` moves these helpers with it.
  *
- * This lives under `fixtures/` rather than beside the tour spec because `waitForAppReady` in
- * `helpers.ts` suppresses the tour for every other spec and needs the same locators; `helpers.ts`
- * imports from here, so this module must not import from `helpers.ts`.
+ * This lives under `fixtures/` rather than beside the tour spec because `isolated.fixture.ts` and
+ * `waitForAppReady` in `helpers.ts` suppress the tour for every other spec and need the same
+ * locators; `helpers.ts` imports from here, so this module must not import from `helpers.ts`.
  */
 
 /**
@@ -251,11 +251,17 @@ export async function goBackTour(page: Page): Promise<void> {
  */
 export async function advanceToLastStep(page: Page): Promise<void> {
   const nextButton = getTourNextButton(page);
+  const doneButton = getTourDoneButton(page);
   const stepCounter = getStepCounter(page);
   for (let i = 0; i < 10; i += 1) {
+    // The card renders nothing while it re-measures a step's target, and the step counter can
+    // already read the new step by then. So wait for the card's primary button, whichever it is,
+    // before deciding: a Next that is merely not painted yet is not the last step.
+    // eslint-disable-next-line no-await-in-loop
+    await expect(nextButton.or(doneButton)).toBeVisible({ timeout: 10_000 });
     // Steps are inherently sequential — must observe the current step before advancing.
     // eslint-disable-next-line no-await-in-loop
-    if (!(await nextButton.isVisible())) return;
+    if (await doneButton.isVisible()) return;
     // Must be read before the click below fires, so there is nothing to parallelize.
     // eslint-disable-next-line no-await-in-loop
     const stepBeforeClick = await stepCounter.textContent();
@@ -296,11 +302,10 @@ export async function skipTour(page: Page): Promise<void> {
  * attached only once the step card has rendered. TODO(PT-4627): once the tour handles Escape from
  * inside a web view, drop the synthetic dispatch.
  *
- * `waitForAppReady` calls this by default. A Simple-mode spec that skips `waitForAppReady` (the
- * scripture-editor specs gate on the editor iframe instead) must call it itself before its first
- * click in the main frame. TODO(PT-4639): suppress the tour at the fixture level
- * (isolated.fixture.ts, with an opt-out for onboarding-tour.spec.ts) so no Simple-mode spec has to
- * remember this call.
+ * `isolated.fixture`'s `mainPage` calls this as soon as the window loads, and `waitForAppReady`
+ * calls it by default; a suite about the tour opts out of both with `allowOnboardingTour`. A spec
+ * on a fixture that does neither (an attach-mode fixture) must call it itself before its first
+ * click in the main frame.
  */
 export async function suppressOnboardingTour(page: Page): Promise<void> {
   await page.evaluate((key) => {

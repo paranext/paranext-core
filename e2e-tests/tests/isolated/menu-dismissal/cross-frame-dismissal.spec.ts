@@ -20,7 +20,7 @@ import {
 // Launch fixture (not the cdp connect fixture): the running app scans the projects folder exactly
 // once at startup, so the test project MUST exist on disk before the app launches. comment.fixture
 // launches Electron lazily (after beforeAll), so the project is present for the startup scan. Same
-// worker-scoped launch fixture the verse-navigation spec uses; it also starts the app in Simple
+// worker-scoped launch fixture the comment-assignment specs use; it also starts the app in Simple
 // mode, whose Column 3 Comments tab supplies the web-view Select the Select variant opens (the
 // "All comments" preset filter).
 

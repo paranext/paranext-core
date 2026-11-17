@@ -1301,6 +1301,14 @@ Where a spec lives is decided by how it gets its app, and that choice also picks
 - `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
   tests, apart from the bare-Electron checks its README describes.
 
+Each `test()` on `isolated.fixture` starts and tears down its own app (specs on `comment.fixture`,
+and the `find/` and `menu-dismissal/` directories, share one app per worker), so checks that can share one launch
+state go in a single `test()` as `test.step()`s; a check that needs a fresh app or different launch
+settings gets its own `test()`. The "Independent" item in the Test Quality Checklist above applies per `test()`,
+not per step. Linux, including WSL2, is the supported platform for the isolated suite; native
+Windows and macOS are best effort (see
+[`e2e-tests/tests/isolated/README.md`](../../e2e-tests/tests/isolated/README.md#supported-platform)).
+
 ```
 e2e-tests/
 ├── fixtures/
@@ -1478,7 +1486,7 @@ e2e-tests/run-e2e-wsl.sh --wrap npx playwright test e2e-tests/tests/isolated/{fe
 **On an Electron upgrade, re-run `tests/isolated/web-view-lifecycle/` by hand.** CI runs only the
 smoke project (`.github/workflows/test.yml`), and that subset is the only place that would notice
 Chromium no longer firing `unload` in web view iframes: the React web view bootstrap unmounts a
-replaced document's root on `unload`, and `extension-teardown-listeners.spec.ts` goes red if it stops.
+replaced document's root on `unload`, and the teardown-listener step of `stale-root-unmount.spec.ts` goes red if it stops.
 
 ### Manually Testing the First-Run Wizard
 

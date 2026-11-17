@@ -2,7 +2,7 @@
  * Simple-mode default-view e2e: a scripture editor opened with no previously saved view state keeps
  * the pre-Standard-view 'formatted' default when `platform.interfaceMode` is 'simple', so nothing
  * changes for Simple users — the power-mode Standard default (see
- * standard-default-power-mode.spec.ts) must not leak into Simple mode.
+ * preview-read-only-power-mode.spec.ts) must not leak into Simple mode.
  *
  * The flow mirrors the power-mode spec exactly (same project, same open command, same navigation);
  * the ONLY variable is `interfaceMode`, so a failure here isolates the interface-mode gating of the
@@ -13,7 +13,8 @@
  * the headings, the empty-verse placeholder and the footnotes pane's rows, read-only and while
  * edited.
  *
- * ONE test() per spec file on purpose — see standard-default-power-mode.spec.ts.
+ * One test(): the isolated fixture starts a new app for every test(), so its checks share one
+ * launch.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
@@ -56,9 +57,9 @@ test.describe('scripture editor default view', () => {
   test('a first-open editor keeps the formatted view in simple mode', async ({ mainPage }) => {
     // Heavy isolated test: it launches its own Electron instance, installs the bundled sample
     // project into a fresh root, opens the editor, and polls several backend-readiness gates. A cold
-    // first run measured ~84s against the default 120s budget (~70%), so a colder or
-    // memory-pressured machine could spuriously time out before the calibrated per-step timeouts
-    // fire. Give it Playwright's 3x "slow" budget for headroom (a passing run still exits in seconds).
+    // first run takes a large share of the default 120s budget, so a colder or memory-pressured
+    // machine could spuriously time out before the calibrated per-step timeouts fire. Give it
+    // Playwright's 3x "slow" budget for headroom (a passing run still exits in seconds).
     test.slow();
     // This is a Simple-mode spec, so the onboarding tour opens on its own; suppress it before its
     // full-screen overlay can intercept the BCV trigger click below.
