@@ -128,7 +128,7 @@ export function parseAllowedCallers(value: unknown): RequestCallerProcess[] | un
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) throw new Error('allowedCallers must be an array');
   return value.map((entry: unknown) => {
-    const caller = ALL_REQUEST_CALLER_PROCESSES.find((process) => process === entry);
+    const caller = ALL_REQUEST_CALLER_PROCESSES.find((known) => known === entry);
     if (!caller) throw new Error('allowedCallers names an unknown process');
     return caller;
   });

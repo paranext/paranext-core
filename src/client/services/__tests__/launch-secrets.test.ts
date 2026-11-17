@@ -2,26 +2,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 async function loadFreshModule() {
   vi.resetModules();
-  return import('@client/services/launch-credentials');
+  return import('@client/services/launch-secrets');
 }
 
-describe('launch credentials', () => {
+describe('launch secrets', () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
-  it('hands the credentials out once', async () => {
-    const { setLaunchCredentials, takeLaunchCredentials } = await loadFreshModule();
-    setLaunchCredentials({ clientSecret: 'client', serverSecret: 'server' });
+  it('hands the secrets out once', async () => {
+    const { setLaunchSecrets, takeLaunchSecrets } = await loadFreshModule();
+    setLaunchSecrets({ clientSecret: 'client', serverSecret: 'server' });
 
-    expect(takeLaunchCredentials()).toEqual({ clientSecret: 'client', serverSecret: 'server' });
-    expect(takeLaunchCredentials()).toBeUndefined();
+    expect(takeLaunchSecrets()).toEqual({ clientSecret: 'client', serverSecret: 'server' });
+    expect(takeLaunchSecrets()).toBeUndefined();
   });
 
   it('has nothing to hand out when none were set', async () => {
-    const { takeLaunchCredentials } = await loadFreshModule();
+    const { takeLaunchSecrets } = await loadFreshModule();
 
-    expect(takeLaunchCredentials()).toBeUndefined();
+    expect(takeLaunchSecrets()).toBeUndefined();
   });
 
   it('is unidentified until marked', async () => {

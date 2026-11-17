@@ -44,9 +44,9 @@ function outcomeOf(socket: IWebSocket): Promise<'open' | 'closed'> {
 
 async function loadFreshModules() {
   vi.resetModules();
-  const credentials = await import('@client/services/launch-credentials');
+  const secrets = await import('@client/services/launch-secrets');
   const { createWebSocket } = await import('@client/services/web-socket.factory');
-  return { ...credentials, createWebSocket };
+  return { ...secrets, createWebSocket };
 }
 
 describe('createWebSocket in the extension host', () => {
@@ -69,7 +69,7 @@ describe('createWebSocket in the extension host', () => {
     const { server, handshakes, url } = await startServer(replyServerSecret);
     servers.push(server);
     const modules = await loadFreshModules();
-    if (hasCredentials) modules.setLaunchCredentials(CREDENTIALS);
+    if (hasCredentials) modules.setLaunchSecrets(CREDENTIALS);
     const socket = await modules.createWebSocket(url);
     sockets.push(socket);
     const outcome = await outcomeOf(socket);
@@ -98,7 +98,7 @@ describe('createWebSocket in the extension host', () => {
     expect(identity).toBe('unidentified');
   });
 
-  it('connects with no header when there are no credentials', async () => {
+  it('connects with no header when there are no secrets', async () => {
     const { outcome, handshakes, identity } = await connect(undefined, false);
 
     expect(handshakes[0]?.headers[PAPI_CLIENT_SECRET_HEADER]).toBeUndefined();
@@ -106,15 +106,18 @@ describe('createWebSocket in the extension host', () => {
     expect(identity).toBe('unidentified');
   });
 
-  it('presents the credentials only once', async () => {
+  it('presents the secrets only once', async () => {
     const { server, handshakes, url } = await startServer(CREDENTIALS.serverSecret);
     servers.push(server);
     const modules = await loadFreshModules();
-    modules.setLaunchCredentials(CREDENTIALS);
+    modules.setLaunchSecrets(CREDENTIALS);
+    // One at a time, so the handshakes reach the server in this order
     const first = await modules.createWebSocket(url);
+    sockets.push(first);
+    await outcomeOf(first);
     const second = await modules.createWebSocket(url);
-    sockets.push(first, second);
-    await Promise.all([outcomeOf(first), outcomeOf(second)]);
+    sockets.push(second);
+    await outcomeOf(second);
 
     expect(handshakes.map((request) => request.headers[PAPI_CLIENT_SECRET_HEADER])).toEqual([
       CREDENTIALS.clientSecret,

@@ -3,7 +3,7 @@ import {
   isLaunchSecretsMessage,
 } from '@node/models/interprocess-messages.model';
 import type { EventEmitter } from 'events';
-import type { LaunchCredentials } from '@client/services/launch-credentials';
+import type { LaunchSecrets } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 
 /** How long to wait for main to send the launch secrets before giving up on starting */
@@ -12,8 +12,8 @@ export const LAUNCH_SECRETS_TIMEOUT_MS = 10_000;
 type Dependencies = {
   /** `process` in production: its `send` exists only when main forked it with an IPC channel */
   process: Pick<EventEmitter, 'on' | 'off'> & { send?: unknown };
-  /** `setLaunchCredentials` from `@client/services/launch-credentials` */
-  setLaunchCredentials: (credentials: LaunchCredentials) => void;
+  /** `setLaunchSecrets` from `@client/services/launch-secrets` */
+  setLaunchSecrets: (secrets: LaunchSecrets) => void;
   /** Ends the process with the given code; `process.exit` in production */
   exitProcess: (code: number) => void;
 };
@@ -32,7 +32,7 @@ type Dependencies = {
  */
 export function receiveLaunchSecrets({
   process: processLike,
-  setLaunchCredentials,
+  setLaunchSecrets,
   exitProcess,
 }: Dependencies): Promise<void> {
   if (typeof processLike.send !== 'function') {
@@ -47,7 +47,7 @@ export function receiveLaunchSecrets({
       if (!isLaunchSecretsMessage(message)) return;
       clearTimeout(timeout);
       processLike.off('message', onMessage);
-      setLaunchCredentials({
+      setLaunchSecrets({
         clientSecret: message.clientSecret,
         serverSecret: message.serverSecret,
       });

@@ -149,7 +149,7 @@ await papi.commands.registerCommand(
 );
 ```
 
-`registerRequestHandler` takes the same option. The processes are `renderer` (the app's windows,
+The processes are `renderer` (the app's windows,
 including every WebView in them), `extensionHost` and `dotnetDataProvider`; main can always call.
 Main enforces the option on remote calls, and the platform applies it to calls from inside the
 registering process too. A caller not on the list gets `MethodNotFound` with

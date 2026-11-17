@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using Paranext.DataProvider.JsonUtils;
 using Paratext.Data;
 using Paratext.Data.Users;
 
@@ -15,6 +16,18 @@ internal static class InternetSettingsLogic
 {
     /// <summary>Placeholder shown in place of a real secret so we never hand out real passwords.</summary>
     public const string PLACEHOLDER_PASSWORD = "********";
+
+    /// <summary>
+    /// Name of the proxy password field as PAPI callers send it, which
+    /// <see cref="PasswordRequiredForChange"/> reports
+    /// </summary>
+    public const string PROXY_PASSWORD = InternetSettingsMementoConverter.PROXY_PASSWORD;
+
+    /// <summary>
+    /// Name of the DBL password field as PAPI callers send it, which
+    /// <see cref="PasswordRequiredForChange"/> reports
+    /// </summary>
+    public const string DBL_PASSWORD = InternetSettingsMementoConverter.DBL_PASSWORD;
 
     /// <summary>Mask a secret for display: the placeholder when a value is present, otherwise null.</summary>
     public static string? MaskSecret(string? value) =>
@@ -32,12 +45,6 @@ internal static class InternetSettingsLogic
 
     /// <summary>Whether a submitted secret is an actual change (not the unchanged-placeholder).</summary>
     public static bool IsSecretChanged(string? submitted) => submitted != PLACEHOLDER_PASSWORD;
-
-    /// <summary>Name of the proxy password field, as <see cref="PasswordRequiredForChange"/> reports it</summary>
-    public const string PROXY_PASSWORD = "ProxyPassword";
-
-    /// <summary>Name of the DBL password field, as <see cref="PasswordRequiredForChange"/> reports it</summary>
-    public const string DBL_PASSWORD = "DBLPassword";
 
     /// <summary>
     /// The password the caller must supply for real for this change, or null when the change is

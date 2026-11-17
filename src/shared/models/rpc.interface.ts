@@ -10,7 +10,10 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { SerializedRequestType } from '@shared/utils/util';
-import type { RequestCallerProcess } from '@shared/models/network.model';
+import type {
+  NetworkMethodHandlerOptions,
+  RequestCallerProcess,
+} from '@shared/models/network.model';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { PlatformEvent } from 'platform-bible-utils';
 
@@ -186,7 +189,7 @@ export type RegisteredRpcMethodDetails = {
  * Options a process sends with a method registration. Travels as the third parameter of
  * `network:registerMethod`.
  */
-export type RpcMethodRegistrationOptions = { allowedCallers?: RequestCallerProcess[] };
+export type RpcMethodRegistrationOptions = Pick<NetworkMethodHandlerOptions, 'allowedCallers'>;
 
 /**
  * Minimal interface for event registries so that {@link RpcServer} can participate in event

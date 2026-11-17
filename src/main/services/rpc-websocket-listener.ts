@@ -46,7 +46,7 @@ import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import { ConnectionIdentity, isRegistrationAllowed } from '@shared/data/request-access.data';
 import { RpcServer } from './rpc-server';
-import { identifyClientSecret, LaunchedIdentity } from './launch-secrets.service';
+import { IdentifiedLaunch, identifyClientSecret, LaunchedIdentity } from './launch-secrets.service';
 // RpcEventRegistry was extracted to its own file to satisfy max-classes-per-file
 import { RpcEventRegistry } from './rpc-event-registry';
 
@@ -76,9 +76,6 @@ function onServerError(error: unknown): void {
 const UNKNOWN_SECRET_STATUS = 401;
 /** HTTP status for a handshake whose launch already has an open connection */
 const LAUNCH_ALREADY_CONNECTED_STATUS = 409;
-
-/** What the handshake check learned about a connection with a valid client secret */
-type VerifiedLaunch = { identity: LaunchedIdentity; serverSecret: string; launchId: number };
 
 /** The open connection a launched child made, and which launch made it */
 type LaunchedConnection = { socket: ServerSocketLike; launchId: number };
@@ -136,7 +133,7 @@ export class RpcWebSocketListener
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
   private readonly connectionLostEmitter = new PlatformEventEmitter<void>();
   /** Handshakes that presented a valid client secret, kept until their connection is set up */
-  private readonly verifiedLaunchByRequest = new WeakMap<IncomingMessage, VerifiedLaunch>();
+  private readonly verifiedLaunchByRequest = new WeakMap<IncomingMessage, IdentifiedLaunch>();
   /** The one open connection each launched child may have */
   private readonly openConnectionByLaunchedIdentity = new Map<
     LaunchedIdentity,
@@ -745,11 +742,10 @@ export class RpcWebSocketListener
       webSocket.close(INTENTIONAL_CLOSE_CODE, 'launch already connected');
       return;
     }
-    this.serveClient(webSocket, socketId, verified ? verified.identity : 'unidentified');
+    const identity = verified ? verified.identity : 'unidentified';
+    this.serveClient(webSocket, socketId, identity);
     // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
-    logger.info(
-      `Websocket client ${socketId} connected as ${verified ? verified.identity : 'unidentified'}`,
-    );
+    logger.info(`Websocket client ${socketId} connected as ${identity}`);
   }
 
   /**
@@ -759,7 +755,7 @@ export class RpcWebSocketListener
    * @returns `false` when the same launch already has an open connection, which happens only when
    *   two handshakes with the same secret pass the handshake check together
    */
-  private trackLaunchedConnection(socket: ServerSocketLike, verified: VerifiedLaunch): boolean {
+  private trackLaunchedConnection(socket: ServerSocketLike, verified: IdentifiedLaunch): boolean {
     const previous = this.openConnectionByLaunchedIdentity.get(verified.identity);
     if (previous?.launchId === verified.launchId) return false;
     this.openConnectionByLaunchedIdentity.set(verified.identity, {

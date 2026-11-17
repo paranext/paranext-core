@@ -7,7 +7,7 @@
 import { isRenderer } from '@shared/utils/internal-util';
 import type { PapiPortBridge } from '@shared/data/papi-port.model';
 import { IWebSocket } from './web-socket.interface';
-import { markLocalConnectionIdentified, takeLaunchCredentials } from './launch-credentials';
+import { markLocalConnectionIdentified, takeLaunchSecrets } from './launch-secrets';
 
 /** Where the preload puts its bridge; absent outside Electron */
 type GlobalWithPapiBridge = typeof globalThis & {
@@ -40,8 +40,8 @@ export const createWebSocket = async (url: string): Promise<IWebSocket> => {
   const { default: Ws, createIdentifiedWebSocket } = await import(
     '@extension-host/services/extension-host-web-socket.model'
   );
-  const credentials = takeLaunchCredentials();
-  const socket = credentials ? createIdentifiedWebSocket(url, credentials) : new Ws(url);
+  const secrets = takeLaunchSecrets();
+  const socket = secrets ? createIdentifiedWebSocket(url, secrets) : new Ws(url);
   // Assert the return type. Note: this web socket is missing the `dispatchEvent` property that the
   // renderer type has.
   // eslint-disable-next-line no-type-assertion/no-type-assertion

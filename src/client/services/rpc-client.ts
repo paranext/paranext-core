@@ -34,7 +34,7 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
-import { getLocalConnectionIdentity } from '@client/services/launch-credentials';
+import { getLocalConnectionIdentity } from '@client/services/launch-secrets';
 import { getRefusedRequestMessage, isCallAllowed } from '@shared/data/request-access.data';
 import type { RequestCallerProcess } from '@shared/models/network.model';
 import {

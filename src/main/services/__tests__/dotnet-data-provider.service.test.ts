@@ -259,6 +259,19 @@ describe('dotnetDataProvider launch secrets', () => {
     expect(mocks.loggerError).toHaveBeenCalledWith(expect.stringContaining('EPIPE'));
   });
 
+  test('revokes the secrets when the data provider exits', () => {
+    dotnetDataProvider.start();
+
+    const [, , options] = mocks.spawn.mock.calls[0];
+    const secrets = expectCurrentDataProviderSecrets(options.env[LAUNCH_SECRETS_VARIABLE]);
+    const child = mocks.spawn.mock.results[0].value;
+    const onExit = child.once.mock.calls.find(([eventName]: [string]) => eventName === 'exit')?.[1];
+    expect(onExit).toBeDefined();
+    onExit(0, undefined);
+
+    expect(identifyClientSecret(secrets.clientSecret)).toBeUndefined();
+  });
+
   test('never puts the secrets in the arguments', () => {
     dotnetDataProvider.start();
     dotnetDataProvider.kill();

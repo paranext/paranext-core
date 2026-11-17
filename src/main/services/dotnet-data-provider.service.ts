@@ -9,13 +9,15 @@ import { issueLaunchSecrets, revokeLaunchSecrets } from '@main/services/launch-s
 /**
  * Environment variable that carries the launch secrets to the data provider in development, where
  * `dotnet watch` has to pass them on to each process it restarts. The data provider clears its own
- * copy on reading it. Holds the same JSON a packaged build reads from standard input.
+ * copy on reading it. Holds the same JSON a packaged build reads from standard input. Mirrored by
+ * `LaunchSecrets.ENVIRONMENT_VARIABLE` in `c-sharp/LaunchSecrets.cs`.
  */
 const LAUNCH_SECRETS_ENVIRONMENT_VARIABLE = 'PAPI_LAUNCH_SECRETS';
 
 /**
  * Tells a packaged data provider to read its launch secrets from standard input. Without it the
  * data provider never waits on standard input, so one started by another tool is not held up.
+ * Mirrored by `LaunchSecrets.STANDARD_INPUT_FLAG` in `c-sharp/LaunchSecrets.cs`.
  */
 const LAUNCH_SECRETS_ON_STANDARD_INPUT_ARG = '--launch-secrets-on-stdin';
 

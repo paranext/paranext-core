@@ -14,7 +14,7 @@ export type NetworkMethodHandlerOptions = {
    *
    * This identifies processes, not extensions: every extension shares the extension host process,
    * so `'extensionHost'` admits all of them. A request type that core restricts itself keeps core's
-   * rule; this option cannot widen it.
+   * rule; this option is ignored for it.
    */
-  allowedCallers?: RequestCallerProcess[];
+  allowedCallers?: readonly RequestCallerProcess[];
 };
