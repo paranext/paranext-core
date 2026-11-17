@@ -5,7 +5,10 @@
  * changed files, the mapping and the CI spec lists, and returns a report. Reading git and printing
  * are the caller's job.
  */
+import { execFileSync } from 'child_process';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Per isolated key, the repository path prefixes its specs exist to test (`main`) and the ones they
@@ -171,4 +174,75 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     entryPointFiles,
     specsChanged: input.changedFiles.some((file) => file.startsWith('e2e-tests/tests/')),
   };
+}
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+function git(...args: string[]): string[] {
+  return execFileSync('git', args, {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+    .split('\n')
+    .filter((line) => line !== '');
+}
+
+function listSpecFiles(directory: string): string[] {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return listSpecFiles(fullPath);
+    return entry.name.endsWith('.spec.ts')
+      ? [path.relative(REPO_ROOT, fullPath).split(path.sep).join('/')]
+      : [];
+  });
+}
+
+/**
+ * Prints the {@link E2eRecommendationReport} for the working tree against `mergeBase` as JSON on
+ * stdout.
+ */
+function runCli(mergeBase: string): void {
+  const sources: SubsetSources = JSON.parse(
+    fs.readFileSync(path.join(REPO_ROOT, 'e2e-tests/tests/isolated/subset-sources.json'), 'utf8'),
+  );
+  const specFilesBySubset: Record<string, string[]> = {};
+  Object.keys(sources)
+    .filter((key) => !isSpecKey(key))
+    .forEach((key) => {
+      specFilesBySubset[key] = listSpecFiles(path.join(REPO_ROOT, ISOLATED_PREFIX, key));
+    });
+
+  const report = recommendE2eTests({
+    changedFiles: git('diff', '--name-only', mergeBase),
+    filesAddingCommandRegistrations: git(
+      'diff',
+      '--name-only',
+      '-G',
+      'registerCommand\\(|RegisterCommand\\(',
+      mergeBase,
+    ),
+    sources,
+    coreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs.txt')),
+    editorCoreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs-editor.txt')),
+    specFilesBySubset,
+  });
+  process.stdout.write(`${JSON.stringify(report, undefined, 2)}\n`);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const mergeBase = process.argv[2];
+  if (!mergeBase) {
+    process.stderr.write('Usage: tsx e2e-tests/e2e-recommendations.ts <merge-base>\n');
+    process.exit(1);
+  }
+  try {
+    runCli(mergeBase);
+  } catch (error) {
+    process.stderr.write(
+      `e2e-recommendations failed for "${mergeBase}": ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exit(1);
+  }
 }
