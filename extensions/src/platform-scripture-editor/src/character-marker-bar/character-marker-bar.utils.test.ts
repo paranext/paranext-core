@@ -204,6 +204,19 @@ describe('resolveActiveLineRect', () => {
     expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.block).toBe(bookLine);
   });
 
+  it('resolves a chapter line as the active line', () => {
+    // The bar moves beside the chapter line rather than holding its last position; the menu there
+    // offers no markers, so the button shows disabled.
+    const { editorRoot } = buildEditor();
+    const chapterLine = document.createElement('p');
+    chapterLine.className = 'chapter usfm_c';
+    chapterLine.textContent = '1';
+    editorRoot.prepend(chapterLine);
+    const textNode = firstChildOf(chapterLine);
+
+    expect(resolveActiveLineRect(selectionAt(textNode, 0), editorRoot)?.block).toBe(chapterLine);
+  });
+
   it('resolves the top-level block, not an inner element, for a caret inside a character marker', () => {
     const { editorRoot, para } = buildEditor();
     para.textContent = 'a ';

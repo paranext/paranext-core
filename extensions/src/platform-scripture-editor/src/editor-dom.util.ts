@@ -59,7 +59,7 @@ const EDITOR_MAX_POLL_INTERVALS = 100; // Hopefully the editor will load in 10 s
  * `\id` line and chapter lines don't match; to find the block holding the caret, use
  * {@link findTopLevelEditorBlock}.
  */
-export const EDITOR_PARA_SELECTOR = '.para[class*="usfm_"]';
+const EDITOR_PARA_SELECTOR = '.para[class*="usfm_"]';
 
 /**
  * Finds the top-level editor block that contains `node`: the ancestor-or-self element whose parent
@@ -85,19 +85,20 @@ export function findTopLevelEditorBlock(
 }
 
 /**
- * Top-level blocks that hold no text a character marker can apply to: the `\id` line (the editor's
- * `BookNode` renders it with class `book`) and chapter lines (class `chapter`).
+ * Top-level blocks that aren't body text: the `\id` line (the editor's `BookNode` renders it with
+ * class `book`) and chapter lines (class `chapter`). {@link findFirstTextBlock} skips them.
  */
 const NON_TEXT_BLOCK_SELECTOR = '.book, .chapter';
 
 /**
- * Finds the first top-level editor block that holds text: a header line, a marked paragraph, or
- * verses outside any paragraph marker. Skips the `\id` line and chapter lines, so a chapter that
- * opens with unmarked verses resolves to those verses rather than to a later marked paragraph.
+ * Finds the first top-level editor block of body text: a header line, a marked paragraph, or verses
+ * outside any paragraph marker. Skips the `\id` line and chapter lines because they aren't body
+ * text, so a chapter that opens with unmarked verses resolves to those verses rather than to a
+ * later marked paragraph.
  *
  * @param editorRoot The editor's contenteditable element
- * @returns The first text-holding block; else the first block, when there are only `\id` and
- *   chapter lines; else `undefined` for an empty editor
+ * @returns The first body-text block; else the first block, when there are only `\id` and chapter
+ *   lines; else `undefined` for an empty editor
  */
 export function findFirstTextBlock(editorRoot: HTMLElement): HTMLElement | undefined {
   const blocks = Array.from(editorRoot.children).filter(

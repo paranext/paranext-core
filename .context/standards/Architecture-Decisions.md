@@ -4887,9 +4887,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   character-marker menu takes focus and the bar must hold.
 - **Consequences:** In Power mode the paragraph-style trigger reads `p` for text that has no `\p`
   (Simple mode is structure-protected, so the cost is Power-only); retagging an implied paragraph
-  from that menu was already reachable, because the stale `id` left it enabled. The bar now also
-  moves to the `\id` and chapter lines, where the character-marker menu is scoped to that block (a
-  chapter line has no character markers, so the button is disabled). `findTopLevelEditorBlock`
+  from that menu was already reachable, because the stale `id` left it enabled. The bar follows the
+  caret onto the `\id` and chapter lines too, and its button is disabled on both: `c` has no
+  character markers, and `generateCharacterMarkerMenuListItems` offers none for `id` even though
+  `usfmMarkers` lists `ior` among `\id`'s children (they name what may follow `\id`, and `ior`
+  belongs inside `\io`). Hiding the bar on those lines was rejected: it would flicker as the caret
+  moves past them. `findTopLevelEditorBlock`
   assumes root-level nodes render as direct children of the contenteditable. The read-only block
   verse layout already wraps paragraphs in a verse-block element, where it would resolve to the
   wrapper; as of 2026-11-12 the bar is not mounted in that layout. Revisit before mounting the bar

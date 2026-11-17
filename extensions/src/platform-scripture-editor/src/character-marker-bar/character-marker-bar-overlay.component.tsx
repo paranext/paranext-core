@@ -77,7 +77,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
   const rafIdRef = useRef<number>(0);
   // Collapses any number of changes arriving while hidden into a single catch-up.
   const pendingCatchUpRef = useRef(false);
-  // Distinguishes "no caret yet, show me at the first paragraph" from "the caret left the editor,
+  // Distinguishes "no caret yet, show me at the first text block" from "the caret left the editor,
   // hold the last position" — both reach the same branch but want opposite behavior.
   const hasPositionedRef = useRef(false);
   // The alignment term, measured once and reused (and re-measured on a font-metrics change — see
@@ -85,7 +85,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
   // taken while hidden yields, so a hidden mount leaves this unset and the next visible recompute
   // fills it in. See `measureBaselineOffset`'s note on why it never returns 0 for the no-layout case.
   const baselineOffsetRef = useRef<number | undefined>(undefined);
-  // The paragraph's computed font metrics `baselineOffsetRef` was last measured against. Caching on
+  // The block's computed font metrics `baselineOffsetRef` was last measured against. Caching on
   // "is the offset set yet" alone would go stale on an explicit font-size/zoom change or a
   // `font-family` swap (e.g. a class or theme change) — both scenarios the ResizeObserver below
   // exists to catch — so the cache is keyed on the metrics themselves instead, and a mismatch
@@ -114,7 +114,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
       }
     | undefined
   >(undefined);
-  // A hidden element OUTSIDE `.editor-input`, given the paragraph's computed text metrics so its line
+  // A hidden element OUTSIDE `.editor-input`, given the block's computed text metrics so its line
   // box (the CSS "strut" a container gets from its own font/line-height, even with no text content)
   // can be probed for a baseline without ever touching Lexical's contenteditable — appending even a
   // synchronous probe span inside the editor would fire Lexical's MutationObserver as a microtask and
@@ -169,7 +169,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     // document is `display: none` — which the empty-chapter view does, hiding the editor subtree
     // with `tw:hidden` rather than unmounting it. Every rect then reads zero. Positioning here
     // would not merely store a garbage top; it would latch `hasPositionedRef`, and the no-caret
-    // branch below returns early once that is set — so the first-paragraph re-anchor would never
+    // branch below returns early once that is set — so the first-text-block re-anchor would never
     // run and the bar would sit at the clamped top until the user's first click. Bail before
     // either happens. Nothing needs to schedule the repair: `display: none` collapses the
     // observed anchor to a 0x0 box, so regaining layout is itself a resize and the
@@ -186,8 +186,8 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     let measurementBlock = activeLine?.block;
 
     if (!targetRect) {
-      // Before the first caret, anchor to the first block that holds text (skipping the `\id` and
-      // chapter lines, where the menu has no markers to offer) so the bar is visible on load —
+      // Before the first caret, anchor to the first block of body text (skipping the `\id` and
+      // chapter lines, which aren't body text) so the bar is visible on load —
       // discoverability is the point of the feature. After that, no caret in an editor block means
       // the popover took focus, so HOLD the last position rather than jumping back to the top of
       // the editor as the popover opens and closes.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { isCharacterMarker } from 'platform-bible-utils';
+import { isCharacterMarker, usfmMarkers } from 'platform-bible-utils';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
@@ -125,6 +125,21 @@ describe('generateCharacterMarkerMenuListItems', () => {
     // has no children at all, so an empty menu there is correct rather than a bug.
     expect(generateCharacterMarkerMenuListItems(ref, noop, {}, 'nd')).toEqual([]);
     expect(generateCharacterMarkerMenuListItems(ref, noop, {}, 'c')).toEqual([]);
+  });
+
+  it('returns [] for the \\id line, though usfmMarkers lists `ior` among its children', () => {
+    const { ref } = makeMockEditorRef();
+    // Positive control: the data does list a character marker under `id`, so an empty menu below
+    // comes from the `\id` rule and not from the data.
+    const idChildren = Object.values(usfmMarkers.id.children ?? {}).flat();
+    expect(idChildren).toContain('ior');
+
+    expect(
+      generateCharacterMarkerMenuListItems(ref, noop, {}, 'id', {
+        currentCharacterMarker: 'ior',
+        removeCharacterMarker: vi.fn(),
+      }),
+    ).toEqual([]);
   });
 
   it('returns [] for a parent with no character children even when remove is available', () => {
