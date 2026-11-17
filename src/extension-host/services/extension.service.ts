@@ -33,6 +33,7 @@ import {
 } from '@extension-host/data/extension-interface-modules.data';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import { removeCodeFromStringsGlobals } from '@extension-host/utils/remove-code-from-strings-globals.util';
+import { isLockedFileError, retryWhileFileLocked } from '@node/utils/locked-file.util';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import * as papiCore from '@shared/services/papi-core.service';
 import { executionTokenService } from '@node/services/execution-token.service';
@@ -434,7 +435,13 @@ async function unzipCompressedExtensionFiles(): Promise<void> {
 async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
   logger.debug(`Unpacking zipped extension: ${zipUri}`);
   const parsedZipUri: path.ParsedPath = path.parse(zipUri);
-  const zipData: Buffer = await nodeFS.readFileBinary(zipUri);
+  // Another process may still hold a newly added zip, such as an antivirus scan of it on Windows
+  const zipData: Buffer = await retryWhileFileLocked(() => nodeFS.readFileBinary(zipUri), {
+    onLocked: () =>
+      logger.info(
+        `Extension ZIP file "${zipUri}" is held by another process; retrying for up to 10 seconds`,
+      ),
+  });
   const zip: JSZip = await JSZip.loadAsync(zipData);
   const zipEntries = Object.entries(zip.files).filter(([, zipObj]) => !zipObj.dir);
 
@@ -738,10 +745,30 @@ function watchForExtensionChanges(): UnsubscriberAsync {
       .concat(commandLineExtensionDirectories)
       .map((uri) => getPathFromUri(uri)),
     { ignoreInitial: true, awaitWriteFinish: true },
-  ).on('all', async (eventType) => {
+  );
+
+  watcher.on('all', async (eventType) => {
     let shouldDeactivateExtensions: boolean = true;
     if (eventType === 'add' || eventType === 'addDir') shouldDeactivateExtensions = false;
-    reloadExtensionsDebounced(shouldDeactivateExtensions);
+    try {
+      await reloadExtensionsDebounced(shouldDeactivateExtensions);
+    } catch (e) {
+      // The reload's LogError has already logged the failure; every handler waiting on the same
+      // debounced reload gets it, so keep the repeats out of the main log
+      logger.debug(`${e}`);
+    }
+  });
+
+  // Without a listener, a watcher error becomes an unhandled rejection in the extension host and the
+  // path's `add` event never arrives. On Windows, watching a file or folder another process still
+  // holds as it is added (a copy writing it, an antivirus scan) fails with EBUSY. chokidar records
+  // the path as watched anyway, so changes made to it in place afterwards are missed.
+  watcher.on('error', (error) => {
+    if (isLockedFileError(error))
+      logger.warn(
+        `Extension path ${error.path} was held by another process as it was added, so changes made to it in place (or inside it, if it is a folder) will not be noticed until the app restarts`,
+      );
+    else logger.warn(`Watching extension directories reported an error: ${error}`);
   });
 
   return async () => {
