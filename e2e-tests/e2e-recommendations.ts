@@ -80,7 +80,9 @@ const SOURCE_ROOTS = ['src/', 'extensions/src/', 'c-sharp/'];
  * Matches added or removed lines that register a command (`registerCommand(`, or the C#
  * `RegisterRequestHandlerAsync(` call that registers a request handler) or a web view provider
  * (`registerWebViewProvider(`). Passed to `git diff -G` (POSIX extended regular expression) and
- * tested against the content of untracked files.
+ * tested against the content of untracked files. It over-reports: the C# call also registers
+ * network object and validator handlers, and its declaration matches too, so the result is a prompt
+ * to look at the diff, not proof that a command was added.
  */
 export const REGISTRATION_PATTERN =
   'registerCommand\\(|registerWebViewProvider\\(|RegisterRequestHandlerAsync\\(';

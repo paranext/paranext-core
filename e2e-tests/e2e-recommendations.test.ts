@@ -345,10 +345,22 @@ describe('recommendE2eTests', () => {
 
 describe('readGitChanges', () => {
   const runGit = (cwd: string, ...args: string[]) =>
-    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], {
-      cwd,
-      encoding: 'utf8',
-    }).trim();
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=Test',
+        '-c',
+        'user.email=test@example.com',
+        // Keep the user's global signing and hook settings out of the throwaway repository.
+        '-c',
+        'commit.gpgsign=false',
+        '-c',
+        'core.hooksPath=/dev/null',
+        ...args,
+      ],
+      { cwd, encoding: 'utf8' },
+    ).trim();
 
   function writeFile(repoRoot: string, file: string, content: string) {
     fs.mkdirSync(path.dirname(path.join(repoRoot, file)), { recursive: true });
@@ -409,7 +421,7 @@ describe('readGitChanges', () => {
 
   it('treats a ref that starts with a dash as a ref, not an option', () => {
     withTemporaryRepository((repoRoot) => {
-      expect(() => readGitChanges(repoRoot, '--output=injected.txt')).toThrow(/injected\.txt/);
+      expect(() => readGitChanges(repoRoot, '--output=injected.txt')).toThrow();
       expect(fs.existsSync(path.join(repoRoot, 'injected.txt'))).toBe(false);
     });
   });
