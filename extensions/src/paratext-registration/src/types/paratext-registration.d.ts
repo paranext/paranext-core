@@ -183,7 +183,8 @@ declare module 'papi-shared-types' {
      * Registration half of `platform.resetFirstRun`, which is the command to call: it also resets
      * first-run progress and restarts the app, which this needs afterwards. Developer and tester
      * tool, not for extensions to call: it can delete the user's registration. Only ever touches
-     * Platform.Bible's own ParatextData folder; Paratext 9's registration is never changed.
+     * Platform.Bible's own ParatextData folder; Paratext 9's registration is never changed. Only
+     * the main process may call it; every other connection is refused with `MethodNotFound`.
      *
      * @param mode See {@link ResetFirstRunRegistration}
      * @throws If ParatextData is not using Platform.Bible's own folder
@@ -206,7 +207,9 @@ declare module 'papi-shared-types' {
      *   `setInternetSettings` instead. Retained as a thin wrapper for backward compatibility and
      *   will be removed in a future release.
      *
-     *   Sets the user's ParatextData.dll internet settings.
+     *   Sets the user's ParatextData.dll internet settings. Refuses the same changes the data
+     *   provider's `setInternetSettings` refuses: moving a saved password to a new host without
+     *   supplying that password.
      *
      *   Note: the application must be restarted after this to fully reflect changes.
      */

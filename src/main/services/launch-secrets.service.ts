@@ -1,14 +1,20 @@
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { sha256Digest } from '@node/utils/crypto-util';
+import type { LaunchSecrets } from '@shared/data/rpc.model';
+import type { RequestCallerProcess } from '@shared/models/network.model';
 
 /**
  * The child processes main launches and identifies by a launch secret. Each presents its client
  * secret in its PAPI WebSocket handshake and checks main's reply for its server secret.
  */
-export type LaunchedIdentity = 'extensionHost' | 'dotnetDataProvider';
+export type LaunchedIdentity = Exclude<RequestCallerProcess, 'renderer'>;
 
-/** The two secrets main hands a child it launches */
-export type LaunchSecrets = { clientSecret: string; serverSecret: string };
+/** What a presented client secret tells main about the connection that presented it */
+export type IdentifiedLaunch = {
+  identity: LaunchedIdentity;
+  serverSecret: string;
+  launchId: number;
+};
 
 type IssuedLaunch = { clientSecretDigest: Buffer; serverSecret: string; launchId: number };
 
@@ -47,11 +53,9 @@ export function issueLaunchSecrets(identity: LaunchedIdentity): LaunchSecrets {
  * @returns The identity, the server secret to return to it, and a number that changes each time
  *   secrets are issued for the identity; `undefined` when the secret matches no current launch
  */
-export function identifyClientSecret(
-  presented: string,
-): { identity: LaunchedIdentity; serverSecret: string; launchId: number } | undefined {
+export function identifyClientSecret(presented: string): IdentifiedLaunch | undefined {
   const presentedDigest = sha256Digest(presented);
-  let match: { identity: LaunchedIdentity; serverSecret: string; launchId: number } | undefined;
+  let match: IdentifiedLaunch | undefined;
   // Check every launch rather than stopping at a match so the time taken does not depend on which
   // identity matched
   issuedLaunches.forEach((launch, identity) => {

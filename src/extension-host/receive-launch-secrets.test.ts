@@ -27,19 +27,19 @@ describe('receiveLaunchSecrets', () => {
 
   it('hands the secrets over once main sends them, and stops listening', async () => {
     const fakeProcess = createProcess(true);
-    const setLaunchCredentials = vi.fn();
+    const setLaunchSecrets = vi.fn();
     const exitProcess = vi.fn();
 
     const received = receiveLaunchSecrets({
       process: fakeProcess,
-      setLaunchCredentials,
+      setLaunchSecrets,
       exitProcess,
     });
     fakeProcess.emit('message', 'heartbeat');
     fakeProcess.emit('message', { type: 'papiLaunchSecrets', ...SECRETS });
     await received;
 
-    expect(setLaunchCredentials).toHaveBeenCalledExactlyOnceWith(SECRETS);
+    expect(setLaunchSecrets).toHaveBeenCalledExactlyOnceWith(SECRETS);
     expect(fakeProcess.listenerCount('message')).toBe(0);
     vi.advanceTimersByTime(60_000);
     expect(exitProcess).not.toHaveBeenCalled();
@@ -47,38 +47,38 @@ describe('receiveLaunchSecrets', () => {
 
   it('exits when no secrets arrive', async () => {
     const fakeProcess = createProcess(true);
-    const setLaunchCredentials = vi.fn();
+    const setLaunchSecrets = vi.fn();
     const exitProcess = vi.fn();
 
-    receiveLaunchSecrets({ process: fakeProcess, setLaunchCredentials, exitProcess });
+    receiveLaunchSecrets({ process: fakeProcess, setLaunchSecrets, exitProcess });
     vi.advanceTimersByTime(10_000);
 
     expect(exitProcess).toHaveBeenCalledExactlyOnceWith(EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE);
     expect(logger.error).toHaveBeenCalled();
-    expect(setLaunchCredentials).not.toHaveBeenCalled();
+    expect(setLaunchSecrets).not.toHaveBeenCalled();
   });
 
   it('ignores a malformed secrets message', async () => {
     const fakeProcess = createProcess(true);
-    const setLaunchCredentials = vi.fn();
+    const setLaunchSecrets = vi.fn();
     const exitProcess = vi.fn();
 
-    receiveLaunchSecrets({ process: fakeProcess, setLaunchCredentials, exitProcess });
+    receiveLaunchSecrets({ process: fakeProcess, setLaunchSecrets, exitProcess });
     fakeProcess.emit('message', { type: 'papiLaunchSecrets', clientSecret: 42 });
     vi.advanceTimersByTime(10_000);
 
-    expect(setLaunchCredentials).not.toHaveBeenCalled();
+    expect(setLaunchSecrets).not.toHaveBeenCalled();
     expect(exitProcess).toHaveBeenCalled();
   });
 
   it('does not wait without an IPC channel', async () => {
     const fakeProcess = createProcess(false);
-    const setLaunchCredentials = vi.fn();
+    const setLaunchSecrets = vi.fn();
     const exitProcess = vi.fn();
 
-    await receiveLaunchSecrets({ process: fakeProcess, setLaunchCredentials, exitProcess });
+    await receiveLaunchSecrets({ process: fakeProcess, setLaunchSecrets, exitProcess });
 
-    expect(setLaunchCredentials).not.toHaveBeenCalled();
+    expect(setLaunchSecrets).not.toHaveBeenCalled();
     expect(fakeProcess.listenerCount('message')).toBe(0);
     vi.advanceTimersByTime(60_000);
     expect(exitProcess).not.toHaveBeenCalled();

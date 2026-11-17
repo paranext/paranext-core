@@ -1,3 +1,5 @@
+import type { LaunchSecrets } from '@shared/data/rpc.model';
+
 export const gracefulShutdownMessage = 'gracefulShutdown';
 export const heartbeatMessage = 'heartbeat';
 
@@ -35,11 +37,7 @@ export const LAUNCH_SECRETS_MESSAGE_TYPE = 'papiLaunchSecrets';
  * it. The extension host presents `clientSecret` when it connects to main's PAPI WebSocket and
  * expects `serverSecret` back. Never logged.
  */
-export type LaunchSecretsMessage = {
-  type: typeof LAUNCH_SECRETS_MESSAGE_TYPE;
-  clientSecret: string;
-  serverSecret: string;
-};
+export type LaunchSecretsMessage = { type: typeof LAUNCH_SECRETS_MESSAGE_TYPE } & LaunchSecrets;
 
 /** Whether an IPC message is a well-formed {@link LaunchSecretsMessage} */
 export function isLaunchSecretsMessage(message: unknown): message is LaunchSecretsMessage {

@@ -35,7 +35,7 @@ import {
   registerExtensionHostStartedEvent,
 } from '@extension-host/announce-extension-host-started';
 import { markStartup } from '@shared/utils/startup-timing.util';
-import { setLaunchCredentials } from '@client/services/launch-credentials';
+import { setLaunchSecrets } from '@client/services/launch-secrets';
 import { receiveLaunchSecrets } from '@extension-host/receive-launch-secrets';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 import { installSourceMappedStackTraces } from '@extension-host/services/extension-stack-traces.util';
@@ -54,7 +54,7 @@ markStartup(STARTUP_MARK_PROCESS_START);
 // and the connection to main presents them. No extension loads before that connection is made.
 const launchSecretsReceived = receiveLaunchSecrets({
   process,
-  setLaunchCredentials,
+  setLaunchSecrets,
   exitProcess: (code) => process.exit(code),
 });
 

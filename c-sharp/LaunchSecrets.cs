@@ -16,14 +16,18 @@ internal sealed class LaunchSecrets
 {
     /// <summary>
     /// Carries the secrets in development, where <c>dotnet watch</c> has to pass them on to each
-    /// process it restarts. Holds the same JSON a packaged build reads from standard input.
+    /// process it restarts. Holds the same JSON a packaged build reads from standard input. Mirrors
+    /// <c>LAUNCH_SECRETS_ENVIRONMENT_VARIABLE</c> in
+    /// <c>src/main/services/dotnet-data-provider.service.ts</c>.
     /// </summary>
     public const string ENVIRONMENT_VARIABLE = "PAPI_LAUNCH_SECRETS";
 
     /// <summary>
     /// Command-line argument with which main tells a packaged build to read the secrets from standard
     /// input. Without it this process never waits on standard input, so a data provider started by
-    /// another tool that redirects standard input is not held up.
+    /// another tool that redirects standard input is not held up. Mirrors
+    /// <c>LAUNCH_SECRETS_ON_STANDARD_INPUT_ARG</c> in
+    /// <c>src/main/services/dotnet-data-provider.service.ts</c>.
     /// </summary>
     public const string STANDARD_INPUT_FLAG = "--launch-secrets-on-stdin";
 
@@ -86,8 +90,8 @@ internal sealed class LaunchSecrets
     }
 
     /// <summary>
-    /// Parses <c>{"clientSecret":"…","serverSecret":"…"}</c>. Null for anything else, including
-    /// an empty secret.
+    /// Parses <c>{"clientSecret":"…","serverSecret":"…"}</c>, the <c>LaunchSecrets</c> type in
+    /// <c>src/shared/data/rpc.model.ts</c>. Null for anything else, including an empty secret.
     /// </summary>
     public static LaunchSecrets? Parse(string? json)
     {

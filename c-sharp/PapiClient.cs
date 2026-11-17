@@ -19,10 +19,16 @@ internal class PapiClient : IDisposable
 
     private static readonly Uri s_connectionUri = new("ws://localhost:8876");
 
-    /// <summary>Handshake request header in which this process presents its client secret</summary>
+    /// <summary>
+    /// Handshake request header in which this process presents its client secret. Mirrors
+    /// <c>PAPI_CLIENT_SECRET_HEADER</c> in <c>src/shared/data/rpc.model.ts</c>.
+    /// </summary>
     private const string CLIENT_SECRET_HEADER = "x-papi-client-secret";
 
-    /// <summary>Handshake reply header in which main proves it launched this process</summary>
+    /// <summary>
+    /// Handshake reply header in which main proves it launched this process. Mirrors
+    /// <c>PAPI_SERVER_SECRET_HEADER</c> in <c>src/shared/data/rpc.model.ts</c>.
+    /// </summary>
     private const string SERVER_SECRET_HEADER = "x-papi-server-secret";
 
     /// <summary>
@@ -31,6 +37,9 @@ internal class PapiClient : IDisposable
     /// one's connection has closed.
     /// </summary>
     private const int CONFLICT_RETRIES = 10;
+
+    /// <summary>How long to wait before each retry counted by <see cref="CONFLICT_RETRIES"/></summary>
+    private static readonly TimeSpan s_conflictRetryDelay = TimeSpan.FromMilliseconds(500);
 
     private readonly Uri _connectionUri;
     private readonly TimeSpan _conflictRetryDelay;
@@ -54,7 +63,7 @@ internal class PapiClient : IDisposable
     /// Without them this process connects unidentified, and main refuses it the request types only
     /// the data provider may register.</param>
     public PapiClient(LaunchSecrets? launchSecrets = null)
-        : this(s_connectionUri, launchSecrets, TimeSpan.FromMilliseconds(500)) { }
+        : this(s_connectionUri, launchSecrets, s_conflictRetryDelay) { }
 
     /// <param name="connectionUri">Address of main's PAPI WebSocket</param>
     /// <param name="launchSecrets">See <see cref="PapiClient(LaunchSecrets?)"/></param>
