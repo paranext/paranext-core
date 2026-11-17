@@ -30,6 +30,7 @@ export interface E2eRecommendation {
   command: string;
   /** The changed files that matched, sorted. */
   matchedFiles: string[];
+  /** For a collapsed item, `kind: 'subset'` counts the member specs only, not the whole subset. */
   ci: CiStatus;
   /**
    * Present on a collapsed item: the spec keys it stands for. Spec keys of one subset that matched
@@ -163,7 +164,9 @@ function commonPrefix(strings: string[]): string {
 /**
  * Collapses spec-level recommendations of one subset that matched the same changed files into one
  * recommendation keyed by the longest common prefix of their keys, which Playwright accepts as a
- * path filter. Only when that prefix is longer than `<subset>/`; otherwise they stay separate.
+ * path filter. Only when that prefix is longer than `<subset>/` and, if the subset's spec files are
+ * known, matches no spec other than the members; otherwise they stay separate. One member with an
+ * unrelated name keeps the whole group separate.
  */
 function collapseSpecGroups(
   recommendations: E2eRecommendation[],
@@ -183,6 +186,16 @@ function collapseSpecGroups(
     const key = commonPrefix(members.map((member) => member.key));
     const subset = members[0].key.slice(0, members[0].key.lastIndexOf('/') + 1);
     if (key.length <= subset.length) return;
+    // The path filter also runs every other spec of the subset that starts with the prefix, so it
+    // must run exactly the members (checked whenever the subset's spec files are known).
+    const subsetSpecs = input.specFilesBySubset[subset.slice(0, -1)];
+    if (
+      subsetSpecs &&
+      subsetSpecs.filter((spec) => spec.startsWith(`${ISOLATED_PREFIX}${key}`)).length !==
+        members.length
+    ) {
+      return;
+    }
     const merged: E2eRecommendation = {
       key,
       command: `npm run test:e2e:isolated ${ISOLATED_PREFIX}${key}`,
