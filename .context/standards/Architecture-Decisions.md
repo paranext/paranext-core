@@ -3674,8 +3674,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   module or throw", since entry files no longer go through it. Refusals from the loader and the
   lockdowns contain `not allowed in extensions`. The `evil` extension's probes and
   `extension-sandbox.probes.test.ts` (which runs them in a child Node process with and without the
-  lockdowns) are the regression guard, and `extension.service.sandbox-wiring.test.ts` fails if
-  `extension.service.ts` stops calling the loader or the lockdowns.
+  lockdowns) are the regression guard. The host gets its loader only from
+  `lockDownAndCreateExtensionLoader`, which applies both lockdowns first, so no extension can load
+  before them; the probe test loads `evil` through that function. Nothing tests that
+  `extension.service.ts` keeps using it rather than Node's own `require`: reading the service's
+  source as text was rejected as brittle, and an end-to-end check needs `evil`, which only loads in
+  noisy dev mode.
 - **Alternatives:** (A) An ESM loader hook (`module.register`) plus caller detection to refuse
   dynamic imports from extension files — rejected: it closes only `import()`, leaves the loader
   and cache reachable, and identifying the caller from a resolve hook is fragile. (B) Starting the
@@ -3701,10 +3705,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   core extension agrees as of 2026-11-09, but a third-party extension whose `package.json` `main`
   differs from its manifest `main`, or whose manifest `main` has no file extension or names a
   directory, now fails to load, with an error saying that `main` must name the built `.js` file
-  exactly. In dev, stack traces for errors inside extensions point at the
-  built `main.js` rather than source-mapped `.ts`, because scripts compiled with
-  `vm.compileFunction` do not get Node's source-map rewriting (debugger breakpoints are expected
-  to still resolve); restoring source-mapped stacks is a candidate follow-up. Packaged builds are
+  exactly. Scripts compiled with `vm.compileFunction` do not get Node's source-map rewriting, so
+  the dev extension host installs `source-map-support` (`installSourceMappedStackTraces`) to map
+  extension stack frames through each bundle's inline source map. That replaces Node's own mapping
+  for every frame, so host frames are mapped through the source maps Node recorded when tsx
+  transpiled them. Packaged builds install neither, since extensions ship without source maps
+  there. Packaged builds are
   checked by hand with the `evil` extension (`Sandbox probes (<phase>): 21/21 refused` for each phase); there is no
   automated packaged test. Revisit if process isolation is taken up. Supersedes in part the
   mechanism described in `adr-licensing-boundary` ("shimming `Module.prototype.require`"); the

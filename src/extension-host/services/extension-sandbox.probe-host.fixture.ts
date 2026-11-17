@@ -4,20 +4,21 @@
  *
  * Usage: `node --import tsx extension-sandbox.probe-host.fixture.ts <protected | unprotected>`
  *
- * - `protected` applies the extension host's lockdowns and loads evil through `loadExtensionModule`.
+ * - `protected` loads evil through the loader `lockDownAndCreateExtensionLoader` returns, as the
+ *   extension host does.
  * - `unprotected` loads evil with Node's own `require` and only filters `require` calls by name, with
  *   no lockdowns. It shows the probes can report an escape.
  */
 import Module, { createRequire } from 'node:module';
 import path from 'node:path';
 import {
-  blockCodeGenerationFromStrings,
-  blockProcessModuleAccess,
-  loadExtensionModule,
+  lockDownAndCreateExtensionLoader,
+  NOT_ALLOWED_IN_EXTENSIONS,
 } from './extension-sandbox.util';
 
 const EVIL_PATH = path.resolve(__dirname, '../../../extensions/src/evil/evil.js');
-const REFUSED_REQUIRE_MESSAGE = 'Requiring other than papi is not allowed in extensions!';
+// Built from the shared constant, as `requireForExtension` builds its refusal
+const REFUSED_REQUIRE_MESSAGE = `Requiring other than papi is ${NOT_ALLOWED_IN_EXTENSIONS}!`;
 
 const papiStub = {
   logger: {
@@ -33,12 +34,10 @@ const stubRequire = (moduleName: string): unknown => {
 };
 
 function loadProtected(): unknown {
-  // Twice each: the host re-applies the lockdowns every time it activates extensions
-  blockProcessModuleAccess();
-  blockCodeGenerationFromStrings();
-  blockProcessModuleAccess();
-  blockCodeGenerationFromStrings();
-  return loadExtensionModule(EVIL_PATH, stubRequire);
+  // Twice: the host creates a new loader every time it activates extensions
+  lockDownAndCreateExtensionLoader(stubRequire);
+  const loadExtension = lockDownAndCreateExtensionLoader(stubRequire);
+  return loadExtension(EVIL_PATH);
 }
 
 function loadUnprotected(): unknown {

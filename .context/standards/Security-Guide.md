@@ -115,6 +115,8 @@ the extension host process:
 - **Code built from strings is disabled at activation.** `blockCodeGenerationFromStrings` deletes
   `globalThis.eval` and `globalThis.Function` and locks the `constructor` of the four function
   prototypes (plain, async, generator, async generator) to a function that throws.
+- **Lockdowns come before any load.** The host gets its extension loader only from
+  `lockDownAndCreateExtensionLoader`, which applies both lockdowns before returning it.
 - **Network:** `fetch` is replaced with `papi.fetch`; `XMLHttpRequest` and `WebSocket` throw.
 - Refusals from the loader and the lockdowns contain the text `not allowed in extensions`.
 
