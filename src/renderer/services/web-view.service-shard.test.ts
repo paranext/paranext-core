@@ -4088,17 +4088,26 @@ describe('createElement guard wiring', () => {
     expect(installMock).toHaveBeenCalledTimes(1);
     const options = installMock.mock.calls[0][0];
     expect(options.realm).toBe(window);
-    expect(options.restrictedTagNames).toEqual(
-      expect.arrayContaining([
-        'object',
+    expect([...options.restrictedTagNames].sort()).toEqual(
+      [
+        'a',
+        'area',
+        'base',
+        'body',
+        'dialog',
         'embed',
+        'form',
         'frame',
         'frameset',
-        'script',
+        'head',
         'iframe',
-        'a',
-        'form',
-      ]),
+        'link',
+        'meta',
+        'object',
+        'portal',
+        'script',
+        'title',
+      ].sort(),
     );
     expect(() => options.onRejected('script', 'Error\n    at somewhere')).toThrow(
       'Rejected creating new script tag on renderer document! Not allowed.',

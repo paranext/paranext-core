@@ -43,8 +43,8 @@ type CallSite = {
 /** A function V8 can drop from a captured trail, along with every frame above it */
 type CaptureBoundary = (...args: never[]) => unknown;
 
-/** Frames captured for the log text of a rejected call (V8's default `stackTraceLimit`) */
-const REJECTED_LOG_DEPTH = 10;
+/** Frames captured when judging a call, for its log text (V8's default `stackTraceLimit`) */
+const LOG_DEPTH = 10;
 
 /** Options for {@link installCreateElementGuard} */
 export type CreateElementGuardOptions = {
@@ -59,7 +59,7 @@ export type CreateElementGuardOptions = {
    * Called before a restricted tag is created for a trusted caller
    *
    * @param tagName Lower-cased local name of the tag
-   * @param stackText The caller's frame, for logging
+   * @param stackText The calling trail, for logging
    */
   onAllowed: (tagName: string, stackText: string) => void;
   /**
@@ -233,7 +233,9 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
 
   /** Calls `onAllowed` for a trusted caller of `boundary`; otherwise calls `onRejected` and throws */
   const judgeCaller = (tagName: string, boundary: CaptureBoundary) => {
-    const callerSites = captureSites(1, boundary);
+    // One capture deep enough to log: the decision reads only the first frame, and the rest show
+    // which code drove a trusted caller
+    const callerSites = captureSites(LOG_DEPTH, boundary);
     let callerFileName: unknown;
     try {
       if (callerSites && callerSites.length > 0)
@@ -250,7 +252,7 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
       onAllowed(tagName, formatSites(callerSites));
       return;
     }
-    onRejected(tagName, formatSites(captureSites(REJECTED_LOG_DEPTH, boundary)));
+    onRejected(tagName, formatSites(callerSites));
     // `onRejected` is typed to throw, but nothing enforces that at runtime
     throw new RealmError(`Rejected creating new ${tagName} tag on renderer document`);
   };
@@ -271,22 +273,35 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
   function createElement(this: Document, ...args: unknown[]): unknown {
     if (args.length === 0) return apply(originalCreateElement, this, args);
 
-    const tagName: string = RealmString(args[0]);
+    // A string primitive cannot change between the check and the native call, so only another
+    // value (whose conversion could answer differently the second time) needs a converted copy
+    const isStringName = typeof args[0] === 'string';
+    const tagName: string = isStringName ? args[0] : RealmString(args[0]);
     const lowerTagName: string = apply(toLowerCase, tagName, []);
     if (restrictedTags[lowerTagName] === true) judgeCaller(lowerTagName, createElement);
-    return apply(originalCreateElement, this, replaceArgument(args, 0, tagName));
+    return apply(
+      originalCreateElement,
+      this,
+      isStringName ? args : replaceArgument(args, 0, tagName),
+    );
   }
 
   function createElementNS(this: Document, ...args: unknown[]): unknown {
     if (args.length < 2) return apply(originalCreateElementNS, this, args);
 
-    const qualifiedName: string = RealmString(args[1]);
+    // See `createElement` for why a string primitive is passed through as is
+    const isStringName = typeof args[1] === 'string';
+    const qualifiedName: string = isStringName ? args[1] : RealmString(args[1]);
     const colonIndex: number = apply(indexOf, qualifiedName, [':']);
     const localName: string =
       colonIndex === -1 ? qualifiedName : apply(slice, qualifiedName, [colonIndex + 1]);
     const lowerLocalName: string = apply(toLowerCase, localName, []);
     if (restrictedTags[lowerLocalName] === true) judgeCaller(lowerLocalName, createElementNS);
-    return apply(originalCreateElementNS, this, replaceArgument(args, 1, qualifiedName));
+    return apply(
+      originalCreateElementNS,
+      this,
+      isStringName ? args : replaceArgument(args, 1, qualifiedName),
+    );
   }
 
   // Step 5: lock the guarded methods onto the prototype

@@ -121,6 +121,24 @@ through `window.papi`. The renderer itself opens no WebSocket to port 8876.
 web view can still reach: the web view preamble's `delete window.top` can't remove a
 non-configurable property.
 
+### The renderer's `createElement` guard
+
+Web views are same-origin with the renderer, so `installCreateElementGuard`
+(`renderer-create-element-guard.util.ts`, installed by `initialize` in `web-view.service-shard.ts`)
+lets only the renderer bundle and the Usersnap widget create restricted tags on the app window. To
+do that it takes over parts of the renderer realm, which constrains all renderer code:
+
+- **Do not reassign `window.Error`, or redefine or delete `Error.prepareStackTrace`.** Both are
+  locked after startup and such code throws. Assigning `Error.prepareStackTrace` still works.
+- **Do not reassign `Document.prototype.createElement` / `createElementNS`, or assign them on a
+  document.** Both are non-writable; wrap at a call site instead.
+- **Unit tests that call `initialize()` must mock `installCreateElementGuard`**, as the
+  `web-view.service-shard.*.test.ts` files do: the real installer locks the test realm and refuses
+  a second install. Its own behaviour is tested in `renderer-create-element-guard.install.test.ts`.
+
+What the guard does not stop, and why, is in `adr-create-element-guard-trusts-call-sites` in
+[Architecture-Decisions.md](./Architecture-Decisions.md).
+
 ### Paratext Registry access tokens
 
 The `requestRegistryTokens` elevated privilege hands extensions Paratext Registry access tokens

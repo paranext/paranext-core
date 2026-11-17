@@ -430,7 +430,7 @@ const FORBIDDEN_HTML_TAGS = ['object', 'embed', 'frame', 'frameset'];
  * Note: this only applies to tags added to the document after initial load, so the document
  * metadata tags are not normally hit.
  *
- * WARNING: A one-frame stack capture runs each time any of these are created, so it is not very
+ * WARNING: A short stack capture runs each time any of these are created, so it is not very
  * efficient when one of these tags is created. Please avoid using these tags where possible.
  */
 const RESTRICTED_HTML_TAGS = [

@@ -2120,8 +2120,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     uses `RegExp.prototype.exec` and `Reflect.apply` captured when its module loads. Everything else
     on the path is an operator (`!!`, not `Boolean(...)`) or an own property of a value the guard
     created or V8 handed it — no free globals, `.call` / `.apply`, iterators or spread. The tag list
-    is a null-prototype record. The tag argument is coerced once and the original receives the
-    coerced string. If `onRejected` returns instead of throwing, the guard throws its own error.
+    is a null-prototype record. A non-string tag argument is coerced once and the original
+    receives the coerced string; a string primitive is passed through unchanged. If `onRejected` returns instead of throwing, the guard throws its own error.
   - **Own the stack-trace machinery.** The installer makes `Error.prepareStackTrace` a
     non-configurable accessor whose getter returns the guard's formatter only during a guard
     capture, and also locks `window.Error` (non-writable, non-configurable): under an embedder
@@ -2129,7 +2129,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     `window.Error` let a frame call the guard's formatter with a harvested renderer-bundle call
     site. V8 picks the `prepareStackTrace` realm from the holder passed to `captureStackTrace`, so
     the holder is built with the window's captured `Object`. `Error.stackTraceLimit` is honored only
-    as a data property, so it is set to the capture depth (1 for the decision; a deeper capture only for the log on a rejected call) and restored rather than locked; if an attacker breaks it,
+    as a data property, so it is set to the capture depth (10 frames, V8's default: the decision reads only the first, the rest are logged) and restored rather than locked; if an attacker breaks it,
     the capture yields no frames and the call is rejected (fail closed).
   - **The guard stays until same-origin web views go.** As of 2026-11-16, PT-2912 and PT-2896 are in
     Triage; until a web view can no longer be same-origin with the renderer, this is the only guard
