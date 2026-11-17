@@ -70,6 +70,7 @@
  * nested close-tag entries, whose labels carry the prefix (`+wj*`).
  */
 
+import type { MarkerMode } from '@eten-tech-foundation/platform-editor';
 import { MODIFIER_KEYS } from 'platform-bible-utils';
 import { isMacOs } from '@/utils/platform.util';
 import type { ForwardedPaletteKeyEvent, PaletteDriver } from 'platform-bible-utils/experimental';
@@ -211,6 +212,19 @@ export type MarkerPaletteKeyOutcome = 'passed' | 'continue' | 'ended';
  */
 export function isImeCompositionKeyEvent(event: MarkerPaletteKeyEvent): boolean {
   return event.isComposing || event.keyCode === 229;
+}
+
+/**
+ * Whether an editor in the view `markerMode` describes refuses a typed `\` and says why: one that
+ * hides markers (`'hidden'`), where a `\` cannot be stored. A host whose `\` opens a marker menu
+ * there takes the key in the CAPTURE phase, before the editor's own keydown handling sees it; left
+ * to the bubble phase, the menu opens AND the editor's "can't be typed" notice shows. With no menu
+ * to open, the host leaves the key to the editor, which refuses it.
+ *
+ * @param markerMode - The editor's `markerMode` view option.
+ */
+export function refusesTypedMarkerTrigger(markerMode: MarkerMode | undefined): boolean {
+  return markerMode === 'hidden';
 }
 
 /**

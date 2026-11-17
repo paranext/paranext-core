@@ -5,6 +5,7 @@ import {
   resolveFilterCharacter,
   handleMarkerPaletteSessionKeyDown,
   isImeCompositionKeyEvent,
+  refusesTypedMarkerTrigger,
   MarkerPaletteSessionDriver,
   MarkerPaletteSessionState,
 } from './marker-palette-keydown.util';
@@ -1084,6 +1085,15 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
       expect(event.defaultPrevented).toBe(true);
       expect(driver.update).toHaveBeenCalledWith({ filterText: 'w' });
     });
+  });
+});
+
+describe('refusesTypedMarkerTrigger', () => {
+  it('is true only in a view that hides markers', () => {
+    expect(refusesTypedMarkerTrigger('hidden')).toBe(true);
+    expect(refusesTypedMarkerTrigger('visible')).toBe(false);
+    expect(refusesTypedMarkerTrigger('editable')).toBe(false);
+    expect(refusesTypedMarkerTrigger(undefined)).toBe(false);
   });
 });
 

@@ -1,4 +1,5 @@
 import type { MarkerMode } from '@eten-tech-foundation/platform-editor';
+import { refusesTypedMarkerTrigger } from 'platform-bible-react/experimental';
 
 /**
  * Decides whether a Standard-view keydown should be routed into the marker-palette session's key
@@ -78,18 +79,14 @@ export function shouldOpenInlineMarkersMenu(options: {
  * Decides whether the CAPTURE-phase keydown listener takes the inline-menu trigger for itself,
  * ahead of the editor, rather than leaving the bubble-phase listener to open the menu.
  *
- * Only a hidden-marker view needs this. Its editor refuses a typed `\` (it cannot be stored in a
- * view with no markers) and tells the user so, from its own keydown handler, which runs before any
- * bubble-phase listener on the window. Left to the bubble phase, the menu opens AND the "can't be
- * typed" notice shows. Claimed here, the editor never sees the keystroke, and the notice still
- * shows whenever no menu opens. Views that show markers raise no such notice, so they keep the
- * bubble-phase path.
+ * Only a view whose editor refuses a typed `\` needs this (`refusesTypedMarkerTrigger`, which says
+ * why). Views that show markers raise no such notice, so they keep the bubble-phase path.
  */
 export function shouldClaimInlineMarkersMenuTrigger(
   options: Parameters<typeof shouldOpenInlineMarkersMenu>[0] & {
-    /** The editor's `markerMode` view option; only `'hidden'` refuses the typed trigger. */
+    /** The editor's `markerMode` view option. */
     markerMode: MarkerMode | undefined;
   },
 ): boolean {
-  return options.markerMode === 'hidden' && shouldOpenInlineMarkersMenu(options);
+  return refusesTypedMarkerTrigger(options.markerMode) && shouldOpenInlineMarkersMenu(options);
 }
