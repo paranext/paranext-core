@@ -85,14 +85,16 @@ jobs:
         run: npx playwright install --with-deps
 
       # One Xvfb at 1920x1080x24: xvfb-run's default screen (1280x1024, 8-bit colour) is too small
-      # for the docking specs. No retries, so a test that passes only on a second attempt fails;
-      # `--trace=retain-on-failure` because the config records a trace only on a retry.
+      # for the docking specs. One retry, so a single timing race does not fail the run; the next
+      # step names every test that needed it. `--trace=retain-on-failure` keeps the trace of the
+      # failed attempt, which the config's `on-first-retry` would replace with the passing one.
       - name: Run the specs
         id: specs
         continue-on-error: ${{ inputs.report_only }}
         env:
           SPEC_LISTS: ${{ inputs.spec_lists }}
           SHARD: ${{ inputs.shard }}
+          E2E_JSON_REPORT: ${{ github.workspace }}/e2e-tests/e2e-results.json
         run: |
           selection=(all)
           if [ -n "$SPEC_LISTS" ]; then
@@ -100,7 +102,7 @@ jobs:
             # shellcheck disable=SC2086
             mapfile -t selection < <(cat $SPEC_LISTS | grep -v -e '^#' -e '^[[:space:]]*$')
           fi
-          playwright_args=(--retries=0 --trace=retain-on-failure)
+          playwright_args=(--retries=1 --trace=retain-on-failure)
           if [ -n "$SHARD" ]; then
             playwright_args+=("--shard=$SHARD")
           fi
@@ -112,6 +114,18 @@ jobs:
         if: ${{ steps.specs.outcome == 'failure' }}
         run: echo "::warning title=E2E isolated specs failed (not blocking)::Isolated end-to-end specs failed but did not fail the build. See the ${{ inputs.artifact_name }} artifact."
 
+      # A test that passed only on its retry is a defect to look at, not a pass to forget.
+      - name: Warn about tests that passed only on their retry
+        if: ${{ !cancelled() && hashFiles('e2e-tests/e2e-results.json') != '' }}
+        run: |
+          set -o pipefail
+          jq -r '.. | objects | select(has("tests") and has("file") and has("title")) | . as $spec
+            | .tests[] | select(.status == "flaky") | "\($spec.file): \($spec.title)"' \
+            e2e-tests/e2e-results.json |
+            while IFS= read -r flaky_test; do
+              echo "::warning title=E2E test passed only on its retry::$flaky_test (trace of the failed attempt in the ${{ inputs.artifact_name }} artifact)"
+            done
+
       - name: Upload Playwright test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -121,4 +135,5 @@ jobs:
           path: |
             e2e-tests/test-results/
             e2e-tests/playwright-report/
+            e2e-tests/e2e-results.json
           if-no-files-found: ignore

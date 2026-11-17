@@ -25,6 +25,11 @@ const config = defineConfig({
     ['./reporters/no-silent-skips.reporter.ts'],
     ['html', { outputFolder: 'playwright-report' }],
     ['list'],
+    // CI's isolated e2e jobs set this and read the report to warn about tests that passed only on
+    // their retry (`.github/workflows/e2e-isolated.yml`).
+    ...(process.env.E2E_JSON_REPORT
+      ? [['json', { outputFile: process.env.E2E_JSON_REPORT }] as const]
+      : []),
   ],
   timeout: 120_000, // 2 minutes per test (app initialization can be slow)
   expect: {
