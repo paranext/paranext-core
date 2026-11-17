@@ -21,6 +21,7 @@ import {
 import { Copy } from 'lucide-react';
 import {
   isImeCompositionKeyEvent,
+  refusesTypedMarkerTrigger,
   type MarkerPaletteKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
 import {
@@ -1660,12 +1661,9 @@ export default function FootnoteEditor({
       event.stopPropagation();
     };
 
-    // A hidden-marker view's editor refuses a typed `\` and tells the user so, from its own keydown
-    // handling, which runs before the bubble-phase listener below: left to that listener, the menu
-    // opens AND the "can't be typed" notice shows. So in that view the trigger is claimed here, in
-    // capture, whenever it is used — the menu opens, or this popover's right-click menu swallows it
-    // as the main editor's does — and the editor never sees it. With no menu to open, the key still
-    // reaches the editor, which refuses it and says why.
+    // Where the editor refuses a typed `\` (see `refusesTypedMarkerTrigger`), the trigger is claimed
+    // here, in capture, whenever it is used — the menu opens, or this popover's right-click menu
+    // swallows it as the main editor's does.
     const claimTriggerInHiddenView = (event: KeyboardEvent) => {
       if (event.key !== defaultMarkerMenuTrigger || showMarkersMenu) return;
       if (isImeCompositionKeyEvent(event)) return;
@@ -1676,7 +1674,7 @@ export default function FootnoteEditor({
         event.stopPropagation();
       }
     };
-    const isHiddenMarkerView = options.view?.markerMode === 'hidden';
+    const isHiddenMarkerView = refusesTypedMarkerTrigger(options.view?.markerMode);
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const editorInput = getEditorInput();
