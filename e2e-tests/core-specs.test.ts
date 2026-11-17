@@ -11,7 +11,8 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 const REPOSITORY_ROOT = path.join(__dirname, '..');
-const SPEC_LISTS = ['core-specs.txt', 'core-specs-editor.txt'];
+const EDITOR_LIST = 'core-specs-editor.txt';
+const SPEC_LISTS = ['core-specs.txt', EDITOR_LIST];
 const ISOLATED_PREFIX = 'e2e-tests/tests/isolated/';
 
 /**
@@ -40,12 +41,23 @@ function readEditorPathsPattern(): RegExp {
   return new RegExp(match[1]);
 }
 
+// Renaming a list and updating only SPEC_LISTS would leave the workflow naming a file that no
+// longer exists (or never naming the new one), so the two sets must stay equal.
+it('names exactly the SPEC_LISTS files in test.yml', () => {
+  const workflow = fs.readFileSync(
+    path.join(REPOSITORY_ROOT, '.github', 'workflows', 'test.yml'),
+    'utf8',
+  );
+  const named = new Set(workflow.match(/e2e-tests\/core-specs[A-Za-z0-9_-]*\.txt/g) ?? []);
+  expect([...named].sort()).toEqual(SPEC_LISTS.map((list) => `e2e-tests/${list}`).sort());
+});
+
 describe('the editor list trigger in test.yml', () => {
   const editorPaths = readEditorPathsPattern();
 
   // A pull request that changes one of the editor-list specs, or the list itself, must run that
   // list; the pattern names them by hand, so it has to follow the list.
-  it.each([...readSpecList('core-specs-editor.txt'), 'e2e-tests/core-specs-editor.txt'])(
+  it.each([...readSpecList(EDITOR_LIST), `e2e-tests/${EDITOR_LIST}`])(
     'runs the editor list when %s changes',
     (changedPath) => {
       expect(editorPaths.test(changedPath)).toBe(true);
@@ -56,7 +68,7 @@ describe('the editor list trigger in test.yml', () => {
   it.each([
     'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     'dev-packages.json',
-    'e2e-tests/core-specs-editor.txt',
+    `e2e-tests/${EDITOR_LIST}`,
     'e2e-tests/fixtures/no-unasked-edits.body.ts',
     'e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-power-standard.spec.ts',
     'e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-simple-paragraph-structure.spec.ts',
@@ -95,6 +107,12 @@ describe.each(SPEC_LISTS)('%s', (listName) => {
   // would pass a trimming reader here and silently match nothing in CI.
   it('has only entries identical to their trimmed form (no stray whitespace or CR)', () => {
     expect(entries.filter((entry) => entry !== entry.trim())).toEqual([]);
+  });
+
+  // e2e-isolated.yml joins the lists with `cat`: a list without its final newline would run its
+  // last spec into the first line of the next list, and that spec would silently drop out.
+  it('ends with a newline, so `cat` keeps its last entry apart from the next list', () => {
+    expect(fs.readFileSync(path.join(__dirname, listName), 'utf8').endsWith('\n')).toBe(true);
   });
 
   it.each(entries)('%s is an isolated spec file that exists', (entry) => {

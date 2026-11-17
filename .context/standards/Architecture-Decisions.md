@@ -2861,6 +2861,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-e2e-core-set-per-pull-request: Pull requests run a small report-only set of isolated e2e specs; the full isolated suite runs nightly and fails on a flaky test
+
+- **Date:** 2026-11-17
+- **Status:** Accepted
+- **Context:** The isolated e2e suite (`e2e-tests/tests/isolated/`) took about an hour on a
+  developer machine and ran in no CI job, so a break in a feature's end-to-end behavior was noticed
+  only when someone ran it by hand. Each spec starts its own copy of the app, so adding specs to
+  every pull request multiplies the cost, and a timing race in the app could turn unrelated
+  pull requests red.
+- **Decision:** Three parts, wired through `.github/workflows/test.yml`, `e2e-isolated.yml` and
+  `e2e-nightly.yml`. (1) Every pull request runs the `e2e-core` job: the isolated specs listed in
+  `e2e-tests/core-specs.txt`. It is report-only: a failure shows as a warning on the run, not a red
+  check. (2) A second list, `e2e-tests/core-specs-editor.txt`, runs as well when the pull request
+  changes a path matched by the curated `editor_paths` pattern (the Scripture editor extension, the
+  editor package pin, the C# USFM/USJ conversion code, the `platform-bible-react` parts the editor
+  web view renders, the editor list and its specs); if the changed-files lookup fails, both lists
+  run. (3) A nightly run (`e2e-nightly.yml`, also startable by hand) runs every isolated spec over
+  eight runners and fails the run on a test that passes only on its retry
+  (`--fail-on-flaky-tests`). Every run allows one retry per test and keeps the trace of each failed
+  attempt (`--trace=retain-on-failure`); the per-pull-request job names a test that needed its retry
+  in a warning. Adding or removing a core spec means editing the list, and
+  `e2e-tests/core-specs.test.ts` keeps the lists, the workflow and the specs in agreement.
+- **Alternatives:** Run the whole isolated suite on every pull request — rejected: about an hour
+  locally and longer on a runner, too slow for a per-pull-request check. Make the core job blocking
+  from day one — rejected: an app race would mark unrelated pull requests red while the job is still
+  proving itself. Fail the per-pull-request job on a test that passes only on its retry — rejected
+  as too strict there; it warns instead, and the nightly run, which blocks nothing, is the one that
+  fails.
+- **Consequences:** Pull requests get early, non-blocking signal on the specs that matter most;
+  the rest of the suite is covered a day late. The `editor_paths` pattern is curated by hand and
+  over-matches on purpose (over-running a report-only job is the safe direction), so it needs
+  upkeep as the editor's dependencies move. Revisit once the job has proven stable: TODO(PT-5088)
+  makes it a required check.
+- **Source:** PT-5015.
+
 ## adr-editor-annotation-exact-locations: An annotation holds exactly the bytes its range names, and removal reporting follows whatever holds it now
 
 - **Date:** 2026-09-29
