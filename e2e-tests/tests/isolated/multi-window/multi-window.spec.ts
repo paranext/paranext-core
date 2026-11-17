@@ -398,10 +398,10 @@ test.use({
   //
   // DEV_NOISY=false (the launcher default): the noisy-dev layout has no stable single web view to
   // key on and loads test-only extensions; the quiet layout is a single Home tab in the first
-  // window, which is exactly what the scoping and focus assertions need. The test captures that tab's freshly minted
-  // id once (getHomeTabWebViewId) and compares against it from then on, rather than relying on any
-  // fixed id — mid-session windows dock a freshly minted Home tab of their own too, under a
-  // different id from window 1's.
+  // window, which is exactly what the scoping and focus assertions need. The test captures that
+  // tab's freshly minted id once (getHomeTabWebViewId) and compares against it from then on, rather
+  // than relying on any fixed id — mid-session windows dock a freshly minted Home tab of their own
+  // too, under a different id from window 1's.
   electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
