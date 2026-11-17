@@ -152,7 +152,10 @@ one of these.
   `fixtures/no-unasked-edits.body.ts`. If the changed-files lookup fails, both lists run.
   To add or remove a spec, edit the list.
 - **Every night** (`.github/workflows/e2e-nightly.yml`, also startable by hand): every isolated
-  spec, split over eight runners.
+  spec, split over eight runners. GitHub runs the schedule only on `main`. A red nightly run is the
+  team's to pick up, like a red build on `main`; nobody is assigned to it. A run started by hand on
+  a feature branch belongs to that branch's owner. GitHub e-mails a failed scheduled run only to
+  whoever last changed its schedule line, so check the Actions tab.
 - Both run on Linux with **one retry**. A test that passed only on its retry is named in a warning
   on the run ("E2E test passed only on its retry"): treat it as a defect, like any flaky test. On
   the nightly run it also fails the run (`--fail-on-flaky-tests`), since nobody opens a green nightly
