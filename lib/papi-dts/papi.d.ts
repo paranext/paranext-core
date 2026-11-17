@@ -2816,8 +2816,8 @@ declare module 'client/services/launch-secrets' {
   /** Keeps the secrets main handed this process until the connection to main takes them */
   export function setLaunchSecrets(secrets: LaunchSecrets): void;
   /**
-   * Returns the secrets once, then forgets them, so nothing that runs after the connection is
-   * made can read them.
+   * Returns the secrets once, then forgets them, so nothing that runs after the connection is made
+   * can read them.
    */
   export function takeLaunchSecrets(): LaunchSecrets | undefined;
   /**
