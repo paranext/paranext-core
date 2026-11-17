@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.9
+version: 1.1.10
 status: active
 created: 2026-03-04
-last_updated: 2026-10-27
+last_updated: 2026-11-16
 ---
 
 # Extension Development Guide
@@ -413,6 +413,16 @@ listed in `LUCIDE_ICON_NAMES` (from `platform-bible-react/experimental`) and add
 `LUCIDE_ICON_COMPONENTS` in `lucide-icons.util.ts`. `iconName` is `@experimental`. See
 `adr-lucide-icons-by-name` in [Architecture-Decisions.md](Architecture-Decisions.md).
 
+### Per-Project Tab Titles
+
+Don't look up `platform.name` and format a project's tab title by hand. Contribute a localized
+format with a `{projectName}` placeholder, then build the title from it with
+`papi.localization.getLocalizedProjectTitle` in the provider's `getWebView` and, if the WebView
+retitles its tab (a project switch, an unsaved marker), with the `useLocalizedProjectTitle` hook in
+the WebView. Both use the same formatter, so the title keeps its shape when the WebView takes over,
+and both show the project id when the name can't be read. See
+`adr-project-titles-from-one-formatter` in [Architecture-Decisions.md](Architecture-Decisions.md).
+
 ### Content Zoom (experimental)
 
 A WebView opts into per-pane **content zoom** by marking the elements that render **project text** — scripture, note bodies, result snippets, resource text in its own font — and not the region around them. Buttons, inputs, filters, headers, badges and card frames stay outside every marked element, so they keep interface scale while the text grows:
@@ -623,3 +633,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in a `pagehide` listener and in the unmount cleanup; a reload unmounts the root on `unload`, after the web view's own `pagehide` listeners; a panel close or tab move runs `pagehide` too, but the root can unmount after the iframe is gone, so `pagehide` is the flush point. |
 | 1.1.8   | 2026-10-16 | "Elevated privileges": the privilege table and the `requestRegistryTokens` privilege for Paratext Registry access tokens. |
 | 1.1.9   | 2026-10-27 | Add "Tab Icons" under WebViews: tabs name a lucide icon with `iconName` instead of shipping theme variants. |
+| 1.1.10  | 2026-11-16 | Add "Per-Project Tab Titles" under WebViews: build them with `getLocalizedProjectTitle` and `useLocalizedProjectTitle`. |

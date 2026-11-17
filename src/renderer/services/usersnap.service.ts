@@ -18,7 +18,7 @@ import { AsyncVariable, getErrorMessage, type LocalizeKey } from 'platform-bible
 export const USERSNAP_INIT_TIMEOUT_MS = 5 * 1000;
 
 /** Shown when a configured feedback form cannot be reached, e.g. because Usersnap failed to load */
-const FEEDBACK_UNAVAILABLE_MESSAGE_KEY = '%mainMenu_feedback_unavailable%' satisfies LocalizeKey;
+const FEEDBACK_UNAVAILABLE_MESSAGE_KEY = '%mainMenu_feedback_unavailable_2%' satisfies LocalizeKey;
 /** Shown when this build has no Usersnap keys, so there are no feedback forms to open */
 const FEEDBACK_NOT_CONFIGURED_MESSAGE_KEY =
   '%mainMenu_feedback_notConfigured%' satisfies LocalizeKey;
@@ -187,7 +187,12 @@ export async function initializeUsersnapApi() {
           logger.debug('Usersnap load/init failed (or cleanup failed) after timeout:', error);
         else {
           // `rejectWithReason` only takes a string, so log the real error here to keep its stack.
-          logger.warn('Usersnap load/init failed:', error);
+          // Usersnap reports any failed script load as "Wrong API key or paused project", whatever
+          // the cause; the main process logs the request's real network error or HTTP status.
+          logger.warn(
+            'Usersnap load/init failed (the main process log names the network error or HTTP status, if there was one):',
+            error,
+          );
           initVar.rejectWithReason(getErrorMessage(error));
         }
       }

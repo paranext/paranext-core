@@ -35,6 +35,11 @@ const mocks = vi.hoisted(() => {
         undefined,
     ),
     setPendingCommentListPanelProjectId: vi.fn(),
+    registerWebViewProvider: vi.fn<
+      (webViewType: string, provider: unknown) => Promise<() => Promise<boolean>>
+    >(async () => async () => true),
+    getLocalizedString: vi.fn<(selector: unknown) => Promise<string>>(async () => 'Comments'),
+    getLocalizedProjectTitle: vi.fn<(options: unknown) => Promise<string>>(async () => 'Comments'),
     registerCommand: vi.fn(registerCommandImpl),
     registerCommandImpl,
     PapiBackendStubBase,
@@ -45,7 +50,7 @@ vi.mock('@papi/backend', () => ({
   default: {
     commands: { registerCommand: mocks.registerCommand },
     webViewProviders: {
-      registerWebViewProvider: vi.fn(async () => async () => true),
+      registerWebViewProvider: mocks.registerWebViewProvider,
       postMessageToWebView: vi.fn(async () => {}),
     },
     webViews: {
@@ -59,7 +64,10 @@ vi.mock('@papi/backend', () => ({
       get: vi.fn(async () => ({ getSetting: vi.fn(async () => undefined) })),
       registerProjectDataProviderEngineFactory: vi.fn(async () => async () => true),
     },
-    localization: { getLocalizedString: vi.fn(async () => 'Comments') },
+    localization: {
+      getLocalizedString: mocks.getLocalizedString,
+      getLocalizedProjectTitle: mocks.getLocalizedProjectTitle,
+    },
     settings: { get: vi.fn(async () => 'simple') },
   },
   logger: { debug: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -273,5 +281,52 @@ describe('legacy comment manager main.ts activation', () => {
       expect(selectThread).toHaveBeenCalledWith('thread-1');
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
     });
+  });
+});
+
+describe('comment list tab title', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.registerCommand.mockImplementation(mocks.registerCommandImpl);
+  });
+
+  async function getCommentListTitle(projectId: string | undefined) {
+    await activate(makeContext());
+    const registration = mocks.registerWebViewProvider.mock.calls.find(
+      ([webViewType]) => webViewType === 'legacyCommentManager.commentList',
+    );
+    // The registered provider is the real factory; the stub base class has no `getWebView`, so the
+    // test calls the factory's own definition method
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const provider = registration?.[1] as {
+      getWebViewDefinition: (
+        savedWebView: object,
+        options: object,
+      ) => Promise<{ title?: string } | undefined>;
+    };
+    const definition = await provider.getWebViewDefinition(
+      { webViewType: 'legacyCommentManager.commentList', id: 'wv-1' },
+      { projectId },
+    );
+    return definition?.title;
+  }
+
+  it("titles a project's comment list with the base title and the project", async () => {
+    mocks.getLocalizedString.mockResolvedValue('Comments');
+    mocks.getLocalizedProjectTitle.mockResolvedValue('Comments: WEB');
+
+    await expect(getCommentListTitle('P1')).resolves.toBe('Comments: WEB');
+    expect(mocks.getLocalizedProjectTitle).toHaveBeenCalledWith({
+      localizeKey: '%webView_legacyCommentManager_commentList_titleWithProject%',
+      projectId: 'P1',
+      replacements: { commentListTitle: 'Comments' },
+    });
+  });
+
+  it('titles a comment list with no project with the base title alone', async () => {
+    mocks.getLocalizedString.mockResolvedValue('Comments');
+
+    await expect(getCommentListTitle(undefined)).resolves.toBe('Comments');
+    expect(mocks.getLocalizedProjectTitle).not.toHaveBeenCalled();
   });
 });

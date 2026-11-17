@@ -28,6 +28,7 @@ import {
   killProcessTree,
   removeUserDataDirBestEffort,
   sleep,
+  withMainProcessLinkRetry,
 } from '../../fixtures/helpers';
 
 const ROOT_DIR = path.resolve(__dirname, '../../..');
@@ -181,17 +182,19 @@ async function waitForZoom(electronApp: ElectronApplication, windowId: number) {
 
 /** The page's width in screen pixels, which does not depend on zoom, and its window's */
 async function widths(electronApp: ElectronApplication, windowId: number) {
-  return electronApp.evaluate(async ({ BrowserWindow, screen }, id) => {
-    const win = BrowserWindow.fromId(id);
-    if (!win) throw new Error(`window ${id} is gone`);
-    const cssWidthTimesRatio: number = await win.webContents.executeJavaScript(
-      'window.innerWidth * window.devicePixelRatio',
-    );
-    return {
-      page: cssWidthTimesRatio / screen.getDisplayMatching(win.getBounds()).scaleFactor,
-      window: win.getContentSize()[0],
-    };
-  }, windowId);
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(async ({ BrowserWindow, screen }, id) => {
+      const win = BrowserWindow.fromId(id);
+      if (!win) throw new Error(`window ${id} is gone`);
+      const cssWidthTimesRatio: number = await win.webContents.executeJavaScript(
+        'window.innerWidth * window.devicePixelRatio',
+      );
+      return {
+        page: cssWidthTimesRatio / screen.getDisplayMatching(win.getBounds()).scaleFactor,
+        window: win.getContentSize()[0],
+      };
+    }, windowId),
+  );
 }
 
 /**
@@ -201,14 +204,16 @@ async function widths(electronApp: ElectronApplication, windowId: number) {
  */
 async function rewriteAndResize(electronApp: ElectronApplication, windowId: number) {
   const widthBefore = (await widths(electronApp, windowId)).window;
-  await electronApp.evaluate(
-    async ({ BrowserWindow }, { id, query }) => {
-      const win = BrowserWindow.fromId(id);
-      if (!win) throw new Error(`window ${id} is gone`);
-      await win.webContents.executeJavaScript(`history.replaceState({}, '', '${query}')`);
-      win.setSize(900, 650);
-    },
-    { id: windowId, query: REWRITTEN_QUERY },
+  await withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(
+      async ({ BrowserWindow }, { id, query }) => {
+        const win = BrowserWindow.fromId(id);
+        if (!win) throw new Error(`window ${id} is gone`);
+        await win.webContents.executeJavaScript(`history.replaceState({}, '', '${query}')`);
+        win.setSize(900, 650);
+      },
+      { id: windowId, query: REWRITTEN_QUERY },
+    ),
   );
   await expect
     .poll(
@@ -244,12 +249,14 @@ async function crashAndReload(electronApp: ElectronApplication, windowId: number
 
 /** The zoom the page is actually painted at: its device pixel ratio over its display's scale */
 async function zoomOnScreen(electronApp: ElectronApplication, windowId: number) {
-  return electronApp.evaluate(async ({ BrowserWindow, screen }, id) => {
-    const win = BrowserWindow.fromId(id);
-    if (!win) throw new Error(`window ${id} is gone`);
-    const devicePixelRatio: number = await win.webContents.executeJavaScript('devicePixelRatio');
-    return devicePixelRatio / screen.getDisplayMatching(win.getBounds()).scaleFactor;
-  }, windowId);
+  return withMainProcessLinkRetry(electronApp, () =>
+    electronApp.evaluate(async ({ BrowserWindow, screen }, id) => {
+      const win = BrowserWindow.fromId(id);
+      if (!win) throw new Error(`window ${id} is gone`);
+      const devicePixelRatio: number = await win.webContents.executeJavaScript('devicePixelRatio');
+      return devicePixelRatio / screen.getDisplayMatching(win.getBounds()).scaleFactor;
+    }, windowId),
+  );
 }
 
 // Shown at creation as well as hidden: `createWindow` creates both, and a shown window takes its

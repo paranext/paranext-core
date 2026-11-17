@@ -452,6 +452,23 @@ describe('openUsersnapForm', () => {
     });
   });
 
+  it('after startup could not load Usersnap: tells the user the form is unavailable', async () => {
+    const { initializeUsersnapApi, openUsersnapForm } = await importService();
+    const { notificationService } = await import('@shared/services/notification.service');
+    const initPromise = initializeUsersnapApi();
+    loadSpaceDeferred.reject(
+      new Error('Failed to load the widget: Wrong API key or paused project'),
+    );
+    await initPromise;
+
+    await openUsersnapForm('test-report-issue-key');
+
+    expect(notificationService.send).toHaveBeenCalledWith({
+      message: '%mainMenu_feedback_unavailable_2%',
+      severity: 'warning',
+    });
+  });
+
   it('without a space key: tells the user the forms are not configured', async () => {
     mockSpaceApiKey('');
     const { initializeUsersnapApi, openUsersnapForm } = await importService();
