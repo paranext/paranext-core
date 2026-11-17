@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { CommandNames, DataProviderNames, DataProviders } from 'papi-shared-types';
 import { REGISTRY_TOKEN_REQUEST_TYPE } from '@node/services/request-registry-tokens.service-model';
 import { dataProtectionServiceNetworkObjectName } from '@shared/models/data-protection.service-model';
 import * as requestAccess from './request-access.data';
@@ -90,6 +91,7 @@ describe('request access table', () => {
       .map(([name]) => name)
       .sort();
     expect(exportedFunctionNames).toEqual([
+      'getRefusedRequestMessage',
       'getRequestAccessRule',
       'isCallAllowed',
       'isRegistrationAllowed',
@@ -118,6 +120,25 @@ describe('request access table', () => {
   });
 
   it('matches the request types the real handlers register', () => {
+    // Typed, so renaming one of these commands or the data provider where it is declared fails
+    // typecheck here instead of silently leaving its row matching nothing
+    const restrictedCommands: CommandNames[] = [
+      'paratextRegistration.setParatextDataInternetSettings',
+      'paratextRegistration.setParatextRegistrationData',
+      'paratextRegistration.resetForFirstRun',
+      'platform.resetFirstRun',
+      'platform.getLogFileContent',
+    ];
+    restrictedCommands.forEach((commandName) =>
+      expect(getRequestAccessRule(`command:${commandName}`)).toBeDefined(),
+    );
+    const internetSettingsProvider: DataProviderNames =
+      'paratextRegistration.internetSettingsDataProvider';
+    const internetSettingsSetter: keyof DataProviders[typeof internetSettingsProvider] =
+      'setInternetSettings';
+    expect(
+      getRequestAccessRule(`object:${internetSettingsProvider}-data.${internetSettingsSetter}`),
+    ).toBeDefined();
     expect(getRequestAccessRule(REGISTRY_TOKEN_REQUEST_TYPE)).toBeDefined();
     expect(
       getRequestAccessRule(`object:${dataProtectionServiceNetworkObjectName}.encryptString`),

@@ -1,4 +1,5 @@
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
+import { sha256Digest } from '@node/utils/crypto-util';
 
 /**
  * The child processes main launches and identifies by a launch secret. Each presents its client
@@ -20,10 +21,6 @@ const SECRET_BYTES = 32;
 const issuedLaunches = new Map<LaunchedIdentity, IssuedLaunch>();
 let lastLaunchId = 0;
 
-function digest(value: string): Buffer {
-  return createHash('sha256').update(value, 'utf8').digest();
-}
-
 /**
  * Creates new secrets for a child about to be launched. Replaces any secrets issued earlier for the
  * identity, so a connection can no longer be made with those.
@@ -35,7 +32,7 @@ export function issueLaunchSecrets(identity: LaunchedIdentity): LaunchSecrets {
   const serverSecret = randomBytes(SECRET_BYTES).toString('base64url');
   lastLaunchId += 1;
   issuedLaunches.set(identity, {
-    clientSecretDigest: digest(clientSecret),
+    clientSecretDigest: sha256Digest(clientSecret),
     serverSecret,
     launchId: lastLaunchId,
   });
@@ -53,7 +50,7 @@ export function issueLaunchSecrets(identity: LaunchedIdentity): LaunchSecrets {
 export function identifyClientSecret(
   presented: string,
 ): { identity: LaunchedIdentity; serverSecret: string; launchId: number } | undefined {
-  const presentedDigest = digest(presented);
+  const presentedDigest = sha256Digest(presented);
   let match: { identity: LaunchedIdentity; serverSecret: string; launchId: number } | undefined;
   // Check every launch rather than stopping at a match so the time taken does not depend on which
   // identity matched

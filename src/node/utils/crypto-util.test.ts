@@ -1,4 +1,4 @@
-import { createUuid, createNonce, generateHashFromBuffer } from './crypto-util';
+import { createUuid, createNonce, generateHashFromBuffer, sha256Digest } from './crypto-util';
 
 test('createUuid returns a property formatted UUID', () => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[8-9a-b][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -73,5 +73,11 @@ test('hash algorithm works as expected', () => {
   const hashValue512 = generateHashFromBuffer('SHA-512', 'base64', buffer);
   expect(hashValue512).toBe(
     'N015SpXNz9izWZMYX++bo2jxYNja9DLQi6nx7R5avmzGkpHg+i/gAGpSVw7xjBne9OYXwzzlLvCm5fvjGMsDhw==',
+  );
+});
+
+test('sha256Digest returns the SHA-256 digest of a string', () => {
+  expect(sha256Digest('abc').toString('hex')).toBe(
+    'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
   );
 });

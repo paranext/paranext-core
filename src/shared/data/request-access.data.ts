@@ -110,6 +110,14 @@ export function isCallAllowed(
 }
 
 /**
+ * The error message a refused request is answered with. It says the request type is not available
+ * rather than that it is forbidden, and is sent with `MethodNotFound`.
+ */
+export function getRefusedRequestMessage(requestType: string): string {
+  return `'${requestType}' is not available on this connection`;
+}
+
+/**
  * Validates an `allowedCallers` value that arrived from another process.
  *
  * @param value The value to validate

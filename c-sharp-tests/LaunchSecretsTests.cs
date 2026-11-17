@@ -48,21 +48,33 @@ internal class LaunchSecretsTests
     public void Read_EnvironmentVariable_IsUsedAndCleared()
     {
         var cleared = new List<string>();
-        bool readStandardInput = false;
 
         var secrets = LaunchSecrets.ReadFromEnvironmentOrStandardInput(
             name => name == LaunchSecrets.ENVIRONMENT_VARIABLE ? JSON : null,
             cleared.Add,
-            _ =>
-            {
-                readStandardInput = true;
-                return null;
-            }
+            null
         );
 
         Assert.That(secrets?.ClientSecret, Is.EqualTo(CLIENT));
         Assert.That(cleared, Is.EqualTo(new[] { LaunchSecrets.ENVIRONMENT_VARIABLE }));
-        Assert.That(readStandardInput, Is.False);
+    }
+
+    [Test]
+    public void Read_StandardInputRequested_WinsOverAnInheritedVariable()
+    {
+        var cleared = new List<string>();
+
+        var secrets = LaunchSecrets.ReadFromEnvironmentOrStandardInput(
+            name =>
+                name == LaunchSecrets.ENVIRONMENT_VARIABLE
+                    ? """{"clientSecret":"stale-client","serverSecret":"stale-server"}"""
+                    : null,
+            cleared.Add,
+            _ => JSON
+        );
+
+        Assert.That(secrets?.ClientSecret, Is.EqualTo(CLIENT));
+        Assert.That(cleared, Is.EqualTo(new[] { LaunchSecrets.ENVIRONMENT_VARIABLE }));
     }
 
     [Test]
