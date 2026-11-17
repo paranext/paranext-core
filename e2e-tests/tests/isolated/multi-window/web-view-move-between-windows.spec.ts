@@ -67,8 +67,8 @@
  *
  * Same pre-configuration as the sibling multi-window specs (`platform.interfaceMode: 'power'`,
  * `platform.firstRunComplete: true`, `platform.interfaceLanguage: ['en']`) and the same
- * `DEV_NOISY=false` launch option, which gives the first window the single-Home-tab layout every
- * identity assertion here keys on.
+ * `DEV_NOISY=false` (the launcher default), which gives the first window the single-Home-tab layout
+ * every identity assertion here keys on.
  *
  * Power mode is load-bearing twice over, not a styling choice: the tab context menu's "Move tab to
  * new window" item is rendered only in power mode, and the move-to-a-new-window command is

@@ -8,6 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDeclaredWindowSize,
+  buildLaunchEnv,
   ASSERT_INTERFACE_MODE_TIMEOUT_MS,
   DEFAULT_WINDOW_SIZE,
   isLocalizedAboutMenuItem,
@@ -191,5 +192,34 @@ describe('killProcessTree', () => {
       expect(() => killProcessTree(4242, 'SIGKILL', 'linux', deps)).not.toThrow();
       expect(deps.kill).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+describe('buildLaunchEnv', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('launches quiet even when the shell exports DEV_NOISY=true', () => {
+    expect(buildLaunchEnv({ DEV_NOISY: 'true' }, '/tmp/profile').DEV_NOISY).toBe('false');
+  });
+
+  it('lets envOverrides turn DEV_NOISY on', () => {
+    const env = buildLaunchEnv({ DEV_NOISY: 'false' }, '/tmp/profile', {
+      envOverrides: { DEV_NOISY: 'true' },
+    });
+    expect(env.DEV_NOISY).toBe('true');
+  });
+
+  it('hides DevTools unless the shell or envOverrides say otherwise', () => {
+    vi.stubEnv('PT_NO_DEVTOOLS', undefined);
+    expect(buildLaunchEnv({}, '/tmp/profile').PT_NO_DEVTOOLS).toBe('true');
+
+    vi.stubEnv('PT_NO_DEVTOOLS', 'false');
+    expect(buildLaunchEnv({}, '/tmp/profile').PT_NO_DEVTOOLS).toBe('false');
+    expect(
+      buildLaunchEnv({}, '/tmp/profile', { envOverrides: { PT_NO_DEVTOOLS: 'true' } })
+        .PT_NO_DEVTOOLS,
+    ).toBe('true');
   });
 });

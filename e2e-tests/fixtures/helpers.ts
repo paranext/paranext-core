@@ -966,7 +966,6 @@ export async function launchElectronApp(
   const pinnedAppGlobalState = !opts.userDataDir;
   if (pinnedAppGlobalState) pinAppGlobalState();
 
-  // NODE_ENV=development so the renderer loads from the webpack dev server.
   // Strip PLATFORM_BIBLE_PROJECT_ROOT_FOLDER as well as what electronChildEnv always omits: the C#
   // backend honors it, so an ambient value from the dev/CI shell would silently redirect the project
   // root of suites that did not opt into isolatedProjectRoot. Only the isolatedProjectRoot branch (or
@@ -984,28 +983,7 @@ export async function launchElectronApp(
       throw new Error('`prepareProjectRoot` requires `isolatedProjectRoot: true`.');
     opts.prepareProjectRoot(isolatedProjectRootDir);
   }
-  const env = {
-    ...restEnv,
-    NODE_ENV: 'development',
-    // Quiet dev mode: the test extensions (helloRock3, helloSomeone, etc.) stay unloaded, so the
-    // window opens on the normal layout and no test-only web views shift iframe order or slow the
-    // launch. A `DEV_NOISY` exported in the developer's shell is deliberately ignored, so it cannot
-    // change the layout a spec expects. A suite that drives a test extension turns it on with
-    // `envOverrides: { DEV_NOISY: 'true' }`, which is spread last below.
-    DEV_NOISY: 'false',
-    // Keep DevTools out of the window so the renderer is the size the test asked for.
-    // Docked DevTools eats ~555px of a 1280px window, leaving specs interacting with a dock
-    // they were never sized for. Honored in src/main/main.ts.
-    PT_NO_DEVTOOLS: process.env.PT_NO_DEVTOOLS ?? 'true',
-    // An empty project root gets the sample WEB project the specs open by SAMPLE_WEB_PROJECT_ID
-    PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'true',
-    // Placing the project root inside userDataDir means the existing teardown rmSync cleans it up.
-    ...(opts.isolatedProjectRoot
-      ? { PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: path.join(userDataDir, 'projects') }
-      : {}),
-    // Caller-supplied overrides take precedence over all defaults above.
-    ...opts.envOverrides,
-  };
+  const env = buildLaunchEnv(restEnv, userDataDir, opts);
 
   let electronApp: ElectronApplication;
   try {
@@ -1066,6 +1044,47 @@ export async function launchElectronApp(
     appClosed,
     appPid: electronApp.process().pid,
     preserveUserDataDir: opts.preserveUserDataDir,
+  };
+}
+
+/**
+ * The environment an Electron app launches with: the shell's variables (`childEnv`), then the
+ * pinned test defaults, then the caller's `envOverrides`, which win over everything.
+ *
+ * @param childEnv The shell variables to start from, as {@link electronChildEnv} returns them
+ * @param userDataDir The launch's user-data directory; `isolatedProjectRoot` places the project
+ *   root inside it
+ * @param opts The launch options; only `isolatedProjectRoot` and `envOverrides` are read
+ */
+export function buildLaunchEnv(
+  childEnv: Record<string, string>,
+  userDataDir: string,
+  opts: Pick<LaunchElectronAppOptions, 'isolatedProjectRoot' | 'envOverrides'> = {},
+): Record<string, string> {
+  return {
+    ...childEnv,
+    // NODE_ENV=development so the renderer loads from the webpack dev server.
+    NODE_ENV: 'development',
+    // Quiet dev mode: the test extensions (helloRock3, helloSomeone, etc.) stay unloaded, so the
+    // window opens on the normal layout and no test-only web views shift iframe order or slow the
+    // launch. A `DEV_NOISY` exported in the developer's shell is deliberately ignored, so it cannot
+    // change the layout a spec expects. A suite that drives a test extension turns it on with
+    // `envOverrides: { DEV_NOISY: 'true' }`, which is spread last below.
+    DEV_NOISY: 'false',
+    // Keep DevTools out of the window so the renderer is the size the test asked for.
+    // Docked DevTools eats ~555px of a 1280px window, leaving specs interacting with a dock
+    // they were never sized for. Honored in src/main/main.ts. The shell value is honored on
+    // purpose, so a developer can export `PT_NO_DEVTOOLS=false` to see DevTools while debugging;
+    // `envOverrides` still wins.
+    PT_NO_DEVTOOLS: process.env.PT_NO_DEVTOOLS ?? 'true',
+    // An empty project root gets the sample WEB project the specs open by SAMPLE_WEB_PROJECT_ID
+    PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'true',
+    // Placing the project root inside userDataDir means the existing teardown rmSync cleans it up.
+    ...(opts.isolatedProjectRoot
+      ? { PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: path.join(userDataDir, 'projects') }
+      : {}),
+    // Caller-supplied overrides take precedence over all defaults above.
+    ...opts.envOverrides,
   };
 }
 
