@@ -161,3 +161,24 @@ export function blockCodeGenerationFromStrings(): void {
     });
   });
 }
+
+/** Loads one extension entry file in the sandbox and returns its `module.exports` */
+export type ExtensionLoader = (entryFilePath: string) => unknown;
+
+/**
+ * Applies both lockdowns ({@link blockCodeGenerationFromStrings} and
+ * {@link blockProcessModuleAccess}) and returns a loader that runs extension entry files through
+ * {@link loadExtensionModule} with `extensionRequire`. The extension host gets its loader only from
+ * here, so it cannot load an extension before the lockdowns are in place. Safe to call more than
+ * once.
+ *
+ * @param extensionRequire Resolver for every `require` call extension files make
+ * @returns The loader for extension entry files
+ */
+export function lockDownAndCreateExtensionLoader(
+  extensionRequire: ExtensionRequire,
+): ExtensionLoader {
+  blockCodeGenerationFromStrings();
+  blockProcessModuleAccess();
+  return (entryFilePath) => loadExtensionModule(entryFilePath, extensionRequire);
+}

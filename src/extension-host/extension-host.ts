@@ -37,6 +37,11 @@ import {
 import { distrustLeakedCertificateRootsInNode } from '@node/utils/leaked-certificates.util';
 import { markStartup } from '@shared/utils/startup-timing.util';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
+import { installSourceMappedStackTraces } from '@extension-host/services/extension-stack-traces.util';
+
+// Extensions are only built with source maps in dev, and the loader compiles them where Node's own
+// source mapping does not reach
+if (!globalThis.isPackaged) installSourceMappedStackTraces();
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,

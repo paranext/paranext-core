@@ -33,9 +33,9 @@ import {
 } from '@extension-host/data/extension-interface-modules.data';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import {
-  blockCodeGenerationFromStrings,
-  blockProcessModuleAccess,
-  loadExtensionModule,
+  type ExtensionLoader,
+  lockDownAndCreateExtensionLoader,
+  NOT_ALLOWED_IN_EXTENSIONS,
 } from '@extension-host/services/extension-sandbox.util';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import * as papiCore from '@shared/services/papi-core.service';
@@ -1152,16 +1152,19 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
  * wrapped in activateExtensions().
  *
  * @param extension - Extension info for the extension to activate.
+ * @param loadExtension - Sandbox loader from `lockDownAndCreateExtensionLoader`
  * @returns Unsubscriber that deactivates the extension.
  */
-async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtension> {
+async function activateExtension(
+  extension: ExtensionInfo,
+  loadExtension: ExtensionLoader,
+): Promise<ActiveExtension> {
   logger.info(`extension.service: importing ${extension.name}`);
   // Run the extension file through the sandbox loader so its `require` only reaches the extension
   // interface modules. Assert a more ambiguous type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const extensionModuleAmbiguous = loadExtensionModule(
+  const extensionModuleAmbiguous = loadExtension(
     getPathFromUri(joinUriPaths(extension.dirUri, extension.main)),
-    requireForExtension,
   ) as AmbiguousExtensionModule;
   logger.info(`extension.service: finished importing ${extension.name}`);
   // Some modules import with their exports directly on the module object, while others put their
@@ -1350,7 +1353,7 @@ function requireForExtension(moduleName: string): unknown {
 
   // Disallow any imports within the extension
   // Tell the extension dev if there is an api similar to what they want to import
-  const message = `Requiring other than papi is not allowed in extensions! ${getModuleSimilarApiMessage(
+  const message = `Requiring other than papi is ${NOT_ALLOWED_IN_EXTENSIONS}! ${getModuleSimilarApiMessage(
     moduleName,
   )}. Read more about Platform.Bible import restrictions at https://github.com/paranext/paranext/wiki/Module-import-restrictions`;
   throw new Error(message);
@@ -1389,12 +1392,11 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   Module.prototype.require = requireForExtension as typeof Module.prototype.require;
 
   // Remove ways to execute arbitrary code https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/script-src#unsafe_eval_expressions
+  // and the `process` members that hand out Node modules, native code or host handles without
+  // `require`. The loader extensions are activated with comes only from this call.
   // Note: node does not allow strings in setTimeout, setInterval, or setImmediate, so we don't need
   // to monkey-patch them https://nodejs.org/api/timers.html#scheduling-timers
-  blockCodeGenerationFromStrings();
-  // Remove the `process` members that hand out Node modules, native code or host handles without
-  // `require`
-  blockProcessModuleAccess();
+  const loadExtension = lockDownAndCreateExtensionLoader(requireForExtension);
 
   // Replace fetch with papi.fetch.
   // eslint-disable-next-line no-global-assign
@@ -1438,7 +1440,7 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
       if (shouldEmitStartupMarks) markStartup(`activate-start ${extensionMarkName}`);
       // Extensions must be activated in dependency order, so sequential awaiting is intentional.
       // eslint-disable-next-line no-await-in-loop
-      const extension = await activateExtension(extensionToActivate);
+      const extension = await activateExtension(extensionToActivate, loadExtension);
       extensionsActive.push(extension);
     } catch (e) {
       logger.error(`Extension '${extensionToActivate.name}' threw while activating! ${e}`);
