@@ -77,11 +77,13 @@ jobs:
 
       - name: Read package.json
         id: package_json
+        timeout-minutes: 20
         uses: zoexx/github-action-json-file-properties@1.0.6
         with:
           file_path: 'package.json'
 
       - name: Install Volta and toolchain
+        timeout-minutes: 20
         uses: volta-cli/action@v4
 
       - name: Install Node.js and NPM
@@ -144,6 +146,12 @@ jobs:
       - name: Warn on a failure that does not block
         if: ${{ steps.specs.outcome == 'failure' }}
         run: echo "::warning title=E2E isolated specs failed (not blocking)::Isolated end-to-end specs failed but did not fail the build. See the ${{ inputs.artifact_name }} artifact."
+
+      # The job-level continue-on-error keeps a report-only run green when a setup step fails too,
+      # so say so on the run: otherwise a broken build would show only in the job log.
+      - name: Warn when setup failed in a report-only run
+        if: ${{ failure() && inputs.report_only }}
+        run: echo "::warning title=E2E isolated setup failed (not blocking)::A setup step failed before the specs could run; see this job's log."
 
       # A test that passed only on its retry is a defect to look at, not a pass to forget. Only a
       # report, so it never decides the job's result; a run cut short can leave the file unreadable.
