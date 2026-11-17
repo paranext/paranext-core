@@ -27,7 +27,7 @@ collected ones through `playwright-cdp.config.ts`, which has no globalSetup.
 ### Local-only directories
 
 These three directories under `tests/` are not part of any standard run, and no CI job collects
-them (CI runs only `test:e2e:smoke`). "Parked" means no config collects the file: it is kept as the
+them (see "What CI runs" below). "Parked" means no config collects the file: it is kept as the
 written scenarios for work still to be done, and its header says so. Each directory's README is the
 detailed source — every file, its status, what it needs and how to bring it back into use.
 
@@ -132,13 +132,25 @@ one of these.
   data provider answered. `waitForAppReady` does not cover this. The raw keys are WIDER than the
   strings they stand for, so geometry assertions report overflow that is not real.
 - **Fail-then-pass is reported as "flaky", and flaky is a defect.** `retries` is 1 locally and 2 in
-  CI. Never re-run to get green: an order-dependent test is telling you it depends on state it does
+  CI's smoke run; the `e2e-core` and nightly jobs pass `--retries=0`, so a fail-then-pass fails there. Never re-run to get green: an order-dependent test is telling you it depends on state it does
   not control.
 - **`PAPI websocket server failed to bind: listen EADDRINUSE …` or `Settings service undefined`** —
   a previous app instance still holds port 8876, so the new app's server can't bind and its
   renderer connects to the leftover one instead. Check the app's own log (`logs/main.log` under its
   temp profile) for what it saw, and `netstat -ano | findstr :8876` (Windows) or `ss -ltnp` (Linux)
   for who holds the port; see `tests/isolated/README.md` for the Windows recovery commands.
+
+## What CI runs
+
+- **Every pull request:** the smoke suite (in the build jobs of `.github/workflows/test.yml`), and
+  the `e2e-core` job: the isolated specs listed in `e2e-tests/core-specs.txt`, plus those in
+  `e2e-tests/core-specs-editor.txt` when the pull request touches the Scripture editor extension,
+  `dev-packages.json` or the C# USFM/USJ conversion code. To add or remove a spec, edit the list.
+- **Every night** (`.github/workflows/e2e-nightly.yml`, also startable by hand): every isolated
+  spec, split over eight runners.
+- Both run on Linux with **no retries** and keep a trace of each failing test in the run's
+  `playwright-results-…` artifact. `e2e-core` reports without blocking: a failure shows as a
+  warning on the run, not as a red check.
 
 ## Window size and DevTools
 
