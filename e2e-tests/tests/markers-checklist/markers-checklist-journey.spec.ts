@@ -1,4 +1,14 @@
 /**
+ * PARKED — no Playwright config collects this file, and it has never run to completion. It is kept
+ * as the written scenarios for the Markers checklist (epic PT-2049, "Inventory & Checklists"). It
+ * attaches to a running app over CDP in Power mode and needs the `wgPIDGIN` project. Its evidence
+ * screenshot path (`EVD_DIR`) is relative to the working directory, so from the repo root the
+ * screenshots land outside the repository; fix that path when reviving it. To work on it, remove
+ * the markers-checklist glob from `testIgnore` in `e2e-tests/playwright-cdp.config.ts` (the ignore
+ * also applies to a file named on the command line). See
+ * `e2e-tests/tests/markers-checklist/README.md`.
+ */
+/**
  * Feature: markers-checklist — Cross-WP Journey Tests (activated)
  *
  * Journey tests exercise flows that span two or more UI work packages so that the user story is
@@ -23,8 +33,8 @@
  * - Selectors mirror those in `markers-checklist-functional-UI-PKG-002.spec.ts` and
  *   `markers-checklist-functional-UI-PKG-003.spec.ts` for consistency.
  *
- * Evidence screenshots are captured at key decision points into
- * `.context/features/markers-checklist/proofs/e2e-evidence/journey/`.
+ * Evidence screenshots are captured at key decision points into `EVD_DIR` (see the header above for
+ * where that path really lands).
  */
 import type { FrameLocator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';

@@ -394,10 +394,11 @@ declare module 'platform-scripture-editor' {
      * If a localized string is passed in, the following replacement strings will be processed in
      * the localized string:
      *
-     * - `{projectId}`: The name of the project opened in the editor (`platform.name` setting)
-     * - `{editable}`: Will be replaced with an empty string for non-editable projects and the
-     *   localized value of `%webView_platformScriptureEditor_title_editable_indicator%` (in
-     *   English, `(Editable)`) for editable projects.
+     * - `{projectName}`: The name of the project opened in the editor (`platform.name` setting), or
+     *   its id when the name is unavailable
+     * - `{projectId}`: Same as `{projectName}`. Prefer `{projectName}`.
+     * - `{editable}`: The localized editable or read-only indicator (in English, `(Editable)` or
+     *   `(Read-only)`).
      */
     title?: string | LocalizeKey;
     /** Tooltip that is shown when hovering over the webview title */

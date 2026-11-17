@@ -158,9 +158,9 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
    * close code, and a close the app asked for is not a loss.
    *
    * Nor does a connection that was never established. A socket that dies during the opening
-   * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
-   * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
-   * event is only for losing a connection that was up.
+   * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value.
+   * The renderer surfaces a failed first connect itself (`initializeNetworkReportingFailure`); the
+   * extension host does not yet (PT-4495). This event is only for losing a connection that was up.
    *
    * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
    * to react to the loss rather than to classify it.

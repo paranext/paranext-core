@@ -12,7 +12,19 @@
  * consumer's test drive this store directly instead of mocking a service graph to reach it.
  */
 
-let isConnectionLost = false;
+/**
+ * How this renderer's connection failed:
+ *
+ * - `lost`: an established connection dropped.
+ * - `neverConnected`: the first connect at startup failed, so the renderer never reached the network
+ *   and startup stopped before most services ran.
+ *
+ * Both count as lost for {@link getIsConnectionLost}: either way nothing that needs the network
+ * works, and the only recovery is a reload.
+ */
+export type ConnectionFailure = 'lost' | 'neverConnected';
+
+let connectionFailure: ConnectionFailure | undefined;
 
 /**
  * Whether this renderer is on its way down. Latched separately from the loss itself because the two
@@ -25,7 +37,12 @@ const listeners = new Set<() => void>();
 
 /** Whether this renderer's connection to the network has been lost. */
 export function getIsConnectionLost(): boolean {
-  return isConnectionLost;
+  return connectionFailure !== undefined;
+}
+
+/** How this renderer's connection failed, or `undefined` while it is alive. */
+export function getConnectionFailure(): ConnectionFailure | undefined {
+  return connectionFailure;
 }
 
 /** Subscribe to state changes. Returns an unsubscribe function. */
@@ -65,8 +82,20 @@ export function markShuttingDown(): void {
  * subscriber for a state that did not change.
  */
 export function reportConnectionLost(): void {
-  if (isShuttingDown || isConnectionLost) return;
-  isConnectionLost = true;
+  reportConnectionFailure('lost');
+}
+
+/**
+ * Records that this renderer's first connect at startup failed, unless the app is already closing.
+ * Latched with {@link reportConnectionLost}: whichever failure is reported first is kept.
+ */
+export function reportConnectionNeverEstablished(): void {
+  reportConnectionFailure('neverConnected');
+}
+
+function reportConnectionFailure(failure: ConnectionFailure): void {
+  if (isShuttingDown || connectionFailure) return;
+  connectionFailure = failure;
   listeners.forEach((listener) => listener());
 }
 
@@ -84,6 +113,6 @@ export function reportConnectionLost(): void {
  * @internal
  */
 export function resetConnectionLost(): void {
-  isConnectionLost = false;
+  connectionFailure = undefined;
   isShuttingDown = false;
 }

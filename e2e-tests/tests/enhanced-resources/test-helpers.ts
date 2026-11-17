@@ -1,4 +1,5 @@
 import { expect, Page } from '@playwright/test';
+import { sendCommandFromPage } from '../../fixtures/helpers';
 
 /**
  * Close every dock tab whose title is not "Home" so each test starts from a clean dock state.
@@ -24,18 +25,11 @@ export async function closeAllNonHomeDockTabs(page: Page): Promise<void> {
 }
 
 /**
- * Sends `platformEnhancedResources.openEnhancedResource` through the renderer's `papi`, exposed on
- * `window` untyped here (the same pattern the content-zoom spec uses).
+ * Sends `platformEnhancedResources.openEnhancedResource` from inside the app window, as a menu
+ * entry would, with the shared `sendCommandFromPage` helper, and waits for the command to answer.
  */
 export async function sendOpenEnhancedResourceCommand(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    // The renderer exposes `papi` on `window` without a declared type in the e2e project.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const win = window as unknown as {
-      papi: { commands: { sendCommand: (command: string) => Promise<unknown> } };
-    };
-    await win.papi.commands.sendCommand('platformEnhancedResources.openEnhancedResource');
-  });
+  await sendCommandFromPage(page, 'platformEnhancedResources.openEnhancedResource');
 }
 
 /** WebView iframe selector for Enhanced Resource. */

@@ -14,8 +14,7 @@
  * row edit holds them back for the text clicked right after it. Each waits out the window first, so
  * the only recent edit is the one made on the other surface.
  *
- * ONE test() per spec file (isolated-fixture constraint — see standard-default-power-mode.spec.ts).
- * Run: `npm run test:e2e:isolated
+ * One test() with steps: each test() pays its own app start. Run: `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/footnote-pane-holds-updates-after-insert.spec.ts`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
