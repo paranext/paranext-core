@@ -438,20 +438,33 @@ describe('recommendE2eTests', () => {
     'c-sharp/ai-analyzers.globalconfig',
     'c-sharp/Paranext.Analyzers/DiagnosticIds.cs',
     'c-sharp/Paranext.Analyzers/Rules/SomeAnalyzer.cs',
-    'extensions/src/x/.eslintrc.js',
-    'extensions/src/x/.eslintrc.cjs',
-    'extensions/src/x/.prettierrc.js',
-    'extensions/src/x/.stylelintrc.js',
-    'extensions/src/x/.eslintignore',
-    'extensions/src/x/.prettierignore',
-    'extensions/src/x/.gitignore',
-    'extensions/src/x/tsconfig.json',
-    'extensions/src/x/tsconfig.lint.json',
-    'extensions/src/x/cspell.json',
+    'extensions/src/hello-rock3/.eslintrc.js',
+    'extensions/src/hello-rock3/.prettierrc.js',
+    'extensions/src/hello-rock3/.stylelintrc.js',
+    'extensions/src/hello-rock3/.eslintignore',
+    'extensions/src/hello-rock3/.prettierignore',
+    'extensions/src/hello-rock3/.stylelintignore',
+    'extensions/src/hello-rock3/.gitignore',
+    'extensions/src/hello-rock3/tsconfig.json',
+    'extensions/src/hello-rock3/tsconfig.lint.json',
+    'extensions/src/hello-rock3/cspell.json',
     'c-sharp/.csharpierrc.yml',
-    'extensions/src/x/.lintstagedrc.yml',
-    'src/x/.editorconfig',
-    'c-sharp/.editorconfig',
+    'c-sharp/.lintstagedrc.yml',
+    'c-sharp/.config/dotnet-tools.json',
+    'extensions/src/hello-rock3/.editorconfig',
+    'extensions/src/hello-rock3/.gitattributes',
+    'extensions/src/hello-rock3/.github/CODEOWNERS',
+    'extensions/src/hello-rock3/.github/workflows/lint.yml',
+    'extensions/src/hello-rock3/.github/actions/bump-versions-action/action.yml',
+    'extensions/src/hello-rock3/.vscode/settings.json',
+    'extensions/src/hello-rock3/LICENSE',
+    'extensions/src/hello-rock3/lib/bump-versions.ts',
+    'extensions/src/hello-rock3/lib/git.util.ts',
+    'src/stories/platform/ten-layout-shared.tsx',
+    'src/stories/keyboard-shortcuts-catalog/keyboard-shortcut-keycaps.util.ts',
+    'src/stories/design-ideas/home-unified.component.tsx',
+    'extensions/src/platform-enhanced-resources/src/data/media-tab.story-data.ts',
+    'extensions/src/platform-scripture/src/data/checklist.story-data.ts',
   ])('treats %s as non-runtime: uncovered nowhere, recommends nothing', (file) => {
     const report = recommend([file], {
       sources: {
@@ -464,6 +477,38 @@ describe('recommendE2eTests', () => {
     expect(report.alsoExercised).toEqual([]);
     expect(report.uncoveredFiles).toEqual([]);
     expect(report.entryPointFiles).toEqual([]);
+  });
+
+  // Build configuration changes what the bundle contains, so it stays runtime like the code and
+  // contribution data it sits beside.
+  it.each([
+    'extensions/src/hello-rock3/webpack.config.ts',
+    'extensions/src/hello-rock3/webpack/webpack.config.base.ts',
+    'extensions/src/hello-rock3/postcss.config.ts',
+    'extensions/src/hello-rock3/tailwind.config.ts',
+    'extensions/src/hello-rock3/src/tailwind.css',
+    'extensions/src/hello-rock3/contributions/menus.json',
+    'extensions/src/hello-rock3/assets/displayData.json',
+    // Its postinstall step fetches the database the extension ships.
+    'extensions/src/platform-lexical-tools/lib/download-db.ts',
+    // Named after tests, but the renderer imports them.
+    'src/renderer/testing/test-panel.component.tsx',
+    'src/renderer/context/papi-context/test.context.ts',
+    'src/renderer/components/docking/platform-dock-layout-storage.util.ts',
+    'c-sharp/icon.ico',
+    // No tracked file has this shape; it pins that the TypeScript-configuration match ends at
+    // `.json`.
+    'src/x/tsconfig-helper.ts',
+  ])('treats %s as runtime: uncovered when no prefix lists it', (file) => {
+    expect(recommend([file], { sources: {} }).uncoveredFiles).toEqual([file]);
+  });
+
+  it('still matches a top-level dot-directory, which holds the app build configuration', () => {
+    const file = '.erb/configs/webpack.config.renderer.dev.ts';
+    const report = recommend([file], {
+      sources: { build: { main: ['.erb/configs/'], incidental: [] } },
+    });
+    expect(recommendedKeys(report)).toEqual(['build']);
   });
 
   it('stays silent for a test-only, stories-only or docs-only change in a covered area', () => {
@@ -606,6 +651,88 @@ describe('recommendE2eTests', () => {
     'src/main/new-thing.ts',
   ])('does not flag %s as a changed e2e spec or its support code', (file) => {
     expect(recommend([file]).specsChanged).toBe(false);
+  });
+});
+
+// The rows above pin the shapes someone thought of; this sweep catches the ones nobody did, by
+// running the classifier over every tracked file under the source roots.
+describe('classifying the tracked source files', () => {
+  // Extensions of the files the app loads or bundles from the source roots, taken from what is
+  // tracked there: code, style sheets, markup, the data the .NET data provider reads, and images.
+  const LOADED_EXTENSIONS = new Set([
+    'cs',
+    'css',
+    'ejs',
+    'html',
+    'ico',
+    'js',
+    'json',
+    'ldml',
+    'png',
+    'scss',
+    'sfm',
+    'sty',
+    'svg',
+    'ts',
+    'tsx',
+    'txt',
+    'vrs',
+    'xml',
+    'zip',
+  ]);
+  // Shapes that are never app code, whatever the extension.
+  const NOT_APP_CODE = [
+    /(^|\/)\.[^/]/, // A dotfile or a file in a dot-directory (`.github/`, `.vscode/`).
+    /(^|\/)LICENSE$/,
+    /\.mdx?$/,
+    /\.(test|stories|story-data)\./,
+    /(^|\/)__(tests|mocks)__\//,
+    /^src\/stories\//,
+  ];
+
+  const extensionOf = (file: string) => {
+    const basename = file.slice(file.lastIndexOf('/') + 1);
+    return basename.includes('.')
+      ? basename.slice(basename.lastIndexOf('.') + 1).toLowerCase()
+      : '';
+  };
+  const isPlainlyNotAppCode = (file: string) =>
+    !LOADED_EXTENSIONS.has(extensionOf(file)) || NOT_APP_CODE.some((shape) => shape.test(file));
+
+  it('recognizes plain non-app files and passes app code', () => {
+    expect(isPlainlyNotAppCode('extensions/src/hello-rock3/.github/CODEOWNERS')).toBe(true);
+    expect(isPlainlyNotAppCode('extensions/src/hello-rock3/.stylelintignore')).toBe(true);
+    expect(isPlainlyNotAppCode('extensions/src/hello-rock3/LICENSE')).toBe(true);
+    expect(isPlainlyNotAppCode('src/stories/platform/ten-layout-shared.tsx')).toBe(true);
+    expect(isPlainlyNotAppCode('src/renderer/context/papi-context/test.context.ts')).toBe(false);
+    expect(isPlainlyNotAppCode('c-sharp/assets/usfm.sty')).toBe(false);
+  });
+
+  it('treats every tracked file that is plainly not app code as non-runtime', () => {
+    const tracked = execFileSync(
+      'git',
+      [
+        '-C',
+        REPOSITORY_ROOT,
+        '-c',
+        'core.quotePath=false',
+        'ls-files',
+        '--',
+        'src',
+        'extensions/src',
+        'c-sharp',
+      ],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    )
+      .split('\n')
+      .filter((file) => file !== '');
+    // With no prefixes, every runtime file in a source root is reported as uncovered.
+    const runtime = recommend(tracked, { sources: {} }).uncoveredFiles;
+    expect(runtime).toContain('src/main/main.ts');
+    expect(runtime).toContain('c-sharp/Program.cs');
+
+    // One path per line, so a failure lists every file the classifier treats as runtime code.
+    expect(runtime.filter(isPlainlyNotAppCode).join('\n')).toBe('');
   });
 });
 

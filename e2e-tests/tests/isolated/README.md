@@ -42,7 +42,10 @@ A new subset directory or loose spec needs an entry in `subset-sources.json` (`m
 the group is about, `incidental` = source it only drives); `e2e-recommendations.test.ts` fails
 without one. A new `scripture-editor/no-unasked-edits-*.spec.ts` also needs a key of its own. The
 test also fails when a prefix names a file that no longer exists, so moving or deleting a source
-file a prefix names means updating the prefix.
+file a prefix names means updating the prefix. It fails, too, when a tracked file under `src/`,
+`extensions/src/` or `c-sharp/` that the app never loads (a dotfile, a license, a story, a file
+type the app does not read) is still classified as runtime code; add its shape to `NON_RUNTIME`
+in `e2e-tests/e2e-recommendations.ts`.
 
 A file named by a spec-level key inside a subset (such as
 `scripture-editor/chapter-marker-repair.spec.ts`) is recommended for that key only: listing the

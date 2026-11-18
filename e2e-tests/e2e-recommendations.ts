@@ -58,10 +58,11 @@ export interface E2eRecommendationReport {
   /** Keys matched only through `incidental`, sorted by key. */
   alsoExercised: { key: string; matchedFiles: string[] }[];
   /**
-   * Changed source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists, so no
-   * recommendation can cover them. `lib/` is never reported here: library code is reached through
-   * the extensions and renderer components that consume it, so a library-only change with no `lib/`
-   * prefix in any entry can produce no recommendation and no uncovered file.
+   * Changed runtime source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists,
+   * so no recommendation can cover them. Files `NON_RUNTIME` matches are never reported here, and
+   * neither is `lib/`: library code is reached through the extensions and renderer components that
+   * consume it, so a library-only change with no `lib/` prefix in any entry can produce no
+   * recommendation and no uncovered file.
    */
   uncoveredFiles: string[];
   /** Changed files that add or change a menu, web view or command registration, sorted. */
@@ -110,20 +111,33 @@ export const REGISTRATION_PATTERN =
   'registerCommand\\(|registerWebViewProvider\\(|RegisterRequestHandlerAsync\\(';
 
 /**
- * Paths that are not runtime code: tests, stories, docs, type declarations, build metadata and
- * image or font assets (other files under `assets/`, such as style sheets and data, are runtime).
- * One alternative group per line, each with its reason.
+ * Paths that are not runtime code: tests, Storybook stories and their support code, docs, type
+ * declarations, package and .NET build metadata, image and font assets (other files under
+ * `assets/`, such as style sheets and data, are runtime), every dotfile and dot-directory below the
+ * top level (the formatter, linter, editor and Git configuration, `.github/` workflows, `.vscode/`
+ * settings), spelling and TypeScript configuration, licenses, the extension template's release
+ * scripts and the Roslyn analyzers. Build configuration that shapes the bundle
+ * (`webpack.config.ts`, `webpack/`, `postcss.config.ts`, `tailwind.config.ts`) is runtime. One
+ * alternative group per line, each with its reason. `e2e-recommendations.test.ts` runs this over
+ * every tracked file under the source roots and fails on a file that is plainly not app code but
+ * matches none of these.
  */
 const NON_RUNTIME = new RegExp(
   [
-    // Unit tests, their helpers and fixtures, and Storybook stories.
-    String.raw`\.test\.|\.test-utils?\.|\.fixtures\.|\.stories\.`,
-    // Documentation.
-    String.raw`\.md$|\.mdx$`,
+    // Unit tests, their helpers and fixtures, Storybook stories and the data only stories use.
+    String.raw`\.test\.|\.test-utils?\.|\.fixtures\.|\.stories\.|\.story-data\.`,
+    // The core Storybook's own pages and the components only they render.
+    String.raw`^src\/stories\/`,
+    // Documentation and licenses.
+    String.raw`\.md$|\.mdx$|(^|\/)LICENSE$`,
     // Type declarations only exist at compile time.
     String.raw`\.d\.ts$`,
-    // Test, mock and tool-configuration directories.
-    String.raw`(^|\/)(__tests__|__mocks__|\.config)\/`,
+    // Test and mock directories.
+    String.raw`(^|\/)(__tests__|__mocks__)\/`,
+    // Any dotfile or dot-directory below the top level: formatter, linter, editor, Git and .NET
+    // tool configuration, CI workflows and IDE settings, none of which the app loads. A top-level
+    // one is not matched, because `.erb/` holds the webpack configuration that builds the app.
+    String.raw`\/\.[^/]`,
     // Images and fonts; style sheets and data under assets/ stay runtime.
     String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
     // C# test projects (`Foo.Tests/`).
@@ -133,14 +147,18 @@ const NON_RUNTIME = new RegExp(
     String.raw`(^|\/)package\.json$|(^|\/)manifest\.json$`,
     // .NET build metadata: projects, shared build properties, the solution and IDE settings.
     String.raw`\.csproj$|\.props$|\.sln$|\.DotSettings$`,
-    // Formatter, linter and editor configuration, which no running app reads. `.globalconfig`
-    // files have arbitrary names (`ai-analyzers.globalconfig`), so only the suffix is matched.
-    String.raw`\.globalconfig$|(^|\/)(\.csharpierrc\.yml|\.lintstagedrc\.yml|\.editorconfig)$`,
+    // Analyzer configuration. `.globalconfig` files have arbitrary names
+    // (`ai-analyzers.globalconfig`), so only the suffix is matched.
+    String.raw`\.globalconfig$`,
     // Roslyn analyzers run at build time; the app never loads them.
     String.raw`(^|\/)c-sharp\/Paranext\.Analyzers\/`,
-    // Per-extension lint, format, spelling and TypeScript configuration (a template merge rewrites
-    // these in every extension). Runtime JSON such as `manifest.json` or `menus.json` is not here.
-    String.raw`(^|\/)(\.(eslint|prettier|stylelint)rc\.(c?js|json)|\.(eslint|prettier)ignore|\.gitignore|tsconfig[^/]*\.json|cspell\.json)$`,
+    // Per-extension spelling and TypeScript configuration (a template merge rewrites these in every
+    // extension). Runtime JSON such as `manifest.json` or `menus.json` is not here.
+    String.raw`(^|\/)(tsconfig[^/]*\.json|cspell\.json)$`,
+    // The extension template's release scripts, run by hand or from its `.github/` workflows.
+    // The other files under an extension's `lib/` can feed the build (`download-db.ts` fetches the
+    // data the extension ships), so they stay runtime.
+    String.raw`^extensions\/src\/[^/]+\/lib\/(bump-versions|git\.util)\.ts$`,
   ].join('|'),
 );
 const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
