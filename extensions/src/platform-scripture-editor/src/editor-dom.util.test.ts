@@ -1452,6 +1452,10 @@ function createAnnotationRanges() {
       rangeByFragment.set(fragment, range);
       return fragment;
     },
+    /** Reports `range` as one of the annotation's fragments. */
+    addRange(range: Range) {
+      ranges.push(range);
+    },
   };
 }
 
@@ -1952,6 +1956,37 @@ describe('createPendingCommentAnchorSource', () => {
     });
 
     // x = 230 + 6 * 10: 6 characters into the held piece.
+    expect(rectNumbers(source.measure())).toEqual({ x: 290, y: 300, width: 0, height: 20 });
+  });
+
+  it('a caret in a range that starts and ends inside a text node: places the caret in the covered part', () => {
+    // Any range, not only one over an element's contents, can cover part of a text node; the caret
+    // is found in that part's text, not in the whole node's.
+    const { paragraph, source } = openAtCaret(RUN_TEXT.slice(RUN_START, RUN_END), 6, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    const rerendered = document.createTextNode(RUN_TEXT);
+    paragraph.replaceChildren(rerendered);
+    layOut(rerendered, {
+      left: 200,
+      top: 300,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    const heldPart = document.createRange();
+    heldPart.setStart(rerendered, RUN_START);
+    heldPart.setEnd(rerendered, RUN_END);
+    stubClientRects(heldPart, [new DOMRect(230, 300, 100, 20)]);
+    annotation.addRange(heldPart);
+
+    // x = 200 + (3 + 6) * 10: 6 characters into the covered part, which starts 3 into the node.
     expect(rectNumbers(source.measure())).toEqual({ x: 290, y: 300, width: 0, height: 20 });
   });
 
