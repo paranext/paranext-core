@@ -1,21 +1,20 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
-import { ShortcutKeysLocalizedStringsProvider } from '@/context/shortcut-keys-strings.context';
-import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
 import {
-  getShortcutKeyNames,
-  getShortcutKeycaps,
-  ShortcutKeys,
   ShortcutKeysLocalizedStrings,
-} from './shortcut-keys.component';
+  ShortcutKeysLocalizedStringsProvider,
+} from '@/context/shortcut-keys-strings.context';
+import { getSharedContextKey } from '@/context/shared-context.util';
+import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
+import { getShortcutKeyNames, getShortcutKeycaps, ShortcutKeys } from './shortcut-keys.component';
 
 describe('getShortcutKeycaps', () => {
   it('splits a macOS combo into its modifier and key, with no separator', () => {
@@ -135,6 +134,7 @@ describe('getShortcutKeyNames', () => {
     ['⌃F', ['Control', 'F']],
     ['⌥⇧⌘L', ['Option', 'Shift', 'Command', 'L']],
     ['Alt+←', ['Alt', 'Left Arrow']],
+    ['Ctrl+Up', ['Control', 'Up Arrow']],
     ['Ctrl+PageDown', ['Control', 'Page Down']],
     ['F7', ['F7']],
   ])('names the keys of %s as %j', (hint, names) => {
@@ -154,9 +154,11 @@ describe('ShortcutKeys tooltip', () => {
   function renderWithStrings(
     ui: ReactNode,
     strings: ShortcutKeysLocalizedStrings = localizedStrings,
+    // Pinned so the expected text does not depend on the test machine's own locale
+    locale = 'en',
   ) {
     return render(
-      <ShortcutKeysLocalizedStringsProvider localizedStrings={strings}>
+      <ShortcutKeysLocalizedStringsProvider localizedStrings={strings} locale={locale}>
         {ui}
       </ShortcutKeysLocalizedStringsProvider>,
     );
@@ -179,6 +181,32 @@ describe('ShortcutKeys tooltip', () => {
     renderWithStrings(<ShortcutKeys hint={hint} />);
     await hoverKeycaps();
     expect(await screen.findByRole('tooltip')).toHaveTextContent(expected);
+  });
+
+  it('joins the keys in the language of the strings, not the runtime locale', async () => {
+    renderWithStrings(
+      <ShortcutKeys hint="Ctrl+Shift+N" />,
+      { '%shortcutKeys_tooltip%': 'Presione {keys}' },
+      'es',
+    );
+    await hoverKeycaps();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Presione Control, Shift y N');
+  });
+
+  it('reads strings that another copy of this library provides through the shared context', async () => {
+    // Another copy (an extension's bundled one, or the platform's) finds the context in this slot.
+    // `globalThis` has no symbol index signature, so reading the slot needs the assertion
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const SharedContext = (globalThis as unknown as Record<symbol, React.Context<unknown>>)[
+      getSharedContextKey('shortcutKeysLocalization')
+    ];
+    render(
+      <SharedContext.Provider value={{ localizedStrings, locale: 'en' }}>
+        <ShortcutKeys hint="Ctrl++" />
+      </SharedContext.Provider>,
+    );
+    await hoverKeycaps();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Press Control and +');
   });
 
   it('shows each key name in the tooltip as a keycap', async () => {

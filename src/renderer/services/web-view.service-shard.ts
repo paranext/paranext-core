@@ -151,6 +151,7 @@ import {
   reconcileSavedLayout,
   savedLayoutHasAnyTabs,
 } from '@shared/utils/saved-layout-reconciliation.util';
+import { getSharedContextKey, SHARED_CONTEXT_NAMES } from 'platform-bible-react/experimental';
 import {
   buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
@@ -165,6 +166,14 @@ import {
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewBufferedEmitter}. This remains for
  *   now to support anyone listening to this event over websocket
  */
+/**
+ * The `Symbol.for` names of the contexts platform-bible-react shares between its copies, so each
+ * web view's frame can be given the main window's contexts before the web view's own copy loads
+ */
+const SHARED_CONTEXT_GLOBAL_KEY_NAMES = SHARED_CONTEXT_NAMES.map(
+  (name) => getSharedContextKey(name).description,
+);
+
 const onDidAddWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   {
@@ -2993,6 +3002,11 @@ export async function openOrReloadWebView(
   window.createRoot = window.parent.createRoot;
   window.WebViewErrorBoundary = window.parent.WebViewErrorBoundary;
   window.ShortcutKeysLocalizationRoot = window.parent.ShortcutKeysLocalizationRoot;
+  // The web view's own copy of platform-bible-react finds the contexts the platform provides here
+  ${JSON.stringify(SHARED_CONTEXT_GLOBAL_KEY_NAMES)}.forEach((keyName) => {
+    const key = Symbol.for(keyName);
+    window[key] = window.parent[key];
+  });
   window.SillsdevScripture = window.parent.SillsdevScripture;
   var require = window.parent.webViewRequire;
   var getWebViewStateById = window.parent.getWebViewStateById;

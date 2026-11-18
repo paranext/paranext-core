@@ -1941,34 +1941,6 @@ export type DeveloperSectionProps = {
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare function DeveloperSection({ localizedStrings, selectedServer, onServerChange, disabled, }: DeveloperSectionProps): import("react/jsx-runtime").JSX.Element;
 /**
- * Object containing all keys used for localization in {@link ShortcutKeys}. Platform.Bible localizes
- * them and gives them to every `ShortcutKeys` through `ShortcutKeysLocalizedStringsProvider`, so a
- * caller in the app never passes them.
- *
- * @experimental This export is unstable and may change or disappear without notice
- */
-export declare const SHORTCUT_KEYS_STRING_KEYS: readonly [
-	"%shortcutKeys_tooltip%"
-];
-/**
- * Localized strings for {@link ShortcutKeys}, keyed by {@link SHORTCUT_KEYS_STRING_KEYS}.
- * `%shortcutKeys_tooltip%` must contain `{keys}`, which is replaced by the keys to press.
- *
- * @experimental This type is unstable and may change or disappear without notice
- */
-export type ShortcutKeysLocalizedStrings = {
-	[key in (typeof SHORTCUT_KEYS_STRING_KEYS)[number]]?: string;
-};
-/**
- * Gets the full name of each key in one already-resolved keyboard shortcut hint, in press order —
- * `Control` for `⌃` or `Ctrl`, `Command` for `⌘` — for text that reads the shortcut out rather than
- * showing it as keycaps.
- *
- * @param hint One key combination, as for {@link getShortcutKeycaps}
- * @experimental This function is unstable and may change or disappear without notice
- */
-export declare function getShortcutKeyNames(hint: string): string[];
-/**
  * Props for {@link ShortcutKeys}.
  *
  * @experimental This type is unstable and may change or disappear without notice
@@ -2001,6 +1973,25 @@ export type ShortcutKeysProps = {
  */
 export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Object containing all keys used for localization in `ShortcutKeys`. Platform.Bible localizes them
+ * and gives them to every `ShortcutKeys` through {@link ShortcutKeysLocalizedStringsProvider}, so a
+ * caller in the app never passes them.
+ *
+ * @experimental This export is unstable and may change or disappear without notice
+ */
+export declare const SHORTCUT_KEYS_STRING_KEYS: readonly [
+	"%shortcutKeys_tooltip%"
+];
+/**
+ * Localized strings for `ShortcutKeys`, keyed by {@link SHORTCUT_KEYS_STRING_KEYS}.
+ * `%shortcutKeys_tooltip%` must contain `{keys}`, which is replaced by the keys to press.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShortcutKeysLocalizedStrings = {
+	[key in (typeof SHORTCUT_KEYS_STRING_KEYS)[number]]?: string;
+};
+/**
  * Props for {@link ShortcutKeysLocalizedStringsProvider}.
  *
  * @experimental This type is unstable and may change or disappear without notice
@@ -2008,16 +1999,49 @@ export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react
 export type ShortcutKeysLocalizedStringsProviderProps = React$1.PropsWithChildren<{
 	/** The localized strings every `ShortcutKeys` inside uses, keyed by `SHORTCUT_KEYS_STRING_KEYS` */
 	localizedStrings: ShortcutKeysLocalizedStrings;
+	/**
+	 * BCP 47 tag of the language `localizedStrings` are in, so the keys are joined into a list ("…
+	 * and N") in that same language. Defaults to the runtime's own locale, which can differ from the
+	 * interface language.
+	 */
+	locale?: string;
 }>;
 /**
  * Gives every `ShortcutKeys` inside the strings for its tooltip. Platform.Bible provides it at the
  * root of the main window and of every web view, so components and extensions in the app never pass
- * the strings themselves; use it only where `platform-bible-react` renders outside the app, such as
- * in Storybook.
+ * the strings themselves, whichever copy of `platform-bible-react` they use; use it only where this
+ * library renders outside the app, such as in Storybook.
  *
  * @experimental This component is unstable and may change or disappear without notice
  */
-export declare function ShortcutKeysLocalizedStringsProvider({ localizedStrings, children, }: ShortcutKeysLocalizedStringsProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function ShortcutKeysLocalizedStringsProvider({ localizedStrings, locale, children, }: ShortcutKeysLocalizedStringsProviderProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Names of the contexts {@link getSharedContext} keeps, each stored on `globalThis` under
+ * `Symbol.for(`platform-bible-react.context.<name>`)`.
+ *
+ * An extension's web view bundles its own copy of `platform-bible-react`, while the platform
+ * renders the providers for these contexts from its own copy. A plain `createContext` would give
+ * each copy a separate context, so a provider the platform renders would never reach a component
+ * from an extension's copy. Platform.Bible copies these slots from the main window into each web
+ * view's frame before the web view's code runs, so every copy finds the same context.
+ *
+ * The value each context holds is shared between copies built from different versions of this
+ * library, so a change to its shape must stay readable by older and newer copies.
+ *
+ * @experimental This export is unstable and may change or disappear without notice
+ */
+export declare const SHARED_CONTEXT_NAMES: readonly [
+	"inTooltip",
+	"shortcutKeysLocalization"
+];
+/** One of {@link SHARED_CONTEXT_NAMES} */
+export type SharedContextName = (typeof SHARED_CONTEXT_NAMES)[number];
+/**
+ * Gets the key a shared context is stored under on `globalThis`.
+ *
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export declare function getSharedContextKey(name: SharedContextName): symbol;
 /**
  * Names (lucide kebab-case) of the icons `LucideIcon` can render
  *

@@ -1,4 +1,4 @@
-import { includes, indexOf, slice, split, stringLength } from 'platform-bible-utils';
+import { formatReplacementStringToArray, includes, slice, split } from 'platform-bible-utils';
 import { Fragment, ReactNode } from 'react';
 import { Kbd, KbdGroup } from '@/components/shadcn-ui/kbd';
 import {
@@ -8,26 +8,8 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { useIsInTooltip } from '@/context/in-tooltip.context';
-import { useShortcutKeysLocalizedStrings } from '@/context/shortcut-keys-strings.context';
-
-/**
- * Object containing all keys used for localization in {@link ShortcutKeys}. Platform.Bible localizes
- * them and gives them to every `ShortcutKeys` through `ShortcutKeysLocalizedStringsProvider`, so a
- * caller in the app never passes them.
- *
- * @experimental This export is unstable and may change or disappear without notice
- */
-export const SHORTCUT_KEYS_STRING_KEYS = Object.freeze(['%shortcutKeys_tooltip%'] as const);
-
-/**
- * Localized strings for {@link ShortcutKeys}, keyed by {@link SHORTCUT_KEYS_STRING_KEYS}.
- * `%shortcutKeys_tooltip%` must contain `{keys}`, which is replaced by the keys to press.
- *
- * @experimental This type is unstable and may change or disappear without notice
- */
-export type ShortcutKeysLocalizedStrings = {
-  [key in (typeof SHORTCUT_KEYS_STRING_KEYS)[number]]?: string;
-};
+import { useShortcutKeysLocalization } from '@/context/shortcut-keys-strings.context';
+import { readDirection } from '@/utils/dir-helper.util';
 
 /**
  * The macOS key symbols a combo may string together with no separator — modifiers plus the symbols
@@ -72,6 +54,11 @@ const KEY_NAMES: Readonly<Record<string, string>> = {
   Ctrl: 'Control',
   Esc: 'Escape',
   Del: 'Delete',
+  // The Windows/Linux spelling of the arrow keys, which macOS writes as symbols
+  Up: 'Up Arrow',
+  Down: 'Down Arrow',
+  Left: 'Left Arrow',
+  Right: 'Right Arrow',
   PageUp: 'Page Up',
   PageDown: 'Page Down',
 };
@@ -141,51 +128,42 @@ export function getShortcutKeyNames(hint: string): string[] {
 }
 
 /**
- * Joins key names as a list in the user's locale, like `Intl.ListFormat` but with no serial comma:
- * `Control, Shift and N` rather than `Control, Shift, and N`. All but the last key are joined as a
- * plain list, and that is then joined to the last key as a list of two, which no locale separates
- * with a comma before its conjunction.
+ * Joins key names as a list in `locale`, like `Intl.ListFormat` but with no serial comma: `Control,
+ * Shift and N` rather than `Control, Shift, and N`. The separator before the last key is the one
+ * the locale puts between exactly two items, which never has a serial comma; the others are the
+ * list's own.
  */
-function getKeyListParts(keyNames: string[]): { type: 'element' | 'literal'; value: string }[] {
-  const conjunctionFormat = new Intl.ListFormat(undefined, { style: 'long', type: 'conjunction' });
-  if (keyNames.length < 3) return conjunctionFormat.formatToParts(keyNames);
-  const leadingParts = new Intl.ListFormat(undefined, {
-    style: 'short',
-    type: 'unit',
-  }).formatToParts(keyNames.slice(0, -1));
-  const lastKeyName = keyNames[keyNames.length - 1];
-  let elementCount = 0;
-  // Format two stand-ins to learn where this locale puts its conjunction, then put the leading list
-  // in place of the first and the last key in place of the second
-  return conjunctionFormat.formatToParts(['leading', 'last']).flatMap((part) => {
-    if (part.type !== 'element') return [part];
-    elementCount += 1;
-    return elementCount === 1 ? leadingParts : [{ type: 'element', value: lastKeyName }];
-  });
+function getKeyListParts(
+  keyNames: string[],
+  locale: string | undefined,
+): { type: 'element' | 'literal'; value: string }[] {
+  const listFormat = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
+  const parts = listFormat.formatToParts(keyNames);
+  if (keyNames.length < 3) return parts;
+  const pairSeparator = listFormat
+    .formatToParts(['first', 'second'])
+    .find((part) => part.type === 'literal');
+  const lastSeparatorIndex = parts.findLastIndex((part) => part.type === 'literal');
+  if (!pairSeparator || lastSeparatorIndex < 0) return parts;
+  return parts.map((part, index) => (index === lastSeparatorIndex ? pairSeparator : part));
 }
 
 /**
  * Builds the tooltip that reads a shortcut out, e.g. "Press [Control] and [+]": the localized
  * template with `{keys}` replaced by each key's full name as a keycap, joined as a list in the
- * user's locale.
+ * template's own language, `locale`.
  */
-function getTooltipContent(template: string, hint: string): ReactNode {
-  const keysPlaceholder = '{keys}';
-  const placeholderIndex = indexOf(template, keysPlaceholder);
-  if (placeholderIndex < 0) return template;
-  const keyNames = getShortcutKeyNames(hint);
-  const listParts = getKeyListParts(keyNames);
-  return (
-    <>
-      {slice(template, 0, placeholderIndex)}
-      {listParts.map((part, index) =>
-        // A key name can repeat, so it is not a safe key; the parts never reorder, so position is.
-        // eslint-disable-next-line react/no-array-index-key
-        part.type === 'element' ? <Kbd key={index}>{part.value}</Kbd> : part.value,
-      )}
-      {slice(template, placeholderIndex + stringLength(keysPlaceholder))}
-    </>
+function getTooltipContent(template: string, hint: string, locale: string | undefined): ReactNode {
+  const keys = getKeyListParts(getShortcutKeyNames(hint), locale).map((part, index) =>
+    // A key name can repeat, so it is not a safe key; the parts never reorder, so position is.
+    // eslint-disable-next-line react/no-array-index-key
+    part.type === 'element' ? <Kbd key={index}>{part.value}</Kbd> : part.value,
   );
+  return formatReplacementStringToArray<ReactNode>(template, { keys }).map((part, index) => (
+    // One fixed template and one list per render, so the parts never reorder
+    // eslint-disable-next-line react/no-array-index-key
+    <Fragment key={index}>{part}</Fragment>
+  ));
 }
 
 /**
@@ -222,7 +200,7 @@ export type ShortcutKeysProps = {
  */
 export function ShortcutKeys({ hint }: ShortcutKeysProps) {
   const isInTooltip = useIsInTooltip();
-  const localizedStrings = useShortcutKeysLocalizedStrings();
+  const { localizedStrings, locale } = useShortcutKeysLocalization();
   const { keycaps, separator } = getShortcutKeycaps(hint);
   // Menu shortcut slots set wide letter spacing for a plain-text hint; keycaps inherit it, which
   // spreads a keycap's letters apart ("C t r l"), so reset it here for every caller.
@@ -266,11 +244,15 @@ export function ShortcutKeys({ hint }: ShortcutKeysProps) {
         <TooltipTrigger asChild>
           <span className="tw:inline-flex">{keys}</span>
         </TooltipTrigger>
-        {/* To the side, so the tooltip does not cover the menu items above or below. */}
-        {/* The shared tooltip nudges its arrow flush against the content only for top and bottom
+        {/* Beside the keycaps at the inline end, past the menu's edge, so the tooltip covers
+          neither the menu items above or below nor, in a right-to-left menu, the item's label. The
+          shared tooltip nudges its arrow flush against the content only for top and bottom
           tooltips; without the same nudge here the side arrow's tip pokes into the keycaps */}
-        <TooltipContent side="right" arrowClassName="tw:translate-y-[calc(-50%-1px)]">
-          {getTooltipContent(tooltipTemplate, hint)}
+        <TooltipContent
+          side={readDirection() === 'rtl' ? 'left' : 'right'}
+          arrowClassName="tw:translate-y-[calc(-50%-1px)]"
+        >
+          {getTooltipContent(tooltipTemplate, hint, locale)}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

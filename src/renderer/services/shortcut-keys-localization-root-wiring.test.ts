@@ -36,6 +36,22 @@ describe('shortcut keys localization root wiring', () => {
     expect(serviceShard).toContain(`window.${ROOT_NAME} = window.parent.${ROOT_NAME};`);
   });
 
+  it("copies the library's shared contexts into each web view frame before the web view loads", () => {
+    // An extension's web view bundles its own copy of platform-bible-react; without these slots
+    // its ShortcutKeys would read a context the root never provides
+    const serviceShard = readRendererFile('services/web-view.service-shard.ts');
+    const importsBlock = serviceShard.slice(
+      serviceShard.indexOf('// Set up WebView imports'),
+      serviceShard.indexOf('var require = window.parent.webViewRequire;'),
+    );
+
+    expect(serviceShard).toMatch(
+      /SHARED_CONTEXT_NAMES\.map\(\s*\(name\) => getSharedContextKey\(name\)/,
+    );
+    expect(importsBlock).toContain('JSON.stringify(SHARED_CONTEXT_GLOBAL_KEY_NAMES)}.forEach(');
+    expect(importsBlock).toContain('window[key] = window.parent[key];');
+  });
+
   it('wraps the web view component in the root at the mount site', () => {
     const serviceShard = readRendererFile('services/web-view.service-shard.ts');
     const mountCall = serviceShard.slice(
