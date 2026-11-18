@@ -15,7 +15,11 @@ import {
 } from '../../fixtures/sandbox-probe-results';
 
 /** Lines of the extension host's log that say how `evil` and extension activation went */
-const ACTIVATION_LOG_LINE = /evil|activat|Sandbox probe|<<BAD>>/i;
+const ACTIVATION_LOG_LINE =
+  /evil|activat|Sandbox probe|<<BAD>>|Starting extension-host|noisy|failed to load|Extension folder/i;
+
+/** Where the extension build writes `evil`, relative to the repository root */
+const EVIL_MANIFEST = path.join('extensions', 'dist', 'evil', 'manifest.json');
 
 /**
  * Explains why `evil`'s command never appeared: which noisy-dev-mode commands are registered (none
@@ -24,6 +28,12 @@ const ACTIVATION_LOG_LINE = /evil|activat|Sandbox probe|<<BAD>>/i;
  */
 async function describeMissingCommand(electronApp: ElectronApplication): Promise<string> {
   const lines: string[] = [];
+  const devNoisy = await electronApp.evaluate(() => process.env.DEV_NOISY);
+  lines.push(`DEV_NOISY in the app's main process: ${devNoisy ?? '(not set)'}`);
+  const appPath = await electronApp.evaluate(({ app }) => app.getAppPath());
+  lines.push(
+    `${EVIL_MANIFEST} under ${appPath}: ${fs.existsSync(path.join(appPath, EVIL_MANIFEST)) ? 'present' : 'missing'}`,
+  );
   try {
     const discovered = await sendPapiRequestOnce<{ methods?: { name: string }[] }>('rpc.discover');
     const testCommands = (discovered.methods ?? [])
@@ -36,12 +46,13 @@ async function describeMissingCommand(electronApp: ElectronApplication): Promise
   const appData = await electronApp.evaluate(({ app }) => app.getPath('appData'));
   const logFile = path.join(appData, 'Electron', 'logs', 'main.log');
   if (fs.existsSync(logFile)) {
-    const activationLines = fs
-      .readFileSync(logFile, 'utf8')
-      .split('\n')
-      .filter((line) => ACTIVATION_LOG_LINE.test(line))
-      .slice(-60);
-    lines.push(`Activation lines from ${logFile}:`, ...activationLines);
+    const logLines = fs.readFileSync(logFile, 'utf8').split('\n');
+    // Says whether the extension host saw noisy dev mode; listed first so the tail cannot cut it
+    const startLines = logLines
+      .filter((line) => line.includes('Starting extension-host'))
+      .slice(-3);
+    const activationLines = logLines.filter((line) => ACTIVATION_LOG_LINE.test(line)).slice(-60);
+    lines.push(`Activation lines from ${logFile}:`, ...startLines, '...', ...activationLines);
   } else lines.push(`No extension host log at ${logFile}`);
   return lines.join('\n');
 }
