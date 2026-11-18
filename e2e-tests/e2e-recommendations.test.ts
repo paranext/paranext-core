@@ -416,28 +416,30 @@ describe('recommendE2eTests', () => {
   });
 
   it.each([
-    'src/x/a.test.ts',
-    'src/x/a.test-util.ts',
-    'src/x/y.stories.tsx',
-    'src/x/README.md',
+    'src/main/app-chords.util.test.ts',
+    'src/main/settings-stub.test-util.ts',
+    'extensions/src/legacy-comment-manager/src/comment-list.stories.tsx',
+    'c-sharp/README.md',
+    // No tracked .mdx file sits outside src/stories/, so this row stays synthetic.
     'src/x/guide.mdx',
-    'src/x/types.d.ts',
-    'src/x/__mocks__/z.ts',
-    'src/x/__tests__/z.ts',
-    'c-sharp/Foo.Tests/Bar.cs',
-    'src/x/assets/logo.svg',
-    'extensions/src/x/package.json',
-    'extensions/src/x/manifest.json',
-    'c-sharp/Foo.csproj',
+    'src/renderer/window-controls-overlay.d.ts',
+    'src/shared/services/__mocks__/logger.service.ts',
+    'src/main/services/__tests__/service-router-test.util.ts',
+    'c-sharp/Paranext.Analyzers.Tests/Rules/BanDynamicAnalyzerTests.cs',
+    'extensions/src/hello-rock3/assets/offline.svg',
+    'extensions/src/hello-rock3/package.json',
+    'extensions/src/c-sharp-provider-test/manifest.json',
+    'c-sharp/ParanextDataProvider.csproj',
     'c-sharp/Directory.Build.props',
+    // No tracked dot-directory sits at this depth under src/, so this row stays synthetic.
     'src/x/.config/settings.ts',
-    'src/x/y.test-utils.ts',
-    'src/x/y.fixtures.ts',
+    'extensions/src/platform-get-resources/src/get-resources.web-view.test-utils.tsx',
+    'extensions/src/legacy-comment-manager/src/comment-draft.fixtures.ts',
     'c-sharp/ParanextDataProvider.sln',
     'c-sharp/ParanextDataProvider.sln.DotSettings',
     'c-sharp/ai-analyzers.globalconfig',
     'c-sharp/Paranext.Analyzers/DiagnosticIds.cs',
-    'c-sharp/Paranext.Analyzers/Rules/SomeAnalyzer.cs',
+    'c-sharp/Paranext.Analyzers/Rules/BanTraceAnalyzer.cs',
     'extensions/src/hello-rock3/.eslintrc.js',
     'extensions/src/hello-rock3/.prettierrc.js',
     'extensions/src/hello-rock3/.stylelintrc.js',
@@ -513,9 +515,9 @@ describe('recommendE2eTests', () => {
 
   it('stays silent for a test-only, stories-only or docs-only change in a covered area', () => {
     [
-      'src/renderer/components/docking/dock.component.test.tsx',
-      'src/renderer/components/docking/dock.stories.tsx',
-      'src/shared/services/README.md',
+      'src/renderer/components/dialogs/alert-dialog.component.test.tsx',
+      'src/renderer/components/dialogs/team-layout.stories.tsx',
+      'src/renderer/hooks/README.md',
     ].forEach((file) => {
       const report = recommend([file]);
       expect({ file, keys: recommendedKeys(report) }).toEqual({ file, keys: [] });
