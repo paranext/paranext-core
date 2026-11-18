@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -56,8 +56,19 @@ function makeCore(): { core: string; clone: string } {
   return { core, clone: path.join(core, 'dev-packages', FOLDER) };
 }
 
-/** Pins `revision` and runs the staging script, as `npm install`'s `preinstall` does. */
-function stage(core: string, revision: string, formerPinBranches: string[] = []) {
+type StageResult = { status: number; output: string };
+
+/**
+ * Pins `revision` and runs the staging script, as `npm install`'s `preinstall` does.
+ *
+ * Asynchronously: the script takes seconds per run on a slow runner, and a test file that blocks
+ * its worker for a minute in total stops the worker answering the test runner at all.
+ */
+function stage(
+  core: string,
+  revision: string,
+  formerPinBranches: string[] = [],
+): Promise<StageResult> {
   fs.writeFileSync(
     path.join(core, 'dev-packages.json'),
     JSON.stringify({
@@ -72,20 +83,31 @@ function stage(core: string, revision: string, formerPinBranches: string[] = [])
       ],
     }),
   );
-  // `spawnSync` blocks the event loop the test's own timeout runs on, so a child that hangs has to
-  // be ended here.
-  const result = spawnSync(process.execPath, ['.erb/scripts/stage-dev-packages.ts'], {
-    cwd: core,
-    encoding: 'utf8',
-    timeout: 90_000,
+  return new Promise((resolve, reject) => {
+    execFile(
+      process.execPath,
+      ['.erb/scripts/stage-dev-packages.ts'],
+      { cwd: core, encoding: 'utf8', timeout: 90_000 },
+      (error, stdout, stderr) => {
+        // A non-zero exit is a result the scenarios assert on; a child that was killed, or never
+        // started, is not.
+        if (error && typeof error.code !== 'number') {
+          reject(error);
+          return;
+        }
+        resolve({ status: error ? Number(error.code) : 0, output: `${stdout}\n${stderr}` });
+      },
+    );
   });
-  if (result.error) throw result.error;
-  return { status: result.status, output: `${result.stdout}\n${result.stderr}` };
 }
 
 /** `stage`, for the steps that only set a scenario up: fails the test if staging did. */
-function stageOk(core: string, revision: string, formerPinBranches: string[] = []): void {
-  const result = stage(core, revision, formerPinBranches);
+async function stageOk(
+  core: string,
+  revision: string,
+  formerPinBranches: string[] = [],
+): Promise<void> {
+  const result = await stage(core, revision, formerPinBranches);
   if (result.status !== 0) throw new Error(`staging ${revision} failed:\n${result.output}`);
 }
 
@@ -141,18 +163,18 @@ afterAll(() => {
 describe('stage-dev-packages checkout, against real git', () => {
   it(
     'follows a commit pin from A to B and back in the clone it made',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
 
-      expect(stage(core, pinA).status).toBe(0);
+      expect((await stage(core, pinA)).status).toBe(0);
       expect(head(clone)).toEqual({ commit: pinA, branch: PINNED_COMMIT_BRANCH });
       expect(stagedFrom(core)).toBe(pinA);
 
-      expect(stage(core, pinB).status).toBe(0);
+      expect((await stage(core, pinB)).status).toBe(0);
       expect(head(clone)).toEqual({ commit: pinB, branch: PINNED_COMMIT_BRANCH });
       expect(stagedFrom(core)).toBe(pinB);
 
-      const back = stage(core, pinA);
+      const back = await stage(core, pinA);
       expect(back.status).toBe(0);
       expect(head(clone)).toEqual({ commit: pinA, branch: PINNED_COMMIT_BRANCH });
       // B is on the remote, so moving the branch off it loses nothing and parks nothing.
@@ -164,31 +186,34 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'leaves a checkout a person detached where it is, install after install',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, pinB);
+      await stageOk(core, pinB);
       git(clone, 'checkout', '--detach', pinA);
 
       // Twice: the first run stages from the detached commit and records it as staged, which must
       // not make the second run take the checkout for one staging placed.
-      [1, 2].forEach(() => {
-        const result = stage(core, pinB);
-        expect(result.status).toBe(0);
-        expect(result.output).toContain('Leaving it alone');
-        expect(head(clone)).toEqual({ commit: pinA, branch: 'HEAD' });
-      });
+      const first = await stage(core, pinB);
+      expect(first.status).toBe(0);
+      expect(first.output).toContain('Leaving it alone');
+      expect(head(clone)).toEqual({ commit: pinA, branch: 'HEAD' });
+
+      const second = await stage(core, pinB);
+      expect(second.status).toBe(0);
+      expect(second.output).toContain('Leaving it alone');
+      expect(head(clone)).toEqual({ commit: pinA, branch: 'HEAD' });
     },
     TIMEOUT_MS,
   );
 
   it(
     "leaves a checkout on somebody's own branch where it is",
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, pinB);
+      await stageOk(core, pinB);
       git(clone, 'checkout', '-b', 'my-editor-fix', pinA);
 
-      const result = stage(core, pinB);
+      const result = await stage(core, pinB);
 
       expect(result.status).toBe(0);
 
@@ -200,15 +225,15 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'moves a checkout off a declared former pin branch, and not off an undeclared one',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, 'release');
+      await stageOk(core, 'release');
       expect(head(clone).branch).toBe('release');
 
-      expect(stage(core, pinB).output).toContain('is on "release"');
+      expect((await stage(core, pinB)).output).toContain('is on "release"');
       expect(head(clone).branch).toBe('release');
 
-      stageOk(core, pinB, ['release']);
+      await stageOk(core, pinB, ['release']);
       expect(head(clone)).toEqual({ commit: pinB, branch: PINNED_COMMIT_BRANCH });
     },
     TIMEOUT_MS,
@@ -216,13 +241,13 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'parks a commit made on the branch staging owns before re-pointing that branch',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, pinB);
-      stageOk(core, pinA);
+      await stageOk(core, pinB);
+      await stageOk(core, pinA);
       const local = commit(clone, 'local work');
 
-      const result = stage(core, pinB);
+      const result = await stage(core, pinB);
 
       expect(result.status).toBe(0);
 
@@ -237,14 +262,14 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'reports nothing as unpushed when the pin goes from a commit to a branch without that commit',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, pinB);
-      stageOk(core, pinA);
-      stageOk(core, pinB);
+      await stageOk(core, pinB);
+      await stageOk(core, pinA);
+      await stageOk(core, pinB);
       expect(head(clone).branch).toBe(PINNED_COMMIT_BRANCH);
 
-      const result = stage(core, 'release');
+      const result = await stage(core, 'release');
 
       expect(result.status).toBe(0);
 
@@ -258,17 +283,17 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'parks a commit left on the local pinned branch when the pin names that branch again',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, 'release');
+      await stageOk(core, 'release');
       const local = commit(clone, 'local work on the pinned branch');
       // The pin becomes a commit: staging moves the checkout off `release` and leaves that local
       // branch, with its commit, as it is.
-      stageOk(core, pinB, ['release']);
+      await stageOk(core, pinB, ['release']);
       expect(head(clone).branch).toBe(PINNED_COMMIT_BRANCH);
       expect(git(clone, 'rev-parse', 'refs/heads/release')).toBe(local);
 
-      const result = stage(core, 'release');
+      const result = await stage(core, 'release');
 
       expect(result.status).toBe(0);
 
@@ -282,11 +307,11 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'stages a tag pin on the branch staging owns',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, pinB);
+      await stageOk(core, pinB);
 
-      stageOk(core, 'on-main');
+      await stageOk(core, 'on-main');
 
       expect(head(clone)).toEqual({ commit: pinA, branch: PINNED_COMMIT_BRANCH });
       expect(stagedFrom(core)).toBe(pinA);
@@ -296,10 +321,10 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'treats a commit that only a pushed tag holds as pushed',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
 
-      stageOk(core, 'off-branch');
+      await stageOk(core, 'off-branch');
 
       expect(head(clone).commit).toBe(tagOnlyCommit);
       // Exactly the commit: an `-unpushed` suffix here blocks committing the lockfile.
@@ -310,17 +335,17 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'does not judge whether the remote holds the pin when the fetch was skipped',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, pinB);
+      await stageOk(core, pinB);
       git(clone, 'checkout', '-b', 'never-pushed');
       const unpushed = commit(clone, 'only on this machine');
       git(clone, 'checkout', 'main');
 
       process.env.PT_SKIP_DEV_PACKAGE_FETCH = '1';
-      let result: ReturnType<typeof stage>;
+      let result: StageResult;
       try {
-        result = stage(core, unpushed);
+        result = await stage(core, unpushed);
       } finally {
         delete process.env.PT_SKIP_DEV_PACKAGE_FETCH;
       }
@@ -335,16 +360,16 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'keeps the record of commits an earlier run parked when a later run fails before parking any',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, pinB);
-      stageOk(core, pinA);
+      await stageOk(core, pinB);
+      await stageOk(core, pinA);
       commit(clone, 'local work');
-      stageOk(core, pinB);
+      await stageOk(core, pinB);
       const record = path.join(core, 'dev-packages', '.stage-rescues.json');
       expect(fs.existsSync(record)).toBe(true);
 
-      const failed = stage(core, 'no-such-revision');
+      const failed = await stage(core, 'no-such-revision');
 
       expect(failed.status).toBe(1);
       expect(fs.existsSync(record)).toBe(true);
@@ -354,14 +379,14 @@ describe('stage-dev-packages checkout, against real git', () => {
 
   it(
     'refuses a commit pin that no branch or tag of the remote holds',
-    () => {
+    async () => {
       const { core, clone } = makeCore();
-      stageOk(core, pinB);
+      await stageOk(core, pinB);
       git(clone, 'checkout', '-b', 'never-pushed');
       const unpushed = commit(clone, 'only on this machine');
       git(clone, 'checkout', 'main');
 
-      const result = stage(core, unpushed);
+      const result = await stage(core, unpushed);
 
       expect(result.status).toBe(1);
       expect(result.output).toContain('is not on any branch or tag of the remote');
