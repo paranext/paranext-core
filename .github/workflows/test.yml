@@ -542,6 +542,10 @@ jobs:
     name: E2E core, pick the spec lists
     runs-on: ubuntu-22.04
     timeout-minutes: 180
+    # Reads the pull request's changed files and nothing else.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       spec_lists: ${{ steps.pick.outputs.spec_lists }}
 
@@ -589,6 +593,9 @@ jobs:
   e2e-core:
     name: E2E core
     needs: e2e-core-selection
+    # The called workflow only reads the repository; it can never get more than this.
+    permissions:
+      contents: read
     uses: ./.github/workflows/e2e-isolated.yml
     with:
       spec_lists: ${{ needs.e2e-core-selection.outputs.spec_lists }}

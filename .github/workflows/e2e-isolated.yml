@@ -10,8 +10,13 @@ name: E2E isolated specs
 # Every setup step has its own 20-minute timeout, well under the caller's job budget: a hang there
 # fails that step and leaves the job time for the steps that run on `!cancelled()` (the warnings,
 # the artifact upload). Recent runs take about two minutes per step.
-# The setup steps mirror the build job's setup in test.yml: keep the two in step.
+# The setup steps mirror the build job's setup in test.yml: keep the two in step, except that this
+# file reads package.json with `jq` and pins third-party actions to a commit (TODO(PT-5030): do the
+# same in test.yml).
 # With `report_only`, the job as a whole is non-blocking, not only the spec step.
+#
+# The job only reads the repository: its token is read-only, and checkout does not leave the token
+# in the git config, so the install scripts and the specs cannot write to the repository.
 
 on:
   workflow_call:
@@ -56,11 +61,15 @@ jobs:
     # A failure anywhere in the job (checkout, install, build, timeout) must not turn a report-only
     # check red. The step-level `continue-on-error` below stays so the warning step sees the outcome.
     continue-on-error: ${{ inputs.report_only }}
+    permissions:
+      contents: read
 
     steps:
       - name: Check out Git repository
         timeout-minutes: 20
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install .NET
         timeout-minutes: 20
@@ -77,22 +86,26 @@ jobs:
             '.config/dotnet-tools.json') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - name: Read package.json
+      - name: Read the Node.js version from package.json
         id: package_json
         timeout-minutes: 20
-        uses: zoexx/github-action-json-file-properties@1.0.6
-        with:
-          file_path: 'package.json'
+        run: |
+          node_version=$(jq -r '.volta.node // empty' package.json)
+          if [ -z "$node_version" ]; then
+            echo "::error title=No Node.js version::package.json has no volta.node"
+            exit 1
+          fi
+          echo "node=$node_version" >> "$GITHUB_OUTPUT"
 
       - name: Install Volta and toolchain
         timeout-minutes: 20
-        uses: volta-cli/action@v4
+        uses: volta-cli/action@5c175f92dea6f48441c436471e6479dbc192e194 # v4.2.1
 
       - name: Install Node.js and NPM
         timeout-minutes: 20
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          node-version: ${{ steps.package_json.outputs.node }}
           cache: npm
 
       - name: Install packages
