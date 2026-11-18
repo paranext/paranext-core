@@ -334,6 +334,25 @@ describe('stage-dev-packages checkout, against real git', () => {
   );
 
   it(
+    'keeps the record of commits an earlier run parked when a later run fails before parking any',
+    () => {
+      const { core, clone } = makeCore();
+      stageOk(core, pinB);
+      stageOk(core, pinA);
+      commit(clone, 'local work');
+      stageOk(core, pinB);
+      const record = path.join(core, 'dev-packages', '.stage-rescues.json');
+      expect(fs.existsSync(record)).toBe(true);
+
+      const failed = stage(core, 'no-such-revision');
+
+      expect(failed.status).toBe(1);
+      expect(fs.existsSync(record)).toBe(true);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
     'refuses a commit pin that no branch or tag of the remote holds',
     () => {
       const { core, clone } = makeCore();
