@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import {
   findLostTests,
   isMaxFailuresStopMessage,
+  runStoppedEarly,
   TestOutcomeLike,
 } from './no-silent-skips.reporter';
 
@@ -148,5 +149,24 @@ describe('isMaxFailuresStopMessage', () => {
 
   it('rejects an undefined message', () => {
     expect(isMaxFailuresStopMessage(undefined)).toBe(false);
+  });
+});
+
+describe('runStoppedEarly', () => {
+  it('counts a --global-timeout stop: CI bounds its isolated runs with one', () => {
+    expect(runStoppedEarly('timedout', false)).toBe(true);
+  });
+
+  it('counts an interrupted run', () => {
+    expect(runStoppedEarly('interrupted', false)).toBe(true);
+  });
+
+  it('counts a --max-failures trip, which reports the run as failed', () => {
+    expect(runStoppedEarly('failed', true)).toBe(true);
+  });
+
+  it('does not count a run that failed or passed on its own', () => {
+    expect(runStoppedEarly('failed', false)).toBe(false);
+    expect(runStoppedEarly('passed', false)).toBe(false);
   });
 });

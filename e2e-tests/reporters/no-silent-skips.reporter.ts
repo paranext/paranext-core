@@ -57,6 +57,20 @@ export function isMaxFailuresStopMessage(message: string | undefined): boolean {
   return message !== undefined && /maximum allowed failures/.test(message);
 }
 
+/**
+ * Whether the run stopped before reaching every test: `--max-failures` tripped (seen only through
+ * {@link isMaxFailuresStopMessage}, since that run reports `'failed'`), the user interrupted it, or
+ * `--global-timeout` ran out (`'timedout'`; CI's isolated e2e jobs set one so that their reports
+ * are still written and uploaded). In each case `Dispatcher` leaves the tests it never reached with
+ * no results at all.
+ */
+export function runStoppedEarly(
+  runStatus: FullResult['status'],
+  sawMaxFailuresStop: boolean,
+): boolean {
+  return sawMaxFailuresStop || runStatus === 'interrupted' || runStatus === 'timedout';
+}
+
 /** {@link findLostTests}'s result, keeping genuine losses apart from an expected early stop. */
 export interface LostTestsSplit<T> {
   /** Tests silently dropped with nothing to explain it — the reporter should fail the run. */
@@ -67,7 +81,7 @@ export interface LostTestsSplit<T> {
 
 /**
  * The tests a run lost, given every test it declared, how the run as a whole finished, and whether
- * it stopped early (`--max-failures` tripped, or the user interrupted it).
+ * it stopped early (see {@link runStoppedEarly}).
  *
  * Empty when nothing executed at all AND the run itself reports `'passed'`: that combination is
  * what `--list` looks like — Playwright still loads reporters named in config for `--list`
@@ -129,11 +143,11 @@ export function findLostTests<T extends TestOutcomeLike>(
  * never ran still expects to pass. That difference is the whole check.
  *
  * A second discriminator, `stoppedEarly` (see {@link findLostTests}), keeps a deliberate early stop
- * — `--max-failures` tripping, or the run being interrupted — from reading the same as the "1
- * failed, 22 did not run" rot above. Both leave tests with no results, but an early stop is already
- * visible through the failure(s) that caused it or through the run's own `interrupted` status, so
- * reporting its never-reached tests as "lost" would be crying wolf over exactly the behavior
- * `--max-failures` was configured to produce.
+ * — `--max-failures` tripping, the run being interrupted, or `--global-timeout` running out — from
+ * reading the same as the "1 failed, 22 did not run" rot above. Both leave tests with no results,
+ * but an early stop is already visible through the failure(s) that caused it or through the run's
+ * own `interrupted` or `timedout` status, so reporting its never-reached tests as "lost" would be
+ * crying wolf over exactly the behavior `--max-failures` was configured to produce.
  *
  * Register this reporter FIRST. The multiplexer runs reporters in array order and applies a
  * reporter's status override only after its `onEnd` returns, so a reporter listed after `html` or
@@ -180,7 +194,7 @@ class NoSilentSkipsReporter implements Reporter {
     if (!this.rootSuite) return undefined;
 
     const allTests = this.rootSuite.allTests();
-    const stoppedEarly = this.sawMaxFailuresStop || result.status === 'interrupted';
+    const stoppedEarly = runStoppedEarly(result.status, this.sawMaxFailuresStop);
     const { lost, notRunBecauseStoppedEarly } = findLostTests(
       allTests,
       result.status,
@@ -189,7 +203,8 @@ class NoSilentSkipsReporter implements Reporter {
 
     if (notRunBecauseStoppedEarly.length > 0) {
       // Informational only: an early stop is already visible through the failure(s) that caused
-      // it (or through `result.status === 'interrupted'`), so this does not also fail the run.
+      // it (or through the run's own `interrupted` or `timedout` status), so this does not also
+      // fail the run.
       console.log(
         `\n${notRunBecauseStoppedEarly.length} test(s) did not run because the run stopped ` +
           `early:\n${notRunBecauseStoppedEarly.map(describeTest).join('\n')}\n`,
