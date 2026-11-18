@@ -27,7 +27,7 @@ const UBUNTU_RUNNER_BY_BASE: Readonly<Record<string, string>> = {
   core24: 'ubuntu-24.04',
 };
 
-/** Workflows that pin the Linux runner the snap is built on, via an `OS_LINUX` env value. */
+/** Workflows that pin the Linux runner the snap is built on, in their job's `strategy.matrix`. */
 const LINUX_RUNNER_WORKFLOWS = ['test.yml', 'package-main.yml', 'publish.yml'];
 
 /**
@@ -167,11 +167,30 @@ function readAppBuilderLibPatches(): string[] {
     .map((name) => readFileSync(path.join(patchesDir, name), 'utf8'));
 }
 
-/** The `OS_LINUX` runner each snap-building workflow pins, named so a failure says which one. */
-function readWorkflowLinuxRunners(): { workflow: string; runner: string | undefined }[] {
+/**
+ * The Ubuntu runner labels each snap-building workflow's matrix lists, named so a failure says
+ * which workflow. Reads both matrix shapes the workflows use: an `os` list and `include` entries
+ * that each set `os`.
+ */
+function readWorkflowLinuxRunners(): { workflow: string; runners: unknown[] }[] {
   return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
-    const contents = readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8');
-    return { workflow, runner: /^\s*OS_LINUX:\s*(\S+)/m.exec(contents)?.[1] };
+    const parsed: unknown = parseYaml(
+      readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8'),
+    );
+    const jobs: unknown[] =
+      isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : [];
+    const runners = jobs
+      .filter(isRecord)
+      .map((job) => (isRecord(job.strategy) ? job.strategy.matrix : undefined))
+      .filter(isRecord)
+      .flatMap((matrix) => [
+        ...(Array.isArray(matrix.os) ? matrix.os : []),
+        ...(Array.isArray(matrix.include)
+          ? matrix.include.filter(isRecord).map((entry) => entry.os)
+          : []),
+      ])
+      .filter((label) => typeof label === 'string' && label.startsWith('ubuntu-'));
+    return { workflow, runners };
   });
 }
 
@@ -279,7 +298,7 @@ describe('electron-builder snap configuration', () => {
     // snap -- the same class of mismatch this whole guard exists to prevent.
     const expected = UBUNTU_RUNNER_BY_BASE[readSnapBase()];
     expect(readWorkflowLinuxRunners()).toEqual(
-      LINUX_RUNNER_WORKFLOWS.map((workflow) => ({ workflow, runner: expected })),
+      LINUX_RUNNER_WORKFLOWS.map((workflow) => ({ workflow, runners: [expected] })),
     );
   });
 
