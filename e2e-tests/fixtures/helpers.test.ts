@@ -246,6 +246,10 @@ describe('buildLaunchEnv', () => {
     expect(env.PLATFORM_BIBLE_PROJECT_ROOT_FOLDER).toBe(path.join('/tmp/profile', 'projects'));
   });
 
+  it('leaves the project root unset unless the launch asks for an isolated one', () => {
+    expect(buildLaunchEnv({}, '/tmp/profile').PLATFORM_BIBLE_PROJECT_ROOT_FOLDER).toBeUndefined();
+  });
+
   it('lets envOverrides win over the pinned test defaults', () => {
     const env = buildLaunchEnv({}, '/tmp/profile', {
       isolatedProjectRoot: true,

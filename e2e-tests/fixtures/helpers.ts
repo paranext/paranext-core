@@ -370,7 +370,9 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
 export interface LaunchElectronAppOptions {
   /**
    * Additional environment variables to merge into the child process environment, applied after the
-   * defaults. Keys present here override the defaults (e.g. `{ DEV_NOISY: 'true' }`).
+   * defaults. Keys present here override the defaults (e.g. `{ DEV_NOISY: 'true' }`). A `DEV_NOISY`
+   * exported in the shell is ignored, so `envOverrides: { DEV_NOISY: 'true' }` is how a spec loads
+   * the test extensions.
    */
   envOverrides?: Record<string, string>;
   /**
