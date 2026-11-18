@@ -85,6 +85,23 @@ describe('InterfaceLanguagePicker', () => {
     expect(screen.getByRole('option', { name: /Español/ })).toHaveAttribute('aria-current', 'true');
   });
 
+  test('checks the selected language and keeps the check space on every other row', () => {
+    render(
+      <InterfaceLanguagePicker
+        languages={LANGUAGES}
+        value="es"
+        onChange={() => {}}
+        localizedStrings={STRINGS}
+      />,
+    );
+    const rows = screen.getAllByRole('option');
+    expect(rows.length).toBeGreaterThan(1);
+    rows.forEach((row) => {
+      const isSpanish = /Español/.test(row.textContent ?? '');
+      expect(row).toHaveAttribute('data-checked', isSpanish ? 'true' : 'false');
+    });
+  });
+
   test('calls onChange with the tag when a language is chosen', async () => {
     const onChange = vi.fn();
     render(

@@ -719,9 +719,9 @@ describe('renderProjectIndicator', () => {
   };
 
   /**
-   * Index of the child holding the row's label, counting from the leading fixed-width check column.
-   * 1 means the label sits directly after the check column (no indicator column); 2 means an
-   * indicator column is laid out between them.
+   * Index of the child holding the row's label, counting from the row's leading check
+   * (CommandItem's built-in check). 1 means the label sits directly after the check (no indicator
+   * column); 2 means an indicator column is laid out between them.
    */
   const labelChildIndex = (row: HTMLElement, shortName: string): number =>
     [...row.children].findIndex((child) => child.textContent?.includes(shortName));

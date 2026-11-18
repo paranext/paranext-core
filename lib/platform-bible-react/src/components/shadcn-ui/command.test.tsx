@@ -135,3 +135,49 @@ describe('CommandInput — Space-selects-highlighted-item is OPT-IN', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
+
+describe('CommandItem check', () => {
+  const renderRows = () =>
+    render(
+      <Command>
+        <CommandList>
+          <CommandItem value="checked" data-checked>
+            Checked
+          </CommandItem>
+          <CommandItem value="unchecked" data-checked={false}>
+            Unchecked
+          </CommandItem>
+          <CommandItem value="plain">Plain</CommandItem>
+        </CommandList>
+      </Command>,
+    );
+  const rowOf = (name: string) => screen.getByRole('option', { name });
+  const checkOf = (row: HTMLElement) => row.querySelector('.tabler-icon-check');
+
+  it('renders the check before the label, on the leading side', () => {
+    renderRows();
+    const row = rowOf('Checked');
+    // firstChild, not firstElementChild: the label is a text node, so only this sees the order
+    expect(row.firstChild).toBe(checkOf(row));
+  });
+
+  it('passes data-checked through as "true" or "false", and leaves it off when omitted', () => {
+    renderRows();
+    expect(rowOf('Checked')).toHaveAttribute('data-checked', 'true');
+    expect(rowOf('Unchecked')).toHaveAttribute('data-checked', 'false');
+    expect(rowOf('Plain')).not.toHaveAttribute('data-checked');
+  });
+
+  it('takes space whenever data-checked is present and shows only when it is "true"', () => {
+    renderRows();
+    const check = checkOf(rowOf('Unchecked'));
+    // Hidden by default, so a row without data-checked carries no invisible icon
+    expect(check).toHaveClass('tw:hidden');
+    // The bracketed attribute form matches data-checked="false" too. The bare `data-checked`
+    // variant from shadcn/tailwind.css excludes "false" and would collapse unchecked rows.
+    expect(check).toHaveClass('tw:group-data-[checked]/command-item:block');
+    expect(check).not.toHaveClass('tw:group-data-checked/command-item:block');
+    expect(check).toHaveClass('tw:opacity-0');
+    expect(check).toHaveClass('tw:group-data-[checked=true]/command-item:opacity-100');
+  });
+});

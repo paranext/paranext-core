@@ -235,7 +235,19 @@ function CommandSeparator({
   );
 }
 
-/** @inheritdoc Command */
+// CUSTOM: Added TSDoc describing the leading check and its `data-checked` contract (see the
+// IconCheck change below), since consumers must set the attribute on every row of a checkable list
+/**
+ * An item in a {@link Command} list. It renders a check mark on its leading side, controlled by the
+ * `data-checked` attribute:
+ *
+ * - In a list where rows can be checked, pass `data-checked={isSelected}` on **every** row, so
+ *   unchecked rows (`"false"`) keep the check's space and all labels line up.
+ * - On rows that are never checkable (command palettes, grids), omit `data-checked`: the check then
+ *   takes no space.
+ *
+ * Do not draw a check of your own alongside it.
+ */
 function CommandItem({
   className,
   children,

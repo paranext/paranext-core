@@ -157,7 +157,7 @@ export function BookItem({
       aria-disabled={disabled || undefined}
       aria-label={ariaLabel}
       disabled={disabled}
-      data-checked={showCheck ? isSelected : undefined}
+      data-checked={showCheck ? !!isSelected : undefined}
       className={cn(
         !suppressKeyboardHighlight && LIST_ITEM_KEYBOARD_FOCUS_RING,
         // Suppress CommandItem's own data-selected background and text color so the keyboard

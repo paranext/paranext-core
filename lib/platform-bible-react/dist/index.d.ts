@@ -3578,7 +3578,17 @@ export declare function CommandList({ className, ...props }: React$1.ComponentPr
 export declare function CommandEmpty({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Empty>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Command */
 export declare function CommandGroup({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Command */
+/**
+ * An item in a {@link Command} list. It renders a check mark on its leading side, controlled by the
+ * `data-checked` attribute:
+ *
+ * - In a list where rows can be checked, pass `data-checked={isSelected}` on **every** row, so
+ *   unchecked rows (`"false"`) keep the check's space and all labels line up.
+ * - On rows that are never checkable (command palettes, grids), omit `data-checked`: the check then
+ *   takes no space.
+ *
+ * Do not draw a check of your own alongside it.
+ */
 export declare function CommandItem({ className, children, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Item>): import("react/jsx-runtime").JSX.Element;
 /**
  * Context Menu component displays a menu to the user — such as a set of actions or functions,
