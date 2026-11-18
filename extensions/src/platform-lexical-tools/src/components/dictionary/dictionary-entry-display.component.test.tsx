@@ -2,11 +2,13 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Entry } from 'platform-lexical-tools';
+import { useState } from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   DictionaryEntryDisplay,
   DictionaryEntryDisplayProps,
 } from './dictionary-entry-display.component';
+import { DictionaryOccurrenceView } from '../../utils/dictionary.utils';
 
 beforeAll(() => {
   vi.stubGlobal(
@@ -59,23 +61,61 @@ const senseCard = (gloss: string) =>
     .map((element) => element.closest('button'))
     .find((card) => card);
 
-const renderEntry = (
+type ViewSettingProps = Pick<
+  DictionaryEntryDisplayProps,
+  | 'areLessRelevantSensesHidden'
+  | 'onAreLessRelevantSensesHiddenChange'
+  | 'occurrenceView'
+  | 'onOccurrenceViewChange'
+>;
+
+/**
+ * The entry display with the view settings `Dictionary` keeps for it. `areLessRelevantSensesHidden`
+ * sets where the hide toggle starts.
+ */
+function EntryWithViewSettings({
+  areLessRelevantSensesHidden: initiallyHidden = false,
+  ...props
+}: Omit<DictionaryEntryDisplayProps, keyof ViewSettingProps> &
+  Partial<Pick<ViewSettingProps, 'areLessRelevantSensesHidden'>>) {
+  const [areLessRelevantSensesHidden, setAreLessRelevantSensesHidden] = useState(initiallyHidden);
+  const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
+  return (
+    <DictionaryEntryDisplay
+      {...props}
+      areLessRelevantSensesHidden={areLessRelevantSensesHidden}
+      onAreLessRelevantSensesHiddenChange={setAreLessRelevantSensesHidden}
+      occurrenceView={occurrenceView}
+      onOccurrenceViewChange={setOccurrenceView}
+    />
+  );
+}
+
+const entryAt = (
   scrRef?: ReturnType<typeof verseRef>,
   dictionaryEntry = TWO_SENSE_ENTRY,
   onSelectOccurrence = vi.fn(),
   otherProps: Partial<DictionaryEntryDisplayProps> = {},
-) =>
-  render(
-    <DictionaryEntryDisplay
-      localizedStrings={LOCALIZED_STRINGS}
-      dictionaryEntry={dictionaryEntry}
-      isDrawer={false}
-      scriptureReferenceToFilterBy={scrRef}
-      onSelectOccurrence={onSelectOccurrence}
-      onClickScrollToTop={vi.fn()}
-      {...otherProps}
-    />,
-  );
+) => (
+  <EntryWithViewSettings
+    localizedStrings={LOCALIZED_STRINGS}
+    dictionaryEntry={dictionaryEntry}
+    isDrawer={false}
+    scriptureReferenceToFilterBy={scrRef}
+    onSelectOccurrence={onSelectOccurrence}
+    onClickScrollToTop={vi.fn()}
+    {...otherProps}
+  />
+);
+
+const renderEntry = (...args: Parameters<typeof entryAt>) => render(entryAt(...args));
+
+// Only the fields this component reads are filled in; the full Entry type carries many more.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const TWO_VERSE_ENTRY = {
+  ...TWO_SENSE_ENTRY,
+  senses: { s1: sense('s1', 'word', 'GEN', 1, 1), s2: sense('s2', 'to speak', 'GEN', 1, 5) },
+} as unknown as Entry;
 
 describe('DictionaryEntryDisplay senses', () => {
   it('lists senses outside the chapter, dimmed', () => {
@@ -112,15 +152,38 @@ describe('DictionaryEntryDisplay senses', () => {
   });
 
   it('dims a sense elsewhere in the chapter in verse scope', () => {
-    // Only the fields this component reads are filled in; the full Entry type carries many more.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const entry = {
-      ...TWO_SENSE_ENTRY,
-      senses: { s1: sense('s1', 'word', 'GEN', 1, 1), s2: sense('s2', 'to speak', 'GEN', 1, 5) },
-    } as unknown as Entry;
-    renderEntry(verseRef('GEN', 1, 5), entry, vi.fn(), { scope: 'verse' });
+    renderEntry(verseRef('GEN', 1, 5), TWO_VERSE_ENTRY, vi.fn(), { scope: 'verse' });
     expect(senseCard('word')).toHaveAttribute('data-less-relevant', 'true');
     expect(senseCard('to speak')).toHaveAttribute('data-less-relevant', 'false');
+  });
+
+  it('keeps the selected sense when the reader moves to another verse in the chapter', () => {
+    const { rerender } = renderEntry(verseRef('GEN', 1, 1), TWO_VERSE_ENTRY);
+    fireEvent.click(senseCard('to speak') ?? document.body);
+    expect(screen.getByText('Occurrences for 2')).toBeInTheDocument();
+
+    rerender(entryAt(verseRef('GEN', 1, 5), TWO_VERSE_ENTRY));
+    expect(screen.getByText('Occurrences for 2')).toBeInTheDocument();
+  });
+
+  it('selects the sense in the new verse when the reader moves in verse scope', () => {
+    const { rerender } = renderEntry(verseRef('GEN', 1, 1), TWO_VERSE_ENTRY, vi.fn(), {
+      scope: 'verse',
+    });
+    expect(screen.getByText('Occurrences for 1')).toBeInTheDocument();
+
+    rerender(entryAt(verseRef('GEN', 1, 5), TWO_VERSE_ENTRY, vi.fn(), { scope: 'verse' }));
+    expect(screen.getByText('Occurrences for 2')).toBeInTheDocument();
+  });
+
+  it('shows every gloss and hides nothing when no sense is in the chapter', () => {
+    renderEntry(verseRef('LEV', 1), TWO_SENSE_ENTRY, vi.fn(), {
+      areLessRelevantSensesHidden: true,
+    });
+    expect(screen.getByText('word, to speak')).toBeInTheDocument();
+    expect(senseCard('word')).toHaveAttribute('data-less-relevant', 'true');
+    expect(senseCard('to speak')).toHaveAttribute('data-less-relevant', 'true');
+    expect(screen.queryByRole('button', { name: /less-relevant/ })).not.toBeInTheDocument();
   });
 
   it('counts the occurrences of every sense when none is in the chapter', () => {

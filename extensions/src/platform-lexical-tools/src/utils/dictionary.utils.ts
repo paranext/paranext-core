@@ -23,8 +23,30 @@ export type DictionaryOccurrenceView = 'chapter' | 'all';
 export type DictionaryProjectOption = { projectId: string | undefined; projectShortName: string };
 
 /**
- * Whether a sense occurs where the dictionary list is filtered to: the verse in verse scope, the
- * chapter otherwise. Senses that do not are less relevant, and are dimmed.
+ * Whether a reference is in the part of the Bible the dictionary list is filtered to: the verse in
+ * verse scope, the chapter otherwise. Both the list's selection and the dimming of senses use this
+ * rule, so they cannot disagree.
+ *
+ * @param verseRef - The reference to check.
+ * @param scrRef - The current reference.
+ * @param scope - The scope the dictionary list is filtered by.
+ * @returns `true` if `verseRef` is in scope.
+ */
+export function isReferenceInScope(
+  verseRef: SerializedVerseRef,
+  scrRef: SerializedVerseRef,
+  scope: DictionaryScope,
+): boolean {
+  return (
+    verseRef.book === scrRef.book &&
+    verseRef.chapterNum === scrRef.chapterNum &&
+    (scope !== 'verse' || verseRef.verseNum === scrRef.verseNum)
+  );
+}
+
+/**
+ * Whether a sense occurs where the dictionary list is filtered to (see {@link isReferenceInScope}).
+ * Senses that do not are less relevant, and are dimmed.
  *
  * @param sense - The sense to check.
  * @param scrRef - The current reference. Every sense is in scope when there is none.
@@ -38,12 +60,7 @@ export function isSenseInScope(
 ): boolean {
   if (!scrRef) return true;
   return Object.values(sense.occurrences).some((occurrences) =>
-    occurrences?.some(
-      ({ verseRef }) =>
-        verseRef.book === scrRef.book &&
-        verseRef.chapterNum === scrRef.chapterNum &&
-        (scope !== 'verse' || verseRef.verseNum === scrRef.verseNum),
-    ),
+    occurrences?.some(({ verseRef }) => isReferenceInScope(verseRef, scrRef, scope)),
   );
 }
 

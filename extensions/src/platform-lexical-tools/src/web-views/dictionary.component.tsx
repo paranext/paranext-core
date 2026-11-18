@@ -18,28 +18,18 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import { DictionaryEntryDisplay } from '../components/dictionary/dictionary-entry-display.component';
 import {
+  DictionaryOccurrenceView,
   DictionaryScope,
   getFormatGlossesStringFromDictionaryEntrySenses,
+  isReferenceInScope,
 } from '../utils/dictionary.utils';
+import { useScopeReference } from '../utils/dictionary-ui.utils';
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
 function isSameEntry(a: Entry, b: Entry): boolean {
   return a.id === b.id && a.lexicalReferenceTextId === b.lexicalReferenceTextId;
-}
-
-/** Whether the entries listed for `scrRef` in `scope` are the ones listed for `otherScrRef` */
-function isSameListReference(
-  scrRef: SerializedVerseRef,
-  otherScrRef: SerializedVerseRef,
-  scope: DictionaryScope,
-): boolean {
-  return (
-    scrRef.book === otherScrRef.book &&
-    scrRef.chapterNum === otherScrRef.chapterNum &&
-    (scope !== 'verse' || scrRef.verseNum === otherScrRef.verseNum)
-  );
 }
 
 /** Result of a scope-filtered entries read. */
@@ -74,6 +64,18 @@ export type DictionaryProps = {
   getFullEntry: (entry: Entry) => Promise<Entry | undefined>;
   /** Retrieve an entry by its lemma, used to open entries linked from definitions. */
   getEntryByLemma: (dictionaryId: string, lemma: string) => Promise<Entry | undefined>;
+  /**
+   * Whether an entry's senses that do not occur in scope are hidden. It is the reader's choice, so
+   * it is kept by the host (the web view keeps it in its state) rather than here, where it would be
+   * lost each time the list reloads.
+   */
+  areLessRelevantSensesHidden: boolean;
+  /** Called when the reader hides or shows the less-relevant senses */
+  onAreLessRelevantSensesHiddenChange: (areLessRelevantSensesHidden: boolean) => void;
+  /** Whether an entry's occurrences are listed for the chapter or all of them; kept by the host */
+  occurrenceView: DictionaryOccurrenceView;
+  /** Called when the reader switches between the chapter's occurrences and all of them */
+  onOccurrenceViewChange: (occurrenceView: DictionaryOccurrenceView) => void;
 };
 
 /**
@@ -89,6 +91,10 @@ export function Dictionary({
   getEntries,
   getFullEntry,
   getEntryByLemma,
+  areLessRelevantSensesHidden,
+  onAreLessRelevantSensesHiddenChange,
+  occurrenceView,
+  onOccurrenceViewChange,
 }: DictionaryProps) {
   const [scope, setScope] = useState<DictionaryScope>('chapter');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -154,7 +160,7 @@ export function Dictionary({
 
       // Keep the entry the reader was looking at open, if it is listed here too
       endPendingSelection();
-      if (pendingSelection && isSameListReference(pendingSelection.scrRef, scrRef, scope)) {
+      if (pendingSelection && isReferenceInScope(pendingSelection.scrRef, scrRef, scope)) {
         setSelectedEntry(
           Object.values(result.entriesById)
             .flat()
@@ -177,6 +183,9 @@ export function Dictionary({
   // `undefined` means "not yet fetched" so we can show the loading state, matching the original.
   const isLoadingEntriesById = !entriesError && entriesById === undefined;
 
+  // Only what decides the scope, so a verse move within the chapter does not re-read every gloss
+  const scopeReference = useScopeReference(scrRef, scope);
+
   // Return all defined entries filtered by searchQuery
   const entriesFiltered = useMemo(() => {
     if (!entriesById) return [];
@@ -190,12 +199,12 @@ export function Dictionary({
         const matchesSearch =
           entry.lemma.toLowerCase().includes(search) ||
           entry.strongsCodes.some((code) => code.toLowerCase().includes(search)) ||
-          getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef, scope)
+          getFormatGlossesStringFromDictionaryEntrySenses(entry, scopeReference, scope)
             .toLowerCase()
             .includes(search);
         return matchesSearch;
       });
-  }, [entriesById, searchQuery, scrRef, scope]);
+  }, [entriesById, searchQuery, scopeReference, scope]);
 
   // Clear the selected entry if it is no longer in the filtered list (e.g. after a chapter change).
   // While a list is loading, or an entry is waiting for the next list, it is not known yet.
@@ -211,7 +220,7 @@ export function Dictionary({
    */
   const selectOccurrenceKeepingEntry = useCallback(
     (entry: Entry, scrRefOfOccurrence: SerializedVerseRef) => {
-      if (isSameListReference(scrRefOfOccurrence, scrRef, scope)) setSelectedEntry(entry);
+      if (isReferenceInScope(scrRefOfOccurrence, scrRef, scope)) setSelectedEntry(entry);
       // The list for the occurrence has yet to load, so the entry is selected once it has
       else pendingSelectionRef.current = { entry, scrRef: scrRefOfOccurrence };
       onSelectOccurrence(scrRefOfOccurrence);
@@ -301,6 +310,10 @@ export function Dictionary({
           dictionaryEntry={linkedEntry}
           scriptureReferenceToFilterBy={scrRef}
           scope={scope}
+          areLessRelevantSensesHidden={areLessRelevantSensesHidden}
+          onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
+          occurrenceView={occurrenceView}
+          onOccurrenceViewChange={onOccurrenceViewChange}
           handleBackToListButton={() => setLinkedEntry(undefined)}
           onSelectOccurrence={(scrRefOfOccurrence) => {
             setLinkedEntry(undefined);
@@ -390,6 +403,10 @@ export function Dictionary({
             isDrawer={false}
             dictionaryEntry={fullDisplayedEntry ?? entriesFiltered[0]}
             hasAllSenses={!!fullDisplayedEntry}
+            areLessRelevantSensesHidden={areLessRelevantSensesHidden}
+            onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
+            occurrenceView={occurrenceView}
+            onOccurrenceViewChange={onOccurrenceViewChange}
             onSelectOccurrence={(scrRefOfOccurrence) =>
               selectOccurrenceKeepingEntry(entriesFiltered[0], scrRefOfOccurrence)
             }
@@ -413,6 +430,10 @@ export function Dictionary({
           onCharacterPress={onCharacterPress}
           onEntrySelected={setSelectedEntry}
           fullSelectedEntry={fullDisplayedEntry}
+          areLessRelevantSensesHidden={areLessRelevantSensesHidden}
+          onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
+          occurrenceView={occurrenceView}
+          onOccurrenceViewChange={onOccurrenceViewChange}
           onEntryLinkClick={handleEntryLinkClick}
         />
       )}

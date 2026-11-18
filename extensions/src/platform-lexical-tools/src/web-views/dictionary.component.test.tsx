@@ -6,6 +6,7 @@ import { Entry } from 'platform-lexical-tools';
 import { useState } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dictionary, DictionaryProps } from './dictionary.component';
+import { DictionaryOccurrenceView } from '../utils/dictionary.utils';
 
 beforeAll(() => {
   vi.stubGlobal(
@@ -29,6 +30,7 @@ const LOCALIZED_STRINGS = {
   '%platformLexicalTools_dictionary_backToList%': BACK_LABEL,
   '%platformLexicalTools_dictionary_entryNotFound%': 'No entry was found for {lemma}',
   '%platformLexicalTools_dictionary_hideLessRelevantSenses%': 'Hide less-relevant senses ({count})',
+  '%platformLexicalTools_dictionary_showLessRelevantSenses%': 'Show less-relevant senses ({count})',
   '%platformLexicalTools_dictionary_occurrencesToggleChapter%': 'Chapter',
   '%platformLexicalTools_dictionary_occurrencesToggleAll%': 'All',
 };
@@ -89,9 +91,25 @@ const getEntries = vi.fn(async (_scope: string, scrRef: SerializedVerseRef) => {
   return { entriesById: Object.fromEntries(entries.map((e) => [e.id, [e]])) };
 });
 
-/** The Dictionary with a reference that moves when an occurrence is selected, as in the app */
-function DictionaryInScrollGroup(props: Partial<DictionaryProps>) {
+/** View settings for tests that never change them */
+const FIXED_VIEW_SETTINGS = {
+  areLessRelevantSensesHidden: false,
+  onAreLessRelevantSensesHiddenChange: vi.fn(),
+  occurrenceView: 'chapter',
+  onOccurrenceViewChange: vi.fn(),
+} as const;
+
+/**
+ * The Dictionary as the web view hosts it: a reference that moves when an occurrence is selected,
+ * and view settings that last. `areLessRelevantSensesHidden` sets where the hide toggle starts.
+ */
+function DictionaryInScrollGroup({
+  areLessRelevantSensesHidden: initiallyHidden = false,
+  ...props
+}: Partial<DictionaryProps>) {
   const [scrRef, setScrRef] = useState<SerializedVerseRef>(SCR_REF);
+  const [areLessRelevantSensesHidden, setAreLessRelevantSensesHidden] = useState(initiallyHidden);
+  const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
   return (
     <Dictionary
       localizedStrings={LOCALIZED_STRINGS}
@@ -100,6 +118,10 @@ function DictionaryInScrollGroup(props: Partial<DictionaryProps>) {
       getEntries={getEntries}
       getFullEntry={async (e) => e}
       getEntryByLemma={async () => BETHLEHEM}
+      areLessRelevantSensesHidden={areLessRelevantSensesHidden}
+      onAreLessRelevantSensesHiddenChange={setAreLessRelevantSensesHidden}
+      occurrenceView={occurrenceView}
+      onOccurrenceViewChange={setOccurrenceView}
       {...props}
     />
   );
@@ -115,6 +137,7 @@ const renderDictionary = (onSelectOccurrence = vi.fn()) => {
       getEntries={getEntries}
       getFullEntry={vi.fn().mockResolvedValue(ELIMELECH)}
       getEntryByLemma={getEntryByLemma}
+      {...FIXED_VIEW_SETTINGS}
     />,
   );
   return getEntryByLemma;
@@ -170,6 +193,45 @@ describe('Dictionary entry links', () => {
     expect(screen.getByRole('button', { name: 'Chapter (1)' })).toBeInTheDocument();
   });
 
+  it('shows a linked entry from outside the chapter whole, with every gloss', async () => {
+    // Boaz occurs only in Ruth 4; the reader is in Ruth 1 and has hidden less-relevant senses
+    render(
+      <DictionaryInScrollGroup getEntryByLemma={async () => BOAZ} areLessRelevantSensesHidden />,
+    );
+    fireEvent.click(await screen.findByRole('link', { name: 'Bethlehem' }));
+    const definition = await screen.findByText('a man of Bethlehem');
+    expect(definition.closest('button')).toHaveAttribute('data-less-relevant', 'true');
+    // The header and the sense card both show the gloss
+    expect(screen.getAllByText('Boaz')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /less-relevant/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps less-relevant senses hidden when the list reloads for another chapter', async () => {
+    const entryInRuth1And4 = entry('000777', 'נָעֳמִי', [
+      { gloss: 'Naomi', definition: 'see {S:00800400300000}', verseRefs: [SCR_REF] },
+      { gloss: 'Mara', definition: 'her other name', verseRefs: [RUTH_4_11] },
+      {
+        gloss: 'pleasant',
+        definition: 'the meaning of the name',
+        verseRefs: [{ ...SCR_REF, book: 'GEN' }],
+      },
+    ]);
+    render(
+      <DictionaryInScrollGroup
+        getEntries={async () => ({ entriesById: { [entryInRuth1And4.id]: [entryInRuth1And4] } })}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Hide less-relevant senses (2)' }));
+    expect(screen.queryByText('her other name')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Ruth 4:3' }));
+    expect(await screen.findByText('her other name')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Show less-relevant senses (2)' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('the meaning of the name')).not.toBeInTheDocument();
+  });
+
   it('keeps a linked entry open after going to its occurrence in another chapter', async () => {
     render(<DictionaryInScrollGroup />);
     fireEvent.click(await screen.findByRole('link', { name: 'Bethlehem' }));
@@ -209,6 +271,7 @@ describe('Dictionary entry links', () => {
         getEntries={getEntriesByChapter}
         getFullEntry={async (e) => e}
         getEntryByLemma={async () => BETHLEHEM}
+        {...FIXED_VIEW_SETTINGS}
       />
     );
     const { rerender } = render(renderAt(SCR_REF));

@@ -6,7 +6,7 @@ import { getLocalizedStrings } from '../../../../../.storybook/localization.util
 import { alertCommand, rejectingMock } from '../../../../../.storybook/story.utils';
 import { Dictionary, DictionaryEntriesResult } from './dictionary.component';
 import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../utils/dictionary-ui.utils';
-import { DictionaryScope } from '../utils/dictionary.utils';
+import { DictionaryOccurrenceView, DictionaryScope } from '../utils/dictionary.utils';
 
 /**
  * `Dictionary` shows lexical reference entries for the current Scripture reference. It owns the
@@ -258,6 +258,9 @@ type HarnessConfig = {
 function DictionaryHarness({ config }: { config: HarnessConfig }) {
   const entries = config.entries ?? seedEntries;
   const [scrRef, setScrRef] = useState<SerializedVerseRef>(DEFAULT_SCR_REF);
+  // The web view keeps these in its state; here they last for the story
+  const [areLessRelevantSensesHidden, setAreLessRelevantSensesHidden] = useState(false);
+  const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
 
   const getEntries = useCallback(
     async (scope: DictionaryScope, ref: SerializedVerseRef): Promise<DictionaryEntriesResult> => {
@@ -306,6 +309,10 @@ function DictionaryHarness({ config }: { config: HarnessConfig }) {
       getEntries={getEntries}
       getFullEntry={getFullEntry}
       getEntryByLemma={getEntryByLemma}
+      areLessRelevantSensesHidden={areLessRelevantSensesHidden}
+      onAreLessRelevantSensesHiddenChange={setAreLessRelevantSensesHidden}
+      occurrenceView={occurrenceView}
+      onOccurrenceViewChange={setOccurrenceView}
     />
   );
 }

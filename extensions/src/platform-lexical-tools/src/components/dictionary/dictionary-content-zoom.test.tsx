@@ -62,6 +62,10 @@ describe('dictionary content zoom', () => {
         dictionaryEntry={ENTRY}
         isDrawer={false}
         scriptureReferenceToFilterBy={SCR_REF}
+        areLessRelevantSensesHidden={false}
+        onAreLessRelevantSensesHiddenChange={vi.fn()}
+        occurrenceView="chapter"
+        onOccurrenceViewChange={vi.fn()}
         onSelectOccurrence={vi.fn()}
         onClickScrollToTop={vi.fn()}
       />,

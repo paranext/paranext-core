@@ -5,6 +5,7 @@ import {
   getCombinedOccurrencesCountFromDictionaryEntrySenses,
   getDeduplicatedOccurrencesFromSenses,
   getFormatGlossesStringFromDictionaryEntrySenses,
+  isReferenceInScope,
   isSenseInScope,
 } from './dictionary.utils';
 
@@ -129,6 +130,19 @@ describe('dictionary.util.ts', () => {
 
     it('is true for every sense when there is no reference', () => {
       expect(isSenseInScope(sense, undefined, 'verse')).toBe(true);
+    });
+  });
+
+  describe('isReferenceInScope', () => {
+    // Each case checks Genesis 1:2 against the reader's reference
+    it.each([
+      { where: 'the same chapter', scrRef: mockVerseRef('GEN', 1, 9), scope: 'chapter', is: true },
+      { where: 'another chapter', scrRef: mockVerseRef('GEN', 2, 2), scope: 'chapter', is: false },
+      { where: 'another book', scrRef: mockVerseRef('EXO', 1, 2), scope: 'chapter', is: false },
+      { where: 'the same verse', scrRef: mockVerseRef('GEN', 1, 2), scope: 'verse', is: true },
+      { where: 'another verse', scrRef: mockVerseRef('GEN', 1, 9), scope: 'verse', is: false },
+    ] as const)('is $is for $where in $scope scope', ({ scrRef, scope, is }) => {
+      expect(isReferenceInScope(mockVerseRef('GEN', 1, 2), scrRef, scope)).toBe(is);
     });
   });
 

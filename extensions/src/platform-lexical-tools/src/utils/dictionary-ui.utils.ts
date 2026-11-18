@@ -1,8 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 import { ERROR_POPOVER_STRING_KEYS } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { DICTIONARY_TITLE_KEY } from './dictionary.utils';
+import { DICTIONARY_TITLE_KEY, DictionaryScope } from './dictionary.utils';
+
+/**
+ * The parts of the reader's reference that decide what is in scope: the book, the chapter, and the
+ * verse only in verse scope (otherwise 0). The scroll group gives a new reference object on every
+ * verse move, so depending on this instead keeps a verse move within the chapter from redoing work
+ * or resetting a selection in chapter scope.
+ *
+ * @param scrRef - The reader's reference, if any.
+ * @param scope - The scope the dictionary list is filtered by.
+ * @returns A reference that changes only when what is in scope does.
+ */
+export function useScopeReference(
+  scrRef: SerializedVerseRef | undefined,
+  scope: DictionaryScope,
+): SerializedVerseRef | undefined {
+  const book = scrRef?.book;
+  const chapterNum = scrRef?.chapterNum;
+  const verseNum = scope === 'verse' ? scrRef?.verseNum : 0;
+  return useMemo(
+    () =>
+      book === undefined || chapterNum === undefined || verseNum === undefined
+        ? undefined
+        : { book, chapterNum, verseNum },
+    [book, chapterNum, verseNum],
+  );
+}
 
 export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...ERROR_POPOVER_STRING_KEYS,

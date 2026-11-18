@@ -12,7 +12,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { LanguageStrings } from 'platform-bible-utils';
 import { DictionaryEntryDisplay } from './dictionary-entry-display.component';
 import { useIsWideScreen } from '../../utils/dictionary-ui.utils';
-import { DictionaryScope } from '../../utils/dictionary.utils';
+import { DictionaryOccurrenceView, DictionaryScope } from '../../utils/dictionary.utils';
 import { DictionaryListItem } from './dictionary-list-item.component';
 import { EntryLinkClickHandler } from './definition-text.component';
 
@@ -46,6 +46,14 @@ type DictionaryListProps = {
    * selected entry instead of the full data, without numbering its senses.
    */
   fullSelectedEntry?: Entry;
+  /** Whether the selected entry's senses that do not occur in scope are hidden */
+  areLessRelevantSensesHidden: boolean;
+  /** Called when the reader hides or shows the less-relevant senses */
+  onAreLessRelevantSensesHiddenChange: (areLessRelevantSensesHidden: boolean) => void;
+  /** Whether the selected entry's occurrences are listed for the chapter or all of them */
+  occurrenceView: DictionaryOccurrenceView;
+  /** Called when the reader switches between the chapter's occurrences and all of them */
+  onOccurrenceViewChange: (occurrenceView: DictionaryOccurrenceView) => void;
   /** Callback function to open an entry linked from a definition */
   onEntryLinkClick?: EntryLinkClickHandler;
 };
@@ -71,6 +79,10 @@ export function DictionaryList({
   onCharacterPress,
   onEntrySelected,
   fullSelectedEntry,
+  areLessRelevantSensesHidden,
+  onAreLessRelevantSensesHiddenChange,
+  occurrenceView,
+  onOccurrenceViewChange,
   onEntryLinkClick,
 }: DictionaryListProps) {
   const isWideScreen = useIsWideScreen();
@@ -147,6 +159,10 @@ export function DictionaryList({
               isDrawer={false}
               dictionaryEntry={fullSelectedEntry ?? selectedEntry}
               hasAllSenses={!!fullSelectedEntry}
+              areLessRelevantSensesHidden={areLessRelevantSensesHidden}
+              onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
+              occurrenceView={occurrenceView}
+              onOccurrenceViewChange={onOccurrenceViewChange}
               handleBackToListButton={handleOptionSelect}
               onSelectOccurrence={onSelectOccurrence}
               onClickScrollToTop={scrollToTop}
@@ -173,6 +189,10 @@ export function DictionaryList({
                   isDrawer
                   dictionaryEntry={fullSelectedEntry ?? selectedEntry}
                   hasAllSenses={!!fullSelectedEntry}
+                  areLessRelevantSensesHidden={areLessRelevantSensesHidden}
+                  onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
+                  occurrenceView={occurrenceView}
+                  onOccurrenceViewChange={onOccurrenceViewChange}
                   handleBackToListButton={() => onEntrySelected(undefined)}
                   onSelectOccurrence={onSelectOccurrence}
                   onClickScrollToTop={scrollToTop}
