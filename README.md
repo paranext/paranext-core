@@ -219,22 +219,30 @@ actually changed.
 **When `scripture-editors`' own dependencies change** (its `package.json`, not ours), this repo's
 `package-lock.json` must be refreshed to match: run `npm install` here and commit the lockfile
 change. Until that lands, `npm ci` and CI builds fail with a message pointing at exactly this
-paragraph's fix — loudly, not with stale packages. The check on `scripture-editors`'
-`platform-yalc` branch watches for this so the person updating that branch is reminded to open the
-core PR.
+paragraph's fix — loudly, not with stale packages. An editor change reaches this repo only when
+the pin moves (next section), so that lockfile change belongs in the same PR as the pin bump.
 
-Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc` when this repo is on `main` and `release-prep` when this repo is on `release-prep`. `platform-yalc` exists so a breaking change can land on `scripture-editors`' `main` before build servers pick it up; move it forward only once this repo is ready for it.
+#### Which `scripture-editors` commit this repo builds, and how to move it
 
-To make your local development and build servers use changes from `scripture-editors/main`, use that repo's own script rather than moving the branch by hand:
+[`dev-packages.json`](./dev-packages.json) pins `scripture-editors` to one commit on its `main` branch (`revision`). Every commit of this repo therefore names exactly the editor it was built and tested with: a push to `scripture-editors` changes nothing here until a PR in this repo moves the pin. `npm install` checks that commit out (it will throw and ask you to do something with your working changes if you have any, so your changes don't get messed up).
 
-```bash
-# from a clone of scripture-editors, with platform-yalc checked out and a clean tree
-npm run move-platform-yalc
-```
+To pick up newer editor commits ("bump the pin"):
 
-It resets your local branch to origin's state, rebases it onto `origin/main`, checks that this repo's `package-lock.json` still matches the editor's dependencies, and force-pushes **only if that passes** — so a move that would break every core build stops before the push rather than after it. `-- --dry-run` stops short of pushing; `-- --skip-verify` is the emergency hatch. Give it a token first (`export GITHUB_TOKEN=$(gh auth token)`) — the check reads this repo through the GitHub API and the unauthenticated budget is 60 requests an hour.
+1. Merge the editor change to `scripture-editors`' `main`.
+2. In this repo, set `revision` in [`dev-packages.json`](./dev-packages.json) to the full hash of the `main` commit you want:
 
-Moving the branch by hand skips all of that — most importantly the lockfile check, which is the one failure that breaks every build here rather than only the mover's.
+   ```bash
+   git ls-remote https://github.com/paranext/scripture-editors.git refs/heads/main
+   ```
+
+3. Run `npm install`. It moves your editor checkout to the new commit, restages it, and updates `package-lock.json` if the editor's dependencies changed.
+4. Commit `dev-packages.json` (and `package-lock.json` if it changed) and open a PR. CI builds and tests this repo against exactly that editor, so a breaking editor change shows up on that PR and on no other.
+
+A PR here that needs a newer editor bumps the pin itself, so the editor change and the code that depends on it land together. To try an editor change that is not on `main` yet, you do not need to move the pin: see [Getting your `scripture-editors` changes into this repo](#getting-your-scripture-editors-changes-into-this-repo).
+
+**Pin only commits that are on `scripture-editors`' `main`** (or a tag). A commit that is only on a branch that gets rebased and force-pushed — `platform-yalc` is one — disappears from the remote at the next force-push, and from then on a fresh clone cannot fetch it. `scripture-editors`' `platform-yalc` branch and its `move-platform-yalc` script predate the commit pin; moving that branch does not change what this repo builds.
+
+When this repo is on `release-prep`, `revision` names `scripture-editors`' `release-prep` branch instead, and `npm install` follows that branch's tip.
 
 To manually set up `scripture-editors` to be staged locally (this should all be done automatically during `npm install`):
 
@@ -243,11 +251,8 @@ To manually set up `scripture-editors` to be staged locally (this should all be 
    # from paranext-core
    cd ..
    git clone https://github.com/paranext/scripture-editors.git scripture-editors
-   # optionally checkout the platform-yalc branch to match the build servers
-   cd scripture-editors
-   git checkout platform-yalc
    # go back to paranext-core
-   cd ../paranext-core
+   cd paranext-core
    ```
 2. Run `npm install` in this repo. The preinstall script stages each package from `scripture-editors` into `dev-packages/staging/`, building it only when the pinned revision has no committed `dist/` to copy.
 
@@ -260,7 +265,7 @@ To manually set up `scripture-editors` to be staged locally (this should all be 
    cd ../paranext-core
    ```
 
-**A sibling checkout is used and moved, not just read.** When `../scripture-editors` exists, `npm install` here stages from it rather than from its own clone under `dev-packages/` — and staging brings that checkout to the pinned revision, fetching and switching branches in it. It refuses to touch a checkout with uncommitted changes, and leaves one alone with a warning when it is on a branch of your own or parked on a detached commit; a clean checkout on `main` or on the pinned branch is moved. If you would rather keep your own clone out of this entirely, move it somewhere that is not a sibling of this repo and let `npm install` manage its own under `dev-packages/scripture-editors`.
+**A sibling checkout is used and moved, not just read.** When `../scripture-editors` exists, `npm install` here stages from it rather than from its own clone under `dev-packages/` — and staging brings that checkout to the pinned revision, fetching and switching branches in it. It refuses to touch a checkout with uncommitted changes, and leaves one alone with a warning when it is on a branch of your own or parked on a detached commit; a clean checkout on `main`, or on a branch staging put it on itself, is moved. Those branches are `stage-dev-packages-pin`, which is where staging keeps a checkout it has brought to a pinned commit, and `platform-yalc`, from when the pin named that branch. If you would rather keep your own clone out of this entirely, move it somewhere that is not a sibling of this repo and let `npm install` manage its own under `dev-packages/scripture-editors`.
 
 #### Getting your `scripture-editors` changes into this repo
 
@@ -276,9 +281,9 @@ Pick by what you need the change to show up in:
 
 The dependency case is the odd one out because npm, not this repo, has to install whatever the editor now declares, and that only happens on a full `npm install` — which stages a _committed_ revision and refuses to run against a checkout with uncommitted changes. So commit in `scripture-editors` first; committing on a branch of your own is enough. (A lockfile built from uncommitted editor work would record a dependency closure nobody else can reproduce, which the pre-commit hook blocks you from committing anyway.)
 
-`npm install` leaves your editor checkout alone unless it is somewhere nothing is being kept — a clean checkout on `main`, or on the pinned branch itself, which is force-pushed by design. On a branch of your own, or parked on a detached commit, it warns and stages what it finds rather than moving you. So developing both repos at once works the way you would expect: keep your editor branch checked out and this repo builds against it.
+`npm install` leaves your editor checkout alone unless it is somewhere nothing is being kept — a clean checkout on `main`, or on a branch staging put it on itself (`stage-dev-packages-pin`, or `platform-yalc` from when the pin named that branch). On a branch of your own, or parked on a detached commit, it warns and stages what it finds rather than moving you. Staging never leaves a checkout detached, so a detached checkout is always treated as yours; do not work on `stage-dev-packages-pin`, which the next pin bump re-points. So developing both repos at once works the way you would expect: keep your editor branch checked out and this repo builds against it.
 
-Where it does move your checkout, it never discards commits. Anything on the branch that the remote does not have is parked on a `refs/stage-rescue/…` ref first, and the install prints how to get it back — at the end of its own output as well as when it happens, so it is not lost in the middle of a build. Nothing deletes those refs, so the notice repeats on every install until you deal with the commits and `git update-ref -d` the ref.
+Where it does move your checkout, it never discards commits. Anything on a branch it re-points that the remote does not have is parked on a `refs/stage-rescue/…` ref first, and the install prints how to get it back — at the end of its own output as well as when it happens, so it is not lost in the middle of a build. Nothing deletes those refs, so the notice repeats on every install until you deal with the commits and `git update-ref -d` the ref.
 
 #### Checking that what is staged matches this repo's lockfile
 
@@ -286,7 +291,7 @@ Where it does move your checkout, it never discards commits. Anything on the bra
 npm run verify:dev-packages
 ```
 
-`package-lock.json` records each staged package's version and dependencies, but the packages themselves come from the branch [`dev-packages.json`](./dev-packages.json) pins, which moves independently of this repo's commits. A checkout of this repo can therefore stage an editor its own lockfile does not describe.
+`package-lock.json` records each staged package's version and dependencies, but the packages themselves come from the `scripture-editors` revision [`dev-packages.json`](./dev-packages.json) pins. A checkout of this repo can stage an editor its own lockfile does not describe: when the pin was moved without refreshing the lockfile, when the pin names a branch (which moves independently of this repo's commits), or when a build overrides the pin.
 
 A plain `npm install` here makes this check on its own and repairs what it can. This command is the check by itself, for the case that cannot: **a consumer repo**. Every repo that builds against this one installs it with `npm ci --ignore-scripts` — required, because this repo's `postinstall` builds an Electron DLL they have no use for — and that skips the check along with everything else. Run it in this repo's directory right after that install:
 

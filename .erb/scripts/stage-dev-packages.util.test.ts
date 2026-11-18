@@ -1,10 +1,14 @@
 import {
+  PINNED_COMMIT_BRANCH,
+  decideCheckout,
   diffStagedAgainstLock,
   formatRescuedCommitsBanner,
   getExpectedMarker,
   isEnvFlagEnabled,
   normalizeRepoUrl,
   shapeStagedManifest,
+  type CheckoutDecision,
+  type CheckoutState,
   type RescuedCommit,
   type StagedManifest,
 } from './stage-dev-packages.util';
@@ -297,5 +301,140 @@ describe('formatRescuedCommitsBanner', () => {
     expect(banner).toContain('scripture-editors: 2 commit(s)');
     expect(banner).toContain('another-dev-repo: 2 commit(s)');
     expect(banner).toContain(other.rescueRef);
+  });
+});
+
+describe('decideCheckout', () => {
+  const PIN_A = 'a'.repeat(40);
+  const PIN_B = 'b'.repeat(40);
+  const ELSEWHERE = 'e'.repeat(40);
+  const BRANCH_TIP = 'f'.repeat(40);
+
+  /** A checkout pinned to the commit `revision`, sitting at `headCommit` on `currentBranch`. */
+  function commitPin(
+    revision: string,
+    headCommit: string,
+    currentBranch: string,
+    formerPinBranches?: string[],
+  ): CheckoutState {
+    return {
+      headCommit,
+      targetCommit: revision,
+      currentBranch,
+      revision,
+      isRemoteBranch: false,
+      formerPinBranches,
+    };
+  }
+
+  /** A checkout pinned to the branch `platform-yalc`, whose remote tip is `BRANCH_TIP`. */
+  function branchPin(headCommit: string, currentBranch: string): CheckoutState {
+    return {
+      headCommit,
+      targetCommit: BRANCH_TIP,
+      currentBranch,
+      revision: 'platform-yalc',
+      isRemoteBranch: true,
+    };
+  }
+
+  /** Where a checkout is after `decision` is carried out, as git would leave it. */
+  function after(state: CheckoutState, decision: CheckoutDecision): CheckoutState {
+    switch (decision.action) {
+      case 'checkoutBranch':
+        return { ...state, headCommit: state.targetCommit, currentBranch: state.revision };
+      case 'checkoutCommit':
+        return { ...state, headCommit: state.targetCommit, currentBranch: decision.branch };
+      default:
+        return state;
+    }
+  }
+
+  it('moves a fresh clone, which starts on main, to a pinned branch', () => {
+    expect(decideCheckout(branchPin(ELSEWHERE, 'main'))).toEqual({ action: 'checkoutBranch' });
+  });
+
+  it('follows a pinned branch that moved upstream', () => {
+    expect(decideCheckout(branchPin(ELSEWHERE, 'platform-yalc'))).toEqual({
+      action: 'checkoutBranch',
+    });
+  });
+
+  it('moves a fresh clone to a pinned commit, onto the branch staging owns', () => {
+    expect(decideCheckout(commitPin(PIN_A, ELSEWHERE, 'main'))).toEqual({
+      action: 'checkoutCommit',
+      branch: PINNED_COMMIT_BRANCH,
+    });
+  });
+
+  it('follows a commit pin bumped from A to B in the checkout staging left at A', () => {
+    const fresh = commitPin(PIN_A, ELSEWHERE, 'main');
+    const atPinA = after(fresh, decideCheckout(fresh));
+    expect(atPinA.headCommit).toBe(PIN_A);
+
+    const bumped = { ...atPinA, revision: PIN_B, targetCommit: PIN_B };
+    const atPinB = after(bumped, decideCheckout(bumped));
+
+    expect(atPinB.headCommit).toBe(PIN_B);
+  });
+
+  it('follows a commit pin moved back from B to A, as a reverted bump does', () => {
+    expect(decideCheckout(commitPin(PIN_A, PIN_B, PINNED_COMMIT_BRANCH))).toEqual({
+      action: 'checkoutCommit',
+      branch: PINNED_COMMIT_BRANCH,
+    });
+  });
+
+  it('leaves a checkout a person detached alone, whichever commit it is parked on', () => {
+    // The previous pin is the commit a person is most likely to be parked on, and it is not a
+    // reason to move them: staging never leaves a checkout detached, so this one is somebody's.
+    [ELSEWHERE, PIN_A].forEach((parkedOn) => {
+      expect(decideCheckout(commitPin(PIN_B, parkedOn, 'HEAD'))).toEqual({
+        action: 'leaveAlone',
+        isDetached: true,
+      });
+    });
+    expect(decideCheckout(branchPin(ELSEWHERE, 'HEAD'))).toEqual({
+      action: 'leaveAlone',
+      isDetached: true,
+    });
+  });
+
+  it("leaves a checkout on somebody's own branch alone", () => {
+    expect(decideCheckout(commitPin(PIN_B, ELSEWHERE, 'my-editor-fix'))).toEqual({
+      action: 'leaveAlone',
+      isDetached: false,
+    });
+    expect(decideCheckout(branchPin(ELSEWHERE, 'my-editor-fix'))).toEqual({
+      action: 'leaveAlone',
+      isDetached: false,
+    });
+  });
+
+  it('moves a checkout still on a branch the pin used to name, when that branch is declared', () => {
+    // Every clone made while `revision` was `platform-yalc` sits on that local branch. Without the
+    // declaration it is indistinguishable from a branch of somebody's own.
+    expect(decideCheckout(commitPin(PIN_A, ELSEWHERE, 'platform-yalc', ['platform-yalc']))).toEqual(
+      { action: 'checkoutCommit', branch: PINNED_COMMIT_BRANCH },
+    );
+    expect(decideCheckout(commitPin(PIN_A, ELSEWHERE, 'platform-yalc'))).toEqual({
+      action: 'leaveAlone',
+      isDetached: false,
+    });
+    expect(decideCheckout(commitPin(PIN_A, ELSEWHERE, 'my-editor-fix', ['platform-yalc']))).toEqual(
+      { action: 'leaveAlone', isDetached: false },
+    );
+  });
+
+  it('moves the checkout off the branch staging owns when the pin names a branch again', () => {
+    expect(decideCheckout(branchPin(PIN_A, PINNED_COMMIT_BRANCH))).toEqual({
+      action: 'checkoutBranch',
+    });
+  });
+
+  it('does nothing to a checkout already on the pinned commit, wherever it is', () => {
+    ['main', 'HEAD', 'my-editor-fix', PINNED_COMMIT_BRANCH].forEach((currentBranch) => {
+      expect(decideCheckout(commitPin(PIN_A, PIN_A, currentBranch))).toEqual({ action: 'stay' });
+    });
   });
 });

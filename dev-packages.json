@@ -4,7 +4,8 @@
     {
       "folder": "scripture-editors",
       "cloneUrl": "https://github.com/paranext/scripture-editors.git",
-      "revision": "platform-yalc",
+      "revision": "5c97f22afe7ab61014695c771c624b54b4938663",
+      "formerPinBranches": ["platform-yalc"],
       "devPackages": [
         {
           "nxProject": "platform-editor",
