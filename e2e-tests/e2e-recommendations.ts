@@ -133,8 +133,14 @@ const NON_RUNTIME = new RegExp(
     String.raw`(^|\/)package\.json$|(^|\/)manifest\.json$`,
     // .NET build metadata: projects, shared build properties, the solution and IDE settings.
     String.raw`\.csproj$|\.props$|\.sln$|\.DotSettings$`,
-    // Formatter, linter and editor configuration, which no running app reads.
-    String.raw`(^|\/)(\.globalconfig|\.csharpierrc\.yml|\.lintstagedrc\.yml|\.editorconfig)$`,
+    // Formatter, linter and editor configuration, which no running app reads. `.globalconfig`
+    // files have arbitrary names (`ai-analyzers.globalconfig`), so only the suffix is matched.
+    String.raw`\.globalconfig$|(^|\/)(\.csharpierrc\.yml|\.lintstagedrc\.yml|\.editorconfig)$`,
+    // Roslyn analyzers run at build time; the app never loads them.
+    String.raw`(^|\/)c-sharp\/Paranext\.Analyzers\/`,
+    // Per-extension lint, format, spelling and TypeScript configuration (a template merge rewrites
+    // these in every extension). Runtime JSON such as `manifest.json` or `menus.json` is not here.
+    String.raw`(^|\/)(\.(eslint|prettier|stylelint)rc\.(c?js|json)|\.(eslint|prettier)ignore|\.gitignore|tsconfig[^/]*\.json|cspell\.json)$`,
   ].join('|'),
 );
 const isNonRuntime = (file: string) => NON_RUNTIME.test(file);

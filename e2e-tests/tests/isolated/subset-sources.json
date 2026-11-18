@@ -92,7 +92,6 @@
       "extensions/src/platform-scripture/src/checks-side-panel.web-view-provider.ts",
       "extensions/src/platform-scripture/src/checks-side-panel.web-view.tsx",
       "extensions/src/platform-scripture/src/checks/",
-      "extensions/src/platform-scripture/src/checks/inventories/",
       "extensions/src/platform-scripture/src/find/",
       "extensions/src/platform-scripture/src/inventory.web-view-provider.ts",
       "extensions/src/platform-scripture/src/inventory.web-view.tsx",
@@ -346,8 +345,6 @@
     "main": [
       "extensions/src/platform-scripture-editor/src/",
       "extensions/src/platform-scripture-editor/contributions/",
-      "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "c-sharp/Projects/ChapterMarkerCorrection.cs",
       "lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx",
       "lib/platform-bible-react/src/components/advanced/marker-palette-change-guard.util.ts",
       "lib/platform-bible-react/src/components/advanced/marker-palette-filter.util.ts",
