@@ -140,11 +140,17 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     // In Standard view a verse is a VerseNode — editable text whose content is literally `\v 4 `,
     // so the caret rests INSIDE this span and the grey badge from `.formatted-font .verse` would
     // sit directly behind it. PT9's Standard view has no badge there; the formatted, non-editable
-    // views keep theirs.
-    it('drops the verse badge background in Standard view', () => {
+    // views keep theirs. Left out, not overridden: an override would also paint over an
+    // annotation's own background on a verse number it holds.
+    it('gives the verse badge background only to the views without editable markers', () => {
       expect(css).toMatch(
-        rule(['.formatted-font.marker-editable .verse'], 'background-color: transparent;'),
+        rule(
+          ['.formatted-font:where(:not(.marker-editable)) .verse'],
+          'background-color: rgba(222, 222, 222, 1);',
+        ),
       );
+      expect(css).not.toMatch(/\.formatted-font \.verse \{[^}]*background-color/);
+      expect(css).not.toMatch(/\.formatted-font\.marker-editable \.verse \{[^}]*background-color/);
     });
 
     // The marker's own text carries the USFM separator space in this mode, so the box spacing
@@ -194,7 +200,13 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     // carries a complete color value here, so `var()` resolves; the literal stays only as the
     // fallback for a host that defines no such token.
     it('resolves the hover color against the host theme', () => {
-      expect(css).toMatch(rule(['.attribute:hover'], 'color: var(--foreground'));
+      // Every piece of a run an annotation cuts lifts with the hovered one.
+      expect(css).toMatch(
+        rule(
+          ['.attribute:hover', ':has(> .attribute:hover) > .attribute'],
+          'color: var(--foreground',
+        ),
+      );
       expect(css).toMatch(rule(['.attribute-run:hover'], 'color: var(--foreground'));
     });
   });
@@ -267,6 +279,14 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     it('breaks the line before an expanded note\u2019s \\fp without making it a block', () => {
       expect(css).toMatch(rule(['.note.expanded .usfm_fp::before'], "content: '\\A';"));
       expect(css).toMatch(rule(['.note.expanded .usfm_fp::before'], 'white-space: pre;'));
+    });
+  });
+
+  // A collapsed note hides its content's text, and must hide a `<mark>` around it too, or an
+  // annotation's box style would draw an empty sliver beside the caller.
+  describe('collapsed note content', () => {
+    it('hides an annotation mark inside it, so no box style draws beside the caller', () => {
+      expect(css).toMatch(rule(['.note.collapsed mark'], 'display: none;'));
     });
   });
 
