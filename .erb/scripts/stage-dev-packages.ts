@@ -749,6 +749,7 @@ function stageDevPackages(): void {
     });
 
     console.log('Successfully staged dev packages');
+    reportRescuedCommits();
   } catch (error) {
     console.error(
       `Error: Failed to stage dev packages${inFlight ? ` while working on ${inFlight}` : ''}.`,
@@ -759,10 +760,17 @@ function stageDevPackages(): void {
     // queued on a piped stderr (which is how npm runs lifecycle scripts) past the ~64KB buffer.
     // Setting the code lets the remediation text above finish writing.
     process.exitCode = 1;
-  } finally {
-    // Also when staging failed: a commit parked before the failure is already off its branch, and
-    // the next successful run finds nothing left to park and so would never mention it.
-    reportRescuedCommits();
+    // A commit parked before the failure is already off its branch, and the next successful run
+    // finds nothing left to park and so would never mention it. Only when this run parked
+    // something: a failed run that parked nothing says nothing about an earlier run's record.
+    if (rescuedCommits.length > 0) {
+      try {
+        reportRescuedCommits();
+      } catch (reportError) {
+        // The staging failure above is the one to act on; the refs themselves are in place.
+        console.error('Could not record the commits that were moved aside:', reportError);
+      }
+    }
   }
 }
 
