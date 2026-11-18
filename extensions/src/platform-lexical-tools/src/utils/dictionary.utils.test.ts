@@ -175,7 +175,6 @@ describe('dictionary.util.ts', () => {
 
   describe('getDeduplicatedOccurrencesFromSenses', () => {
     it('returns deduplicated occurrences from senses', () => {
-      const scrRef = mockVerseRef('GEN', 1);
       // These are not fully constructed Sense objects, but they are sufficient for testing so I asserted them.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const senses: Sense[] = [
@@ -191,9 +190,8 @@ describe('dictionary.util.ts', () => {
         },
       ] as unknown as Sense[];
 
-      const result = getDeduplicatedOccurrencesFromSenses(senses, scrRef);
-      expect(result).toHaveLength(1);
-      expect(result[0].verseRef.book).toBe('GEN');
+      const result = getDeduplicatedOccurrencesFromSenses(senses);
+      expect(result.map(({ verseRef }) => verseRef.book)).toEqual(['GEN', 'EXO']);
     });
 
     it('lists the occurrences of several senses in Bible order', () => {

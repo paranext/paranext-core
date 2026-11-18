@@ -14,6 +14,9 @@
     },
     "%platformLexicalTools_dictionary_title_SDBHSDBG%": {
       "fallbackKey": "%platformLexicalTools_dictionary_title%"
+    },
+    "%settings_platformLexicalTools_hideLessRelevantSenses_label%": {
+      "notes": "Settings UI label for the hidden setting behind the Dictionary's \"Hide less-relevant senses\" link."
     }
   },
   "localizedStrings": {
@@ -47,7 +50,11 @@
       "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%": "Open Dictionary: SDBH/SDBG",
       "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%": "Dictionary: SDBH/SDBG",
       "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Open HEBGRK Dictionary",
-      "%platformLexicalTools_webViewMenu_openDictionary%": "Open Dictionary"
+      "%platformLexicalTools_webViewMenu_openDictionary%": "Open Dictionary",
+      "%settings_platformLexicalTools_group_label%": "Dictionary",
+      "%settings_platformLexicalTools_group_description%": "Settings for the dictionary.",
+      "%settings_platformLexicalTools_hideLessRelevantSenses_label%": "Hide less-relevant senses",
+      "%settings_platformLexicalTools_hideLessRelevantSenses_description%": "When enabled, the dictionary hides an entry's senses that do not occur in the current chapter or verse."
     },
     "es": {
       "%platformLexicalTools_dictionary_allOccurrencesLabel%": "Ocurrencias",
@@ -79,7 +86,11 @@
       "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%": "Abrir diccionario: SDBH/SDBG",
       "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%": "Diccionario: SDBH/SDBG",
       "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Abrir diccionario HEBGRK",
-      "%platformLexicalTools_webViewMenu_openDictionary%": "Abrir diccionario"
+      "%platformLexicalTools_webViewMenu_openDictionary%": "Abrir diccionario",
+      "%settings_platformLexicalTools_group_label%": "Diccionario",
+      "%settings_platformLexicalTools_group_description%": "Configuración del diccionario.",
+      "%settings_platformLexicalTools_hideLessRelevantSenses_label%": "Ocultar sentidos menos relevantes",
+      "%settings_platformLexicalTools_hideLessRelevantSenses_description%": "Si está activado, el diccionario oculta los sentidos de una entrada que no aparecen en el capítulo o versículo actual."
     }
   }
 }

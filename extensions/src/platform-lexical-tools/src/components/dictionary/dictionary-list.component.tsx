@@ -7,11 +7,11 @@ import {
   useListbox,
   type ListboxOption,
 } from 'platform-bible-react';
-import { RefObject, useRef } from 'react';
+import { RefObject, useCallback, useRef } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { LanguageStrings } from 'platform-bible-utils';
 import { DictionaryEntryDisplay } from './dictionary-entry-display.component';
-import { useIsWideScreen } from '../../utils/dictionary-ui.utils';
+import { useIsWideScreen, useScopeReference } from '../../utils/dictionary-ui.utils';
 import { DictionaryOccurrenceView, DictionaryScope } from '../../utils/dictionary.utils';
 import { DictionaryListItem } from './dictionary-list-item.component';
 import { EntryLinkClickHandler } from './definition-text.component';
@@ -98,6 +98,14 @@ export function DictionaryList({
     onEntrySelected(selectedEntryId === option.id ? undefined : clickedEntry);
   };
 
+  // A click handler and reference that only change when they matter, so the memoized list items
+  // are left alone by a verse move within the chapter
+  const handleItemClick = useCallback(
+    (entry: Entry) => onEntrySelected(selectedEntryId === getEntryId(entry) ? undefined : entry),
+    [onEntrySelected, selectedEntryId],
+  );
+  const scopeReference = useScopeReference(scriptureReferenceToFilterBy, scope);
+
   const { listboxRef, activeId, handleKeyDown } = useListbox({
     options,
     onOptionSelect: handleOptionSelect,
@@ -140,9 +148,9 @@ export function DictionaryList({
                   entry={entry}
                   isSelected={isSelected}
                   localizedStrings={localizedStrings}
-                  scrRef={scriptureReferenceToFilterBy}
+                  scrRef={scopeReference}
                   scope={scope}
-                  onClick={() => onEntrySelected(isSelected ? undefined : entry)}
+                  onClick={handleItemClick}
                 />
               </div>
             );

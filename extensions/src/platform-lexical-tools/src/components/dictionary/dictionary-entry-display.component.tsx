@@ -19,6 +19,7 @@ import {
   getDeduplicatedOccurrencesFromSenses,
   DictionaryOccurrenceView,
   DictionaryScope,
+  isReferenceInScope,
   isSenseInScope as isSenseInScopeOfReference,
 } from '../../utils/dictionary.utils';
 import { useScopeReference } from '../../utils/dictionary-ui.utils';
@@ -81,7 +82,7 @@ export function DictionaryEntryDisplay({
   scriptureReferenceToFilterBy,
   scope = 'chapter',
   hasAllSenses = true,
-  areLessRelevantSensesHidden: isHidingLessRelevantSenses,
+  areLessRelevantSensesHidden,
   onAreLessRelevantSensesHiddenChange,
   occurrenceView,
   onOccurrenceViewChange,
@@ -113,7 +114,7 @@ export function DictionaryEntryDisplay({
   // An entry opened from a link may not occur in scope at all. Its senses are still dimmed, but
   // hiding them would leave none, so they are not hidden, and the header lists all of their glosses.
   const hasSensesInScope = sensesInScope.length > 0;
-  const areLessRelevantSensesHidden = isHidingLessRelevantSenses && hasSensesInScope;
+  const shouldHideLessRelevantSenses = areLessRelevantSensesHidden && hasSensesInScope;
 
   const formattedGlosses = useMemo(
     () =>
@@ -148,10 +149,8 @@ export function DictionaryEntryDisplay({
   const chapterOccurrences = useMemo(
     () =>
       scopeReference
-        ? allOccurrences.filter(
-            ({ verseRef }) =>
-              verseRef.book === scopeReference.book &&
-              verseRef.chapterNum === scopeReference.chapterNum,
+        ? allOccurrences.filter(({ verseRef }) =>
+            isReferenceInScope(verseRef, scopeReference, 'chapter'),
           )
         : allOccurrences,
     [allOccurrences, scopeReference],
@@ -211,18 +210,22 @@ export function DictionaryEntryDisplay({
             <Button
               variant="link"
               className="tw:h-auto tw:p-0 tw:text-xs"
-              aria-expanded={!areLessRelevantSensesHidden}
+              aria-expanded={!shouldHideLessRelevantSenses}
               aria-controls={sensesListId}
               onClick={() => {
                 // A sense that is about to be hidden can no longer be deselected, so deselect it now
-                if (!areLessRelevantSensesHidden && selectedSense && !isSenseInScope(selectedSense))
+                if (
+                  !shouldHideLessRelevantSenses &&
+                  selectedSense &&
+                  !isSenseInScope(selectedSense)
+                )
                   setSelectedSense(undefined);
-                onAreLessRelevantSensesHiddenChange(!areLessRelevantSensesHidden);
+                onAreLessRelevantSensesHiddenChange(!shouldHideLessRelevantSenses);
               }}
             >
               {formatReplacementString(
                 localizedStrings[
-                  areLessRelevantSensesHidden
+                  shouldHideLessRelevantSenses
                     ? '%platformLexicalTools_dictionary_showLessRelevantSenses%'
                     : '%platformLexicalTools_dictionary_hideLessRelevantSenses%'
                 ],
@@ -252,7 +255,7 @@ export function DictionaryEntryDisplay({
           className="tw:flex tw:w-full tw:flex-col tw:gap-3"
         >
           {allSenses
-            .filter((sense) => !areLessRelevantSensesHidden || isSenseInScope(sense))
+            .filter((sense) => !shouldHideLessRelevantSenses || isSenseInScope(sense))
             .map((sense) => (
               <ToggleGroupItem
                 key={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}

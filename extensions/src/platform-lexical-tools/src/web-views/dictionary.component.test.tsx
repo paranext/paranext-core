@@ -6,7 +6,6 @@ import { Entry } from 'platform-lexical-tools';
 import { useState } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dictionary, DictionaryProps } from './dictionary.component';
-import { DictionaryOccurrenceView } from '../utils/dictionary.utils';
 
 beforeAll(() => {
   vi.stubGlobal(
@@ -91,17 +90,15 @@ const getEntries = vi.fn(async (_scope: string, scrRef: SerializedVerseRef) => {
   return { entriesById: Object.fromEntries(entries.map((e) => [e.id, [e]])) };
 });
 
-/** View settings for tests that never change them */
-const FIXED_VIEW_SETTINGS = {
+/** The hide setting, for tests that never change it */
+const FIXED_HIDE_SETTING = {
   areLessRelevantSensesHidden: false,
   onAreLessRelevantSensesHiddenChange: vi.fn(),
-  occurrenceView: 'chapter',
-  onOccurrenceViewChange: vi.fn(),
-} as const;
+};
 
 /**
  * The Dictionary as the web view hosts it: a reference that moves when an occurrence is selected,
- * and view settings that last. `areLessRelevantSensesHidden` sets where the hide toggle starts.
+ * and a hide setting that lasts. `areLessRelevantSensesHidden` sets where it starts.
  */
 function DictionaryInScrollGroup({
   areLessRelevantSensesHidden: initiallyHidden = false,
@@ -109,7 +106,6 @@ function DictionaryInScrollGroup({
 }: Partial<DictionaryProps>) {
   const [scrRef, setScrRef] = useState<SerializedVerseRef>(SCR_REF);
   const [areLessRelevantSensesHidden, setAreLessRelevantSensesHidden] = useState(initiallyHidden);
-  const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
   return (
     <Dictionary
       localizedStrings={LOCALIZED_STRINGS}
@@ -120,8 +116,6 @@ function DictionaryInScrollGroup({
       getEntryByLemma={async () => BETHLEHEM}
       areLessRelevantSensesHidden={areLessRelevantSensesHidden}
       onAreLessRelevantSensesHiddenChange={setAreLessRelevantSensesHidden}
-      occurrenceView={occurrenceView}
-      onOccurrenceViewChange={setOccurrenceView}
       {...props}
     />
   );
@@ -137,7 +131,7 @@ const renderDictionary = (onSelectOccurrence = vi.fn()) => {
       getEntries={getEntries}
       getFullEntry={vi.fn().mockResolvedValue(ELIMELECH)}
       getEntryByLemma={getEntryByLemma}
-      {...FIXED_VIEW_SETTINGS}
+      {...FIXED_HIDE_SETTING}
     />,
   );
   return getEntryByLemma;
@@ -232,6 +226,37 @@ describe('Dictionary entry links', () => {
     expect(screen.queryByText('the meaning of the name')).not.toBeInTheDocument();
   });
 
+  it('keeps the Chapter/All choice when the list reloads, and starts a new entry on Chapter', async () => {
+    const GEN_1_2 = { ...SCR_REF, book: 'GEN' };
+    const GEN_2_1 = { book: 'GEN', chapterNum: 2, verseNum: 1 };
+    const entryInRuth1And4 = entry('000777', 'נָעֳמִי', [
+      { gloss: 'Naomi', definition: 'see {S:00800400300000}', verseRefs: [SCR_REF, GEN_1_2] },
+      {
+        gloss: 'Mara',
+        definition: 'her other name; of {L:Bethlehem<SDBH:בֵּית לֶחֶם>}',
+        verseRefs: [RUTH_4_11, GEN_2_1],
+      },
+    ]);
+    render(
+      <DictionaryInScrollGroup
+        getEntries={async () => ({ entriesById: { [entryInRuth1And4.id]: [entryInRuth1And4] } })}
+      />,
+    );
+    // Naomi's sense in Ruth 1 is selected; All lists its occurrence in Genesis too
+    fireEvent.click(await screen.findByRole('button', { name: 'All (2)' }));
+    expect(screen.getByRole('button', { name: 'Genesis 1:2' })).toBeInTheDocument();
+
+    // In Ruth 4 the list reloads, and All still lists the other sense's occurrence in Genesis
+    fireEvent.click(screen.getByRole('link', { name: 'Ruth 4:3' }));
+    expect(await screen.findByRole('button', { name: 'Genesis 2:1' })).toBeInTheDocument();
+
+    // A different entry opens on Chapter: Bethlehem's sense lists Ruth 4:11, not Ruth 1:2
+    fireEvent.click(screen.getByRole('link', { name: 'Bethlehem' }));
+    expect(await screen.findByText('a town in Judah')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ruth 4:11' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ruth 1:2' })).not.toBeInTheDocument();
+  });
+
   it('keeps a linked entry open after going to its occurrence in another chapter', async () => {
     render(<DictionaryInScrollGroup />);
     fireEvent.click(await screen.findByRole('link', { name: 'Bethlehem' }));
@@ -271,7 +296,7 @@ describe('Dictionary entry links', () => {
         getEntries={getEntriesByChapter}
         getFullEntry={async (e) => e}
         getEntryByLemma={async () => BETHLEHEM}
-        {...FIXED_VIEW_SETTINGS}
+        {...FIXED_HIDE_SETTING}
       />
     );
     const { rerender } = render(renderAt(SCR_REF));

@@ -10,6 +10,7 @@ import {
   Separator,
 } from 'platform-bible-react';
 import { Entry } from 'platform-lexical-tools';
+import { memo } from 'react';
 import {
   DictionaryScope,
   getCombinedOccurrencesCountFromDictionaryEntrySenses,
@@ -24,12 +25,15 @@ type DictionaryListItemProps = {
   isSelected: boolean;
   /** Localized strings for the dictionary */
   localizedStrings: LocalizationData;
-  /** Scripture reference to filter the occurrences by */
-  scrRef: SerializedVerseRef;
+  /**
+   * Scripture reference to filter the occurrences by. Pass the reference from `useScopeReference`,
+   * so a verse move within the chapter leaves the item alone.
+   */
+  scrRef: SerializedVerseRef | undefined;
   /** The current scope (chapter or verse) */
   scope: DictionaryScope;
-  /** Callback function to handle click on the entry */
-  onClick: () => void;
+  /** Called with this item's entry when it is clicked */
+  onClick: (entry: Entry) => void;
 };
 
 /**
@@ -42,9 +46,10 @@ type DictionaryListItemProps = {
  * renders a tooltip that displays the number of occurrences in the chapter.
  *
  * The component uses the `useListbox` hook from the `listbox-keyboard-navigation.util` module to
- * handle keyboard navigation of the list.
+ * handle keyboard navigation of the list. It is memoized, because each item re-reads its glosses'
+ * markup and recounts its occurrences when it renders.
  */
-export function DictionaryListItem({
+export const DictionaryListItem = memo(function DictionaryListItem({
   entry,
   isSelected,
   localizedStrings,
@@ -60,7 +65,7 @@ export function DictionaryListItem({
         role="option"
         aria-selected={isSelected}
         id={`${entry.lexicalReferenceTextId}-entry-${entry.id}`}
-        onClick={onClick}
+        onClick={() => onClick(entry)}
         className={cn(
           'tw:flex tw:flex-col tw:p-2 tw:outline-hidden tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
           {
@@ -119,4 +124,4 @@ export function DictionaryListItem({
       <Separator />
     </>
   );
-}
+});

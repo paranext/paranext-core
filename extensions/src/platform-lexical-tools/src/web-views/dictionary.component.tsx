@@ -65,17 +65,13 @@ export type DictionaryProps = {
   /** Retrieve an entry by its lemma, used to open entries linked from definitions. */
   getEntryByLemma: (dictionaryId: string, lemma: string) => Promise<Entry | undefined>;
   /**
-   * Whether an entry's senses that do not occur in scope are hidden. It is the reader's choice, so
-   * it is kept by the host (the web view keeps it in its state) rather than here, where it would be
-   * lost each time the list reloads.
+   * Whether an entry's senses that do not occur in scope are hidden. It is the reader's preference
+   * for every entry, so, as in Paratext 9, the host keeps it as a setting (the web view reads it
+   * with `useSetting`).
    */
   areLessRelevantSensesHidden: boolean;
   /** Called when the reader hides or shows the less-relevant senses */
   onAreLessRelevantSensesHiddenChange: (areLessRelevantSensesHidden: boolean) => void;
-  /** Whether an entry's occurrences are listed for the chapter or all of them; kept by the host */
-  occurrenceView: DictionaryOccurrenceView;
-  /** Called when the reader switches between the chapter's occurrences and all of them */
-  onOccurrenceViewChange: (occurrenceView: DictionaryOccurrenceView) => void;
 };
 
 /**
@@ -93,8 +89,6 @@ export function Dictionary({
   getEntryByLemma,
   areLessRelevantSensesHidden,
   onAreLessRelevantSensesHiddenChange,
-  occurrenceView,
-  onOccurrenceViewChange,
 }: DictionaryProps) {
   const [scope, setScope] = useState<DictionaryScope>('chapter');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -267,6 +261,19 @@ export function Dictionary({
     if (linkedEntry) dictionaryEntryRef.current?.scrollTo({ top: 0 });
   }, [linkedEntry]);
 
+  // Whether the shown entry's occurrences are those in the chapter or all of them. It is kept here,
+  // where a list reload does not reset it, but each entry the reader opens starts on the chapter.
+  const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
+  const shownEntry = linkedEntry ?? displayedEntry;
+  const shownEntryKey = shownEntry && `${shownEntry.lexicalReferenceTextId}-${shownEntry.id}`;
+  // While the list reloads no entry is shown, so the last entry shown is what tells a new one apart.
+  // Resetting while rendering, rather than in an effect, keeps a new entry from showing "all" first.
+  const [lastShownEntryKey, setLastShownEntryKey] = useState(shownEntryKey);
+  if (shownEntryKey && shownEntryKey !== lastShownEntryKey) {
+    setLastShownEntryKey(shownEntryKey);
+    setOccurrenceView('chapter');
+  }
+
   const handleEntryLinkClick = useCallback(
     async (dictionaryId: string, lemma: string) => {
       // An empty lemma would look up every entry in the dictionary
@@ -313,7 +320,7 @@ export function Dictionary({
           areLessRelevantSensesHidden={areLessRelevantSensesHidden}
           onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
           occurrenceView={occurrenceView}
-          onOccurrenceViewChange={onOccurrenceViewChange}
+          onOccurrenceViewChange={setOccurrenceView}
           handleBackToListButton={() => setLinkedEntry(undefined)}
           onSelectOccurrence={(scrRefOfOccurrence) => {
             setLinkedEntry(undefined);
@@ -406,7 +413,7 @@ export function Dictionary({
             areLessRelevantSensesHidden={areLessRelevantSensesHidden}
             onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
             occurrenceView={occurrenceView}
-            onOccurrenceViewChange={onOccurrenceViewChange}
+            onOccurrenceViewChange={setOccurrenceView}
             onSelectOccurrence={(scrRefOfOccurrence) =>
               selectOccurrenceKeepingEntry(entriesFiltered[0], scrRefOfOccurrence)
             }
@@ -433,7 +440,7 @@ export function Dictionary({
           areLessRelevantSensesHidden={areLessRelevantSensesHidden}
           onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
           occurrenceView={occurrenceView}
-          onOccurrenceViewChange={onOccurrenceViewChange}
+          onOccurrenceViewChange={setOccurrenceView}
           onEntryLinkClick={handleEntryLinkClick}
         />
       )}

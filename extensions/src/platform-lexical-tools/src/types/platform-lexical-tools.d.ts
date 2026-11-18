@@ -688,6 +688,16 @@ declare module 'papi-shared-types' {
   export interface DataProviders {
     'platformLexicalTools.lexicalReferenceService': ILexicalReferenceService;
   }
+
+  export interface SettingTypes {
+    /**
+     * Whether the Dictionary hides an entry's senses that do not occur in the current chapter (or
+     * verse, in verse scope). Like Paratext 9's `MarbleHideIrrelevantMeanings`, it is the reader's
+     * preference for every entry, set by the "Hide/Show less-relevant senses" link, and it lasts
+     * across restarts. Hidden from the settings UI.
+     */
+    'platformLexicalTools.hideLessRelevantSenses': boolean;
+  }
 }
 
 declare module 'papi-shared-types' {

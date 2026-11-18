@@ -148,21 +148,10 @@ export function getCombinedOccurrencesCountFromDictionaryEntrySenses(
   return getAllOccurrencesFromDictionaryEntry(dictionaryEntry, scrRef).length;
 }
 
-function getChapterOrAllOccurrencesForSense(
-  sense: Sense,
-  scrRef?: SerializedVerseRef,
-): Occurrence[] {
-  const occurrences: Occurrence[] = [];
-  if (!sense?.occurrences) return [];
-  Object.values(sense.occurrences ?? {})
+function getOccurrencesForSense(sense: Sense): Occurrence[] {
+  return Object.values(sense?.occurrences ?? {})
     .filter((arr): arr is Occurrence[] => Array.isArray(arr))
-    .forEach((arr) => occurrences.push(...arr));
-
-  return scrRef
-    ? occurrences.filter(
-        (occ) => occ.verseRef.book === scrRef.book && occ.verseRef.chapterNum === scrRef.chapterNum,
-      )
-    : occurrences;
+    .flat();
 }
 
 /** Orders occurrences as they appear in the Bible */
@@ -179,13 +168,9 @@ function compareOccurrences(a: Occurrence, b: Occurrence): number {
  * Gathers the occurrences of several senses, one per verse, in Bible order.
  *
  * @param senses - The senses whose occurrences to gather.
- * @param scrRef - If provided, only occurrences in this book and chapter are included.
  * @returns The occurrences in Bible order.
  */
-export function getDeduplicatedOccurrencesFromSenses(
-  senses: Sense[],
-  scrRef?: SerializedVerseRef,
-): Occurrence[] {
-  const occurrences = senses.flatMap((sense) => getChapterOrAllOccurrencesForSense(sense, scrRef));
+export function getDeduplicatedOccurrencesFromSenses(senses: Sense[]): Occurrence[] {
+  const occurrences = senses.flatMap(getOccurrencesForSense);
   return deduplicateOccurrencesByVerseRef(occurrences.sort(compareOccurrences));
 }

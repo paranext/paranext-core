@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import papi, { logger } from '@papi/frontend';
 import { WebViewProps } from '@papi/core';
 import { Entry, LexicalEntriesById, LexicalReferenceSelector } from 'platform-lexical-tools';
@@ -7,11 +7,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { Dictionary } from './dictionary.component';
 import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../utils/dictionary-ui.utils';
-import {
-  DICTIONARY_TITLE_KEY,
-  DictionaryOccurrenceView,
-  DictionaryScope,
-} from '../utils/dictionary.utils';
+import { DICTIONARY_TITLE_KEY, DictionaryScope } from '../utils/dictionary.utils';
 
 /**
  * Reads entries through the lexical reference service.
@@ -44,20 +40,35 @@ async function getEntriesBySelector(
 globalThis.webViewComponent = function DictionaryWebView({
   updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
-  useWebViewState,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => DICTIONARY_LOCALIZED_STRING_KEYS, []),
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
-  // The reader's view choices last across list reloads and restarts
-  const [areLessRelevantSensesHidden, setAreLessRelevantSensesHidden] = useWebViewState(
-    'areLessRelevantSensesHidden',
-    false,
-  );
-  const [occurrenceView, setOccurrenceView] = useWebViewState<DictionaryOccurrenceView>(
-    'occurrenceView',
-    'chapter',
+  // Like Paratext 9's MarbleHideIrrelevantMeanings, hiding less-relevant senses is the reader's
+  // preference for every entry and every Dictionary tab, so it is a setting
+  const [areLessRelevantSensesHiddenPossiblyError, setAreLessRelevantSensesHiddenSetting] =
+    useSetting('platformLexicalTools.hideLessRelevantSenses', false);
+  const areLessRelevantSensesHidden = useMemo(() => {
+    if (isPlatformError(areLessRelevantSensesHiddenPossiblyError)) {
+      logger.warn(
+        'Failed to load setting platformLexicalTools.hideLessRelevantSenses; treating as false',
+        areLessRelevantSensesHiddenPossiblyError,
+      );
+      return false;
+    }
+    return areLessRelevantSensesHiddenPossiblyError;
+  }, [areLessRelevantSensesHiddenPossiblyError]);
+  const setAreLessRelevantSensesHidden = useCallback(
+    (areHidden: boolean) => {
+      // The write's result is not needed; the setting's new value comes back through `useSetting`
+      Promise.resolve(setAreLessRelevantSensesHiddenSetting?.(areHidden)).catch((e) => {
+        logger.warn(
+          `Failed to save setting platformLexicalTools.hideLessRelevantSenses: ${getErrorMessage(e)}`,
+        );
+      });
+    },
+    [setAreLessRelevantSensesHiddenSetting],
   );
 
   // `main.ts` resolves the tooltip once, when the tab opens/reloads; this effect keeps it current
@@ -131,8 +142,6 @@ globalThis.webViewComponent = function DictionaryWebView({
       getEntryByLemma={getEntryByLemma}
       areLessRelevantSensesHidden={areLessRelevantSensesHidden}
       onAreLessRelevantSensesHiddenChange={setAreLessRelevantSensesHidden}
-      occurrenceView={occurrenceView}
-      onOccurrenceViewChange={setOccurrenceView}
     />
   );
 };
