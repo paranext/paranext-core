@@ -167,29 +167,37 @@ function readAppBuilderLibPatches(): string[] {
     .map((name) => readFileSync(path.join(patchesDir, name), 'utf8'));
 }
 
+/** The jobs of a workflow under `.github/workflows/`, parsed, keeping only well-formed entries. */
+function readWorkflowJobs(workflow: string): Record<string, unknown>[] {
+  const parsed: unknown = parseYaml(
+    readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8'),
+  );
+  return (isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : []).filter(
+    isRecord,
+  );
+}
+
 /**
  * The Ubuntu runner labels each snap-building workflow's matrix lists, named so a failure says
  * which workflow. Reads both matrix shapes the workflows use: an `os` list and `include` entries
  * that each set `os`.
+ *
+ * Only `ubuntu-*` labels count, because the snap's `core` base pins an Ubuntu release. A Linux leg
+ * moved to a label without that prefix (a custom larger runner, say) is left out, so the check
+ * fails with an empty list for that workflow rather than a mismatched label.
  */
-function readWorkflowLinuxRunners(): { workflow: string; runners: unknown[] }[] {
+function readWorkflowLinuxRunners(): { workflow: string; runners: string[] }[] {
   return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
-    const parsed: unknown = parseYaml(
-      readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8'),
-    );
-    const jobs: unknown[] =
-      isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : [];
-    const runners = jobs
-      .filter(isRecord)
+    const runners = readWorkflowJobs(workflow)
       .map((job) => (isRecord(job.strategy) ? job.strategy.matrix : undefined))
       .filter(isRecord)
-      .flatMap((matrix) => [
+      .flatMap((matrix): unknown[] => [
         ...(Array.isArray(matrix.os) ? matrix.os : []),
         ...(Array.isArray(matrix.include)
           ? matrix.include.filter(isRecord).map((entry) => entry.os)
           : []),
       ])
-      .filter((label) => typeof label === 'string' && label.startsWith('ubuntu-'));
+      .filter((label): label is string => typeof label === 'string' && label.startsWith('ubuntu-'));
     return { workflow, runners };
   });
 }
@@ -204,13 +212,7 @@ function readWorkflowLinuxRunners(): { workflow: string; runners: unknown[] }[] 
  */
 function readSnapToolsSteps(): { workflow: string; step: WorkflowStep | undefined }[] {
   return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
-    const parsed: unknown = parseYaml(
-      readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8'),
-    );
-    const jobs: unknown[] =
-      isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : [];
-    const step = jobs
-      .filter(isRecord)
+    const step = readWorkflowJobs(workflow)
       .flatMap((job) => (Array.isArray(job.steps) ? job.steps : []))
       .filter(isRecord)
       .find((candidate) => candidate.name === SNAP_TOOLS_STEP_NAME);
@@ -230,12 +232,7 @@ const JOB_TIMEOUT_MINUTES = 180;
  */
 function readWorkflowTimeouts(): { workflow: string; job: unknown[]; steps: unknown[] }[] {
   return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
-    const parsed: unknown = parseYaml(
-      readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8'),
-    );
-    const jobs = (
-      isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : []
-    ).filter(isRecord);
+    const jobs = readWorkflowJobs(workflow);
     const steps = jobs
       .flatMap((job) => (Array.isArray(job.steps) ? job.steps : []))
       .filter(isRecord)

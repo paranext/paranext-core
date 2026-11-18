@@ -16,9 +16,8 @@ on:
         default: false
       macos_runner:
         type: string
-        description: 'macOS runner label, e.g. macos-26 to try a newer image'
+        description: 'macOS runner label to try, e.g. macos-26. Must be a macOS label. Leave empty for the default image.'
         required: false
-        default: macos-15
 
 jobs:
   publish:
@@ -32,13 +31,23 @@ jobs:
         # Steps pick their OS with `runner.os`, so changing a runner label here is the whole change.
         os:
           - windows-latest
-          # Push runs have no inputs, so they use macos-15. Dispatch the workflow with
-          # `macos_runner` to try another image.
+          # The label after `||` is the default image: push runs have no inputs, and a dispatch
+          # with `macos_runner` left empty falls through to it too.
           - ${{ inputs.macos_runner || 'macos-15' }}
           # The Ubuntu version must align with the "core" version in electron-builder.json5
           - ubuntu-22.04
 
     steps:
+      - name: Check the dispatched macOS runner label
+        # `macos_runner` is free text; a label for another OS would skip every macOS step and still
+        # produce this leg's artifacts.
+        if: ${{ inputs.macos_runner && matrix.os == inputs.macos_runner && runner.os != 'macOS' }}
+        env:
+          MACOS_RUNNER: ${{ inputs.macos_runner }}
+        run: |
+          echo "::error::macos_runner '$MACOS_RUNNER' started a $RUNNER_OS runner; it must be a macOS label."
+          exit 1
+
       - name: Install MacPorts
         if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
