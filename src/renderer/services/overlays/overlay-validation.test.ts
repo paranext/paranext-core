@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { isPlatformError, INVALID_ARGUMENT } from 'platform-bible-utils';
+import {
+  isPlatformError,
+  INVALID_ARGUMENT,
+  Localized,
+  MenuItemContainingCommand,
+  MultiColumnMenu,
+} from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 import { CommandPaletteRequest, PopoverRequest } from './overlay.service-model';
 import {
@@ -7,6 +13,7 @@ import {
   validateContextMenuItems,
   validateMenuItems,
   validatePopoverRequest,
+  validateTabMenu,
 } from './overlay-validation';
 
 /* eslint vitest/expect-expect: ["error", { assertFunctionNames: ["expect", "expectValidationError"] }] */
@@ -148,6 +155,45 @@ describe('overlay-validation', () => {
       ];
       // At depth 2, submenus should be rejected (max 2 levels)
       expectValidationError(() => validateMenuItems(items, 2));
+    });
+  });
+
+  describe('validateTabMenu', () => {
+    const tabMenuWith = (
+      items: Localized<MenuItemContainingCommand>[],
+    ): Localized<MultiColumnMenu> => ({
+      columns: { 'ext.column': { label: 'Column', order: 1 } },
+      groups: { 'ext.group': { column: 'ext.column', order: 1 } },
+      items,
+    });
+    const itemLabeled = (label: string, order = 1): Localized<MenuItemContainingCommand> => ({
+      label,
+      localizeNotes: '',
+      group: 'ext.group',
+      order,
+      command: 'ext.command',
+    });
+
+    it('accepts a menu with items', () => {
+      expect(() => validateTabMenu(tabMenuWith([itemLabeled('Copy')]))).not.toThrow();
+    });
+
+    it('rejects a menu with no items', () => {
+      expectValidationError(() => validateTabMenu(tabMenuWith([])), 'Menu has no items');
+    });
+
+    it('rejects a menu with more than 200 items', () => {
+      const items = Array.from({ length: 201 }, (_, index) => itemLabeled('Item', index));
+      expect(() => validateTabMenu(tabMenuWith(items.slice(0, 200)))).not.toThrow();
+      expectValidationError(
+        () => validateTabMenu(tabMenuWith(items)),
+        'Too many menu items (max 200)',
+      );
+    });
+
+    it('rejects an item label longer than 500 characters', () => {
+      expect(() => validateTabMenu(tabMenuWith([itemLabeled('a'.repeat(500))]))).not.toThrow();
+      expectValidationError(() => validateTabMenu(tabMenuWith([itemLabeled('a'.repeat(501))])));
     });
   });
 

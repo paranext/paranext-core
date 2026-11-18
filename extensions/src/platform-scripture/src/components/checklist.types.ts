@@ -2,6 +2,7 @@ import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ReactNode } from 'react';
 import type { Localized, LocalizedStringValue, MultiColumnMenu } from 'platform-bible-utils';
 import type { ScriptureRange } from 'platform-scripture';
+import type { OpenTabMenuInOverlay } from 'platform-bible-react/experimental';
 
 /**
  * Localization keys consumed by `ChecklistTool` and its Storybook stories.
@@ -264,6 +265,13 @@ export type ChecklistToolProps = {
    * minimal stub. Currently contains: Copy, Settings.
    */
   projectMenuData?: Localized<MultiColumnMenu> | undefined;
+
+  /**
+   * Opens the project menu outside the web view, over the whole window, so a narrow tab cannot cut
+   * it off. The wiring layer passes one that calls `papi.overlays.showTabMenu`; without it, the
+   * menu opens inside the web view.
+   */
+  openProjectMenuInOverlay?: OpenTabMenuInOverlay;
 
   /**
    * Called when the user selects an item in the project menu. The wiring layer dispatches the

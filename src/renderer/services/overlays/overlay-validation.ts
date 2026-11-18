@@ -5,6 +5,7 @@
 
 import { newPlatformError, INVALID_ARGUMENT } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
+import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { CommandPaletteRequest, PopoverRequest } from './overlay.service-model';
 
 /** Throws a PlatformError with INVALID_ARGUMENT code */
@@ -41,6 +42,26 @@ export function validateContextMenuItems(items: OverlayContextMenuItem[]): void 
     throwValidationError('Items array must not be empty');
   }
   validateMenuItems(items, 0);
+}
+
+/**
+ * Most items a tab menu may hold, counting the items of its submenus. The largest contributed tab
+ * menu, the scripture editor's, holds about 35.
+ */
+const MAX_TAB_MENU_ITEMS = 200;
+
+/**
+ * Validates a tab menu's item count and label lengths. Submenu depth is not checked: a tab menu
+ * only shows the submenus its menu data links to its items.
+ *
+ * @param menu The tab menu to validate
+ * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+ */
+export function validateTabMenu(menu: Localized<MultiColumnMenu>): void {
+  if (!menu?.items || menu.items.length === 0) throwValidationError('Menu has no items');
+  if (menu.items.length > MAX_TAB_MENU_ITEMS)
+    throwValidationError(`Too many menu items (max ${MAX_TAB_MENU_ITEMS})`);
+  menu.items.forEach((item) => validateLabelLength(item.label));
 }
 
 /**

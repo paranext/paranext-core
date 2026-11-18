@@ -588,6 +588,10 @@ globalThis.webViewComponent = function HelloRock3({
       <TabFloatingMenu
         onSelectProjectMenuItem={projectMenuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
+        // The window draws the menu over every tab, so a narrow tab cannot cut it off
+        openMenuInOverlay={(menu, anchor) =>
+          papi.overlays.showTabMenu(menu, globalThis.webViewId, { anchor })
+        }
       />
       <div className="title">
         {localizedHelloRock3} <span className="framework">{localizedReact}</span>

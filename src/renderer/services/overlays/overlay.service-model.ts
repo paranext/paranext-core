@@ -6,7 +6,14 @@
  * behalf.
  */
 
-import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+import {
+  Localized,
+  LocalizeKey,
+  MenuItemContainingCommand,
+  MultiColumnMenu,
+  PaletteItem,
+  PlatformError,
+} from 'platform-bible-utils';
 import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 // Type-only, deliberately: this module is the overlay service's cross-process CONTRACT, and a
 // runtime value import from `platform-bible-react` here pulled the whole component library into
@@ -263,6 +270,14 @@ export interface CommandPaletteRequest {
  */
 export type { PaletteFilterMode };
 
+// ── Tab Menu Types ──
+
+/**
+ * Where a tab menu's trigger is, in pixels relative to the requesting WebView's iframe origin. See
+ * {@link IOverlayService.showTabMenu}.
+ */
+export type TabMenuAnchor = { x: number; y: number; width: number; height: number };
+
 // ── Service Interface ──
 
 /**
@@ -277,9 +292,9 @@ export type { PaletteFilterMode };
  * renderer's React tree. Each method returns a promise that resolves when the user interacts with
  * the overlay or it is dismissed.
  *
- * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
- * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
- * one and rejects its promise with a PlatformError with code ABORTED.
+ * Only one overlay of each type (context menu, tab menu, popover, command palette) can be active
+ * per WebView at a time. Requesting a new overlay of the same type from the same WebView replaces
+ * the previous one and rejects its promise with a PlatformError with code ABORTED.
  */
 export interface IOverlayService {
   /**
@@ -303,6 +318,41 @@ export interface IOverlayService {
     webViewId: string,
     options?: { position?: { x: number; y: number } },
   ): Promise<string | undefined>;
+  /**
+   * Shows a WebView's tab menu (the menu behind the button at the start of its tab toolbar) over
+   * the whole window, so a narrow tab cannot cut it or its submenus off. The menu is laid out as
+   * the tab menu is in the WebView: one section per column in column order, headed by the column
+   * labels, with the items' icons, shortcuts and tooltips.
+   *
+   * Unlike {@link showContextMenu}, this runs no command: it settles with the item the user picked
+   * and the WebView runs it, so a handler that acts inside the WebView (one that needs the click's
+   * user activation, for the clipboard) still can. Focus is back in the WebView by the time it
+   * settles with a pick.
+   *
+   * Pass it to `TabToolbar` or `TabFloatingMenu` as `openMenuInOverlay` rather than calling it
+   * yourself.
+   *
+   * The menu is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+   * at.
+   *
+   * @param menu The localized menu to show, as the WebView would show it
+   * @param webViewId The ID of the WebView requesting the menu. Pass `globalThis.webViewId` from
+   *   within a WebView iframe.
+   * @param options Where the menu's trigger is, in pixels relative to the WebView's iframe. The
+   *   menu opens below it, aligned with its start edge.
+   * @returns The item the user picked, or `undefined` if the menu closed without a pick
+   * @throws PlatformError with code FAILED_PRECONDITION if the requesting WebView is not visible
+   * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+   *   debounce cooldown
+   * @throws PlatformError with code INVALID_ARGUMENT if the menu is empty or too large
+   * @throws PlatformError with code ABORTED if replaced by another tab menu from the same WebView
+   * @experimental This method is unstable and may change or disappear without notice
+   */
+  showTabMenu(
+    menu: Localized<MultiColumnMenu>,
+    webViewId: string,
+    options: { anchor: TabMenuAnchor },
+  ): Promise<Localized<MenuItemContainingCommand> | undefined>;
   /**
    * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
    * return immediately with an overlay ID rather than waiting for dismissal. Use
@@ -426,6 +476,7 @@ export interface IOverlayService {
  * Discriminated union on `type`:
  *
  * - `'contextMenu'` — An active context menu with translated position and menu items.
+ * - `'tabMenu'` — An active tab menu with its menu data and the translated trigger rectangle.
  * - `'modalDialog'` — An active modal dialog with its type-specific options.
  * - `'popover'` — An active popover with mutable `content` (updatable via `updatePopover`).
  * - `'commandPalette'` — An active command palette with searchable/filterable items.
@@ -446,6 +497,21 @@ export type OverlayEntry =
       position: { x: number; y: number };
       /** Settles the caller's promise with the selected command string, or `undefined` if dismissed */
       resolve: (result: string | undefined) => void;
+      /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+      reject: (error: PlatformError) => void;
+    }
+  | {
+      type: 'tabMenu';
+      /** Unique overlay identifier generated by the service */
+      id: string;
+      /** The WebView that requested this overlay. Used to enforce one-per-type-per-WebView. */
+      webViewId: string;
+      /** The localized menu to render */
+      menu: Localized<MultiColumnMenu>;
+      /** The trigger's rectangle in the document (translated from iframe coordinates) */
+      anchor: TabMenuAnchor;
+      /** Settles the caller's promise with the picked item, or `undefined` if dismissed */
+      resolve: (item: Localized<MenuItemContainingCommand> | undefined) => void;
       /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
       reject: (error: PlatformError) => void;
     }
@@ -529,6 +595,7 @@ export type OverlayEntry =
  */
 export type OverlayResolveType = {
   contextMenu: string | undefined;
+  tabMenu: Localized<MenuItemContainingCommand> | undefined;
   modalDialog: unknown;
   popover: string | undefined;
   commandPalette: string | undefined;

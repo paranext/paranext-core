@@ -87,6 +87,7 @@ import {
   useMarkerPaletteFocusOutCapture,
   useMarkerPaletteSessionWriters,
   type FootnoteEditorMarkerPalette,
+  type OpenTabMenuInOverlay,
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
@@ -5274,6 +5275,14 @@ function PlatformScriptureEditor({
     [getMenuFindSelectionText, runEditMenuCommand, webViewId],
   );
 
+  // The window draws the tab menus over every tab, so a narrow tab cannot cut them off. The picked
+  // item still comes back to `menuCommandHandler` here, with focus back in this frame, so Cut, Copy
+  // and Paste keep the click's user activation for the clipboard.
+  const openMenuInOverlay = useCallback<OpenTabMenuInOverlay>(
+    (menu, anchor) => papi.overlays.showTabMenu(menu, webViewId, { anchor }),
+    [webViewId],
+  );
+
   function renderEditor() {
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw:hidden" />;
@@ -5565,6 +5574,7 @@ function PlatformScriptureEditor({
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={projectMenuData}
+        openMenuInOverlay={openMenuInOverlay}
         className={[
           'scripture-editor-tab-nav tw:z-10',
           ...(isPowerMode ? [] : ['scripture-editor-tab-nav-simple']),

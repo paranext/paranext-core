@@ -19,6 +19,7 @@ import {
   type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
+  type OpenTabMenuInOverlay,
   type ProjectSelectorProjectPair,
   type ScopeWithRange,
 } from 'platform-bible-react/experimental';
@@ -591,6 +592,14 @@ global.webViewComponent = function ChecklistWebView({
   // the copy action operates on the live web-view's visible data — there's no point in routing
   // it through PAPI just to send the result back.
 
+  // The window draws the project menu over every tab, so a narrow tab cannot cut it off. The picked
+  // item still comes back to `handleSelectProjectMenuItem`, with focus back in this frame, so Copy
+  // keeps the click's user activation for the clipboard.
+  const openProjectMenuInOverlay = useCallback<OpenTabMenuInOverlay>(
+    (menu, anchor) => papi.overlays.showTabMenu(menu, globalThis.webViewId, { anchor }),
+    [],
+  );
+
   const handleSelectProjectMenuItem = useCallback(
     (selectedMenuItem: { [key: string]: unknown; command: string }) => {
       const { command } = selectedMenuItem;
@@ -1068,6 +1077,7 @@ global.webViewComponent = function ChecklistWebView({
         matchCountLabel={matchCountLabel}
         onRetry={handleRetry}
         projectMenuData={webViewMenu.topMenu}
+        openProjectMenuInOverlay={openProjectMenuInOverlay}
         onSelectProjectMenuItem={handleSelectProjectMenuItem}
         onGotoLinkClick={handleGotoLinkClick}
         // onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003).

@@ -401,6 +401,7 @@
   "%overlay_aria_contextMenuOpened%": "Context menu opened",
   "%overlay_aria_dialogOpened%": "{title} dialog opened",
   "%overlay_aria_popoverOpened%": "Popover opened",
+  "%overlay_aria_tabMenuOpened%": "Menu opened",
   "%overlay_connectionLost%": "{%product_name%} can't reach the rest of the app. Anything you changed just now may not be saved.",
   "%overlay_connectionLostReload%": "Reload anyway",
   "%overlay_connectionLostTitle%": "Connection lost",

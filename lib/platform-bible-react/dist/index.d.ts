@@ -2440,11 +2440,108 @@ type SettingsListHeaderProps = {
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
-type TabDropdownMenuProps = {
+type MenuContextProps = {
+	variant?: "default" | "muted";
+};
+/**
+ * Dropdown Menu components providing accessible dropdown menus and submenus. Built on Radix UI
+ * primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
+export type DropdownMenuProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Root> & {
+	variant?: MenuContextProps["variant"];
+};
+/** @inheritdoc DropdownMenuProps */
+export type DropdownMenuSubTriggerProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
+	inset?: boolean;
+};
+/** @inheritdoc DropdownMenuProps */
+export type DropdownMenuSubContentProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.SubContent>;
+/** @inheritdoc DropdownMenuProps */
+export type DropdownMenuContentProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Content>;
+/** @inheritdoc DropdownMenuProps */
+export type DropdownMenuItemProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
+	inset?: boolean;
+	variant?: "default" | "destructive";
+};
+/** @inheritdoc DropdownMenuProps */
+export type DropdownMenuCheckboxItemProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem> & {
+	inset?: boolean;
+};
+/** @inheritdoc DropdownMenuProps */
+export type DropdownMenuRadioItemProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & {
+	inset?: boolean;
+};
+/** @inheritdoc DropdownMenuProps */
+export type DropdownMenuLabelProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Label> & {
+	inset?: boolean;
+};
+/** @inheritdoc DropdownMenuProps */
+export type DropdownMenuSeparatorProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Separator>;
+/** @inheritdoc DropdownMenuProps */
+export type DropdownMenuShortcutProps = React$1.ComponentProps<"span">;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenu({ variant, ...props }: DropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuPortal({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Portal>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuTrigger({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ref, onCloseAutoFocus, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuItem({ className, inset, variant, ...props }: DropdownMenuItemProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuCheckboxItem({ className, children, checked, inset, ...props }: DropdownMenuCheckboxItemProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuRadioItem({ className, children, inset, ...props }: DropdownMenuRadioItemProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuLabel({ className, inset, ...props }: DropdownMenuLabelProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuSeparator({ className, ...props }: DropdownMenuSeparatorProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuSub({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Sub>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuSubTrigger({ className, inset, children, ...props }: DropdownMenuSubTriggerProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuSubContent({ className, style, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
+type TabMenuSubmenuContentProps = Omit<DropdownMenuSubContentProps, "children"> & {
+	/** Any `data-*` attribute, for whoever needs to recognize the submenu's content */
+	[dataAttribute: `data-${string}`]: string | undefined;
+};
+type TabDropdownMenuItemsProps = {
 	/** The handler to use for menu commands */
 	onSelectMenuItem: SelectMenuItemHandler;
-	/** The menu data to show on the dropdown menu */
+	/** The menu data to show */
 	menuData: Localized<MultiColumnMenu>;
+	/**
+	 * Whether to head each section with its column label. Only takes effect when two or more sections
+	 * have items, since a lone section has nothing to be told apart from.
+	 */
+	showSectionHeadings?: boolean;
+	/**
+	 * Props for the content of every submenu. Submenus render in their own portal, outside the menu's
+	 * content, so anything that must recognize all of the menu's surfaces needs them here as well.
+	 *
+	 * @experimental This property is unstable and may change or disappear without notice
+	 */
+	submenuContentProps?: TabMenuSubmenuContentProps;
+};
+type TabMenuTriggerRect = {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+};
+type OpenTabMenuInOverlay = (menuData: Localized<MultiColumnMenu>, triggerRect: TabMenuTriggerRect) => Promise<Localized<MenuItemContainingCommand> | undefined>;
+type TabDropdownMenuProps = Omit<TabDropdownMenuItemsProps, "showSectionHeadings" | "submenuContentProps"> & {
 	/** Defines a string value that labels the current element */
 	tabLabel: string;
 	/** Optional icon for the dropdown menu trigger. Defaults to hamburger icon. */
@@ -2460,6 +2557,14 @@ type TabDropdownMenuProps = {
 	 * renders.
 	 */
 	showSectionHeadings?: boolean;
+	/**
+	 * Opens the menu outside this document instead of in it. When set, the trigger hands the menu
+	 * data and its own position to this function and passes the item it settles with to
+	 * `onSelectMenuItem`; the menu is not rendered here at all.
+	 *
+	 * @experimental This property is unstable and may change or disappear without notice
+	 */
+	openMenuInOverlay?: OpenTabMenuInOverlay;
 	/** Style variant for the app menubar component. */
 	variant?: "default" | "muted";
 	buttonVariant?: "default" | "ghost" | "outline" | "secondary";
@@ -2472,11 +2577,12 @@ type TabDropdownMenuProps = {
  * distinguished, while the groups of a submenu are divided by a line. Items show their tooltip on
  * hover and their `shortcut`, if any, at the end of the row. With `showSectionHeadings`, each
  * section is headed by its column label, except a column that sets `isHeaderHidden`, whose label
- * names the section for screen readers only.
+ * names the section for screen readers only. With `openMenuInOverlay`, the menu opens outside this
+ * document instead (in a web view, over the whole window).
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, showSectionHeadings, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, showSectionHeadings, openMenuInOverlay, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 type TabToolbarCommonProps = {
 	/**
 	 * The handler to use for toolbar item commands related to the project menu. Here is a basic
@@ -2513,6 +2619,14 @@ type TabToolbarCommonProps = {
 	className?: string;
 	/** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
 	menuButtonIcon?: React$1.ReactNode;
+	/**
+	 * Opens the toolbar's menus outside this document instead of in it. In a web view, pass one that
+	 * calls `papi.overlays.showTabMenu`, so the menus draw over the whole window instead of being cut
+	 * off at the edge of a narrow tab. See `OpenTabMenuInOverlay`.
+	 *
+	 * @experimental This property is unstable and may change or disappear without notice
+	 */
+	openMenuInOverlay?: OpenTabMenuInOverlay;
 };
 export type TabToolbarProps = TabToolbarCommonProps & {
 	/**
@@ -2558,13 +2672,13 @@ export type TabToolbarProps = TabToolbarCommonProps & {
  * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
  * component for a menu component that takes up less screen real estate yet is always visible.
  */
-export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, openMenuInOverlay, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Renders a TabDropdownMenu with a trigger button that looks like the menuButtonIcon or like the
  * default of three stacked horizontal lines (aka the hamburger). The menu "floats" over the content
  * so it is always visible. When clicked, it displays a dropdown menu with the projectMenuData.
  */
-export declare function TabFloatingMenu({ onSelectProjectMenuItem, projectMenuData, id, className, menuButtonIcon, }: TabToolbarCommonProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabFloatingMenu({ onSelectProjectMenuItem, projectMenuData, id, className, menuButtonIcon, openMenuInOverlay, }: TabToolbarCommonProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -3705,78 +3819,6 @@ export declare function DrawerFooter({ className, ...props }: React$1.ComponentP
 export declare function DrawerTitle({ className, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Title>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Drawer */
 export declare function DrawerDescription({ className, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Description>): import("react/jsx-runtime").JSX.Element;
-type MenuContextProps = {
-	variant?: "default" | "muted";
-};
-/**
- * Dropdown Menu components providing accessible dropdown menus and submenus. Built on Radix UI
- * primitives and styled with Shadcn UI.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
- */
-export type DropdownMenuProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Root> & {
-	variant?: MenuContextProps["variant"];
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuSubTriggerProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
-	inset?: boolean;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuSubContentProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.SubContent>;
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuContentProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Content>;
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuItemProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
-	inset?: boolean;
-	variant?: "default" | "destructive";
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuCheckboxItemProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem> & {
-	inset?: boolean;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuRadioItemProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & {
-	inset?: boolean;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuLabelProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Label> & {
-	inset?: boolean;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuSeparatorProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Separator>;
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuShortcutProps = React$1.ComponentProps<"span">;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenu({ variant, ...props }: DropdownMenuProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuPortal({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Portal>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuTrigger({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ref, onCloseAutoFocus, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuItem({ className, inset, variant, ...props }: DropdownMenuItemProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuCheckboxItem({ className, children, checked, inset, ...props }: DropdownMenuCheckboxItemProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuRadioItem({ className, children, inset, ...props }: DropdownMenuRadioItemProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuLabel({ className, inset, ...props }: DropdownMenuLabelProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSeparator({ className, ...props }: DropdownMenuSeparatorProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSub({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Sub>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSubTrigger({ className, inset, children, ...props }: DropdownMenuSubTriggerProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSubContent({ className, style, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Empty component displays a centered zero-state message — typically a title, description, and
  * an optional action — for when there is no content to show. The component is built and styled by

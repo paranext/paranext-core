@@ -12,6 +12,7 @@ export function TabFloatingMenu({
   id,
   className,
   menuButtonIcon,
+  openMenuInOverlay,
 }: TabToolbarCommonProps) {
   return (
     <TabToolbarContainer className="tw:pointer-events-none" id={id}>
@@ -24,6 +25,7 @@ export function TabFloatingMenu({
           className={`tw:pointer-events-auto tw:shadow-lg ${className}`}
           buttonVariant="outline"
           showSectionHeadings
+          openMenuInOverlay={openMenuInOverlay}
         />
       )}
     </TabToolbarContainer>

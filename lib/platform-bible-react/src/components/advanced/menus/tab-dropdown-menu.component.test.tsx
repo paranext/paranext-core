@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
+import type { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
 import { QUIET_FOCUS_ATTRIBUTE } from '@/utils/focus.util';
 import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
 import { persistDirection } from '@/utils/dir-helper.util';
-import TabDropdownMenu from './tab-dropdown-menu.component';
+import TabDropdownMenu, {
+  AnchoredTabMenu,
+  OpenTabMenuInOverlay,
+} from './tab-dropdown-menu.component';
 
 // The hasPointerCapture / scrollIntoView shims this menu needs in jsdom are installed repo-wide by
 // vitest.setup.ts. ResizeObserver is opt-in there, because tests that never open an overlay depend
@@ -701,6 +704,174 @@ describe('TabDropdownMenu focus after the menu closes', () => {
     } finally {
       matchMedia.mockRestore();
     }
+  });
+});
+
+describe('TabDropdownMenu opened in an overlay', () => {
+  const UNDO_ITEM: Localized<MenuItemContainingCommand> = {
+    label: 'Undo',
+    localizeNotes: '',
+    group: 'test.editActions',
+    order: 1,
+    command: 'test.undo',
+  };
+
+  function renderOverlayMenu(openMenuInOverlay: OpenTabMenuInOverlay) {
+    const onSelectMenuItem = vi.fn();
+    render(
+      <TabDropdownMenu
+        menuData={SUBMENU_MENU}
+        onSelectMenuItem={onSelectMenuItem}
+        tabLabel="Project"
+        openMenuInOverlay={openMenuInOverlay}
+      />,
+    );
+    return { onSelectMenuItem, trigger: screen.getByRole('button', { name: 'Project' }) };
+  }
+
+  it('hands the menu and the trigger position to the overlay instead of opening a menu here', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const openMenuInOverlay = vi.fn<OpenTabMenuInOverlay>(async () => undefined);
+    const { trigger } = renderOverlayMenu(openMenuInOverlay);
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(
+      DOMRect.fromRect({ x: 12, y: 3, width: 32, height: 28 }),
+    );
+
+    await user.click(trigger);
+
+    expect(openMenuInOverlay).toHaveBeenCalledWith(SUBMENU_MENU, {
+      x: 12,
+      y: 3,
+      width: 32,
+      height: 28,
+    });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('runs the item picked in the overlay', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { trigger, onSelectMenuItem } = renderOverlayMenu(async () => UNDO_ITEM);
+
+    await user.click(trigger);
+
+    await waitFor(() => expect(onSelectMenuItem).toHaveBeenCalledWith(UNDO_ITEM));
+  });
+
+  it('runs nothing when the overlay closes without a pick, or refuses to open', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const openMenuInOverlay = vi
+      .fn<OpenTabMenuInOverlay>()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Requesting WebView is not visible'));
+    const { trigger, onSelectMenuItem } = renderOverlayMenu(openMenuInOverlay);
+
+    await user.click(trigger);
+    await user.click(trigger);
+
+    await waitFor(() => expect(openMenuInOverlay).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    expect(onSelectMenuItem).not.toHaveBeenCalled();
+  });
+
+  it('reports the menu as open while the overlay shows it, and asks for one menu at a time', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    let closeOverlay: (item: undefined) => void = () => {};
+    const openMenuInOverlay = vi.fn<OpenTabMenuInOverlay>(
+      () =>
+        new Promise((resolve) => {
+          closeOverlay = resolve;
+        }),
+    );
+    const { trigger } = renderOverlayMenu(openMenuInOverlay);
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(trigger);
+    await user.click(trigger);
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(openMenuInOverlay).toHaveBeenCalledTimes(1);
+
+    act(() => closeOverlay(undefined));
+
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+  });
+
+  it('opens the overlay from the keyboard, like a dropdown trigger', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const openMenuInOverlay = vi.fn<OpenTabMenuInOverlay>(async () => undefined);
+    const { trigger } = renderOverlayMenu(openMenuInOverlay);
+
+    trigger.focus();
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() => expect(openMenuInOverlay).toHaveBeenCalledTimes(1));
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(openMenuInOverlay).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('AnchoredTabMenu', () => {
+  const ANCHOR = { x: 40, y: 10, width: 32, height: 28 };
+
+  it('opens below the anchor, with the sections in column order headed by their labels', () => {
+    render(
+      <AnchoredTabMenu
+        menuData={EDITOR_MENU}
+        anchor={ANCHOR}
+        onSelectMenuItem={() => {}}
+        onClose={() => {}}
+        showSectionHeadings
+      />,
+    );
+
+    // Sections follow column `order`, not the order the columns appear in the menu data
+    const sections = screen.getAllByRole('group');
+    expect(sections).toHaveLength(3);
+    expect(sections[0]).toHaveAccessibleName('Project');
+    expect(sections[1]).toHaveAccessibleName('Edit');
+    expect(sections[2]).toHaveAccessibleName('Insert');
+    expect(screen.getByRole('menu')).toHaveAttribute('data-side', 'bottom');
+    expect(screen.getByRole('menu')).toHaveAttribute('data-align', 'start');
+  });
+
+  it('hands a picked item to onSelectMenuItem', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onSelectMenuItem = vi.fn();
+    render(
+      <AnchoredTabMenu
+        menuData={EDITOR_MENU}
+        anchor={ANCHOR}
+        onSelectMenuItem={onSelectMenuItem}
+        onClose={() => {}}
+      />,
+    );
+
+    await user.click(screen.getByRole('menuitem', { name: /^Insert footnote/ }));
+
+    expect(onSelectMenuItem).toHaveBeenCalledWith(EDITOR_MENU.items[2]);
+  });
+
+  it('closes on Escape from a submenu, and passes its props to the submenu content', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onClose = vi.fn();
+    render(
+      <AnchoredTabMenu
+        menuData={SUBMENU_MENU}
+        anchor={ANCHOR}
+        onSelectMenuItem={() => {}}
+        onClose={onClose}
+        submenuContentProps={{ 'data-overlay-id': 'menu-1' }}
+      />,
+    );
+
+    screen.getByRole('menuitem', { name: /^Edit/ }).focus();
+    await user.keyboard('{ArrowRight}');
+    const undo = await screen.findByRole('menuitem', { name: 'Undo' });
+    expect(undo.closest('[data-overlay-id="menu-1"]')).not.toBeNull();
+    await user.keyboard('{Escape}');
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
 

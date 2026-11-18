@@ -11055,6 +11055,43 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`2026-08-25-pt-4282-tab-move-menu-design.md`), Paratext 9 `ParatextFloatWindow.SetText`
   and `MainForm`'s Window menu.
 
+## adr-tab-menus-open-in-the-overlay: A web view's tab toolbar menus open in the overlay service, drawn by the shared tab menu items, and hand the pick back to the web view
+
+- **Date:** 2026-11-18
+- **Status:** Accepted
+- **Context:** A tab toolbar rendered inside a web view's iframe (the scripture editor, the
+  markers checklist, hello-rock3) opens its menus inside that iframe, so a narrow tab cuts the
+  menu off at the frame's edge and its submenus open outside the frame where nobody can see them.
+  The overlay service already draws context menus in the renderer's top document, but only from
+  `contextMenu` contributions, through a converter that drops column headings, column order and
+  icons, and it runs the picked command itself.
+- **Decision:** `papi.overlays.showTabMenu(menu, webViewId, { anchor })` draws the tab menu the
+  web view passes, below its trigger's rectangle, and settles with the picked item instead of
+  running it. Both the in-frame menu and the overlay render the same `TabDropdownMenuItems` from
+  `platform-bible-react` (the overlay through `AnchoredTabMenu`), so headings, column order,
+  icons, shortcuts and tooltips cannot drift between the two. `TabToolbar` and `TabFloatingMenu`
+  opt in with an `openMenuInOverlay` prop; without it the menu still opens in the frame, which is
+  right for the renderer's own tab toolbar (already in the top document) and for extensions that
+  have not opted in. On a pick the service focuses the requesting iframe synchronously before
+  settling, because the web view's handler runs on settlement and its clipboard actions need the
+  frame focused and the click's user activation.
+- **Alternatives:** Keep the menu in the frame, shrink it to the tab and slide submenus back over
+  the parent when neither side has room — prototyped first and dropped in favour of this, because
+  a menu in a narrow tab is cramped whatever it does. Reuse `showContextMenu` with the `topMenu` —
+  rejected; it loses the headings and column order and runs the command in the renderer, which
+  breaks handlers that act inside the web view (the editor's Cut/Copy/Paste, the checklist's
+  Copy). Render the overlay's menu with its own copy of the tab menu layout — rejected; two
+  layouts drift.
+- **Consequences:** The pick reaches the web view's handler a microtask after the click, in
+  another document. Clipboard actions depend on Chromium's user activation reaching same-origin
+  child frames and on the synchronous iframe focus; both need checking in the running app,
+  which unit tests cannot do. A web view whose tab is not visible cannot open its menu (the
+  service refuses, as for context menus). The menu is now dismissed by the overlay service's
+  rules (click away anywhere, Escape, tab change, window blur), and scrolling inside it does not
+  dismiss it.
+- **Source:** design discussion with the user in the implementing session; overlay service in
+  `src/renderer/services/overlays/overlay.service-host.ts` (`showTabMenu`).
+
 ## adr-tab-order-anchor-insert-before: Column 3 tab order is expressed as anchor + insert-before in the layout supplement, not as a pinning mechanism
 
 - **Formerly:** ADR-0021

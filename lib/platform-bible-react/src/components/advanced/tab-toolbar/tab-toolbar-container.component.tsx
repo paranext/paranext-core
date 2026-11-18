@@ -8,6 +8,7 @@ import {
 import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
+import type { OpenTabMenuInOverlay } from '../menus/tab-dropdown-menu.component';
 
 export type TabToolbarCommonProps = {
   /**
@@ -49,6 +50,15 @@ export type TabToolbarCommonProps = {
 
   /** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
   menuButtonIcon?: ReactNode;
+
+  /**
+   * Opens the toolbar's menus outside this document instead of in it. In a web view, pass one that
+   * calls `papi.overlays.showTabMenu`, so the menus draw over the whole window instead of being cut
+   * off at the edge of a narrow tab. See `OpenTabMenuInOverlay`.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  openMenuInOverlay?: OpenTabMenuInOverlay;
 };
 
 export type TabToolbarContainerProps = PropsWithChildren<{
