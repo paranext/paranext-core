@@ -57,11 +57,15 @@ async function describeMissingCommand(electronApp: ElectronApplication): Promise
   return lines.join('\n');
 }
 
+// `evil` loads only in noisy dev mode. CI sets DEV_NOISY=false for the other smoke tests, so this
+// spec asks for it explicitly, which also gives it its own app
+test.use({ devNoisy: true });
+
 /**
- * The `evil` test extension (loaded because the launch helper sets `DEV_NOISY=true`) tries every
- * known way out of the extension sandbox at load, at activation and 3 seconds later. This checks
- * those results in the real app: the extension host's own wiring, Electron's own Node, and anything
- * the host reopens after startup — which the unit-level probe test cannot see.
+ * The `evil` test extension (loaded because this spec launches in noisy dev mode) tries every known
+ * way out of the extension sandbox at load, at activation and 3 seconds later. This checks those
+ * results in the real app: the extension host's own wiring, Electron's own Node, and anything the
+ * host reopens after startup — which the unit-level probe test cannot see.
  */
 test('every extension sandbox probe is refused in the running app', async ({ electronApp }) => {
   try {
