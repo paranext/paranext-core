@@ -2885,7 +2885,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `margin` put the block part on every element and the inline part on the first's start and the
   last's end. Every other form, and every other property, stays on the base class as before.
   Logical properties put the start on the right in right-to-left text. Core's hard-coded Find
-  current-result style rounds only its outer corners the same way.
+  current-result style and Enhanced Resources' marble-word rules (`scripture-pane.component.tsx`)
+  round only their outer corners the same way, by hand.
 - **Alternatives:** **Sibling selectors** (`.x + .x`, `.x:has(+ .x)`) — rejected: they work only
   between adjacent siblings, not into or out of a char span or a note, and an extension cannot write
   a selector through the style API. **`data-` attributes** — rejected: these are per-type style
@@ -3063,7 +3064,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   helpers. **Overlay rectangles** — rejected: they must be repositioned on every reflow and scroll,
   and take no part in the host's class rules.
 - **Consequences:** Every host class rule, any property and `:hover` included, applies to
-  everything an annotation paints, and `CSS.highlights` is never used. A selector for a carrier
+  everything an annotation paints, and `CSS.highlights` is never used. The one limit is a verse
+  number outside Standard view, whose own view rules outrank an annotation's style: Formatted's
+  verse badge, the Simple gutter view's `background: none` on `span.verse` and the
+  `.text-spacing … .verse` spacing rules all beat the annotation class on a wholly held
+  `span.verse`, so an annotation's background does not show on a verse number there and its padding
+  and margin never reach one. A selector for a carrier
   (`span.verse[data-number="4"]`, `span.opening[data-marker="wj"]`) can match several sibling
   pieces; the first comes first, so `querySelector` and Playwright's `.first()` find it, and every
   later piece's element carries `data-piece-continuation`. Hosts keep measuring, scrolling to and
