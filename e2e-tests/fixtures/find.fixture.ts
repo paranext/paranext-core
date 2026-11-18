@@ -2,11 +2,10 @@
  * Fixture helpers for Find/Replace E2E tests.
  *
  * Re-exports a custom `test` built on top of app.fixture (worker-scoped Electron instance). The
- * custom `electronApp` fixture launches with the launcher's default `DEV_NOISY=false` so test
- * extensions like helloRock3 do not open their webviews on startup. This keeps the initial webview
- * list clean — without it, helloRock3 opens 3 iframes before the scripture editor, breaking
- * `nth(0)` selectors. Also provides PAPI helpers used in `test.beforeAll` to auto-discover and open
- * a scripture project so the editor hamburger menu is available before tests run.
+ * custom `electronApp` fixture uses the launcher's quiet default, so test extensions like
+ * helloRock3 do not add web views at startup. Also provides PAPI helpers used in `test.beforeAll`
+ * to auto-discover and open a scripture project so the editor hamburger menu is available before
+ * tests run.
  *
  * The tests use a worker-scoped Electron instance (one launch per worker) rather than a test-scoped
  * one, which avoids the cost of 20+ separate Electron launches.
@@ -81,10 +80,7 @@ function setupWEBCopyProject(projectsDir: string): void {
   console.log('[find tests] Created testWEB project from WEB assets with new ID and Editable=T');
 }
 
-// Extend app.fixture but override electronApp to point it at a temp project root. The default
-// DEV_NOISY=false matters here: with DEV_NOISY=true, helloRock3 opens 3 webviews on startup,
-// causing `iframe.web-view nth(0)` to point to a helloRock3 iframe instead of the
-// scripture editor.
+// Extend app.fixture, overriding electronApp to launch against a temp project root.
 export const test = appTest.extend<
   {},
   {

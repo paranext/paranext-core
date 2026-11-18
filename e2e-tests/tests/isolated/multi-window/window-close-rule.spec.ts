@@ -256,8 +256,8 @@ test.use({
   seedSettings: { 'platform.firstRunComplete': true },
   // The fixture launches with no special options unless a suite says otherwise, and the four
   // tests that take `mainPage` from it need the same app the two that launch explicitly get.
-  // The default quiet layout gives the first window the single-Home-tab fallback layout whose
-  // fixed web view id the emptied-primary test moves out.
+  // The launcher's quiet default opens the first window on the single-Home-tab fallback layout;
+  // the emptied-primary test moves that Home tab out.
   electronLaunchOptions: BASE_LAUNCH_OPTIONS,
 });
 
