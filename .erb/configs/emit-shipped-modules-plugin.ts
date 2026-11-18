@@ -223,8 +223,17 @@ export class EmitShippedModulesPlugin {
       // session carries the id its sibling's new manifest does and the mixed-vintage check cannot
       // tell them apart.
       if (stats.hasErrors()) {
-        fs.rmSync(out, { force: true });
-        console.log(`${NAME}: compilation failed, so ${out} was removed rather than rewritten`);
+        try {
+          fs.rmSync(out, { force: true });
+          console.log(`${NAME}: compilation failed, so ${out} was removed rather than rewritten`);
+        } catch (error: unknown) {
+          // A manifest another process holds open (`EPERM`, `EBUSY` on Windows) must not end an
+          // `npm run watch` session either, for the same reason as a failed write below.
+          console.warn(
+            `[${NAME}] compilation failed and ${out} could not be removed (${error instanceof Error ? error.message : String(error)}). ` +
+              'It may carry the current build id, so do not generate notices from this build.',
+          );
+        }
         return;
       }
       const build = buildId(outputDir);

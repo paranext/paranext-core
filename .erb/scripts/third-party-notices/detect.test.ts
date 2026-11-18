@@ -1,6 +1,7 @@
 import { execFileSync } from 'child_process';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 
@@ -106,7 +107,16 @@ describe.skipIf(!hasLicensee)('detect.rb', () => {
   });
 
   it('returns an empty file list for a directory with no license', () => {
-    const [result] = detect([path.join(REPO, '.erb', 'scripts', 'third-party-notices')]);
-    expect(result.files).toEqual([]);
+    // A folder of its own: licensee treats any file whose name contains "license" as a candidate,
+    // so a source folder (this suite once used its own, until `license-pointers.ts` arrived) is not a
+    // stable example of a folder with no license.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'detect-no-license-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'index.js'), 'module.exports = 1;\n');
+      const [result] = detect([dir]);
+      expect(result.files).toEqual([]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

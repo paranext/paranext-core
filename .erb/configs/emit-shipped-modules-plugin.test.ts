@@ -10,7 +10,9 @@ import { EmitShippedModulesPlugin, isWarmFilesystemCache } from './emit-shipped-
 let dir: string;
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warm-cache-'));
+  // Resolved: on macOS the temp folder is under the `/var` -> `/private/var` symlink, and webpack
+  // records real paths.
+  dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'warm-cache-')));
 });
 afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
