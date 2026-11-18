@@ -2557,10 +2557,7 @@
   white-space: nowrap;
 }
 
-/* Standard view only. In standard view (`marker-editable`) a verse is a VerseNode, i.e. editable
-   text whose content is literally `\v 4 `, so the caret can and does come to rest INSIDE this
-   span, and PT9's Standard view has no background badge on verse tokens: the badge rule above
-   leaves this view out. */
+/* Standard view: a verse is editable text (`\v 4 `) the caret can rest inside. */
 .formatted-font.marker-editable .verse {
   white-space: nowrap;
   unicode-bidi: embed;
