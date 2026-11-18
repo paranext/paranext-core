@@ -437,9 +437,9 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
   const parsedZipUri: path.ParsedPath = path.parse(zipUri);
   // Another process may still hold a newly added zip, such as an antivirus scan of it on Windows
   const zipData: Buffer = await retryWhileFileLocked(() => nodeFS.readFileBinary(zipUri), {
-    onLocked: () =>
+    onLocked: (_error, maxWaitMs) =>
       logger.info(
-        `Extension ZIP file "${zipUri}" is held by another process; retrying for up to 10 seconds`,
+        `Extension ZIP file "${zipUri}" is held by another process; retrying for up to ${maxWaitMs / 1000} seconds`,
       ),
   });
   const zip: JSZip = await JSZip.loadAsync(zipData);

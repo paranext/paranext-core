@@ -31,14 +31,15 @@ describe('retryWhileFileLocked', () => {
       .mockRejectedValueOnce(fsError('EBUSY', 'a.zip'))
       .mockResolvedValueOnce('contents');
 
-    const onLocked = vi.fn();
+    // Checked from inside the callback, so a call made after a later attempt fails this test
+    const onLocked = vi.fn(() => expect(operation).toHaveBeenCalledTimes(1));
 
-    await expect(retryWhileFileLocked(operation, { delayMs: 1, onLocked })).resolves.toBe(
-      'contents',
-    );
+    await expect(
+      retryWhileFileLocked(operation, { delayMs: 1, maxAttempts: 5, onLocked }),
+    ).resolves.toBe('contents');
     expect(operation).toHaveBeenCalledTimes(3);
     expect(onLocked).toHaveBeenCalledTimes(1);
-    expect(onLocked).toHaveBeenCalledWith(expect.objectContaining({ path: 'a.zip' }));
+    expect(onLocked).toHaveBeenCalledWith(expect.objectContaining({ path: 'a.zip' }), 4);
   });
 
   it('does not call onLocked when the file is free', async () => {

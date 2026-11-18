@@ -28,9 +28,10 @@ export type RetryWhileFileLockedOptions = {
   maxAttempts?: number;
   /**
    * Called once, when the first attempt finds the file locked, so the caller can say that a wait
-   * has started
+   * has started. `maxWaitMs` is the longest the retries will wait in all, from `delayMs` and
+   * `maxAttempts`
    */
-  onLocked?: (error: LockedFileError) => void;
+  onLocked?: (error: LockedFileError, maxWaitMs: number) => void;
 };
 
 /**
@@ -51,7 +52,7 @@ export async function retryWhileFileLocked<T>(
         return { value: await operation() };
       } catch (error) {
         if (!isLockedFileError(error)) throw error;
-        if (attemptNumber === 1) onLocked?.(error);
+        if (attemptNumber === 1) onLocked?.(error, (maxAttempts - 1) * delayMs);
         return { lockedError: error };
       }
     },
