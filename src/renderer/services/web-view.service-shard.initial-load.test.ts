@@ -72,6 +72,8 @@ vi.mock('@renderer/services/web-view-state.service', () => ({
   getFullWebViewStateById: vi.fn(),
   setFullWebViewStateById: vi.fn(),
 }));
+// The real guard locks this jsdom window's `Error` and `Document.prototype` and refuses a second
+// install; see "The renderer's `createElement` guard" in Security-Guide.md
 vi.mock('@renderer/services/renderer-create-element-guard.util', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@renderer/services/renderer-create-element-guard.util')

@@ -127,7 +127,8 @@ const EVIL_WEBVIEW = `
         }
       }
 
-      // Try to create a script by calling \`Document.prototype.createElement\` directly instead of through the document instance
+      // Try to create a script by calling \`Document.prototype.createElement\` directly instead of
+      // through the document instance
       try {
         const prototypeScript = window.top.Document.prototype.createElement.call(
           window.top.document,

@@ -36,7 +36,8 @@ export function isCreateElementCallerAllowed(
 
 /** The parts of a V8 `CallSite` the guard reads */
 type CallSite = {
-  getFileName(): string | undefined;
+  /** `null` for `eval` and `new Function` frames */
+  getFileName(): string | null | undefined;
   toString(): string;
 };
 
