@@ -7,7 +7,7 @@ import { RpcWebSocketListener } from '@main/services/rpc-websocket-listener';
 import { issueLaunchSecrets, revokeLaunchSecrets } from '@main/services/launch-secrets.service';
 import { logger } from '@shared/services/logger.service';
 import { createFakeWebSocket } from './fake-web-socket-test.util';
-import { bindOnAFreePort } from './real-socket-test.util';
+import { bindOnAFreePort } from './real-socket.test-utils';
 
 vi.mock('electron', () => ({ app: { getVersion: () => '0.0.0' } }));
 vi.mock('@shared/services/logger.service', () => ({
