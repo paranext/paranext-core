@@ -35,27 +35,11 @@ import { createRef } from 'react';
 import { render, act, fireEvent } from '@testing-library/react';
 import { Editorial, type EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { polyfillRangeBoundingClientRect } from './jsdom-range-rect.test-utils';
 
-// jsdom doesn't implement `getBoundingClientRect` on `Range`; moving the caret can make Lexical's
-// post-commit scroll-into-view read a Range rect. Stub it (a zero rect nothing here asserts on) —
-// same as the editor engine's own markerEdit tests and platform-bible-react's footnote-editor tests.
-if (typeof Range.prototype.getBoundingClientRect !== 'function') {
-  Range.prototype.getBoundingClientRect = function getBoundingClientRect(): DOMRect {
-    return {
-      x: 0,
-      y: 0,
-      width: 0,
-      height: 0,
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: 0,
-      toJSON() {
-        return this;
-      },
-    };
-  };
-}
+// Moving the caret can make Lexical's post-commit scroll-into-view read a Range rect; nothing here
+// asserts on it.
+polyfillRangeBoundingClientRect();
 
 const PARA_TEXT = 'In the beginning';
 

@@ -4890,6 +4890,54 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
 
+## adr-implied-paragraph-reports-p-and-bar-follows-top-level-block: Verses outside any paragraph marker report `p`, and the character-marker bar follows the caret's top-level block
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** Verses that sit outside any paragraph marker load as an `ImpliedParaNode`, which
+  renders as a bare `<p>` with no USFM class. Two things broke for a caret there in Simple mode.
+  The editor's `StateChangePlugin` (scripture-editors,
+  `libs/shared-react/src/plugins/usj/StateChangePlugin.tsx`) emitted no state change for an implied
+  paragraph, so the host kept the previous block's `blockMarker` — typically `id` — and scoped the
+  character-marker menu to `\id`'s children (`ior`). And the bar resolved the caret's block with
+  `EDITOR_PARA_SELECTOR` (`.para[class*="usfm_"]`, `editor-dom.util.ts`), which neither the bare
+  `<p>` nor the `\id` line (`p.book.usfm_id`) matches, so the bar held its last position.
+- **Decision:** (1) An implied paragraph reports `p` as its block marker: `StateChangePlugin`
+  accepts `$isSomeParaNode` (paragraph or implied paragraph) at both its verse-block resolution and
+  its reporting guard, and `ImpliedParaNode.getMarker()` already returns `PARA_MARKER_DEFAULT`
+  (scripture-editors `docs/markers-inventories/implemented-markers-inventory.md` documents that).
+  (2) The character-marker bar anchors to the caret's **top-level block** — the child of
+  `.editor-input` that holds it (`findTopLevelEditorBlock`), the DOM twin of Lexical's
+  `getTopLevelElement()` and the block `ActiveTextPlugin` outlines — while the paragraph-marker
+  tooltip keeps `EDITOR_PARA_SELECTOR`, because it names a marked paragraph. Before the first caret,
+  the bar anchors to the first block that holds text (`findFirstTextBlock`): it skips the `\id`
+  line (class `book`) and chapter lines (class `chapter`) and takes the next block whether or not it
+  has a paragraph marker, so a chapter that opens with unmarked verses starts the bar beside them
+  rather than beside a later `\p` that may be off-screen.
+- **Alternatives:** Report `undefined` for an implied paragraph — rejected: the character-marker
+  menu returns no items without a parent marker, which disables the button in exactly the place the
+  user is typing. Add an `isImpliedPara` field to `StateChangeSnapshot` — rejected: public API growth
+  for one consumer, when `p` is already what the node says it is. Give the implied paragraph an
+  `implied-para` class in the editor and widen the selector — rejected: a new cross-repo class
+  contract, and it would still miss the `\id` and chapter lines; the top-level-block rule rests on
+  Lexical's own invariant that root children render as the contenteditable's children. Read the
+  `psc-active-text` class `ActiveTextPlugin` puts on the active block — rejected: it exists only in
+  views with `hasActiveTextFocusBox`, and the plugin removes it on blur, which is exactly when the
+  character-marker menu takes focus and the bar must hold.
+- **Consequences:** In Power mode the paragraph-style trigger reads `p` for text that has no `\p`
+  (Simple mode is structure-protected, so the cost is Power-only); retagging an implied paragraph
+  from that menu was already reachable, because the stale `id` left it enabled. The bar follows the
+  caret onto the `\id` and chapter lines too, and its button is disabled on both: `c` has no
+  character markers, and `generateCharacterMarkerMenuListItems` offers none for `id` even though
+  `usfmMarkers` lists `ior` among `\id`'s children (they name what may follow `\id`, and `ior`
+  belongs inside `\io`). Hiding the bar on those lines was rejected: it would flicker as the caret
+  moves past them. `findTopLevelEditorBlock`
+  assumes root-level nodes render as direct children of the contenteditable. The read-only block
+  verse layout already wraps paragraphs in a verse-block element, where it would resolve to the
+  wrapper; as of 2026-11-12 the bar is not mounted in that layout. Revisit before mounting the bar
+  anywhere the editor wraps its blocks.
+- **Source:** PT-4763.
+
 ## adr-interface-mode-decides-the-window-set: The interface mode decides how many windows exist, and the persisted entry list is that set
 
 - **Date:** 2026-09-02
