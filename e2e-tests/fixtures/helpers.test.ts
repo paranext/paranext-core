@@ -5,6 +5,7 @@
  * `assertDeclaredWindowSize` takes only `evaluate`, not the full Playwright `Page`, so these drive
  * it directly with a stub instead of a real browser connection.
  */
+import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDeclaredWindowSize,
@@ -232,6 +233,17 @@ describe('buildLaunchEnv', () => {
       envOverrides: { PT_NO_DEVTOOLS: 'true' },
     });
     expect(env.PT_NO_DEVTOOLS).toBe('true');
+  });
+
+  it('pins the test defaults over the shell', () => {
+    const env = buildLaunchEnv(
+      { NODE_ENV: 'production', PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'false' },
+      '/tmp/profile',
+      { isolatedProjectRoot: true },
+    );
+    expect(env.NODE_ENV).toBe('development');
+    expect(env.PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT).toBe('true');
+    expect(env.PLATFORM_BIBLE_PROJECT_ROOT_FOLDER).toBe(path.join('/tmp/profile', 'projects'));
   });
 
   it('lets envOverrides win over the pinned test defaults', () => {

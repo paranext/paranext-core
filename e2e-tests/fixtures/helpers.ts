@@ -1049,7 +1049,9 @@ export async function launchElectronApp(
 
 /**
  * The environment an Electron app launches with: the shell's variables (`childEnv`), then the
- * pinned test defaults, then the caller's `envOverrides`, which win over everything.
+ * pinned test defaults, then the caller's `envOverrides`, which win over everything. One default
+ * yields to the shell: `PT_NO_DEVTOOLS` is `'true'` only when `childEnv` does not set it, so a
+ * developer can still open DevTools while debugging.
  *
  * @param childEnv The shell variables to start from, as {@link electronChildEnv} returns them
  * @param userDataDir The launch's user-data directory; `isolatedProjectRoot` places the project
