@@ -67,10 +67,10 @@ type EdgeDeclarations = {
  *
  * A `padding`, `margin` or `borderRadius` value with a priority (`!important`), or an empty one, is
  * not split: it stays on every element as written, since the priority would be read as one of its
- * values. A `border` is split whatever its value, each side taking the value as written. A `var()`
- * counts as one value, so a custom property that holds several is copied whole into each split
- * longhand: a block longhand or a corner radius reads two values with a different meaning, and an
- * inline-side longhand, which takes one, is invalid.
+ * values. So is one holding a `var()`, whose custom property may hold several values: copied whole
+ * into each split longhand, a block longhand or a corner radius would read them with a different
+ * meaning, and an inline-side longhand, which takes one, would be invalid. A `border` is split
+ * whatever its value, each side taking the value as written.
  *
  * An annotation that paints one element gets all three rules, so it is drawn as the unsplit style
  * draws it. Logical properties put the start on the right in right-to-left text.
@@ -84,7 +84,8 @@ function stylesToCss(properties: AnnotationStyleProperties): EdgeDeclarations {
     if (value === undefined) return;
     const cssProperty = toKebabCase(key);
     const values = shorthandValues(String(value));
-    const isSplittable = values.length > 0 && !values.some((part) => part.includes('!'));
+    const isSplittable =
+      values.length > 0 && !values.some((part) => part.includes('!') || part.includes('var('));
 
     if (key === 'border') {
       every.push(declaration('border-block', value));

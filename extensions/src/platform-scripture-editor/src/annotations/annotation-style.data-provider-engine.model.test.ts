@@ -37,21 +37,37 @@ describe('AnnotationStyleDataProviderEngine stylesheet', () => {
   });
 
   it('splits two-value padding and margin into a block part and inline start and end parts', async () => {
-    expect(await stylesheetFor({ padding: '1px 4px', margin: 'var(--gap)' })).toBe(
+    expect(await stylesheetFor({ padding: '1px 4px', margin: '2px 3px' })).toBe(
       [
         '.editor-typed-mark-external-check {\n' +
           '  padding-block: 1px;\n' +
-          '  margin-block: var(--gap);\n' +
+          '  margin-block: 2px;\n' +
           '}',
         '.editor-typed-markStart-external-check {\n' +
           '  padding-inline-start: 4px;\n' +
-          '  margin-inline-start: var(--gap);\n' +
+          '  margin-inline-start: 3px;\n' +
           '}',
         '.editor-typed-markEnd-external-check {\n' +
           '  padding-inline-end: 4px;\n' +
-          '  margin-inline-end: var(--gap);\n' +
+          '  margin-inline-end: 3px;\n' +
           '}',
       ].join('\n\n'),
+    );
+  });
+
+  it('keeps a padding, margin or radius that uses a var() whole on every element', async () => {
+    expect(
+      await stylesheetFor({
+        padding: 'var(--gap)',
+        margin: '1px var(--gap)',
+        borderRadius: 'var(--r)',
+      }),
+    ).toBe(
+      '.editor-typed-mark-external-check {\n' +
+        '  padding: var(--gap);\n' +
+        '  margin: 1px var(--gap);\n' +
+        '  border-radius: var(--r);\n' +
+        '}',
     );
   });
 

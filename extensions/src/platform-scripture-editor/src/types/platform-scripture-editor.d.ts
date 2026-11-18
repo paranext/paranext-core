@@ -564,8 +564,9 @@ declare module 'platform-scripture-editor' {
    * last element. Each element's top and bottom follow its own font size and baseline, so over a
    * raised, smaller verse number they sit inside the text's. An annotation that paints one element
    * is drawn as the style reads. A `padding`, `margin` or `borderRadius` with `!important`, or an
-   * empty one, is not split: it applies to every element as written. A `var()` counts as one value
-   * when splitting, so a custom property used there must hold one value.
+   * empty one, is not split: it applies to every element as written. A `padding`, `margin` or
+   * `borderRadius` that uses a `var()` is not split either, since the custom property may hold
+   * several values.
    */
   export type AnnotationStyleProperties = {
     /**
