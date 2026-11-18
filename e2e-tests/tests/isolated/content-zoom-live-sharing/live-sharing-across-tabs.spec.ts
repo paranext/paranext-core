@@ -85,11 +85,10 @@ import {
   sendPapiCommandWhenRegistered,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
+import { HOME_WEBVIEW_TYPE } from '../../../fixtures/web-view-frames';
 
 /** `webViewType` of the comment list web view (`legacyCommentManager.main.ts`). */
 const COMMENT_LIST_WEBVIEW_TYPE = 'legacyCommentManager.commentList';
-/** `webViewType` of Home (`extensions/src/platform-get-resources/src/main.ts`). */
-const HOME_WEBVIEW_TYPE = 'platformGetResources.home';
 /** `webViewType` of Find (`FIND_WEBVIEW_TYPE` in `src/shared/models/web-view.model.ts`). */
 const FIND_WEBVIEW_TYPE = 'platformScripture.find';
 /** The Settings default seeded before launch: far enough from 100 % that a scaled Home is obvious. */

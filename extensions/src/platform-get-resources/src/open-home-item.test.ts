@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getSetting: vi.fn(async (): Promise<unknown> => 'power'),
   recordProjectOpened: vi.fn(async () => undefined),
   notify: vi.fn(async () => 'notification-1'),
+  warn: vi.fn(),
 }));
 
 vi.mock('@papi/frontend', () => ({
@@ -18,7 +19,7 @@ vi.mock('@papi/frontend', () => ({
       get: vi.fn(async () => ({ recordProjectOpened: mocks.recordProjectOpened })),
     },
   },
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: mocks.warn, error: vi.fn() },
 }));
 
 // vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
@@ -127,7 +128,7 @@ describe('openHomeItem', () => {
       throw new Error('editor unavailable');
     });
 
-    await expect(openHomeItem('project-1', false)).resolves.toBeUndefined();
+    await expect(openHomeItem('project-1', false)).resolves.toBe(false);
   });
 
   it('opens a resource in its viewer in Power mode', async () => {
@@ -148,6 +149,7 @@ describe('openHomeItem', () => {
 
   it('opens a project in the Scripture editor in Simple mode and remembers it', async () => {
     mocks.getSetting.mockImplementation(async () => 'simple');
+    mocks.sendCommand.mockImplementation(async () => 'editor-1');
 
     await openHomeItem('project-1', false);
 
@@ -159,6 +161,65 @@ describe('openHomeItem', () => {
     await openHomeItem('resource-1', true);
 
     expect(mocks.recordProjectOpened).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * Home closes itself after a project opens in Simple mode, so it has to know whether one did. A
+ * resource never closes Home, so its result is always `false`.
+ */
+describe('openHomeItem result', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getSetting.mockImplementation(async () => 'simple');
+    mocks.recordProjectOpened.mockImplementation(async () => undefined);
+  });
+
+  it('resolves true when the project opens', async () => {
+    mocks.sendCommand.mockImplementation(async () => 'editor-1');
+
+    await expect(openHomeItem('project-1', false)).resolves.toBe(true);
+  });
+
+  it('resolves false when the project could not be opened', async () => {
+    mocks.sendCommand.mockImplementation(async () => {
+      throw new Error('editor unavailable');
+    });
+
+    await expect(openHomeItem('project-1', false)).resolves.toBe(false);
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ message: '%resources_couldNotOpen%' }),
+    );
+  });
+
+  it('treats an open that showed nothing as a failed open', async () => {
+    mocks.sendCommand.mockImplementation(async () => undefined);
+
+    await expect(openHomeItem('project-1', false)).resolves.toBe(false);
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ message: '%resources_couldNotOpen%' }),
+    );
+    expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('opened nothing'));
+    expect(mocks.recordProjectOpened).not.toHaveBeenCalled();
+  });
+
+  it('resolves true when the project opened but could not be recorded as recent', async () => {
+    mocks.sendCommand.mockImplementation(async () => 'editor-1');
+    mocks.recordProjectOpened.mockImplementation(async () => {
+      throw new Error('recent list unavailable');
+    });
+
+    await expect(openHomeItem('project-1', false)).resolves.toBe(true);
+  });
+
+  it('resolves false for a resource that opened', async () => {
+    mocks.getSetting.mockImplementation(async () => 'power');
+    mocks.sendCommand.mockImplementation(async () => 'viewer-1');
+
+    await expect(openHomeItem('resource-1', true)).resolves.toBe(false);
+    expect(commandsSent()).toEqual(['platformScriptureEditor.openResourceViewer']);
   });
 });
 

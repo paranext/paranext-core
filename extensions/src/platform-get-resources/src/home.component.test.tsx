@@ -1855,6 +1855,16 @@ describe('Home unsupported projects', () => {
       await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('openable1'));
     });
 
+    it('opens an openable project from its narrow-width menu', async () => {
+      const onOpenProject = vi.fn();
+      renderHomeList({ localProjectsInfo: [OPENABLE_PROJECT], onOpenProject });
+
+      const openItem = await openRowMenu(OPENABLE_PROJECT.name, 'first');
+      await userEvent.setup().click(openItem);
+
+      await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('openable1', false));
+    });
+
     // The action cell menu holds Sync only for an unedited project; the narrow-width menu holds
     // it only for an edited one.
     it.each([

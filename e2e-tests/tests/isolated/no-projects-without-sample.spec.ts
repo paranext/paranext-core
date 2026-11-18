@@ -15,12 +15,8 @@ import { test, expect } from '../../fixtures/isolated.fixture';
 import { waitForAppReady, waitForOpenWebViewIdByType } from '../../fixtures/helpers';
 import { sendPapiCommandWhenRegistered } from '../../fixtures/scripture-editor-helpers';
 import { SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE } from '../../fixtures/simple-mode-columns.page';
-import {
-  HOME_WEBVIEW_TYPE,
-  NoProjectEditorView,
-  homeNothingHere,
-  webViewFrame,
-} from './no-projects-without-sample.page';
+import { HOME_WEBVIEW_TYPE, webViewFrame } from '../../fixtures/web-view-frames';
+import { NoProjectEditorView, homeNothingHere } from './no-projects-without-sample.page';
 
 /**
  * Generous: the guidance can only appear after the C# factory has scanned the projects folder and

@@ -23,7 +23,8 @@ import { useUnsupportedReasonStrings } from './use-unsupported-reason-strings.ho
 import { useLocalProjects } from './use-local-projects.hook';
 import { useSyncActivity } from './use-sync-activity.hook';
 import { useSyncQueue } from './use-sync-queue.hook';
-import { openHomeItem } from './open-home-item';
+import { isSimpleMode, openHomeItem } from './open-home-item';
+import { closeOwnDockTab } from './close-own-dock-tab.util';
 
 const defaultInterfaceLanguages: string[] = ['en'];
 
@@ -38,7 +39,10 @@ const SEND_RECEIVE_RETRY_MS = 2000;
  */
 type SyncReportSource = 'activity' | 'waiting' | 'sending' | 'running';
 
-globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
+globalThis.webViewComponent = function HomeWebView({
+  id: webViewId,
+  useWebViewState,
+}: WebViewProps) {
   // Set by the web view provider from an opener's preset, and otherwise kept as the user left it.
   // The user's changes are written back so it survives window moves and reloads, and so `openHome`
   // can tell whether the filter on screen matches what a later caller asks for. See
@@ -219,6 +223,10 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // stays open while it waits in the sync queue as well as while it runs.
   const [ownActiveSendReceiveProjects, setOwnActiveSendReceiveProjects] = useState<string[]>([]);
   const isOwnSendReceiveInProgress = ownActiveSendReceiveProjects.length > 0;
+  // How many of Home's own requests have not settled yet, counted alongside the list above. A ref, because the
+  // check after a project opens runs after an `await`, where state from the render that started the
+  // open would be stale.
+  const pendingOwnRequestCountRef = useRef(0);
   // Hidden case: keeps following while the tab is inactive; data-only and cheap, so the rows are
   // current when shown.
   const syncActivity = useSyncActivity();
@@ -390,6 +398,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     unreportedRequestsRef.current.set(normalizedProjectId, namedAtRequest);
 
     setOwnActiveSendReceiveProjects((prev) => [...prev, projectId]);
+    pendingOwnRequestCountRef.current += 1;
     const isQueueIdle =
       !syncActivity.isSyncing &&
       syncQueue.waitingProjectIds.length === 0 &&
@@ -434,12 +443,47 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       // callback's rejection and renders the message, but only ever saw a resolved promise.
       throw e;
     } finally {
+      pendingOwnRequestCountRef.current -= 1;
       unreportedRequestsRef.current.delete(normalizedProjectId);
       if (isMounted.current)
         setOptimisticRunningProjectIds((ids) => ids.filter((id) => id !== normalizedProjectId));
       endOwnRequest(projectId);
     }
   };
+
+  /**
+   * Opens an item from Home's list. In Simple mode, which shows one project at a time, Home then
+   * closes once a project has opened, so the user lands in it.
+   */
+  const openItem = useCallback(
+    async (projectId: string, isPublished: boolean): Promise<void> => {
+      // Read before the open as well as after it: a Simple-mode switch takes seconds, and a sync
+      // that ends meanwhile has just put its result in Home.
+      const wasOwnRequestPendingAtClick = pendingOwnRequestCountRef.current > 0;
+      const didProjectOpen = await openHomeItem(projectId, isPublished);
+      // A resource opens beside the project, so Home stays open for the user to keep choosing.
+      if (!didProjectOpen || isPublished) return;
+      if (!(await isSimpleMode())) return;
+      if (!isMounted.current) return;
+      // Most results of a Get or Sync that Home started show only in Home, so Home stays open until
+      // it ends, and the user closes Home themselves.
+      if (wasOwnRequestPendingAtClick || pendingOwnRequestCountRef.current > 0) {
+        logger.info(
+          'Home stays open after opening a project: a Get or Sync it started was running at the click or still is',
+        );
+        return;
+      }
+      // Last: closing can tear down this web view before the call returns.
+      const closeResult = closeOwnDockTab(webViewId);
+      if (closeResult === 'tabNotFound')
+        logger.warn('Home could not find its tab to close after opening a project');
+      else if (closeResult === 'onlyTabInDock')
+        logger.info(
+          'Home stays open after opening a project: it is the only tab docked in its window',
+        );
+    },
+    [webViewId],
+  );
 
   const removeFromSyncQueue = useCallback(
     async (projectId: string) => {
@@ -606,7 +650,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       uiLocales={uiLocales}
       onOpenGetResources={openGetResources}
-      onOpenProject={openHomeItem}
+      onOpenProject={openItem}
       onSendReceiveProject={sendReceiveProject}
       onRemoveFromQueue={removeFromSyncQueue}
       onGetStarted={getStarted}

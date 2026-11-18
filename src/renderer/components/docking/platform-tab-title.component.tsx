@@ -101,8 +101,10 @@ type PlatformTabTitleProps = {
   id: string;
   /**
    * ID of the WebView this tab hosts, if it is a WebView tab (equals the tab ID); `undefined` for
-   * non-WebView tabs. Emitted as a `data-web-view-id` attribute to give tests a stable,
-   * locale-independent selector.
+   * non-WebView tabs. Emitted as a `data-web-view-id` attribute, which gives tests a stable,
+   * locale-independent selector and lets a web view find its own tab to close itself
+   * (`closeOwnDockTab` in `platform-get-resources`). Keep it: the e2e spec
+   * `home-closes-after-open-simple.spec.ts` fails if Home can no longer close itself.
    */
   webViewId?: string;
   /**

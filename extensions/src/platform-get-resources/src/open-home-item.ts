@@ -5,7 +5,7 @@ import { getErrorMessage } from 'platform-bible-utils';
  * Whether the app is in Simple mode, read when it is needed so a mode switch is never missed. An
  * unreadable setting counts as Power mode, which opens the resource the way Home always has.
  */
-async function isSimpleMode(): Promise<boolean> {
+export async function isSimpleMode(): Promise<boolean> {
   try {
     return (await papi.settings.get('platform.interfaceMode')) === 'simple';
   } catch (e) {
@@ -49,9 +49,15 @@ async function openResource(projectId: string): Promise<void> {
  * join it — otherwise the escape hatch for finding a non-recent project never makes it recent.
  *
  * @param projectId The project's id
+ * @throws If the project did not open, including when the editor answered with no web view: it
+ *   gives no reason then, so it is reported like any other failed open.
  */
 async function openProject(projectId: string): Promise<void> {
-  await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
+  const webViewId = await papi.commands.sendCommand(
+    'platformScriptureEditor.openScriptureEditor',
+    projectId,
+  );
+  if (webViewId === undefined) throw new Error('the editor opened nothing for it');
   try {
     const recentlyOpenedProjects = await papi.dataProviders.get(
       'platformScripture.recentlyOpenedProjects',
@@ -71,13 +77,19 @@ async function openProject(projectId: string): Promise<void> {
  *
  * @param projectId The row's project id
  * @param isPublished Whether the row is a resource
+ * @returns Whether a project opened in the editor. Always `false` for a resource.
  */
-export async function openHomeItem(projectId: string, isPublished: boolean): Promise<void> {
+export async function openHomeItem(projectId: string, isPublished: boolean): Promise<boolean> {
   try {
-    if (isPublished) await openResource(projectId);
-    else await openProject(projectId);
+    if (isPublished) {
+      await openResource(projectId);
+      return false;
+    }
+    await openProject(projectId);
+    return true;
   } catch (e) {
     await reportCouldNotOpen('Home', projectId, e);
+    return false;
   }
 }
 

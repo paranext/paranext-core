@@ -39,9 +39,15 @@ Terse decisions (choice → what to avoid → one-line why). Add only the net-ne
 
 ### Web view self-close (stopgap)
 
-- **A web view closes itself with a DOM walk** (PAPI has no self-close method yet): from `window.top.document`, find the iframe whose `contentWindow === window`, walk up to the enclosing `.dock-panel`, then click `.dock-tab-active .dock-tab-close-btn`.
-  - Avoid: re-deriving this each time; relying on it long-term once a PAPI self-close ships.
-  - Why: documented stopgap until `papi.webViews.closeSelf()` exists on `@papi/frontend`. Web views are same-origin iframes, so `top.document` walking works; it is fragile against rc-dock DOM changes, so it is recorded here so agents don't re-invent it.
+- **A web view closes itself by clicking its own tab's close button** in `window.top.document` (PAPI cannot close a web view yet). Use the reference implementation, `closeOwnDockTab` in `extensions/src/platform-get-resources/src/close-own-dock-tab.util.ts` (consumer: Home, `home.web-view.tsx`); its TSDoc and comments carry the details. It is extension-local while Home is its only consumer: a web view in another extension should move it into `platform-bible-react` (marked `@experimental`) and use it from there, not copy it or import across extensions.
+  - Avoid:
+    - the active tab's close button — after an await, the active tab can be a neighbor; find the tab by its `.platform-tab-title`'s `data-web-view-id`.
+    - a bare `[data-web-view-id]` match — the web view's `<iframe>` carries it too.
+    - the first title match — rc-tabs' overflow dropdown holds a copy of the tab, close button included, outside any `.dock-tab`.
+    - `instanceof HTMLElement` on host-page elements — they belong to the top window's realm.
+    - closing the last docked tab — the dock refills itself with a fresh Home, however many tabs float, are maximized or have their own window.
+    - code after the click — rc-dock can tear down the caller's iframe inside the dispatch.
+  - Why: a stopgap until PAPI can close a web view (e.g. `papi.webViews.closeWebView`). It is fragile against rc-dock markup changes, which `e2e-tests/tests/isolated/home-closes-after-open-simple.spec.ts` guards, and relies on web views reaching `window.top`, an open hole in `Security-Guide.md` (PT-5065).
 
 ### Single-instance web views
 
