@@ -728,6 +728,9 @@ test.describe('scripture editor annotation shapes', () => {
       ]);
       const mark = noteElement.locator('mark.annotationId-in-collapsed-note');
       await expect(mark).toHaveCount(1, { timeout: 30_000 });
+      // A hidden element still reports its computed style, so the registered rule having reached
+      // the page shows on the mark itself; only then does the unchanged width mean anything.
+      await expect(mark).toHaveCSS('padding', '6px', { timeout: 30_000 });
       expect((await noteElement.boundingBox())?.width).toBe(widthBefore);
       await expect(mark).toHaveCSS('display', 'none');
     });
