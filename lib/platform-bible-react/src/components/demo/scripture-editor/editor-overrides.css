@@ -259,7 +259,9 @@ button.toolbar-item {
 }
 
 /* The verse badge, in the theme's colour. Standard view (`marker-editable`) has none, as in PT9,
-   so an annotation's own background can paint a verse number it holds. */
+   so an annotation's background can paint a verse number. `:where` keeps the specificity of
+   `.formatted-font .verse`, so the gutter view's `background: none` still wins (the obvious
+   `.formatted-font:not(.marker-editable) .verse` is (0,3,0) and would beat it). */
 .formatted-font:where(:not(.marker-editable)) .verse {
   background-color: var(--secondary);
 }
