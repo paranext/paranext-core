@@ -2194,6 +2194,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     with their full trail logged; with the `evil` tab active, its `script`, `iframe` and `a`
     attempts were rejected from `evil.web-view.html` and no renderer `<<BAD>>` was logged. Probes
     (a) and (b) behaved as in the dev build.
+  - **Usersnap check (2026-11-18, dev build with the Paratext 10 Studio Usersnap keys added
+    locally):** both feedback forms opened and took input; the widget's `form` and `a` were allowed
+    from `https://resources.usersnap.com/widget-assets/js/chunks/<digits>/<hash>.js` (no query
+    string), with no rejection and no `TypeError` from the `window.Error` lock.
 - **Source:** PT-4767 (epic PT-2091).
 
 ## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
