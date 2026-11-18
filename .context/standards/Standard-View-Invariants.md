@@ -434,7 +434,13 @@ each range.
 ranges.** Every annotation paints as CSS classes on elements — content text in a `<mark>`, and a
 display byte with the same classes plus `display-annotation` — so every host class rule, any
 property and `:hover` included, applies to everything it paints, and `CSS.highlights` is never used.
-An editable carrier (a marker glyph, a verse, an attribute run, an editable caller) held only in
+Outside Standard view a verse number's own view rules can outrank an annotation's style: Formatted
+draws the verse badge, the Simple gutter view sets `background: none` on `span.verse`, and the
+`.text-spacing … .verse` spacing rules beat the annotation class on a wholly held `span.verse`, so
+there an annotation's background does not show on a verse number and its padding and margin never
+reach one.
+An editable carrier (a marker glyph, a chapter glyph, a verse, an attribute run, an editable caller,
+an unmatched closer) held only in
 part is cut into sibling pieces of its own class and `data-*` attributes, and only the held pieces
 carry the annotation's classes: `\v<NBSP>4 ` held on its `4` renders as three
 `span.verse[data-number="4"]` pieces, `\v<NBSP>`, `4` and ` `. So a selector for a carrier can match
