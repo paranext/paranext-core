@@ -354,7 +354,8 @@ function checkoutRevision(repo: DevRepo): void {
 
   // A commit or tag pin has to be something a fresh clone can fetch: reachable from a branch or a
   // tag of the remote. A commit that is only in this checkout — made here, or left behind when a
-  // branch was force-pushed — stages fine on this machine and fails on every other one.
+  // branch was force-pushed — stages fine on this machine and fails on every other one. Tags are
+  // taken as the checkout has them, so a tag made here and never pushed is not caught.
   if (!isRemoteBranch) {
     const holders = execSync(
       `git for-each-ref --count=1 --contains ${targetCommit} refs/remotes/origin refs/tags`,
@@ -394,13 +395,12 @@ function checkoutRevision(repo: DevRepo): void {
     // For a commit or tag pin the way back is `main`, which the next install moves to the pin.
     // Checking the pin out by name would leave the checkout detached, and so left alone again.
     const howToFollowThePin = isRemoteBranch
-      ? `git -C "${repoPath}" checkout ${repo.revision}`
-      : `git -C "${repoPath}" checkout main, then run the install again`;
+      ? `To stage the pinned revision instead:\n  git -C "${repoPath}" checkout ${repo.revision}\n`
+      : `To stage the pinned revision instead, run this and then the install again:\n  git -C "${repoPath}" checkout main\n`;
     console.warn(
       `\nWARNING: ${repoPath} ${where}, not the pinned "${repo.revision}".\n` +
         `Leaving it alone and staging what it has, so nothing you are working on is lost.\n` +
-        `Whatever this app runs is built from that state, not from the pinned revision.\n` +
-        `To stage the pinned revision instead: ${howToFollowThePin}\n`,
+        `Whatever this app runs is built from that state, not from the pinned revision.\n${howToFollowThePin}`,
     );
     return;
   }
