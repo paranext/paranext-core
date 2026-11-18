@@ -6,6 +6,8 @@
    demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
    When re-syncing, see the "Indent compensation" comment in the gutter section below for the
    invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy.
+   The cut-run hover, table-row head piece, collapsed-note mark and verse-badge scoping rules come
+   from scripture-editors#26, unmerged when copied.
    The empty-verse caret rules (`.psc-empty-text-active`, `[data-caret-host]`) come from
    scripture-editors#34, unmerged when copied. Deliberately different from it: the ellipsis box
    (`--psc-empty-verse-ellipsis-width`) is the verse number size (`--psc-verse-number-size`, 13/16

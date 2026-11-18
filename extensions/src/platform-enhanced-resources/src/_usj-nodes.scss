@@ -5,6 +5,8 @@
 // Until then: keep manually in sync. Tracked in working-docs/2026-05-04-pt9-fidelity-session-1-design.md §11.
 // Divergence from that copy: the font rule is `.formatted-font .usfm` rather than
 // `.usfm.formatted-font`, as it has always been here. Everything else in the font block matches.
+// The cut-run hover, table-row head piece, collapsed-note mark and verse-badge scoping rules come
+// from scripture-editors#26, unmerged when copied.
 
 /* stylelint-disable */
 
@@ -1753,6 +1755,14 @@
   margin: 0;
 }
 
+/* The head piece only: a row glyph an annotation cuts into pieces (`data-piece-continuation` on
+   every piece after the first, displayAnnotations.index.ts) keeps the one gap the uncut glyph has,
+   in front of it, rather than one in front of every piece. */
+.usfm .table-row > .opening:not([data-piece-continuation]),
+.usfm .table-row > .marker:not([data-piece-continuation]) {
+  padding-inline-start: 0.28em;
+}
+
 .formatted-font .usfm_th1 {
   font-size: 100%;
   font-style: italic;
@@ -2104,6 +2114,15 @@
   display: none;
 }
 
+/* A collapsed note shows only its caller, so a `<mark>` an annotation puts in its content holds no
+   visible text; any box an annotation style gives it (a border, padding, a margin) would draw a
+   sliver beside the caller. Everything such a mark holds is hidden already, so the mark is
+   hidden whole, which no box style can draw past. The caller is never a mark, so its own painting
+   is untouched. */
+.note.collapsed mark {
+  display: none;
+}
+
 /* Expanded NoteNode background styling */
 .marker-visible .note.expanded,
 .marker-hidden .note.expanded {
@@ -2257,9 +2276,16 @@ rt {
 /* VerseNode, ImmutableVerseNode */
 
 .formatted-font .verse {
-  background-color: rgba(222, 222, 222, 1);
   vertical-align: super;
   font-size: 0.66em;
+}
+/* The grey badge is for the views whose verse is a read-only number (see the Standard view rule
+   below). Leaving the badge out of Standard view, rather than overriding it with a transparent
+   background there, leaves an annotation's own background free to paint a verse number it holds.
+   `:where` keeps the rule at the specificity of a plain `.formatted-font .verse`, so a view's own
+   verse rule (the gutter view's `background: none`) still outranks the badge. */
+.formatted-font:where(:not(.marker-editable)) .verse {
+  background-color: rgba(222, 222, 222, 1);
 }
 .text-spacing .verse {
   margin: 0px 2px 0px 2px;
