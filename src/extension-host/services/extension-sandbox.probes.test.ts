@@ -21,6 +21,8 @@ const PROBE_NAMES = [
   'process-getActiveRequests',
   'process-execve',
   'process-mainModule',
+  'process-stdin',
+  'logger-file-transport',
   'module-loader',
   'require-cache',
   'dynamic-import',
@@ -43,6 +45,8 @@ function runProbes(mode: 'protected' | 'unprotected'): {
 } {
   const child = spawnSync(process.execPath, ['--import', 'tsx', FIXTURE, mode], {
     cwd: REPO_ROOT,
+    // Standard input ignored, as the extension host is started, so `process.stdin` is a file stream
+    stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
     timeout: 60_000,
   });
@@ -74,21 +78,24 @@ describe('evil extension sandbox probes', () => {
     expect(describeEscapes(results)).toBe('');
   }, 60_000);
 
-  it('the probes detect escapes from a host that only filters require by name', () => {
+  it('every probe except the require probes detects an escape from a host that only filters require by name', () => {
     const { results } = runProbes('unprotected');
 
-    expect(results).toEqual(
-      expect.arrayContaining(
-        [
-          'process-getBuiltinModule',
-          'process-binding',
-          'module-loader',
-          'require-cache',
-          'dynamic-import',
-          'function-constructor',
-        ].map((name) => expect.objectContaining({ name, outcome: 'escaped' })),
-      ),
+    // The require probes go through the name filter, which refuses them in this mode too.
+    // `process.execve` does not exist on Windows or before Node 22.15, so its probe reports refused
+    // there.
+    const expectedEscapes = PROBE_NAMES.filter(
+      (name) =>
+        !name.startsWith('require-') &&
+        !(name === 'process-execve' && typeof process.execve !== 'function'),
     );
+    const notEscaped = results
+      .filter((result) => expectedEscapes.includes(result.name) && result.outcome !== 'escaped')
+      .map((result) => `${result.name}: ${result.detail}`);
+
+    expect(results.map((result) => result.name).sort()).toEqual([...PROBE_NAMES].sort());
+    // Compared as text so a failure lists every probe that missed its route
+    expect(notEscaped.join('\n')).toBe('');
   }, 60_000);
 
   it('function kinds stay distinguishable after the constructors are locked', () => {

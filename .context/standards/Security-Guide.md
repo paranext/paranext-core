@@ -111,12 +111,18 @@ the extension host process:
 - **Module helpers on `process` are disabled at activation.** `blockProcessModuleAccess` replaces
   `process.getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`, `loadEnvFile`,
   `_getActiveHandles`, `_getActiveRequests` and `execve` with functions that throw, and sets
-  `process.mainModule` to `undefined`.
+  `process.mainModule` to `undefined`. It also replaces `process.stdin` with an empty stream: the
+  host's standard input is `/dev/null`, so Node would otherwise make it a file stream carrying the
+  whole `fs` module.
 - **Code built from strings is disabled at activation.** `blockCodeGenerationFromStrings` deletes
   `globalThis.eval` and `globalThis.Function` and locks the `constructor` of the four function
   prototypes (plain, async, generator, async generator) to a function that throws.
 - **Lockdowns come before any load.** The host gets its extension loader only from
   `lockDownAndCreateExtensionLoader`, which applies both lockdowns before returning it.
+- **The logger exposes only logging methods.** `papi.logger` in the extension host is a frozen
+  object of the seven logging methods (`createExtensionLogger` in `extension-logger.util.ts`), not
+  the electron-log logger, whose `transports.file` settings could point the log file and
+  `readAllLogs` at any path.
 - **Network:** `fetch` is replaced with `papi.fetch`; `XMLHttpRequest` and `WebSocket` throw.
 - Refusals from the loader and the lockdowns contain the text `not allowed in extensions`.
 
@@ -124,7 +130,10 @@ The regression guard is the `evil` extension's sandbox probes (`extensions/src/e
 which logs `Sandbox probes (<phase>): <refused>/<total> refused` and a `<<BAD>>` line per escape,
 at load, at activation and again 3 seconds later to catch a route the host reopens after startup) and
 `src/extension-host/services/extension-sandbox.probes.test.ts`, which runs the same probes in a
-child Node process and fails if any route is open.
+child Node process and fails if any route is open. The running app is checked too: the smoke E2E
+test `e2e-tests/tests/smoke/extension-sandbox.spec.ts` reads every phase's results from the dev app
+through the `evil.getSandboxProbeResults` command, and CI's `check packaged extension sandbox` step
+(`e2e-tests/check-packaged-sandbox-probes.ts`) does the same against the Linux packaged build.
 
 This is an in-process sandbox. It closes the module-loading and string-compilation routes listed
 above, and every extension still shares one JavaScript realm and one `process` with the host, so it
@@ -134,7 +143,11 @@ is not a hard security boundary. As of 2026-11-09 these routes are known to rema
 - the rest of the `process` surface, such as `kill`, `send`, `report.writeReport`, `chdir` and
   `env`;
 - in dev builds, grabbing host functions from stack frames through `Error.prepareStackTrace` and
-  `CallSite.getFunction()`.
+  `CallSite.getFunction()`;
+- (added 2026-11-18) after anything in the host has called `fetch` once, Node's built-in HTTP client
+  (undici) on `globalThis[Symbol.for('undici.globalDispatcher.1')]`, whose `dispatch` makes
+  requests that skip `papi.fetch`. Harmless while `papi.fetch` passes requests through unchanged,
+  but a gap if `papi.fetch` ever enforces a policy.
 
 A follow-up audit of the `process` surface is recommended but not filed as of 2026-11-09.
 Process-level isolation (Node's permission model, a process per extension) is out of scope as of

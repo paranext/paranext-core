@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import vm from 'node:vm';
 import { rememberExtensionSourceMap } from './extension-stack-traces.util';
 
@@ -83,8 +84,8 @@ const PROCESS_MODULE_ACCESS_MEMBERS = [
 /**
  * Replaces the `process` members that load Node modules or native code outside `require`, read
  * files into the environment, hand out the host's live handles, or replace the host process with
- * functions that throw, and hides `process.mainModule` (a handle on Node's module loader). Safe to
- * call more than once.
+ * functions that throw, hides `process.mainModule` (a handle on Node's module loader), and replaces
+ * `process.stdin` with an empty stream. Safe to call more than once.
  *
  * This does not lock down the rest of `process`: members such as `kill`, `send`, `chdir`, `env`,
  * `report.writeReport` and the `net.Socket` constructor behind `process.stdout` and
@@ -102,6 +103,14 @@ export function blockProcessModuleAccess(): void {
   });
   Object.defineProperty(process, 'mainModule', {
     value: undefined,
+    writable: true,
+    configurable: true,
+  });
+  // The host's standard input is `/dev/null`, so Node makes `process.stdin` a file stream, which
+  // carries the whole `fs` module. The original is a getter that creates that stream on first read;
+  // nothing in the host reads it, so replacing it here means the file stream is never created.
+  Object.defineProperty(process, 'stdin', {
+    value: Readable.from([]),
     writable: true,
     configurable: true,
   });
