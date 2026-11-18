@@ -459,6 +459,14 @@ async function tryNetworkAccess() {
 
 async function activate(context) {
   logger.info('Evil is activating...');
+  // Registered first, so end-to-end tests can read the probe results even if the web views below
+  // are slow to register
+  context.registrations.add(
+    await papi.commands.registerCommand(
+      'evil.getSandboxProbeResults',
+      async () => sandboxProbeResultsByPhase,
+    ),
+  );
   reportSandboxProbes('activate');
   tryNetworkAccess();
   // 3 secs is timed to be after the extension service has finished initializing.
@@ -487,12 +495,6 @@ async function activate(context) {
 
   context.registrations.add(await evilWebViewProviderPromise);
   context.registrations.add(await evilFileWebViewProviderPromise);
-  context.registrations.add(
-    await papi.commands.registerCommand(
-      'evil.getSandboxProbeResults',
-      async () => sandboxProbeResultsByPhase,
-    ),
-  );
 
   logger.info('Evil is finished activating!');
 }
