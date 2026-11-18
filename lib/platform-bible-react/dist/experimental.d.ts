@@ -4,7 +4,7 @@ import { EditorRef, MarkerMenuItem, MarkerMenuItem as EditorMarkerMenuItem, Sele
 import { DblResourceData, LanguageStrings, LocalizeKey, PaletteItem, ResourceType, ScrollGroupId } from 'platform-bible-utils';
 import { ALL_BOOK_IDS, ForwardedPaletteKeyEvent, PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import React$1 from 'react';
-import { MouseEventHandler, MutableRefObject, ReactNode, RefObject } from 'react';
+import { MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 
 type ClassValue = ClassArray | ClassDictionary | string | number | bigint | null | boolean | undefined;
 type ClassDictionary = Record<string, any>;
@@ -1941,6 +1941,34 @@ export type DeveloperSectionProps = {
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare function DeveloperSection({ localizedStrings, selectedServer, onServerChange, disabled, }: DeveloperSectionProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Object containing all keys used for localization in {@link ShortcutKeys}. Platform.Bible localizes
+ * them and gives them to every `ShortcutKeys` through `ShortcutKeysLocalizedStringsProvider`, so a
+ * caller in the app never passes them.
+ *
+ * @experimental This export is unstable and may change or disappear without notice
+ */
+export declare const SHORTCUT_KEYS_STRING_KEYS: readonly [
+	"%shortcutKeys_tooltip%"
+];
+/**
+ * Localized strings for {@link ShortcutKeys}, keyed by {@link SHORTCUT_KEYS_STRING_KEYS}.
+ * `%shortcutKeys_tooltip%` must contain `{keys}`, which is replaced by the keys to press.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShortcutKeysLocalizedStrings = {
+	[key in (typeof SHORTCUT_KEYS_STRING_KEYS)[number]]?: string;
+};
+/**
+ * Gets the full name of each key in one already-resolved keyboard shortcut hint, in press order —
+ * `Control` for `⌃` or `Ctrl`, `Command` for `⌘` — for text that reads the shortcut out rather than
+ * showing it as keycaps.
+ *
+ * @param hint One key combination, as for {@link getShortcutKeycaps}
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export declare function getShortcutKeyNames(hint: string): string[];
+/**
  * Props for {@link ShortcutKeys}.
  *
  * @experimental This type is unstable and may change or disappear without notice
@@ -1965,9 +1993,31 @@ export type ShortcutKeysProps = {
  * It does not detect the operating system: it follows the spelling of the hint it is given, so the
  * caller picks the spelling for the user's OS (e.g. `isMacOs() ? '⌘Z' : 'Ctrl+Z'`).
  *
+ * Hovering the keycaps shows a tooltip that reads the shortcut out ("Press Control and +"), using
+ * the strings from the nearest `ShortcutKeysLocalizedStringsProvider`. There is no tooltip inside
+ * another tooltip's content, where it could not open, or until the strings have loaded.
+ *
  * @experimental This component is unstable and may change or disappear without notice
  */
 export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Props for {@link ShortcutKeysLocalizedStringsProvider}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShortcutKeysLocalizedStringsProviderProps = React$1.PropsWithChildren<{
+	/** The localized strings every `ShortcutKeys` inside uses, keyed by `SHORTCUT_KEYS_STRING_KEYS` */
+	localizedStrings: ShortcutKeysLocalizedStrings;
+}>;
+/**
+ * Gives every `ShortcutKeys` inside the strings for its tooltip. Platform.Bible provides it at the
+ * root of the main window and of every web view, so components and extensions in the app never pass
+ * the strings themselves; use it only where `platform-bible-react` renders outside the app, such as
+ * in Storybook.
+ *
+ * @experimental This component is unstable and may change or disappear without notice
+ */
+export declare function ShortcutKeysLocalizedStringsProvider({ localizedStrings, children, }: ShortcutKeysLocalizedStringsProviderProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Names (lucide kebab-case) of the icons `LucideIcon` can render
  *

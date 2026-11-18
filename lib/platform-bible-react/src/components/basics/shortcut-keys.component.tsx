@@ -1,6 +1,33 @@
-import { slice, split } from 'platform-bible-utils';
-import { Fragment } from 'react';
+import { includes, indexOf, slice, split, stringLength } from 'platform-bible-utils';
+import { Fragment, ReactNode } from 'react';
 import { Kbd, KbdGroup } from '@/components/shadcn-ui/kbd';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
+import { useIsInTooltip } from '@/context/in-tooltip.context';
+import { useShortcutKeysLocalizedStrings } from '@/context/shortcut-keys-strings.context';
+
+/**
+ * Object containing all keys used for localization in {@link ShortcutKeys}. Platform.Bible localizes
+ * them and gives them to every `ShortcutKeys` through `ShortcutKeysLocalizedStringsProvider`, so a
+ * caller in the app never passes them.
+ *
+ * @experimental This export is unstable and may change or disappear without notice
+ */
+export const SHORTCUT_KEYS_STRING_KEYS = Object.freeze(['%shortcutKeys_tooltip%'] as const);
+
+/**
+ * Localized strings for {@link ShortcutKeys}, keyed by {@link SHORTCUT_KEYS_STRING_KEYS}.
+ * `%shortcutKeys_tooltip%` must contain `{keys}`, which is replaced by the keys to press.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShortcutKeysLocalizedStrings = {
+  [key in (typeof SHORTCUT_KEYS_STRING_KEYS)[number]]?: string;
+};
 
 /**
  * The macOS key symbols a combo may string together with no separator — modifiers plus the symbols
@@ -22,6 +49,32 @@ const MACOS_SYMBOL_KEYS: ReadonlySet<string> = new Set([
   '←',
   '→',
 ]);
+
+/**
+ * Names for the keycaps whose glyph or abbreviation does not say the key's name in full. Any keycap
+ * not listed is already its own name (`Shift`, `F8`, `+`).
+ */
+// TODO(PT-4629): Localize these names along with the hint's own key names.
+const KEY_NAMES: Readonly<Record<string, string>> = {
+  '⌘': 'Command',
+  '⌥': 'Option',
+  '⌃': 'Control',
+  '⇧': 'Shift',
+  '⇥': 'Tab',
+  '⏎': 'Return',
+  '⌫': 'Delete',
+  '⎋': 'Escape',
+  '␣': 'Space',
+  '↑': 'Up Arrow',
+  '↓': 'Down Arrow',
+  '←': 'Left Arrow',
+  '→': 'Right Arrow',
+  Ctrl: 'Control',
+  Esc: 'Escape',
+  Del: 'Delete',
+  PageUp: 'Page Up',
+  PageDown: 'Page Down',
+};
 
 /**
  * Splits one hint written the macOS way — leading symbols with no separator, optionally followed by
@@ -76,6 +129,66 @@ export function getShortcutKeycaps(hint: string): { keycaps: string[]; separator
 }
 
 /**
+ * Gets the full name of each key in one already-resolved keyboard shortcut hint, in press order —
+ * `Control` for `⌃` or `Ctrl`, `Command` for `⌘` — for text that reads the shortcut out rather than
+ * showing it as keycaps.
+ *
+ * @param hint One key combination, as for {@link getShortcutKeycaps}
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export function getShortcutKeyNames(hint: string): string[] {
+  return getShortcutKeycaps(hint).keycaps.map((keycap) => KEY_NAMES[keycap] ?? keycap);
+}
+
+/**
+ * Joins key names as a list in the user's locale, like `Intl.ListFormat` but with no serial comma:
+ * `Control, Shift and N` rather than `Control, Shift, and N`. All but the last key are joined as a
+ * plain list, and that is then joined to the last key as a list of two, which no locale separates
+ * with a comma before its conjunction.
+ */
+function getKeyListParts(keyNames: string[]): { type: 'element' | 'literal'; value: string }[] {
+  const conjunctionFormat = new Intl.ListFormat(undefined, { style: 'long', type: 'conjunction' });
+  if (keyNames.length < 3) return conjunctionFormat.formatToParts(keyNames);
+  const leadingParts = new Intl.ListFormat(undefined, {
+    style: 'short',
+    type: 'unit',
+  }).formatToParts(keyNames.slice(0, -1));
+  const lastKeyName = keyNames[keyNames.length - 1];
+  let elementCount = 0;
+  // Format two stand-ins to learn where this locale puts its conjunction, then put the leading list
+  // in place of the first and the last key in place of the second
+  return conjunctionFormat.formatToParts(['leading', 'last']).flatMap((part) => {
+    if (part.type !== 'element') return [part];
+    elementCount += 1;
+    return elementCount === 1 ? leadingParts : [{ type: 'element', value: lastKeyName }];
+  });
+}
+
+/**
+ * Builds the tooltip that reads a shortcut out, e.g. "Press [Control] and [+]": the localized
+ * template with `{keys}` replaced by each key's full name as a keycap, joined as a list in the
+ * user's locale.
+ */
+function getTooltipContent(template: string, hint: string): ReactNode {
+  const keysPlaceholder = '{keys}';
+  const placeholderIndex = indexOf(template, keysPlaceholder);
+  if (placeholderIndex < 0) return template;
+  const keyNames = getShortcutKeyNames(hint);
+  const listParts = getKeyListParts(keyNames);
+  return (
+    <>
+      {slice(template, 0, placeholderIndex)}
+      {listParts.map((part, index) =>
+        // A key name can repeat, so it is not a safe key; the parts never reorder, so position is.
+        // eslint-disable-next-line react/no-array-index-key
+        part.type === 'element' ? <Kbd key={index}>{part.value}</Kbd> : part.value,
+      )}
+      {slice(template, placeholderIndex + stringLength(keysPlaceholder))}
+    </>
+  );
+}
+
+/**
  * Props for {@link ShortcutKeys}.
  *
  * @experimental This type is unstable and may change or disappear without notice
@@ -101,26 +214,65 @@ export type ShortcutKeysProps = {
  * It does not detect the operating system: it follows the spelling of the hint it is given, so the
  * caller picks the spelling for the user's OS (e.g. `isMacOs() ? '⌘Z' : 'Ctrl+Z'`).
  *
+ * Hovering the keycaps shows a tooltip that reads the shortcut out ("Press Control and +"), using
+ * the strings from the nearest `ShortcutKeysLocalizedStringsProvider`. There is no tooltip inside
+ * another tooltip's content, where it could not open, or until the strings have loaded.
+ *
  * @experimental This component is unstable and may change or disappear without notice
  */
 export function ShortcutKeys({ hint }: ShortcutKeysProps) {
+  const isInTooltip = useIsInTooltip();
+  const localizedStrings = useShortcutKeysLocalizedStrings();
   const { keycaps, separator } = getShortcutKeycaps(hint);
   // Menu shortcut slots set wide letter spacing for a plain-text hint; keycaps inherit it, which
   // spreads a keycap's letters apart ("C t r l"), so reset it here for every caller.
-  if (keycaps.length === 1) return <Kbd className="tw:tracking-normal">{keycaps[0]}</Kbd>;
+  const keys =
+    keycaps.length === 1 ? (
+      <Kbd className="tw:tracking-normal">{keycaps[0]}</Kbd>
+    ) : (
+      // `dir="ltr"` on the group itself, not an enclosing element: `KbdGroup` is `inline-flex`, and
+      // flex item order follows `direction`, so this keeps the keycap order in a right-to-left
+      // layout. The gap is narrower than `KbdGroup`'s so a combo reads as one unit.
+      <KbdGroup dir="ltr" className="tw:gap-0.5 tw:tracking-normal">
+        {keycaps.map((keycap, index) => (
+          // A combo can repeat a glyph (`Ctrl++` has two keycaps but only one distinct value), so
+          // the keycap text is not a safe key; position is stable because the keycaps never
+          // reorder.
+          // eslint-disable-next-line react/no-array-index-key
+          <Fragment key={index}>
+            {index > 0 && separator && (
+              // The `+` is drawn about half a pixel left of the middle of its advance, so centered
+              // as is it leaves a wider gap after it than before it. A pixel of start padding in a
+              // whole-pixel box moves the center half a pixel right, which measured closest to
+              // centered at 100 % and stays within half a pixel at 125 %–200 %. The group is always
+              // `ltr`, so the padding is always on the left.
+              <span className="tw:inline-flex tw:w-2 tw:justify-center tw:ps-px">{separator}</span>
+            )}
+            <Kbd>{keycap}</Kbd>
+          </Fragment>
+        ))}
+      </KbdGroup>
+    );
+
+  const tooltipTemplate = localizedStrings['%shortcutKeys_tooltip%'];
+  // A template without `{keys}` is no template: while the strings load, the value is the key itself
+  if (isInTooltip || !tooltipTemplate || !includes(tooltipTemplate, '{keys}')) return keys;
   return (
-    // `dir="ltr"` on the group itself, not an enclosing element: `KbdGroup` is `inline-flex`, and
-    // flex item order follows `direction`, so this keeps the keycap order in a right-to-left layout.
-    <KbdGroup dir="ltr" className="tw:tracking-normal">
-      {keycaps.map((keycap, index) => (
-        // A combo can repeat a glyph (`Ctrl++` has two keycaps but only one distinct value), so the
-        // keycap text is not a safe key; position is stable because the keycaps never reorder.
-        // eslint-disable-next-line react/no-array-index-key
-        <Fragment key={index}>
-          {index > 0 && separator && <span>{separator}</span>}
-          <Kbd>{keycap}</Kbd>
-        </Fragment>
-      ))}
-    </KbdGroup>
+    // Its own provider, so the keycaps get a tooltip in any menu, whether or not one is above them
+    <TooltipProvider>
+      <Tooltip>
+        {/* A wrapper rather than `asChild` on the keycaps: the trigger would replace their `data-slot`,
+          and `Kbd` ignores the pointer, so the hover has to land on something around it */}
+        <TooltipTrigger asChild>
+          <span className="tw:inline-flex">{keys}</span>
+        </TooltipTrigger>
+        {/* To the side, so the tooltip does not cover the menu items above or below. */}
+        {/* The shared tooltip nudges its arrow flush against the content only for top and bottom
+          tooltips; without the same nudge here the side arrow's tip pokes into the keycaps */}
+        <TooltipContent side="right" arrowClassName="tw:translate-y-[calc(-50%-1px)]">
+          {getTooltipContent(tooltipTemplate, hint)}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

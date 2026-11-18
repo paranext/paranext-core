@@ -2992,6 +2992,7 @@ export async function openOrReloadWebView(
   window.ReactDOMClient = window.parent.ReactDOMClient;
   window.createRoot = window.parent.createRoot;
   window.WebViewErrorBoundary = window.parent.WebViewErrorBoundary;
+  window.ShortcutKeysLocalizationRoot = window.parent.ShortcutKeysLocalizationRoot;
   window.SillsdevScripture = window.parent.SillsdevScripture;
   var require = window.parent.webViewRequire;
   var getWebViewStateById = window.parent.getWebViewStateById;
@@ -3194,7 +3195,9 @@ export async function openOrReloadWebView(
                   // Every React web view mounts here, with nothing above it, so an uncaught render
                   // throw would tear down this iframe's whole root and leave an empty pane. The
                   // boundary is the only thing between that throw and a blank web view, which is
-                  // why it wraps here rather than in any one extension's component.
+                  // why it wraps here rather than in any one extension's component. The shortcut
+                  // keys strings wrap here for the same reason: every shortcut keycap in every web
+                  // view gets its tooltip without the web view asking for it.
                   root.render(
                     React.createElement(
                       WebViewErrorBoundary,
@@ -3203,7 +3206,11 @@ export async function openOrReloadWebView(
                         webViewType: savedWebViewDefinition.webViewType,
                         webViewTitle: savedWebViewDefinition.title,
                       },
-                      React.createElement(globalThis.webViewComponent, webViewProps),
+                      React.createElement(
+                        ShortcutKeysLocalizationRoot,
+                        null,
+                        React.createElement(globalThis.webViewComponent, webViewProps),
+                      ),
                     ),
                   );
                 }

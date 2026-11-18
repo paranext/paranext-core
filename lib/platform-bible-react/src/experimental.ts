@@ -160,7 +160,17 @@ export {
   DEVELOPER_SECTION_STRING_KEYS,
 } from './components/advanced/developer-section/developer-section.component';
 export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
-export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';
+export {
+  getShortcutKeyNames,
+  SHORTCUT_KEYS_STRING_KEYS,
+  ShortcutKeys,
+  type ShortcutKeysLocalizedStrings,
+  type ShortcutKeysProps,
+} from './components/basics/shortcut-keys.component';
+export {
+  ShortcutKeysLocalizedStringsProvider,
+  type ShortcutKeysLocalizedStringsProviderProps,
+} from './context/shortcut-keys-strings.context';
 export {
   LucideIcon,
   LUCIDE_ICON_NAMES,

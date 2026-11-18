@@ -10213,6 +10213,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Alternatives:** **Re-export from `platform-bible-utils`, source left in `src/shared/utils/`** — not available: the package is standalone and cannot import from core's `src/`. **Export through `@papi/core`** — that surface is types-only (an empty default object plus `export type` lines); a runtime function does not belong there. **Leave it core-internal and let each extension hand-roll it** — the zero-diff option, and it hands every extension the same promise-versus-value caching bug.
 - **Consequences:** Such a utility is now held to the `lib/platform-bible-utils/` API-surface TSDoc bar rather than core-internal expectations. Each further move costs a repoint of every core import plus a `papi.d.ts` regeneration, so batch them. A utility needing both extension reach and a core-only dependency cannot follow: nothing in `platform-bible-utils` can import from `src/`.
 
+## adr-shortcut-keys-tooltip-from-platform-roots: Shortcut keycaps get their tooltip strings from the platform's roots, not from each caller
+
+- **Date:** 2026-11-18
+- **Status:** Accepted
+- **Context:** Every keyboard shortcut shown in the app (menus, context menus, the menu bar, button
+  tooltips) renders through `ShortcutKeys` in `platform-bible-react`. UX asked for a tooltip on the
+  keycaps that reads the shortcut out ("Press Control and +"). As a prop, the localized template
+  would have to be threaded through `TabToolbar`, `TabDropdownMenu`, `PlatformMenubar` and every
+  context menu, and every web view that renders one would have to fetch it; a menu that forgot
+  would silently have no tooltip. Keycaps also appear inside other tooltips (Undo/Redo,
+  Back/Forward), where a tooltip of their own cannot open.
+- **Decision:** `ShortcutKeys` always offers the tooltip. It reads the localized template from
+  `ShortcutKeysLocalizedStringsProvider`, which the platform puts at the root of the main window
+  (`src/renderer/index.tsx`) and of every web view (the mount call in `web-view.service-shard.ts`),
+  through `ShortcutKeysLocalizationRoot`. `TooltipContent` marks its content with
+  `InTooltipContext`, and `ShortcutKeys` adds no tooltip there. Without a provider, or while the
+  strings load, the keycaps render without a tooltip.
+- **Alternatives:** **A prop on `ShortcutKeys` threaded by each caller** — rejected: it is a pattern
+  every menu and extension has to follow, and missing it fails silently. **An opt-out prop for
+  keycaps inside a tooltip** — rejected for the same reason; the tooltip content knows it is a
+  tooltip, so it says so. **English text built into the component** — rejected by
+  `adr-shared-components-take-localized-strings`.
+- **Consequences:** This narrows `adr-shared-components-take-localized-strings` for one string: the
+  component still takes a localized string, never a key, and never composes the caller's text, but
+  the host supplies it once through context rather than each caller through a prop. The template
+  holds its own grammar (`Press {keys}`); the component fills `{keys}` with key names joined by
+  `Intl.ListFormat` in the user's locale, without a serial comma. Key names are English for now, as
+  the hints themselves are (`TODO(PT-4629)`). `platform-bible-react` used outside the app, such as
+  in Storybook, shows no keycap tooltip unless it adds the provider. The web view half is mounted
+  from generated script text, so `shortcut-keys-localization-root-wiring.test.ts` pins its wiring
+  the way the error boundary's wiring test does.
+
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 
 - **Date:** 2026-08-26

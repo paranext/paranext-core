@@ -3875,6 +3875,7 @@ describe('React web view bootstrap teardown', () => {
       createRoot: vi.fn(() => root),
       React: { createElement: vi.fn(() => ({})) },
       WebViewErrorBoundary: () => undefined,
+      ShortcutKeysLocalizationRoot: () => undefined,
       papi: { webViews: { onDidUpdateWebView: vi.fn(() => unsubscribeUpdateWebView) } },
       getSavedWebViewDefinition: () =>
         canRender ? { id: 'wv-react', webViewType: 'test.type' } : undefined,

@@ -642,6 +642,7 @@
   "%shareLayoutDialog_textCollection_hint%": "Text collection includes checked resources from all tabs ({count})",
   "%shareLayoutDialog_textCollectionResources_label%": "Text collection resources",
   "%shareLayoutDialog_title%": "Share layout with team",
+  "%shortcutKeys_tooltip%": "Press {keys}",
   "%some_localization_key%": "This is the English text for %some_localization_key%.",
   "%sourceLanguageIndexedList_backToList%": "Back to list",
   "%sourceLanguageIndexedList_emptyState%": "No items found",
