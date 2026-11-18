@@ -6,6 +6,7 @@
  * So a spec renamed or deleted without updating these lists would drop out of the job with no
  * error, and the job only reports. This test fails on the pull request that makes the list stale.
  */
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
@@ -27,18 +28,36 @@ function readSpecList(listName: string): string[] {
 }
 
 /**
- * The `editor_paths` pattern in `.github/workflows/test.yml`'s `e2e-core-selection` job: the paths
- * whose change makes the pull-request job run `core-specs-editor.txt` too. It is POSIX ERE (for
- * `grep -E`), which this pattern's syntax shares with JavaScript.
+ * The entries of `editor_paths` in `.github/workflows/test.yml`'s `e2e-core-selection` job, one per
+ * `editor_paths+=('…')` line: the paths whose change makes the pull-request job run
+ * `core-specs-editor.txt` too. Each is POSIX ERE (for `grep -E`), whose syntax these entries share
+ * with JavaScript.
  */
-function readEditorPathsPattern(): RegExp {
+function readEditorPathEntries(): string[] {
   const workflow = fs.readFileSync(
     path.join(REPOSITORY_ROOT, '.github', 'workflows', 'test.yml'),
     'utf8',
   );
-  const match = /^\s*editor_paths='([^']+)'/m.exec(workflow);
-  if (!match) throw new Error('test.yml no longer sets editor_paths');
-  return new RegExp(match[1]);
+  const entries = [...workflow.matchAll(/^\s*editor_paths\+=\('([^']+)'\)\s*$/gm)].map(
+    (match) => match[1],
+  );
+  if (entries.length === 0) throw new Error("test.yml has no editor_paths+=('…') lines");
+  return entries;
+}
+
+/** The pattern the workflow builds from the entries: `^(` + the entries joined with `|` + `)`. */
+function editorPathsPattern(entries: string[]): RegExp {
+  return new RegExp(`^(${entries.join('|')})`);
+}
+
+/** Every path git tracks, as the pull request's changed-files list would name it. */
+function trackedFiles(): string[] {
+  return execFileSync('git', ['-C', REPOSITORY_ROOT, 'ls-files'], {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+    .split('\n')
+    .filter((line) => line !== '');
 }
 
 // Renaming a list and updating only SPEC_LISTS would leave the workflow naming a file that no
@@ -53,7 +72,20 @@ it('names exactly the SPEC_LISTS files in test.yml', () => {
 });
 
 describe('the editor list trigger in test.yml', () => {
-  const editorPaths = readEditorPathsPattern();
+  const entries = readEditorPathEntries();
+  const editorPaths = editorPathsPattern(entries);
+
+  // An entry that matches no file silently stops triggering the editor list — after a rename, for
+  // instance — and the job only reports, so nothing else would notice. Each entry names one thing,
+  // so this checks every one of them.
+  it.each(entries)('%s matches a file in the repository', (entry) => {
+    const entryPattern = new RegExp(`^(${entry})`);
+    expect(
+      trackedFiles().some((file) => entryPattern.test(file)),
+      `No tracked file matches the editor_paths entry '${entry}': update editor_paths in ` +
+        '.github/workflows/test.yml to the path the editor now uses.',
+    ).toBe(true);
+  });
 
   // A pull request that changes one of the editor-list specs, or the list itself, must run that
   // list; the pattern names them by hand, so it has to follow the list.
@@ -64,24 +96,27 @@ describe('the editor list trigger in test.yml', () => {
     },
   );
 
-  // One row per alternative of the pattern, so dropping any one of them fails its own row.
+  // One row per entry, so dropping any one of them fails its own row.
   it.each([
     'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     'dev-packages.json',
     `e2e-tests/${EDITOR_LIST}`,
     'e2e-tests/fixtures/no-unasked-edits.body.ts',
+    'e2e-tests/fixtures/project-write-judging.ts',
+    'e2e-tests/fixtures/usfm-units.ts',
     'e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-power-standard.spec.ts',
     'e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-simple-paragraph-structure.spec.ts',
+    'extensions/src/platform-scripture/src/project-data-provider/platform-scripture-extender-pdpe.model.ts',
+    'src/node/polyfills/dom-globals.polyfill.ts',
     'c-sharp/Projects/ParatextProjectDataProvider.cs',
-    'c-sharp/Projects/UsfmConverter.cs',
-    'c-sharp/Projects/Conversion/UsjWriter.cs',
+    'c-sharp/ParanextDataProvider.csproj',
     'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
     'lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx',
     'lib/platform-bible-react/src/components/advanced/marker-palette-keys.util.ts',
     'lib/platform-bible-react/src/components/advanced/use-marker-palette-session-writers.hook.ts',
     'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
     'lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css',
-  ])('matches a pattern alternative for %s', (changedPath) => {
+  ])('matches an entry for %s', (changedPath) => {
     expect(editorPaths.test(changedPath)).toBe(true);
   });
 
@@ -90,6 +125,7 @@ describe('the editor list trigger in test.yml', () => {
     'lib/platform-bible-react/src/components/basics/button.component.tsx',
     'lib/platform-bible-react/src/components/advanced/book-chapter-control.component.tsx',
     'c-sharp/Projects/Other.cs',
+    'c-sharp/Checks/UsfmLocation.cs',
     'e2e-tests/tests/isolated/docking/other.spec.ts',
   ])('does not run the editor list when %s changes', (changedPath) => {
     expect(editorPaths.test(changedPath)).toBe(false);
