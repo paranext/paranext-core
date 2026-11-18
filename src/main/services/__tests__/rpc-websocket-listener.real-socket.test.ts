@@ -7,7 +7,7 @@ import { INTENTIONAL_CLOSE_CODE, REGISTER_METHOD } from '@shared/data/rpc.model'
 import { issueLaunchSecrets, revokeLaunchSecrets } from '@main/services/launch-secrets.service';
 import { REGISTRY_TOKEN_REQUEST_TYPE } from '@node/services/request-registry-tokens.service-model';
 import { createFakeWebSocket } from './fake-web-socket-test.util';
-import { bindOnAFreePort } from './real-socket-test.util';
+import { bindOnAFreePort } from './real-socket.test-utils';
 
 /**
  * Companion to `rpc-websocket-listener.listening.test.ts`, which proves the `listening` handshake
