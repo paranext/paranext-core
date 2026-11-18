@@ -170,7 +170,7 @@ function MarkerMenuCommandItem({
       className="tw:flex tw:gap-2 tw:hover:bg-accent"
       disabled={item.isDisallowed || item.isDeprecated || item.isDisabled}
       // Absent for items with no selection state, so existing consumers' rows are unchanged.
-      // Never pair this with `data-checked`: CommandItem renders its own trailing check for that,
+      // Never pair this with `data-checked`: CommandItem renders its own leading check for that,
       // which would double the checkmark.
       aria-checked={
         item.selectionState === undefined

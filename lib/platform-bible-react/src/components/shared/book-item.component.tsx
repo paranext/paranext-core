@@ -3,7 +3,6 @@ import { getLocalizedBookId, getLocalizedBookName } from '@/components/shared/bo
 import { LIST_ITEM_KEYBOARD_FOCUS_RING } from '@/utils/focus.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
-import { Check } from 'lucide-react';
 import { Section } from 'platform-bible-utils';
 import { MouseEvent, Ref, useMemo, useRef } from 'react';
 
@@ -158,6 +157,7 @@ export function BookItem({
       aria-disabled={disabled || undefined}
       aria-label={ariaLabel}
       disabled={disabled}
+      data-checked={showCheck ? isSelected : undefined}
       className={cn(
         !suppressKeyboardHighlight && LIST_ITEM_KEYBOARD_FOCUS_RING,
         // Suppress CommandItem's own data-selected background and text color so the keyboard
@@ -168,9 +168,6 @@ export function BookItem({
         // Hover keeps its own background so pointer feedback stays distinct from the ring, which
         // marks the item Enter will submit.
         'tw:hover:bg-muted',
-        // Hide CommandItem's own trailing check icon — this component's own `showCheck` icon
-        // (rendered as the first child below, so it is never the last child) is the one shown.
-        'tw:[&>svg:last-child]:hidden',
         className,
         disabled && 'tw:cursor-not-allowed tw:opacity-50',
         // Mirrors NumberedItemGrid's dimmed-vs-disabled split — same tokens, so chapter/verse cells
@@ -182,14 +179,6 @@ export function BookItem({
           'tw:bg-muted/50 tw:text-muted-foreground/50 tw:data-selected:bg-muted/50 tw:data-selected:text-muted-foreground/50',
       )}
     >
-      {showCheck && (
-        <Check
-          className={cn(
-            'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
-            isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
-          )}
-        />
-      )}
       <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
       {isDimmed && (
         // Visible rather than hover-only: cmdk never moves DOM focus onto an item (the input keeps

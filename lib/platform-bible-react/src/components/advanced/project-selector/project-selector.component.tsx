@@ -16,7 +16,7 @@ import {
   type MouseEvent,
   type RefObject,
 } from 'react';
-import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Group, Loader2 } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronsUpDown, Group, Loader2 } from 'lucide-react';
 import {
   formatProjectName,
   getLocalizeKeyForScrollGroupId,
@@ -666,10 +666,6 @@ function ProjectRowView({
     onTruncationPointerLeave();
   }, [onTruncationPointerLeave]);
 
-  const leftCheck = (
-    <Check className={cn('tw:h-4 tw:w-4', row.isSelected ? 'tw:opacity-100' : 'tw:opacity-0')} />
-  );
-
   // Right-side content: chip(s) and, for bound-but-closed rows that are not disabled, an "Open"
   // button. A disabled row still takes the pointer (for its tooltip), so the button must not render.
   let rightContent: ReactNode;
@@ -721,6 +717,7 @@ function ProjectRowView({
         onClick(row);
       }}
       disabled={row.isDisabled}
+      data-checked={row.isSelected}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       // Spread rather than passed as `undefined`: this node is a Radix `Slot` child, whose props win
@@ -734,9 +731,6 @@ function ProjectRowView({
         'tw:data-[disabled=true]:pointer-events-auto tw:data-[disabled=true]:cursor-not-allowed',
       )}
     >
-      <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
-        {leftCheck}
-      </span>
       {/* Fixed-width slot, reserved for every row once the caller supplies an indicator renderer.
           A renderer that returns a glyph for some rows and nothing for others is the expected
           shape (an icon for resources only, say), and rendering the wrapper conditionally would

@@ -211,13 +211,18 @@ function ContextMenuCheckboxItem({
       data-inset={inset}
       className={cn(
         // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
-        'pr-twp tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-8 tw:ps-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
+        // CUSTOM: Replaced tw:pe-8 tw:ps-1.5 with tw:pe-1.5 tw:ps-7 so the space kept for the
+        // check indicator is on the leading side, matching MenubarCheckboxItem/MenubarRadioItem; the
+        // item text then lines up with tw:data-inset:ps-7 labels and items
+        'pr-twp tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-1.5 tw:ps-7 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
         className,
       )}
       checked={checked}
       {...props}
     >
-      <span className="tw:pointer-events-none tw:absolute tw:end-2">
+      {/* CUSTOM: Moved the indicator from tw:end-2 to tw:start-1.5 and gave it tw:size-4 so the
+          check sits on the leading side, matching MenubarCheckboxItem/MenubarRadioItem */}
+      <span className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center">
         <ContextMenuPrimitive.ItemIndicator>
           <IconCheck />
         </ContextMenuPrimitive.ItemIndicator>
@@ -242,12 +247,17 @@ function ContextMenuRadioItem({
       data-inset={inset}
       className={cn(
         // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
-        'pr-twp tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-8 tw:ps-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
+        // CUSTOM: Replaced tw:pe-8 tw:ps-1.5 with tw:pe-1.5 tw:ps-7 so the space kept for the
+        // check indicator is on the leading side, matching MenubarCheckboxItem/MenubarRadioItem; the
+        // item text then lines up with tw:data-inset:ps-7 labels and items
+        'pr-twp tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-1.5 tw:ps-7 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
         className,
       )}
       {...props}
     >
-      <span className="tw:pointer-events-none tw:absolute tw:end-2">
+      {/* CUSTOM: Moved the indicator from tw:end-2 to tw:start-1.5 and gave it tw:size-4 so the
+          check sits on the leading side, matching MenubarCheckboxItem/MenubarRadioItem */}
+      <span className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center">
         <ContextMenuPrimitive.ItemIndicator>
           <IconCheck />
         </ContextMenuPrimitive.ItemIndicator>

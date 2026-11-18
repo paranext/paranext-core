@@ -3,7 +3,13 @@ import { LocalizedStringValue } from 'platform-bible-utils';
 import { IconSearch } from '@tabler/icons-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { InputGroup, InputGroupAddon } from '@/components/shadcn-ui/input-group';
-import { Command, CommandEmpty, CommandItem, CommandList } from '../../shadcn-ui/command';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from '../../shadcn-ui/command';
 import { LanguageInfo } from '../ui-language-selector.component';
 
 /**
@@ -212,32 +218,36 @@ export function InterfaceLanguagePicker({
       )}
       <CommandList ref={listRef}>
         <CommandEmpty>{noResults}</CommandEmpty>
-        {visibleEntries.map(({ tag, info }) => {
-          const isSelected = tag === value;
-          return (
-            <CommandItem
-              key={tag}
-              ref={(row) => {
-                if (row) rowRefs.current.set(tag, row);
-                else rowRefs.current.delete(tag);
-              }}
-              value={tag}
-              // aria-current (not aria-selected, which cmdk uses for the keyboard-highlighted item).
-              // `data-checked` drives the check mark the vendored CommandItem ALREADY renders
-              // (command.tsx appends an IconCheck gated on `group-data-[checked=true]`), so we don't
-              // render our own icon (that would double it up). We still add a visually-hidden label
-              // so screen readers announce the selection.
-              aria-current={isSelected ? 'true' : undefined}
-              data-checked={isSelected ? 'true' : undefined}
-              onSelect={() => onChange(tag)}
-            >
-              {/* dir="auto" so each autonym lays out per its own script (e.g. RTL Arabic, or the
+        {/* The group's padding lines each name up under the search placeholder, as in the other
+            searchable lists */}
+        <CommandGroup>
+          {visibleEntries.map(({ tag, info }) => {
+            const isSelected = tag === value;
+            return (
+              <CommandItem
+                key={tag}
+                ref={(row) => {
+                  if (row) rowRefs.current.set(tag, row);
+                  else rowRefs.current.delete(tag);
+                }}
+                value={tag}
+                // aria-current (not aria-selected, which cmdk uses for the keyboard-highlighted item).
+                // `data-checked` drives the leading check mark the vendored CommandItem renders, so we
+                // don't render our own icon (that would double it up). It is set on every row, not
+                // only the selected one, so every label starts at the same offset. We still add a
+                // visually-hidden label so screen readers announce the selection.
+                aria-current={isSelected ? 'true' : undefined}
+                data-checked={isSelected}
+                onSelect={() => onChange(tag)}
+              >
+                {/* dir="auto" so each autonym lays out per its own script (e.g. RTL Arabic, or the
                   parentheses in 中文（简体）) regardless of the wizard's ambient direction. */}
-              <span dir="auto">{info.autonym}</span>
-              {isSelected && <span className="tw:sr-only">{selectedLabel}</span>}
-            </CommandItem>
-          );
-        })}
+                <span dir="auto">{info.autonym}</span>
+                {isSelected && <span className="tw:sr-only">{selectedLabel}</span>}
+              </CommandItem>
+            );
+          })}
+        </CommandGroup>
       </CommandList>
     </Command>
   );

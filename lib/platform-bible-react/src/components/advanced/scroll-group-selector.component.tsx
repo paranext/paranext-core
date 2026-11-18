@@ -15,6 +15,9 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
+/** Trigger text start (10px padding + 1px border) minus an option's text start (28px), in pixels */
+const SELECT_ITEM_TO_TRIGGER_TEXT_OFFSET = 11 - 28;
+
 export type ScrollGroupSelectorProps = {
   /**
    * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
@@ -128,8 +131,17 @@ export function ScrollGroupSelector({
       <SelectContent
         id={id}
         align={dir === 'rtl' ? 'end' : 'start'}
-        // Need to get over the floating web view z-index 200
-        style={{ zIndex: Z_INDEX_ABOVE_DOCK }}
+        // Pulls the list back toward the start edge by the difference between an option's start
+        // padding (`tw:ps-7`, 28px, which keeps room for its check) and the trigger's (`tw:ps-2.5`
+        // plus its 1px border), so the option names sit directly under the selected name
+        alignOffset={SELECT_ITEM_TO_TRIGGER_TEXT_OFFSET}
+        // Need to get over the floating web view z-index 200. The min-width replaces the list's
+        // default 144px floor, which is far wider than these short names: the list is as wide as
+        // the trigger, less the offset that pulls it back, so it ends where the trigger ends.
+        style={{
+          zIndex: Z_INDEX_ABOVE_DOCK,
+          minWidth: `calc(var(--radix-select-trigger-width) - ${SELECT_ITEM_TO_TRIGGER_TEXT_OFFSET}px)`,
+        }}
       >
         {availableScrollGroupIds.map((scrollGroupOptionId) => (
           <SelectItem key={`${scrollGroupOptionId}`} value={`${scrollGroupOptionId}`}>

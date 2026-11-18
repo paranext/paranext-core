@@ -640,8 +640,48 @@ describe('PlatformMenubar dynamic item states', () => {
     expect(plain?.className).toContain('tw:px-1.5');
     expect(checkbox?.className).toContain('tw:ps-1.5');
     expect(checkbox?.className).not.toContain('tw:ps-7');
-    // Every item reserves the same leading slot, so all labels start at the same x
-    expect(plain?.querySelector('[data-slot="menu-icon-spacer"]')).not.toBeNull();
-    expect(checkbox?.querySelector('[data-slot="menu-icon-spacer"]')).not.toBeNull();
+    // The check sits after the icon slot, where the label would otherwise begin
+    expect(plain?.querySelector('[data-slot="menu-check-slot"]')).toBeNull();
+    expect(checkbox?.querySelector('[data-slot="menu-check-slot"] svg')).not.toBeNull();
+    const unchecked = screen.getByText('Unchecked Item').closest('[role="menuitemcheckbox"]');
+    expect(unchecked?.querySelector('[data-slot="menu-check-slot"]')).not.toBeNull();
+    expect(unchecked?.querySelector('[data-slot="menu-check-slot"] svg')).toBeNull();
+    // No item has an icon, so being checkable does not reserve the icon slot
+    expect(document.querySelectorAll('[data-slot="menu-icon-spacer"]')).toHaveLength(0);
+  });
+
+  it("keeps a checkbox item's leading icon, with the check after it", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const menu: Localized<MultiColumnMenu> = {
+      ...DYNAMIC_STATE_MENU,
+      items: [
+        {
+          label: 'Checked With Icon',
+          localizeNotes: '',
+          group: 'test.group',
+          order: 1,
+          command: 'test.checkedIcon',
+          iconNameBefore: 'search',
+          shortcut: 'F7',
+          checked: true,
+        },
+      ],
+    };
+    render(<PlatformMenubar menuData={menu} onSelectMenuItem={vi.fn()} />);
+
+    await user.click(screen.getByText('TestColumn'));
+    const checkbox = (await screen.findByText('Checked With Icon')).closest(
+      '[role="menuitemcheckbox"]',
+    );
+    const icon = checkbox?.querySelector('.lucide-search');
+    const slot = checkbox?.querySelector('[data-slot="menu-check-slot"]');
+    expect(slot?.querySelector('svg')).toBeTruthy();
+    const children = [...(checkbox?.children ?? [])];
+    expect(children.indexOf(icon ?? document.body)).toBeGreaterThanOrEqual(0);
+    // The icon comes first, then the check, then the label
+    expect(children.indexOf(slot ?? document.body)).toBeGreaterThan(
+      children.indexOf(icon ?? document.body),
+    );
+    expect(checkbox?.querySelector('[data-slot="menubar-shortcut"]')).not.toBeNull();
   });
 });

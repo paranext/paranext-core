@@ -851,13 +851,69 @@ describe('TabDropdownMenu dynamic item states', () => {
     expect(disabledChecked.className).toContain('data-disabled:opacity-50');
   });
 
-  it('reserves no leading icon slot for checkbox items, because the check indicator is trailing', async () => {
+  const checkSlotOf = (el: HTMLElement) => el.querySelector('[data-slot="menu-check-slot"]');
+
+  it('puts the check after the icon slot, where the label would otherwise begin', async () => {
     await openMenu(DYNAMIC_MENU);
-    expect(screen.getByRole('menuitemcheckbox', { name: 'Checked' })).toBeInTheDocument();
+    expect(checkSlotOf(screen.getByRole('menuitem', { name: 'Plain' }))).toBeNull();
+    const checked = screen.getByRole('menuitemcheckbox', { name: 'Checked' });
+    expect(checked).toHaveClass('tw:ps-1.5');
+    expect(checkSlotOf(checked)?.querySelector('svg')).not.toBeNull();
+    // An unchecked item keeps the slot empty, so its label starts where a checked one's does
+    const unchecked = screen.getByRole('menuitemcheckbox', { name: 'Unchecked' });
+    expect(checkSlotOf(unchecked)).not.toBeNull();
+    expect(checkSlotOf(unchecked)?.querySelector('svg')).toBeNull();
+    // No item has an icon, so being checkable does not reserve the icon slot
     expect(document.querySelectorAll('[data-slot="menu-icon-spacer"]')).toHaveLength(0);
   });
 
-  it('reserves no leading icon slot for checkbox items inside a submenu', async () => {
+  it("keeps a checkbox item's leading icon, with the check after it and the shortcut at the end", async () => {
+    await openMenu({
+      ...DYNAMIC_MENU,
+      items: [
+        {
+          label: 'Plain with icon',
+          localizeNotes: '',
+          group: 'test.top',
+          order: 1,
+          command: 'test.plainIcon',
+          iconNameBefore: 'search',
+        },
+        {
+          label: 'Checked with icon',
+          localizeNotes: '',
+          group: 'test.top',
+          order: 2,
+          command: 'test.checkedIcon',
+          iconNameBefore: 'search',
+          shortcut: 'Ctrl+Shift+F',
+          checked: true,
+        },
+        {
+          label: 'Checked without icon',
+          localizeNotes: '',
+          group: 'test.top',
+          order: 3,
+          command: 'test.checkedNoIcon',
+          checked: true,
+        },
+      ],
+    });
+    const checked = screen.getByRole('menuitemcheckbox', { name: /^Checked with icon/ });
+    const slot = checkSlotOf(checked);
+    const icon = checked.querySelector('.lucide-search');
+    const children = [...checked.children];
+    expect(children.indexOf(icon ?? checked)).toBeGreaterThanOrEqual(0);
+    // The icon comes first, then the check, then the label
+    expect(children.indexOf(slot ?? checked)).toBeGreaterThan(children.indexOf(icon ?? checked));
+    expect(checked.querySelector('[data-slot="dropdown-menu-shortcut"]')).not.toBeNull();
+    // An item without an icon keeps the icon spacer, so its check lines up with the others
+    const noIcon = screen.getByRole('menuitemcheckbox', { name: 'Checked without icon' });
+    expect(noIcon.querySelector('[data-slot="menu-icon-spacer"]')).not.toBeNull();
+    expect(checkSlotOf(noIcon)?.querySelector('svg')).not.toBeNull();
+  });
+
+  it('puts the check after the icon slot inside a submenu too', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const submenuData: Localized<MultiColumnMenu> = {
       columns: { 'test.project': { label: 'Project', order: 1 } },
@@ -892,7 +948,10 @@ describe('TabDropdownMenu dynamic item states', () => {
     const trigger = await screen.findByRole('menuitem', { name: /^Sub/ });
     trigger.focus();
     await user.keyboard('{ArrowRight}');
-    await screen.findByRole('menuitemcheckbox', { name: 'Inner checked' });
+    const innerChecked = await screen.findByRole('menuitemcheckbox', { name: 'Inner checked' });
+    expect(checkSlotOf(innerChecked)?.querySelector('svg')).not.toBeNull();
+    const innerUnchecked = screen.getByRole('menuitemcheckbox', { name: 'Inner unchecked' });
+    expect(checkSlotOf(innerUnchecked)?.querySelector('svg')).toBeNull();
     expect(document.querySelectorAll('[data-slot="menu-icon-spacer"]')).toHaveLength(0);
   });
 });

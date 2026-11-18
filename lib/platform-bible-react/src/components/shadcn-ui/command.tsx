@@ -251,8 +251,18 @@ function CommandItem({
       )}
       {...props}
     >
+      {/* CUSTOM: Moved the check from after the children (tw:ms-auto, at the trailing edge) to
+          before them, so every checkable list puts its check mark on the leading side like the
+          Radix menus and Select do. Replaced tw:group-has-data-[slot=command-shortcut]:hidden
+          (needed only while the check and a shortcut competed for the trailing edge) with
+          tw:hidden tw:group-data-[checked]:block: the check takes up space only on items that pass
+          `data-checked` at all, so a checkable list passes `data-checked={isSelected}` on every
+          row to keep labels aligned, and items that are never checkable (command palettes, grids)
+          no longer carry an invisible icon. This must stay the bracketed attribute form: the bare
+          `data-checked` variant from shadcn/tailwind.css excludes data-checked="false", which
+          would collapse the space on unchecked rows. */}
+      <IconCheck className="tw:hidden tw:opacity-0 tw:group-data-[checked]/command-item:block tw:group-data-[checked=true]/command-item:opacity-100" />
       {children}
-      <IconCheck className="tw:ms-auto tw:opacity-0 tw:group-has-data-[slot=command-shortcut]/command-item:hidden tw:group-data-[checked=true]/command-item:opacity-100" />
     </CommandPrimitive.Item>
   );
 }
