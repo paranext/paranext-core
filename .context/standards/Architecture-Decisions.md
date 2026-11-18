@@ -2622,8 +2622,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pinned branch, that owned branch, and the branches `dev-packages.json` lists under
   `formerPinBranches` (`platform-yalc`, which is where every existing clone sits). Any other branch
   and every detached HEAD is left alone with a warning, in the script's own clone and in a sibling
-  checkout alike. A commit somebody made on the owned branch is parked on a `refs/stage-rescue/…`
-  ref before the branch is re-pointed, as on a pinned branch.
+  checkout alike. Before staging re-points a local branch — the owned one, or a pinned branch — a
+  commit on it that no branch of `origin` and no tag holds is parked on a `refs/stage-rescue/…` ref.
+  That is asked of the branch being re-pointed, not of HEAD, because with two kinds of pin the
+  checkout is routinely on one branch while the other still holds somebody's commit.
 - **Alternatives:** **Keep the branch pin and name an owner** who watches this repo's CI after each
   push — rejected: every push still reaches every pull request, the cost lands on whoever is trying
   to merge, and builds stay unreproducible. **Keep the branch pin and take the editor specs out of
@@ -2648,12 +2650,19 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   request that brings it in. Editor fixes reach this repo only when someone bumps the pin; a
   scheduled bump pull request can automate that later. `scripture-editors`' `platform-yalc` branch,
   its `move-platform-yalc` script and its consumer-lockfile workflow no longer decide what this repo
-  builds. Repositories that build against this one are unaffected: they stage through this repo's
-  script and follow its pin. A pinned commit must stay reachable from a branch or tag that is never
-  force-pushed, or a fresh clone cannot fetch it — hence `main`. `formerPinBranches` can be emptied
-  once no checkout can still be on `platform-yalc`. Going back is one line: set `revision` to a
-  branch name again, and staging moves a checkout off its owned branch onto it. The `release-prep`
-  branch of this repo still pins the editor's `release-prep` branch.
+  builds. Repositories that build against this one stage through this repo's script, so a fresh
+  clone of one — its CI — follows the pin with no change there. What does not follow by itself is
+  a consumer's incremental loop that skips this repo's install when `package-lock.json` is unchanged
+  and `verify:dev-packages` passes (`paratext-10-studio`'s `reset-and-patch` does): that check
+  compares dependency manifests, not the staged commit, so a pin bump that changes no dependency
+  is picked up there only at the next install. The same was true of a moved branch. A pinned commit
+  must stay reachable from a branch or tag that is never force-pushed, or a fresh clone cannot fetch
+  it — hence `main`; staging refuses a commit or tag pin that no branch or tag of the remote holds.
+  An entry of `formerPinBranches` is safe to remove only once every existing checkout has been
+  moved off that branch, which happens at the first install whose pin differs from the commit the
+  checkout is on. Going back is one line: set `revision` to a branch name again, and staging moves
+  a checkout off its owned branch onto it. The `release-prep` branch of this repo still pins the
+  editor's `release-prep` branch.
 
 ## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
 

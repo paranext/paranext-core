@@ -240,7 +240,7 @@ To pick up newer editor commits ("bump the pin"):
 
 A PR here that needs a newer editor bumps the pin itself, so the editor change and the code that depends on it land together. To try an editor change that is not on `main` yet, you do not need to move the pin: see [Getting your `scripture-editors` changes into this repo](#getting-your-scripture-editors-changes-into-this-repo).
 
-**Pin only commits that are on `scripture-editors`' `main`** (or a tag). A commit that is only on a branch that gets rebased and force-pushed — `platform-yalc` is one — disappears from the remote at the next force-push, and from then on a fresh clone cannot fetch it. `scripture-editors`' `platform-yalc` branch and its `move-platform-yalc` script predate the commit pin; moving that branch does not change what this repo builds.
+**Pin only commits that are on `scripture-editors`' `main`** (or a tag). A commit that is only on a branch that gets rebased and force-pushed — `platform-yalc` is one — disappears from the remote at the next force-push, and from then on a fresh clone cannot fetch it. Moving `scripture-editors`' `platform-yalc` branch (its `move-platform-yalc` script) does not change what this repo builds. `npm install` refuses a pinned commit that no branch or tag of the remote holds.
 
 When this repo is on `release-prep`, `revision` names `scripture-editors`' `release-prep` branch instead, and `npm install` follows that branch's tip.
 

@@ -426,6 +426,18 @@ describe('decideCheckout', () => {
     );
   });
 
+  it('moves a checkout from a declared former pin branch to a pinned branch too', () => {
+    expect(
+      decideCheckout({
+        ...branchPin(ELSEWHERE, 'release-prep'),
+        formerPinBranches: ['release-prep'],
+      }),
+    ).toEqual({ action: 'checkoutBranch' });
+    expect(
+      decideCheckout({ ...branchPin(ELSEWHERE, 'release-prep'), formerPinBranches: [] }),
+    ).toEqual({ action: 'leaveAlone', isDetached: false });
+  });
+
   it('moves the checkout off the branch staging owns when the pin names a branch again', () => {
     expect(decideCheckout(branchPin(PIN_A, PINNED_COMMIT_BRANCH))).toEqual({
       action: 'checkoutBranch',

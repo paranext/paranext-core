@@ -42,7 +42,6 @@ const path = require('path');
 // Explicit `.ts`: this runs under bare `node` with type stripping, where extensionless resolution
 // of a TypeScript file does not work.
 const {
-  PINNED_COMMIT_BRANCH,
   RESCUED_COMMITS_FILE,
   decideCheckout,
   formatRescuedCommitsBanner,
@@ -289,9 +288,9 @@ function reportRescuedCommits(): void {
  * whether the checkout is somewhere nothing is being kept, and only then is it moved. Anywhere else
  * it is left exactly as it is and staged from, with a warning saying so.
  *
- * A branch pin checks out as that branch. A commit or tag pin checks out as `PINNED_COMMIT_BRANCH`,
- * never as a detached HEAD, so the next run can recognise the checkout as one it placed and move it
- * when the pin moves.
+ * A branch pin checks out as that branch. A commit or tag pin checks out as the util's
+ * `PINNED_COMMIT_BRANCH`, never as a detached HEAD, so the next run can recognise the checkout as
+ * one it placed and move it when the pin moves.
  */
 function checkoutRevision(repo: DevRepo): void {
   const repoPath = getDevRepoPath(repo.folder);
@@ -353,6 +352,20 @@ function checkoutRevision(repo: DevRepo): void {
     );
   }
 
+  // A commit or tag pin has to be something a fresh clone can fetch: reachable from a branch or a
+  // tag of the remote. A commit that is only in this checkout — made here, or left behind when a
+  // branch was force-pushed — stages fine on this machine and fails on every other one.
+  if (!isRemoteBranch) {
+    const holders = execSync(
+      `git for-each-ref --count=1 --contains ${targetCommit} refs/remotes/origin refs/tags`,
+      { cwd: repoPath, encoding: 'utf8' },
+    ).trim();
+    if (holders.length === 0)
+      throw new Error(
+        `The pinned revision "${repo.revision}" of ${repo.folder} is not on any branch or tag of the remote, so a fresh clone could not fetch it.\n\nPin a commit that is on the remote's main branch (or a tag). A commit that was only ever on a branch that gets rebased and force-pushed disappears from the remote at the next force-push.\n`,
+      );
+  }
+
   // `git rev-parse --abbrev-ref HEAD` answers `HEAD` when the checkout is detached.
   const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
     cwd: repoPath,
@@ -378,28 +391,43 @@ function checkoutRevision(repo: DevRepo): void {
     const where = decision.isDetached
       ? `is detached at ${head.slice(0, 9)}`
       : `is on "${currentBranch}"`;
-    // Checking a commit or a tag out by name would leave the checkout detached, which the next
-    // moved pin then warns about again. On the branch this script owns, installs follow the pin.
-    const checkoutPinned = isRemoteBranch
-      ? `checkout ${repo.revision}`
-      : `checkout -B ${PINNED_COMMIT_BRANCH} ${repo.revision}`;
+    // For a commit or tag pin the way back is `main`, which the next install moves to the pin.
+    // Checking the pin out by name would leave the checkout detached, and so left alone again.
+    const howToFollowThePin = isRemoteBranch
+      ? `git -C "${repoPath}" checkout ${repo.revision}`
+      : `git -C "${repoPath}" checkout main, then run the install again`;
     console.warn(
       `\nWARNING: ${repoPath} ${where}, not the pinned "${repo.revision}".\n` +
         `Leaving it alone and staging what it has, so nothing you are working on is lost.\n` +
         `Whatever this app runs is built from that state, not from the pinned revision.\n` +
-        `To stage the pinned revision instead: git -C "${repoPath}" ${checkoutPinned}\n`,
+        `To stage the pinned revision instead: ${howToFollowThePin}\n`,
     );
     return;
   }
 
   /**
-   * Parks `tip` on a ref of its own when `rangeArgs` finds commits the remote does not have, and
-   * queues the announcement. `git checkout -B` discards whatever the branch pointed at, and a
+   * Parks the tip of the local branch `branch` on a ref of its own when it holds commits the remote
+   * does not have, and queues the announcement. `git checkout -B` re-points that branch, and a
    * commit that was never pushed then survives only in the reflog.
+   *
+   * Asked of the branch being re-pointed rather than of HEAD: the checkout can be on another branch
+   * while this one still holds somebody's commit, and HEAD's own commits stay on HEAD's branch.
+   * "The remote does not have" means reachable from no branch of `origin` and no tag, so the
+   * commits of an earlier pin, which are on the remote, are never counted.
    */
-  const parkUnpushedCommits = (branch: string, tip: string, rangeArgs: string) => {
+  const parkUnpushedCommits = (branch: string) => {
+    let tip: string;
+    try {
+      tip = resolve(`refs/heads/${branch}`);
+    } catch {
+      // No such local branch yet, so `-B` creates it and discards nothing.
+      return;
+    }
     const unpushedCount = Number(
-      execSync(`git rev-list --count ${rangeArgs}`, { cwd: repoPath, encoding: 'utf8' }).trim(),
+      execSync(`git rev-list --count "${tip}" --not --remotes=origin --tags`, {
+        cwd: repoPath,
+        encoding: 'utf8',
+      }).trim(),
     );
     if (unpushedCount === 0) return;
     // Named by commit, so staging twice from two different tips parks both rather than the second
@@ -430,28 +458,15 @@ function checkoutRevision(repo: DevRepo): void {
     // A refusal cannot tell that from work somebody authored - `rev-list` reports both identically
     // - so it would fire for everyone and stage a stale editor. Parking needs no such judgement: a
     // ref for a stale tip costs nothing, and a ref for real work is the whole point.
-    parkUnpushedCommits(repo.revision, head, `"${target}..HEAD"`);
+    parkUnpushedCommits(repo.revision);
     console.log(`Updating ${repo.folder} to ${target} (was at ${head.slice(0, 9)})...`);
     execSync(`git checkout -B "${repo.revision}" "${target}"`, { stdio: 'inherit', cwd: repoPath });
     return;
   }
 
   // A tag or a commit hash. `-B` re-points the branch this script owns, so a commit somebody made
-  // on it is parked first, like one on a pinned branch. Asked of the branch rather than of HEAD:
-  // the checkout can be on `main` while that branch still exists from an earlier pin. Commits of an
-  // earlier pin are reachable from a remote branch or a tag, and are not counted.
-  let ownedBranchTip: string | undefined;
-  try {
-    ownedBranchTip = resolve(`refs/heads/${decision.branch}`);
-  } catch {
-    ownedBranchTip = undefined;
-  }
-  if (ownedBranchTip)
-    parkUnpushedCommits(
-      decision.branch,
-      ownedBranchTip,
-      `"${ownedBranchTip}" --not --remotes=origin --tags`,
-    );
+  // on it is parked first, like one on a pinned branch.
+  parkUnpushedCommits(decision.branch);
   console.log(
     `Checking out ${repo.revision} in ${repo.folder} on "${decision.branch}" (was at ${head.slice(0, 9)})...`,
   );

@@ -38,7 +38,7 @@
         },
         "formerPinBranches": {
           "type": "array",
-          "description": "Branches `revision` named earlier. Existing checkouts may still be on one because the staging script put them there, so a checkout on one is moved to `revision` the way one on `main` is, instead of being left alone as somebody's own branch. Remove an entry once no checkout can still be on it.",
+          "description": "Branches `revision` named earlier. Existing checkouts may still be on one because the staging script put them there, so a checkout on one is moved to `revision` the way one on `main` is, instead of being left alone as somebody's own branch. A checkout leaves the branch at the first install whose `revision` resolves to a commit other than the one it is on, so an entry is safe to remove only when every existing checkout has been moved that way.",
           "items": {
             "type": "string"
           }
