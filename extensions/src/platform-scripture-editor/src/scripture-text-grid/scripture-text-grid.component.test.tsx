@@ -2070,10 +2070,13 @@ describe('ScriptureTextGrid — reveal a resource', () => {
       expect(column).toHaveAttribute('data-revealed', 'true');
       // The column's editor area paints an opaque background over the column's own box, so the
       // outline is drawn on an overlay above the content rather than as an inset ring beneath it.
-      expect(column.className).toContain('tw:after:ring-ring');
-      expect(column.className).not.toContain('tw:ring-ring');
-      // Forced colors removes the ring (a box-shadow), so the overlay draws an outline there too.
-      expect(column).toHaveClass('tw:forced-colors:after:outline-2');
+      // Focus is not on the column, so the outline must not look like a focus ring: it is a thicker
+      // outline set in from the edge, not the 2px ring a focused scroll area shows.
+      expect(column).toHaveClass('tw:after:outline-3', 'tw:after:-outline-offset-7');
+      expect(column.className).not.toContain('ring-ring');
+      expect(column.className).not.toContain('ring-2');
+      // An outline survives forced colors, where it takes the system highlight color.
+      expect(column).toHaveClass('tw:forced-colors:after:outline-[color:Highlight]');
       // The column's root does not scroll, so focus goes to the element that does: the column's own
       // scroller in the chapter view, the shared root in the aligned view.
       expect(document.activeElement).not.toBe(column);
@@ -2091,7 +2094,7 @@ describe('ScriptureTextGrid — reveal a resource', () => {
 
     fireEvent.pointerDown(within(cellOf('P1')).getByTestId('verse-text-P1'));
     expect(column).not.toHaveAttribute('data-revealed');
-    expect(column.className).not.toContain('ring-ring');
+    expect(column.className).not.toContain('tw:after:outline-ring');
   });
 
   it('clears the outline on the next pointerdown inside the grid in the verse view', () => {
@@ -2199,11 +2202,11 @@ describe('ScriptureTextGrid — reveal a resource', () => {
   });
 
   describe('screen-reader announcement', () => {
-    const getRevealAnnouncement = (name: string) => `Showing the result in ${name}`;
+    const getRevealAnnouncement = (name: string) => `Result shown in ${name}`;
 
     it('announces an aligned reveal, whose focus lands on the shared root, through the live region', () => {
       renderRevealed({ viewMode: 'aligned', getRevealAnnouncement });
-      expect(screen.getByRole('status')).toHaveTextContent('Showing the result in KJV');
+      expect(screen.getByRole('status')).toHaveTextContent('Result shown in KJV');
     });
 
     it("announces nothing for a chapter reveal, whose focus lands inside the column's named region", () => {
@@ -2219,7 +2222,7 @@ describe('ScriptureTextGrid — reveal a resource', () => {
 
     it('inserts a new live-region node when the same resource is revealed again', () => {
       const { rerender } = renderRevealed({ viewMode: 'aligned', getRevealAnnouncement });
-      const firstNode = screen.getByText('Showing the result in KJV');
+      const firstNode = screen.getByText('Result shown in KJV');
       rerender(
         gridElement({
           viewMode: 'aligned',
@@ -2227,7 +2230,7 @@ describe('ScriptureTextGrid — reveal a resource', () => {
           revealRequest: { projectId: 'P2', requestId: 2 },
         }),
       );
-      const secondNode = screen.getByText('Showing the result in KJV');
+      const secondNode = screen.getByText('Result shown in KJV');
       // A live region reads inserted nodes, not unchanged text, so the repeat must be a new node.
       expect(secondNode).not.toBe(firstNode);
       expect(firstNode.isConnected).toBe(false);

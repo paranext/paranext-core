@@ -3970,7 +3970,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   never focused, because a focused column root is not a scroller and breaks keyboard scrolling.
   Aligned view also announces the resource to screen readers, since its shared area is not named
   for any one resource; a chapter column's scroll area sits inside the column's region, which is.
-  The outline lasts until the user next interacts with the grid or its tab is hidden. Find adds
+  The outline lasts until the user next interacts with the grid or its tab is hidden. A verse row's
+  outline is a 2px ring, the row's focus indicator, since the row holds focus. A column's is a
+  thicker outline set in from its edge: focus is on its scroll area or the shared root instead, and
+  the outline outlives focus moving to Find, so it must not read as a second focus ring. Find adds
   the grid to `FIND_SEARCHABLE_WEB_VIEW_TYPES` and to `DECLARING_WEB_VIEW_TYPES`, so it lists the
   resources the grid declares. "Go to result" targets one tab, in this order: an editor showing
   the project (driven through its controller), then any reference panel showing it, then the Text
@@ -7801,8 +7804,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Amended 2026-11-13:** the Text Collection's resource tracker is now
   `useActiveResourceProjectId`. Besides focus, it follows a pointer press and the resource Find
   last revealed: in the aligned view, focus lands on the shared scroll area, outside every cell, so
-  focus alone would leave Ctrl+F with no resource or a stale one. See
-  `adr-find-reveals-text-collection-cell`.
+  focus alone would leave Ctrl+F with no resource or a stale one. Before any of those, as in a
+  freshly opened Text Collection, Ctrl+F searches the first installed resource displayed (usually
+  the top row or the first column) rather than doing nothing; Find's picker switches to another. It
+  is a no-op only while no displayed resource is installed. See `adr-find-reveals-text-collection-cell`.
 
 ## adr-per-web-view-state-lives-in-the-definition: Per-web-view state lives in the web view definition; user defaults and cross-instance memory live in settings
 

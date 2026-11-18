@@ -1964,9 +1964,10 @@ global.webViewComponent = function FindWebView({
             logger.debug(
               `Find: activated the Text Collection tab without revealing ${target.projectId} because its controller is not available yet`,
             );
+            break;
           }
           callControllerSafely(
-            () => textCollectionWebViewController?.revealResource(target.projectId),
+            () => textCollectionWebViewController.revealResource(target.projectId),
             (e) =>
               logger.warn(
                 `Find: failed to reveal ${target.projectId} in the Text Collection: ${getErrorMessage(e)}`,

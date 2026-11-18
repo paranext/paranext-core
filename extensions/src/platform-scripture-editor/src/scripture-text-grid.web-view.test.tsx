@@ -104,7 +104,7 @@ const STRINGS: Record<string, string> = {
   '%webView_scriptureTextGrid_cell_zoomOptions%': 'Zoom options for {resourceName}',
   '%webView_scriptureTextGrid_cell_reorderAnnouncement%':
     'Moved {resourceName} to position {position} of {total}',
-  '%webView_scriptureTextGrid_revealAnnouncement%': 'Showing the result in {resourceName}',
+  '%webView_scriptureTextGrid_revealAnnouncement%': 'Result shown in {resourceName}',
   '%webView_scriptureTextGrid_cell_reorderHandle%': 'Reorder {resourceName}',
   '%webView_scriptureTextGrid_cell_reorderHint%': 'Drag or press arrow keys to reorder',
   '%webView_scriptureTextGrid_viewOptions_viewHeader%': 'View',
@@ -134,6 +134,12 @@ const sendCommand = vi.fn<(commandName: string, ...args: unknown[]) => Promise<u
 const notify = vi.fn();
 
 /**
+ * Stands in for `papi.dataProviders.get`, which the DBL install lookup asks for the disk scan. No
+ * provider by default, so the lookup answers nothing at once.
+ */
+const getDataProvider = vi.fn<(providerName: string) => Promise<unknown>>();
+
+/**
  * What the window's `ActiveEditorProjectId` reports. `useTextCollectionProjectId` seeds an unbound
  * grid from this and then latches, so a test that wants an unbound grid sets it before rendering.
  */
@@ -151,6 +157,7 @@ vi.mock('@papi/frontend', () => ({
       sendCommand: (commandName: string, ...args: unknown[]) => sendCommand(commandName, ...args),
     },
     notifications: { send: (...args: unknown[]) => notify(...args) },
+    dataProviders: { get: (providerName: string) => getDataProvider(providerName) },
     // `useTextCollectionProjectId` reads ActiveEditorProjectId off the window data provider.
     window: { dataProviderName: 'platform.windowDataProvider' },
     // The DBL install lookup re-asks on project changes; these tests never fire one.
@@ -443,6 +450,7 @@ beforeEach(() => {
   lastPickerOptions = undefined;
   dblResourcesProvider = { installDblResource: () => Promise.resolve(true) };
   sendCommand.mockResolvedValue([]);
+  getDataProvider.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -913,6 +921,7 @@ describe('revealing a resource from Find', () => {
 
   beforeEach(() => {
     resetRevealRequestStoreForTesting();
+    resolveCachedResources = undefined;
     gridRevealRequestsSeen = [];
     // jsdom has no layout, so the web view would read as hidden and defer every request.
     const rect = { x: 0, y: 0, width: 100, height: 100, top: 0, left: 0, right: 100, bottom: 100 };
@@ -936,7 +945,7 @@ describe('revealing a resource from Find', () => {
     render(<ScriptureTextGridWebView {...makeProps({ projectId: PROJECT_ONE })} />);
 
     expect(await screen.findByTestId('reveal-announcement')).toHaveTextContent(
-      'Showing the result in KJV',
+      'Result shown in KJV',
     );
   });
 
@@ -992,6 +1001,72 @@ describe('revealing a resource from Find', () => {
     await waitFor(() =>
       expect(JSON.parse(revealRequestShown() ?? '')).toEqual({
         projectId: ALPHA.id,
+        requestId: expect.any(Number),
+      }),
+    );
+  });
+
+  it('holds the request while the disk scan for an uncatalogued DBL resource is in flight', async () => {
+    const KJV_UID = 'uid-kjv';
+    const KJV_PROJECT_ID = 'projectKjv';
+    hookResultsByProjectId.set(
+      PROJECT_ONE,
+      readyResult(
+        {
+          adminReferenced: EMPTY_LIST,
+          userReferenced: {
+            dataVersion: '1.1.0',
+            items: [
+              { type: 'dblResource', id: KJV_UID, name: 'KJV', isInTextCollectionForUser: true },
+            ],
+          },
+          overlay: {},
+          order: [],
+        },
+        createFakeTextConnectionPdp(),
+      ),
+    );
+    // The catalog does not list the resource, so only the disk scan can say which project it is
+    // installed as. Each is resolved by hand, so the test controls which one is still in flight.
+    sendCommand.mockImplementation((commandName) =>
+      commandName === 'platformGetResources.getCachedResources'
+        ? new Promise<unknown[]>((resolve) => {
+            resolveCachedResources = () => resolve([]);
+          })
+        : Promise.resolve([]),
+    );
+    let resolveDiskScan: (() => void) | undefined;
+    getDataProvider.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDiskScan = () =>
+            resolve({
+              recomputeDblResourcesInstallStatus: () =>
+                Promise.resolve({ [KJV_UID]: KJV_PROJECT_ID }),
+            });
+        }),
+    );
+
+    render(<ScriptureTextGridWebView {...makeProps({ projectId: PROJECT_ONE })} />);
+    await screen.findByTestId('reveal-request');
+    // Settle the catalog first, so only the disk scan can be what holds the request.
+    // Positive controls: both were asked for.
+    expect(resolveCachedResources).toBeDefined();
+    expect(getDataProvider).toHaveBeenCalledWith('platformGetResources.dblResourcesProvider');
+    await act(async () => {
+      resolveCachedResources?.();
+    });
+
+    postRevealRequest(KJV_PROJECT_ID);
+    expect(revealRequestShown()).toBe('none');
+
+    await act(async () => {
+      resolveDiskScan?.();
+    });
+
+    await waitFor(() =>
+      expect(JSON.parse(revealRequestShown() ?? '')).toEqual({
+        projectId: KJV_PROJECT_ID,
         requestId: expect.any(Number),
       }),
     );
@@ -1124,19 +1199,45 @@ describe('Ctrl+F in the Text Collection', () => {
     window.getSelection()?.removeAllRanges();
   });
 
-  it('opens Find for the resource whose text the pointer last pressed, and not before', async () => {
+  it('opens Find for the first resource displayed before the user has picked one', async () => {
+    await renderWebView({ projectId: PROJECT_ONE });
+    // Positive control: Alpha is the first cell, so the fallback is distinguishable from Beta.
+    const cells = document.querySelectorAll<HTMLElement>('[data-project-id]');
+    expect(cells[0]?.dataset.projectId).toBe(ALPHA.id);
+
+    pressCtrlF();
+
+    expect(openFindCalls()).toEqual([['platformScripture.openFind', 'webViewId', '', ALPHA.id]]);
+  });
+
+  it('opens Find for the resource whose text the pointer last pressed', async () => {
     await renderWebView({ projectId: PROJECT_ONE });
     const betaText = cellTextOf(BETA.id);
     selectTextOf(betaText);
-
-    pressCtrlF();
-    expect(openFindCalls()).toEqual([]);
 
     fireEvent.pointerDown(betaText);
     pressCtrlF();
     expect(openFindCalls()).toEqual([
       ['platformScripture.openFind', 'webViewId', BETA.name, BETA.id],
     ]);
+  });
+
+  it('leaves Ctrl+F alone when the collection shows no text', async () => {
+    hookResultsByProjectId.set(
+      PROJECT_ONE,
+      readyResult(
+        { adminReferenced: EMPTY_LIST, userReferenced: EMPTY_LIST, overlay: {}, order: [] },
+        createFakeTextConnectionPdp(),
+      ),
+    );
+    await renderWebView({ projectId: PROJECT_ONE });
+    await screen.findByText(/No texts to display/);
+
+    const event = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, cancelable: true });
+    window.dispatchEvent(event);
+
+    expect(openFindCalls()).toEqual([]);
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it('opens Find for the resource a reveal reported, where focus cannot name it', async () => {

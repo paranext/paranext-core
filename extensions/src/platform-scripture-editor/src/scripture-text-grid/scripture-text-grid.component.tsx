@@ -18,6 +18,7 @@ import type { GridResource } from './grid-resources.utils';
 import { ResourceCell } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { AlignedGrid } from './aligned-grid.component';
+import { DROP_TARGET_RING_CLASSES, REVEALED_ROW_RING_CLASSES } from './aligned-grid.styles';
 import { ResourceColumn, type ResourceColumnReorder } from './resource-column.component';
 import {
   resourceZoomAreaOf,
@@ -133,9 +134,8 @@ type ScriptureTextGridProps = {
   getReorderAnnouncement?: (resourceName: string, position: number, total: number) => string;
   /**
    * Builds the live-region announcement for a reveal whose focus lands outside the revealed cell
-   * (the aligned view's shared root), e.g. "Showing the result in KJV". In the verse and chapter
-   * views focus lands inside the cell, which a screen reader already names, so nothing is
-   * announced.
+   * (the aligned view's shared root), e.g. "Result shown in KJV". In the verse and chapter views
+   * focus lands inside the cell, which a screen reader already names, so nothing is announced.
    */
   getRevealAnnouncement?: (resourceName: string) => string;
   /**
@@ -624,14 +624,10 @@ export function ScriptureTextGrid({
         // its own role and activation — but it must not carry a second copy of the handlers.
         const reorder = buildReorder(resource);
         const isRevealed = revealedResourceId === resource.resourceId;
-        // The drop-target ring wins when both apply. Forced colors removes a ring (a box-shadow),
-        // so the reveal also draws an outline there, as `ResourceColumn`'s does.
+        // The drop-target ring wins when both apply.
         let ringClass = '';
-        if (reorder?.isDropTarget) ringClass = ' tw:ring-2 tw:ring-inset tw:ring-primary';
-        else if (isRevealed)
-          ringClass =
-            ' tw:ring-2 tw:ring-inset tw:ring-ring tw:forced-colors:outline-2' +
-            ' tw:forced-colors:outline-[color:Highlight] tw:forced-colors:-outline-offset-2';
+        if (reorder?.isDropTarget) ringClass = ` ${DROP_TARGET_RING_CLASSES}`;
+        else if (isRevealed) ringClass = ` ${REVEALED_ROW_RING_CLASSES}`;
         return (
           // The row's click handler is a pointer-only convenience that widens the hit area to the
           // whole row. The keyboard-accessible control is the name button the cell renders (see

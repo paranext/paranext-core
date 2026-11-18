@@ -1,5 +1,6 @@
 import type { DragEvent, KeyboardEvent } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { DROP_TARGET_RING_CLASSES, REVEALED_COLUMN_OUTLINE_CLASSES } from './aligned-grid.styles';
 import type { GridResource } from './grid-resources.utils';
 import { ResourceCell } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
@@ -69,18 +70,10 @@ export function ResourceColumn({
   zoom,
   zoomMenuLabels,
 }: ResourceColumnProps) {
-  const dropTargetRing = reorder?.isDropTarget ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : '';
-  // The drop-target ring wins when both apply. The reveal outline is drawn on an overlay rather than
-  // as an inset ring on this element: an inset ring paints beneath the column's children, and the
-  // editor area's opaque background (and, in the aligned view, the sticky header) covers it. The
-  // overlay ignores the pointer, and its z-index sits above the aligned header's `z-index: 1`. The
-  // ring is a box-shadow, which forced colors (Windows High Contrast) removes, so an outline in the
-  // system `Highlight` color stands in for it there, as `LIST_ITEM_KEYBOARD_FOCUS_RING` does.
+  const dropTargetRing = reorder?.isDropTarget ? ` ${DROP_TARGET_RING_CLASSES}` : '';
+  // The drop-target ring wins when both apply.
   const revealRing =
-    isRevealed && !reorder?.isDropTarget
-      ? ' tw:relative tw:after:pointer-events-none tw:after:absolute tw:after:inset-0 tw:after:z-2 tw:after:ring-2 tw:after:ring-inset tw:after:ring-ring' +
-        ' tw:forced-colors:after:outline-2 tw:forced-colors:after:outline-[color:Highlight] tw:forced-colors:after:-outline-offset-2'
-      : '';
+    isRevealed && !reorder?.isDropTarget ? ` ${REVEALED_COLUMN_OUTLINE_CLASSES}` : '';
   const zoomArea = resourceZoomAreaOf(resource.resourceId);
 
   return (

@@ -253,7 +253,7 @@ function RevealStory({ viewMode }: RevealStoryProps) {
           revealRequest={requestId ? { projectId: target.projectId, requestId } : undefined}
           onRevealHandled={noop}
           onRevealed={noop}
-          getRevealAnnouncement={(name) => `Showing the result in ${name}`}
+          getRevealAnnouncement={(name) => `Result shown in ${name}`}
         />
       </GridBox>
     </div>

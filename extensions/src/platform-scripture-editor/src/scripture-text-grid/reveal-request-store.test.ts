@@ -86,6 +86,18 @@ describe('reveal request store', () => {
     expect(remounted.result.current.revealRequest).toBeUndefined();
   });
 
+  it('keeps a newer request when the grid reports an older one handled late', () => {
+    const { result } = renderHook(() => useRevealRequest(true));
+    post({ method: 'revealResource', projectId: 'P1' });
+    const firstId = requireRequestId(result.current.revealRequest);
+    post({ method: 'revealResource', projectId: 'P2' });
+    expect(result.current.revealRequest?.projectId).toBe('P2');
+
+    act(() => result.current.onRevealHandled(firstId));
+
+    expect(result.current.revealRequest?.projectId).toBe('P2');
+  });
+
   it('gives a repeated request for the same resource a new request id', () => {
     const { result } = renderHook(() => useRevealRequest(true));
     post({ method: 'revealResource', projectId: 'P1' });

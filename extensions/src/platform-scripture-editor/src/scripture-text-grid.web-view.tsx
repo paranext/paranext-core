@@ -335,9 +335,11 @@ function ScriptureTextGridProjectView({
   );
 
   // Ctrl+F opens Find for the resource the user last clicked or focused in, or that Find last
-  // revealed. Unlike the single-resource reference panels, this view shows several texts at once,
-  // so there is no "displayed resource" to fall back to — before any of those, Ctrl+F is a logged
-  // no-op.
+  // revealed. Before any of those, as in a freshly opened Text Collection, it opens Find for the
+  // first installed resource displayed (usually the top row or the first column; one that is not
+  // installed, or whose install the disk scan has not confirmed yet, has no project to search), so
+  // the key does nothing only while no displayed resource is installed. Find's picker switches to
+  // another.
   const displayedProjectIds = useMemo(
     () =>
       resources
@@ -347,7 +349,7 @@ function ScriptureTextGridProjectView({
   );
   const [activeResourceProjectId, setActiveResourceProjectId] =
     useActiveResourceProjectId(displayedProjectIds);
-  useOpenFindShortcut(webViewId, activeResourceProjectId);
+  useOpenFindShortcut(webViewId, activeResourceProjectId ?? displayedProjectIds[0]);
 
   const gridBodyState = getGridBodyState({
     hasRows: resources.length > 0,

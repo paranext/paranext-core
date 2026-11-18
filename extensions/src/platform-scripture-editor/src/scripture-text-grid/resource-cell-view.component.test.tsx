@@ -1501,6 +1501,8 @@ describe('ResourceCellView content scroll ownership', () => {
 
     const content = container.querySelector('[data-cell-content]');
     expect(content).toHaveAttribute('tabindex', '0');
+    // Named for the resource, so landing on it says whose text the keys scroll.
+    expect(screen.getByRole('group', { name: 'WEB' })).toBe(content);
     // `outline-hidden`, not `outline-none`: it keeps a real outline under forced colors, where the
     // ring (a box-shadow) is not drawn.
     expect(content).toHaveClass('tw:focus-visible:outline-hidden', 'tw:focus-visible:ring-2');
@@ -1512,7 +1514,10 @@ describe('ResourceCellView content scroll ownership', () => {
       <ResourceCellView {...baseProps} contentOverflow="visible" />,
     );
 
-    expect(container.querySelector('[data-cell-content]')).not.toHaveAttribute('tabindex');
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).not.toHaveAttribute('tabindex');
+    expect(content).not.toHaveAttribute('role');
+    expect(content).not.toHaveAttribute('aria-label');
   });
 
   it('hands scrolling to an ancestor when asked, so an aligned grid can own the scroll port', () => {

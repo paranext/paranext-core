@@ -827,6 +827,10 @@ export function ResourceCellView({
           <div
             ref={setHeaderContentElement}
             data-cell-content
+            // The tab stop below is named for the resource, as the aligned grid's root is named for
+            // the view, so landing on it announces whose text the keys scroll.
+            role={contentOverflow === 'auto' ? 'group' : undefined}
+            aria-label={contentOverflow === 'auto' ? label : undefined}
             // A cell that scrolls itself (a chapter column, the single-resource view, the verse
             // view's chapter split) makes its scroller a tab stop (WCAG 2.1.1: a scroll container
             // must be keyboard-reachable), which also lets a reveal or a click focus it so Arrow and

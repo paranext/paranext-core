@@ -3,8 +3,10 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.
 // The four web view type consts below are the read-only scripture reference panels and the Text
 // Collection, as this extension sees them. `platform-scripture` cannot import
 // `platform-scripture-editor`'s source, so these values are mirrored here. They must equal the
-// corresponding consts in `extensions/src/platform-scripture-editor/src/main.ts` (the panels) and
-// `platform-scripture-editor.utils.ts` (`SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE`); a pinning test in
+// corresponding consts in `extensions/src/platform-scripture-editor/src/`: `main.ts`
+// (`MODEL_TEXT_PANEL_WEBVIEW_TYPE`), `show-panel.util.ts` (`BIBLE_TEXTS_PANEL_WEBVIEW_TYPE`,
+// `COMMENTARIES_PANEL_WEBVIEW_TYPE`) and `platform-scripture-editor.utils.ts`
+// (`SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE`); a pinning test in
 // `resource-panel-web-view-types.const.test.ts` catches an accidental edit to these copies.
 
 /** Web view type of the Model text panel. Mirrored — see the note above. */
@@ -69,7 +71,8 @@ export const DECLARING_WEB_VIEW_TYPES = new Set<string>([
  * Each of these tabs displays scripture Find can search, and each already routes Ctrl+F to Find for
  * it (`useOpenFindShortcut` in `platform-scripture-editor`): the editor passes its own project, the
  * reference panels pass the resource they display, and the Text Collection passes the resource the
- * user last clicked or focused in, or that Find last revealed.
+ * user last clicked or focused in, or that Find last revealed, else the first installed resource it
+ * shows.
  *
  * "Go to result" on a resource shown only in the Text Collection activates that tab and asks its
  * controller to reveal the resource's cell at the result's verse; the match itself is not
