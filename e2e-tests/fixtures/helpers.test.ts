@@ -201,6 +201,8 @@ describe('buildLaunchEnv', () => {
   });
 
   it('launches quiet even when the shell exports DEV_NOISY=true', () => {
+    // Both ways a launcher could read the shell: the real environment and the `childEnv` copy.
+    vi.stubEnv('DEV_NOISY', 'true');
     expect(buildLaunchEnv({ DEV_NOISY: 'true' }, '/tmp/profile').DEV_NOISY).toBe('false');
   });
 
@@ -211,15 +213,38 @@ describe('buildLaunchEnv', () => {
     expect(env.DEV_NOISY).toBe('true');
   });
 
-  it('hides DevTools unless the shell or envOverrides say otherwise', () => {
-    vi.stubEnv('PT_NO_DEVTOOLS', undefined);
-    expect(buildLaunchEnv({}, '/tmp/profile').PT_NO_DEVTOOLS).toBe('true');
-
+  it('hides DevTools when the shell does not set PT_NO_DEVTOOLS', () => {
+    // The shell reaches buildLaunchEnv only through `childEnv`; a value in the real environment
+    // that `childEnv` lacks must not leak in.
     vi.stubEnv('PT_NO_DEVTOOLS', 'false');
-    expect(buildLaunchEnv({}, '/tmp/profile').PT_NO_DEVTOOLS).toBe('false');
-    expect(
-      buildLaunchEnv({}, '/tmp/profile', { envOverrides: { PT_NO_DEVTOOLS: 'true' } })
-        .PT_NO_DEVTOOLS,
-    ).toBe('true');
+    expect(buildLaunchEnv({}, '/tmp/profile').PT_NO_DEVTOOLS).toBe('true');
+  });
+
+  it('shows DevTools when the shell exports PT_NO_DEVTOOLS=false', () => {
+    vi.stubEnv('PT_NO_DEVTOOLS', undefined);
+    expect(buildLaunchEnv({ PT_NO_DEVTOOLS: 'false' }, '/tmp/profile').PT_NO_DEVTOOLS).toBe(
+      'false',
+    );
+  });
+
+  it('lets envOverrides hide DevTools over the shell value', () => {
+    const env = buildLaunchEnv({ PT_NO_DEVTOOLS: 'false' }, '/tmp/profile', {
+      envOverrides: { PT_NO_DEVTOOLS: 'true' },
+    });
+    expect(env.PT_NO_DEVTOOLS).toBe('true');
+  });
+
+  it('lets envOverrides win over the pinned test defaults', () => {
+    const env = buildLaunchEnv({}, '/tmp/profile', {
+      isolatedProjectRoot: true,
+      envOverrides: {
+        NODE_ENV: 'production',
+        PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'false',
+        PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: '/elsewhere',
+      },
+    });
+    expect(env.NODE_ENV).toBe('production');
+    expect(env.PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT).toBe('false');
+    expect(env.PLATFORM_BIBLE_PROJECT_ROOT_FOLDER).toBe('/elsewhere');
   });
 });

@@ -1076,7 +1076,7 @@ export function buildLaunchEnv(
     // they were never sized for. Honored in src/main/main.ts. The shell value is honored on
     // purpose, so a developer can export `PT_NO_DEVTOOLS=false` to see DevTools while debugging;
     // `envOverrides` still wins.
-    PT_NO_DEVTOOLS: process.env.PT_NO_DEVTOOLS ?? 'true',
+    PT_NO_DEVTOOLS: childEnv.PT_NO_DEVTOOLS ?? 'true',
     // An empty project root gets the sample WEB project the specs open by SAMPLE_WEB_PROJECT_ID
     PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'true',
     // Placing the project root inside userDataDir means the existing teardown rmSync cleans it up.
