@@ -151,8 +151,14 @@ function isScriptureEditorViewType(viewType: unknown): viewType is ScriptureEdit
 
 /**
  * The Simple-mode marker classes for the Scripture editor's root element (see `_simple-mode.scss`).
+ * `character-marker-bar-host` reserves the space the character-marker bar occupies beside the text.
  * `character-marker-indicators` turns on the tint and hover line for character markers with no
  * visible style.
+ *
+ * The bar is shown whenever the editor is not in Power mode, including while it is read-only and
+ * while the interface mode loads, so `character-marker-bar-host` is on in all of those cases too: a
+ * bar without its reservation paints over project text. The read-only Simple panels (Model Text,
+ * resource texts) have no bar and must never carry this class.
  *
  * The character-marker indicator warns against typing inside a marker, so it is on only where the
  * text can be typed into, and stays off until that is known: `isPowerMode` reads `false` while the
@@ -173,8 +179,9 @@ export function getSimpleModeRootClassNames({
   isDurablyReadOnly: boolean | undefined;
 }): string[] {
   if (isPowerMode) return [];
-  if (isInterfaceModeLoading || isDurablyReadOnly !== false) return ['editor-container-simple'];
-  return ['editor-container-simple', 'character-marker-indicators'];
+  const simpleClassNames = ['editor-container-simple', 'character-marker-bar-host'];
+  if (isInterfaceModeLoading || isDurablyReadOnly !== false) return simpleClassNames;
+  return [...simpleClassNames, 'character-marker-indicators'];
 }
 
 /**

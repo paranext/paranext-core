@@ -8,6 +8,8 @@
 // `.editor-container-simple` (unconditional in model-text-panel.component.tsx and
 // resource-text-panel.component.tsx — both Simple-mode-only web views; conditional on
 // `!isPowerMode` in platform-scripture-editor.web-view.tsx, which is used in both modes),
+// `.character-marker-bar-host` (beside `.editor-container-simple` on the Scripture editor's root
+// only — never on the read-only panels; see `getSimpleModeRootClassNames`),
 // `.character-marker-indicators` (beside `.editor-container-simple` on the Scripture editor's root,
 // only while its text can be typed into; see `getSimpleModeRootClassNames`) and
 // `.scripture-editor-tab-nav-simple` (conditional in platform-scripture-editor.web-view.tsx only).
@@ -15,9 +17,9 @@
 // This file is @used from _editor-overrides.scss, which all three web-view entry points already
 // @use — so it flows into every web view's compiled CSS without needing to touch each entry point.
 // (Sass hoists an @used module's CSS to the top of the compiled output regardless of source-order
-// position. Only ONE rule in this file has a cascade-order dependency — the RTL rule at the bottom,
-// which loses a same-specificity tie to a hoisted-below vendored rule and therefore raises its own
-// specificity deliberately; each rule notes its own situation. Contrast the renderer's
+// position, so no rule in this file may depend on source order: a rule that contends with another
+// stylesheet's wins on specificity or `!important`, and its comment says which. Contrast the
+// renderer's
 // dock-layout-wrapper.component.scss, which needed a plain webpack import instead of @use for that
 // reason.)
 
@@ -64,20 +66,21 @@
 // column to make room for a control they never see. The React `!isPowerMode` gate cannot cover a
 // CSS selector, so the scoping must happen here.
 //
-// The matching condition is `.editor-container-simple` AND `.psc-gutter-markers` — TWO gates, and
-// BOTH are required. Do not broaden this to `.editor-container-simple .usfm`: this stylesheet is
+// The matching condition is `.editor-container-simple`, `.character-marker-bar-host` AND
+// `.psc-gutter-markers` — THREE gates, all required. Do not drop the host class: this stylesheet is
 // compiled into every web view in this extension (via `_editor-overrides.scss`), and both
 // resource-text-panel.web-view.tsx and model-text-panel.component.tsx apply
-// `editor-container-simple` UNCONDITIONALLY to an editor that sets no `hasGutterParaMarkers` — so
-// the broader selector would reserve 64px of dead space in the Bible Texts / Commentaries panel and
-// the model text panel, neither of which has a character-marker bar. `.psc-gutter-markers` is what
-// keeps this rule off those two editors. (Broadening would also drop the RTL rule below from
-// specificity (0,4,0) to (0,3,0), tying `_usj-nodes.scss`'s mirror rule and losing on source order.)
+// `editor-container-simple` UNCONDITIONALLY to an editor with no character-marker bar — and the
+// model text panel's editor renders gutter markers, so `.psc-gutter-markers` alone cannot keep the
+// rule off it. Without the host class this would reserve 64px of dead space down the model text's
+// inline-end side. Only the Scripture editor root carries `character-marker-bar-host` (see
+// `getSimpleModeRootClassNames`).
 //
-// The bar is gated on the SAME two conditions in platform-scripture-editor.web-view.tsx —
-// `!isPowerMode` and `viewOptions.hasGutterParaMarkers` — so the bar and the space it occupies
-// cannot come apart. Keep them in step: a bar that renders where this rule does not match paints
-// over project text, which is the one failure this design exists to prevent.
+// The bar is gated on the same conditions in platform-scripture-editor.web-view.tsx —
+// `!isPowerMode`, which is exactly when the root carries both classes above, and
+// `viewOptions.hasGutterParaMarkers` — so the bar and the space it occupies cannot come apart. Keep
+// them in step: a bar that renders where this rule does not match paints over project text, which
+// is the one failure this design exists to prevent.
 //
 // Reservation is unconditional within Simple mode, not tied to whether the bar is currently drawn:
 // reserving only while visible would reflow the whole text column as the caret enters and leaves
@@ -112,7 +115,7 @@
 // `.usfm`, inside that area, where CSS `zoom` multiplies it. Dividing by the area's factor makes
 // the reserved space render at exactly the bar's width at every level; without it the reservation
 // shrinks under the bar below 100 % and the bar paints over text.
-.editor-container-simple .usfm.psc-gutter-markers {
+.editor-container-simple.character-marker-bar-host .usfm.psc-gutter-markers {
   padding-inline-end: calc(
     var(--psc-character-marker-bar-width) /
       var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))
@@ -165,13 +168,13 @@
 }
 /* stylelint-enable selector-class-pattern */
 
-// RTL: `_usj-nodes.scss`'s mirror rule (`.usfm.psc-gutter-markers[dir='rtl']`) re-asserts
-// `padding-left: 10px` PHYSICALLY — the same side `padding-inline-end` resolves to in RTL — at
-// equal specificity (0,3,0) to the rule above. Sass hoists this @used module's CSS above it, so
-// source order would hand the tie to the mirror. Restating the inline-end side with the `[dir]`
-// attribute raises specificity to (0,4,0) and settles it deterministically. That rule's
-// `padding-right` (the start-side gutter in RTL) is untouched and still applies.
-.editor-container-simple .usfm.psc-gutter-markers[dir='rtl'] {
+// RTL: `_usj-nodes.scss`'s mirror rule (`.usfm.psc-gutter-markers[dir='rtl']`, specificity (0,3,0))
+// re-asserts `padding-left: 10px` PHYSICALLY — the same side `padding-inline-end` resolves to in
+// RTL. The rule above already outranks it at (0,4,0); this one states the RTL side explicitly, at
+// (0,5,0), so the reservation does not hang on a one-class margin against a rule in another file
+// whose source order Sass's hoisting decides. That rule's `padding-right` (the start-side gutter in
+// RTL) is untouched and still applies.
+.editor-container-simple.character-marker-bar-host .usfm.psc-gutter-markers[dir='rtl'] {
   padding-left: calc(
     var(--psc-character-marker-bar-width) /
       var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))

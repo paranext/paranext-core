@@ -1,9 +1,11 @@
+// @vitest-environment jsdom
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import postcss, { type Rule } from 'postcss';
 import { compile } from 'sass';
 import ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { getSimpleModeRootClassNames } from './platform-scripture-editor.utils';
 import {
   descendants,
   parseSource,
@@ -187,13 +189,15 @@ describe('_simple-mode.scss', () => {
     expect(scss).not.toMatch(/--psc-character-marker-bar-width:\s*[\d.]+(em|rem|%|ch|ex)/);
   });
 
-  it('gates the bar on the same two conditions the reservation selects on', () => {
+  it('gates the bar on the same conditions the reservation selects on', () => {
     // The highest-coupling point in this feature, and the one failure it exists to prevent: a bar
     // that renders where this stylesheet does not match paints over project text. The two halves
     // live in different languages and different files, so nothing but this test can hold them
-    // together — the CSS side cannot be broadened to `!isPowerMode` alone, because this stylesheet
-    // is compiled into the resource-text and model-text panels too, and both apply
-    // `editor-container-simple` unconditionally to an editor with no gutter markers.
+    // together. The CSS side cannot select on `.editor-container-simple` alone: this stylesheet is
+    // compiled into the Model Text and resource-text panels too, which apply that class and have no
+    // bar, and the Model Text panel renders gutter markers. `character-marker-bar-host`, which only
+    // the Scripture editor root carries (whenever it is not in Power mode, as the bar's gate
+    // requires), is what keeps the reservation to the editor that has the bar.
     //
     // Deliberately a source scan, in the same spirit as the scope guard above: the mount site is
     // deep inside a web view that cannot be rendered in isolation, and a refactor that restates the
@@ -201,10 +205,97 @@ describe('_simple-mode.scss', () => {
     const scss = readFileSync(SIMPLE_MODE_SCSS_PATH, 'utf8');
     const webView = readFileSync(join(__dirname, 'platform-scripture-editor.web-view.tsx'), 'utf8');
 
-    // CSS side: both classes on one compound selector, so BOTH are required.
-    expect(scss).toContain('.editor-container-simple .usfm.psc-gutter-markers {');
-    // React side: the bar slot is empty unless the same two conditions hold.
+    // CSS side: the host class and the gutter class on one selector, so BOTH are required.
+    expect(scss).toContain(
+      '.editor-container-simple.character-marker-bar-host .usfm.psc-gutter-markers {',
+    );
+    // React side: the bar slot is empty unless the same conditions hold.
     expect(webView).toContain('isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined');
+  });
+
+  describe('character-marker bar reservation', () => {
+    /** The rules that reserve the bar's width beside the text. */
+    const reservationRules = () =>
+      compiledSimpleModeRules().filter((rule) =>
+        rule.nodes.some(
+          (node) =>
+            node.type === 'decl' &&
+            (node.prop === 'padding-inline-end' || node.prop === 'padding-left') &&
+            node.value.includes('--psc-character-marker-bar-width'),
+        ),
+      );
+
+    /**
+     * Gutter-marker text as the editor renders it, under a root carrying `rootClasses`: the element
+     * the reservation pads.
+     */
+    const gutterTextUnder = (rootClasses: string[], dir: 'ltr' | 'rtl') => {
+      const root = document.createElement('div');
+      root.className = rootClasses.join(' ');
+      root.innerHTML = `<div class="editor-container"><div class="editor-input usfm psc-gutter-markers" dir="${dir}"></div></div>`;
+      document.body.append(root);
+      const text = root.querySelector('.usfm');
+      if (!text) throw new Error('fixture did not render');
+      return text;
+    };
+
+    const isReserved = (element: Element) =>
+      reservationRules().some((rule) =>
+        rule.selectors.some((selector) => element.matches(selector)),
+      );
+
+    afterEach(() => {
+      document.body.replaceChildren();
+    });
+
+    it('finds the reservation rules, one per direction', () => {
+      // Keeps the matching tests below from passing against an empty rule list.
+      expect(reservationRules()).toHaveLength(2);
+    });
+
+    it.each(['ltr', 'rtl'] as const)(
+      'reserves the bar’s space beside the Scripture editor’s Simple text (%s)',
+      (dir) => {
+        // One Simple case stands for all of them: `getSimpleModeRootClassNames`'s own tests pin
+        // that every Simple case carries the host class this rule matches on.
+        expect(
+          isReserved(
+            gutterTextUnder(
+              getSimpleModeRootClassNames({
+                isPowerMode: false,
+                isInterfaceModeLoading: false,
+                isDurablyReadOnly: false,
+              }),
+              dir,
+            ),
+          ),
+        ).toBe(true);
+      },
+    );
+
+    it.each(['ltr', 'rtl'] as const)(
+      'reserves no space beside gutter text in the read-only Simple panels (%s)',
+      (dir) => {
+        // The root classes the Model Text and resource-text panels apply: the source scan below
+        // pins that they apply `editor-container-simple` and none of the editor root's other classes.
+        expect(isReserved(gutterTextUnder(['editor-container-simple'], dir))).toBe(false);
+      },
+    );
+
+    it('reserves nothing in Power mode', () => {
+      expect(
+        isReserved(
+          gutterTextUnder(
+            getSimpleModeRootClassNames({
+              isPowerMode: true,
+              isInterfaceModeLoading: false,
+              isDurablyReadOnly: false,
+            }),
+            'ltr',
+          ),
+        ),
+      ).toBe(false);
+    });
   });
 
   it('reserves the gutter in unzoomed pixels, in both directions, so the fixed-size bar never overlaps zoomed text', () => {
@@ -286,6 +377,7 @@ describe('_simple-mode.scss', () => {
         );
         expect(strings.some((text) => text.includes('editor-container-simple'))).toBe(true);
         expect(strings.some((text) => text.includes('character-marker-indicators'))).toBe(false);
+        expect(strings.some((text) => text.includes('character-marker-bar-host'))).toBe(false);
         expect(
           nodes.some(
             (node) => ts.isIdentifier(node) && node.text === 'getSimpleModeRootClassNames',

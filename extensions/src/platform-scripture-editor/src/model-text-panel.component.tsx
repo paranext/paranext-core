@@ -1,9 +1,4 @@
-import {
-  Editorial,
-  EditorOptions,
-  EditorRef,
-  getDefaultViewOptions,
-} from '@eten-tech-foundation/platform-editor';
+import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
 import { BaseOrModelTextExplanation } from 'platform-bible-react/experimental';
 import { ChevronDown } from 'lucide-react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -76,6 +71,7 @@ import type {
 } from './model-text-panel.const';
 import { MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS } from './model-text-panel.const';
 import { getInstallFailureMessageKey } from './install-failure-message.utils';
+import { getModelTextViewOptions } from './editor-view-options.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -446,7 +442,7 @@ export function ModelTextPanel({
   // Memoized on the boolean alone: the editor reloads (re-serialize + setEditorState) whenever the
   // `view` object's identity changes, so a refetch of identical content must not rebuild it.
   const view = useMemo(
-    () => ({ ...getDefaultViewOptions(), allowInvisibleCharacters }),
+    () => getModelTextViewOptions(allowInvisibleCharacters),
     [allowInvisibleCharacters],
   );
 
@@ -910,7 +906,9 @@ export function ModelTextPanel({
   // Active: read-only editor showing the model text.
   // This panel is Simple-mode-only, so `editor-container-simple` (flattens .editor-container's
   // rounded top corners — see _simple-mode.scss) is applied unconditionally, unlike the
-  // Scripture Editor's conditional use of the same class.
+  // Scripture Editor's conditional use of the same class. It must not also carry
+  // `character-marker-bar-host`: this panel has no character-marker bar, and that class would
+  // reserve the bar's width beside its gutter-marker text.
   return (
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       {modelTextLabel && (

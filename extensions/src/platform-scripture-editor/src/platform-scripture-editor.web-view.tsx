@@ -5522,16 +5522,17 @@ function PlatformScriptureEditor({
             the stored value arrives — taking Lexical's undo history and the scroll position with it.
             An empty slot renders nothing beside the editor.
 
-            `hasGutterParaMarkers` is checked here because it is the OTHER half of the condition the
-            gutter reservation in `_simple-mode.scss` matches on
-            (`.editor-container-simple .usfm.psc-gutter-markers`). Gating the bar on the same two
-            things the CSS does keeps the bar and the space it occupies inseparable: if this view ever
-            stops using the paragraph-structure preset — a Simple view-option chooser would do it —
-            the reservation and the bar disappear together instead of leaving the bar painting over
-            project text. The reservation cannot simply be broadened to match `!isPowerMode` alone,
-            because `_simple-mode.scss` is compiled into the resource-text and model-text panels too,
-            and both apply `editor-container-simple` unconditionally to an editor that has no gutter
-            markers. */}
+            The bar is gated on the same things the gutter reservation in `_simple-mode.scss`
+            matches on (`.editor-container-simple.character-marker-bar-host
+            .usfm.psc-gutter-markers`): the root carries both classes exactly when `!isPowerMode`
+            (see `getSimpleModeRootClassNames`), and `hasGutterParaMarkers` is the editor's gutter
+            class. Gating both on the same conditions keeps the bar and the space it occupies
+            inseparable: if this view ever stops using the paragraph-structure preset — a Simple
+            view-option chooser would do it — the reservation and the bar disappear together instead
+            of leaving the bar painting over project text. The reservation cannot match on
+            `editor-container-simple` alone, because `_simple-mode.scss` is compiled into the
+            resource-text and model-text panels too: both apply that class and have no bar, and the
+            model text panel renders gutter markers. */}
           <CharacterMarkerBarOverlay
             bar={
               isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined : (

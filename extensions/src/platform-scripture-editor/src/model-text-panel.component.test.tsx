@@ -43,9 +43,15 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
     }, []);
     return <div data-testid="editorial" />;
   }),
-  // A recognizable stand-in for the editor's default view options, so a test can see that the
-  // panel's `view` starts from them.
+  // Recognizable stand-ins for the editor's view presets, so a test can see which one the panel's
+  // `view` starts from and what it changes.
   getDefaultViewOptions: () => ({ viewOptionsFor: 'default' }),
+  PARAGRAPH_STRUCTURE_VIEW_MODE: 'paragraph-structure',
+  getViewOptions: (mode: string) => ({
+    viewOptionsFor: mode,
+    hasGutterParaMarkers: true,
+    hasActiveTextFocusBox: true,
+  }),
 }));
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
@@ -1069,7 +1075,7 @@ describe('ModelTextPanel', () => {
   });
 
   it.each([true, false])(
-    "gives the editor the project's allowInvisibleCharacters (%s) in its view options",
+    "gives the read-only editor the gutter-marker view, without the active-text outline, and the project's allowInvisibleCharacters (%s)",
     async (allowInvisibleCharacters) => {
       renderPanel({
         modelTextsState: readyState(configuredModelText('uid-web')),
@@ -1081,7 +1087,13 @@ describe('ModelTextPanel', () => {
       await waitFor(() =>
         expect(capturedEditorOptions).toHaveBeenLastCalledWith(
           expect.objectContaining({
-            view: { viewOptionsFor: 'default', allowInvisibleCharacters },
+            isReadonly: true,
+            view: {
+              viewOptionsFor: 'paragraph-structure',
+              hasGutterParaMarkers: true,
+              hasActiveTextFocusBox: false,
+              allowInvisibleCharacters,
+            },
           }),
         ),
       );

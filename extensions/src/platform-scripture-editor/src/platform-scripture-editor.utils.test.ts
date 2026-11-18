@@ -5525,7 +5525,11 @@ describe('getSimpleModeRootClassNames', () => {
         isInterfaceModeLoading: false,
         isDurablyReadOnly: false,
       }),
-    ).toEqual(['editor-container-simple', 'character-marker-indicators']);
+    ).toEqual([
+      'editor-container-simple',
+      'character-marker-bar-host',
+      'character-marker-indicators',
+    ]);
   });
 
   it('leaves the indicator off when the text cannot be typed into', () => {
@@ -5536,7 +5540,7 @@ describe('getSimpleModeRootClassNames', () => {
         isInterfaceModeLoading: false,
         isDurablyReadOnly: true,
       }),
-    ).toEqual(['editor-container-simple']);
+    ).toEqual(['editor-container-simple', 'character-marker-bar-host']);
   });
 
   it('leaves the indicator off until the interface mode is known', () => {
@@ -5548,7 +5552,7 @@ describe('getSimpleModeRootClassNames', () => {
         isInterfaceModeLoading: true,
         isDurablyReadOnly: false,
       }),
-    ).toEqual(['editor-container-simple']);
+    ).toEqual(['editor-container-simple', 'character-marker-bar-host']);
   });
 
   it('leaves the indicator off until edit permissions are known', () => {
@@ -5560,8 +5564,30 @@ describe('getSimpleModeRootClassNames', () => {
         isInterfaceModeLoading: false,
         isDurablyReadOnly: undefined,
       }),
-    ).toEqual(['editor-container-simple']);
+    ).toEqual(['editor-container-simple', 'character-marker-bar-host']);
   });
+
+  // The bar's own gate ignores read-only state and the interface-mode load, so the class that
+  // reserves its space must too: a bar without its reservation paints over project text.
+  it.each(
+    [false, true].flatMap((isInterfaceModeLoading) =>
+      [false, true, undefined].map((isDurablyReadOnly) => ({
+        isInterfaceModeLoading,
+        isDurablyReadOnly,
+      })),
+    ),
+  )(
+    'marks the root as hosting the character-marker bar wherever Simple shows it (interface mode loading $isInterfaceModeLoading, read-only $isDurablyReadOnly)',
+    ({ isInterfaceModeLoading, isDurablyReadOnly }) => {
+      expect(
+        getSimpleModeRootClassNames({
+          isPowerMode: false,
+          isInterfaceModeLoading,
+          isDurablyReadOnly,
+        }),
+      ).toContain('character-marker-bar-host');
+    },
+  );
 
   it('adds no Simple-mode classes in Power mode', () => {
     expect(

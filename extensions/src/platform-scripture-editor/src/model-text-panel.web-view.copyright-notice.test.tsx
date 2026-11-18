@@ -73,6 +73,8 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
     return <div data-testid="editorial" />;
   }),
   getDefaultViewOptions: () => ({}),
+  PARAGRAPH_STRUCTURE_VIEW_MODE: 'paragraph-structure',
+  getViewOptions: () => ({}),
 }));
 
 vi.mock('./use-effective-resource-reference-list.hook', () => ({
