@@ -6,8 +6,8 @@
  *
  * The body, and what each step proves, is `runInvisibleCharacters` in
  * `e2e-tests/fixtures/no-unasked-edits.body.ts`; its sibling specs run it with the other setting
- * and in the other editable view. ONE test() per spec file on purpose (the isolated fixture is
- * test-scoped, and the setting is seeded before the app starts).
+ * and in the other editable view. One test() per spec: the setting is seeded before the app starts,
+ * so each setting and view gets its own launch.
  *
  * Runs against an isolated project root: `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/no-unasked-edits-invisible-characters-off-power-standard.spec.ts`.

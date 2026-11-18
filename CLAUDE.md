@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with code in the paranex
 
 ## Project Overview
 
-Platform.Bible is extensible Bible translation software built on Electron with a TypeScript/React frontend and .NET 8 backend data provider. The core platform provides a minimal framework with functionality delivered primarily through extensions, giving developers flexibility to create and share their desired Bible translation experience.
+Platform.Bible is extensible Bible translation software built on Electron with a TypeScript/React frontend and .NET 10 backend data provider. The core platform provides a minimal framework with functionality delivered primarily through extensions, giving developers flexibility to create and share their desired Bible translation experience.
 
 ## Reference Documentation
 
@@ -47,7 +47,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Desktop Framework  | Electron                              |
 | Frontend           | React, TypeScript, SCSS, Tailwind CSS |
 | Backend (Node)     | TypeScript, WebSocket (JSON-RPC 2.0)  |
-| Backend (Data)     | .NET 8 / C#                           |
+| Backend (Data)     | .NET 10 / C#                          |
 | Build System       | Webpack                               |
 | Testing            | Vitest, Storybook                     |
 | Package Management | npm workspaces (monorepo)             |
@@ -273,7 +273,7 @@ Never skip pre-commit hooks (`--no-verify`, `-n`, `HUSKY=0`) — they run the se
 ## Version Management
 
 - Use Node.js version specified in `package.json` → `volta.node` (recommend using Volta)
-- Requires .NET 8 SDK
+- Requires .NET 10 SDK
 
 ## Links
 

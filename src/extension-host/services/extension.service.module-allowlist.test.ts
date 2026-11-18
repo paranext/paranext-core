@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EXTENSION_INTERFACE_MODULE_SPECIFIERS } from '@extension-host/data/extension-interface-modules.data';
-import { WEB_VIEW_MODULE_SPECIFIERS } from '@renderer/data/web-view-modules.data';
+import {
+  readPermittedModuleSpecifiers,
+  readSuppliedModuleSpecifiers,
+} from './webpack-externals.test-utils';
 
 /*
  * Pins the module specifiers an extension may `require` at runtime.
@@ -23,6 +25,9 @@ import { WEB_VIEW_MODULE_SPECIFIERS } from '@renderer/data/web-view-modules.data
  * pulls in React and `platform-bible-react`, which do not load outside a browser environment, so its
  * map is keyed by `WEB_VIEW_MODULE_SPECIFIERS` in a module that imports nothing and this compares
  * that value.
+ *
+ * The webpack `externals` list extension builds declare is pinned against what these hosts supply
+ * in `extension.service.webpack-externals.test.ts`.
  */
 
 const REPO = path.join(__dirname, '..', '..', '..');
@@ -52,11 +57,6 @@ const WIDENING_THE_GRANT = [
   'intended, update PERMITTED_MODULE_SPECIFIERS deliberately and say so in the review; do not update',
   'it to make the test pass.',
 ].join(' ');
-
-/** The specifiers the extension host supplies, as the shim reads them. */
-function readPermittedModuleSpecifiers(): string[] {
-  return [...EXTENSION_INTERFACE_MODULE_SPECIFIERS].sort();
-}
 
 // The consequence lives in the test name because that is what a failing run prints. Vitest's
 // two-argument `expect(value, message)` would say it closer to the assertion, but `vitest/valid-expect`
@@ -145,11 +145,6 @@ const FIRST_PARTY_SUPPLIED_MODULES = [
   'platform-bible-utils',
 ];
 
-/** The specifiers the renderer answers for a web view, as its module map is keyed. */
-function readWebViewModuleSpecifiers(): string[] {
-  return [...WEB_VIEW_MODULE_SPECIFIERS].sort();
-}
-
 /**
  * The module specifiers `LICENSE-EXCEPTION.md` names as the Extension Interface.
  *
@@ -181,25 +176,21 @@ describe('the Extension Interface the license exception grants', () => {
     // The grant is a promise that these modules are there to be linked against. A name the hosts do
     // not answer is a promise nothing keeps; this is the direction the shim-only guard above cannot
     // see, because it compares the shim against a copy of itself.
-    const supplied = new Set([
-      ...readPermittedModuleSpecifiers(),
-      ...readWebViewModuleSpecifiers(),
-    ]);
+    const supplied = readSuppliedModuleSpecifiers();
 
-    expect(FIRST_PARTY_SUPPLIED_MODULES.filter((module) => !supplied.has(module))).toEqual([]);
+    expect(FIRST_PARTY_SUPPLIED_MODULES.filter((module) => !supplied.includes(module))).toEqual([]);
   });
 
   it(`carves out nothing the hosts supply from a third party — ${WIDENING_THE_GRANT}`, () => {
     // The other direction: a first-party module added to either host has to reach the grant, or the
     // published carve-out is silently narrower than the interface extensions actually link against.
-    const supplied = [
-      ...new Set([...readPermittedModuleSpecifiers(), ...readWebViewModuleSpecifiers()]),
-    ];
-    const ungranted = supplied.filter((module) => !FIRST_PARTY_SUPPLIED_MODULES.includes(module));
+    const ungranted = readSuppliedModuleSpecifiers().filter(
+      (module) => !FIRST_PARTY_SUPPLIED_MODULES.includes(module),
+    );
 
     // Everything the hosts supply that the grant does not name must be a module this project does
     // not own - Node built-ins and React. Each is listed so that adding one is a deliberate line.
-    expect(ungranted.sort()).toEqual([
+    expect(ungranted).toEqual([
       '@sillsdev/scripture',
       'crypto',
       'react',

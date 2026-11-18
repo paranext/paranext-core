@@ -2,8 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Localized, WebViewMenu } from 'platform-bible-utils';
 
 import { menuDataService } from '@shared/services/menu-data.service';
+import { logger } from '@shared/services/logger.service';
+import { webViewService } from '@shared/services/web-view.service';
+import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
+import type { OverlayEntry } from './overlay.service-model';
 import { overlayService, resetDebounceState } from './overlay.service-host';
-import { getOverlays, clearAllOverlays } from './overlay-store';
+import {
+  getOverlays,
+  getOverlayById,
+  clearAllOverlays,
+  resolveAndRemoveOverlay,
+} from './overlay-store';
+import { validateContextMenuItems } from './overlay-validation';
 
 // Mock the menu data service
 vi.mock('@shared/services/menu-data.service', () => ({
@@ -74,11 +84,52 @@ vi.mock('@shared/services/localization.service', () => ({
   },
 }));
 
+vi.mock('@shared/services/web-view.service', () => ({
+  webViewService: {
+    getOpenWebViewDefinition: vi.fn(() => Promise.resolve(undefined)),
+  },
+}));
+
+const { keyValues, keyListeners, unsubscribeKeyListener } = vi.hoisted(() => ({
+  keyValues: new Map<string, unknown>(),
+  keyListeners: new Set<(event: { key: string; value: unknown }) => void>(),
+  unsubscribeKeyListener: vi.fn(),
+}));
+
+vi.mock('@shared/services/context-keys.service', () => ({
+  contextKeysService: {
+    get: vi.fn((key: string) => keyValues.get(key)),
+    onDidChange: vi.fn((listener: (event: { key: string; value: unknown }) => void) => {
+      keyListeners.add(listener);
+      return () => {
+        unsubscribeKeyListener();
+        keyListeners.delete(listener);
+      };
+    }),
+  },
+}));
+
+/** Sets a context key and notifies the listeners, as the real service does */
+function emitKey(key: string, value: unknown) {
+  keyValues.set(key, value);
+  keyListeners.forEach((listener) => listener({ key, value }));
+}
+
 const mockGetWebViewMenu = vi.mocked(menuDataService.getWebViewMenu);
+
+type ContextMenuOverlay = Extract<OverlayEntry, { type: 'contextMenu' }>;
+
+/** Narrows an overlay entry to a context menu, failing the test if it is anything else */
+function asContextMenuOverlay(overlay: OverlayEntry | undefined): ContextMenuOverlay {
+  if (overlay?.type !== 'contextMenu') throw new Error('Expected an open context menu overlay');
+  return overlay;
+}
 
 describe('showContextMenu contribution integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    keyValues.clear();
+    keyListeners.clear();
     resetDebounceState();
     clearAllOverlays();
   });
@@ -109,7 +160,7 @@ describe('showContextMenu contribution integration', () => {
       'test-webview',
     );
 
-    // Flush the getWebViewMenu promise so addOverlay is called
+    // Flush getWebViewMenu so addOverlay is called
     await Promise.resolve();
 
     expect(mockGetWebViewMenu).toHaveBeenCalledWith('platformScripture.checkingResultsListWebView');
@@ -165,7 +216,7 @@ describe('showContextMenu contribution integration', () => {
       position: { x: 100, y: 200 },
     });
 
-    // Flush the getWebViewMenu promise so addOverlay is called
+    // Flush getWebViewMenu so addOverlay is called
     await Promise.resolve();
 
     // Verify the overlay was added to the real store with correctly converted items
@@ -211,5 +262,286 @@ describe('showContextMenu contribution integration', () => {
 
     const result = await overlayService.showContextMenu('ext.emptyMenu', 'empty-webview');
     expect(result).toBeUndefined();
+  });
+  it("does not look up the web view's project when no item uses {projectId}", async () => {
+    mockGetWebViewMenu.mockResolvedValue({
+      includeDefaults: false,
+      topMenu: undefined,
+      contextMenu: {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [{ command: 'ext.a', group: 'ext.group1', label: 'A', order: 1, localizeNotes: '' }],
+      },
+    });
+
+    const promise = overlayService.showContextMenu('ext.myWebView', 'no-lookup-webview');
+
+    // Flush getWebViewMenu so addOverlay is called
+    await Promise.resolve();
+
+    expect(getOverlays()).toHaveLength(1);
+    expect(webViewService.getOpenWebViewDefinition).not.toHaveBeenCalled();
+
+    getOverlays()[0].resolve(undefined);
+    return promise;
+  });
+
+  it('opens the menu without project-gated items when the project lookup fails', async () => {
+    mockGetWebViewMenu.mockResolvedValue({
+      includeDefaults: false,
+      topMenu: undefined,
+      contextMenu: {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          { command: 'ext.a', group: 'ext.group1', label: 'A', order: 1, localizeNotes: '' },
+          {
+            command: 'ext.b',
+            group: 'ext.group1',
+            label: 'B',
+            order: 2,
+            localizeNotes: '',
+            when: 'ext.project.{projectId}.flag',
+          },
+        ],
+      },
+    });
+    vi.mocked(webViewService.getOpenWebViewDefinition).mockRejectedValueOnce(
+      new Error('window gone'),
+    );
+
+    const promise = overlayService.showContextMenu('ext.myWebView', 'lookup-fails-webview');
+
+    await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+    const overlay = asContextMenuOverlay(getOverlays()[0]);
+    expect(overlay.items).toEqual([{ type: 'item', id: 'ext.a', label: 'A' }]);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('{projectId}'));
+
+    overlay.resolve(undefined);
+    return promise;
+  });
+
+  describe('live updates while open', () => {
+    type ContextMenu = NonNullable<Localized<WebViewMenu>['contextMenu']>;
+
+    const fixtureMenu: ContextMenu = {
+      groups: { 'ext.group1': { order: 1 } },
+      items: [
+        {
+          command: 'ext.cmd',
+          group: 'ext.group1',
+          label: 'Cmd',
+          order: 1,
+          localizeNotes: '',
+          enabledWhen: 'ext.flag',
+        },
+        {
+          command: 'ext.extra',
+          group: 'ext.group1',
+          label: '%hidden%',
+          order: 2,
+          localizeNotes: '',
+          when: 'ext.show',
+        },
+      ],
+    };
+
+    async function openMenu(contextMenu: ContextMenu, webViewId = 'live-webview') {
+      mockGetWebViewMenu.mockResolvedValue({
+        includeDefaults: false,
+        topMenu: undefined,
+        contextMenu,
+      });
+      const promise = overlayService.showContextMenu('ext.myWebView', webViewId);
+      await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+      const overlay = asContextMenuOverlay(getOverlays()[0]);
+      return { promise, overlay };
+    }
+
+    function currentOverlay(id: string): ContextMenuOverlay {
+      return asContextMenuOverlay(getOverlayById(id));
+    }
+
+    it('enables an item while open', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+      expect(overlay.items[0]).toMatchObject({ id: 'ext.cmd', disabled: true });
+
+      emitKey('ext.flag', true);
+
+      expect(currentOverlay(overlay.id).items[0]).not.toHaveProperty('disabled');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('shows an item while open', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+      expect(overlay.items.some((i) => i.type === 'item' && i.id === 'ext.extra')).toBe(false);
+
+      emitKey('ext.show', true);
+
+      expect(
+        currentOverlay(overlay.id).items.some((i) => i.type === 'item' && i.id === 'ext.extra'),
+      ).toBe(true);
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('picks up a short-circuited key once the key before it changes', async () => {
+      const { promise, overlay } = await openMenu({
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 1,
+            localizeNotes: '',
+            enabledWhen: 'ext.a && ext.b',
+          },
+        ],
+      });
+      emitKey('ext.a', true);
+      expect(currentOverlay(overlay.id).items[0]).toMatchObject({ disabled: true });
+
+      emitKey('ext.b', true);
+
+      expect(currentOverlay(overlay.id).items[0]).not.toHaveProperty('disabled');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('looks up the web view project when only enabledWhen uses {projectId}', async () => {
+      const definition: SavedWebViewDefinition = {
+        id: 'live-webview',
+        webViewType: 'ext.myWebView',
+        projectId: 'proj1',
+      };
+      vi.mocked(webViewService.getOpenWebViewDefinition).mockResolvedValue(definition);
+      keyValues.set('ext.project.PROJ1.flag', true);
+
+      const { promise, overlay } = await openMenu({
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 1,
+            localizeNotes: '',
+            enabledWhen: 'ext.project.{projectId}.flag',
+          },
+        ],
+      });
+
+      expect(webViewService.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+      expect(overlay.items[0]).not.toHaveProperty('disabled');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('ignores a key the menu did not read', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+      const before = getOverlayById(overlay.id);
+
+      emitKey('other.key', 1);
+
+      expect(getOverlayById(overlay.id)).toBe(before);
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('closes when every item becomes hidden', async () => {
+      keyValues.set('ext.show', true);
+      const { promise } = await openMenu({
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.extra',
+            group: 'ext.group1',
+            label: 'Extra',
+            order: 1,
+            localizeNotes: '',
+            when: 'ext.show',
+          },
+        ],
+      });
+
+      emitKey('ext.show', false);
+
+      await expect(promise).resolves.toBeUndefined();
+      expect(getOverlays()).toEqual([]);
+    });
+
+    it('stops following keys once resolved', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+
+      resolveAndRemoveOverlay(overlay.id, 'contextMenu', undefined);
+      await promise;
+
+      expect(unsubscribeKeyListener).toHaveBeenCalledTimes(1);
+      emitKey('ext.flag', true);
+      expect(getOverlays()).toEqual([]);
+    });
+
+    it('keeps the menu and logs when re-evaluation throws', async () => {
+      vi.mocked(validateContextMenuItems)
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {
+          throw new Error('bad');
+        });
+      const { promise, overlay } = await openMenu(fixtureMenu);
+
+      expect(() => emitKey('ext.flag', true)).not.toThrow();
+
+      expect(getOverlayById(overlay.id)).toBeDefined();
+      expect(logger.warn).toHaveBeenCalled();
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('prefetches keys of hidden items', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+
+      expect(overlay.localizeKeys).toContain('%hidden%');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('re-evaluates with the project it looked up once', async () => {
+      const definition: SavedWebViewDefinition = {
+        id: 'live-webview',
+        webViewType: 'ext.myWebView',
+        projectId: 'proj1',
+      };
+      vi.mocked(webViewService.getOpenWebViewDefinition).mockResolvedValue(definition);
+      const { promise, overlay } = await openMenu({
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.plain',
+            group: 'ext.group1',
+            label: 'Plain',
+            order: 1,
+            localizeNotes: '',
+          },
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 2,
+            localizeNotes: '',
+            when: 'ext.project.{projectId}.flag',
+          },
+        ],
+      });
+      expect(webViewService.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+      keyValues.set('ext.project.PROJ1.flag', false);
+
+      emitKey('ext.project.PROJ1.flag', true);
+
+      expect(webViewService.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+      expect(overlay.items).toHaveLength(1);
+      expect(currentOverlay(overlay.id).items).toHaveLength(2);
+      overlay.resolve(undefined);
+      await promise;
+    });
   });
 });

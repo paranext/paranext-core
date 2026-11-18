@@ -13,6 +13,7 @@ import { ElectronApplication, Page, expect } from '@playwright/test';
 import {
   killProcessTree,
   sendPapiRequestOnce,
+  waitForDockLayoutLoaded,
   waitForOverlayGone,
   waitForPapiMethodRegistered,
 } from '../../../fixtures/helpers';
@@ -417,6 +418,107 @@ export function getAppPages(electronApp: ElectronApplication): Page[] {
     .filter((page) => !page.isClosed() && page.url().includes('windowId='));
 }
 
+/** What `platform.getWindows` reports for one window (`WindowSummary` in the app's window service). */
+export interface ReportedWindow {
+  windowId: string;
+  label: string;
+  isMain: boolean;
+}
+
+/**
+ * The window list the main process reports over PAPI (`platform.getWindows`). It leaves out a
+ * window whose close has begun, so it reflects a closing window before Electron has destroyed it,
+ * and it already includes a window that is still starting up.
+ */
+export async function getReportedWindows(): Promise<ReportedWindow[]> {
+  return sendPapiRequestOnce<ReportedWindow[]>(
+    'command:platform.getWindows',
+    [],
+    WEBSOCKET_PORT,
+    ROUTED_CALL_TIMEOUT_MS,
+  );
+}
+
+/**
+ * How long a count that must NOT change has to hold, for {@link waitForAppWindowCount}'s
+ * `stableForMs`. Whatever would change the count — a close or a new window — starts within main's
+ * handling of the command that came just before the check, so two seconds covers the gap between
+ * that handling and the first poll with room to spare.
+ */
+export const WINDOW_COUNT_STABLE_MS = 2_000;
+
+/**
+ * Wait until the app has exactly `expectedCount` windows, as BOTH views of the window set agree:
+ * Playwright's pages ({@link getAppPages}) and the main process's own window list
+ * ({@link getReportedWindows}).
+ *
+ * The two only agree once a window has really finished arriving or leaving: a window that is on its
+ * way out drops out of the reported list the moment its close begins but stays a page until it is
+ * destroyed, and a window that is being created is reported before its page is attached. So
+ * agreement on the expected count is the positive signal that a window arrived or left.
+ *
+ * Agreement on the first poll cannot show that nothing is ABOUT to change, so a caller asserting
+ * that a count must not change passes `stableForMs`: the agreeing count must then hold on every
+ * poll for that long, and any poll that disagrees restarts the clock — so does a poll that cannot
+ * read the reported window list, since it observed nothing and cannot vouch for the count.
+ * `timeoutMs` bounds the whole wait, stability included.
+ */
+export async function waitForAppWindowCount(
+  electronApp: ElectronApplication,
+  expectedCount: number,
+  timeoutMs: number,
+  label: string,
+  { stableForMs = 0 }: { stableForMs?: number } = {},
+): Promise<void> {
+  let agreedSince: number | undefined;
+  await pollUntil(
+    async () => {
+      const pages = getAppPages(electronApp).length;
+      let reported: number;
+      try {
+        reported = (await getReportedWindows()).length;
+      } catch (error) {
+        // A poll that observed nothing cannot count towards the hold: a close or a new window may
+        // have come and gone in the gap
+        agreedSince = undefined;
+        throw error;
+      }
+      const now = Date.now();
+      if (pages === expectedCount && reported === expectedCount) agreedSince ??= now;
+      else agreedSince = undefined;
+      return { pages, reported, heldMs: agreedSince === undefined ? -1 : now - agreedSince };
+    },
+    ({ heldMs }) => heldMs >= stableForMs,
+    timeoutMs,
+    label,
+    500,
+  );
+}
+
+/**
+ * Wait until the settings service answers the interface-mode read that main's startup window
+ * restore is blocked on. The restore creates the main window first and then blocks on reading
+ * `platform.interfaceMode` (which waits on the extension host) before deciding whether to restore
+ * the other saved windows (`restoreWindows` in `src/main/main.ts`), so once this answers, the
+ * restore is about to create its secondary windows. Nothing observable says when it has finished,
+ * so callers asserting "no extra window came back" follow this with {@link waitForAppWindowCount}
+ * and `stableForMs`.
+ */
+export async function waitForInterfaceModeRead(): Promise<void> {
+  await pollUntil(
+    async () =>
+      sendPapiRequestOnce<string | undefined>(
+        'object:platform.settingsServiceDataProvider-data.get',
+        ['platform.interfaceMode'],
+        WEBSOCKET_PORT,
+        ROUTED_CALL_TIMEOUT_MS,
+      ),
+    (mode) => typeof mode === 'string',
+    120_000,
+    'the settings service to report the interface mode',
+  );
+}
+
 /**
  * Wait until the app has at least `count` open windows (renderer pages), then return them in
  * creation order (see {@link getAppPages}), each with its React root attached. For asserting
@@ -636,13 +738,14 @@ export async function getHeldWebViewIds(page: Page): Promise<string[]> {
 export const MOVE_COMMAND_TIMEOUT_MS = 180_000;
 
 /**
- * How long {@link expectWindowDockHasOnlyHomeTab} waits after the Home tab attaches before asserting
- * it is the ONLY thing docked. A dock that is about to receive more than Home — e.g. a
- * wrongly-cloned copy of another window's layout landing alongside the docked Home tab — can look
- * identical to a Home-only dock for a moment, since the extra content can arrive after Home does;
- * this settle gives a wrongly-added tab time to appear before the count assertions below.
+ * How long {@link expectWindowDockHasOnlyHomeTab} requires the dock to hold exactly the Home tab
+ * before it passes. Anything the window's own layout load brings is already in the DOM by then (the
+ * helper waits for that load first), so what this leaves time for is a tab the main process routes
+ * in alongside Home. The dock-Home decision and a wrongly-routed extra would both start in main's
+ * handling of the same emptiness report, so they arrive close together. Two seconds covers that
+ * gap, as {@link WINDOW_COUNT_STABLE_MS} does for a window starting or closing.
  */
-const HOME_ONLY_SETTLE_MS = 5_000;
+const HOME_ONLY_STABLE_MS = 2_000;
 
 /**
  * Assert that a window's dock UI is genuinely up and renders EXACTLY the Home tab: one dock tab,
@@ -661,20 +764,47 @@ const HOME_ONLY_SETTLE_MS = 5_000;
  */
 export async function expectWindowDockHasOnlyHomeTab(page: Page): Promise<void> {
   // The dock container itself must render — "no tabs because the UI never came up" must fail, not
-  // pass. Then the startup overlay must clear, signalling async initialization (settings, theme,
-  // layout load) finished.
+  // pass. Then the startup overlay must clear, signalling async initialization (settings, theme)
+  // finished.
   await expect(page.locator('div[class*="dock-layout"]')).toBeAttached({ timeout: 120_000 });
   await waitForOverlayGone(page, 120_000);
+  // The window's own layout load is where a default or cloned layout would come from, and it can
+  // land after the overlay clears. Once it has finished, everything it brought is in the DOM.
+  await waitForDockLayoutLoaded(page, 120_000);
   // Wait for Home itself as the readiness signal, rather than a blind settle before asserting
   // content: the dock-Home decision and the tab's own load both happen asynchronously after the
   // dock container first renders.
   await expect(page.locator('.dock-tab', { hasText: 'Home' })).toHaveCount(1, {
     timeout: 60_000,
   });
-  // Give a wrongly-added extra tab time to become observable before asserting Home is the ONLY one.
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, HOME_ONLY_SETTLE_MS);
-  });
+  // A tab routed in alongside Home can arrive just after it, so Home must hold the dock alone for a
+  // while — on every poll, since any poll that sees more restarts the clock
+  let homeAloneSince: number | undefined;
+  await pollUntil(
+    async () => {
+      try {
+        const counts = {
+          tabs: await page.locator('.dock-tab').count(),
+          titles: await page.locator('.platform-tab-title').count(),
+          iframes: await page.locator('iframe[data-web-view-id]').count(),
+        };
+        const now = Date.now();
+        if (counts.tabs === 1 && counts.titles === 1 && counts.iframes === 1)
+          homeAloneSince ??= now;
+        else homeAloneSince = undefined;
+        return { ...counts, heldMs: homeAloneSince === undefined ? -1 : now - homeAloneSince };
+      } catch (error) {
+        // A poll that observed nothing cannot count towards the hold: a second tab may have come
+        // and gone in the gap
+        homeAloneSince = undefined;
+        throw error;
+      }
+    },
+    ({ heldMs }) => heldMs >= HOME_ONLY_STABLE_MS,
+    60_000,
+    'the dock to hold exactly one tab, one title and one web view iframe',
+    250,
+  );
   await expect(page.locator('.dock-tab')).toHaveCount(1);
   await expect(page.locator('.platform-tab-title')).toHaveCount(1);
   await expect(page.locator('iframe[data-web-view-id]')).toHaveCount(1);

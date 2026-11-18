@@ -953,7 +953,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The repair then puts the marker back above them, as Paratext 9 saves the bytes it holds and
   restores the marker at the top of a later chapter; chapter 1 is left without one, as Paratext 9
   leaves it. Text typed ahead of a later chapter's marker is the placement rule's case above,
-  reachable by typing, and `chapter-line-left-as-text.spec.ts` pins it end to end. Text typed
+  reachable by typing, and `chapter-marker-restore.spec.ts` pins the Ruth `\c` placement cases end
+  to end (its typing-over-a-selection case does not run until PT-5059 is fixed). Text typed
   ahead of a marker with a paragraph before it joins the end of that paragraph instead
   (`\mt1 Ruth X`), because USFM reads text behind a line break with no marker of its own as part of
   the paragraph before it, which is where the save and the reload put it. The caret the user had in
@@ -1066,9 +1067,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the annotation was on is completely deleted", so a consumer acting on it could discard data whose
   text is intact. No annotation set in this repo carries an `interactionCommand` today. Where the
   editor puts a caret target on screen is pinned end to end
-  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`,
-  `chapter-marker-deleted.spec.ts` and `chapter-line-left-as-text.spec.ts` read the web view's own
-  DOM selection). **Revisit** with PT-4818.
+  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`
+  and `chapter-marker-restore.spec.ts` read the web view's own DOM selection; the restore spec's
+  typing-over-a-selection case does not run until PT-5059 is fixed). **Revisit** with
+  PT-4818.
 - **Source:** PT-4608 hand QA.
 
 ## adr-chapter-one-skips-only-the-personal-structure-lock: "Add chapter number" on chapter 1 passes the user's own structure lock, never the team lock
@@ -1935,6 +1937,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the scrim) is PT-4851, because that one runs the other way — main must notice this window's port
   dying, since the window cannot tell it. The `TODO(main-renderer-shutdown-relay)` slug is gone from
   the code.
+- **Amended 2026-11-10 (PT-4494):** the state now also covers a renderer whose FIRST connect
+  fails, widening the "Scope: an ESTABLISHED connection only" bullet above. That bullet's text
+  stays as written; read it together with this amendment.
+  - **Why the scope widened.** Without it, a renderer whose first connect failed stopped its
+    startup partway through and still rendered a UI where nothing worked, with nothing telling the
+    user. The `RpcClient` gate is unchanged — `onDidLoseConnection` still fires only for an
+    established connection — so the failed first connect is reported separately:
+    `initializeNetworkReportingFailure` (`connection-lost-service.ts`) wraps the network service's
+    `initialize` and calls `reportConnectionNeverEstablished()` when it rejects.
+  - **Store model.** The "Store" bullet's `isConnectionLost` boolean is now one latched
+    `ConnectionFailure | undefined` (`'lost' | 'neverConnected'`). The store is still one-way and
+    import-free, and keeps whichever failure is reported first. One latch rather than a second flag
+    because every surface that stands down on a lost connection (`OverlayHost`, `FirstRunOverlay`,
+    `OnboardingTour`, the extension-host-stopped banner) must stand down for both kinds:
+    `getIsConnectionLost()` / `useIsConnectionLost()` are true for either, and only the overlay asks
+    which kind (`useConnectionFailure()`) to choose its wording.
+  - **Why Reload is the right action after all.** The Scope bullet's objection — "the banner offers
+    a reload, which is not the answer to a server that was never there" — was written when each
+    window reached main over a WebSocket on port 8876, where "never there" meant nothing listening
+    on that port. Since `adr-renderer-papi-transport-is-messageport` (2026-09-24) a window reaches
+    main over a MessagePort that main hands it, and main necessarily exists because it created the
+    window. A failed first connect is therefore a failed handshake between this window and main,
+    which a reload starts over. For the case where main's side is itself broken, the message adds
+    "If this keeps happening, close and reopen {%product_name%}." A Restart button that relaunches
+    the whole app is open work (PT-5054); it needs a new non-PAPI path from the window to main, and
+    so its own security review.
+  - **Wording and language.** The overlay shows "Couldn't start" text and a plain "Reload" (no
+    "anyway": nothing was ever connected, so no work can be lost). Localization travels over the
+    connection that never opened, so this state normally shows the English fallbacks whatever the
+    interface language, and interface mode keeps its Simple default for the banner's offset.
+  - **Pointer.** The Scope bullet's "belongs to PT-4494 / PT-4495" now applies only to PT-4495: the
+    extension host still does not surface a failed first connect.
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 
@@ -2697,6 +2731,54 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   electron-builder makes staging the upstream files directly practical.
 - **Source:** the AGPL relicense branch; the multi-agent review of #2654.
 
+## adr-dotnet-sdk-pin-and-package-pruning: `global.json` sets the .NET SDK floor for builds and CI, and the SDK's package pruning keeps `System.Net.Http` 4.3.4 out
+
+- **Date:** 2026-11-10
+- **Status:** Accepted
+- **Context:** The data provider (`c-sharp/ParanextDataProvider.csproj`) and its test projects moved
+  from `net8.0` to `net10.0`, which needs a .NET 10 SDK. Until then the repository named no SDK:
+  each machine built with the newest SDK it had, and each CI workflow named its own version. On
+  `net8.0`, an explicit `System.Net.Http` 4.3.4 reference with `ExcludeAssets="all"` made
+  `project.assets.json` record only `_._` placeholders for `SIL.Core`'s transitive copy, so the
+  closure the third-party notices derive from did not see it
+  (`adr-notices-derived-from-what-ships`); the .NET 8 override table stopped at 4.3.0, so nothing
+  else would have dropped it. That package's pre-MIT license terms raise an AGPL question nobody
+  has settled (`LICENSING.md`, "The two Microsoft compatibility shims this project does not
+  ship").
+- **Decision:**
+  1. **`global.json` is the one place the SDK version lives.** It pins `10.0.100` with
+     `rollForward: latestFeature`, so any .NET 10 SDK at or above 10.0.100 builds and a newer major
+     SDK does not. Every CI `actions/setup-dotnet` step in this repository reads it
+     (`global-json-file: global.json`), which installs the newest 10.0 SDK. `chromatic.yml` and
+     `publish-docs.yml` install no SDK and use the runner image's, which must satisfy it too.
+  2. **The SDK's package pruning replaces the `ExcludeAssets` reference.** The .NET 10 SDK prunes
+     packages its shared framework supplies, `System.Net.Http` 4.3.4 and `System.Net.WebSockets`
+     4.3.0 among them, so neither reaches the assets file. The reference is removed, and the csproj
+     comment says never to reference either package for its assets. The notices generator would
+     drop 4.3.4 even without pruning: the .NET 10 override table lists `System.Net.Http` through
+     4.3.4.
+  3. **`NET10_FRAMEWORK_OVERRIDES` (`.erb/scripts/third-party-notices/nuget-set.ts`) stays at
+     10.0.0.** It is copied from the 10.0.0 targeting pack, the one bundled by SDK 10.0.100, the
+     oldest SDK `global.json` allows. Later SDKs only raise its entries, so the notices can
+     over-disclose a package but never omit one that ships.
+- **Alternatives:**
+  - No `global.json` — rejected: a developer with a newer major SDK installed, including a preview,
+    would build with an SDK CI never tests, and each workflow's version would drift separately.
+  - Pin an exact SDK (`rollForward: disable` or `latestPatch`) — rejected: every machine and
+    runner would need that one feature band, when any 10.0 SDK at or above it builds the project.
+  - Keep the `ExcludeAssets` reference — rejected: it is redundant under pruning, and a reference
+    to a package nobody may use for its assets invites someone to turn it into a real one.
+- **Consequences:** Raising the SDK floor within .NET 10 means editing `global.json` only; the
+  override table can stay at 10.0.0, because a newer floor only makes it over-disclose.
+  paratext-10-studio's workflows install .NET before they clone core, so they name `10.0.x`
+  themselves and must keep satisfying this file. If pruning ever stops covering `System.Net.Http`
+  4.3.4, the override table still keeps it out of the notices, matching publish, which picks the
+  framework's assembly. A newer version of the package is not dropped (`isFrameworkPackage`), so it
+  would change the notices and fail their check, and the license question must be answered before
+  it ships. **Revisit** when the data provider retargets past `net10.0`: both `global.json` and the
+  override table move with it.
+- **Source:** PT-4881, the .NET 8 to .NET 10 upgrade (paranext-core PR #2995).
+
 ## adr-durable-window-ids: Window ids are durable across a restart; the separate persisted-layout "slot" indirection is removed
 
 - **Date:** 2026-08-28
@@ -3258,6 +3340,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Alt-tabbing away mid-edit in the footnotes pane applies a delivery once the grace period ends,
   after flushing pending saves, as the text editor does.
   Revisit the grace period if the window service's focus debounce changes.
+- **Amended 2026-11-05:** the footnotes pane claims from the same last-edit stamp as the text
+  (`lastLocalEditTimestamp`) rather than from a pane-only one. A pane row edit stamps it as a text
+  edit does, so moving between the text and a row (inserting a footnote, clicking a row, clicking
+  back into the text) keeps the claim, and the Send/Receive and other-web-view releases clear one
+  ref for both surfaces. The cost: after a row edit and a click into the text without typing, a
+  differing update from another view is held back for up to `EDITOR_OWNERSHIP_WINDOW_MS`, and this
+  view's copy is pushed over it.
 - **Source:** PT-4968
 
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
@@ -4526,6 +4615,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     pane-scoped fonts-only sheet (`FOOTNOTE_ROWS_SELECTOR`), so a row keeps its font and size when it
     is opened for editing. Rows take fonts only (family, size, per-marker family). Standard view's row
     editor still applies per-marker size and style that read-only rows do not; this is accepted.
+- **Amended 2026-10-30 (PT-4974):** the fonts-only sheet now comes from the editor package's
+  `generateUsjFontCss` (scripture-editors #42), which shares its font helpers with
+  `generateUsjCss`; core's copy (`generateProjectFontCss`) and the parity tests that pinned it are
+  deleted. `useProjectStylesheet` and `useFootnotePaneFontStylesheet` call it, the latter with
+  `FOOTNOTE_ROWS_SELECTOR` as `containerSelector`. The decision itself is unchanged. The
+  `release-prep` branch keeps core's copy.
+- **Amended 2026-11-06 (PT-4086, UX review):** Simple's `\s`-`\s3` headings no longer have a size
+  of their own. Their gutter rule now only places them, as upstream
+  (eten-tech-foundation/scripture-editors#486), so they take the formatted view's standard heading
+  styles, as in Preview. Only the verse number and the ellipsis box still derive from
+  `--psc-base-font-size`.
 - **Source:** PT-4966.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
@@ -5894,7 +5994,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0003
 - **Date:** 2026-06-18
-- **Status:** Accepted
+- **Status:** Superseded in part by adr-menus-gate-declaratively-with-context-keys (the
+  menu-availability half); the DataProvider-vs-NetworkObject half stays accepted.
 - **Context:** Two placement questions recur when porting a PT9 tool that mutates project data.
   (a) PT9 menu items hide/disable themselves via predicate evaluation before render
   (permission checks, project-state guards). paranext-core's menu system has **no arbitrary
@@ -5935,6 +6036,97 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** manage-books port (menu-availability deferred); keyboard-switching port (OS-keyboard
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
+
+## adr-menus-gate-declaratively-with-context-keys: Menu items may be gated by when-expressions over context keys; handlers keep submission-time checks
+
+- **Date:** 2026-10-28
+- **Status:** Accepted, amended 2026-11-02, with the D3 amendment (menus updating while open, and
+  the `when` vs `enabledWhen`/`checkedWhen` authoring rule) provisional until UX review (PT-5037)
+  confirms it (see D3)
+- **Context:** Menu items that cannot act (Insert footnote in a read-only project, Sync on a
+  resource, Insert comment without the comment role) were clickable and failed only at submission
+  with an error, which users read as a dead click. The earlier decision
+  (`adr-menus-always-available-gate-at-submission`) kept menus always-available because the menu
+  system had no way to express a condition. A prototype added `when`/`enabledWhen`/`checkedWhen`
+  expressions that the consumer of a menu document (main menu, web view top menu, tab menu,
+  overlay context menu, the scripture editor's self-rendered toolbar) evaluates against a flat
+  store of context keys (`papi.contextKeys`, backed by the shared store). Evaluation sits with the
+  consumer, not the menu data provider, because the facts change at a rate and in processes the
+  menu data provider does not see: a producer only writes a scalar, and every surface re-evaluates
+  from its own copy of the store without a round trip.
+- **Decision:** Menu items may be gated declaratively by when-expressions over context keys, for
+  state the platform or an extension already knows reactively.
+  - Keys are plain facts (booleans and scalars such as `platform.project.{projectId}.isEditable`),
+    never pre-computed menu answers; the expression combines them.
+  - Each key has exactly one producer process: a TypeScript process refuses (logs, does not throw)
+    a write to a key another process wrote first; the .NET store does not check, so a C# write to
+    another process's key takes it over. A key released after its writer disconnected is
+    claimable by any process. Either way two producers on one key race, so keep exactly one.
+  - Items are disabled (`enabledWhen`), not hidden (`when`), when the user could fix the cause or
+    would otherwise wonder where an item went.
+  - Command handlers keep their own guards and `PlatformError`s: keyboard shortcuts and direct
+    PAPI calls bypass menus, and a key can lag the state it describes.
+  - **Amended 2026-11-02 (D3, provisional).** Originally: overlay context menus applied `when` only
+    and tab menus evaluated once when read, with `enabledWhen`/`checkedWhen` rejected there.
+  - A key that no producer has published reads as unknown, which counts as false.
+- **Alternatives:** Evaluate expressions in the menu data provider (producer side): rejected, since
+  it would need every key change to travel to the provider and back to every window, and the
+  provider has no per-web-view or per-window facts. Keep gate-at-submission only: rejected, since
+  it leaves the dead clicks. Expose the shared store directly to extensions: rejected, since it
+  has no key-format rule, no namespacing convention and no typed values.
+- **Consequences:** A new public surface (`papi.contextKeys`, the `when`/`enabledWhen`/`checkedWhen`
+  menu properties, `evaluateMenu`, `useEvaluatedMenu`), all experimental. The shared store releases
+  a disconnected process's keys so a restarted producer can republish. Until a producer publishes,
+  a gate on that key reads as false, so an item gated on a positive fact is disabled for a moment
+  after startup; a gate on a negated fact is enabled for that moment. **Amended 2026-11-02
+  (D3, provisional).** Originally: "Revisit when a second surface needs `enabledWhen` (overlay
+  context menus) or when key volume becomes noticeable." Tab menus and overlay context menus now
+  honor `enabledWhen` on command items; revisit when key volume becomes noticeable.
+- **Amendments (2026-11-02, review of #2959):**
+  - **D1:** A producer's `remove` releases its key for any process. A `set` refused because another
+    live process owns the key is held (and logged at info on each refused set) and applied when that key is released
+    (`applyPendingClaim` in `shared-store.service.ts`). This covers a moved tab whose old
+    renderer's cleanup (the deferred `setTimeout` `unmountRoot` in `web-view.component.tsx`, or the
+    late "unload never ran" path) lands after the new renderer's first set, and a restarted
+    producer that fetched the store before main released the old process's keys
+    (`releaseKeysOfDisconnectedProcesses`). Release applies to every shared-store caller,
+    including the network request timeouts and the dialog router. C# `SharedStore.Remove<T>`
+    writes a live default value (for example `null`, or `false` for a bool) through `Set`, never a
+    released tombstone, so release semantics do not apply to keys written from C#.
+  - **D2:** There is no public change subscription: keys are menu facts, not a state bus. A
+    self-rendered menu uses `useEvaluatedMenu`, and menus re-evaluate only when a key they READ
+    changes (`evaluateMenuRecordingReads` records the keys; the same holds for the tab menu, the
+    overlay context menu and the macOS menubar).
+  - **D3 (provisional until UX review confirms it; as of 2026-11-05 that review has not
+    happened):** what follows is what the code does, not yet a settled convention. UX is to decide
+    whether a menu may change under the pointer while it is open, and with it whether the authoring
+    rule below stands. TODO(PT-5037): settle or change D3 per that review, then drop this note.
+    Every surface updates while open: toolbar, web view top menus, self-rendered menus, tab menus
+    and overlay context menus. On the macOS menubar, enabled/checked update in place on the
+    existing native items; a visibility or structure change rebuilds the menubar, because
+    evaluation removes hidden items and prunes emptied containers. Behaviour while a native menu is
+    open is unverified on a real Mac as of 2026-11-02. `enabledWhen` became allowed on tab-menu and
+    overlay-context-menu command items; `checkedWhen` there, and `enabledWhen` on their submenu
+    items, stay rejected when the contribution loads (`limitedSurface` in
+    `menu-document-combiner.ts`): those surfaces show no check marks and can disable only command
+    items, so there the authoring rule below has these exceptions. Authoring rule: use `enabledWhen`/`checkedWhen` for state
+    that can change while a menu is open, and `when` for state that does not. Handlers keep their
+    own guards. A tab's zoomability is held for one open, as layout state.
+  - **D4:** No network call while building a menu, with one exception: the overlay context menu
+    looks up the web view's `{projectId}` once per open, only when an item's expression uses it
+    (`menuExpressionsUseTemplateVar`). If the lookup fails, the menu is evaluated without a project
+    for that open (positive project gates read as unset).
+  - **D5:** Release depends on the network method registry: main releases on removal of
+    `shared-store:owner:<id>` at disconnect, and .NET registers no marker. Live-checked
+    2026-11-02 in the dev app: after `platform.restartExtensionHost`, main removed the old
+    extension host's owner-marker method and the open editor's keys and menu state stayed
+    correct; an editor tab moved with `platform.moveWebViewToNewWindow` had its keys re-owned by
+    the new window's process. As of 2026-11-02 no bundled extension-host producer exists in this
+    repo, so a restarted producer re-claiming its own keys is covered by unit tests only.
+  - **D6:** C# `SharedStore.Set` skips a publish whose JSON equals the stored value, and TS
+    `setFromRemote` does not emit an equal remote value. There is still no ownership check in C#;
+    keeping one producer per key is the producer's job.
+- **Source:** PT-4805 / PT-4732; prototype spec attached to PT-4805.
 
 ## adr-mode-switch-sends-one-send-receive-for-all-closing-windows: A mode switch starts ONE send/receive covering every window it closes, not one per window
 
@@ -6812,7 +7004,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-panel-open-joins-the-group-beside-it: A `'panel'` open joins the tab group beside its target when that group can take it; a target that is not docked gets a new group at the reading-end edge of the dock
 
 - **Date:** 2026-10-12
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-11-17 for `before-tab` and `after-tab`.
 - **Context:** A `{ type: 'panel' }` open docked the new tab beside its target with rc-dock's
   `dockMove(tab, targetTabGroup, direction)`. Beside a floating or maximized target, rc-dock wrapped
   both tab groups in a new box inside the floating or maximized layer, which draws only the tab
@@ -6836,7 +7028,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     top-level docked group; in a vertical one rc-dock's own 30% share stands (`dockAtReadingEndEdge`).
     A floating target that would cover it is slid sideways, narrowed when the room beside the new
     group is narrower than the float, and left alone when there is no room at all
-    (`moveFloatingTabGroupClear`).
+    (`moveFloatingTabGroupClear`). *(Amended 2026-11-17: this holds for `left`, `right`, `top`, and
+    `bottom` only; `before-tab` and `after-tab` join the target's own group wherever it is. See the
+    amendment below.)*
   - `direction` is in reading order: core swaps `left` and `right` in a right-to-left UI
     (`resolvePanelDirection`), since rc-dock lays the dock out left to right whatever the UI
     direction.
@@ -6865,6 +7059,23 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   may be split from slightly early; a neighbour narrower than the group a split would create is
   never joined.
 - **Source:** PT-3138 (PR #2881 and its review).
+- **Amended 2026-11-17 (sillsdev/interlinearizer-extension#611, PR #2994):** `before-tab` and
+  `after-tab` add the new tab to the target's own tab group, as its active tab, just before or after
+  the target (rc-dock's `addNextToTab`), when that group can take it (`canTabGroupTakeTab`: it is of
+  the new tab's rc-dock group and not `panelLock`). This is checked before whether the target is
+  docked, so it applies to floating and maximized groups too. A group that cannot take the tab falls
+  back to `left` for `before-tab` and `right` for `after-tab`, which then follow the rules above.
+  Joining a group outside the dock does not bring back the bug the reading-end-edge rule exists for:
+  `addNextToTab` only splices the tab into the existing group and never wraps a new box around it,
+  and rc-dock's `restorePanel` brings the new tab back with a maximized group when it is restored.
+  The placement is a `PanelLayout` direction rather than a target-tab option on `TabLayout` because
+  it needs no new public API (`before-tab` and `after-tab` were already `PanelDirection` values),
+  and the fallback needs a direction, which `TabLayout` does not have. `before-tab` and `after-tab`
+  follow the tab order, which core treats as reading order, as `DirectionFromTab` does: `after-tab`
+  inserts where `nextTab` from the target goes. Their fallbacks are sides, mirrored like any other,
+  so both paths land on the same reading side. rc-dock draws the tab strip left to right whatever
+  the UI direction, so in a right-to-left UI a joined tab is drawn to the target's right today, just
+  as `nextTab` moves right. Mirroring the strip with CSS would correct both together.
 
 ## adr-panel-readiness-from-sources: Panel readiness is derived from whether data sources arrived, never from a filtered result
 
@@ -7050,6 +7261,42 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pruned, including for deleted projects. A write shows once the setting reports it back, a round
   trip to the extension host. A hidden panel needs no catch-up: the switch reloads it like a visible
   one, and picking the selection is data, not layout.
+
+## adr-papi-port-blocked-at-the-session: Renderer windows are kept off the PAPI port by the main process's session, not by the renderer alone
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** PAPI connections are unauthenticated, and a raw socket to port 8876 is a separate
+  client that can call any method, register any unclaimed method, and broadcast any event. The
+  renderer kept web views off the port by making `PapiRendererWebSocket` (the `WebSocket` a web
+  view gets from `papi`) refuse it. But web views are same-origin `srcdoc` iframes, and three routes
+  borrow an unchecked constructor from the renderer's realm: `window.top.WebSocket` (`top` is
+  non-configurable, so the web view preamble's `delete window.top` does nothing); the
+  `constructor` of the native socket `PapiRendererWebSocket` returns; and a fresh about:blank
+  iframe in the top document, which gets its own native `WebSocket` under the renderer's CSP,
+  which allows `ws:`. A web view's own realm is not a route: its CSP has `connect-src 'self'` and
+  `worker-src 'none'`.
+- **Decision:** The main process cancels every WebSocket request to `WEBSOCKET_PORT` from the
+  default session in an `onBeforeRequest` listener (`registerPapiPortRequestBlock` in
+  `src/main/services/papi-port-request-block.util.ts`). Every handshake from every frame passes
+  through it, whatever constructor opened it. It matches on the port, not the host, as
+  `isPotentialConnectionToPapiNetwork` does. Nothing legitimate is blocked: windows reach main over
+  a `MessagePort`, the extension host and the .NET data provider are not in a browser session, and
+  external browsers use their own sessions. As defence in depth, and to give a clear `Invalid URL`
+  error, the renderer also replaces the top window's `WebSocket` and the native prototype's
+  `constructor` with `PapiRendererWebSocket` (`replaceTopWindowWebSocket`, called from the web
+  view service's monkey patches); that layer does not cover the fresh-iframe route.
+- **Alternatives:** **Patch the renderer only.** Cannot cover a fresh iframe's realm, and
+  `document.createElement`'s patch is bypassed by `insertAdjacentHTML` and by calling
+  `Document.prototype.createElement` on the top document; the iframe's `contentWindow` is readable
+  before the MutationObserver removes it. **Authenticate PAPI connections.** The real fix for
+  caller identity (PT-2893), and much larger.
+- **Consequences:** Electron keeps one `onBeforeRequest` listener per session; registering another
+  on the default session replaces this one and silently reopens the port, so any other need for
+  `onBeforeRequest` there must be folded into this listener. The renderer is still not a hard
+  boundary: a same-origin web view can reach renderer internals through `window.top`, including
+  the window's `MessagePort` bridge and webpack's chunk-loading global, which hands out its module
+  loader (open work: PT-5065). Revisit when PT-2893 identifies callers.
 
 ## adr-papi-websocket-hostname-bind: The PAPI websocket binds by hostname, and readiness is awaited rather than assumed
 
@@ -8168,7 +8415,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `formatProjectName`: a tab strip is the most space-constrained surface in the app, so appending
   the full name would push the short name toward the truncation leading with it is meant to avoid.
   They show the short name alone, which `getTabTitleProjectName` now pins to the `platform.name`
-  setting. DBL resource labels follow the same rule even though a resource carries a
+  setting. How a title fills in that name, falling back to the project id, is
+  `adr-project-titles-from-one-formatter`. DBL resource labels follow the same rule even though a resource carries a
   `displayName`/`fullName` pair rather than the `platform.name`/`platform.fullName` project
   settings: `getRefLabel` and Share Layout's `formatResourceDisplayName` pass `displayName` in the
   helper's `shortName` slot. Sites that merely fill a long-name slot the UI renders after the short
@@ -8336,6 +8584,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   and should be settled before promotion: read-only is consumer-derived through
   `renderProjectIndicator`, which leaves the row tooltip unable to explain the padlock to sighted
   pointer users.
+
+## adr-project-titles-from-one-formatter: Per-project titles are built by one shared formatter, reached through a papi resolver and a matching hook
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** Tabs scoped to one project (Inventories, Markers Checklist, Manage Books, the comment
+  list, the Scripture Editor, and extensions' own tools) each looked up `platform.name` and
+  formatted the title by hand, in a provider, a WebView, or both. The copies disagreed on the
+  fallback (`??` vs `||`, id vs no name, rejecting vs catching a failed lookup) and on the
+  placeholder (`{projectName}` vs the editor's `{projectId}`), and Manage Books carried a comment
+  warning that its provider and WebView had to be kept in sync by hand.
+- **Decision:** One pure formatter, `formatProjectTitle` in `platform-bible-utils` (with
+  `getProjectDisplayName` for the fallback rule), owns the title: `{projectName}` is the project's
+  short name alone, as `adr-project-name-short-name-first` sets for tab titles, when it is
+  non-blank, otherwise its id. Blank (empty or whitespace-only) is absent on the same terms as that
+  ADR's `normalizeFullName`. Two thin callers wrap it: `papi.localization.getLocalizedProjectTitle`
+  for providers and other async code, which never rejects, and the `useLocalizedProjectTitle` hook
+  for WebViews, which returns `undefined` while loading. Because both call the same formatter, a
+  provider's opening title and its WebView's updates agree whenever their lookups succeed.
+- **Alternatives:** **A resolver only, no hook** — rejected: WebViews that update their title
+  (unsaved marker, project switch) would keep re-deriving loading and error handling from
+  `useProjectSetting` and `useLocalizedStrings`. **Hosting the resolver on
+  `papi.projectDataProviders`** — rejected: the result is a localized string, and
+  `papi.localization` already hosts a composed helper of this shape
+  (`getLocalizedIdFromBookNumber`). **Putting the lookups in `platform-bible-utils`** with the
+  papi calls injected as callbacks, as `getLocalizedIdFromBookNumber` takes `getLocalizedString`
+  — rejected: this method needs both a localization lookup and a project data provider lookup, so
+  every caller would pass two callbacks to get what one papi method gives them.
+- **Consequences:** A blank short name now shows the id everywhere, and a failed lookup no longer
+  keeps a tab from opening. Titles that need their own words around the project go through a
+  localized format rather than string concatenation (Manage Books' em-dash and the comment list's
+  `": "` are now localizable). The editor keeps filling `{projectId}` with the name for
+  caller-supplied titles, as its options document. **Revisit** if a title ever needs the full name
+  (`platform.fullName`) rather than the short name, together with the tab-title carve-out in
+  `adr-project-name-short-name-first`.
 
 ## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
 

@@ -136,6 +136,15 @@
       "message": "Installing a resource that is already installed and up to date now succeeds as a no-op instead of failing, so there is no error to show and no replacement key. A stale catalog used to make this the only outcome a retry could ever reach."
     }
   },
+  "%mainMenu_feedback_unavailable%": {
+    "deprecationInfo": {
+      "date": "2026-11-04",
+      "message": "Superseded by %mainMenu_feedback_unavailable_2%, which also asks whether an ad or tracker blocker is blocking usersnap.com."
+    }
+  },
+  "%mainMenu_feedback_unavailable_2%": {
+    "fallbackKey": "%mainMenu_feedback_unavailable%"
+  },
   "%mainMenu_helpInfo_visitFAQsPage%": {
     "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%",
     "deprecationInfo": {

@@ -7,6 +7,8 @@ import { useCallback, useEffect, useRef, useState, type ComponentType } from 're
 import type { WebViewProps } from '@papi/core';
 import type { IChecklistService } from 'platform-scripture';
 import { newPlatformError } from 'platform-bible-utils';
+import { useEvaluatedMenu } from '@papi/frontend/react';
+import { ChecklistTool } from './components/checklist.component';
 import { useChecklistService } from './hooks/use-checklist';
 import { localizedValueFor } from './project-selector.test-utils';
 
@@ -64,7 +66,13 @@ type MockProject = {
 };
 type MockOpenTab = { projectId: string; scrollGroupId: number; webViewType: string };
 
-const { mockChecklistService, mockRecentProjects, mockProjects, mockOpenTabs } = vi.hoisted(() => {
+const {
+  mockChecklistService,
+  mockRecentProjects,
+  mockProjects,
+  mockOpenTabs,
+  mockUseLocalizedProjectTitle,
+} = vi.hoisted(() => {
   const projects: { value: MockProject[] } = { value: [] };
   const openTabs: {
     value: { projectId: string; scrollGroupId: number; webViewType: string }[];
@@ -74,6 +82,7 @@ const { mockChecklistService, mockRecentProjects, mockProjects, mockOpenTabs } =
     mockRecentProjects: { value: undefined as unknown },
     mockProjects: projects,
     mockOpenTabs: openTabs,
+    mockUseLocalizedProjectTitle: vi.fn<(options: { projectId?: string }) => string | undefined>(),
   };
 });
 
@@ -120,6 +129,14 @@ vi.mock('@papi/frontend', () => {
   };
 });
 
+const TOP_MENU_FIXTURE = vi.hoisted(() => ({ columns: {}, groups: {}, items: [] }));
+const EVALUATED_SENTINEL = vi.hoisted(() => ({
+  columns: {},
+  groups: {},
+  items: [],
+  evaluated: true,
+}));
+
 vi.mock('@papi/frontend/react', async () => {
   // Imported inside the factory: `vi.mock` factories are hoisted above the file's imports, so a
   // top-level binding may still be in its temporal dead zone when the factory runs. One rule, no
@@ -147,10 +164,16 @@ vi.mock('@papi/frontend/react', async () => {
     );
   return {
     useLocalizedStrings: (keys: string[]) => [localize(keys), false],
+    useLocalizedProjectTitle: mockUseLocalizedProjectTitle,
     useProjectDataProvider: vi.fn(() => undefined),
+    useEvaluatedMenu: vi.fn(() => EVALUATED_SENTINEL),
     useData: vi.fn(() => ({
       RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
-      WebViewMenu: (_selector: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), false],
+      WebViewMenu: () => [
+        { includeDefaults: true, topMenu: TOP_MENU_FIXTURE, contextMenu: undefined },
+        vi.fn(),
+        false,
+      ],
       // The localization data type, which the refusal message reads through `useData`.
       LocalizedStrings: ({ localizeKeys }: { localizeKeys: string[] }) => [
         localize(localizeKeys),
@@ -192,6 +215,13 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   };
 });
 
+// Wraps the real ChecklistTool in a spy so a test can read the props the web view hands it, while
+// every other test still renders the real component.
+vi.mock('./components/checklist.component', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./components/checklist.component')>();
+  return { ...original, ChecklistTool: vi.fn(original.ChecklistTool) };
+});
+
 vi.mock('./hooks/use-checklist', () => ({
   useChecklistService: vi.fn(() => ({ service: mockChecklistService.value })),
 }));
@@ -224,6 +254,7 @@ function makeProps(
   // every optional field of WebViewProps.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
+    id: 'checklist-wv-1',
     projectId: 'project-1',
     updateWebViewDefinition: vi.fn(),
     useWebViewState: vi.fn(
@@ -258,6 +289,97 @@ afterEach(() => {
   mockRecentProjects.value = undefined;
   mockProjects.value = [];
   mockOpenTabs.value = [];
+  mockUseLocalizedProjectTitle.mockReturnValue(undefined);
+});
+
+describe('ChecklistWebView tab title', () => {
+  it("sets the tab title from the project's localized title", async () => {
+    mockRecentProjects.value = [];
+    mockUseLocalizedProjectTitle.mockReturnValue('Markers Checklist - P1');
+
+    const ChecklistWebView = getChecklistWebView();
+    const props = makeProps();
+    render(<ChecklistWebView {...props} />);
+
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenCalledWith({
+        title: 'Markers Checklist - P1',
+      }),
+    );
+    expect(mockUseLocalizedProjectTitle).toHaveBeenCalledWith({
+      localizeKey: '%markersChecklist_windowTitle%',
+      projectId: 'project-1',
+    });
+  });
+
+  it('retitles the tab when the project changes', async () => {
+    mockRecentProjects.value = [];
+    mockUseLocalizedProjectTitle.mockImplementation(({ projectId }) =>
+      projectId === 'P2' ? 'Markers Checklist - P2' : 'Markers Checklist - P1',
+    );
+
+    const ChecklistWebView = getChecklistWebView();
+    const props = { ...makeProps(), projectId: 'P1' };
+    const { rerender } = render(<ChecklistWebView {...props} />);
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenLastCalledWith({
+        title: 'Markers Checklist - P1',
+      }),
+    );
+
+    rerender(<ChecklistWebView {...props} projectId="P2" />);
+
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenLastCalledWith({
+        title: 'Markers Checklist - P2',
+      }),
+    );
+    expect(mockUseLocalizedProjectTitle).toHaveBeenLastCalledWith({
+      localizeKey: '%markersChecklist_windowTitle%',
+      projectId: 'P2',
+    });
+  });
+
+  it('leaves the tab title alone while the title is loading', async () => {
+    mockRecentProjects.value = [];
+
+    const ChecklistWebView = getChecklistWebView();
+    const props = makeProps();
+    render(<ChecklistWebView {...props} />);
+
+    expect(await screen.findByTestId('checklist-primary-project-trigger')).toBeInTheDocument();
+    expect(props.updateWebViewDefinition).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.anything() }),
+    );
+  });
+});
+
+describe('ChecklistWebView top menu evaluation', () => {
+  it('evaluates the top menu against the web view and project it belongs to', async () => {
+    mockRecentProjects.value = [];
+    const ChecklistWebView = getChecklistWebView();
+    await act(async () => {
+      render(<ChecklistWebView {...makeProps()} />);
+    });
+
+    expect(useEvaluatedMenu).toHaveBeenCalledWith(TOP_MENU_FIXTURE, {
+      webViewId: 'checklist-wv-1',
+      webViewType: 'platformScripture.markersChecklist',
+      projectId: 'PROJECT-1',
+    });
+  });
+
+  it('hands the evaluated menu, not the raw one, to the toolbar', async () => {
+    mockRecentProjects.value = [];
+    const ChecklistWebView = getChecklistWebView();
+    await act(async () => {
+      render(<ChecklistWebView {...makeProps()} />);
+    });
+
+    const toolProps = vi.mocked(ChecklistTool).mock.calls.at(-1)?.[0];
+    expect(toolProps?.projectMenuData).toBe(EVALUATED_SENTINEL);
+    expect(toolProps?.projectMenuData).not.toBe(TOP_MENU_FIXTURE);
+  });
 });
 
 describe('ChecklistWebView recently-opened-projects wiring', () => {

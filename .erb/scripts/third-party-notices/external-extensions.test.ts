@@ -27,7 +27,7 @@ const config = {
     './assets/**',
     { from: './extensions/dist/', to: './extensions' },
     { from: './additional-extensions', to: './extensions' },
-    { from: './c-sharp/bin/Release/net8.0/publish/linux-x64/', to: './dotnet/' },
+    { from: './c-sharp/bin/Release/net10.0/publish/linux-x64/', to: './dotnet/' },
   ],
 };
 

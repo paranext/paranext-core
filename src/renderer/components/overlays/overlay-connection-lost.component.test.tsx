@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import {
   reportConnectionLost,
+  reportConnectionNeverEstablished,
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
 import {
@@ -14,6 +15,9 @@ import {
 import {
   CONNECTION_LOST_RELOAD_KEY,
   CONNECTION_LOST_TITLE_KEY,
+  COULD_NOT_START_MESSAGE_KEY,
+  COULD_NOT_START_RELOAD_KEY,
+  COULD_NOT_START_TITLE_KEY,
   ConnectionLostOverlay,
   ConnectionLostOverlayPresentational,
   ENGLISH_FALLBACKS,
@@ -253,5 +257,60 @@ describe('ConnectionLostOverlay', () => {
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
     }
+  });
+
+  describe('when the first connect at startup failed', () => {
+    it('says the app could not start, not that the connection was lost', () => {
+      vi.mocked(useLocalizedStrings).mockReturnValue([
+        {
+          ...RESOLVED_STRINGS,
+          [COULD_NOT_START_TITLE_KEY]: 'Could not start.',
+          [COULD_NOT_START_MESSAGE_KEY]: 'Platform.Bible could not connect.',
+          [COULD_NOT_START_RELOAD_KEY]: 'Reload now',
+        },
+        false,
+      ]);
+      render(<ConnectionLostOverlay />);
+
+      act(() => {
+        reportConnectionNeverEstablished();
+      });
+
+      const alert = screen.getByRole('alertdialog');
+      expect(alert).toHaveTextContent('Could not start.');
+      expect(alert).toHaveTextContent('Platform.Bible could not connect.');
+      expect(alert).not.toHaveTextContent('Connection lost.');
+      expect(screen.getByRole('button', { name: 'Reload now' })).toBeInTheDocument();
+    });
+
+    // Localization travels over the connection that never opened, so the English fallback is the
+    // text this state is normally shown in.
+    it('renders English text when localization has not resolved', () => {
+      vi.mocked(useLocalizedStrings).mockReturnValue([UNRESOLVED_STRINGS, true]);
+      render(<ConnectionLostOverlay />);
+
+      act(() => {
+        reportConnectionNeverEstablished();
+      });
+
+      const alert = screen.getByRole('alertdialog');
+      expect(alert).not.toHaveTextContent('%');
+      expect(alert).toHaveTextContent(ENGLISH_FALLBACKS[COULD_NOT_START_TITLE_KEY]);
+      // Names a next step for when Reload does not help, with the product name expanded there too
+      expect(alert).toHaveTextContent('close and reopen Platform.Bible.');
+      expect(
+        screen.getByRole('button', { name: ENGLISH_FALLBACKS[COULD_NOT_START_RELOAD_KEY] }),
+      ).toBeInTheDocument();
+    });
+
+    it('marks the window blocked', () => {
+      render(<ConnectionLostOverlay />);
+
+      act(() => {
+        reportConnectionNeverEstablished();
+      });
+
+      expect(isWindowBlockedByOverlay()).toBe(true);
+    });
   });
 });
