@@ -674,6 +674,7 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
       });
 
     let editorUsj: unknown;
+    let isEditorFocused = false;
     editorHandle.current = new Proxy(
       {},
       {
@@ -683,7 +684,7 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
             return (usj: unknown) => {
               editorUsj = usj;
             };
-          if (property === 'isFocused') return () => false;
+          if (property === 'isFocused') return () => isEditorFocused;
           return vi.fn();
         },
       },
@@ -730,6 +731,10 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
         act(() => {
           window.dispatchEvent(new Event('blur'));
         });
+      },
+      /** Gives the editor focus, so it claims the chapter while the user types in it. */
+      focus: () => {
+        isEditorFocused = true;
       },
       goToChapter: async (chapterNum: number) => {
         scrRef.chapterNum = chapterNum;
@@ -972,8 +977,12 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     await editor.goToChapter(2);
     editor.type('In the beginning God');
     await waitForSaveDebounce();
-    // Positive control: the first refused save was reported.
-    expect(lostEditsNotices()).toHaveLength(1);
+    // Positive control: the first save was refused, and is not reported while the editor still
+    // shows the chapter.
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledWith(
+      expect.stringContaining('the editor has not loaded that chapter yet'),
+    );
+    expect(lostEditsNotices()).toHaveLength(0);
     editor.type('In the beginning God created');
     await waitForSaveDebounce();
     await editor.deliver(2, chapterText(2, 'Thus the heavens'));
@@ -988,7 +997,9 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     await editor.goToChapter(2);
     editor.type('In the beginning God');
     await waitForSaveDebounce();
-    expect(lostEditsNotices()).toHaveLength(1);
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledWith(
+      expect.stringContaining('the editor has not loaded that chapter yet'),
+    );
     editor.type('In the beginning God created');
     await editor.deliver(2, chapterText(2, 'Thus the heavens'));
     await waitForSaveDebounce();
@@ -1025,6 +1036,50 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     await editor.deliver(2, chapterText(2, 'Thus the heavens'));
     editor.unmount();
 
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports nothing on leaving the chapter when a focused editor gets an earlier save back while a later one runs, and both reach the backend', async () => {
+    const editor = await setUp();
+    editor.focus();
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    await editor.finishSave(0);
+    editor.type('In the beginning God created');
+    await waitForSaveDebounce();
+    expect(editor.saves).toHaveLength(2);
+
+    // The first save's update arrives while the second save is still running.
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+    await editor.finishSave(1);
+    await editor.deliver(1, chapterText(1, 'In the beginning God created'));
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(editor.saves.map((save) => verseText(save.usj))).toEqual([
+      'In the beginning God',
+      'In the beginning God created',
+    ]);
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports nothing when the user leaves the chapter with edits held back and comes back before the next chapter loads', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+
+    await editor.goToChapter(2);
+    await editor.goToChapter(1);
+    await editor.finishSave(0);
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+    await editor.finishSave(1);
+
+    expect(editor.saves.map((save) => verseText(save.usj))).toEqual([
+      'In the beginning God',
+      'In the beginning God created',
+    ]);
     expect(lostEditsWarnings()).toHaveLength(0);
     expect(lostEditsNotices()).toHaveLength(0);
   });
@@ -1138,6 +1193,42 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     expect(editor.saves).toHaveLength(0);
     expect(lostEditsWarnings()).toHaveLength(1);
     expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports once when another edit reaching the chapter being left is refused after the user moves on again', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    await editor.goToChapter(3);
+    editor.type('In the beginning God created');
+    await waitForSaveDebounce();
+    await editor.deliver(3, chapterText(3, 'And the earth'));
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports nothing when the user comes back to the chapter being left before the next one loads, and its refused edit is sent', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    expect(editor.saves).toHaveLength(0);
+
+    await editor.goToChapter(1);
+    editor.type('In the beginning God created');
+    await waitForSaveDebounce();
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(editor.saves.map((save) => verseText(save.usj))).toEqual([
+      'In the beginning God created',
+    ]);
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
   });
 
   it('sends the notice outside the closing editor when the page goes away while the next chapter loads', async () => {

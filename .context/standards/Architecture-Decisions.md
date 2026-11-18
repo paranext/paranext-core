@@ -3267,7 +3267,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   But edits the editor had not saved yet were treated two ways: a save still waiting out the 700 ms
   debounce was flushed first, so it overwrote the outside change on disk ("recent typing wins"),
   while a save held back behind a write still in flight was thrown away with only a log line that
-  alarmed testers even in the harmless case.
+  alarmed testers even in the harmless case. PT-4970 ("Step 2") proposed letting the outside change
+  win, and UX accepted losing up to about half a second of typing to it.
 - **Decision:**
   - The claim decides who wins. With it, the editor's edits win (unchanged). Without it, the
     incoming chapter wins: unsaved edits, whether still waiting on the debounce or held back
@@ -3280,7 +3281,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     still holds the new one back; the held edits reach the backend when that save's update comes
     back to an editor still showing the chapter.
   - Edits lost because the editor left the chapter or closed while a save was in flight are
-    warned about and notified the same way, until PT-5043 sends them instead.
+    warned about and notified the same way, until PT-5043 sends them instead. Leaving is reported
+    when the next chapter replaces the editor, not at the chapter switch: until then the editor
+    still shows the chapter, and a user who comes back to it in time still has the edits sent.
 - **Alternatives:** Keep "recent typing wins" (flush before replacing): rejected, because it
   silently overwrites a change made outside the editor (Find & Replace, a merge) with a copy that
   predates it. Merge the unsaved edits onto the incoming chapter: not done; several days of work
@@ -3293,13 +3296,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `Scripture-Data-Fidelity-Catalog.md`) comes back looking like an outside change, so held edits
   behind it are thrown away and reported even though nothing else changed the chapter; held edits
   therefore get the plain "not saved" notice, never the "changed outside this editor" one. That
-  loss is catalog row O-15, which PT-5043 is to fix. A loss on leaving a chapter is reported once
-  per chapter left, however many edits reach it while the next one loads. While the next chapter
+  loss is catalog row O-15, which PT-5043 is to fix. A loss on leaving a chapter is reported once,
+  when the next chapter replaces the editor, however many edits reach it while that chapter loads.
+  While the next chapter
   loads after navigation, the editor holds off typing, pasting and the like (`usePauseEditing`), but
   an edit that does not come through its own keyboard (for example from the footnotes pane) can
-  still reach the chapter being left. It is lost and reported either way: thrown away if the next
-  chapter arrives first, or refused by the save if the debounce fires first
-  (`isTypingLostToNavigation`); PT-5043 is to send it to the chapter it was made in.
+  still reach the chapter being left. Its save is refused (`isTypingLostToNavigation`) or thrown
+  away, and it is reported as lost when the next chapter replaces the editor; PT-5043 is to send it
+  to the chapter it was made in.
 - **Source:** PT-5048; paranext-core PR #2998.
 
 ## adr-editor-yields-to-window-focus-subject: The Scripture editor's typing hold yields to the window focus subject
