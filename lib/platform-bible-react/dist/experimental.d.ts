@@ -101,7 +101,7 @@ export type TabMenuSubmenuContentProps = Omit<DropdownMenuSubContentProps, "chil
 	/** Any `data-*` attribute, for whoever needs to recognize the submenu's content */
 	[dataAttribute: `data-${string}`]: string | undefined;
 };
-export type TabDropdownMenuItemsProps = {
+type TabDropdownMenuItemsProps = {
 	/** The handler to use for menu commands */
 	onSelectMenuItem: SelectMenuItemHandler;
 	/** The menu data to show */
@@ -126,11 +126,27 @@ export type TabMenuTriggerRect = {
 	width: number;
 	height: number;
 };
+/**
+ * How a tab menu asks to be opened outside its own document. See {@link OpenTabMenuInOverlay}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type TabMenuOverlayOptions = {
+	/** The trigger's rectangle; the menu opens below it, aligned with its start edge */
+	anchor: TabMenuTriggerRect;
+	/** Whether the menu was opened from the keyboard, so it opens with its first item focused */
+	focusFirstItem?: boolean;
+};
 export type AnchoredTabMenuProps = TabDropdownMenuItemsProps & {
 	/** The rectangle of the trigger the menu belongs to; the menu opens below it, aligned to its start */
 	anchor: TabMenuTriggerRect;
 	/** Called when the menu closes without a pick: Escape, a click away, or a submenu's Escape */
 	onClose: () => void;
+	/**
+	 * Whether the menu opens with its first item focused, as a dropdown opened from the keyboard
+	 * does. Otherwise the menu itself takes focus, as after a click.
+	 */
+	focusFirstItem?: boolean;
 	/**
 	 * Props for the menu's content. Its `onCloseAutoFocus` defaults to keeping focus where it is,
 	 * since the menu has no real trigger to return focus to.
@@ -148,17 +164,18 @@ export type AnchoredTabMenuProps = TabDropdownMenuItemsProps & {
  *
  * @experimental This component is unstable and may change or disappear without notice
  */
-export declare function AnchoredTabMenu({ anchor, onClose, contentProps, ...itemsProps }: AnchoredTabMenuProps): import("react/jsx-runtime").JSX.Element;
+export declare function AnchoredTabMenu({ anchor, onClose, focusFirstItem, contentProps, ...itemsProps }: AnchoredTabMenuProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Opens a tab menu outside the document its trigger is in, and settles with the item the user
- * picked, or `undefined` when the menu closed without a pick.
+ * picked, or `undefined` when the menu closed without a pick. The options pass straight through to
+ * `papi.overlays.showTabMenu`.
  *
- * In a web view, pass one that calls `papi.overlays.showTabMenu`: the window then draws the menu
- * over every tab, so a narrow tab no longer cuts it or its flyouts off.
+ * In a web view, pass `(menu, options) => papi.overlays.showTabMenu(menu, webViewId, options)`: the
+ * window then draws the menu over every tab, so a narrow tab no longer cuts it or its flyouts off.
  *
  * @experimental This type is unstable and may change or disappear without notice
  */
-export type OpenTabMenuInOverlay = (menuData: Localized<MultiColumnMenu>, triggerRect: TabMenuTriggerRect) => Promise<Localized<MenuItemContainingCommand> | undefined>;
+export type OpenTabMenuInOverlay = (menuData: Localized<MultiColumnMenu>, options: TabMenuOverlayOptions) => Promise<Localized<MenuItemContainingCommand> | undefined>;
 /**
  * Z-index for tooltips. Must sit above every layer that can contain a tooltip trigger — modal
  * dialogs, the popover layer, and content portalled out of a popover ({@link Z_INDEX_ABOVE_POPOVER})

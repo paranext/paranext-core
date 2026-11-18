@@ -740,10 +740,8 @@ describe('TabDropdownMenu opened in an overlay', () => {
     await user.click(trigger);
 
     expect(openMenuInOverlay).toHaveBeenCalledWith(SUBMENU_MENU, {
-      x: 12,
-      y: 3,
-      width: 32,
-      height: 28,
+      anchor: { x: 12, y: 3, width: 32, height: 28 },
+      focusFirstItem: false,
     });
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
@@ -797,7 +795,7 @@ describe('TabDropdownMenu opened in an overlay', () => {
     await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
   });
 
-  it('opens the overlay from the keyboard, like a dropdown trigger', async () => {
+  it('opens the overlay from the keyboard, like a dropdown trigger, asking for the first item to be focused', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const openMenuInOverlay = vi.fn<OpenTabMenuInOverlay>(async () => undefined);
     const { trigger } = renderOverlayMenu(openMenuInOverlay);
@@ -806,8 +804,13 @@ describe('TabDropdownMenu opened in an overlay', () => {
     await user.keyboard('{ArrowDown}');
     await waitFor(() => expect(openMenuInOverlay).toHaveBeenCalledTimes(1));
     await user.keyboard('{Enter}');
-
     await waitFor(() => expect(openMenuInOverlay).toHaveBeenCalledTimes(2));
+    await user.keyboard(' ');
+
+    await waitFor(() => expect(openMenuInOverlay).toHaveBeenCalledTimes(3));
+    openMenuInOverlay.mock.calls.forEach(([, options]) =>
+      expect(options.focusFirstItem).toBe(true),
+    );
   });
 });
 
@@ -833,6 +836,35 @@ describe('AnchoredTabMenu', () => {
     expect(sections[2]).toHaveAccessibleName('Insert');
     expect(screen.getByRole('menu')).toHaveAttribute('data-side', 'bottom');
     expect(screen.getByRole('menu')).toHaveAttribute('data-align', 'start');
+  });
+
+  it('focuses its first item when asked to, as after opening from the keyboard', async () => {
+    render(
+      <AnchoredTabMenu
+        menuData={EDITOR_MENU}
+        anchor={ANCHOR}
+        onSelectMenuItem={() => {}}
+        onClose={() => {}}
+        focusFirstItem
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: /^Open Project Settings/ })).toHaveFocus(),
+    );
+  });
+
+  it('focuses the menu itself otherwise, as after a click', async () => {
+    render(
+      <AnchoredTabMenu
+        menuData={EDITOR_MENU}
+        anchor={ANCHOR}
+        onSelectMenuItem={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByRole('menu')).toHaveFocus());
   });
 
   it('hands a picked item to onSelectMenuItem', async () => {

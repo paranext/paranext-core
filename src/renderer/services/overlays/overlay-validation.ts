@@ -3,9 +3,13 @@
  * depth, and label lengths.
  */
 
-import { newPlatformError, INVALID_ARGUMENT } from 'platform-bible-utils';
+import {
+  newPlatformError,
+  INVALID_ARGUMENT,
+  type Localized,
+  type MultiColumnMenu,
+} from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
-import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { CommandPaletteRequest, PopoverRequest } from './overlay.service-model';
 
 /** Throws a PlatformError with INVALID_ARGUMENT code */

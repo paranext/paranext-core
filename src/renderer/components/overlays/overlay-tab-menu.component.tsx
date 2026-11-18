@@ -10,7 +10,10 @@
 
 import { markOverlayFocusReturnIfFocusInside } from '@renderer/services/overlays/overlay-focus-return.util';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
-import { OverlayEntry, TabMenuAnchor } from '@renderer/services/overlays/overlay.service-model';
+import {
+  OverlayEntry,
+  TabMenuTriggerRect,
+} from '@renderer/services/overlays/overlay.service-model';
 import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
 import { AnchoredTabMenu } from 'platform-bible-react/experimental';
 import type { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
@@ -21,7 +24,9 @@ export type OverlayTabMenuPresentationalProps = {
   /** The localized menu to show */
   menu: Localized<MultiColumnMenu>;
   /** The trigger's rectangle in this document; the menu opens below it, aligned with its start */
-  anchor: TabMenuAnchor;
+  anchor: TabMenuTriggerRect;
+  /** Whether the menu opens with its first item focused, because the keyboard opened it */
+  focusFirstItem?: boolean;
   /** Called when the user picks an item */
   onSelect: (item: Localized<MenuItemContainingCommand>) => void;
   /** Called when the menu closes without a pick */
@@ -46,6 +51,7 @@ export type OverlayTabMenuPresentationalProps = {
 export function OverlayTabMenuPresentational({
   menu,
   anchor,
+  focusFirstItem,
   onSelect,
   onDismiss,
   onEscape,
@@ -55,6 +61,7 @@ export function OverlayTabMenuPresentational({
     <AnchoredTabMenu
       menuData={menu}
       anchor={anchor}
+      focusFirstItem={focusFirstItem}
       // Only command items reach this handler; submenu items open their submenu
       onSelectMenuItem={onSelect}
       onClose={onDismiss}
@@ -117,6 +124,7 @@ export function OverlayTabMenu({ overlay }: OverlayTabMenuProps) {
     <OverlayTabMenuPresentational
       menu={overlay.menu}
       anchor={overlay.anchor}
+      focusFirstItem={overlay.focusFirstItem}
       onSelect={handleSelect}
       onDismiss={handleDismiss}
       onEscape={handleEscape}

@@ -19,7 +19,11 @@ import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 // runtime value import from `platform-bible-react` here pulled the whole component library into
 // every consumer of these types. The implementation half lives in
 // `overlay-palette-filter.util.ts`.
-import type { PaletteFilterMode } from 'platform-bible-react/experimental';
+import type {
+  PaletteFilterMode,
+  TabMenuOverlayOptions,
+  TabMenuTriggerRect,
+} from 'platform-bible-react/experimental';
 import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 
@@ -273,10 +277,10 @@ export type { PaletteFilterMode };
 // ── Tab Menu Types ──
 
 /**
- * Where a tab menu's trigger is, in pixels relative to the requesting WebView's iframe origin. See
- * {@link IOverlayService.showTabMenu}.
+ * Re-exported from `platform-bible-react`, whose tab menu trigger builds these options, so what the
+ * trigger sends and what {@link IOverlayService.showTabMenu} accepts cannot drift apart.
  */
-export type TabMenuAnchor = { x: number; y: number; width: number; height: number };
+export type { TabMenuOverlayOptions, TabMenuTriggerRect };
 
 // ── Service Interface ──
 
@@ -338,8 +342,9 @@ export interface IOverlayService {
    * @param menu The localized menu to show, as the WebView would show it
    * @param webViewId The ID of the WebView requesting the menu. Pass `globalThis.webViewId` from
    *   within a WebView iframe.
-   * @param options Where the menu's trigger is, in pixels relative to the WebView's iframe. The
-   *   menu opens below it, aligned with its start edge.
+   * @param options Where the menu's trigger is (`anchor`, in pixels relative to the WebView's
+   *   iframe; the menu opens below it, aligned with its start edge), and whether it was opened from
+   *   the keyboard (`focusFirstItem`, so the menu opens with its first item focused).
    * @returns The item the user picked, or `undefined` if the menu closed without a pick
    * @throws PlatformError with code FAILED_PRECONDITION if the requesting WebView is not visible
    * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
@@ -351,7 +356,7 @@ export interface IOverlayService {
   showTabMenu(
     menu: Localized<MultiColumnMenu>,
     webViewId: string,
-    options: { anchor: TabMenuAnchor },
+    options: TabMenuOverlayOptions,
   ): Promise<Localized<MenuItemContainingCommand> | undefined>;
   /**
    * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
@@ -516,7 +521,9 @@ export type OverlayEntry =
       /** The localized menu to render */
       menu: Localized<MultiColumnMenu>;
       /** The trigger's rectangle in the document (translated from iframe coordinates) */
-      anchor: TabMenuAnchor;
+      anchor: TabMenuTriggerRect;
+      /** Whether the menu opens with its first item focused, because the keyboard opened it */
+      focusFirstItem: boolean;
       /** Settles the caller's promise with the picked item, or `undefined` if dismissed */
       resolve: (item: Localized<MenuItemContainingCommand> | undefined) => void;
       /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */

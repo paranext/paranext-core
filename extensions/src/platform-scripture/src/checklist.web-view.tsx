@@ -22,10 +22,10 @@ import {
   makeBuiltInGroupings,
   makeSelectionGrouping,
   resolveLocalizedString,
+  type OpenTabMenuInOverlay,
   type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
-  type OpenTabMenuInOverlay,
   type ProjectSelectorProjectPair,
   type ScopeWithRange,
 } from 'platform-bible-react/experimental';
@@ -626,7 +626,7 @@ global.webViewComponent = function ChecklistWebView({
   // item still comes back to `handleSelectProjectMenuItem`, with focus back in this frame, so Copy
   // keeps the click's user activation for the clipboard.
   const openProjectMenuInOverlay = useCallback<OpenTabMenuInOverlay>(
-    (menu, anchor) => papi.overlays.showTabMenu(menu, globalThis.webViewId, { anchor }),
+    (menu, options) => papi.overlays.showTabMenu(menu, globalThis.webViewId, options),
     [],
   );
 

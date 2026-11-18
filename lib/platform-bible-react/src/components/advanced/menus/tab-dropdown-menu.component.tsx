@@ -23,7 +23,7 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import { MenuIcon } from 'lucide-react';
 import { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
-import { Fragment, ReactNode, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, ReactNode, useCallback, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import {
@@ -280,12 +280,30 @@ export function TabDropdownMenuItems({
 /** Where a tab menu's trigger sits, in pixels relative to the viewport of the document it is in */
 export type TabMenuTriggerRect = { x: number; y: number; width: number; height: number };
 
+/**
+ * How a tab menu asks to be opened outside its own document. See {@link OpenTabMenuInOverlay}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type TabMenuOverlayOptions = {
+  /** The trigger's rectangle; the menu opens below it, aligned with its start edge */
+  anchor: TabMenuTriggerRect;
+  /** Whether the menu was opened from the keyboard, so it opens with its first item focused */
+  focusFirstItem?: boolean;
+};
+
 export type AnchoredTabMenuProps = TabDropdownMenuItemsProps & {
   /** The rectangle of the trigger the menu belongs to; the menu opens below it, aligned to its start */
   anchor: TabMenuTriggerRect;
 
   /** Called when the menu closes without a pick: Escape, a click away, or a submenu's Escape */
   onClose: () => void;
+
+  /**
+   * Whether the menu opens with its first item focused, as a dropdown opened from the keyboard
+   * does. Otherwise the menu itself takes focus, as after a click.
+   */
+  focusFirstItem?: boolean;
 
   /**
    * Props for the menu's content. Its `onCloseAutoFocus` defaults to keeping focus where it is,
@@ -308,9 +326,25 @@ export type AnchoredTabMenuProps = TabDropdownMenuItemsProps & {
 export function AnchoredTabMenu({
   anchor,
   onClose,
+  focusFirstItem = false,
   contentProps,
   ...itemsProps
 }: AnchoredTabMenuProps) {
+  // Radix moves to the first item only after a keydown in its own document, and the key that
+  // opened this menu may have been pressed in another one (a web view's frame). The content's portal
+  // mounts it a render late and its own mount effect focuses the menu, so wait a frame past both.
+  const focusFirstItemOnMount = useCallback(
+    (content: HTMLDivElement | null) => {
+      if (!content || !focusFirstItem) return;
+      requestAnimationFrame(() =>
+        content
+          .querySelector<HTMLElement>('[role^="menuitem"]:not([data-disabled])')
+          ?.focus({ preventScroll: true }),
+      );
+    },
+    [focusFirstItem],
+  );
+
   return (
     <DropdownMenu
       open
@@ -340,6 +374,7 @@ export function AnchoredTabMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
+        ref={focusFirstItemOnMount}
         align="start"
         side="bottom"
         onCloseAutoFocus={(event) => event.preventDefault()}
@@ -353,16 +388,17 @@ export function AnchoredTabMenu({
 
 /**
  * Opens a tab menu outside the document its trigger is in, and settles with the item the user
- * picked, or `undefined` when the menu closed without a pick.
+ * picked, or `undefined` when the menu closed without a pick. The options pass straight through to
+ * `papi.overlays.showTabMenu`.
  *
- * In a web view, pass one that calls `papi.overlays.showTabMenu`: the window then draws the menu
- * over every tab, so a narrow tab no longer cuts it or its flyouts off.
+ * In a web view, pass `(menu, options) => papi.overlays.showTabMenu(menu, webViewId, options)`: the
+ * window then draws the menu over every tab, so a narrow tab no longer cuts it or its flyouts off.
  *
  * @experimental This type is unstable and may change or disappear without notice
  */
 export type OpenTabMenuInOverlay = (
   menuData: Localized<MultiColumnMenu>,
-  triggerRect: TabMenuTriggerRect,
+  options: TabMenuOverlayOptions,
 ) => Promise<Localized<MenuItemContainingCommand> | undefined>;
 
 export type TabDropdownMenuProps = Omit<
@@ -391,13 +427,14 @@ export type TabDropdownMenuProps = Omit<
   /**
    * Opens the menu outside this document instead of in it. When set, the trigger hands the menu
    * data and its own position to this function and passes the item it settles with to
-   * `onSelectMenuItem`; the menu is not rendered here at all.
+   * `onSelectMenuItem`; the menu is not rendered here at all. The overlay always heads the sections
+   * with their column labels, whatever `showSectionHeadings` says, and ignores `variant`.
    *
    * @experimental This property is unstable and may change or disappear without notice
    */
   openMenuInOverlay?: OpenTabMenuInOverlay;
 
-  /** Style variant for the app menubar component. */
+  /** Style variant for the app menubar component. Not applied with `openMenuInOverlay`. */
   variant?: 'default' | 'muted';
 
   buttonVariant?: 'default' | 'ghost' | 'outline' | 'secondary';
@@ -444,14 +481,17 @@ export default function TabDropdownMenu({
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
 
   if (openMenuInOverlay) {
-    const openOverlay = async () => {
+    const openOverlay = async (isFromKeyboard: boolean) => {
       const trigger = triggerRef.current;
       if (!trigger || isOverlayOpen) return;
       const { x, y, width, height } = trigger.getBoundingClientRect();
       setIsOverlayOpen(true);
       let pickedItem: Localized<MenuItemContainingCommand> | undefined;
       try {
-        pickedItem = await openMenuInOverlay(menuData, { x, y, width, height });
+        pickedItem = await openMenuInOverlay(menuData, {
+          anchor: { x, y, width, height },
+          focusFirstItem: isFromKeyboard,
+        });
       } catch {
         // The overlay refuses a request it cannot show (a hidden tab, a repeat inside its
         // cooldown) and drops a menu that another request replaced; either way nothing was picked
@@ -459,8 +499,8 @@ export default function TabDropdownMenu({
         setIsOverlayOpen(false);
       }
       if (getLastInteractionModality() === 'pointer') hideFocusRing(trigger);
-      // Run in the same task the pick settles in: some handlers need the pick's user activation
-      // The handler's type names the unlocalized item, as for a pick from the in-document menu
+      // Run in the same task the pick settles in: some handlers need the pick's user activation.
+      // The handler's type names the unlocalized item, as for a pick from the in-document menu.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       if (pickedItem) onSelectMenuItem(pickedItem as MenuItemContainingCommand);
     };
@@ -474,13 +514,14 @@ export default function TabDropdownMenu({
         variant={buttonVariant}
         size="icon"
         className={cn(QUIET_FOCUS_RING_SUPPRESSION, className)}
-        onClick={openOverlay}
+        // A click that Enter or Space produced carries no click count
+        onClick={(event) => openOverlay(event.detail === 0)}
         onKeyDown={(event) => {
           restoreFocusRing();
           // Like a dropdown trigger, ArrowDown opens the menu too
           if (event.key === 'ArrowDown') {
             event.preventDefault();
-            openOverlay();
+            openOverlay(true);
           }
         }}
         onBlur={restoreFocusRing}

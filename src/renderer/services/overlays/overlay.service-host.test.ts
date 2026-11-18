@@ -321,6 +321,7 @@ describe('overlay.service-host', () => {
       const overlay = getTabMenuOverlay();
       expect(overlay.menu).toBe(TAB_MENU);
       expect(overlay.anchor).toEqual({ x: 304, y: 82, width: 32, height: 28 });
+      expect(overlay.focusFirstItem).toBe(false);
 
       overlay.resolve(undefined);
       await expect(promise).resolves.toBeUndefined();
@@ -376,6 +377,49 @@ describe('overlay.service-host', () => {
       ).rejects.toSatisfy(
         (error: unknown) => isPlatformError(error) && error.code === FAILED_PRECONDITION,
       );
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('opens with its first item focused when the keyboard opened it', async () => {
+      const promise = overlayService.showTabMenu(TAB_MENU, 'tab-webview', {
+        anchor: ANCHOR,
+        focusFirstItem: true,
+      });
+
+      expect(getTabMenuOverlay().focusFirstItem).toBe(true);
+
+      getTabMenuOverlay().resolve(undefined);
+      await promise;
+    });
+
+    it('closes on Escape or a click anywhere in the app window, and when another tab takes focus', async () => {
+      vi.useFakeTimers();
+      appWindowInputSubscribers.length = 0;
+      resetAppWindowInputState();
+      vi.mocked(windowService.subscribeFocus).mockClear();
+      await startOverlayService();
+      const onFocusChange = vi.mocked(windowService.subscribeFocus).mock.calls.at(-1)?.[1];
+      const openPastGrace = () => {
+        resetDebounceState();
+        const promise = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+        // Past the creation grace period, inside which the auto-dismiss listeners stand down
+        vi.advanceTimersByTime(350);
+        return promise;
+      };
+
+      const closedByEscape = openPastGrace();
+      appWindowInputSubscribers.forEach((subscriber) => subscriber({ kind: 'escape' }));
+      await expect(closedByEscape).resolves.toBeUndefined();
+
+      const closedByClick = openPastGrace();
+      appWindowInputSubscribers.forEach((subscriber) => subscriber({ kind: 'mouseDown' }));
+      // Past the deferred mouse-down decision
+      vi.advanceTimersByTime(50);
+      await expect(closedByClick).resolves.toBeUndefined();
+
+      const closedByTabChange = openPastGrace();
+      onFocusChange?.({ focusType: 'tab', id: 'another-tab', tabType: 'test' });
+      await expect(closedByTabChange).resolves.toBeUndefined();
       expect(getOverlays()).toHaveLength(0);
     });
 

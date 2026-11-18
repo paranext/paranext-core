@@ -2540,7 +2540,13 @@ type TabMenuTriggerRect = {
 	width: number;
 	height: number;
 };
-type OpenTabMenuInOverlay = (menuData: Localized<MultiColumnMenu>, triggerRect: TabMenuTriggerRect) => Promise<Localized<MenuItemContainingCommand> | undefined>;
+type TabMenuOverlayOptions = {
+	/** The trigger's rectangle; the menu opens below it, aligned with its start edge */
+	anchor: TabMenuTriggerRect;
+	/** Whether the menu was opened from the keyboard, so it opens with its first item focused */
+	focusFirstItem?: boolean;
+};
+type OpenTabMenuInOverlay = (menuData: Localized<MultiColumnMenu>, options: TabMenuOverlayOptions) => Promise<Localized<MenuItemContainingCommand> | undefined>;
 type TabDropdownMenuProps = Omit<TabDropdownMenuItemsProps, "showSectionHeadings" | "submenuContentProps"> & {
 	/** Defines a string value that labels the current element */
 	tabLabel: string;
@@ -2560,12 +2566,13 @@ type TabDropdownMenuProps = Omit<TabDropdownMenuItemsProps, "showSectionHeadings
 	/**
 	 * Opens the menu outside this document instead of in it. When set, the trigger hands the menu
 	 * data and its own position to this function and passes the item it settles with to
-	 * `onSelectMenuItem`; the menu is not rendered here at all.
+	 * `onSelectMenuItem`; the menu is not rendered here at all. The overlay always heads the sections
+	 * with their column labels, whatever `showSectionHeadings` says, and ignores `variant`.
 	 *
 	 * @experimental This property is unstable and may change or disappear without notice
 	 */
 	openMenuInOverlay?: OpenTabMenuInOverlay;
-	/** Style variant for the app menubar component. */
+	/** Style variant for the app menubar component. Not applied with `openMenuInOverlay`. */
 	variant?: "default" | "muted";
 	buttonVariant?: "default" | "ghost" | "outline" | "secondary";
 	/** Optional unique identifier */

@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { addOverlay, clearAllOverlays } from '@renderer/services/overlays/overlay-store';
@@ -74,6 +74,20 @@ describe('OverlayTabMenuPresentational', () => {
     expect(sections).toHaveLength(2);
     expect(sections[0]).toHaveAccessibleName('Edit');
     expect(sections[1]).toHaveAccessibleName('Insert');
+  });
+
+  it('opens with its first item focused when the keyboard opened it', async () => {
+    render(
+      <OverlayTabMenuPresentational
+        menu={MENU}
+        anchor={ANCHOR}
+        focusFirstItem
+        onSelect={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: /^Clipboard/ })).toHaveFocus());
   });
 
   it('hands the picked item to onSelect, including one in a submenu', () => {
@@ -169,6 +183,7 @@ describe('OverlayTabMenu', () => {
       webViewId: 'web-view-1',
       menu: MENU,
       anchor: ANCHOR,
+      focusFirstItem: false,
       resolve,
       reject: vi.fn(),
     };

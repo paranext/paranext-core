@@ -134,8 +134,8 @@ export { isEditorContextMenuOpenFor } from './components/advanced/editor-context
 export {
   AnchoredTabMenu,
   type AnchoredTabMenuProps,
-  type TabDropdownMenuItemsProps,
   type OpenTabMenuInOverlay,
+  type TabMenuOverlayOptions,
   type TabMenuTriggerRect,
   type TabMenuSubmenuContentProps,
 } from './components/advanced/menus/tab-dropdown-menu.component';

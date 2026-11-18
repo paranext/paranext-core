@@ -5333,7 +5333,7 @@ function PlatformScriptureEditor({
   // item still comes back to `menuCommandHandler` here, with focus back in this frame, so Cut, Copy
   // and Paste keep the click's user activation for the clipboard.
   const openMenuInOverlay = useCallback<OpenTabMenuInOverlay>(
-    (menu, anchor) => papi.overlays.showTabMenu(menu, webViewId, { anchor }),
+    (menu, menuOptions) => papi.overlays.showTabMenu(menu, webViewId, menuOptions),
     [webViewId],
   );
 

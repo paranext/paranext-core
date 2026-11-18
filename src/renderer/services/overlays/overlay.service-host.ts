@@ -59,7 +59,7 @@ import {
   OverlayEntry,
   PopoverContent,
   PopoverRequest,
-  TabMenuAnchor,
+  TabMenuOverlayOptions,
 } from './overlay.service-model';
 import { filterPaletteItems, getPaletteFilterMode } from './overlay-palette-filter.util';
 import { convertContributionToContextMenuItems } from './overlay-menu-converter';
@@ -713,13 +713,14 @@ async function showContextMenu(
  *
  * @param menu The localized menu to show
  * @param webViewId The webViewId that originated the request
- * @param options Where the menu's trigger is, relative to the WebView's iframe
+ * @param options Where the menu's trigger is, relative to the WebView's iframe, and whether the
+ *   keyboard opened it
  * @returns The picked item, or undefined if dismissed
  */
 async function showTabMenu(
   menu: Localized<MultiColumnMenu>,
   webViewId: string,
-  options: { anchor: TabMenuAnchor },
+  options: TabMenuOverlayOptions,
 ): Promise<Localized<MenuItemContainingCommand> | undefined> {
   if (!isWebViewVisible(webViewId)) {
     throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
@@ -756,6 +757,7 @@ async function showTabMenu(
       webViewId,
       menu,
       anchor: { x, y, width, height },
+      focusFirstItem: options.focusFirstItem ?? false,
       resolve: (item) => {
         // The WebView runs the picked item as soon as this settles, and some items act on its own
         // document (the clipboard needs that document focused), so focus goes back synchronously

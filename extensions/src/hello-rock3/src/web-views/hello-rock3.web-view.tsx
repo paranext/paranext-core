@@ -570,8 +570,8 @@ globalThis.webViewComponent = function HelloRock3({
         onSelectProjectMenuItem={projectMenuCommandHandler}
         projectMenuData={projectMenuData}
         // The window draws the menu over every tab, so a narrow tab cannot cut it off
-        openMenuInOverlay={(menu, anchor) =>
-          papi.overlays.showTabMenu(menu, globalThis.webViewId, { anchor })
+        openMenuInOverlay={(menu, options) =>
+          papi.overlays.showTabMenu(menu, globalThis.webViewId, options)
         }
       />
       <div className="title">

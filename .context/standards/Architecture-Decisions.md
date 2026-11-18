@@ -11369,11 +11369,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   another document. Clipboard actions depend on Chromium's user activation reaching same-origin
   child frames and on the synchronous iframe focus; both need checking in the running app,
   which unit tests cannot do. A web view whose tab is not visible cannot open its menu (the
-  service refuses, as for context menus). The menu is now dismissed by the overlay service's
-  rules (click away anywhere, Escape, tab change, window blur), and scrolling inside it does not
-  dismiss it.
-- **Source:** design discussion with the user in the implementing session; overlay service in
-  `src/renderer/services/overlays/overlay.service-host.ts` (`showTabMenu`).
+  service refuses, as for context menus). A key pressed in the web view's frame never reaches the
+  top document, so Radix there cannot tell the menu was opened from the keyboard: the trigger says
+  so itself (`focusFirstItem`) and the overlay focuses the first item. The menu is now dismissed by
+  the overlay service's rules (click away anywhere, Escape, tab change, window blur), and scrolling
+  inside it does not dismiss it.
+- **Source:** PR #3032; overlay service in `src/renderer/services/overlays/overlay.service-host.ts`
+  (`showTabMenu`) and `AnchoredTabMenu` in `platform-bible-react`'s `tab-dropdown-menu.component.tsx`.
 
 ## adr-tab-order-anchor-insert-before: Column 3 tab order is expressed as anchor + insert-before in the layout supplement, not as a pinning mechanism
 
