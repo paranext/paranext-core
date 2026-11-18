@@ -356,7 +356,10 @@ function checkoutRevision(repo: DevRepo): void {
   // tag of the remote. A commit that is only in this checkout — made here, or left behind when a
   // branch was force-pushed — stages fine on this machine and fails on every other one. Tags are
   // taken as the checkout has them, so a tag made here and never pushed is not caught.
-  if (!isRemoteBranch) {
+  //
+  // Only after a fetch: without one the checkout's refs can be older than the remote, and stale
+  // refs cannot show that the remote lacks a commit.
+  if (!isRemoteBranch && !isFetchSkipped) {
     const holders = execSync(
       `git for-each-ref --count=1 --contains ${targetCommit} refs/remotes/origin refs/tags`,
       { cwd: repoPath, encoding: 'utf8' },
@@ -416,13 +419,19 @@ function checkoutRevision(repo: DevRepo): void {
    * commits of an earlier pin, which are on the remote, are never counted.
    */
   const parkUnpushedCommits = (branch: string) => {
-    let tip: string;
     try {
-      tip = resolve(`refs/heads/${branch}`);
-    } catch {
-      // No such local branch yet, so `-B` creates it and discards nothing.
-      return;
+      execSync(`git show-ref --verify --quiet "refs/heads/${branch}"`, {
+        cwd: repoPath,
+        stdio: 'pipe',
+      });
+    } catch (error) {
+      // Exit status 1 is git's "no such ref": `-B` then creates the branch and discards nothing.
+      // Anything else is a failure to read the branch, and re-pointing a branch this could not
+      // look at is how its commits would be lost, so it stops the run.
+      if (error && typeof error === 'object' && 'status' in error && error.status === 1) return;
+      throw error;
     }
+    const tip = resolve(`refs/heads/${branch}`);
     const unpushedCount = Number(
       execSync(`git rev-list --count "${tip}" --not --remotes=origin --tags`, {
         cwd: repoPath,
@@ -488,13 +497,14 @@ function getSourceStamp(repoPath: string): string {
 
   // A committed-but-unpushed source commit is still work that exists on one machine, and a lockfile
   // recording its dependency closure is one nobody else can reproduce — the same problem `-dirty`
-  // marks, one step later. Asked of the local remote-tracking refs, so it needs no network; a
-  // commit reachable from any `origin/*` is on the remote.
-  const remoteBranches = execSync('git branch -r --contains HEAD', {
-    cwd: repoPath,
-    encoding: 'utf8',
-  }).trim();
-  return remoteBranches.length > 0 ? head : `${head}-unpushed`;
+  // marks, one step later. Asked of the local remote-tracking refs and tags, so it needs no network;
+  // a commit reachable from any `origin/*` branch or from a tag is on the remote. Tags count
+  // because a release can be pinned by a tag whose commit no branch holds.
+  const holders = execSync(
+    'git for-each-ref --count=1 --contains HEAD refs/remotes/origin refs/tags',
+    { cwd: repoPath, encoding: 'utf8' },
+  ).trim();
+  return holders.length > 0 ? head : `${head}-unpushed`;
 }
 
 /** What a marker written by this version of the script, for this source state, would say. */
@@ -739,7 +749,6 @@ function stageDevPackages(): void {
     });
 
     console.log('Successfully staged dev packages');
-    reportRescuedCommits();
   } catch (error) {
     console.error(
       `Error: Failed to stage dev packages${inFlight ? ` while working on ${inFlight}` : ''}.`,
@@ -750,6 +759,10 @@ function stageDevPackages(): void {
     // queued on a piped stderr (which is how npm runs lifecycle scripts) past the ~64KB buffer.
     // Setting the code lets the remediation text above finish writing.
     process.exitCode = 1;
+  } finally {
+    // Also when staging failed: a commit parked before the failure is already off its branch, and
+    // the next successful run finds nothing left to park and so would never mention it.
+    reportRescuedCommits();
   }
 }
 

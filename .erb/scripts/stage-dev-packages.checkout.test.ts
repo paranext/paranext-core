@@ -19,6 +19,8 @@ let remote: string;
 /** Two commits on the remote's `main`, older first. */
 let pinA: string;
 let pinB: string;
+/** A commit that only the tag `off-branch` holds: on no branch of the remote. */
+let tagOnlyCommit: string;
 let coreCount = 0;
 
 function git(cwd: string, ...args: string[]): string {
@@ -70,11 +72,21 @@ function stage(core: string, revision: string, formerPinBranches: string[] = [])
       ],
     }),
   );
+  // `spawnSync` blocks the event loop the test's own timeout runs on, so a child that hangs has to
+  // be ended here.
   const result = spawnSync(process.execPath, ['.erb/scripts/stage-dev-packages.ts'], {
     cwd: core,
     encoding: 'utf8',
+    timeout: 90_000,
   });
+  if (result.error) throw result.error;
   return { status: result.status, output: `${result.stdout}\n${result.stderr}` };
+}
+
+/** `stage`, for the steps that only set a scenario up: fails the test if staging did. */
+function stageOk(core: string, revision: string, formerPinBranches: string[] = []): void {
+  const result = stage(core, revision, formerPinBranches);
+  if (result.status !== 0) throw new Error(`staging ${revision} failed:\n${result.output}`);
 }
 
 function stagedFrom(core: string): string {
@@ -96,7 +108,9 @@ function rescueRefs(clone: string): string {
 
 beforeAll(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-dev-packages-'));
-  remote = path.join(root, 'remote.git');
+  // Forward slashes on every platform: git stores a clone's origin that way on Windows, and the
+  // script compares the stored origin with this string.
+  remote = path.join(root, 'remote.git').replace(/\\/g, '/');
   git(root, 'init', '--bare', '--initial-branch=main', remote);
 
   const seed = path.join(root, 'seed');
@@ -113,11 +127,15 @@ beforeAll(() => {
   commit(seed, 'release only');
   git(seed, 'checkout', 'main');
   pinB = commit(seed, 'B');
-  git(seed, 'push', 'origin', 'main', 'release');
+  git(seed, 'tag', '-a', 'on-main', '-m', 'on main', pinA);
+  git(seed, 'checkout', '--detach', pinA);
+  tagOnlyCommit = commit(seed, 'held by a tag only');
+  git(seed, 'tag', '-a', 'off-branch', '-m', 'off every branch');
+  git(seed, 'push', 'origin', 'main', 'release', 'on-main', 'off-branch');
 });
 
 afterAll(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 
 describe('stage-dev-packages checkout, against real git', () => {
@@ -135,6 +153,7 @@ describe('stage-dev-packages checkout, against real git', () => {
       expect(stagedFrom(core)).toBe(pinB);
 
       const back = stage(core, pinA);
+      expect(back.status).toBe(0);
       expect(head(clone)).toEqual({ commit: pinA, branch: PINNED_COMMIT_BRANCH });
       // B is on the remote, so moving the branch off it loses nothing and parks nothing.
       expect(rescueRefs(clone)).toBe('');
@@ -147,7 +166,7 @@ describe('stage-dev-packages checkout, against real git', () => {
     'leaves a checkout a person detached where it is, install after install',
     () => {
       const { core, clone } = makeCore();
-      stage(core, pinB);
+      stageOk(core, pinB);
       git(clone, 'checkout', '--detach', pinA);
 
       // Twice: the first run stages from the detached commit and records it as staged, which must
@@ -166,10 +185,12 @@ describe('stage-dev-packages checkout, against real git', () => {
     "leaves a checkout on somebody's own branch where it is",
     () => {
       const { core, clone } = makeCore();
-      stage(core, pinB);
+      stageOk(core, pinB);
       git(clone, 'checkout', '-b', 'my-editor-fix', pinA);
 
       const result = stage(core, pinB);
+
+      expect(result.status).toBe(0);
 
       expect(result.output).toContain('is on "my-editor-fix"');
       expect(head(clone)).toEqual({ commit: pinA, branch: 'my-editor-fix' });
@@ -181,13 +202,13 @@ describe('stage-dev-packages checkout, against real git', () => {
     'moves a checkout off a declared former pin branch, and not off an undeclared one',
     () => {
       const { core, clone } = makeCore();
-      stage(core, 'release');
+      stageOk(core, 'release');
       expect(head(clone).branch).toBe('release');
 
       expect(stage(core, pinB).output).toContain('is on "release"');
       expect(head(clone).branch).toBe('release');
 
-      stage(core, pinB, ['release']);
+      stageOk(core, pinB, ['release']);
       expect(head(clone)).toEqual({ commit: pinB, branch: PINNED_COMMIT_BRANCH });
     },
     TIMEOUT_MS,
@@ -197,11 +218,13 @@ describe('stage-dev-packages checkout, against real git', () => {
     'parks a commit made on the branch staging owns before re-pointing that branch',
     () => {
       const { core, clone } = makeCore();
-      stage(core, pinB);
-      stage(core, pinA);
+      stageOk(core, pinB);
+      stageOk(core, pinA);
       const local = commit(clone, 'local work');
 
       const result = stage(core, pinB);
+
+      expect(result.status).toBe(0);
 
       expect(head(clone)).toEqual({ commit: pinB, branch: PINNED_COMMIT_BRANCH });
       expect(result.output).toContain('MOVED ASIDE');
@@ -216,12 +239,14 @@ describe('stage-dev-packages checkout, against real git', () => {
     'reports nothing as unpushed when the pin goes from a commit to a branch without that commit',
     () => {
       const { core, clone } = makeCore();
-      stage(core, pinB);
-      stage(core, pinA);
-      stage(core, pinB);
+      stageOk(core, pinB);
+      stageOk(core, pinA);
+      stageOk(core, pinB);
       expect(head(clone).branch).toBe(PINNED_COMMIT_BRANCH);
 
       const result = stage(core, 'release');
+
+      expect(result.status).toBe(0);
 
       // The control: the checkout did move, so a notice had its chance to appear.
       expect(head(clone).branch).toBe('release');
@@ -235,15 +260,17 @@ describe('stage-dev-packages checkout, against real git', () => {
     'parks a commit left on the local pinned branch when the pin names that branch again',
     () => {
       const { core, clone } = makeCore();
-      stage(core, 'release');
+      stageOk(core, 'release');
       const local = commit(clone, 'local work on the pinned branch');
       // The pin becomes a commit: staging moves the checkout off `release` and leaves that local
       // branch, with its commit, as it is.
-      stage(core, pinB, ['release']);
+      stageOk(core, pinB, ['release']);
       expect(head(clone).branch).toBe(PINNED_COMMIT_BRANCH);
       expect(git(clone, 'rev-parse', 'refs/heads/release')).toBe(local);
 
       const result = stage(core, 'release');
+
+      expect(result.status).toBe(0);
 
       expect(head(clone).branch).toBe('release');
       expect(head(clone).commit).not.toBe(local);
@@ -254,10 +281,63 @@ describe('stage-dev-packages checkout, against real git', () => {
   );
 
   it(
+    'stages a tag pin on the branch staging owns',
+    () => {
+      const { core, clone } = makeCore();
+      stageOk(core, pinB);
+
+      stageOk(core, 'on-main');
+
+      expect(head(clone)).toEqual({ commit: pinA, branch: PINNED_COMMIT_BRANCH });
+      expect(stagedFrom(core)).toBe(pinA);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    'treats a commit that only a pushed tag holds as pushed',
+    () => {
+      const { core, clone } = makeCore();
+
+      stageOk(core, 'off-branch');
+
+      expect(head(clone).commit).toBe(tagOnlyCommit);
+      // Exactly the commit: an `-unpushed` suffix here blocks committing the lockfile.
+      expect(stagedFrom(core)).toBe(tagOnlyCommit);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    'does not judge whether the remote holds the pin when the fetch was skipped',
+    () => {
+      const { core, clone } = makeCore();
+      stageOk(core, pinB);
+      git(clone, 'checkout', '-b', 'never-pushed');
+      const unpushed = commit(clone, 'only on this machine');
+      git(clone, 'checkout', 'main');
+
+      process.env.PT_SKIP_DEV_PACKAGE_FETCH = '1';
+      let result: ReturnType<typeof stage>;
+      try {
+        result = stage(core, unpushed);
+      } finally {
+        delete process.env.PT_SKIP_DEV_PACKAGE_FETCH;
+      }
+
+      // Without a fetch the checkout's refs can be older than the remote, so they cannot show that
+      // the remote lacks a commit.
+      expect(result.output).toContain('Skipping the fetch');
+      expect(result.status).toBe(0);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
     'refuses a commit pin that no branch or tag of the remote holds',
     () => {
       const { core, clone } = makeCore();
-      stage(core, pinB);
+      stageOk(core, pinB);
       git(clone, 'checkout', '-b', 'never-pushed');
       const unpushed = commit(clone, 'only on this machine');
       git(clone, 'checkout', 'main');

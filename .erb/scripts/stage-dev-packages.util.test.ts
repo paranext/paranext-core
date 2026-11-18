@@ -286,6 +286,16 @@ describe('formatRescuedCommitsBanner', () => {
     expect(banner).toContain(`git -C "${rescue.repoPath}" log`);
   });
 
+  it('explains the branch staging owns when the commits were on it', () => {
+    // Nobody chose that branch's name, so a notice that only quotes it does not say why work was
+    // there or where to put it next time.
+    const onOwnedBranch = formatRescuedCommitsBanner([
+      { ...rescue, revision: PINNED_COMMIT_BRANCH },
+    ]);
+    expect(onOwnedBranch).toContain('Commit on a branch of your own instead');
+    expect(formatRescuedCommitsBanner([rescue])).not.toContain('branch of your own');
+  });
+
   it('says how to stop the reminder, since nothing deletes the ref', () => {
     expect(formatRescuedCommitsBanner([rescue])).toContain('update-ref -d');
   });

@@ -235,7 +235,7 @@ To pick up newer editor commits ("bump the pin"):
    git ls-remote https://github.com/paranext/scripture-editors.git refs/heads/main
    ```
 
-3. Run `npm install`. It moves your editor checkout to the new commit, restages it, and updates `package-lock.json` if the editor's dependencies changed.
+3. Run `npm install`. It moves your editor checkout to the new commit, restages it, and updates `package-lock.json` if the editor's dependencies changed. If the install warns that it is leaving your editor checkout alone (it is on a branch of your own, or detached), it staged that checkout instead of the new pin: follow the command the warning prints and install again before committing the lockfile.
 4. Commit `dev-packages.json` (and `package-lock.json` if it changed) and open a PR. CI builds and tests this repo against exactly that editor, so a breaking editor change shows up on that PR and on no other.
 
 A PR here that needs a newer editor bumps the pin itself, so the editor change and the code that depends on it land together. To try an editor change that is not on `main` yet, you do not need to move the pin: see [Getting your `scripture-editors` changes into this repo](#getting-your-scripture-editors-changes-into-this-repo).

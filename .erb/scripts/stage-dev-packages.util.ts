@@ -210,6 +210,17 @@ export function isEnvFlagEnabled(value: string | undefined): boolean {
 }
 
 /**
+ * The local branch `stage-dev-packages` keeps a dev repo checkout on when `revision` names a commit
+ * or a tag.
+ *
+ * A commit has no branch to be on, and leaving the checkout detached would make it look exactly
+ * like one a person parked on a commit to read it — which staging never moves. Sitting on a branch
+ * only this script creates is what lets the next run tell "where staging left this checkout" from
+ * "where somebody put it", with nothing recorded outside the checkout itself.
+ */
+export const PINNED_COMMIT_BRANCH = 'stage-dev-packages-pin';
+
+/**
  * Where `stage-dev-packages` records commits it moved aside, relative to the repository root.
  *
  * A file rather than a return value because the two halves run in different processes: staging is
@@ -251,6 +262,14 @@ export function formatRescuedCommitsBanner(rescues: RescuedCommit[]): string {
     lines.push(
       `  ${rescue.repoFolder}: ${rescue.commitCount} commit(s) on "${rescue.revision}" were not on`,
       '  the remote, so staging reset the branch past them. They are kept at:',
+    );
+    if (rescue.revision === PINNED_COMMIT_BRANCH)
+      lines.push(
+        '',
+        `  ("${PINNED_COMMIT_BRANCH}" is the branch staging keeps this checkout on and re-points`,
+        '  whenever the pinned commit changes. Commit on a branch of your own instead.)',
+      );
+    lines.push(
       '',
       `      ${rescue.rescueRef}`,
       '',
@@ -268,17 +287,6 @@ export function formatRescuedCommitsBanner(rescues: RescuedCommit[]): string {
   lines.push(rule, '');
   return lines.join('\n');
 }
-
-/**
- * The local branch `stage-dev-packages` keeps a dev repo checkout on when `revision` names a commit
- * or a tag.
- *
- * A commit has no branch to be on, and leaving the checkout detached would make it look exactly
- * like one a person parked on a commit to read it — which staging never moves. Sitting on a branch
- * only this script creates is what lets the next run tell "where staging left this checkout" from
- * "where somebody put it", with nothing recorded outside the checkout itself.
- */
-export const PINNED_COMMIT_BRANCH = 'stage-dev-packages-pin';
 
 /** What `stage-dev-packages` knows about a dev repo checkout when deciding whether to move it. */
 export type CheckoutState = {
@@ -313,7 +321,7 @@ export type CheckoutDecision =
  * It moves a checkout only from somewhere nothing is being kept:
  *
  * - `main`, where a fresh clone starts;
- * - The pinned branch itself, which is force-pushed upstream by design;
+ * - The pinned branch itself, which follows its remote and may be force-pushed there;
  * - {@link PINNED_COMMIT_BRANCH}, where this script left the checkout for an earlier commit or tag pin
  *   — this is what makes a moved pin reach a checkout that already followed the previous one;
  * - A branch `dev-packages.json` lists under `formerPinBranches`, where this script left the checkout
