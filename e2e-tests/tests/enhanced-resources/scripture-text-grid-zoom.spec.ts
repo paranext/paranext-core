@@ -154,28 +154,6 @@ async function stepAreaUpTo(
 /** Areas this test zoomed, so `afterEach` can return them to the default whatever happened. */
 let zoomedAreas: { webViewId: string; areaIds: string[] } | undefined;
 
-/** Makes the non-closable grid tab closable, so a test or the shared sweep can close it. */
-async function makeGridClosable(page: Page): Promise<void> {
-  await page.evaluate(async (webViewType) => {
-    // The renderer exposes `papi` and `updateWebViewDefinitionById` on `globalThis`, untyped here.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const win = window as unknown as {
-      papi: {
-        webViews: {
-          getAllOpenWebViewDefinitions: () => Promise<{ id: string; webViewType: string }[]>;
-        };
-      };
-      updateWebViewDefinitionById: (id: string, update: { isClosable: boolean }) => unknown;
-    };
-    const defs = await win.papi.webViews.getAllOpenWebViewDefinitions();
-    await Promise.all(
-      defs
-        .filter((d) => d.webViewType === webViewType)
-        .map((d) => win.updateWebViewDefinitionById(d.id, { isClosable: true })),
-    );
-  }, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
-}
-
 type OpenedGrid = {
   projectId: string;
   stg: ScriptureTextGrid;
@@ -253,7 +231,6 @@ test.describe('Scripture Text Grid — per-resource content zoom', () => {
         ),
       );
     }
-    await makeGridClosable(mainPage).catch(() => {});
     await restoreScriptureTextGridProjectSettings(mainPage);
     await closeAllNonHomeDockTabs(mainPage);
   });
@@ -431,7 +408,6 @@ test.describe('Scripture Text Grid — per-resource content zoom', () => {
     await stepAreaUpTo(mainPage, frame, webViewId, areaA, aLevel);
     await stepAreaUpTo(mainPage, frame, webViewId, areaB, bLevel);
 
-    await makeGridClosable(mainPage);
     await closeDockTab(mainPage, webViewId);
     await expect(stg.cellDraggable).toHaveCount(0);
 

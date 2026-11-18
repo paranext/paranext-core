@@ -31,21 +31,18 @@ Seventeen spec files, plus `test-helpers.ts` (dock and Enhanced Resource helpers
 `scripture-text-grid.page.ts` (page helpers for the Text Collection grid). Each has one of two
 statuses.
 
-**Runs locally against a prepared app** (6 files). Someone runs them by hand when they change the
+**Runs locally against a prepared app** (7 files). Someone runs them by hand when they change the
 feature:
 
-- `scripture-text-grid-verse-row.spec.ts`, `scripture-text-grid-view-options.spec.ts`,
-  `scripture-text-grid-zoom.spec.ts` and `cell-reorder.spec.ts` — the Text Collection grid.
+- `scripture-text-grid.spec.ts`, `scripture-text-grid-verse-row.spec.ts`,
+  `scripture-text-grid-view-options.spec.ts`, `scripture-text-grid-zoom.spec.ts` and
+  `cell-reorder.spec.ts` — the Text Collection grid. Most `scripture-text-grid.spec.ts` tests also
+  need a project you administer, and some need `E2E_TEST_RESOURCE_IDS`; its env-var notes say
+  which resources qualify.
 - `enhanced-resource-content-zoom.spec.ts` — content zoom in the Enhanced Resource window.
 - `enhanced-resources-image-render.spec.ts` — images render in an Enhanced Resource.
 
-**Parked** (11 files). One of them is parked because it is out of date:
-
-- `scripture-text-grid.spec.ts` — the Text Collection grid, a shipped feature. Eight of its
-  assertions are out of date; PT-4779 covers bringing it up to date, and the file comes back then.
-  It needs Power mode and Marble resources like the other grid specs.
-
-The other ten are parked for a different reason. The Enhanced Resources feature was built
+**Parked** (10 files). The Enhanced Resources feature was built
 experimentally and is still to be finished (epic PT-2021, "Enhanced Resources"). These files are its
 written test scenarios, kept so that work can start from them. They have never run as a whole, no CI
 job runs them, and some of their tests are `test.fixme` placeholders for behaviour or fixtures that
@@ -78,9 +75,9 @@ To bring a parked file back into use:
 
 ### What collects this suite
 
-The 6 locally-run files are collected by `playwright-cdp.config.ts`, which testIgnores `smoke`,
+The 7 locally-run files are collected by `playwright-cdp.config.ts`, which testIgnores `smoke`,
 `isolated`, `_example`, `manage-books` and `markers-checklist` but not this directory. There is no
-dedicated npm script, and nothing in CI runs it. The 11 parked files are testIgnored there
+dedicated npm script, and nothing in CI runs it. The 10 parked files are testIgnored there
 (`PARKED_ENHANCED_RESOURCES_SPECS`), so no config collects them.
 
 This directory deliberately has no project in `playwright.config.ts`, like `tests/attached/`:
@@ -107,4 +104,4 @@ The `no-silent-skips` reporter (`e2e-tests/reporters/`) fails a run in which tes
 skipped that nobody asked to skip, so a run of this suite is watched by it.
 
 **Size:** 17 spec files — 171 `test(...)` declarations in all, of which 45 are `test.fixme(...)`;
-the 6 locally-run files hold 14 and no `test.fixme(...)`, the 11 parked files 157.
+the 7 locally-run files hold 35 and no `test.fixme(...)`, the 10 parked files 136.
