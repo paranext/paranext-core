@@ -166,6 +166,13 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
       expect(css).toMatch(rule(['.marker-editable .unknown-inline'], 'display: inline;'));
     });
 
+    // `text-indent` is inherited, and a block box applies it to its own first line. A box inside a
+    // `\q` paragraph (`text-indent: -10vw`) would otherwise draw its opening `\fig` glyph out past
+    // its left edge, and one inside an indented paragraph would leave a gap before the glyph.
+    it("does not inherit the paragraph's first-line indent", () => {
+      expect(css).toMatch(rule(['.marker-editable .unknown-block'], 'text-indent: 0;'));
+    });
+
     // The editor JS renders an UnknownNode's own USFM bytes as REAL child text, so a
     // content-generating pseudo-element duplicates it: a bare `\fig` shows its marker twice and a
     // single `//` optbreak displays as `////` with a caret that cannot be placed inside it.

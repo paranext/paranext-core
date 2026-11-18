@@ -2488,6 +2488,10 @@
   /* An EMPTY opaque block (e.g. a bare \fig) must stay visible/selectable: without content the
      box collapses to 0 height. One line-height of room keeps the dashed frame renderable. */
   min-height: 1.5em;
+  /* `text-indent` is inherited and a block box applies it to its own first line, so without this
+     a `\q` paragraph's hanging indent pushes the opening glyph out past the box's left edge, and
+     an indented paragraph leaves a gap before it. */
+  text-indent: 0;
   border: 1px dashed rgba(140, 140, 140, 0.5);
   background-color: rgba(140, 140, 140, 0.08);
   color: rgba(140, 140, 140, 0.85);
