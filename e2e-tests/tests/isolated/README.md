@@ -40,8 +40,13 @@ e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 
 A new subset directory or loose spec needs an entry in `subset-sources.json` (`main` = the source
 the group is about, `incidental` = source it only drives); `e2e-recommendations.test.ts` fails
-without one, and for a new `scripture-editor/no-unasked-edits-*.spec.ts` that has no key of its own. It also fails when a prefix names a file that no longer exists, so moving or deleting a
-source file a prefix names means updating the prefix.
+without one. A new `scripture-editor/no-unasked-edits-*.spec.ts` also needs a key of its own. The
+test also fails when a prefix names a file that no longer exists, so moving or deleting a source
+file a prefix names means updating the prefix.
+
+A file named by a spec-level key inside a subset (such as
+`scripture-editor/chapter-marker-repair.spec.ts`) is recommended for that key only: listing the
+same file in the subset's own `main` has no effect, so leave it out there.
 
 ## Spec files directly under `tests/isolated/`
 
