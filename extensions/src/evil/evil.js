@@ -550,6 +550,12 @@ async function runSandboxProbes() {
       ? probeThrowsRefusal('process-execve', () => process.execve(undefined))
       : { name: 'process-execve', outcome: 'refused', detail: 'is not a function' },
     probeIsUndefined('process-mainModule', () => process.mainModule),
+    // `kFs` is Node's own name for the `fs` module a file stream keeps; never opens a file
+    probeIsUndefined('process-stdin', () =>
+      Object.getOwnPropertySymbols(process.stdin).find((symbol) => symbol.description === 'kFs'),
+    ),
+    // The logger's file transport can point its output, and `readAllLogs`, at any file
+    probeIsUndefined('logger-file-transport', () => logger.transports),
     // `_load` is Node's own name for its module loader's entry point
     // eslint-disable-next-line no-underscore-dangle
     probeIsNotFunction('module-loader', () => module.constructor._load),
@@ -578,9 +584,19 @@ async function runSandboxProbes() {
  * @param {string} phase When the probes ran, so a route the host reopens later shows up in the log
  *   as escaped in a later phase only
  */
+/**
+ * Each phase's probe results, returned by the `evil.getSandboxProbeResults` command so end-to-end
+ * tests can check them in the running app. A phase whose probes failed to run holds one escaped
+ * result saying so.
+ *
+ * @type {Record<string, SandboxProbeResult[]>}
+ */
+const sandboxProbeResultsByPhase = {};
+
 async function reportSandboxProbes(phase) {
   try {
     const results = await runSandboxProbes();
+    sandboxProbeResultsByPhase[phase] = results;
     const refusedCount = results.filter((result) => result.outcome === 'refused').length;
     logger.info(`Sandbox probes (${phase}): ${refusedCount}/${results.length} refused`);
     results
@@ -589,6 +605,9 @@ async function reportSandboxProbes(phase) {
         logger.error(`<<BAD>> Sandbox probe escaped (${phase}): ${result.name} — ${result.detail}`),
       );
   } catch (e) {
+    sandboxProbeResultsByPhase[phase] = [
+      { name: 'probes-failed-to-run', outcome: 'escaped', detail: errorMessage(e) },
+    ];
     logger.error(`<<BAD>> Sandbox probes failed to run (${phase}): ${errorMessage(e)}`);
   }
 }
@@ -667,6 +686,12 @@ async function activate(context) {
 
   context.registrations.add(await evilWebViewProviderPromise);
   context.registrations.add(await evilFileWebViewProviderPromise);
+  context.registrations.add(
+    await papi.commands.registerCommand(
+      'evil.getSandboxProbeResults',
+      async () => sandboxProbeResultsByPhase,
+    ),
+  );
 
   logger.info('Evil is finished activating!');
 }

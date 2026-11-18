@@ -386,6 +386,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run package
 
+      # Starts the packaged app built above in noisy dev mode, which loads the `evil` test
+      # extension, and fails if any of its extension sandbox probes escapes. The packaged extension
+      # host runs as a webpack bundle rather than through tsx like the smoke tests' dev app, so this
+      # is the only automated check of the sandbox in a packaged build. Linux-only: one packaged
+      # platform is enough to catch a bundling problem, and Linux already has Xvfb.
+      # No timeout-minutes: the script bounds itself (about 4 minutes at most), and step caps in the
+      # snap-building workflows are pinned to one shared value by electron-builder-snap-config.test.ts.
+      - name: check packaged extension sandbox
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: xvfb-run --auto-servernum node --import tsx e2e-tests/check-packaged-sandbox-probes.ts release/build/linux-unpacked/platform-bible
+
       # Reads `meta/snap.yaml` out of the snap the packaging step above built; see
       # .erb/scripts/assert-generated-snap-metadata.ts for why that is checked separately from the
       # config. Linux-only because that is the leg that builds a snap.

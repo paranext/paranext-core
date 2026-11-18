@@ -9,8 +9,10 @@
  * - `unprotected` loads evil with Node's own `require` and only filters `require` calls by name, with
  *   no lockdowns. It shows the probes can report an escape.
  */
+import log from 'electron-log';
 import Module, { createRequire } from 'node:module';
 import path from 'node:path';
+import { createExtensionLogger } from './extension-logger.util';
 import {
   lockDownAndCreateExtensionLoader,
   NOT_ALLOWED_IN_EXTENSIONS,
@@ -20,12 +22,16 @@ const EVIL_PATH = path.resolve(__dirname, '../../../extensions/src/evil/evil.js'
 // Built from the shared constant, as `requireForExtension` builds its refusal
 const REFUSED_REQUIRE_MESSAGE = `Requiring other than papi is ${NOT_ALLOWED_IN_EXTENSIONS}!`;
 
+// A real logger, as the host's is, with output turned off so it writes nothing
+log.transports.file.setAppName('extension-sandbox-probe-host');
+log.transports.file.level = false;
+log.transports.console.level = false;
+
+const mode = process.argv[2];
+
 const papiStub = {
-  logger: {
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-  },
+  // The host gives extensions the narrowed logger; an unprotected host gives the real one
+  logger: mode === 'protected' ? createExtensionLogger(log) : log,
 };
 
 const stubRequire = (moduleName: string): unknown => {
@@ -55,7 +61,6 @@ function loadUnprotected(): unknown {
 }
 
 async function main(): Promise<void> {
-  const mode = process.argv[2];
   if (mode !== 'protected' && mode !== 'unprotected')
     throw new Error(`Expected mode 'protected' or 'unprotected', got '${mode}'`);
 

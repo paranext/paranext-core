@@ -104,39 +104,37 @@ function withoutLocation(frame: string): string {
 }
 
 describe('installSourceMappedStackTraces', () => {
-  it('maps extension frames to the source named in the inline source map', () => {
-    const { extension } = runHost(true);
+  // Each run starts a child process; every test reads the same two runs
+  let mapped: Frames;
+  let unmapped: Frames;
 
-    expect(extension).toMatch(/original-extension\.ts:42:\d+\)$/);
-  }, 60_000);
+  beforeAll(() => {
+    mapped = runHost(true);
+    unmapped = runHost(false);
+  }, 120_000);
+
+  it('maps extension frames to the source named in the inline source map', () => {
+    expect(mapped.extension).toMatch(/original-extension\.ts:42:\d+\)$/);
+  });
 
   it('maps a rebuilt extension file through its new source map', () => {
-    const { rebuiltExtension } = runHost(true);
-
-    expect(rebuiltExtension).toMatch(/rebuilt-extension\.ts:77:\d+\)$/);
-  }, 60_000);
+    expect(mapped.rebuiltExtension).toMatch(/rebuilt-extension\.ts:77:\d+\)$/);
+  });
 
   it('keeps host frames mapped to their TypeScript source', () => {
-    const { host } = runHost(true);
-
-    expect(host).toMatch(new RegExp(`host\\.ts:${HOST_THROW_LINE}:\\d+\\)$`));
-  }, 60_000);
+    expect(mapped.host).toMatch(new RegExp(`host\\.ts:${HOST_THROW_LINE}:\\d+\\)$`));
+  });
 
   it('describes mapped frames the way Node does', () => {
-    const mapped = runHost(true);
-    const unmapped = runHost(false);
-
     expect(withoutLocation(mapped.extension)).toBe('    at Object.activate');
     expect(withoutLocation(mapped.extension)).toBe(withoutLocation(unmapped.extension));
     expect(withoutLocation(mapped.extensionConstructor)).toBe(
       withoutLocation(unmapped.extensionConstructor),
     );
     expect(withoutLocation(mapped.extensionConstructor)).toBe('    at new activate');
-  }, 60_000);
+  });
 
   it('without it, extension frames point at the built file', () => {
-    const { extension } = runHost(false);
-
-    expect(extension).toMatch(/main\.js:2:\d+\)$/);
-  }, 60_000);
+    expect(unmapped.extension).toMatch(/main\.js:2:\d+\)$/);
+  });
 });

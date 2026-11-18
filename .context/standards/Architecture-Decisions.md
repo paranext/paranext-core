@@ -3668,18 +3668,25 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   apart; only a reference to an original constructor taken before the lockdown stops matching
   `fn.constructor`. (3) **`process` helpers are replaced with throwing stubs at activation**
   (`blockProcessModuleAccess`: `getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`,
-  `loadEnvFile`, `_getActiveHandles`, `_getActiveRequests`, `execve`), and `process.mainModule` is set to
-  `undefined`. (4) **The
+  `loadEnvFile`, `_getActiveHandles`, `_getActiveRequests`, `execve`), `process.mainModule` is set to
+  `undefined`, and `process.stdin` (a file stream carrying `fs`, because the host's standard input
+  is `/dev/null`) is replaced with an empty stream. **`papi.logger` is narrowed** to a frozen object
+  of the seven logging methods (`createExtensionLogger`), because electron-log's `transports.file`
+  can point the log file and `readAllLogs` at any path and freezing the logger is shallow; the
+  methods are bound, not wrapped, so the caller shown on each log line is still the extension's.
+  (4) **The
   `Module.prototype.require` shim stays** as defense in depth, reduced to "extension interface
   module or throw", since entry files no longer go through it. Refusals from the loader and the
   lockdowns contain `not allowed in extensions`. The `evil` extension's probes and
   `extension-sandbox.probes.test.ts` (which runs them in a child Node process with and without the
   lockdowns) are the regression guard. The host gets its loader only from
   `lockDownAndCreateExtensionLoader`, which applies both lockdowns first, so no extension can load
-  before them; the probe test loads `evil` through that function. Nothing tests that
-  `extension.service.ts` keeps using it rather than Node's own `require`: reading the service's
-  source as text was rejected as brittle, and an end-to-end check needs `evil`, which only loads in
-  noisy dev mode.
+  before them; the probe test loads `evil` through that function. The running host's wiring is
+  checked end to end rather than by reading `extension.service.ts` as text (rejected as brittle):
+  `evil` returns each phase's results from the `evil.getSandboxProbeResults` command, which the
+  smoke E2E test `extension-sandbox.spec.ts` reads from the dev app (the E2E launcher sets
+  `DEV_NOISY=true`) and CI's `check packaged extension sandbox` step reads from the Linux packaged
+  build.
 - **Alternatives:** (A) An ESM loader hook (`module.register`) plus caller detection to refuse
   dynamic imports from extension files — rejected: it closes only `import()`, leaves the loader
   and cache reachable, and identifying the caller from a resolve hook is fragile. (B) Starting the
@@ -3694,7 +3701,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   2026-11-09: a `net.Socket` built from `process.stdout.constructor` or
   `process.stderr.constructor`; the rest of the `process` surface (`kill`, `send`,
   `report.writeReport`, `chdir`, `env`); and, in dev builds, grabbing host functions from stack
-  frames through `Error.prepareStackTrace` and `CallSite.getFunction()`. A follow-up audit of the
+  frames through `Error.prepareStackTrace` and `CallSite.getFunction()`. Also open (added
+  2026-11-18): after the host calls `fetch` once, Node's built-in HTTP client (undici) on
+  `globalThis[Symbol.for('undici.globalDispatcher.1')]` makes requests that skip `papi.fetch`;
+  harmless while `papi.fetch` passes requests through unchanged. The published type of
+  `papi.logger` in `@papi/backend` narrows from electron-log's `MainLogger` to its seven logging
+  methods; no known extension used anything else. A follow-up audit of the
   `process` surface is recommended (not filed as of 2026-11-09). Extensions
   that relied on string-built code or on Node's `module` beyond `exports` break; neither was
   supported. The extension module cache is no longer involved: a reloaded extension re-reads its
@@ -3713,8 +3725,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `source-map-support` was rejected because it caches maps by path for the life of the process, so
   extensions rebuilt in dev were mapped through their old map. Packaged builds install none of
   this, since extensions ship without source maps there. Packaged builds are
-  checked by hand with the `evil` extension (`Sandbox probes (<phase>): 21/21 refused` for each phase); there is no
-  automated packaged test. Revisit if process isolation is taken up. Supersedes in part the
+  checked automatically on Linux in CI (see above); other platforms' packaged builds are checked
+  by hand with the `evil` extension. Revisit if process isolation is taken up. Supersedes in part the
   mechanism described in `adr-licensing-boundary` ("shimming `Module.prototype.require`"); the
   licensing decision there is unchanged.
 
