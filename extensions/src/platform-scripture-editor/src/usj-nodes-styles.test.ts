@@ -146,7 +146,10 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     it('resolves the attribute hover color against the host theme', () => {
       expect(scss).toMatch(
         rule(
-          ['.attribute:hover', ':has(> .attribute:hover) > .attribute'],
+          [
+            '.attribute:hover',
+            ':is(.char, .attribute-run, .unknown-block):has(> .attribute:hover) > .attribute',
+          ],
           'color: var(--foreground',
         ),
       );
