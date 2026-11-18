@@ -2284,9 +2284,11 @@
    color. The literal is only the fallback for a host that defines no `--foreground`: a fixed
    near-black would be all but invisible against a dark theme. An annotation that holds part of a
    run cuts it into sibling pieces, so the hover lifts every `.attribute` child of the hovered
-   piece's parent: a char span or other owner holds one attribute run, so those are its pieces. */
+   piece's parent, when that parent is an owner holding one attribute run (a char span, an
+   attribute-run wrapper, an opaque block), so those are its pieces. A paragraph holds the runs of
+   every milestone in the Markers view, so a hover there lifts the hovered piece alone. */
 .attribute:hover,
-:has(> .attribute:hover) > .attribute {
+:is(.char, .attribute-run, .unknown-block):has(> .attribute:hover) > .attribute {
   color: var(--foreground, rgba(25, 25, 25, 1));
 }
 

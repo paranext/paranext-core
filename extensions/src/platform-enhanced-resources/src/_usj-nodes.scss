@@ -2098,7 +2098,11 @@
   color: rgba(170, 170, 170, 1);
 }
 
-.attribute:hover {
+/* An annotation that holds part of a run cuts it into sibling pieces, so the hover lifts every
+   `.attribute` child of the hovered piece's parent, when that parent is an owner holding one
+   attribute run (a char span, an attribute-run wrapper, an opaque block). */
+.attribute:hover,
+:is(.char, .attribute-run, .unknown-block):has(> .attribute:hover) > .attribute {
   color: rgba(25, 25, 25, 1);
 }
 

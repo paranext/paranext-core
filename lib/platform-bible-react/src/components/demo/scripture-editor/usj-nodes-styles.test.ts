@@ -203,7 +203,10 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
       // Every piece of a run an annotation cuts lifts with the hovered one.
       expect(css).toMatch(
         rule(
-          ['.attribute:hover', ':has(> .attribute:hover) > .attribute'],
+          [
+            '.attribute:hover',
+            ':is(.char, .attribute-run, .unknown-block):has(> .attribute:hover) > .attribute',
+          ],
           'color: var(--foreground',
         ),
       );
