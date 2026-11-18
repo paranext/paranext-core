@@ -542,9 +542,8 @@ jobs:
     name: E2E core, pick the spec lists
     runs-on: ubuntu-22.04
     timeout-minutes: 180
-    # Reads the pull request's changed files and nothing else.
+    # Reads the pull request's changed files and nothing else; it does not check out the repository.
     permissions:
-      contents: read
       pull-requests: read
     outputs:
       spec_lists: ${{ steps.pick.outputs.spec_lists }}
