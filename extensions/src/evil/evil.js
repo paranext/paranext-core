@@ -579,12 +579,6 @@ async function runSandboxProbes() {
 }
 
 /**
- * Runs the sandbox probes and logs the results
- *
- * @param {string} phase When the probes ran, so a route the host reopens later shows up in the log
- *   as escaped in a later phase only
- */
-/**
  * Each phase's probe results, returned by the `evil.getSandboxProbeResults` command so end-to-end
  * tests can check them in the running app. A phase whose probes failed to run holds one escaped
  * result saying so.
@@ -593,6 +587,12 @@ async function runSandboxProbes() {
  */
 const sandboxProbeResultsByPhase = {};
 
+/**
+ * Runs the sandbox probes and logs the results
+ *
+ * @param {string} phase When the probes ran, so a route the host reopens later shows up in the log
+ *   as escaped in a later phase only
+ */
 async function reportSandboxProbes(phase) {
   try {
     const results = await runSandboxProbes();

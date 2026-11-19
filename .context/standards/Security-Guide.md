@@ -112,8 +112,8 @@ the extension host process:
   `process.getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`, `loadEnvFile`,
   `_getActiveHandles`, `_getActiveRequests` and `execve` with functions that throw, and sets
   `process.mainModule` to `undefined`. It also replaces `process.stdin` with an empty stream: the
-  host's standard input is `/dev/null`, so Node would otherwise make it a file stream carrying the
-  whole `fs` module.
+  host's standard input is the null device (`/dev/null`, `NUL` on Windows), so Node would otherwise
+  make it a file stream carrying the whole `fs` module.
 - **Code built from strings is disabled at activation.** `blockCodeGenerationFromStrings` deletes
   `globalThis.eval` and `globalThis.Function` and locks the `constructor` of the four function
   prototypes (plain, async, generator, async generator) to a function that throws.
@@ -133,7 +133,8 @@ at load, at activation and again 3 seconds later to catch a route the host reope
 child Node process and fails if any route is open. The running app is checked too: the smoke E2E
 test `e2e-tests/tests/smoke/extension-sandbox.spec.ts` reads every phase's results from the dev app
 through the `evil.getSandboxProbeResults` command, and CI's `check packaged extension sandbox` step
-(`e2e-tests/check-packaged-sandbox-probes.ts`) does the same against the Linux packaged build.
+(`e2e-tests/check-packaged-sandbox-probes.ts`) does the same against the packaged build on Linux,
+Windows and macOS (non-blocking on macOS).
 
 This is an in-process sandbox. It closes the module-loading and string-compilation routes listed
 above, and every extension still shares one JavaScript realm and one `process` with the host, so it

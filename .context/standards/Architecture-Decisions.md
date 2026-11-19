@@ -3670,7 +3670,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`blockProcessModuleAccess`: `getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`,
   `loadEnvFile`, `_getActiveHandles`, `_getActiveRequests`, `execve`), `process.mainModule` is set to
   `undefined`, and `process.stdin` (a file stream carrying `fs`, because the host's standard input
-  is `/dev/null`) is replaced with an empty stream. **`papi.logger` is narrowed** to a frozen object
+  is the null device: `/dev/null`, `NUL` on Windows) is replaced with an empty stream. **`papi.logger` is narrowed** to a frozen object
   of the seven logging methods (`createExtensionLogger`), because electron-log's `transports.file`
   can point the log file and `readAllLogs` at any path and freezing the logger is shallow; the
   methods are bound, not wrapped, so the caller shown on each log line is still the extension's.
@@ -3684,9 +3684,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   before them; the probe test loads `evil` through that function. The running host's wiring is
   checked end to end rather than by reading `extension.service.ts` as text (rejected as brittle):
   `evil` returns each phase's results from the `evil.getSandboxProbeResults` command, which the
-  smoke E2E test `extension-sandbox.spec.ts` reads from the dev app (the E2E launcher sets
-  `DEV_NOISY=true`) and CI's `check packaged extension sandbox` step reads from the Linux packaged
-  build.
+  smoke E2E test `extension-sandbox.spec.ts` reads from the dev app and CI's `check packaged
+  extension sandbox` step reads from the packaged build on every platform (non-blocking on macOS,
+  like the E2E step). The spec loads `evil` by launching with `test.use({ devNoisy: true })`: CI runs
+  the smoke suite with `DEV_NOISY=false`, so without that line `evil` never loads there.
 - **Alternatives:** (A) An ESM loader hook (`module.register`) plus caller detection to refuse
   dynamic imports from extension files — rejected: it closes only `import()`, leaves the loader
   and cache reachable, and identifying the caller from a resolve hook is fragile. (B) Starting the
@@ -3725,8 +3726,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `source-map-support` was rejected because it caches maps by path for the life of the process, so
   extensions rebuilt in dev were mapped through their old map. Packaged builds install none of
   this, since extensions ship without source maps there. Packaged builds are
-  checked automatically on Linux in CI (see above); other platforms' packaged builds are checked
-  by hand with the `evil` extension. Revisit if process isolation is taken up. Supersedes in part the
+  checked automatically in CI on Linux, Windows and macOS (see above). Revisit if process isolation is taken up. Supersedes in part the
   mechanism described in `adr-licensing-boundary` ("shimming `Module.prototype.require`"); the
   licensing decision there is unchanged.
 
