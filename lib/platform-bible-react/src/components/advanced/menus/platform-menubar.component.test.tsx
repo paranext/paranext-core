@@ -650,6 +650,22 @@ describe('PlatformMenubar dynamic item states', () => {
     expect(document.querySelectorAll('[data-slot="menu-icon-spacer"]')).toHaveLength(0);
   });
 
+  it("hides the primitive's own indicator, so only MenuCheckSlot draws a check", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<PlatformMenubar menuData={DYNAMIC_STATE_MENU} onSelectMenuItem={vi.fn()} />);
+
+    await user.click(screen.getByText('TestColumn'));
+    const checkbox = (await screen.findByText('Checked Item')).closest('[role="menuitemcheckbox"]');
+    // jsdom does not load Tailwind, so pin both halves of the hiding selector: the slot name the
+    // menubar primitive gives its indicator, and the class that hides that slot
+    expect(
+      [...(checkbox?.children ?? [])].some(
+        (child) => child.getAttribute('data-slot') === 'menubar-checkbox-item-indicator',
+      ),
+    ).toBe(true);
+    expect(checkbox).toHaveClass('tw:[&>[data-slot=menubar-checkbox-item-indicator]]:hidden');
+  });
+
   it("keeps a checkbox item's leading icon, with the check after it", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const menu: Localized<MultiColumnMenu> = {

@@ -3583,13 +3583,19 @@ export declare function CommandGroup({ className, ...props }: React$1.ComponentP
  * `data-checked` attribute:
  *
  * - In a list where rows can be checked, pass `data-checked={isSelected}` on **every** row, so
- *   unchecked rows (`"false"`) keep the check's space and all labels line up.
- * - On rows that are never checkable (command palettes, grids), omit `data-checked`: the check then
- *   takes no space.
+ *   unchecked rows (`false`) keep the check's space and all labels line up.
+ * - On rows that are never checkable (command palettes, grids), omit `data-checked`: no check is
+ *   rendered.
  *
- * Do not draw a check of your own alongside it.
+ * The check is visual only. Announce the selection to assistive technology yourself, for example
+ * with `aria-current` or a visually hidden label. Do not draw a check of your own alongside it.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/command}
+ * @see cmdk Documentation: {@link https://cmdk.paco.me/}
  */
-export declare function CommandItem({ className, children, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Item>): import("react/jsx-runtime").JSX.Element;
+export declare function CommandItem({ className, children, "data-checked": dataChecked, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Item> & {
+	"data-checked"?: boolean | "true" | "false";
+}): import("react/jsx-runtime").JSX.Element;
 /**
  * Context Menu component displays a menu to the user — such as a set of actions or functions,
  * triggered by a right-click or long-press.

@@ -913,6 +913,19 @@ describe('TabDropdownMenu dynamic item states', () => {
     expect(checkSlotOf(noIcon)?.querySelector('svg')).not.toBeNull();
   });
 
+  it("hides the primitive's own indicator, so only MenuCheckSlot draws a check", async () => {
+    await openMenu(DYNAMIC_MENU);
+    const checked = screen.getByRole('menuitemcheckbox', { name: 'Checked' });
+    // jsdom does not load Tailwind, so pin both halves of the hiding selector: the slot name the
+    // dropdown primitive gives its indicator, and the class that hides that slot
+    expect(
+      [...(checked?.children ?? [])].some(
+        (child) => child.getAttribute('data-slot') === 'dropdown-menu-checkbox-item-indicator',
+      ),
+    ).toBe(true);
+    expect(checked).toHaveClass('tw:[&>[data-slot=dropdown-menu-checkbox-item-indicator]]:hidden');
+  });
+
   it('puts the check after the icon slot inside a submenu too', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const submenuData: Localized<MultiColumnMenu> = {

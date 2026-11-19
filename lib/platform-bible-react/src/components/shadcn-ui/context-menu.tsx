@@ -220,8 +220,9 @@ function ContextMenuCheckboxItem({
       checked={checked}
       {...props}
     >
-      {/* CUSTOM: Moved the indicator from tw:end-2 to tw:start-1.5 and gave it tw:size-4 so the
-          check sits on the leading side, matching MenubarCheckboxItem/MenubarRadioItem */}
+      {/* CUSTOM: Moved the indicator from tw:end-2 to tw:start-1.5 and gave it Menubar's indicator
+          classes (tw:flex tw:size-4 tw:items-center tw:justify-center) so the check sits centered
+          on the leading side, matching MenubarCheckboxItem/MenubarRadioItem */}
       <span className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center">
         <ContextMenuPrimitive.ItemIndicator>
           <IconCheck />
@@ -255,8 +256,9 @@ function ContextMenuRadioItem({
       )}
       {...props}
     >
-      {/* CUSTOM: Moved the indicator from tw:end-2 to tw:start-1.5 and gave it tw:size-4 so the
-          check sits on the leading side, matching MenubarCheckboxItem/MenubarRadioItem */}
+      {/* CUSTOM: Moved the indicator from tw:end-2 to tw:start-1.5 and gave it Menubar's indicator
+          classes (tw:flex tw:size-4 tw:items-center tw:justify-center) so the check sits centered
+          on the leading side, matching MenubarCheckboxItem/MenubarRadioItem */}
       <span className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center">
         <ContextMenuPrimitive.ItemIndicator>
           <IconCheck />

@@ -1570,8 +1570,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                     {/* Empty stand-ins for the check and indicator slots every project row leads
                         with. Without them the footer's text starts ~40px to the left of every
                         label above it — the same ragged edge `reserveIndicatorSlot` exists to
-                        prevent between rows. Mirrors `ProjectRowView`'s leading spans, so the two
-                        stay aligned if that layout changes. */}
+                        prevent between rows. The first stands in for CommandItem's 16px check on
+                        project rows, the second mirrors `ProjectRowView`'s indicator span, so the
+                        footer stays aligned if either changes. */}
                     <span
                       aria-hidden
                       className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"

@@ -168,16 +168,35 @@ describe('CommandItem check', () => {
     expect(rowOf('Plain')).not.toHaveAttribute('data-checked');
   });
 
-  it('takes space whenever data-checked is present and shows only when it is "true"', () => {
+  it('shows the check only when data-checked is true, keeping its space when false', () => {
     renderRows();
-    const check = checkOf(rowOf('Unchecked'));
-    // Hidden by default, so a row without data-checked carries no invisible icon
-    expect(check).toHaveClass('tw:hidden');
-    // The bracketed attribute form matches data-checked="false" too. The bare `data-checked`
-    // variant from shadcn/tailwind.css excludes "false" and would collapse unchecked rows.
-    expect(check).toHaveClass('tw:group-data-[checked]/command-item:block');
-    expect(check).not.toHaveClass('tw:group-data-checked/command-item:block');
-    expect(check).toHaveClass('tw:opacity-0');
-    expect(check).toHaveClass('tw:group-data-[checked=true]/command-item:opacity-100');
+    const checked = checkOf(rowOf('Checked'));
+    const unchecked = checkOf(rowOf('Unchecked'));
+    expect(checked).not.toBeNull();
+    expect(checked).not.toHaveClass('tw:opacity-0');
+    // Still rendered, so an unchecked label starts where a checked one does
+    expect(unchecked).not.toBeNull();
+    expect(unchecked).toHaveClass('tw:opacity-0');
+  });
+
+  it('renders no check on an item without data-checked, so its own content stays first', () => {
+    render(
+      <Command>
+        <CommandList>
+          <CommandItem value="plain">
+            <span>Genesis 1:1</span>
+            <span>GEN</span>
+          </CommandItem>
+        </CommandList>
+      </Command>,
+    );
+    const row = screen.getByRole('option');
+    expect(checkOf(row)).toBeNull();
+    expect(row.firstElementChild).toHaveTextContent('Genesis 1:1');
+  });
+
+  it('hides the check from assistive technology, since it is decorative', () => {
+    renderRows();
+    expect(checkOf(rowOf('Checked'))).toHaveAttribute('aria-hidden', 'true');
   });
 });
