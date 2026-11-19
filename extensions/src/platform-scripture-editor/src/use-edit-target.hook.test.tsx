@@ -134,6 +134,21 @@ describe('useEditTarget', () => {
     });
   });
 
+  it('re-reads the selection when the pane hides or another row opens, keeping the target', () => {
+    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
+      initialProps: { ...baseOptions, recheckToken: 'true|0' },
+    });
+    select(readOnlyText);
+    expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: true });
+
+    act(() => {
+      document.getSelection()?.removeAllRanges();
+    });
+    rerender({ ...baseOptions, recheckToken: 'false|undefined' });
+
+    expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: false });
+  });
+
   it("does not move the target when only the main editor's own selection changes", () => {
     const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
       initialProps: baseOptions,
