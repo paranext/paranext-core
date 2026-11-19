@@ -10,10 +10,23 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  editorPathsPattern,
+  isolatedCommand,
+  ISOLATED_PREFIX,
+  readEditorPathEntries,
+  readSpecList,
+} from './core-specs';
 
 /**
  * Per isolated key, the repository path prefixes its specs exist to test (`main`) and the ones they
  * only drive along the way (`incidental`). A trailing `/` makes a prefix a directory.
+ *
+ * A key is a subset (a directory under `tests/isolated/`, such as `docking`), a loose spec directly
+ * under it (`comments-tab.spec.ts`) or a spec key: one spec file inside a subset
+ * (`scripture-editor/chapter-marker-repair.spec.ts`), which lets that spec name sources of its own.
+ * A file that reaches both a subset and one of its spec keys through `main` counts for the spec key
+ * first; the report then folds the spec key into the subset when both are recommended.
  */
 export type SubsetSources = Record<string, { main: string[]; incidental: string[] }>;
 
@@ -31,7 +44,10 @@ export type CiStatus =
 
 /** One isolated key recommended for the changed files. */
 export interface E2eRecommendation {
-  /** The key as written in `subset-sources.json`. */
+  /**
+   * The key from `subset-sources.json`, or for a collapsed item the path prefix that runs its
+   * members.
+   */
   key: string;
   /** The command that runs it. */
   command: string;
@@ -41,8 +57,9 @@ export interface E2eRecommendation {
   ci: CiStatus;
   /**
    * Present on a collapsed item: the spec keys it stands for. Spec keys of one subset that matched
-   * the same changed files collapse into one item whose `key` is their longest common prefix, run
-   * as a path filter, when that prefix is longer than `<subset>/`.
+   * the same changed files collapse into one item whose `key` is their common prefix, trimmed back
+   * to a `-`, `.` or `/` boundary where that still runs only the members, and run as a path filter.
+   * Only a prefix longer than `<subset>/` collapses.
    */
   memberKeys?: string[];
 }
@@ -50,23 +67,43 @@ export interface E2eRecommendation {
 /** The result of matching changed files against the isolated e2e tests. */
 export interface E2eRecommendationReport {
   /**
-   * Keys matched through `main`, sorted by key. A file reaching both a subset key and a file-level
-   * key inside it counts for the file-level key only, so the subset is recommended only for files
-   * that reach none of its file-level keys.
+   * Keys matched through `main`, sorted by key. A spec key (or a collapsed item) whose subset is
+   * recommended too is folded into the subset, its matched files merged in: running the subset runs
+   * the spec.
    */
   recommendations: E2eRecommendation[];
-  /** Keys matched only through `incidental`, sorted by key. */
+  /**
+   * Keys matched only through `incidental`, sorted by key. A spec key whose subset is recommended
+   * is left out (the subset's run covers it); one whose subset is listed here too is merged into
+   * it.
+   */
   alsoExercised: { key: string; matchedFiles: string[] }[];
   /**
    * Changed runtime source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists,
-   * so no recommendation can cover them. Files `NON_RUNTIME` matches are never reported here, and
-   * neither is `lib/`: library code is reached through the extensions and renderer components that
-   * consume it, so a library-only change with no `lib/` prefix in any entry can produce no
-   * recommendation and no uncovered file.
+   * so no recommendation can cover them. Files `NON_RUNTIME` matches are never reported here, nor
+   * are deleted files, and neither is `lib/`: library code is reached through the extensions and
+   * renderer components that consume it, so a `lib/` file is reported only through the keys that
+   * list it.
    */
   uncoveredFiles: string[];
-  /** Changed files that add or change a menu, web view or command registration, sorted. */
+  /** Changed files that add, change or remove a menu, web view or command registration, sorted. */
   entryPointFiles: string[];
+  /**
+   * Whether any changed file is runtime code: not matched by `NON_RUNTIME`, and under `src/`,
+   * `extensions/src/`, `c-sharp/` or `lib/`. False for a change to documentation, tests, stories,
+   * tool configuration or e2e files alone.
+   */
+  runtimeChanged: boolean;
+  /**
+   * Prefixes in `subset-sources.json` that match no tracked file, sorted: a moved or deleted source
+   * a key still names. Such a prefix silently stops matching, so the map needs updating.
+   */
+  stalePrefixes: string[];
+  /**
+   * Whether the changed files make CI's `e2e-core` job run the editor list too: whether one of them
+   * matches an `editor_paths` entry in `.github/workflows/test.yml`.
+   */
+  editorListRuns: boolean;
   /**
    * Whether an e2e spec or its support code changed: any `.ts` file under `e2e-tests/tests/`
    * (specs, page objects, spec helpers), `e2e-tests/fixtures/` or `e2e-tests/reporters/`, plus
@@ -82,11 +119,17 @@ export interface RecommendInput {
   /** Repository-relative changed paths, deleted ones included. */
   changedFiles: string[];
   /**
-   * Changed files whose diff adds or removes a command or web view provider registration
-   * ({@link REGISTRATION_PATTERN}). Files outside the source roots or that are not runtime code are
-   * ignored.
+   * Changed files whose diff adds or removes a command, request handler or web view provider
+   * registration ({@link REGISTRATION_PATTERN}). Files outside the source roots or that are not
+   * runtime code are ignored.
    */
-  filesAddingCommandRegistrations: string[];
+  filesChangingCommandRegistrations: string[];
+  /** The subset of `changedFiles` that no longer exist. */
+  deletedFiles: string[];
+  /** Every file git tracks (and every untracked one), repository-relative, as written on disk. */
+  trackedFiles: string[];
+  /** The `editor_paths` entries of `.github/workflows/test.yml`, each a POSIX ERE. */
+  editorPaths: string[];
   sources: SubsetSources;
   /** Entries of `e2e-tests/core-specs.txt`. */
   coreSpecs: string[];
@@ -96,19 +139,19 @@ export interface RecommendInput {
   specFilesBySubset: Record<string, string[]>;
 }
 
-const ISOLATED_PREFIX = 'e2e-tests/tests/isolated/';
 const SOURCE_ROOTS = ['src/', 'extensions/src/', 'c-sharp/'];
 
 /**
- * Matches added or removed lines that register a command (`registerCommand(`, or the C#
- * `RegisterRequestHandlerAsync(` call that registers a request handler) or a web view provider
- * (`registerWebViewProvider(`). Passed to `git diff -G` (POSIX extended regular expression) and
- * tested against the content of untracked files. It over-reports: the C# call also registers
- * network object and validator handlers, and its declaration matches too, so the result is a prompt
- * to look at the diff, not proof that a command was added.
+ * Matches added or removed lines that register a command (`registerCommand(`, or the request
+ * handler registration the C# `RegisterRequestHandlerAsync(` and the TypeScript
+ * `registerRequestHandler(` calls make) or a web view provider (`registerWebViewProvider(`). Passed
+ * to `git diff -G` (POSIX extended regular expression) and tested against the content of untracked
+ * files. It over-reports: the request handler calls also register network object and validator
+ * handlers, and a declaration matches too, so the result is a prompt to look at the diff, not proof
+ * that a command was added. Sending a command does not match.
  */
 export const REGISTRATION_PATTERN =
-  'registerCommand\\(|registerWebViewProvider\\(|RegisterRequestHandlerAsync\\(';
+  'registerCommand\\(|registerWebViewProvider\\(|RegisterRequestHandlerAsync\\(|registerRequestHandler\\(';
 
 /**
  * Paths that are not runtime code: tests, Storybook stories and their support code, docs, type
@@ -163,6 +206,8 @@ const NON_RUNTIME = new RegExp(
 );
 const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
+/** Library code is runtime but reached through the source roots that consume it. */
+const isRuntimeRoot = (file: string) => isInSourceRoot(file) || file.startsWith('lib/');
 const isE2eSpecSupport = (file: string) =>
   file.endsWith('.ts') &&
   !file.endsWith('.test.ts') &&
@@ -177,18 +222,6 @@ const isE2eSpecSupport = (file: string) =>
 const isMenuFile = (file: string) =>
   file.endsWith('contributions/menus.json') || file === 'src/extension-host/data/menu.data.json';
 
-/**
- * The entries of a spec list: one repository path per line; `#` starts a comment line. Lines are
- * returned untrimmed, as the CI workflow reads them; `core-specs.test.ts` rejects a list whose
- * lines carry stray whitespace.
- */
-export function readSpecList(filePath: string): string[] {
-  return fs
-    .readFileSync(filePath, 'utf8')
-    .split('\n')
-    .filter((line) => line.trim() !== '' && !line.startsWith('#'));
-}
-
 function matchesPrefix(file: string, prefix: string): boolean {
   return file === prefix || (prefix.endsWith('/') && file.startsWith(prefix));
 }
@@ -197,6 +230,13 @@ const matchesAny = (file: string, prefixes: string[]) =>
   prefixes.some((prefix) => matchesPrefix(file, prefix));
 
 const isSpecKey = (key: string) => key.endsWith('.spec.ts');
+
+/** The subset a spec key (or collapsed prefix) lives in; undefined for a subset or a loose spec. */
+const subsetOfNestedKey = (key: string) => (key.includes('/') ? key.split('/')[0] : undefined);
+
+/** The command that runs a key: a subset by name, a spec or collapsed prefix as a path filter. */
+const commandForKey = (key: string) =>
+  isolatedCommand(isSpecKey(key) || key.includes('/') ? `${ISOLATED_PREFIX}${key}` : key);
 
 function addFile(map: Map<string, Set<string>>, key: string, file: string) {
   const files = map.get(key) ?? new Set<string>();
@@ -235,12 +275,10 @@ function commonPrefix(strings: string[]): string {
 }
 
 /**
- * Collapses spec-level recommendations of one subset that matched the same changed files into one
- * recommendation keyed by the common prefix of their keys, which Playwright accepts as a path
- * filter. The prefix is cut back to the last `-`, `.` or `/` when that still runs exactly the
- * members, so a key does not stop mid-word. Only when the prefix is longer than `<subset>/` and, if
- * the subset's spec files are known, matches no spec other than the members; otherwise they stay
- * separate. One member with an unrelated name keeps the whole group separate.
+ * Collapses spec keys of one subset that matched the same changed files into one recommendation
+ * keyed by the common prefix of their keys, which Playwright accepts as a path filter. The group
+ * stays separate when that prefix is no longer than `<subset>/`, or, if the subset's spec files are
+ * known, when it would also run a spec that is not a member.
  */
 function collapseSpecGroups(
   recommendations: E2eRecommendation[],
@@ -269,8 +307,8 @@ function collapseSpecGroups(
       subsetSpecs.filter((spec) => spec.startsWith(`${ISOLATED_PREFIX}${prefix}`)).length ===
         members.length;
     if (!runsExactlyMembers(longest)) return;
-    // Prefer a key that ends at a word boundary over one that stops mid-word, but only when the
-    // subset's spec files are known, so the shorter prefix can be checked.
+    // Prefer a key that ends at a `-`, `.` or `/` boundary over one that stops mid-word, but only
+    // when the subset's spec files are known, so the shorter prefix can be checked.
     const boundary = Math.max(
       longest.lastIndexOf('-'),
       longest.lastIndexOf('.'),
@@ -283,7 +321,7 @@ function collapseSpecGroups(
         : longest;
     const merged: E2eRecommendation = {
       key,
-      command: `npm run test:e2e:isolated ${ISOLATED_PREFIX}${key}`,
+      command: commandForKey(key),
       matchedFiles: members[0].matchedFiles,
       ci: {
         kind: 'subset',
@@ -310,19 +348,54 @@ function collapseSpecGroups(
     .sort((a, b) => (a.key < b.key ? -1 : Number(a.key > b.key)));
 }
 
+/**
+ * Folds every recommendation whose subset is also recommended into that subset, merging the matched
+ * files: the subset's run covers the spec.
+ */
+function foldIntoSubsets(recommendations: E2eRecommendation[]): E2eRecommendation[] {
+  const subsets = new Map(
+    recommendations
+      .filter((recommendation) => !recommendation.key.includes('/'))
+      .map((recommendation) => [recommendation.key, { ...recommendation }]),
+  );
+  const kept = recommendations.filter((recommendation) => {
+    const subset = subsets.get(subsetOfNestedKey(recommendation.key) ?? '');
+    if (!subset) return true;
+    subset.matchedFiles = [
+      ...new Set([...subset.matchedFiles, ...recommendation.matchedFiles]),
+    ].sort();
+    return false;
+  });
+  return kept.map((recommendation) => subsets.get(recommendation.key) ?? recommendation);
+}
+
+/** The prefixes of `sources` that no tracked file matches, sorted. */
+function findStalePrefixes(sources: SubsetSources, trackedFiles: string[]): string[] {
+  const tracked = new Set(trackedFiles);
+  const prefixes = new Set(
+    Object.values(sources).flatMap((entry) => [...entry.main, ...entry.incidental]),
+  );
+  return [...prefixes]
+    .filter((prefix) =>
+      prefix.endsWith('/')
+        ? !trackedFiles.some((file) => file.startsWith(prefix))
+        : !tracked.has(prefix),
+    )
+    .sort();
+}
+
 /** Matches the changed files to the isolated e2e keys that cover them. */
 export function recommendE2eTests(input: RecommendInput): E2eRecommendationReport {
   const keys = Object.keys(input.sources);
   const mainMatches = new Map<string, Set<string>>();
   const incidentalMatches = new Map<string, Set<string>>();
 
-  // Localized strings stay matchable (e2e locators use visible text) but are never "uncovered".
   const runtimeFiles = input.changedFiles.filter((file) => !isNonRuntime(file));
 
   runtimeFiles.forEach((file) => {
     const mainKeys = keys.filter((key) => matchesAny(file, input.sources[key].main));
     mainKeys
-      // A subset yields to a file-level key inside it that this same file reaches.
+      // A subset yields to a spec key inside it that this same file reaches.
       .filter((key) => !mainKeys.some((other) => other.startsWith(`${key}/`)))
       .forEach((key) => addFile(mainMatches, key, file));
     keys
@@ -334,25 +407,39 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
 
   const singles: E2eRecommendation[] = [...mainMatches.keys()].sort().map((key) => ({
     key,
-    command: isSpecKey(key)
-      ? `npm run test:e2e:isolated ${ISOLATED_PREFIX}${key}`
-      : `npm run test:e2e:isolated ${key}`,
+    command: commandForKey(key),
     matchedFiles: sorted(mainMatches.get(key)),
     ci: ciStatus(key, input),
   }));
-  const recommendations = collapseSpecGroups(singles, input);
+  const recommendations = foldIntoSubsets(collapseSpecGroups(singles, input));
+  const recommendedSubsets = new Set(recommendations.map((recommendation) => recommendation.key));
 
-  const alsoExercised = [...incidentalMatches.keys()]
+  const incidentalOnly = [...incidentalMatches.keys()]
     .filter((key) => !mainMatches.has(key))
     .sort()
     .map((key) => ({ key, matchedFiles: sorted(incidentalMatches.get(key)) }));
+  const exercisedSubsets = new Map(
+    incidentalOnly.filter((entry) => !entry.key.includes('/')).map((entry) => [entry.key, entry]),
+  );
+  const alsoExercised = incidentalOnly.filter((entry) => {
+    const subset = subsetOfNestedKey(entry.key);
+    if (subset === undefined) return true;
+    if (recommendedSubsets.has(subset)) return false;
+    const target = exercisedSubsets.get(subset);
+    if (!target) return true;
+    target.matchedFiles = [...new Set([...target.matchedFiles, ...entry.matchedFiles])].sort();
+    return false;
+  });
 
   const allPrefixes = keys.flatMap((key) => [
     ...input.sources[key].main,
     ...input.sources[key].incidental,
   ]);
+  const deleted = new Set(input.deletedFiles);
   const uncoveredFiles = runtimeFiles
     .filter(isInSourceRoot)
+    .filter((file) => !deleted.has(file))
+    // Localized strings stay matchable (e2e locators use visible text) but are never "uncovered".
     .filter((file) => !file.endsWith('localizedStrings.json'))
     .filter((file) => !matchesAny(file, allPrefixes))
     .sort();
@@ -360,7 +447,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
   const entryPointFiles = [
     ...new Set([
       ...runtimeFiles.filter((file) => isMenuFile(file) || file.endsWith('.web-view-provider.ts')),
-      ...input.filesAddingCommandRegistrations
+      ...input.filesChangingCommandRegistrations
         .filter(isInSourceRoot)
         .filter((file) => !isNonRuntime(file)),
     ]),
@@ -371,6 +458,11 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     alsoExercised,
     uncoveredFiles,
     entryPointFiles,
+    runtimeChanged: runtimeFiles.some(isRuntimeRoot),
+    stalePrefixes: findStalePrefixes(input.sources, input.trackedFiles),
+    editorListRuns:
+      input.editorPaths.length > 0 &&
+      input.changedFiles.some((file) => editorPathsPattern(input.editorPaths).test(file)),
     specsChanged: input.changedFiles.some(isE2eSpecSupport),
   };
 }
@@ -409,7 +501,7 @@ function listSpecFiles(directory: string): string[] {
 export function readGitChanges(
   repoRoot: string,
   mergeBase: string,
-): Pick<RecommendInput, 'changedFiles' | 'filesAddingCommandRegistrations'> {
+): Pick<RecommendInput, 'changedFiles' | 'filesChangingCommandRegistrations' | 'deletedFiles'> {
   const untrackedFiles = git(repoRoot, 'ls-files', '--others', '--exclude-standard');
   const registrationRegExp = new RegExp(REGISTRATION_PATTERN);
   const untrackedRegistering = untrackedFiles
@@ -431,7 +523,16 @@ export function readGitChanges(
         ...untrackedFiles,
       ]),
     ],
-    filesAddingCommandRegistrations: [
+    deletedFiles: git(
+      repoRoot,
+      'diff',
+      '--no-renames',
+      '--name-only',
+      '--diff-filter=D',
+      '--end-of-options',
+      mergeBase,
+    ),
+    filesChangingCommandRegistrations: [
       ...git(
         repoRoot,
         'diff',
@@ -465,6 +566,8 @@ function runCli(mergeBase: string): void {
   const report = recommendE2eTests({
     ...readGitChanges(REPO_ROOT, mergeBase),
     sources,
+    trackedFiles: git(REPO_ROOT, 'ls-files', '--cached', '--others', '--exclude-standard'),
+    editorPaths: readEditorPathEntries(REPO_ROOT),
     coreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs.txt')),
     editorCoreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs-editor.txt')),
     specFilesBySubset,

@@ -1,9 +1,14 @@
 /**
- * Unit tests for the mapping from isolated e2e subsets to the source paths they exercise.
+ * Unit tests for the recommender of isolated e2e tests (`e2e-recommendations.ts`) and its mapping
+ * `tests/isolated/subset-sources.json`.
  *
- * `tests/isolated/subset-sources.json` drives which isolated e2e subsets get recommended for a
- * branch's changed files. A subset or spec missing from it would never be recommended, and a prefix
- * pointing at a moved path would silently stop matching, so these tests keep it complete and real.
+ * - The map: every subset and spec has a key (a missing one would never be recommended), the keys are
+ *   well formed, and pins in the real map for files that were once missed.
+ * - The matcher, {@link recommendE2eTests}: main and incidental matching, spec keys and their
+ *   collapsing, folding into a recommended subset, deleted files, stale prefixes, CI status.
+ * - The classifier sweep: every tracked file under the source roots that is plainly not app code must
+ *   be non-runtime.
+ * - `readGitChanges` against throwaway repositories, and the command-line entry point.
  */
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -23,9 +28,6 @@ const MAPPING_PATH = path.join(ISOLATED_DIRECTORY, 'subset-sources.json');
 
 const mapping: SubsetSources = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
 const keys = Object.keys(mapping);
-const prefixEntries = keys.flatMap((key) =>
-  [...mapping[key].main, ...mapping[key].incidental].map((prefix) => [key, prefix]),
-);
 const isZoomKey = (key: string) => key.includes('zoom');
 const EDITOR_WEB_VIEW =
   'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx';
@@ -53,11 +55,6 @@ describe('subset-sources.json', () => {
   it.each(keys)('%s names a subset or spec that exists', (key) => {
     const stat = fs.statSync(path.join(ISOLATED_DIRECTORY, key), { throwIfNoEntry: false });
     expect(key.endsWith('.spec.ts') ? stat?.isFile() : stat?.isDirectory()).toBe(true);
-  });
-
-  it.each(prefixEntries)('%s → %s exists', (_key, prefix) => {
-    const stat = fs.statSync(path.join(REPOSITORY_ROOT, prefix), { throwIfNoEntry: false });
-    expect(prefix.endsWith('/') ? stat?.isDirectory() : stat?.isFile()).toBe(true);
   });
 
   it.each(keys)('%s has exactly the lists main and incidental', (key) => {
@@ -110,7 +107,10 @@ const FIXTURE_SOURCES: SubsetSources = {
 function recommend(changedFiles: string[], overrides: Partial<RecommendInput> = {}) {
   return recommendE2eTests({
     changedFiles,
-    filesAddingCommandRegistrations: [],
+    filesChangingCommandRegistrations: [],
+    deletedFiles: [],
+    trackedFiles: [],
+    editorPaths: [],
     sources: FIXTURE_SOURCES,
     coreSpecs: [],
     editorCoreSpecs: [],
@@ -150,24 +150,75 @@ describe('recommendE2eTests', () => {
     ]);
   });
 
-  it('lets a file-level key win over its subset for the same file', () => {
+  it('recommends only the subset when another file also reaches a spec key inside it', () => {
     const report = recommend([
       'extensions/src/platform-scripture-editor/src/no-unasked.ts',
       'extensions/src/platform-scripture-editor/src/other.ts',
     ]);
-    expect(recommendedKeys(report)).toEqual([
-      'scripture-editor',
-      'scripture-editor/no-unasked.spec.ts',
-    ]);
+    expect(recommendedKeys(report)).toEqual(['scripture-editor']);
     expect(report.recommendations[0].matchedFiles).toEqual([
-      'extensions/src/platform-scripture-editor/src/other.ts',
-    ]);
-    expect(report.recommendations[1].matchedFiles).toEqual([
       'extensions/src/platform-scripture-editor/src/no-unasked.ts',
+      'extensions/src/platform-scripture-editor/src/other.ts',
     ]);
   });
 
-  it('does not recommend the subset when every changed file reaches a file-level key', () => {
+  it('folds spec keys of a recommended subset into it, in the real mapping', () => {
+    const report = recommend(
+      [
+        EDITOR_WEB_VIEW,
+        'c-sharp/Projects/ParatextProjectDataProvider.cs',
+        'extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts',
+      ],
+      { sources: mapping },
+    );
+    const keysOfEditor = recommendedKeys(report).filter((key) =>
+      key.startsWith('scripture-editor'),
+    );
+    expect(keysOfEditor).toEqual(['scripture-editor']);
+    expect(
+      report.recommendations.find((recommendation) => recommendation.key === 'scripture-editor')
+        ?.matchedFiles,
+    ).toEqual([
+      'c-sharp/Projects/ParatextProjectDataProvider.cs',
+      'extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts',
+      EDITOR_WEB_VIEW,
+    ]);
+  });
+
+  it('folds a collapsed item into its recommended subset', () => {
+    const sources: SubsetSources = {
+      a: { main: ['src/a/'], incidental: [] },
+      'a/x-one.spec.ts': { main: ['src/b/'], incidental: [] },
+      'a/x-two.spec.ts': { main: ['src/b/'], incidental: [] },
+    };
+    const report = recommend(['src/a/f.ts', 'src/b/g.ts'], { sources });
+    expect(recommendedKeys(report)).toEqual(['a']);
+    expect(report.recommendations[0].matchedFiles).toEqual(['src/a/f.ts', 'src/b/g.ts']);
+  });
+
+  it('keeps a spec key whose subset is not recommended', () => {
+    const sources: SubsetSources = {
+      a: { main: ['src/a/'], incidental: [] },
+      'a/x.spec.ts': { main: ['src/b/'], incidental: [] },
+    };
+    expect(recommendedKeys(recommend(['src/b/g.ts'], { sources }))).toEqual(['a/x.spec.ts']);
+  });
+
+  it('drops an also-exercised spec key whose subset is recommended, and merges it into a subset that is also exercised', () => {
+    const sources: SubsetSources = {
+      a: { main: ['src/a/'], incidental: [] },
+      'a/x.spec.ts': { main: ['src/c/'], incidental: ['src/shared/'] },
+      b: { main: ['src/b/'], incidental: ['src/shared/'] },
+      'b/y.spec.ts': { main: ['src/d/'], incidental: ['src/shared/y/'] },
+    };
+    const report = recommend(['src/a/f.ts', 'src/shared/y/z.ts', 'src/shared/w.ts'], { sources });
+    expect(recommendedKeys(report)).toEqual(['a']);
+    expect(report.alsoExercised).toEqual([
+      { key: 'b', matchedFiles: ['src/shared/w.ts', 'src/shared/y/z.ts'] },
+    ]);
+  });
+
+  it('does not recommend the subset when every changed file reaches a spec key', () => {
     const report = recommend(['extensions/src/platform-scripture-editor/src/no-unasked.ts']);
     expect(recommendedKeys(report)).toEqual(['scripture-editor/no-unasked.spec.ts']);
     expect(report.recommendations[0].command).toBe(
@@ -444,6 +495,73 @@ describe('recommendE2eTests', () => {
     ]);
   });
 
+  it('does not report a deleted file as uncovered, but still matches it', () => {
+    const report = recommend(
+      ['src/main/gone.ts', 'src/main/new-thing.ts', 'src/renderer/components/docking/gone.tsx'],
+      {
+        deletedFiles: ['src/main/gone.ts', 'src/renderer/components/docking/gone.tsx'],
+      },
+    );
+    expect(report.uncoveredFiles).toEqual(['src/main/new-thing.ts']);
+    expect(recommendedKeys(report)).toEqual(['docking']);
+  });
+
+  it('lists the map prefixes that match no tracked file, a directory by its contents', () => {
+    const report = recommend([], {
+      sources: {
+        a: {
+          main: ['src/a/', 'src/b/', 'src/c.ts', 'src/Moved.ts'],
+          incidental: ['src/old/', 'src/c.ts/', 'src/d.ts'],
+        },
+        b: { main: ['src/a/'], incidental: [] },
+      },
+      trackedFiles: ['src/a/f.ts', 'src/c.ts', 'src/moved.ts', 'src/d.ts.bak'],
+    });
+    // Compared exactly: `src/Moved.ts` differs from the tracked `src/moved.ts` by case alone.
+    expect(report.stalePrefixes).toEqual([
+      'src/Moved.ts',
+      'src/b/',
+      'src/c.ts/',
+      'src/d.ts',
+      'src/old/',
+    ]);
+  });
+
+  it('reports no stale prefix when every prefix names a tracked file', () => {
+    expect(
+      recommend([], {
+        sources: { a: { main: ['src/a/', 'src/b.ts'], incidental: [] } },
+        trackedFiles: ['src/a/x.ts', 'src/b.ts'],
+      }).stalePrefixes,
+    ).toEqual([]);
+  });
+
+  it('reports runtimeChanged for app code and library code, not for docs, tests or e2e files', () => {
+    const runtime = (file: string) => recommend([file]).runtimeChanged;
+    expect(runtime('src/main/x.ts')).toBe(true);
+    expect(runtime('extensions/src/x/src/y.ts')).toBe(true);
+    expect(runtime('c-sharp/X.cs')).toBe(true);
+    expect(runtime('lib/platform-bible-utils/src/x.ts')).toBe(true);
+    expect(runtime('lib/platform-bible-react/src/components/x.stories.tsx')).toBe(false);
+    expect(runtime('src/main/x.test.ts')).toBe(false);
+    expect(runtime('README.md')).toBe(false);
+    expect(runtime('e2e-tests/tests/isolated/docking/x.spec.ts')).toBe(false);
+    expect(runtime('.github/workflows/test.yml')).toBe(false);
+    expect(recommend([]).runtimeChanged).toBe(false);
+  });
+
+  it('says whether the changed files make CI run the editor list', () => {
+    const editorPaths = ['extensions/src/platform-scripture-editor/', 'dev-packages\\.json$'];
+    expect(recommend(['dev-packages.json'], { editorPaths }).editorListRuns).toBe(true);
+    expect(
+      recommend(['extensions/src/platform-scripture-editor/src/a.ts'], { editorPaths })
+        .editorListRuns,
+    ).toBe(true);
+    expect(recommend(['src/main/x.ts'], { editorPaths }).editorListRuns).toBe(false);
+    // An empty entry list would make `^()` match everything.
+    expect(recommend(['src/main/x.ts'], { editorPaths: [] }).editorListRuns).toBe(false);
+  });
+
   it('reports the core list a spec key belongs to', () => {
     const key = 'comments-tab.spec.ts';
     const specPath = `e2e-tests/tests/isolated/${key}`;
@@ -527,7 +645,7 @@ describe('recommendE2eTests', () => {
         everything: { main: ['src/', 'extensions/src/', 'c-sharp/'], incidental: [] },
         other: { main: [], incidental: ['src/', 'extensions/src/', 'c-sharp/'] },
       },
-      filesAddingCommandRegistrations: [file],
+      filesChangingCommandRegistrations: [file],
     });
     expect(report.recommendations).toEqual([]);
     expect(report.alsoExercised).toEqual([]);
@@ -589,7 +707,7 @@ describe('recommendE2eTests', () => {
 
   it('only counts registrations inside the source roots', () => {
     const report = recommend([], {
-      filesAddingCommandRegistrations: [
+      filesChangingCommandRegistrations: [
         'lib/platform-bible-react/dist/index.js',
         'lib/eslint-rules/x.ts',
         'src/main/commands.test.ts',
@@ -663,7 +781,7 @@ describe('recommendE2eTests', () => {
         'extensions/src/foo/contributions/menus.json',
         'extensions/src/foo/foo.web-view-provider.ts',
       ],
-      { filesAddingCommandRegistrations: ['src/main/commands.ts', 'src/main/commands.ts'] },
+      { filesChangingCommandRegistrations: ['src/main/commands.ts', 'src/main/commands.ts'] },
     );
     expect(report.entryPointFiles).toEqual([
       'extensions/src/foo/contributions/menus.json',
@@ -849,7 +967,7 @@ describe('readGitChanges', () => {
       expect(changes.changedFiles).toEqual(
         expect.arrayContaining(['src/main/new.ts', 'src/main/plain.ts']),
       );
-      expect(changes.filesAddingCommandRegistrations).toEqual(['src/main/new.ts']);
+      expect(changes.filesChangingCommandRegistrations).toEqual(['src/main/new.ts']);
     });
   });
 
@@ -862,8 +980,38 @@ describe('readGitChanges', () => {
       );
       writeFile(repoRoot, 'c-sharp/Other/Sender.cs', 'Send("command:c");\n');
       runGit(repoRoot, 'add', '-N', 'c-sharp/Other/Sender.cs');
-      expect(readGitChanges(repoRoot, baseSha).filesAddingCommandRegistrations).toEqual([
+      expect(readGitChanges(repoRoot, baseSha).filesChangingCommandRegistrations).toEqual([
         'c-sharp/Projects/Service.cs',
+      ]);
+    });
+  });
+
+  it('flags a TypeScript request handler registration', () => {
+    withTemporaryRepository((repoRoot, baseSha) => {
+      writeFile(
+        repoRoot,
+        'src/main/handler.ts',
+        "await networkService.registerRequestHandler('command:a', h);\n",
+      );
+      writeFile(
+        repoRoot,
+        'src/main/sender.ts',
+        "await networkService.request(serializeRequestType(CATEGORY_COMMAND, 'a'));\n",
+      );
+      expect(readGitChanges(repoRoot, baseSha).filesChangingCommandRegistrations).toEqual([
+        'src/main/handler.ts',
+      ]);
+    });
+  });
+
+  it('lists the deleted files, a renamed file under its old path', () => {
+    withTemporaryRepository((repoRoot, baseSha) => {
+      fs.mkdirSync(path.join(repoRoot, 'src/main'), { recursive: true });
+      runGit(repoRoot, 'mv', 'src/renderer/components/docking/dock.tsx', 'src/main/dock.tsx');
+      fs.rmSync(path.join(repoRoot, 'c-sharp/Projects/Service.cs'));
+      expect(readGitChanges(repoRoot, baseSha).deletedFiles.sort()).toEqual([
+        'c-sharp/Projects/Service.cs',
+        'src/renderer/components/docking/dock.tsx',
       ]);
     });
   });
@@ -917,6 +1065,24 @@ describe('readGitChanges', () => {
 });
 
 describe('command-line entry point', () => {
+  it('runs on a plain checkout path and reports every field', () => {
+    const output = execFileSync(
+      process.execPath,
+      ['--import', 'tsx', path.join(__dirname, 'e2e-recommendations.ts'), 'HEAD'],
+      { cwd: REPOSITORY_ROOT, encoding: 'utf8', timeout: 120_000 },
+    );
+    expect(Object.keys(JSON.parse(output)).sort()).toEqual([
+      'alsoExercised',
+      'editorListRuns',
+      'entryPointFiles',
+      'recommendations',
+      'runtimeChanged',
+      'specsChanged',
+      'stalePrefixes',
+      'uncoveredFiles',
+    ]);
+  }, 150_000);
+
   // Creating a symbolic link needs elevated rights on Windows.
   it.skipIf(process.platform === 'win32')(
     'runs when started through a symbolic link to the module',
