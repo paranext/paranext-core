@@ -384,10 +384,18 @@ export type ImportedPackage = {
 };
 
 /**
- * Folders whose files exist only to serve tests: mocks, and the fixtures that
- * `paratext-bible-internal-extensions` keeps in `__test-fixtures__` (which import `vitest`).
+ * Folders whose files exist only to serve tests: mocks, the fixtures that
+ * `paratext-bible-internal-extensions` keeps in `__test-fixtures__` (which import `vitest`), and
+ * the setup files and stubs that `paratext-assistant` keeps in `test-utils` (which import `vitest`
+ * and `@testing-library/*`). `test-utils` is the folder form of the `*.test-utils.*` file name
+ * below.
  */
-const TEST_SUPPORT_FOLDERS = new Set(['__mocks__', '__fixtures__', '__test-fixtures__']);
+const TEST_SUPPORT_FOLDERS = new Set([
+  '__mocks__',
+  '__fixtures__',
+  '__test-fixtures__',
+  'test-utils',
+]);
 
 /**
  * Third-party packages that first-party SOURCE imports at runtime, read from the source itself.

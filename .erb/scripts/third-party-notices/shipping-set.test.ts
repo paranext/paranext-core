@@ -2404,10 +2404,11 @@ describe('importedPackages', () => {
     expect(importedPackages(repo)).toEqual([]);
   });
 
-  it.each(['__mocks__', '__fixtures__', '__test-fixtures__'])(
+  it.each(['__mocks__', '__fixtures__', '__test-fixtures__', 'test-utils'])(
     'says nothing about a package reached only from a file in a %s folder',
     (folder) => {
-      // paratext-bible-internal-extensions keeps vitest-importing fixtures in `__test-fixtures__`.
+      // paratext-bible-internal-extensions keeps vitest-importing fixtures in `__test-fixtures__`, and
+      // paratext-assistant keeps its test setup and stubs in `test-utils`.
       writePackage('node_modules/test-only', 'test-only', '1.0.0');
       const file = path.join(repo, `extensions/src/an-extension/src/${folder}/thing.fixtures.ts`);
       fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -2417,7 +2418,7 @@ describe('importedPackages', () => {
     },
   );
 
-  it.each(['__mocks__', '__fixtures__', '__test-fixtures__'])(
+  it.each(['__mocks__', '__fixtures__', '__test-fixtures__', 'test-utils'])(
     'still reports an import from a normal file when the repository itself lives in a %s folder',
     (folder) => {
       const outer = repo;
