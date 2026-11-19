@@ -455,10 +455,11 @@ with `EditorRef.getAnnotationRanges(type, id)` — one range over each painted e
 document order — as `editor-dom.util.ts` does, rather than re-deriving the painting rules from
 classes. The first element an annotation paints, by document order, also carries
 `editor-typed-markStart-<type>` and its last `editor-typed-markEnd-<type>` (one element carries
-both); a box style draws one box over everything it paints by putting the block sides on the base
-class and the inline-start and inline-end sides and corners on these, as the annotation style data
-provider does with a registered `border`, one-value `borderRadius` and one- or two-value `padding`
-and `margin`. An annotation inside a collapsed note's content — its undisplayed `\cat` included — is
+both); a box style draws one box over everything it paints by keeping the whole value on the base
+class and removing the inline-start and inline-end sides and corners from an element that is not
+the first or last, with `:not(.editor-typed-markStart-<type>)` and `:not(.editor-typed-markEnd-<type>)`
+override rules, as the annotation style data provider does with any registered `border`,
+`borderRadius`, `padding` and `margin` value. An annotation inside a collapsed note's content — its undisplayed `\cat` included — is
 not shown and never paints the caller, as in Paratext 9; it reappears when the note is expanded and
 still reports its removal. Rationale: `adr-editor-annotations-paint-by-element`,
 `adr-editor-annotations-paint-exactly`, `adr-editor-annotation-edge-classes` and
