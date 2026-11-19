@@ -120,7 +120,10 @@ import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet
 import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
-import { substituteProjectNameInMenu } from './menu-label-substitution.util';
+import {
+  substituteProjectNameInMenu,
+  substituteResourceNameInColumnHeading,
+} from './menu-label-substitution.util';
 import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
@@ -5272,10 +5275,16 @@ function PlatformScriptureEditor({
   const evaluatedTopMenu = useEvaluatedMenu(webViewMenuRaw.topMenu, menuTemplateVars);
 
   // Menu labels are localized once for every editor, so the project name stays as the
-  // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here.
+  // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here. A
+  // resource also names its Project column heading after its short name.
   const projectMenuData = useMemo(
-    () => substituteProjectNameInMenu(evaluatedTopMenu, projectName),
-    [evaluatedTopMenu, projectName],
+    () =>
+      substituteResourceNameInColumnHeading(
+        substituteProjectNameInMenu(evaluatedTopMenu, projectName),
+        isResource,
+        projectName,
+      ),
+    [evaluatedTopMenu, projectName, isResource],
   );
 
   const [booksPresentPossiblyError] = useProjectSetting(

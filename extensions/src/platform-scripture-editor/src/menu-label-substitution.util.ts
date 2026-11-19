@@ -63,3 +63,28 @@ export function substituteProjectNameInMenu<T extends Localized<MultiColumnMenu>
   });
   return changed ? { ...menu, items } : menu;
 }
+
+/** The default web-view menu's "Project" column, which a resource tab relabels with its short name. */
+export const PROJECT_COLUMN_KEY = 'platform.app';
+
+/**
+ * Replaces the heading of the "Project" menu column with the resource's short name, so a resource
+ * tab's menu names the resource it belongs to instead of the word "Project".
+ *
+ * @param menu Localized menu, or `undefined` when the web view has none
+ * @param isResource Whether the editor shows a resource rather than a project
+ * @param projectName Short name of the shown project; `''` when not known yet
+ * @returns The same menu reference when the editor shows a project, the name is empty or the menu
+ *   has no Project column, otherwise a copy with the column relabeled
+ */
+export function substituteResourceNameInColumnHeading<
+  T extends Localized<MultiColumnMenu> | undefined,
+>(menu: T, isResource: boolean, projectName: string): T {
+  if (!menu || !isResource || projectName === '') return menu;
+  const projectColumn = menu.columns[PROJECT_COLUMN_KEY];
+  if (!projectColumn) return menu;
+  return {
+    ...menu,
+    columns: { ...menu.columns, [PROJECT_COLUMN_KEY]: { ...projectColumn, label: projectName } },
+  };
+}
