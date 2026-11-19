@@ -93,6 +93,14 @@ function stubRangeClientRects(rects: object[]) {
   });
 }
 
+function stubRangeBoundingRect(rect: DOMRect) {
+  Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    writable: true,
+    value: () => rect,
+  });
+}
+
 async function flush() {
   await act(async () => {
     await Promise.resolve();
@@ -109,6 +117,8 @@ describe('useEditorContextMenu', () => {
     vi.restoreAllMocks();
     // @ts-expect-error ts(2790) - removing the stub installed by stubRangeClientRects
     delete Range.prototype.getClientRects;
+    // @ts-expect-error ts(2790) - removing the stub installed by stubRangeBoundingRect
+    delete Range.prototype.getBoundingClientRect;
     window.getSelection()?.removeAllRanges();
   });
 
@@ -476,6 +486,23 @@ describe('useEditorContextMenu', () => {
       );
     });
 
+    it('uses the range bounding rect when a collapsed caret has no client rects', () => {
+      const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
+        () => new Promise(() => {}),
+      );
+      const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+      const range = document.createRange();
+      range.setStart(getByTestId('text'), 0);
+      range.collapse(true);
+      addRangeAsSelection(range);
+      stubRangeClientRects([]);
+      stubRangeBoundingRect(new DOMRect(100, 200, 2, 18));
+
+      keyboardContextMenu(getByTestId('container'));
+
+      expect(requestMenu.mock.calls[0][0].position).toEqual({ x: 102, y: 218 });
+    });
+
     it('falls back to the container rect clipped to the viewport plus an inset', () => {
       const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
         () => new Promise(() => {}),
@@ -487,6 +514,7 @@ describe('useEditorContextMenu', () => {
       range.collapse(true);
       addRangeAsSelection(range);
       stubRangeClientRects([]);
+      stubRangeBoundingRect(new DOMRect(0, 0, 0, 0));
       // Container starts above and left of the viewport: its visible part begins at 0,0.
       vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(
         new DOMRect(-100, -200, 500, 900),
@@ -526,6 +554,50 @@ describe('useEditorContextMenu', () => {
     open.unmount();
 
     expect(dismissMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the newest request pending when an older one settles', async () => {
+    const first = deferred<string | undefined>();
+    const second = deferred<string | undefined>();
+    const queue = [first, second];
+    let api!: ReturnType<typeof useEditorContextMenu>;
+    const { getByTestId } = render(
+      <Host
+        requestMenu={() => queue.shift()?.promise ?? Promise.resolve(undefined)}
+        onApi={(value) => {
+          api = value;
+        }}
+      />,
+    );
+    rightClick(getByTestId('text'));
+    rightClick(getByTestId('text'));
+
+    first.resolve(undefined);
+    await flush();
+    expect(api.isPending()).toBe(true);
+
+    second.resolve(undefined);
+    await flush();
+    expect(api.isPending()).toBe(false);
+  });
+
+  it('sends a failure thrown by onPick to onError even when it carries an expected code', async () => {
+    const onError = vi.fn();
+    const failure = newPlatformError('pick failed', ABORTED);
+    const { getByTestId } = render(
+      <Host
+        requestMenu={() => Promise.resolve('cmd')}
+        onPick={() => {
+          throw failure;
+        }}
+        onError={onError}
+      />,
+    );
+    rightClick(getByTestId('text'));
+
+    await flush();
+
+    expect(onError).toHaveBeenCalledWith(failure);
   });
 
   it('dismiss() closes a pending menu through dismissMenu', () => {
