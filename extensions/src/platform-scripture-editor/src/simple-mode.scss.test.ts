@@ -5,7 +5,10 @@ import postcss, { type Rule } from 'postcss';
 import { compile } from 'sass';
 import ts from 'typescript';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getSimpleModeRootClassNames } from './platform-scripture-editor.utils';
+import {
+  CHARACTER_MARKER_BAR_HOST_CLASS_NAME,
+  getSimpleModeRootClassNames,
+} from './platform-scripture-editor.utils';
 import {
   descendants,
   parseSource,
@@ -207,7 +210,7 @@ describe('_simple-mode.scss', () => {
 
     // CSS side: the host class and the gutter class on one selector, so BOTH are required.
     expect(scss).toContain(
-      '.editor-container-simple.character-marker-bar-host .usfm.psc-gutter-markers {',
+      `.editor-container-simple.${CHARACTER_MARKER_BAR_HOST_CLASS_NAME} .usfm.psc-gutter-markers {`,
     );
     // React side: the bar slot is empty unless the same conditions hold.
     expect(webView).toContain('isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined');
@@ -377,10 +380,15 @@ describe('_simple-mode.scss', () => {
         );
         expect(strings.some((text) => text.includes('editor-container-simple'))).toBe(true);
         expect(strings.some((text) => text.includes('character-marker-indicators'))).toBe(false);
-        expect(strings.some((text) => text.includes('character-marker-bar-host'))).toBe(false);
+        expect(strings.some((text) => text.includes(CHARACTER_MARKER_BAR_HOST_CLASS_NAME))).toBe(
+          false,
+        );
         expect(
           nodes.some(
-            (node) => ts.isIdentifier(node) && node.text === 'getSimpleModeRootClassNames',
+            (node) =>
+              ts.isIdentifier(node) &&
+              (node.text === 'getSimpleModeRootClassNames' ||
+                node.text === 'CHARACTER_MARKER_BAR_HOST_CLASS_NAME'),
           ),
         ).toBe(false);
       });

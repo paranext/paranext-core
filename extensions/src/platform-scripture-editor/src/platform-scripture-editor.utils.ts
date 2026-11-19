@@ -150,6 +150,13 @@ function isScriptureEditorViewType(viewType: unknown): viewType is ScriptureEdit
 }
 
 /**
+ * The root class that reserves the space the character-marker bar occupies beside the text (see
+ * `_simple-mode.scss`, which spells it as a literal). Only the Scripture editor's root carries it;
+ * see {@link getSimpleModeRootClassNames}.
+ */
+export const CHARACTER_MARKER_BAR_HOST_CLASS_NAME = 'character-marker-bar-host';
+
+/**
  * The Simple-mode marker classes for the Scripture editor's root element (see `_simple-mode.scss`).
  * `character-marker-bar-host` reserves the space the character-marker bar occupies beside the text.
  * `character-marker-indicators` turns on the tint and hover line for character markers with no
@@ -179,7 +186,7 @@ export function getSimpleModeRootClassNames({
   isDurablyReadOnly: boolean | undefined;
 }): string[] {
   if (isPowerMode) return [];
-  const simpleClassNames = ['editor-container-simple', 'character-marker-bar-host'];
+  const simpleClassNames = ['editor-container-simple', CHARACTER_MARKER_BAR_HOST_CLASS_NAME];
   if (isInterfaceModeLoading || isDurablyReadOnly !== false) return simpleClassNames;
   return [...simpleClassNames, 'character-marker-indicators'];
 }

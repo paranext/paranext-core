@@ -19,9 +19,8 @@
 // (Sass hoists an @used module's CSS to the top of the compiled output regardless of source-order
 // position, so no rule in this file may depend on source order: a rule that contends with another
 // stylesheet's wins on specificity or `!important`, and its comment says which. Contrast the
-// renderer's
-// dock-layout-wrapper.component.scss, which needed a plain webpack import instead of @use for that
-// reason.)
+// renderer's dock-layout-wrapper.component.scss, which needed a plain webpack import instead of
+// @use for that reason.)
 
 // Flatten .editor-container's own rounded top corners (10px, set in the vendored ./_editor.scss)
 // to match the flattened column chrome. Specificity alone wins here (two classes vs. one) — no

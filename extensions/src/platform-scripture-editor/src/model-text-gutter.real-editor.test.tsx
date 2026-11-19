@@ -14,11 +14,8 @@ import { join } from 'path';
 import postcss from 'postcss';
 import { compile } from 'sass';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  getEditorViewOptions,
-  getModelTextViewOptions,
-  MODEL_TEXT_ROOT_CLASS_NAME,
-} from './editor-view-options.util';
+import { getEditorViewOptions, getModelTextViewOptions } from './editor-view-options.util';
+import { MODEL_TEXT_ROOT_CLASS_NAME } from './model-text-panel.const';
 
 const PROSE_TEXT = 'Paul, a servant of Christ Jesus.';
 const POETRY_TEXT = 'Grace to you and peace.';
@@ -260,7 +257,9 @@ describe('the Model Text view in the real editor', () => {
     expect(await clickSelectsPoetryMarker(root)).toBe(false);
   });
 
-  it('copies the selected text across a paragraph break', async () => {
+  // The control for the tripwire below: the copy it checks for a marker label really does hold both
+  // paragraphs' text. This case does not check for marker labels itself.
+  it('keeps both paragraphs’ text in a copy across a paragraph break', async () => {
     const { container } = renderModelTextEditor();
     const root = await findEditorRoot(container);
 

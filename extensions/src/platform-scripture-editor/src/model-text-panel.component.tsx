@@ -69,9 +69,12 @@ import type {
   ModelTextPanelLocalizedStringKey,
   ModelTextPanelLocalizedStrings,
 } from './model-text-panel.const';
-import { MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS } from './model-text-panel.const';
+import {
+  MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS,
+  MODEL_TEXT_ROOT_CLASS_NAME,
+} from './model-text-panel.const';
 import { getInstallFailureMessageKey } from './install-failure-message.utils';
-import { getModelTextViewOptions, MODEL_TEXT_ROOT_CLASS_NAME } from './editor-view-options.util';
+import { getModelTextViewOptions } from './editor-view-options.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 

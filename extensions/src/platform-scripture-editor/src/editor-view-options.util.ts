@@ -55,14 +55,6 @@ export function getEditorViewOptions(
 }
 
 /**
- * The class on the Model Text panel's root element. With it, chapter and verse numbers keep the
- * look they have in the resource panels: `_usj-nodes.scss`'s gutter view restyles them for the
- * Scripture editor only, so the text being translated stands apart from the text it is drafted
- * from.
- */
-export const MODEL_TEXT_ROOT_CLASS_NAME = 'model-text-root';
-
-/**
  * The editor's view options for the Model Text panel: the read-only text a Simple user drafts from,
  * beside the Scripture editor. It shows paragraph markers in the same gutter as the Scripture
  * editor's paragraph-structure view, so the two columns can be matched paragraph by paragraph, but

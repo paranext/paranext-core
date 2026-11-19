@@ -24,6 +24,7 @@ import {
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
   getSimpleModeRootClassNames,
+  CHARACTER_MARKER_BAR_HOST_CLASS_NAME,
   createUnsupportedProjectIdsCache,
   getProjectUnsupportedReason,
   buildScriptureEditorWebViewState,
@@ -5527,7 +5528,7 @@ describe('getSimpleModeRootClassNames', () => {
       }),
     ).toEqual([
       'editor-container-simple',
-      'character-marker-bar-host',
+      CHARACTER_MARKER_BAR_HOST_CLASS_NAME,
       'character-marker-indicators',
     ]);
   });
@@ -5540,7 +5541,7 @@ describe('getSimpleModeRootClassNames', () => {
         isInterfaceModeLoading: false,
         isDurablyReadOnly: true,
       }),
-    ).toEqual(['editor-container-simple', 'character-marker-bar-host']);
+    ).toEqual(['editor-container-simple', CHARACTER_MARKER_BAR_HOST_CLASS_NAME]);
   });
 
   it('leaves the indicator off until the interface mode is known', () => {
@@ -5552,7 +5553,7 @@ describe('getSimpleModeRootClassNames', () => {
         isInterfaceModeLoading: true,
         isDurablyReadOnly: false,
       }),
-    ).toEqual(['editor-container-simple', 'character-marker-bar-host']);
+    ).toEqual(['editor-container-simple', CHARACTER_MARKER_BAR_HOST_CLASS_NAME]);
   });
 
   it('leaves the indicator off until edit permissions are known', () => {
@@ -5564,7 +5565,7 @@ describe('getSimpleModeRootClassNames', () => {
         isInterfaceModeLoading: false,
         isDurablyReadOnly: undefined,
       }),
-    ).toEqual(['editor-container-simple', 'character-marker-bar-host']);
+    ).toEqual(['editor-container-simple', CHARACTER_MARKER_BAR_HOST_CLASS_NAME]);
   });
 
   // The bar's own gate ignores read-only state and the interface-mode load, so the class that
@@ -5585,7 +5586,7 @@ describe('getSimpleModeRootClassNames', () => {
           isInterfaceModeLoading,
           isDurablyReadOnly,
         }),
-      ).toContain('character-marker-bar-host');
+      ).toContain(CHARACTER_MARKER_BAR_HOST_CLASS_NAME);
     },
   );
 

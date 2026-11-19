@@ -9,8 +9,7 @@ import { BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS } from 'platform-bible-react
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList, ResourceReferenceList } from 'platform-scripture';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
-import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
-import { MODEL_TEXT_ROOT_CLASS_NAME } from './editor-view-options.util';
+import { MODEL_TEXT_PANEL_STRING_KEYS, MODEL_TEXT_ROOT_CLASS_NAME } from './model-text-panel.const';
 import {
   MODEL_TEXT_EDITOR_CONTAINER_TEST_ID,
   ModelTextPanel,

@@ -2775,7 +2775,7 @@ span.read img {
 
 /* The verse and chapter number styles below are the Scripture editor's own. The Model Text panel
    (root class `model-text-root`, MODEL_TEXT_ROOT_CLASS_NAME in platform-scripture-editor's
-   editor-view-options.util.ts) shows gutter markers too but keeps the numbers the resource panels
+   model-text-panel.const.ts) shows gutter markers too but keeps the numbers the resource panels
    show, so these three rules skip it. `:where()` keeps each rule's specificity what the editor's
    source gives it. */
 .psc-gutter-markers:where(:not(.model-text-root *)) .usfm_v,
