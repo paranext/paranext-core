@@ -4,7 +4,7 @@ import type { FootnoteEditorHandle } from 'platform-bible-react';
 import { useEditorContextMenu } from 'platform-bible-react/experimental';
 import { getErrorMessage } from 'platform-bible-utils';
 import { ReactNode, RefObject, useRef } from 'react';
-import type { EditMenuActionCommand } from './edit-menu-actions.util';
+import type { EditMenuCommand } from './edit-menu-actions.util';
 import {
   createContextMenuCommandEffects,
   dispatchContextMenuPick,
@@ -14,8 +14,9 @@ import {
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
 
 /** The row editor's handle method behind each clipboard command the menu can pick. */
-const CLIPBOARD_METHOD_BY_COMMAND: Partial<
-  Record<EditMenuActionCommand, 'cut' | 'copy' | 'paste' | 'pastePlainText'>
+const CLIPBOARD_METHOD_BY_COMMAND: Record<
+  EditMenuCommand,
+  'cut' | 'copy' | 'paste' | 'pastePlainText'
 > = {
   'platformScriptureEditor.cutSelection': 'cut',
   'platformScriptureEditor.copySelection': 'copy',
@@ -86,9 +87,6 @@ export function PaneFootnoteEditorContextMenu({
         runClipboardCommand: (clipboardCommand) => {
           const rowEditor = rowEditorRef.current;
           const method = CLIPBOARD_METHOD_BY_COMMAND[clipboardCommand];
-          // Undo and Redo are not items of this menu, and the row editor has its own buttons;
-          // `dispatchContextMenuPick` never passes them here, the check keeps the type honest.
-          if (!method) return;
           if (!rowEditor) {
             notifyActionBlocked();
             return;

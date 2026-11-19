@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render } from '@testing-library/react';
+import type { ViewOptions } from '@eten-tech-foundation/platform-editor';
 import type { FootnoteEditorHandle } from 'platform-bible-react';
 import type { RefObject } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ABORTED, newPlatformError } from 'platform-bible-utils';
+import { getEditorViewOptions } from './editor-view-options.util';
 import { PaneFootnoteEditorContextMenu } from './pane-footnote-editor-context-menu.component';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
 
@@ -56,7 +58,7 @@ function openRequest() {
   return (command: string | undefined) => settle(command);
 }
 
-function setup() {
+function setup(viewOptions?: ViewOptions) {
   const handle = makeHandle();
   // The wrapper reads the handle through the ref, as the web view's row editor ref is filled.
   const rowEditorRef: RefObject<FootnoteEditorHandle | null> = { current: handle };
@@ -73,7 +75,7 @@ function setup() {
       <PaneFootnoteEditorContextMenu
         webViewId={WEB_VIEW_ID}
         projectId={PROJECT_ID}
-        viewOptions={undefined}
+        viewOptions={viewOptions}
         rowEditorRef={rowEditorRef}
         notifyActionBlocked={notifyActionBlocked}
       >
@@ -356,6 +358,28 @@ describe('PaneFootnoteEditorContextMenu', () => {
         PROJECT_ID,
       );
       expect(handle.copy).not.toHaveBeenCalled();
+    });
+
+    it("respells the editor's no-break space stand-in the project's way for Find", async () => {
+      // Standard view with invisible characters allowed holds a no-break space as U+001A.
+      const settle = openRequest();
+      const { getByTestId, rightClick, flush } = setup(
+        getEditorViewOptions('standard', true, true),
+      );
+      const noteText = getByTestId('note-text');
+      noteText.textContent = 'Mr.\u001AAbraham';
+      window.getSelection()?.selectAllChildren(noteText);
+      rightClick(noteText);
+
+      settle('platformScripture.openFind');
+      await flush();
+
+      expect(mockSendCommand).toHaveBeenCalledWith(
+        'platformScripture.openFind',
+        WEB_VIEW_ID,
+        'Mr.\u00A0Abraham',
+        PROJECT_ID,
+      );
     });
 
     it('sends another extension command with the web view id', async () => {

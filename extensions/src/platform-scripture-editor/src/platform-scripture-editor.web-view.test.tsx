@@ -1490,7 +1490,7 @@ describe('Scripture editor right-click menu', () => {
     expect(mockSendCommand).toHaveBeenCalledExactlyOnceWith(
       'platformScripture.openFind',
       WEB_VIEW_ID,
-      'Mr. Abraham',
+      'Mr.\u00A0Abraham',
       PROJECT_ID,
     );
   });
