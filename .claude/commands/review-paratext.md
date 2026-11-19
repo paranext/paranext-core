@@ -333,7 +333,7 @@ It prints a JSON report with these fields:
 - `uncoveredFiles`: changed, existing runtime source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists. Files the app never loads (tests, stories, docs, licenses, tool configuration, package and .NET build metadata; `NON_RUNTIME` in `e2e-tests/e2e-recommendations.ts`) are never listed, while webpack, PostCSS and Tailwind configuration is runtime and is listed. A `lib/` file is listed under no key unless some key names it.
 - `entryPointFiles`: changed menu, web view provider and command or request handler registration files.
 - `specsChanged`: whether the branch changes an e2e spec or its support code (any `.ts` under `e2e-tests/tests/`, `e2e-tests/fixtures/` or `e2e-tests/reporters/`, the global setup or teardown, or a Playwright config, except unit tests).
-- `runtimeChanged`: whether any changed file changes the app: app and library code, build configuration and patches (false for documentation, tests, stories, tool configuration, CI workflows or e2e files alone).
+- `runtimeChanged`: whether any changed file is part of the app: app and library code, build configuration, patches, dependency pins and shipped assets (false for documentation, tests, stories, tools, scripts, CI workflows or e2e files alone).
 - `stalePrefixes`: paths in the map (`e2e-tests/tests/isolated/subset-sources.json`) that match no tracked file, because a source was moved or deleted.
 - `editorListRuns`: whether the changed files make CI run the editor spec list too on this branch's pull request.
 

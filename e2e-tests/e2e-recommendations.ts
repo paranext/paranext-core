@@ -90,10 +90,9 @@ export interface E2eRecommendationReport {
   /** Changed files that add, change or remove a menu, web view or command registration, sorted. */
   entryPointFiles: string[];
   /**
-   * Whether any changed file changes the app: not matched by `NON_RUNTIME`, outside `e2e-tests/`,
-   * and outside the top-level dot-directories other than `.erb/`. App and library code, build
-   * configuration and patches count; documentation, tests, stories, tool configuration, CI
-   * workflows and e2e files alone do not.
+   * Whether any changed file changes the app: under one of `APP_ROOTS` (the source roots, `lib/`,
+   * build configuration, patches, pins and shipped assets) and not matched by `NON_RUNTIME`.
+   * Documentation, tests, stories, tools, scripts, CI workflows and e2e files alone do not count.
    */
   runtimeChanged: boolean;
   /**
@@ -238,14 +237,32 @@ export function readEditorPathsOrEmpty(read: () => string[]): string[] {
 }
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
 /**
- * Whether a runtime file (one {@link NON_RUNTIME} does not exclude) changes the app: everything but
- * the e2e suite itself and the top-level dot-directories other than `.erb/` (CI workflows, agent
- * and editor configuration). Build configuration and patches count, since they change what runs.
+ * The repository paths that make up or build the app: its source roots and `lib/`, the build
+ * configuration (`.erb/`, the top-level PostCSS, Tailwind and electron-builder files), the
+ * dependency patches and pins, and the shipped assets. Anything else at the top level (tools,
+ * scripts, test runners, docs, CI) never reaches a user. Listed rather than excluded, so that a new
+ * top-level tool or script needs no entry here.
  */
-const changesTheApp = (file: string) =>
-  !file.startsWith('e2e-tests/') && !/^\.(?!erb\/)/.test(file);
+const APP_ROOTS = [
+  'src/',
+  'extensions/',
+  'c-sharp/',
+  'lib/',
+  '.erb/',
+  'assets/',
+  'patches/',
+  'release/app/',
+  'dev-packages.json',
+  'electron-builder.json5',
+  'postcss.config.ts',
+  'tailwind.config.ts',
+];
 
-/** Whether a changed file is runtime code that changes the app ({@link NON_RUNTIME}, then the rest). */
+/** Whether a runtime file (one {@link NON_RUNTIME} does not exclude) is part of the app. */
+const changesTheApp = (file: string) =>
+  APP_ROOTS.some((root) => (root.endsWith('/') ? file.startsWith(root) : file === root));
+
+/** Whether a changed file is part of the app: under `APP_ROOTS` and not {@link NON_RUNTIME}. */
 export const isAppFile = (file: string) => !isNonRuntime(file) && changesTheApp(file);
 const isE2eSpecSupport = (file: string) =>
   file.endsWith('.ts') &&

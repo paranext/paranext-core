@@ -572,8 +572,19 @@ describe('recommendE2eTests', () => {
     expect(runtime('extensions/webpack/webpack.config.base.ts')).toBe(true);
     expect(runtime('patches/rc-dock+3.3.2.patch')).toBe(true);
     expect(runtime('dev-packages.json')).toBe(true);
+    expect(runtime('electron-builder.json5')).toBe(true);
+    expect(runtime('tailwind.config.ts')).toBe(true);
+    expect(runtime('assets/localization/en.json')).toBe(true);
     expect(runtime('.claude/commands/review-paratext.md')).toBe(false);
   });
+
+  // Only the app's own roots count, so a new top-level tool or script never needs an exclusion.
+  it.each(['tools/some-tool.ts', 'refresh.sh', 'stop-processes.mjs', 'data/pt9-css/x.css'])(
+    'does not count %s, outside the roots that build the app, as an app change',
+    (file) => {
+      expect(recommend([file]).runtimeChanged).toBe(false);
+    },
+  );
 
   // Tool, test-runner and notice files at the top level, and the C# test projects, load into no
   // part of the app.
