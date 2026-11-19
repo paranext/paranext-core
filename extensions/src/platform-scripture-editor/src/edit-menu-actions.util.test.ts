@@ -1,10 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
 import {
   EDIT_MENU_COMMANDS,
   handleEditMenuCommand,
   isEditMenuCommand,
   runEditMenuAction,
+  runKeepingBrowserSelection,
 } from './edit-menu-actions.util';
 import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
@@ -207,5 +209,92 @@ describe('handleEditMenuCommand', () => {
     handleEditMenuCommand(PASTE, editor, EDITABLE, effects);
     expect(effects.onActionError).toHaveBeenCalledWith(error);
     expect(effects.focusEditor).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runKeepingBrowserSelection', () => {
+  /** A paragraph with one text node, selected from `start` to `end`. */
+  function selectText(start: number, end: number) {
+    const paragraph = document.createElement('p');
+    paragraph.textContent = 'grace and truth';
+    document.body.appendChild(paragraph);
+    const text = paragraph.firstChild;
+    if (!text) throw new Error('missing text node');
+    window.getSelection()?.setBaseAndExtent(text, start, text, end);
+    return { paragraph, text };
+  }
+
+  /** What the editor's copy does to the browser selection: selects an element, then removes it. */
+  function moveSelectionAway() {
+    const hidden = document.createElement('span');
+    hidden.textContent = '#';
+    document.body.appendChild(hidden);
+    window.getSelection()?.selectAllChildren(hidden);
+    hidden.remove();
+  }
+
+  afterEach(() => {
+    window.getSelection()?.removeAllRanges();
+    document.body.replaceChildren();
+  });
+
+  it('puts back a selection the action moved', () => {
+    selectText(0, 5);
+
+    runKeepingBrowserSelection(moveSelectionAway);
+
+    expect(window.getSelection()?.toString()).toBe('grace');
+  });
+
+  it('keeps the direction of a backward selection', () => {
+    const { text } = selectText(9, 0);
+
+    runKeepingBrowserSelection(moveSelectionAway);
+
+    const selection = window.getSelection();
+    expect(selection?.anchorNode).toBe(text);
+    expect(selection?.anchorOffset).toBe(9);
+    expect(selection?.focusOffset).toBe(0);
+  });
+
+  it('puts the selection back, and still throws, when the action throws', () => {
+    selectText(0, 5);
+
+    expect(() =>
+      runKeepingBrowserSelection(() => {
+        moveSelectionAway();
+        throw new Error('copy failed');
+      }),
+    ).toThrow('copy failed');
+    expect(window.getSelection()?.toString()).toBe('grace');
+  });
+
+  it('leaves the selection alone when the action did not move it', () => {
+    selectText(0, 5);
+    const setBaseAndExtent = vi.spyOn(Selection.prototype, 'setBaseAndExtent');
+
+    runKeepingBrowserSelection(() => {});
+
+    expect(setBaseAndExtent).not.toHaveBeenCalled();
+    setBaseAndExtent.mockRestore();
+  });
+
+  it('puts nothing back when the selected text is gone', () => {
+    const { paragraph } = selectText(0, 5);
+
+    runKeepingBrowserSelection(() => {
+      paragraph.remove();
+      moveSelectionAway();
+    });
+
+    expect(window.getSelection()?.toString()).toBe('');
+  });
+
+  it('runs the action when there is no selection to keep', () => {
+    const action = vi.fn();
+
+    runKeepingBrowserSelection(action);
+
+    expect(action).toHaveBeenCalledTimes(1);
   });
 });
