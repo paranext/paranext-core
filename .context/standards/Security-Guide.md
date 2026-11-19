@@ -189,14 +189,16 @@ WebSocket, and developers test PAPI calls from browsers and tools. The table in
 | The internet settings setters | `renderer`, `extensionHost` | `dotnetDataProvider` |
 | `command:paratextRegistration.setParatextRegistrationData` | `renderer`, `extensionHost` | `dotnetDataProvider` |
 | `command:paratextRegistration.validateParatextRegistrationData` | `renderer`, `extensionHost` | `dotnetDataProvider` |
+| `command:paratextRegistration.getParatextRegistryUrl` | `renderer`, `extensionHost` | `dotnetDataProvider` |
 | `command:paratextRegistration.resetForFirstRun` | main only | `dotnetDataProvider` |
 | `command:platform.resetFirstRun` | `renderer` | `main` |
 | `object:DataProtectionService.encryptString` / `.decryptString` | `extensionHost` | `main` |
 | `command:platform.getLogFileContent` | `renderer` | `main` |
 
 Main is always allowed to call. A request type with no row can be registered by anyone, and the
-first to register it receives every call: a request type whose handler is handed a secret needs a
-row for its registrant even when its callers are harmless, as `validateParatextRegistrationData` has. A TS process
+first to register it receives every call: a request type whose handler is handed a secret, or whose
+answer decides where the user is sent, needs a row for its registrant even when its callers are
+harmless, as `validateParatextRegistrationData` and `getParatextRegistryUrl` have. A TS process
 applies the same check to its own handlers in `RpcClient.request`, so a handler in the calling
 process answers only callers the rules allow. .NET's `PapiClient` calls its own handlers directly,
 because no third-party code runs there. Refusals answer `MethodNotFound` with

@@ -53,10 +53,15 @@ const REQUEST_TYPE_RULES: ReadonlyMap<string, RequestAccessRule> = new Map([
     'command:paratextRegistration.setParatextRegistrationData',
     rule(['renderer', 'extensionHost'], 'dotnetDataProvider'),
   ],
-  // Restricted for its registrant: whoever handles it receives the user's name and registration
-  // code, and .NET registers it seconds after connecting, so anyone could otherwise claim it first
+  // Restricted for their registrant. .NET registers these seconds after connecting, so anyone could
+  // otherwise claim them first: whoever handles the check receives the user's name and registration
+  // code, and whoever answers the URL picks where the app sends the user to register.
   [
     'command:paratextRegistration.validateParatextRegistrationData',
+    rule(['renderer', 'extensionHost'], 'dotnetDataProvider'),
+  ],
+  [
+    'command:paratextRegistration.getParatextRegistryUrl',
     rule(['renderer', 'extensionHost'], 'dotnetDataProvider'),
   ],
   ['command:paratextRegistration.resetForFirstRun', rule([], 'dotnetDataProvider')],
