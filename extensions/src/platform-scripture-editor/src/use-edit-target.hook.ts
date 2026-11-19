@@ -37,7 +37,8 @@ export type EditTargetState = {
   isSelectionInRowEditor: boolean;
   /**
    * Re-reads the browser selection for the footnotes pane, for when its nodes may have been
-   * replaced or removed (the pane stopped being rendered). The target itself stays where it is.
+   * replaced or removed (the pane stopped being rendered). The target stays put while the rows are
+   * rendered and returns to the main text once they are gone.
    */
   recheckSelection: () => void;
 };
@@ -76,8 +77,12 @@ export function useEditTarget({
   }, []);
 
   const recheckSelection = useCallback(() => {
+    const { footnotesRows } = getRootsRef.current();
+    // With the rows gone (the pane is hidden or not rendered) the target is the main text: the
+    // caret is there, but no selection change fires in it to say so.
+    if (!footnotesRows) setTarget('main');
     setFootnotesSelectionIfChanged(
-      readFootnotesSelectionState(document.getSelection(), getRootsRef.current().footnotesRows),
+      readFootnotesSelectionState(document.getSelection(), footnotesRows),
     );
   }, [setFootnotesSelectionIfChanged]);
 
@@ -100,9 +105,8 @@ export function useEditTarget({
   }, [setFootnotesSelectionIfChanged]);
 
   // A row editor opening or closing replaces the nodes the selection was in, so what was last read
-  // from the pane no longer holds. The target itself stays where it is.
-  // Hidden case: the target deliberately stays on the footnotes when the pane goes away, until the
-  // user selects in the main text; with nothing selected in the pane the keys read false then.
+  // from the pane no longer holds. While the rows are rendered the target stays where it is; once
+  // they are gone it returns to the main text (see `recheckSelection`).
   useEffect(() => {
     recheckSelection();
   }, [isRowEditorOpen, recheckToken, recheckSelection]);
