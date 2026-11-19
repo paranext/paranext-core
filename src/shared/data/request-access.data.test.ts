@@ -16,6 +16,7 @@ const RESTRICTED_REQUEST_TYPES = [
   'command:paratextRegistration.setParatextDataInternetSettings',
   'command:paratextRegistration.setParatextRegistrationData',
   'command:paratextRegistration.validateParatextRegistrationData',
+  'command:paratextRegistration.getParatextRegistryUrl',
   'command:paratextRegistration.resetForFirstRun',
   'command:platform.resetFirstRun',
   'object:DataProtectionService.encryptString',
@@ -70,13 +71,16 @@ describe('request access table', () => {
     expect(isRegistrationAllowed('command:platform.getLogFileContent', 'main')).toBe(true);
     expect(isRegistrationAllowed('command:platform.getLogFileContent', 'renderer')).toBe(false);
     expect(isRegistrationAllowed('command:anything.else', 'unidentified')).toBe(true);
-    // Whoever handles the registration check receives the user's name and registration code
-    expect(
-      isRegistrationAllowed(
-        'command:paratextRegistration.validateParatextRegistrationData',
-        'unidentified',
-      ),
-    ).toBe(false);
+    // Whoever handles the registration check receives the user's name and registration code, and
+    // whoever answers the registry URL picks where the user is sent to register
+    [
+      'command:paratextRegistration.validateParatextRegistrationData',
+      'command:paratextRegistration.getParatextRegistryUrl',
+    ].forEach((requestType) => {
+      expect(isRegistrationAllowed(requestType, 'unidentified')).toBe(false);
+      expect(isRegistrationAllowed(requestType, 'extensionHost')).toBe(false);
+      expect(isRegistrationAllowed(requestType, 'dotnetDataProvider')).toBe(true);
+    });
   });
 
   it('applies a registrant restriction to unlisted request types', () => {
@@ -134,6 +138,7 @@ describe('request access table', () => {
       'paratextRegistration.setParatextDataInternetSettings',
       'paratextRegistration.setParatextRegistrationData',
       'paratextRegistration.validateParatextRegistrationData',
+      'paratextRegistration.getParatextRegistryUrl',
       'paratextRegistration.resetForFirstRun',
       'platform.resetFirstRun',
       'platform.getLogFileContent',
