@@ -42,6 +42,8 @@ jobs:
         # `macos_runner` is free text; a label for another OS would skip every macOS step and still
         # produce this leg's artifacts.
         if: ${{ inputs.macos_runner && matrix.os == inputs.macos_runner && runner.os != 'macOS' }}
+        # The Windows default shell is pwsh, which would read `$MACOS_RUNNER` as an empty pwsh variable.
+        shell: bash
         env:
           MACOS_RUNNER: ${{ inputs.macos_runner }}
         run: |
@@ -52,13 +54,6 @@ jobs:
         if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         uses: paranext/setup-macports@v0.3.0
-
-      - name: Update MacPorts ports tree
-        if: ${{ runner.os == 'macOS' }}
-        timeout-minutes: 90
-        # Not using `-v` for verbose because it is very slow and does not add much value
-        run: |
-          sudo port sync
 
       - name: Install loader tools on macOS
         if: ${{ runner.os == 'macOS' }}

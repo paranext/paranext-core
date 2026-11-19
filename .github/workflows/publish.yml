@@ -43,6 +43,8 @@ jobs:
         # Steps pick their OS with `runner.os`, so changing a runner label here is the whole change.
         os:
           - windows-latest
+          # Move with the `||` defaults in test.yml and package-main.yml. Pinned because newer macOS
+          # images are often slow to get a runner.
           - macos-15
           # The Ubuntu version must align with the "core" version in electron-builder.json5
           - ubuntu-22.04
@@ -55,13 +57,6 @@ jobs:
         if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         uses: paranext/setup-macports@v0.3.0
-
-      - name: Update MacPorts ports tree
-        if: ${{ runner.os == 'macOS' }}
-        timeout-minutes: 90
-        # Not using `-v` for verbose because it is very slow and does not add much value
-        run: |
-          sudo port sync
 
       - name: Install loader tools on macOS
         if: ${{ runner.os == 'macOS' }}

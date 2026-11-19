@@ -24,7 +24,9 @@ on:
 
 jobs:
   test:
-    name: Build on ${{ matrix.os }}
+    # A dispatch that tries another macOS image reports as "Trial on <label>", so its results never
+    # land on the pull request's required "Build on <label>" checks for the same commit.
+    name: ${{ inputs.macos_runner && 'Trial' || 'Build' }} on ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
@@ -35,15 +37,18 @@ jobs:
       fail-fast: false
       matrix:
         # Each entry is one leg; `artifact_name` is the name the leg uploads its app under, and the
-        # name its cleanup step deletes by. Steps pick their OS with `runner.os`, so changing a
-        # runner label here is the whole change.
+        # name its cleanup step deletes by. Steps pick their OS with `runner.os`, never these labels.
+        # Renaming a label also renames its required "Build on <label>" check, so update main's
+        # ruleset in the same change.
         include:
           - os: windows-latest
             artifact_name: app-windows-test
           # The label after `||` is the default image: push and pull_request runs have no inputs,
           # and a dispatch with `macos_runner` left empty falls through to it too.
           - os: ${{ inputs.macos_runner || 'macos-15' }}
-            artifact_name: app-macos-test
+            # A trial image gets its own artifact name, so it never replaces the branch's real
+            # macOS build.
+            artifact_name: app-macos-test${{ inputs.macos_runner && format('-{0}', inputs.macos_runner) || '' }}
           # The Ubuntu version must align with the "core" version in electron-builder.json5
           - os: ubuntu-22.04
             artifact_name: app-linux-test
@@ -53,6 +58,8 @@ jobs:
         # `macos_runner` is free text; a label for another OS would skip every macOS step and still
         # produce this leg's artifacts.
         if: ${{ inputs.macos_runner && matrix.os == inputs.macos_runner && runner.os != 'macOS' }}
+        # The Windows default shell is pwsh, which would read `$MACOS_RUNNER` as an empty pwsh variable.
+        shell: bash
         env:
           MACOS_RUNNER: ${{ inputs.macos_runner }}
         run: |
@@ -63,13 +70,6 @@ jobs:
         if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         uses: paranext/setup-macports@v0.3.0
-
-      - name: Update MacPorts ports tree
-        if: ${{ runner.os == 'macOS' }}
-        timeout-minutes: 90
-        # Not using `-v` for verbose because it is very slow and does not add much value
-        run: |
-          sudo port sync
 
       - name: Install loader tools on macOS
         if: ${{ runner.os == 'macOS' }}
