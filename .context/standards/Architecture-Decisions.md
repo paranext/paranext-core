@@ -2912,8 +2912,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   loose spec, a spec key: one spec inside a subset that names sources of its own, or a prefix key:
   a path prefix inside a subset, such as `scripture-editor/no-unasked-edits-`, that names the
   sources of every spec starting with it, new ones included, and must match at least one spec file)
-  to repository path prefixes, and `e2e-tests/e2e-recommendations.ts` matches a branch's changed files against it
-  for `/review-paratext` Step 3.5. The rules:
+  to repository path prefixes, and `e2e-tests/e2e-recommendations.ts` matches a branch's changed
+  files against it for `/review-paratext` Step 3.5. The rules:
   - **`main` versus `incidental`.** `main` is source the group exists to test and produces a
     recommendation; `incidental` is source the group only drives on its way and produces an
     "also exercised" line, never a question.

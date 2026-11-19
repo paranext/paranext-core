@@ -17,9 +17,11 @@ import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import { editorPathsPattern, parseEditorPathEntries, readEditorPathEntries } from './core-specs';
 import {
+  APP_ROOTS,
   isAppFile,
   isEntryPoint,
-  readEditorPathsOrEmpty,
+  isPrefixKey,
+  readEditorPaths,
   readGitChanges,
   recommendE2eTests,
   RecommendInput,
@@ -52,7 +54,6 @@ describe('subset-sources.json', () => {
     .readdirSync(ISOLATED_DIRECTORY, { recursive: true, encoding: 'utf8' })
     .map((entry) => entry.split(path.sep).join('/'))
     .filter((entry) => entry.endsWith('.spec.ts'));
-  const isPrefixKey = (key: string) => key.includes('/') && !key.endsWith('.spec.ts');
 
   it('has a prefix key for the no-unasked-edits family, covering every spec in it', () => {
     expect(keys).toContain('scripture-editor/no-unasked-edits-');
@@ -64,6 +65,22 @@ describe('subset-sources.json', () => {
 
   it.each(keys.filter(isPrefixKey))('prefix key %s matches at least one spec file', (key) => {
     expect(specPaths.filter((entry) => entry.startsWith(key))).not.toEqual([]);
+  });
+
+  // A spec key under a prefix key would be listed twice for the same spec; the map uses one or the
+  // other.
+  const keysUnderPrefixKeys = (all: string[]) =>
+    all.filter(
+      (key) =>
+        !isPrefixKey(key) && all.some((other) => isPrefixKey(other) && key.startsWith(other)),
+    );
+
+  it('has no spec key that a prefix key already covers', () => {
+    expect(keysUnderPrefixKeys(keys)).toEqual([]);
+    // Control: the check sees such a key when one is added.
+    expect(
+      keysUnderPrefixKeys([...keys, 'scripture-editor/no-unasked-edits-power-standard.spec.ts']),
+    ).toEqual(['scripture-editor/no-unasked-edits-power-standard.spec.ts']);
   });
 
   it.each(keys.filter((key) => !isPrefixKey(key)))(
@@ -625,25 +642,27 @@ describe('recommendE2eTests', () => {
     expect(runtime('assets/localization/en.json')).toBe(true);
     // The editor's marker stylesheets import these.
     expect(runtime('data/pt9-css/hbkeng.css')).toBe(true);
-    // The build and install scripts run these, and what they produce ships.
+    // The build and install scripts run these, and what they produce ships; the whole `.erb/` counts
+    // because every narrower line left out a file that feeds the build.
     expect(runtime('.erb/scripts/stage-dev-packages.ts')).toBe(true);
-    expect(runtime('.erb/scripts/stage-dev-packages.util.ts')).toBe(true);
-    expect(runtime('.erb/scripts/notices-build-id.ts')).toBe(true);
-    expect(runtime('.erb/scripts/generate-dev-build-info.ts')).toBe(true);
-    expect(runtime('.erb/scripts/third-party-notices/notices.ts')).toBe(true);
+    expect(runtime('.erb/scripts/delete-source-maps.js')).toBe(true);
+    expect(runtime('.erb/scripts/postinstall.ts')).toBe(true);
+    expect(runtime('.erb/scripts/bump-versions.ts')).toBe(true);
+    expect(runtime('.erb/scripts/third-party-notices/main.ts')).toBe(true);
+    // Fixtures only a unit test reads.
+    expect(runtime('.erb/scripts/third-party-notices/__fixtures__/overlay/policy.json')).toBe(
+      false,
+    );
     expect(runtime('.claude/commands/review-paratext.md')).toBe(false);
   });
 
   // Only the app's own roots count, so a new top-level tool or script never needs an exclusion.
-  it.each([
-    'tools/some-tool.ts',
-    'refresh.sh',
-    'stop-processes.mjs',
-    'platform.bible-dev.desktop',
-    '.erb/scripts/bump-versions.ts',
-  ])('does not count %s, outside the roots that build the app, as an app change', (file) => {
-    expect(recommend([file]).runtimeChanged).toBe(false);
-  });
+  it.each(['tools/some-tool.ts', 'refresh.sh', 'stop-processes.mjs', 'platform.bible-dev.desktop'])(
+    'does not count %s, outside the roots that build the app, as an app change',
+    (file) => {
+      expect(recommend([file]).runtimeChanged).toBe(false);
+    },
+  );
 
   // Tool, test-runner and notice files at the top level, and the C# test projects, load into no
   // part of the app.
@@ -682,6 +701,10 @@ describe('recommendE2eTests', () => {
     expect(recommend(['src/main/x.ts'], { editorPaths }).editorListRuns).toBe(false);
     // An empty entry list would make `^()` match everything.
     expect(recommend(['src/main/x.ts'], { editorPaths: [] }).editorListRuns).toBe(false);
+    // Entries that could not be read leave the answer unknown, not false.
+    expect(recommend(['dev-packages.json'], { editorPaths: undefined }).editorListRuns).toBe(
+      'unknown',
+    );
   });
 
   it('reports the core list a spec key belongs to', () => {
@@ -931,6 +954,9 @@ describe('recommendE2eTests', () => {
     'e2e-tests/playwright-cdp.config.ts',
     'e2e-tests/global-teardown.ts',
     'e2e-tests/reporters/no-silent-skips.reporter.ts',
+    'e2e-tests/scoped-cleanup.ts',
+    'e2e-tests/parked-enhanced-resources.ts',
+    'e2e-tests/run-isolated.mjs',
   ])('flags %s as a changed e2e spec or its support code', (file) => {
     expect(recommend([file]).specsChanged).toBe(true);
   });
@@ -944,10 +970,32 @@ describe('recommendE2eTests', () => {
     'e2e-tests/global-setup.test.ts',
     'e2e-tests/reporters/no-silent-skips.reporter.test.ts',
     'e2e-tests/fixtures/poll-retry.test.ts',
+    'e2e-tests/scoped-cleanup.test.ts',
+    'e2e-tests/parked-enhanced-resources.test.ts',
     'e2e-tests/core-specs.txt',
     'src/main/new-thing.ts',
   ])('does not flag %s as a changed e2e spec or its support code', (file) => {
     expect(recommend([file]).specsChanged).toBe(false);
+  });
+});
+
+describe('APP_ROOTS', () => {
+  // A renamed build file or directory would silently stop counting as an app change.
+  it('lists only paths that name a tracked file', () => {
+    const tracked = execFileSync(
+      'git',
+      ['-C', REPOSITORY_ROOT, '-c', 'core.quotePath=false', 'ls-files'],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    )
+      .split('\n')
+      .filter((file) => file !== '');
+    expect(APP_ROOTS.length).toBeGreaterThan(0);
+    expect(
+      APP_ROOTS.filter(
+        (root) =>
+          !tracked.some((file) => (root.endsWith('/') ? file.startsWith(root) : file === root)),
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -976,10 +1024,10 @@ describe('the editor list and the map', () => {
 
 describe('reading the editor paths for the command line', () => {
   it('returns the entries the reader gives', () => {
-    expect(readEditorPathsOrEmpty(() => ['a/'])).toEqual(['a/']);
+    expect(readEditorPaths(() => ['a/'])).toEqual(['a/']);
   });
 
-  it('warns on stderr and returns no entries when the workflow line is malformed', () => {
+  it('warns on stderr and returns undefined when the workflow line is malformed', () => {
     const written: string[] = [];
     const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
       written.push(String(chunk));
@@ -987,8 +1035,8 @@ describe('reading the editor paths for the command line', () => {
     });
     try {
       expect(
-        readEditorPathsOrEmpty(() => parseEditorPathEntries('editor_paths+=("dev-packages")\n')),
-      ).toEqual([]);
+        readEditorPaths(() => parseEditorPathEntries('editor_paths+=("dev-packages")\n')),
+      ).toBeUndefined();
     } finally {
       spy.mockRestore();
     }

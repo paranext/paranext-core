@@ -85,10 +85,11 @@ export interface E2eRecommendationReport {
   alsoExercised: { key: string; matchedFiles: string[] }[];
   /**
    * Changed runtime source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists,
-   * so no recommendation can cover them. Files `NON_RUNTIME` matches are never reported here, nor
-   * are deleted files, and neither is `lib/`: library code is reached through the extensions and
-   * renderer components that consume it, so a `lib/` file is reported only through the keys that
-   * list it.
+   * so no recommendation can cover them; only files under those three roots are listed. Files
+   * `NON_RUNTIME` matches are never reported here, nor are deleted files, and neither is `lib/`:
+   * library code is reached through the extensions and renderer components that consume it, so a
+   * `lib/` file is reported only through the keys that list it. Build configuration counts through
+   * `runtimeChanged` instead.
    */
   uncoveredFiles: string[];
   /** Changed files that add, change or remove a menu, web view or command registration, sorted. */
@@ -106,15 +107,17 @@ export interface E2eRecommendationReport {
   stalePrefixes: string[];
   /**
    * Whether the changed files make CI's `e2e-core` job run the editor list too: whether one of them
-   * matches an `editor_paths` entry in `.github/workflows/test.yml`.
+   * matches an `editor_paths` entry in `.github/workflows/test.yml`. `'unknown'` when the entries
+   * could not be read.
    */
-  editorListRuns: boolean;
+  editorListRuns: boolean | 'unknown';
   /**
    * Whether an e2e spec or its support code changed: any `.ts` file under `e2e-tests/tests/`
    * (specs, page objects, spec helpers), `e2e-tests/fixtures/` or `e2e-tests/reporters/`, plus
-   * `e2e-tests/global-setup.ts`, `e2e-tests/global-teardown.ts` and
-   * `e2e-tests/playwright*.config.ts` (the harness files the Playwright configuration loads),
-   * except a unit test (`*.test.ts`). READMEs and mapping files do not count.
+   * `e2e-tests/global-setup.ts`, `e2e-tests/global-teardown.ts`, `e2e-tests/playwright*.config.ts`
+   * (the harness files the Playwright configuration loads), `e2e-tests/scoped-cleanup.ts`,
+   * `e2e-tests/parked-enhanced-resources.ts` and `e2e-tests/run-isolated.mjs`, except a unit test
+   * (`*.test.ts`). READMEs and mapping files do not count.
    */
   specsChanged: boolean;
 }
@@ -133,8 +136,11 @@ export interface RecommendInput {
   deletedFiles: string[];
   /** Every file git tracks (and every untracked one), repository-relative, as written on disk. */
   trackedFiles: string[];
-  /** The `editor_paths` entries of `.github/workflows/test.yml`, each a POSIX ERE. */
-  editorPaths: string[];
+  /**
+   * The `editor_paths` entries of `.github/workflows/test.yml`, each a POSIX ERE; undefined when
+   * they could not be read.
+   */
+  editorPaths: string[] | undefined;
   sources: SubsetSources;
   /** Entries of `e2e-tests/core-specs.txt`. */
   coreSpecs: string[];
@@ -167,10 +173,12 @@ export const REGISTRATION_PATTERN =
  * every dotfile and dot-directory below the top level (the formatter, linter, editor and Git
  * configuration, `.github/` workflows, `.vscode/` settings), spelling and TypeScript configuration,
  * licenses, the extension template's release scripts and the Roslyn analyzers. Build configuration
- * that shapes the bundle (`webpack.config.ts`, `webpack/`, `postcss.config.ts`,
- * `tailwind.config.ts`) is runtime. One alternative group per line, each with its reason.
- * `e2e-recommendations.test.ts` runs this over every tracked file under the source roots and fails
- * on a file that is plainly not app code but matches none of these.
+ * that shapes the bundle (an extension's `webpack.config.ts` and `webpack/`, the
+ * `postcss.config.ts` and `tailwind.config.ts` files) is runtime: it counts through
+ * `runtimeChanged`, though only files under `src/`, `extensions/src/` and `c-sharp/` can be listed
+ * as uncovered. One alternative group per line, each with its reason. `e2e-recommendations.test.ts`
+ * runs this over every tracked file under the source roots and fails on a file that is plainly not
+ * app code but matches none of these.
  */
 const NON_RUNTIME = new RegExp(
   [
@@ -185,11 +193,11 @@ const NON_RUNTIME = new RegExp(
     // Type declarations only exist at compile time.
     String.raw`\.d\.ts$`,
     // Test and mock directories.
-    String.raw`(^|\/)(__tests__|__mocks__)\/`,
+    String.raw`(^|\/)(__tests__|__mocks__|__fixtures__)\/`,
     // Any dotfile or dot-directory below the top level: formatter, linter, editor, Git and .NET
     // tool configuration, CI workflows and IDE settings, none of which the app loads. A top-level
-    // one is not matched: `.erb/configs/` and some `.erb/scripts/` build the app, and `APP_ROOTS`
-    // decides which top-level paths count.
+    // one is not matched: `.erb/` holds the scripts and configuration that build the app, and
+    // `APP_ROOTS` decides which top-level paths count.
     String.raw`\/\.[^/]`,
     // Images and fonts; style sheets and data under assets/ stay runtime.
     String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
@@ -198,7 +206,10 @@ const NON_RUNTIME = new RegExp(
     // The C# test project at the top level (`c-sharp-tests/`, lower case, so the line above misses it).
     String.raw`^c-sharp-tests\/`,
     // Package and extension metadata: a design decision, not an oversight (a version or
-    // dependency bump changes no behaviour an e2e spec can see).
+    // dependency bump changes no behaviour an e2e spec can see). A release bumps every extension's
+    // `manifest.json` version at once, so counting it would ask the e2e question on every release
+    // branch; a change to a manifest's main, menus, settings or activation events is accepted as
+    // undetected here for that reason.
     // The lock file only records resolved versions, and npm rewrites its name field in every
     // worktree.
     String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
@@ -216,7 +227,7 @@ const NON_RUNTIME = new RegExp(
     // Roslyn analyzers run at build time; the app never loads them.
     String.raw`(^|\/)c-sharp\/Paranext\.Analyzers\/`,
     // Per-extension spelling and TypeScript configuration (a template merge rewrites these in every
-    // extension). Runtime JSON such as `manifest.json` or `menus.json` is not here.
+    // extension). Runtime JSON such as `menus.json` is not here.
     String.raw`(^|\/)(tsconfig[^/]*\.json|cspell\.json)$`,
     // The extension template's release scripts, run by hand or from its `.github/` workflows.
     // The other files under an extension's `lib/` can feed the build (`download-db.ts` fetches the
@@ -227,40 +238,39 @@ const NON_RUNTIME = new RegExp(
 const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 
 /**
- * The `editor_paths` entries read through `read`, or none when `read` throws: a malformed line in
- * `test.yml` then costs the report its `editorListRuns` answer instead of the whole report.
+ * The `editor_paths` entries read through `read`, or undefined when `read` throws: a malformed line
+ * in `test.yml` then costs the report its `editorListRuns` answer (`'unknown'`) instead of the
+ * whole report.
  */
-export function readEditorPathsOrEmpty(read: () => string[]): string[] {
+export function readEditorPaths(read: () => string[]): string[] | undefined {
   try {
     return read();
   } catch (error) {
     process.stderr.write(
-      `e2e-recommendations: could not read editor_paths from test.yml, so editorListRuns is false: ${error instanceof Error ? error.message : String(error)}\n`,
+      `e2e-recommendations: could not read editor_paths from test.yml, so editorListRuns is unknown: ${error instanceof Error ? error.message : String(error)}\n`,
     );
-    return [];
+    return undefined;
   }
 }
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
 /**
  * The repository paths that make up or build the app: its source roots and `lib/`, the build
- * configuration (`.erb/configs/`, the top-level PostCSS, Tailwind and electron-builder files), the
- * dependency patches and pins, and the shipped assets. Anything else at the top level (tools,
- * scripts, test runners, docs, CI) never reaches a user. Listed rather than excluded, so that a new
- * top-level tool or script needs no entry here.
+ * configuration and scripts (`.erb/`, the top-level PostCSS, Tailwind and electron-builder files),
+ * the dependency patches and pins, and the shipped assets. Anything else at the top level (tools,
+ * test runners, docs, CI) never reaches a user. Listed rather than excluded, so that a new
+ * top-level tool needs no entry here.
+ *
+ * `.erb/` counts as a whole: every narrower line inside it left out a file that feeds the build
+ * (`delete-source-maps.js`, `check-node-env.js`, `electron-rebuild.js`, `postinstall.ts`,
+ * `dev-packages.schema.json`). Counting a release script too costs one optional question; missing a
+ * build change skips it on a real one.
  */
-const APP_ROOTS = [
+export const APP_ROOTS = [
   'src/',
   'extensions/',
   'c-sharp/',
   'lib/',
-  '.erb/configs/',
-  // The build and install steps run these, and what they produce ships: the editor's staged dev
-  // packages, the notices and their build id, and the development build info.
-  '.erb/scripts/stage-dev-packages.ts',
-  '.erb/scripts/stage-dev-packages.util.ts',
-  '.erb/scripts/notices-build-id.ts',
-  '.erb/scripts/generate-dev-build-info.ts',
-  '.erb/scripts/third-party-notices/',
+  '.erb/',
   'assets/',
   // Paratext 9's marker stylesheets, which the editor's own stylesheets import.
   'data/',
@@ -279,14 +289,17 @@ const changesTheApp = (file: string) =>
 /** Whether a changed file is part of the app: under `APP_ROOTS` and not {@link NON_RUNTIME}. */
 export const isAppFile = (file: string) => !isNonRuntime(file) && changesTheApp(file);
 const isE2eSpecSupport = (file: string) =>
-  file.endsWith('.ts') &&
-  !file.endsWith('.test.ts') &&
-  (file.startsWith('e2e-tests/tests/') ||
-    file.startsWith('e2e-tests/fixtures/') ||
-    file.startsWith('e2e-tests/reporters/') ||
-    file === 'e2e-tests/global-setup.ts' ||
-    file === 'e2e-tests/global-teardown.ts' ||
-    /^e2e-tests\/playwright[^/]*\.config\.ts$/.test(file));
+  file === 'e2e-tests/run-isolated.mjs' ||
+  (file.endsWith('.ts') &&
+    !file.endsWith('.test.ts') &&
+    (file.startsWith('e2e-tests/tests/') ||
+      file.startsWith('e2e-tests/fixtures/') ||
+      file.startsWith('e2e-tests/reporters/') ||
+      file === 'e2e-tests/global-setup.ts' ||
+      file === 'e2e-tests/global-teardown.ts' ||
+      file === 'e2e-tests/scoped-cleanup.ts' ||
+      file === 'e2e-tests/parked-enhanced-resources.ts' ||
+      /^e2e-tests\/playwright[^/]*\.config\.ts$/.test(file)));
 
 /** Menu contributions of the extensions and the core menu data. */
 const isMenuFile = (file: string) =>
@@ -302,7 +315,7 @@ const matchesAny = (file: string, prefixes: string[]) =>
 const isSpecKey = (key: string) => key.endsWith('.spec.ts');
 
 /** A key that is a path filter inside a subset (`scripture-editor/no-unasked-edits-`). */
-const isPrefixKey = (key: string) => key.includes('/') && !isSpecKey(key);
+export const isPrefixKey = (key: string) => key.includes('/') && !isSpecKey(key);
 
 /** The subset a spec key (or collapsed prefix) lives in; undefined for a subset or a loose spec. */
 const subsetOfNestedKey = (key: string) => (key.includes('/') ? key.split('/')[0] : undefined);
@@ -525,7 +538,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     ...input.sources[key].incidental,
   ]);
   const deleted = new Set(input.deletedFiles);
-  const editorPattern = editorPathsPattern(input.editorPaths);
+  const editorPattern = input.editorPaths && editorPathsPattern(input.editorPaths);
   const uncoveredFiles = runtimeFiles
     .filter(isInSourceRoot)
     .filter((file) => !deleted.has(file))
@@ -555,7 +568,10 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
       input.trackedFiles.filter((file) => !deleted.has(file)),
     ),
     editorListRuns:
-      input.editorPaths.length > 0 && input.changedFiles.some((file) => editorPattern.test(file)),
+      editorPattern === undefined
+        ? 'unknown'
+        : (input.editorPaths?.length ?? 0) > 0 &&
+          input.changedFiles.some((file) => editorPattern.test(file)),
     specsChanged: input.changedFiles.some(isE2eSpecSupport),
   };
 }
@@ -651,7 +667,7 @@ function runCli(mergeBase: string): void {
   );
   const specFilesBySubset: Record<string, string[]> = {};
   Object.keys(sources)
-    .filter((key) => !isSpecKey(key))
+    .filter((key) => !key.includes('/') && !isSpecKey(key))
     .forEach((key) => {
       specFilesBySubset[key] = listSpecFiles(path.join(REPO_ROOT, ISOLATED_PREFIX, key));
     });
@@ -660,7 +676,7 @@ function runCli(mergeBase: string): void {
     ...readGitChanges(REPO_ROOT, mergeBase),
     sources,
     trackedFiles: git(REPO_ROOT, 'ls-files', '--cached', '--others', '--exclude-standard'),
-    editorPaths: readEditorPathsOrEmpty(() => readEditorPathEntries(REPO_ROOT)),
+    editorPaths: readEditorPaths(() => readEditorPathEntries(REPO_ROOT)),
     coreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs.txt')),
     editorCoreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs-editor.txt')),
     specFilesBySubset,

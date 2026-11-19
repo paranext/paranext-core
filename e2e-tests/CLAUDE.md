@@ -64,8 +64,8 @@ author as a warning, so moving or deleting a source file a prefix names means up
 
 `/review-paratext` stops asking whether a branch needs a new e2e test once the report's
 `specsChanged` is true: the branch changes an e2e spec or its support code (any `.ts` under
-`tests/`, `fixtures/` or `reporters/`, the global setup or teardown, or a Playwright config, except
-unit tests).
+`tests/`, `fixtures/` or `reporters/`, the global setup or teardown, a Playwright config,
+`scoped-cleanup.ts`, `parked-enhanced-resources.ts` or `run-isolated.mjs`, except unit tests).
 
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch
