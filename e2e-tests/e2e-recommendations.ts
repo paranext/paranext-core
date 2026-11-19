@@ -38,8 +38,6 @@ export type SubsetSources = Record<string, { main: string[]; incidental: string[
 /** How CI treats a recommended key. */
 export type CiStatus =
   | { kind: 'spec'; coreList: 'always' | 'editor' | 'none' }
-  /** The full isolated run, which CI runs only nightly. */
-  | { kind: 'all' }
   | {
       kind: 'subset';
       /** Specs CI runs on every pull request. */
@@ -60,8 +58,6 @@ export interface E2eRecommendation {
   command: string;
   /** The changed files that matched, sorted. */
   matchedFiles: string[];
-  /** Why the key is recommended, when the changed files alone do not say. */
-  reason?: string;
   /** For a collapsed item, `kind: 'subset'` counts the member specs only, not the whole subset. */
   ci: CiStatus;
   /**
@@ -78,14 +74,13 @@ export interface E2eRecommendationReport {
   /**
    * Keys matched through `main`, sorted by key. A spec key (or a collapsed item) whose subset is
    * recommended too is folded into the subset, its matched files merged in: running the subset runs
-   * the spec. When `dependencyChangedFiles` is non-empty the list also carries the item `all` (the
-   * full isolated run) with a `reason`.
+   * the spec.
    */
   recommendations: E2eRecommendation[];
   /**
    * Keys matched only through `incidental`, sorted by key. A spec key whose subset is recommended
    * is left out (the subset's run covers it); one whose subset is listed here too is merged into
-   * it. Empty when the item `all` is recommended: the full run includes every key.
+   * it.
    */
   alsoExercised: { key: string; matchedFiles: string[] }[];
   /**
@@ -93,22 +88,19 @@ export interface E2eRecommendationReport {
    * so no recommendation can cover them; only files under those three roots are listed. Files
    * `NON_RUNTIME` matches are never reported here, nor are deleted files, and neither is `lib/`:
    * library code is reached through the extensions and renderer components that consume it, so a
-   * `lib/` file is reported only through the keys that list it. Build configuration counts through
-   * `runtimeChanged` instead.
+   * `lib/` file is reported only through the keys that list it.
    */
   uncoveredFiles: string[];
   /** Changed files that add, change or remove a menu, web view or command registration, sorted. */
   entryPointFiles: string[];
   /**
-   * Whether any changed file changes the app: every file except documentation, unit tests and their
-   * helpers and fixtures, stories, tool and CI configuration (top-level dot-paths other than
-   * `.erb/`, formatter, linter and spelling configuration) and the e2e suite itself. Package
-   * metadata, lock files, manifests, build scripts and configuration, patches, assets and data all
-   * count. The rule is coarse on purpose: the Add question of Step 3.5 still needs an uncovered
-   * file, a new entry point or a judged behaviour change, so counting a file too many only widens
-   * when that judgment is consulted.
+   * Changed files that can carry a dependency change, sorted: the root `package.json`,
+   * `package-lock.json`, `release/app/package.json`, `release/app/package-lock.json`,
+   * `dev-packages.json`, `global.json`, any `.csproj` or `.props` file under `c-sharp/` and
+   * anything under `patches/`. A hint: whether a dependency actually changed is read from their
+   * diffs in Step 3.5.
    */
-  runtimeChanged: boolean;
+  dependencyFiles: string[];
   /**
    * Prefixes in `subset-sources.json` that match no tracked file, sorted: a moved or deleted source
    * a key still names. Such a prefix silently stops matching, so the map needs updating.
@@ -145,14 +137,6 @@ export interface RecommendInput {
   filesChangingCommandRegistrations: string[];
   /** The subset of `changedFiles` that no longer exist. */
   deletedFiles: string[];
-  /**
-   * The subset of `changedFiles` whose change alters a dependency ({@link readGitChanges} decides
-   * which): a dependency field (npm or NuGet) or an engine or SDK pin (`volta`, `engines`,
-   * `global.json`), a lock file line other than a name or version, a pin in `dev-packages.json` or
-   * a patch. A package's own `version` bump, a script edit and reformatting do not. Any of them
-   * recommends the full isolated run.
-   */
-  dependencyChangedFiles: string[];
   /** Every file git tracks (and every untracked one), repository-relative, as written on disk. */
   trackedFiles: string[];
   /**
@@ -184,105 +168,60 @@ export const REGISTRATION_PATTERN =
   'registerCommand\\(|registerWebViewProvider\\(|RegisterRequestHandlerAsync\\(|registerRequestHandler\\(';
 
 /**
- * Shapes of files that are not app code and change nothing a user sees: tests and their helpers,
- * Storybook stories and their support code, docs, type declarations, the unit-test runner's
- * configuration, the C# test projects, every dotfile and dot-directory below the top level (the
+ * Paths that are not runtime code, so no key lists them and none is "uncovered": tests and their
+ * helpers, Storybook stories and their support code, docs, type declarations, package, extension
+ * and .NET project metadata, image and font assets (other files under `assets/`, such as style
+ * sheets and data, are runtime), every dotfile and dot-directory below the top level (the
  * formatter, linter, editor and Git configuration, `.github/` workflows, `.vscode/` settings),
- * spelling configuration, licenses, documentation and watcher tooling at the top level, the
- * extension template's release scripts and the Roslyn analyzers. One alternative per line, each
- * with its reason.
+ * spelling and TypeScript configuration, licenses, the extension template's release scripts and the
+ * Roslyn analyzers. One alternative per line, each with its reason. `e2e-recommendations.test.ts`
+ * runs this over every tracked file under the source roots and fails on a file that is plainly not
+ * app code but matches none of these.
  */
-const NOT_APP_SHAPES = [
-  // Unit tests, their helpers and fixtures, Storybook stories and the data only stories use.
-  String.raw`\.test\.|\.test-utils?\.|\.fixtures\.|\.stories\.|\.story-data\.`,
-  // Test-runner configuration and setup files (`vitest.config.ts`, `vitest.unit.setup.ts`), the
-  // component tests' harness, their helper directories and the extensions' test mocks.
-  String.raw`(^|\/)vitest\.[^/]*\.ts$`,
-  String.raw`\.test-harness\.`,
-  String.raw`(^|\/)(test-utils|__test-mocks__)\/`,
-  // Test helpers and test data named after what they serve (`test.utils.ts`, `*-test-data/`,
-  // `footnote-util-test.usj.data.ts`); only tests import them.
-  String.raw`(^|\/)test\.utils\.|(^|\/)[^/]*-test-data\/|-test\.[^/]*\.data\.`,
-  // The component library's Storybook helpers and story pages, which only stories load.
-  String.raw`^lib\/[^/]+\/src\/(storybook|stories)\/`,
-  // The core Storybook's own pages and the components only they render.
-  String.raw`^src\/stories\/`,
-  // Documentation and licenses.
-  String.raw`\.md$|\.mdx$|(^|\/)LICENSE$`,
-  // Type declarations only exist at compile time.
-  String.raw`\.d\.ts$`,
-  // Test, mock and fixture directories.
-  String.raw`(^|\/)(__tests__|__mocks__|__fixtures__)\/`,
-  // Any dotfile or dot-directory below the top level: formatter, linter, editor, Git and .NET
-  // tool configuration, CI workflows and IDE settings, none of which the app loads. A top-level
-  // one is not matched here: `.erb/` holds the scripts and configuration that build the app, and
-  // {@link NOT_AN_APP_CHANGE} excludes the other top-level dot-paths.
-  String.raw`\/\.[^/]`,
-  // C# test projects (`Foo.Tests/`).
-  String.raw`(^|\/)[^/]*Tests\/`,
-  // The C# test project at the top level (`c-sharp-tests/`, lower case, so the line above misses it).
-  String.raw`^c-sharp-tests\/`,
-  // IDE settings of the .NET solution.
-  String.raw`\.DotSettings$`,
-  // The Ruby documentation tooling's Gemfile and nodemon's watcher configuration, run by hand.
-  String.raw`^(Gemfile(\.lock)?|nodemon\.json)$`,
-  // Analyzer configuration. `.globalconfig` files have arbitrary names
-  // (`ai-analyzers.globalconfig`), so only the suffix is matched.
-  String.raw`\.globalconfig$`,
-  // Roslyn analyzers run at build time; the app never loads them.
-  String.raw`(^|\/)c-sharp\/Paranext\.Analyzers\/`,
-  // Spelling configuration (a template merge rewrites it in every extension). Runtime JSON such as
-  // `menus.json` is not here.
-  String.raw`(^|\/)cspell\.json$`,
-  // The extension template's release scripts, run by hand or from its `.github/` workflows.
-  // The other files under an extension's `lib/` can feed the build (`download-db.ts` fetches the
-  // data the extension ships), so they stay runtime.
-  String.raw`^extensions\/src\/[^/]+\/lib\/(bump-versions|git\.util)\.ts$`,
-];
-
-/**
- * Files that ship or build the app but hold no code a key could list: package and extension
- * metadata, lock files, .NET project files, image and font assets. A change to one is an app change
- * ({@link isAppFile}) yet never a recommendation or an uncovered file, because a key cannot name
- * what it tests there (a version or dependency bump changes no behaviour a spec can pin). A
- * dependency change ({@link isDependencyLockChange}, {@link isDependencyPackageChange},
- * {@link isDependencyPinsChange}, {@link isDotnetDependencyChange}) recommends the full isolated run
- * instead. A change to a manifest's main, menus, settings or activation events goes unnoticed here:
- * a release bumps every manifest's version at once, so listing manifests would flag every release
- * branch.
- */
-const SHIPPED_METADATA_SHAPES = [
-  // Package and extension metadata, and the lock files. npm rewrites the root lock file's name in
-  // every worktree; `readGitChanges` leaves a name-only change out.
-  String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
-  // TypeScript configuration: it sets the build's emit target, JSX mode and path aliases.
-  String.raw`(^|\/)tsconfig[^/]*\.json$`,
-  // The third-party notices' lock file.
-  String.raw`^THIRD-PARTY-NOTICES\.lock\.json$`,
-  // .NET build metadata: projects, shared build properties and the solution. The data provider's
-  // own project file is the exception: it pins ParatextData, which does the USFM to USX conversion
-  // the editor saves through, so a change to it changes what the editor writes.
-  String.raw`^(?!c-sharp\/ParanextDataProvider\.csproj$).*\.csproj$|\.props$|\.sln$`,
-  // Images and fonts; style sheets and data under assets/ stay runtime.
-  String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
-];
-
-/**
- * Paths that are not runtime code, so no key lists them and none is "uncovered":
- * {@link NOT_APP_SHAPES} and {@link SHIPPED_METADATA_SHAPES}. `e2e-recommendations.test.ts` runs this
- * over every tracked file under the source roots and fails on a file that is plainly not app code
- * but matches none of these.
- */
-const NON_RUNTIME = new RegExp([...NOT_APP_SHAPES, ...SHIPPED_METADATA_SHAPES].join('|'));
-
-/**
- * Files whose change leaves the app as it was: {@link NOT_APP_SHAPES}, the e2e suite itself and the
- * top-level dot-paths other than `.erb/` (CI workflows, agent and editor configuration).
- */
-const NOT_AN_APP_CHANGE = new RegExp(
-  [...NOT_APP_SHAPES, String.raw`^e2e-tests\/`, String.raw`^\.(?!erb\/)`].join('|'),
+const NON_RUNTIME = new RegExp(
+  [
+    // Unit tests, their helpers and fixtures, Storybook stories and the data only stories use.
+    String.raw`\.test\.|\.test-utils?\.|\.test-harness\.|\.fixtures\.|\.stories\.|\.story-data\.`,
+    // The core Storybook's own pages and the components only they render.
+    String.raw`^src\/stories\/`,
+    // Documentation and licenses.
+    String.raw`\.md$|\.mdx$|(^|\/)LICENSE$`,
+    // Type declarations only exist at compile time.
+    String.raw`\.d\.ts$`,
+    // Test, mock and fixture directories.
+    String.raw`(^|\/)(__tests__|__mocks__|__fixtures__)\/`,
+    // Any dotfile or dot-directory below the top level: formatter, linter, editor, Git and .NET
+    // tool configuration, CI workflows and IDE settings, none of which the app loads. A top-level
+    // one is not matched, because `.erb/` holds the webpack configuration that builds the app.
+    String.raw`\/\.[^/]`,
+    // Images and fonts; style sheets and data under assets/ stay runtime.
+    String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
+    // C# test projects (`Foo.Tests/`).
+    String.raw`(^|\/)[^/]*Tests\/`,
+    // Package and extension metadata: a design decision, not an oversight (a version or
+    // dependency bump changes no behaviour an e2e spec can see; step 3.5 weighs the dependency
+    // files separately). A change to a manifest's main, menus, settings or activation events goes
+    // unnoticed here: a release bumps every manifest's version at once.
+    String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
+    // .NET build metadata: projects, shared build properties, the solution and IDE settings. The
+    // data provider's own project file is the exception: it pins ParatextData, which does the
+    // USFM to USX conversion the editor saves through, so a change to it changes what the editor
+    // writes.
+    String.raw`^(?!c-sharp\/ParanextDataProvider\.csproj$).*\.csproj$|\.props$|\.sln$|\.DotSettings$`,
+    // Analyzer configuration. `.globalconfig` files have arbitrary names
+    // (`ai-analyzers.globalconfig`), so only the suffix is matched.
+    String.raw`\.globalconfig$`,
+    // Roslyn analyzers run at build time; the app never loads them.
+    String.raw`(^|\/)c-sharp\/Paranext\.Analyzers\/`,
+    // Per-extension spelling and TypeScript configuration (a template merge rewrites these in every
+    // extension). Runtime JSON such as `menus.json` is not here.
+    String.raw`(^|\/)(tsconfig[^/]*\.json|cspell\.json)$`,
+    // The extension template's release scripts, run by hand or from its `.github/` workflows.
+    // The other files under an extension's `lib/` can feed the build (`download-db.ts` fetches the
+    // data the extension ships), so they stay runtime.
+    String.raw`^extensions\/src\/[^/]+\/lib\/(bump-versions|git\.util)\.ts$`,
+  ].join('|'),
 );
-
 export const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 
 /**
@@ -302,8 +241,6 @@ export function readEditorPaths(read: () => string[]): string[] | undefined {
 }
 
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
-/** Whether a changed file changes the app: every file except {@link NOT_AN_APP_CHANGE}. */
-export const isAppFile = (file: string) => !NOT_AN_APP_CHANGE.test(file);
 const isE2eSpecSupport = (file: string) => {
   if (file.endsWith('.test.ts') || file.endsWith('.md')) return false;
   if (file === `${ISOLATED_PREFIX}subset-sources.json`) return false;
@@ -322,142 +259,23 @@ const isE2eSpecSupport = (file: string) => {
   );
 };
 
-// The files that can carry a dependency change: the lock files, the root and the packaged app's
-// `package.json`, the dev package pins, the .NET SDK pin, the patches and the .NET project files.
-
 /**
- * The lock files. The `package.json` files of `lib/*` and of the extensions are not checked: the
- * root `package.json`'s `workspaces` (`lib/*`, `extensions`, `extensions/src/*`) share the root
- * `package-lock.json`, so a real dependency change in a workspace changes that lock file too.
+ * Whether `file` can carry a dependency change: the root `package.json`, `package-lock.json`,
+ * `release/app/package.json`, `release/app/package-lock.json`, `dev-packages.json` and
+ * `global.json`, a `.csproj` or `.props` file under `c-sharp/`, or anything under `patches/`. A
+ * path test only: the diff decides whether a dependency changed.
  */
-const LOCK_FILES = ['package-lock.json', 'release/app/package-lock.json'];
-const PACKAGE_FILES = ['package.json', 'release/app/package.json'];
-const DEV_PACKAGES_FILE = 'dev-packages.json';
-const DOTNET_SDK_PIN_FILE = 'global.json';
-const isPatchFile = (file: string) => file.startsWith('patches/') && file.endsWith('.patch');
-/** A .NET project or build properties file of the app (the test and analyzer projects excluded). */
-const isDotnetProjectFile = (file: string) =>
-  file.startsWith('c-sharp/') && /\.(csproj|props)$/.test(file) && isAppFile(file);
-
-/** The `package.json` fields that name a dependency or an engine the app is built and run with. */
-const PACKAGE_DEPENDENCY_FIELDS = [
-  'dependencies',
-  'devDependencies',
-  'peerDependencies',
-  'optionalDependencies',
-  'overrides',
-  'engines',
-  'volta',
-];
-
-/** The added and removed lines of a diff, without its file headers. */
-const changedDiffLines = (diffLines: string[]) =>
-  diffLines.filter((line) => /^[-+]/.test(line) && !/^(\+\+\+|---) /.test(line));
-
-const isNameOrVersionLine = (line: string) => /^[-+]\s*"(name|version)":/.test(line);
-const isBlankChange = (line: string) => line.slice(1).trim() === '';
-
-/**
- * Whether a diff of a lock file changes a dependency: a changed line other than a `"name"` or
- * `"version"` field or a blank line. A real dependency change also changes a `"resolved"` or
- * `"integrity"` line, or adds or removes a block; a release bump changes only versions.
- */
-export function isDependencyLockChange(diffLines: string[]): boolean {
-  return changedDiffLines(diffLines).some(
-    (line) => !isNameOrVersionLine(line) && !isBlankChange(line),
-  );
-}
-
-/** The JSON text of `value` with every object's keys sorted, so key order never matters. */
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value instanceof Object) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson(Reflect.get(value, key))}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? '';
-}
-
-/**
- * Whether a `package.json` differs in a dependency field ({@link PACKAGE_DEPENDENCY_FIELDS}) between
- * its content `before` (at the merge base) and `after` (in the working tree), whatever the order of
- * the keys. A file missing on either side, or one that cannot be parsed, counts: that fails toward
- * recommending the full run.
- */
-export function isDependencyPackageChange(
-  before: string | undefined,
-  after: string | undefined,
-): boolean {
-  if (before === undefined || after === undefined) return true;
-  try {
-    const previous: unknown = JSON.parse(before);
-    const current: unknown = JSON.parse(after);
-    const field = (manifest: unknown, name: string) =>
-      stableJson(manifest instanceof Object ? Reflect.get(manifest, name) : undefined);
-    return PACKAGE_DEPENDENCY_FIELDS.some((name) => field(previous, name) !== field(current, name));
-  } catch {
-    return true;
-  }
-}
-
-/**
- * Whether `dev-packages.json` differs in content between `before` (at the merge base) and `after`
- * (in the working tree): a reformat or a reordered key is not a pin change. A file missing on
- * either side, or one that cannot be parsed, counts.
- */
-export function isDependencyPinsChange(
-  before: string | undefined,
-  after: string | undefined,
-): boolean {
-  if (before === undefined || after === undefined) return true;
-  try {
-    return stableJson(JSON.parse(before)) !== stableJson(JSON.parse(after));
-  } catch {
-    return true;
-  }
-}
-
-/**
- * The dependency items of .NET project or build properties `xml`, normalized: every
- * `PackageReference` and `PackageVersion` element (attributes and child elements, over any number
- * of lines and with either kind of quote) and the values of `TargetFramework`, `TargetFrameworks`
- * and `ParatextPackageVersion`. Comments are ignored, and so is everything else (a project's own
- * `VersionPrefix`, `AssemblyVersion`, `Nullable`, `Compile Include`).
- */
-function dotnetDependencyItems(xml: string): string[] {
-  const text = xml.replace(/<!--[\s\S]*?-->/g, '');
-  const normalize = (value: string) =>
-    value
-      .replace(/'/g, '"')
-      .replace(/\s*=\s*/g, '=')
-      .replace(/\s+/g, ' ')
-      .trim();
-  const references = [
-    ...text.matchAll(/<(PackageReference|PackageVersion)\b([^>]*?)(\/>|>([\s\S]*?)<\/\1\s*>)/g),
-  ].map((match) => normalize(`${match[1]} ${match[2]} ${match[4] ?? ''}`));
-  const values = [
-    ...text.matchAll(/<(TargetFrameworks?|ParatextPackageVersion)\b[^>]*>([\s\S]*?)<\/\1\s*>/g),
-  ].map((match) => normalize(`${match[1]}=${match[2]}`));
-  return [...references, ...values].sort();
-}
-
-/**
- * Whether the .NET project or build properties file differs in its dependency items
- * ({@link dotnetDependencyItems}) between its content `before` (at the merge base) and `after` (in
- * the working tree): a package reference, package version, target framework or ParatextData version
- * changes. A file missing on one side is compared as empty, so a new project file counts only when
- * it names a dependency.
- */
-export function isDotnetDependencyChange(
-  before: string | undefined,
-  after: string | undefined,
-): boolean {
-  return (
-    dotnetDependencyItems(before ?? '').join('\n') !== dotnetDependencyItems(after ?? '').join('\n')
-  );
-}
+const isDependencyFile = (file: string) =>
+  [
+    'package.json',
+    'package-lock.json',
+    'release/app/package.json',
+    'release/app/package-lock.json',
+    'dev-packages.json',
+    'global.json',
+  ].includes(file) ||
+  (file.startsWith('c-sharp/') && /\.(csproj|props)$/.test(file)) ||
+  file.startsWith('patches/');
 
 /** Menu contributions of the extensions and the core menu data. */
 const isMenuFile = (file: string) =>
@@ -672,22 +490,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     matchedFiles: sorted(mainMatches.get(key)),
     ci: ciStatus(key, input),
   }));
-  const mapRecommendations = foldIntoSubsets(collapseSpecGroups(singles, input));
-  const changedDependencyFiles = input.dependencyChangedFiles;
-  // A dependency change can break any area, so no subset stands in for the full run.
-  const fullRun: E2eRecommendation = {
-    key: 'all',
-    command: isolatedCommand('all'),
-    matchedFiles: [...changedDependencyFiles].sort(),
-    reason: 'a dependency changed',
-    ci: { kind: 'all' },
-  };
-  const recommendations =
-    changedDependencyFiles.length > 0
-      ? [...mapRecommendations, fullRun].sort((a, b) =>
-          a.key < b.key ? -1 : Number(a.key > b.key),
-        )
-      : mapRecommendations;
+  const recommendations = foldIntoSubsets(collapseSpecGroups(singles, input));
   const recommendedSubsets = new Set(recommendations.map((recommendation) => recommendation.key));
 
   const incidentalOnly = [...incidentalMatches.keys()]
@@ -706,7 +509,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
       return;
     mergedFiles.set(subset, [...(mergedFiles.get(subset) ?? []), ...entry.matchedFiles]);
   });
-  const exercised = incidentalOnly
+  const alsoExercised = incidentalOnly
     .filter((entry) => {
       const subset = subsetOfNestedKey(entry.key);
       return (
@@ -719,8 +522,6 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
         ...new Set([...entry.matchedFiles, ...(mergedFiles.get(entry.key) ?? [])]),
       ].sort(),
     }));
-  // The full run includes every key a change only drives along the way.
-  const alsoExercised = changedDependencyFiles.length > 0 ? [] : exercised;
 
   const allPrefixes = keys.flatMap((key) => [
     ...input.sources[key].main,
@@ -749,7 +550,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     alsoExercised,
     uncoveredFiles,
     entryPointFiles,
-    runtimeChanged: input.changedFiles.some(isAppFile),
+    dependencyFiles: input.changedFiles.filter(isDependencyFile).sort(),
     // A deletion not yet staged is still in `git ls-files --cached`; the branch's diff says it is gone.
     stalePrefixes: findStalePrefixes(
       input.sources,
@@ -785,59 +586,6 @@ function listSpecFiles(directory: string): string[] {
   });
 }
 
-/** The diff lines of `file` against `mergeBase`, without context. */
-function diffLinesOf(repoRoot: string, mergeBase: string, file: string): string[] {
-  return git(repoRoot, 'diff', '--no-renames', '-U0', '--end-of-options', mergeBase, '--', file);
-}
-
-/**
- * Whether the only lines changed in `diffLines` are `"name"` fields: what `npm install` rewrites in
- * a lock file in a git worktree, where it takes the directory's name. Such a change alters
- * nothing.
- */
-function onlyNameFieldChanged(diffLines: string[]): boolean {
-  const changed = changedDiffLines(diffLines);
-  return changed.length > 0 && changed.every((line) => /^[-+]\s*"name":/.test(line));
-}
-
-/** Says on stderr that `file` could not be read; a missing file is not reported. */
-function warnUnreadable(file: string, detail: string) {
-  process.stderr.write(`e2e-recommendations: could not read ${file}: ${detail}\n`);
-}
-
-/**
- * The content of `file` at `ref`, or undefined when the file does not exist there or cannot be read
- * (the latter is reported on stderr).
- */
-function contentAt(repoRoot: string, ref: string, file: string): string | undefined {
-  try {
-    return execFileSync('git', ['show', '--end-of-options', `${ref}:${file}`], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      maxBuffer: 64 * 1024 * 1024,
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    if (!/does not exist in|exists on disk, but not in/.test(detail)) warnUnreadable(file, detail);
-    return undefined;
-  }
-}
-
-/**
- * The content of `file` in the working tree, or undefined when it does not exist or cannot be read
- * (the latter is reported on stderr).
- */
-function workingContent(repoRoot: string, file: string): string | undefined {
-  try {
-    return fs.readFileSync(path.join(repoRoot, file), 'utf8');
-  } catch (error) {
-    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
-      warnUnreadable(file, error instanceof Error ? error.message : String(error));
-    return undefined;
-  }
-}
-
 /**
  * The working tree's changes against `mergeBase`, read from the git repository at `repoRoot`.
  * `--no-renames` lists a rename's old and new path; untracked files never appear in `git diff`, so
@@ -847,10 +595,7 @@ function workingContent(repoRoot: string, file: string): string | undefined {
 export function readGitChanges(
   repoRoot: string,
   mergeBase: string,
-): Pick<
-  RecommendInput,
-  'changedFiles' | 'filesChangingCommandRegistrations' | 'deletedFiles' | 'dependencyChangedFiles'
-> {
+): Pick<RecommendInput, 'changedFiles' | 'filesChangingCommandRegistrations' | 'deletedFiles'> {
   const untrackedFiles = git(repoRoot, 'ls-files', '--others', '--exclude-standard');
   const registrationRegExp = new RegExp(REGISTRATION_PATTERN);
   const untrackedRegistering = untrackedFiles
@@ -873,45 +618,8 @@ export function readGitChanges(
     '--end-of-options',
     mergeBase,
   );
-  const lockDiffs = new Map(
-    diffFiles
-      .filter((file) => LOCK_FILES.includes(file))
-      .map((file) => [file, diffLinesOf(repoRoot, mergeBase, file)]),
-  );
-  const dependencyChangedFiles = [...new Set([...diffFiles, ...untrackedFiles])].filter((file) => {
-    if (LOCK_FILES.includes(file)) {
-      const lockDiff = lockDiffs.get(file);
-      // A lock file git does not diff is new: missing at the merge base counts.
-      return lockDiff === undefined || isDependencyLockChange(lockDiff);
-    }
-    if (PACKAGE_FILES.includes(file))
-      return isDependencyPackageChange(
-        contentAt(repoRoot, mergeBase, file),
-        workingContent(repoRoot, file),
-      );
-    if (file === DEV_PACKAGES_FILE)
-      return isDependencyPinsChange(
-        contentAt(repoRoot, mergeBase, file),
-        workingContent(repoRoot, file),
-      );
-    if (isDotnetProjectFile(file))
-      return isDotnetDependencyChange(
-        contentAt(repoRoot, mergeBase, file),
-        workingContent(repoRoot, file),
-      );
-    return file === DOTNET_SDK_PIN_FILE || isPatchFile(file);
-  });
   return {
-    changedFiles: [
-      ...new Set([
-        ...diffFiles.filter((file) => {
-          const lockDiff = lockDiffs.get(file);
-          return !lockDiff || !onlyNameFieldChanged(lockDiff);
-        }),
-        ...untrackedFiles,
-      ]),
-    ],
-    dependencyChangedFiles,
+    changedFiles: [...new Set([...diffFiles, ...untrackedFiles])],
     deletedFiles: git(
       repoRoot,
       'diff',

@@ -17,11 +17,6 @@ import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import { editorPathsPattern, parseEditorPathEntries, readEditorPathEntries } from './core-specs';
 import {
-  isAppFile,
-  isDependencyLockChange,
-  isDependencyPinsChange,
-  isDotnetDependencyChange,
-  isDependencyPackageChange,
   isEntryPoint,
   isNonRuntime,
   isPrefixKey,
@@ -147,7 +142,6 @@ function recommend(changedFiles: string[], overrides: Partial<RecommendInput> = 
     changedFiles,
     filesChangingCommandRegistrations: [],
     deletedFiles: [],
-    dependencyChangedFiles: [],
     trackedFiles: [],
     editorPaths: [],
     sources: FIXTURE_SOURCES,
@@ -622,104 +616,10 @@ describe('recommendE2eTests', () => {
     ).toEqual([]);
   });
 
-  it('reports runtimeChanged for app code and library code, not for docs, tests or e2e files', () => {
-    const runtime = (file: string) => recommend([file]).runtimeChanged;
-    expect(runtime('src/main/x.ts')).toBe(true);
-    expect(runtime('extensions/src/x/src/y.ts')).toBe(true);
-    expect(runtime('c-sharp/X.cs')).toBe(true);
-    expect(runtime('lib/platform-bible-utils/src/x.ts')).toBe(true);
-    expect(runtime('lib/platform-bible-react/src/components/x.stories.tsx')).toBe(false);
-    expect(runtime('src/main/x.test.ts')).toBe(false);
-    expect(runtime('README.md')).toBe(false);
-    expect(runtime('docs/x.md')).toBe(false);
-    expect(runtime('e2e-tests/tests/isolated/docking/x.spec.ts')).toBe(false);
-    expect(runtime('.github/workflows/test.yml')).toBe(false);
-    expect(runtime('.claude/commands/x.md')).toBe(false);
-    expect(runtime('.husky/pre-commit')).toBe(false);
-    // The e2e suite's own files, wherever they sit under `e2e-tests/`.
-    expect(runtime('e2e-tests/core-specs.txt')).toBe(false);
-    // Test and story helpers and test-runner configuration outside the source roots.
-    [
-      'lib/platform-bible-react/src/test-utils/resize-observer.util.ts',
-      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.test-harness.tsx',
-      'lib/platform-bible-react/src/storybook/direction-toggle.component.tsx',
-      'lib/platform-bible-react/src/stories/basics/helper.tsx',
-      'extensions/__test-mocks__/@papi/backend.ts',
-      'lib/eslint-plugin-paranext/vitest.config.ts',
-      'extensions/vitest.config.ts',
-      'lib/platform-bible-react/vitest.unit.setup.ts',
-      'lib/eslint-plugin-paranext/src/test.utils.ts',
-      'lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/editor-usx/x.resave.usx',
-      'lib/platform-bible-utils/src/scripture/footnote-util-test.usj.data.ts',
-    ].forEach((file) => expect({ file, changed: runtime(file) }).toEqual({ file, changed: false }));
-    expect(runtime('e2e-tests/e2e-recommendations.ts')).toBe(false);
-    expect(recommend([]).runtimeChanged).toBe(false);
-  });
-
-  // Everything that is not documentation, a test, a story, tool or CI configuration or the e2e suite
-  // counts, so a new kind of file needs no entry anywhere.
-  it.each([
-    'package.json',
-    'package-lock.json',
-    'release/app/package.json',
-    'extensions/src/hello-rock3/manifest.json',
-    '.erb/scripts/reset-fresh-install.ts',
-    'tools/x.ts',
-    'refresh.sh',
-    'stop-processes.mjs',
-    'platform.bible-dev.desktop',
-    'c-sharp/Paranext.Other/Other.csproj',
-    'THIRD-PARTY-NOTICES.lock.json',
-    // The root configuration sets the emit target, JSX mode and path aliases of the build.
-    'tsconfig.json',
-    'lib/platform-bible-react/tsconfig.json',
-  ])('counts %s as a change to the app', (file) => {
-    expect(recommend([file]).runtimeChanged).toBe(true);
-  });
-
-  it('counts a change to what builds or patches the app as runtime', () => {
-    const runtime = (file: string) => recommend([file]).runtimeChanged;
-    expect(runtime('.erb/configs/webpack.config.renderer.dev.ts')).toBe(true);
-    expect(runtime('extensions/webpack/webpack.config.base.ts')).toBe(true);
-    expect(runtime('patches/rc-dock+3.3.2.patch')).toBe(true);
-    expect(runtime('dev-packages.json')).toBe(true);
-    expect(runtime('electron-builder.json5')).toBe(true);
-    expect(runtime('tailwind.config.ts')).toBe(true);
-    expect(runtime('assets/localization/en.json')).toBe(true);
-    // The editor's marker stylesheets import these.
-    expect(runtime('data/pt9-css/hbkeng.css')).toBe(true);
-    // The build and install scripts run these, and what they produce ships.
-    expect(runtime('.erb/scripts/stage-dev-packages.ts')).toBe(true);
-    expect(runtime('.erb/scripts/delete-source-maps.js')).toBe(true);
-    expect(runtime('.erb/scripts/postinstall.ts')).toBe(true);
-    expect(runtime('.erb/scripts/bump-versions.ts')).toBe(true);
-    expect(runtime('.erb/scripts/third-party-notices/main.ts')).toBe(true);
-    // Fixtures only a unit test reads.
-    expect(runtime('.erb/scripts/third-party-notices/__fixtures__/overlay/policy.json')).toBe(
-      false,
-    );
-    expect(runtime('.claude/commands/review-paratext.md')).toBe(false);
-  });
-
-  // Test-runner and documentation-tooling files at the top level, and the C# test projects.
-  it.each([
-    'c-sharp-tests/Checklists/ChecklistDataModelTests.cs',
-    'c-sharp-tests/Foo/helper.cs',
-    'vitest.config.ts',
-    'vitest.setup.ts',
-    'vitest.setup.node.ts',
-    'Gemfile',
-    'Gemfile.lock',
-    'nodemon.json',
-  ])('does not count %s as a runtime change', (file) => {
-    expect(recommend([file]).runtimeChanged).toBe(false);
-  });
-
   it('neither recommends nor reports as uncovered an extension tsconfig.json', () => {
     const report = recommend(['extensions/src/x/tsconfig.json'], { sources: mapping });
     expect(report.recommendations).toEqual([]);
     expect(report.uncoveredFiles).toEqual([]);
-    expect(report.runtimeChanged).toBe(true);
   });
 
   // ParatextData does the USFM to USX conversion the editor saves through, and this project file
@@ -728,7 +628,6 @@ describe('recommendE2eTests', () => {
     const file = 'c-sharp/ParanextDataProvider.csproj';
     const report = recommend([file], { sources: {} });
     expect(report.uncoveredFiles).toEqual([file]);
-    expect(report.runtimeChanged).toBe(true);
     expect(
       recommend(['c-sharp/Paranext.Other/Other.csproj'], { sources: {} }).uncoveredFiles,
     ).toEqual([]);
@@ -740,40 +639,38 @@ describe('recommendE2eTests', () => {
     'release/app/package.json',
     'release/app/package-lock.json',
     'dev-packages.json',
-  ])('recommends the full isolated run when %s changed a dependency', (file) => {
-    const report = recommend([file], { dependencyChangedFiles: [file] });
-    const all = report.recommendations.filter((recommendation) => recommendation.key === 'all');
-    expect(all).toHaveLength(1);
-    expect(all[0]).toMatchObject({
-      command: 'npm run test:e2e:isolated all',
-      matchedFiles: [file],
-      ci: { kind: 'all' },
-      reason: 'a dependency changed',
-    });
+    'global.json',
+    'c-sharp/ParanextDataProvider.csproj',
+    'c-sharp/Directory.Build.props',
+    'patches/rc-dock+3.3.2.patch',
+    'patches/new+1.0.0.patch',
+  ])('lists %s as a file that can carry a dependency change', (file) => {
+    expect(recommend([file]).dependencyFiles).toEqual([file]);
   });
 
-  it('leaves out the also-exercised keys when the full run is recommended', () => {
-    const files = ['src/shared/services/x.ts', 'extensions/src/platform-scripture/a.ts'];
-    expect(recommend(files).alsoExercised).not.toEqual([]);
-    const report = recommend([...files, 'package.json'], {
-      dependencyChangedFiles: ['package.json'],
-    });
-    expect(recommendedKeys(report)).toContain('all');
-    expect(report.alsoExercised).toEqual([]);
+  it.each([
+    'src/main/x.ts',
+    'extensions/src/hello-rock3/package.json',
+    'extensions/package.json',
+    'lib/platform-bible-react/package.json',
+    'README.md',
+    'c-sharp/Projects/ParatextProjectDataProvider.cs',
+    'c-sharp-tests/c-sharp-tests.csproj',
+    'e2e-tests/core-specs.txt',
+  ])('does not list %s as a dependency file', (file) => {
+    expect(recommend([file]).dependencyFiles).toEqual([]);
   });
 
-  it('recommends the full run alongside the editor keys when dev-packages.json changes', () => {
-    const report = recommend(['dev-packages.json'], {
-      sources: mapping,
-      dependencyChangedFiles: ['dev-packages.json'],
-    });
-    expect(recommendedKeys(report)).toEqual(expect.arrayContaining(['all', 'scripture-editor']));
-  });
-
-  it('recommends no full run for a dependency file that changed no dependency', () => {
+  it('lists the dependency files among the changed files, sorted', () => {
     expect(
-      recommendedKeys(recommend(['package.json', 'package-lock.json', 'src/main/x.ts'])),
-    ).not.toContain('all');
+      recommend([
+        'src/main/x.ts',
+        'patches/b.patch',
+        'package.json',
+        'global.json',
+        'patches/a.patch',
+      ]).dependencyFiles,
+    ).toEqual(['global.json', 'package.json', 'patches/a.patch', 'patches/b.patch']);
   });
 
   it('says whether the changed files make CI run the editor list', () => {
@@ -1069,222 +966,6 @@ describe('recommendE2eTests', () => {
   });
 });
 
-describe('telling a dependency change from the rest of a dependency file', () => {
-  const header = ['--- a/package-lock.json', '+++ b/package-lock.json', '@@ -3 +3 @@'];
-
-  it.each([
-    [[]],
-    [['-  "name": "a"', '+  "name": "b"']],
-    [['-  "version": "1.0.0"', '+  "version": "1.0.1"']],
-    [['-  "name": "a"', '+  "name": "b"', '-  "version": "1.0.0"', '+  "version": "1.0.1"']],
-    [['+', '-  ', '+\t']],
-  ])('does not count the lock file lines %j as a dependency change', (lines) => {
-    expect(isDependencyLockChange([...header, ...lines])).toBe(false);
-  });
-
-  it.each([
-    [['-      "resolved": "https://x/a-1.tgz"', '+      "resolved": "https://x/a-2.tgz"']],
-    [['-      "integrity": "sha512-a"', '+      "integrity": "sha512-b"']],
-    [['+    "node_modules/new": {', '+      "version": "1.0.0"', '+    },']],
-    [['-  "version": "1.0.0"', '+  "version": "1.0.1"', '+      "integrity": "sha512-b"']],
-  ])('counts the lock file lines %j as a dependency change', (lines) => {
-    expect(isDependencyLockChange([...header, ...lines])).toBe(true);
-  });
-
-  const manifest = (fields: object) => JSON.stringify({ name: 'x', version: '1.0.0', ...fields });
-  const base = manifest({ scripts: { a: 'x' }, devDependencies: { eslint: '8.0.0' } });
-  const withDev = (fields: object) => manifest({ devDependencies: { eslint: '8.0.0' }, ...fields });
-
-  it.each([
-    ['a blank line', `${base}\n\n`],
-    ['a changed script', manifest({ scripts: { a: 'y' }, devDependencies: { eslint: '8.0.0' } })],
-    ['a release version bump', JSON.stringify({ ...JSON.parse(base), version: '1.1.0' })],
-  ])('does not count %s in a package file as a dependency change', (_label, after) => {
-    expect(isDependencyPackageChange(base, after)).toBe(false);
-  });
-
-  it.each([
-    [
-      'a devDependencies bump',
-      manifest({ scripts: { a: 'x' }, devDependencies: { eslint: '9.0.0' } }),
-    ],
-    ['a new dependency', withDev({ dependencies: { left: '1.0.0' } })],
-    ['an engines change', withDev({ engines: { node: '24' } })],
-    ['a volta change', withDev({ volta: { node: '24.0.0' } })],
-    ['an overrides change', withDev({ overrides: { a: '1' } })],
-    ['a peerDependencies change', withDev({ peerDependencies: { a: '1' } })],
-    ['an optionalDependencies change', withDev({ optionalDependencies: { a: '1' } })],
-    ['unparseable content', '{ not json'],
-    ['a deleted file', undefined],
-  ])('counts %s in a package file as a dependency change', (_label, after) => {
-    expect(isDependencyPackageChange(base, after)).toBe(true);
-  });
-
-  it('ignores the key order of a dependency field, not a changed value', () => {
-    const ordered = manifest({ devDependencies: { eslint: '8.0.0', prettier: '3.0.0' } });
-    const reordered = manifest({ devDependencies: { prettier: '3.0.0', eslint: '8.0.0' } });
-    expect(isDependencyPackageChange(ordered, reordered)).toBe(false);
-    expect(
-      isDependencyPackageChange(
-        ordered,
-        manifest({ devDependencies: { prettier: '3.1.0', eslint: '8.0.0' } }),
-      ),
-    ).toBe(true);
-  });
-
-  it('compares dev-packages.json by its parsed content', () => {
-    const pins = '{ "a": { "x": 1, "y": 2 }, "b": [1, 2] }';
-    expect(isDependencyPinsChange(pins, `${pins}\n\n`)).toBe(false);
-    expect(isDependencyPinsChange(pins, '{"b":[1,2],"a":{"y":2,"x":1}}')).toBe(false);
-    expect(isDependencyPinsChange(pins, '{ "a": { "x": 1, "y": 3 }, "b": [1, 2] }')).toBe(true);
-    expect(isDependencyPinsChange(pins, '{ "a": { "x": 1, "y": 2 }, "b": [2, 1] }')).toBe(true);
-    expect(isDependencyPinsChange(pins, '{ not json')).toBe(true);
-    expect(isDependencyPinsChange(undefined, pins)).toBe(true);
-    expect(isDependencyPinsChange(pins, undefined)).toBe(true);
-  });
-
-  const project = (body: string) =>
-    `<Project>\n  <PropertyGroup>\n${body}\n  </PropertyGroup>\n</Project>\n`;
-  const withReference = (reference: string) =>
-    `<Project>\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <VersionPrefix>0.1.0</VersionPrefix>\n  </PropertyGroup>\n  <ItemGroup>\n${reference}\n  </ItemGroup>\n</Project>\n`;
-  const baseReference = '    <PackageReference Include="StreamJsonRpc" Version="2.22.11" />';
-  const dotnetBase = withReference(baseReference);
-
-  it.each([
-    [
-      'a PackageReference version bump',
-      withReference('    <PackageReference Include="StreamJsonRpc" Version="2.23.0" />'),
-    ],
-    [
-      'a PackageReference swapped on its own line',
-      withReference('    <PackageReference\n      Include="Other"\n      Version="2.22.11" />'),
-    ],
-    [
-      'a VersionOverride',
-      withReference(
-        '    <PackageReference Include="StreamJsonRpc" Version="2.22.11" VersionOverride="1.0.0" />',
-      ),
-    ],
-    [
-      'a single-quoted version',
-      withReference("    <PackageReference Include='StreamJsonRpc' Version='2.23.0' />"),
-    ],
-    [
-      'a Version child element',
-      withReference(
-        '    <PackageReference Include="StreamJsonRpc">\n      <Version>2.23.0</Version>\n    </PackageReference>',
-      ),
-    ],
-    [
-      'a new PackageReference',
-      withReference(`${baseReference}\n    <PackageReference Include="New" Version="1.0.0" />`),
-    ],
-    [
-      'a central PackageVersion',
-      withReference('    <PackageVersion Include="StreamJsonRpc" Version="2.23.0" />'),
-    ],
-    ['a removed reference', withReference('')],
-    ['a TargetFramework change', dotnetBase.replace('net10.0', 'net11.0')],
-    [
-      'a TargetFrameworks change',
-      dotnetBase.replace(
-        '<TargetFramework>net10.0</TargetFramework>',
-        '<TargetFrameworks>net10.0;net9.0</TargetFrameworks>',
-      ),
-    ],
-    [
-      'a ParatextPackageVersion change',
-      project('    <ParatextPackageVersion>9.5.0.24</ParatextPackageVersion>'),
-    ],
-  ])('counts %s in a .NET project file as a dependency change', (label, after) => {
-    const befores: Record<string, string> = {
-      'a ParatextPackageVersion change': project(
-        '    <ParatextPackageVersion>9.6.0.1</ParatextPackageVersion>',
-      ),
-      'a central PackageVersion': withReference(
-        '    <PackageVersion Include="StreamJsonRpc" Version="2.22.11" />',
-      ),
-    };
-    const before = befores[label] ?? dotnetBase;
-    expect(isDotnetDependencyChange(before, after)).toBe(true);
-  });
-
-  it.each([
-    ["the project's own VersionPrefix", dotnetBase.replace('0.1.0', '0.2.0')],
-    [
-      'an AssemblyVersion',
-      dotnetBase.replace(
-        '</PropertyGroup>',
-        '  <AssemblyVersion>1.2.3.4</AssemblyVersion>\n  </PropertyGroup>',
-      ),
-    ],
-    [
-      'an InformationalVersion',
-      dotnetBase.replace(
-        '</PropertyGroup>',
-        '  <InformationalVersion>1.2.3-x</InformationalVersion>\n  </PropertyGroup>',
-      ),
-    ],
-    [
-      'a Nullable property',
-      dotnetBase.replace('</PropertyGroup>', '  <Nullable>enable</Nullable>\n  </PropertyGroup>'),
-    ],
-    [
-      'a Compile Include',
-      dotnetBase.replace('</ItemGroup>', '  <Compile Include="x.cs" />\n  </ItemGroup>'),
-    ],
-    [
-      'a comment',
-      dotnetBase.replace(
-        '<ItemGroup>',
-        '<!-- <PackageReference Include="Old" Version="1.0.0" /> -->\n  <ItemGroup>',
-      ),
-    ],
-    [
-      'a reformat of the reference',
-      withReference(
-        '    <PackageReference\n        Include="StreamJsonRpc"\n        Version="2.22.11"\n    />',
-      ),
-    ],
-  ])('does not count %s in a .NET project file', (_label, after) => {
-    expect(isDotnetDependencyChange(dotnetBase, after)).toBe(false);
-  });
-
-  it('compares quote style, child elements and target framework lists by value', () => {
-    const child = (version: string) =>
-      withReference(
-        `    <PackageReference Include="StreamJsonRpc">\n      <Version>${version}</Version>\n    </PackageReference>`,
-      );
-    expect(isDotnetDependencyChange(child('2.22.11'), child('2.22.11'))).toBe(false);
-    expect(isDotnetDependencyChange(child('2.22.11'), child('2.23.0'))).toBe(true);
-    expect(
-      isDotnetDependencyChange(
-        dotnetBase,
-        withReference("    <PackageReference Include='StreamJsonRpc' Version='2.22.11' />"),
-      ),
-    ).toBe(false);
-    const frameworks = (list: string) =>
-      project(`    <TargetFrameworks>${list}</TargetFrameworks>`);
-    expect(
-      isDotnetDependencyChange(frameworks('net10.0;net9.0'), frameworks('net10.0;net9.0')),
-    ).toBe(false);
-    expect(
-      isDotnetDependencyChange(frameworks('net10.0;net9.0'), frameworks('net10.0;net8.0')),
-    ).toBe(true);
-  });
-
-  it('compares a new or deleted .NET project file with an empty one', () => {
-    expect(isDotnetDependencyChange(undefined, dotnetBase)).toBe(true);
-    expect(isDotnetDependencyChange(dotnetBase, undefined)).toBe(true);
-    expect(isDotnetDependencyChange(undefined, '<Project />')).toBe(false);
-  });
-
-  it('counts a package file that is missing or unparseable at the merge base', () => {
-    expect(isDependencyPackageChange(undefined, base)).toBe(true);
-    expect(isDependencyPackageChange('{ not json', base)).toBe(true);
-  });
-});
-
 describe('the editor list and the map', () => {
   // CI runs the editor list for every path `editor_paths` names; a runtime file among them that no
   // key lists would be recommended nothing, so the map must follow that list.
@@ -1297,22 +978,12 @@ describe('the editor list and the map', () => {
     )
       .split('\n')
       .filter((file) => file !== '');
-    // The full run recommended for a dependency change is not a key from the map.
     const reachesAKey = (file: string) =>
-      recommend([file], { sources: mapping, dependencyChangedFiles: [file] }).recommendations.some(
-        (recommendation) => recommendation.key !== 'all',
-      );
+      recommend([file], { sources: mapping }).recommendations.length > 0;
     const triggering = tracked.filter(
-      (file) => pattern.test(file) && !isNonRuntime(file) && isAppFile(file),
+      (file) => pattern.test(file) && !isNonRuntime(file) && !file.startsWith('e2e-tests/'),
     );
     expect(triggering).toContain('c-sharp/assets/usfm.sty');
-    // Control: a file only the full run covers does not reach a key.
-    expect(
-      recommend(['dev-packages.json'], {
-        sources: {},
-        dependencyChangedFiles: ['dev-packages.json'],
-      }).recommendations.map((recommendation) => recommendation.key),
-    ).toEqual(['all']);
     // One path per line, so a failure lists every file the map leaves out.
     expect(triggering.filter((file) => !reachesAKey(file)).join('\n')).toBe('');
   });
@@ -1573,251 +1244,12 @@ describe('readGitChanges', () => {
     });
   });
 
-  const lockFile = (name: string, version: string, resolved = 'a-1.tgz') =>
-    `{\n  "name": "${name}",\n  "version": "${version}",\n  "packages": {\n    "": {\n      "name": "${name}",\n      "version": "${version}"\n    },\n    "node_modules/x": {\n      "version": "1.0.0",\n      "resolved": "${resolved}"\n    }\n  }\n}\n`;
-  const packageFile = (fields: object, trailing = '\n') =>
-    `${JSON.stringify({ name: 'x', version: '1.0.0', scripts: { a: 'x' }, ...fields }, undefined, 2)}${trailing}`;
-
-  /** Commits the dependency files, then runs `body` with the base SHA. */
-  function withDependencyFiles(body: (repoRoot: string, base: string) => void) {
-    withTemporaryRepository((repoRoot) => {
-      writeFile(repoRoot, 'package-lock.json', lockFile('base', '1.0.0'));
-      writeFile(repoRoot, 'package.json', packageFile({ devDependencies: { eslint: '8.0.0' } }));
-      writeFile(repoRoot, 'release/app/package.json', packageFile({ dependencies: { a: '1' } }));
-      writeFile(repoRoot, 'dev-packages.json', '{ "a": 1 }\n');
-      writeFile(repoRoot, 'release/app/package-lock.json', lockFile('app', '1.0.0'));
-      runGit(repoRoot, 'add', '-A');
-      runGit(repoRoot, 'commit', '--quiet', '-m', 'dependency files');
-      body(repoRoot, runGit(repoRoot, 'rev-parse', 'HEAD'));
-    });
-  }
-
-  it('leaves out a package-lock.json whose only change is the name field', () => {
-    withDependencyFiles((repoRoot, base) => {
-      writeFile(repoRoot, 'package-lock.json', lockFile('worktree-directory', '1.0.0'));
-      const changes = readGitChanges(repoRoot, base);
-      expect(changes.changedFiles).not.toContain('package-lock.json');
-      expect(changes.dependencyChangedFiles).toEqual([]);
-    });
-  });
-
-  it('keeps a version-only change as a changed file but not as a dependency change', () => {
-    withDependencyFiles((repoRoot, base) => {
-      writeFile(repoRoot, 'package-lock.json', lockFile('base', '1.1.0'));
-      writeFile(
-        repoRoot,
-        'release/app/package.json',
-        packageFile({ dependencies: { a: '1' } }).replace('1.0.0', '1.1.0'),
-      );
-      const changes = readGitChanges(repoRoot, base);
-      expect(changes.changedFiles).toEqual(
-        expect.arrayContaining(['package-lock.json', 'release/app/package.json']),
-      );
-      expect(changes.dependencyChangedFiles).toEqual([]);
-    });
-  });
-
-  it('applies the lock file rule to the packaged app lock file too', () => {
-    withDependencyFiles((repoRoot, base) => {
-      writeFile(repoRoot, 'release/app/package-lock.json', lockFile('app', '1.1.0'));
-      let changes = readGitChanges(repoRoot, base);
-      expect(changes.changedFiles).toContain('release/app/package-lock.json');
-      expect(changes.dependencyChangedFiles).toEqual([]);
-
-      writeFile(repoRoot, 'release/app/package-lock.json', lockFile('app', '1.1.0', 'a-2.tgz'));
-      changes = readGitChanges(repoRoot, base);
-      expect(changes.dependencyChangedFiles).toEqual(['release/app/package-lock.json']);
-
-      writeFile(repoRoot, 'release/app/package-lock.json', lockFile('other', '1.0.0'));
-      expect(readGitChanges(repoRoot, base).changedFiles).not.toContain(
-        'release/app/package-lock.json',
-      );
-    });
-  });
-
-  /** Commits the files given, then runs `body` with the base SHA. */
-  function withCommittedFiles(
-    files: Record<string, string>,
-    body: (repoRoot: string, base: string) => void,
-  ) {
-    withTemporaryRepository((repoRoot) => {
-      Object.entries(files).forEach(([file, content]) => writeFile(repoRoot, file, content));
-      runGit(repoRoot, 'add', '-A');
-      runGit(repoRoot, 'commit', '--quiet', '-m', 'files');
-      body(repoRoot, runGit(repoRoot, 'rev-parse', 'HEAD'));
-    });
-  }
-
-  const project = (stream: string, extra = '') =>
-    `<Project>\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>${extra}\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include="StreamJsonRpc" Version="${stream}" />\n  </ItemGroup>\n</Project>\n`;
-
-  it('counts a .NET package version bump, not an unrelated project file edit', () => {
-    withCommittedFiles(
-      {
-        'c-sharp/ParanextDataProvider.csproj': project('2.22.11'),
-        'c-sharp/Directory.Build.props': project('2.22.11'),
-        'c-sharp-tests/c-sharp-tests.csproj': project('2.22.11'),
-        'c-sharp/Paranext.Analyzers.Tests/x.csproj': project('2.22.11'),
-        'c-sharp/Paranext.Analyzers/Paranext.Analyzers.csproj': project('2.22.11'),
-      },
-      (repoRoot, base) => {
-        writeFile(
-          repoRoot,
-          'c-sharp/ParanextDataProvider.csproj',
-          project('2.22.11', '\n    <!-- a note -->\n    <Nullable>enable</Nullable>'),
-        );
-        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
-
-        writeFile(repoRoot, 'c-sharp/ParanextDataProvider.csproj', project('2.23.0'));
-        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([
-          'c-sharp/ParanextDataProvider.csproj',
-        ]);
-
-        writeFile(repoRoot, 'c-sharp/ParanextDataProvider.csproj', project('2.22.11'));
-        writeFile(repoRoot, 'c-sharp/Directory.Build.props', project('2.23.0'));
-        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([
-          'c-sharp/Directory.Build.props',
-        ]);
-
-        writeFile(repoRoot, 'c-sharp/Directory.Build.props', project('2.22.11'));
-        writeFile(repoRoot, 'c-sharp-tests/c-sharp-tests.csproj', project('2.23.0'));
-        writeFile(repoRoot, 'c-sharp/Paranext.Analyzers.Tests/x.csproj', project('2.23.0'));
-        writeFile(
-          repoRoot,
-          'c-sharp/Paranext.Analyzers/Paranext.Analyzers.csproj',
-          project('2.23.0'),
-        );
-        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
-      },
-    );
-  });
-
-  it('counts a new untracked patch, global.json, pins file and project file', () => {
-    withCommittedFiles({ 'README.md': 'x\n' }, (repoRoot, base) => {
-      writeFile(repoRoot, 'patches/new+1.0.0.patch', 'diff --git a/x b/x\n+one\n');
-      writeFile(repoRoot, 'global.json', '{ "sdk": { "version": "10.0.100" } }\n');
-      writeFile(repoRoot, 'dev-packages.json', '{ "a": 1 }\n');
-      writeFile(repoRoot, 'c-sharp/New.csproj', project('2.23.0'));
-      writeFile(repoRoot, 'c-sharp-tests/New.csproj', project('2.23.0'));
-      writeFile(repoRoot, 'patches/README.md', 'notes\n');
-      writeFile(repoRoot, 'c-sharp/Plain.csproj', '<Project />\n');
-      writeFile(repoRoot, 'package-lock.json', '{}\n');
-      writeFile(repoRoot, 'release/app/package-lock.json', '{}\n');
-      expect(readGitChanges(repoRoot, base).dependencyChangedFiles.sort()).toEqual([
-        'c-sharp/New.csproj',
-        'dev-packages.json',
-        'global.json',
-        'package-lock.json',
-        'patches/new+1.0.0.patch',
-        'release/app/package-lock.json',
-      ]);
-    });
-  });
-
-  it('does not count a non-patch file under patches/', () => {
-    withCommittedFiles({ 'patches/README.md': 'a\n' }, (repoRoot, base) => {
-      writeFile(repoRoot, 'patches/README.md', 'b\n');
-      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
-    });
-  });
-
-  it('says on stderr when it cannot read a dependency file, but not when the file is missing', () => {
-    withCommittedFiles({ 'dev-packages.json': '{ "a": 1 }\n' }, (repoRoot, base) => {
-      const written: string[] = [];
-      const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
-        written.push(String(chunk));
-        return true;
-      });
-      try {
-        // A directory where the file is expected cannot be read as a file.
-        fs.rmSync(path.join(repoRoot, 'dev-packages.json'));
-        fs.mkdirSync(path.join(repoRoot, 'dev-packages.json'));
-        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([
-          'dev-packages.json',
-        ]);
-        expect(written.join('')).toContain('e2e-recommendations: could not read dev-packages.json');
-
-        // A file that does not exist in the working tree is just missing.
-        written.length = 0;
-        fs.rmdirSync(path.join(repoRoot, 'dev-packages.json'));
-        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([
-          'dev-packages.json',
-        ]);
-        expect(written.join('')).toBe('');
-      } finally {
-        spy.mockRestore();
-      }
-    });
-  });
-
-  it('counts any change to global.json and to a patch', () => {
-    withCommittedFiles(
-      {
-        'global.json': '{ "sdk": { "version": "10.0.100" } }\n',
-        'patches/a+1.0.0.patch': 'diff --git a/x b/x\n+one\n',
-      },
-      (repoRoot, base) => {
-        writeFile(repoRoot, 'global.json', '{ "sdk": { "version": "10.0.200" } }\n');
-        writeFile(repoRoot, 'patches/a+1.0.0.patch', 'diff --git a/x b/x\n+two\n');
-        expect(readGitChanges(repoRoot, base).dependencyChangedFiles.sort()).toEqual([
-          'global.json',
-          'patches/a+1.0.0.patch',
-        ]);
-      },
-    );
-  });
-
-  it('does not count a workspace package.json on its own', () => {
-    withCommittedFiles(
-      { 'lib/x/package.json': packageFile({ dependencies: { a: '1' } }) },
-      (repoRoot, base) => {
-        writeFile(repoRoot, 'lib/x/package.json', packageFile({ dependencies: { a: '2' } }));
-        const changes = readGitChanges(repoRoot, base);
-        expect(changes.changedFiles).toContain('lib/x/package.json');
-        expect(changes.dependencyChangedFiles).toEqual([]);
-      },
-    );
-  });
-
-  it('compares dev-packages.json by content, so a reformat is not a pin change', () => {
-    withCommittedFiles({ 'dev-packages.json': '{ "a": 1, "b": 2 }\n' }, (repoRoot, base) => {
-      writeFile(repoRoot, 'dev-packages.json', '{\n  "b": 2,\n  "a": 1\n}\n\n');
-      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
-      writeFile(repoRoot, 'dev-packages.json', '{ "a": 1, "b": 3 }\n');
-      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual(['dev-packages.json']);
-    });
-  });
-
-  it('counts a lock file whose resolved package changed', () => {
-    withDependencyFiles((repoRoot, base) => {
-      writeFile(repoRoot, 'package-lock.json', lockFile('base', '1.0.0', 'a-2.tgz'));
-      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual(['package-lock.json']);
-    });
-  });
-
-  it('counts a package.json only when a dependency field differs from the merge base', () => {
-    withDependencyFiles((repoRoot, base) => {
-      const dev = { devDependencies: { eslint: '8.0.0' } };
-      writeFile(repoRoot, 'package.json', packageFile(dev, '\n\n'));
-      expect(readGitChanges(repoRoot, base).changedFiles).toContain('package.json');
-      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
-
-      writeFile(repoRoot, 'package.json', packageFile({ ...dev, scripts: { a: 'changed' } }));
-      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
-
-      writeFile(repoRoot, 'package.json', packageFile({ devDependencies: { eslint: '9.0.0' } }));
-      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual(['package.json']);
-    });
-  });
-
-  it('counts any change to dev-packages.json and a package file deleted since the merge base', () => {
-    withDependencyFiles((repoRoot, base) => {
-      writeFile(repoRoot, 'dev-packages.json', '{ "a": 2 }\n');
-      fs.rmSync(path.join(repoRoot, 'release/app/package.json'));
-      expect(readGitChanges(repoRoot, base).dependencyChangedFiles.sort()).toEqual([
-        'dev-packages.json',
-        'release/app/package.json',
-      ]);
+  it('lists an untracked patch among the changed files, so the report lists it as a dependency file', () => {
+    withTemporaryRepository((repoRoot, baseSha) => {
+      writeFile(repoRoot, 'patches/zz+1.0.0.patch', 'a patch\n');
+      const { changedFiles } = readGitChanges(repoRoot, baseSha);
+      expect(changedFiles).toContain('patches/zz+1.0.0.patch');
+      expect(recommend(changedFiles).dependencyFiles).toEqual(['patches/zz+1.0.0.patch']);
     });
   });
 
@@ -1878,10 +1310,10 @@ describe('command-line entry point', () => {
     );
     expect(Object.keys(JSON.parse(output)).sort()).toEqual([
       'alsoExercised',
+      'dependencyFiles',
       'editorListRuns',
       'entryPointFiles',
       'recommendations',
-      'runtimeChanged',
       'specsChanged',
       'stalePrefixes',
       'uncoveredFiles',
