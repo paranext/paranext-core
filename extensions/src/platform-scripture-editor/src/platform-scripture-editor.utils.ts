@@ -975,11 +975,42 @@ export function getEditorTitleEditability(
 }
 
 /**
+ * Picks the icon name an editor tab shows. A resource tab shows the book icon whatever was saved.
+ *
+ * Any other tab keeps its saved name. An editor tab's project never changes in place, so a saved
+ * `'book-open'` exists only on a resource tab; keeping the saved name preserves the resource icon
+ * when the published-state lookup fails while a layout is restored.
+ *
+ * @param isResource Whether the tab's project is a published resource
+ * @param savedIconName The icon name saved with the tab's layout, if any
+ */
+export function getEditorTabIconName(
+  isResource: boolean,
+  savedIconName: string | undefined,
+): string | undefined {
+  return isResource ? 'book-open' : savedIconName;
+}
+
+/**
+ * Removes the `{editable}` placeholder from a title format together with one adjacent run of
+ * whitespace: the run before it, or the run after it when nothing precedes it. Whitespace anywhere
+ * else in the format is left alone.
+ */
+function removeEditablePlaceholder(titleFormat: string): string {
+  const match = /(\s*)\{editable\}/.exec(titleFormat);
+  if (!match) return titleFormat;
+  const before = titleFormat.slice(0, match.index);
+  const after = titleFormat.slice(match.index + match[0].length);
+  return before === '' ? after.trimStart() : before + after;
+}
+
+/**
  * Builds the editor's tab title. A localize key title is localized, then `{projectName}` is
  * replaced with the project's short name (or its id when the name is unavailable) and `{editable}`
- * with the editable or read-only indicator, or with nothing for a resource (leftover spaces are
- * trimmed and collapsed). `{projectId}` is replaced with the short name too, for titles written
- * before `{projectName}` existed.
+ * with the editable or read-only indicator, or with nothing for a resource (the placeholder is
+ * removed from the format together with the whitespace beside it, and the title's ends are trimmed;
+ * spacing elsewhere, including inside the project name, is kept). `{projectId}` is replaced with
+ * the short name too, for titles written before `{projectName}` existed.
  *
  * @param editability Which indicator `{editable}` shows. Without a project id, `'resource'` behaves
  *   like `'readOnly'`.
@@ -1008,14 +1039,18 @@ export async function formatEditorTitle(
     if (hasNoIndicator) editable = '';
     else if (editability === 'editable') editable = localizedStrings[EDITABLE_KEY];
 
+    const titleFormatStr = hasNoIndicator
+      ? removeEditablePlaceholder(localizedTitleFormatStr)
+      : localizedTitleFormatStr;
+
     if (projectId) {
       const projectName = getProjectDisplayName(projectId, await getProjectName(projectId));
-      title = formatProjectTitle(localizedTitleFormatStr, projectId, projectName, {
+      title = formatProjectTitle(titleFormatStr, projectId, projectName, {
         projectId: projectName,
         editable,
       });
-    } else title = formatReplacementString(localizedTitleFormatStr, { projectId, editable });
-    if (hasNoIndicator) title = title.replace(/\s+/g, ' ').trim();
+    } else title = formatReplacementString(titleFormatStr, { projectId, editable });
+    if (hasNoIndicator) title = title.trim();
   }
 
   return title;

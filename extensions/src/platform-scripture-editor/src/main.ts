@@ -39,6 +39,7 @@ import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getEditorTabIconName,
   getEditorTitleEditability,
   isProjectPublished,
   buildScriptureEditorWebViewState,
@@ -650,7 +651,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     return {
       ...savedWebView,
       title,
-      iconName: isResource ? 'book-open' : savedWebView.iconName,
+      iconName: getEditorTabIconName(isResource, savedWebView.iconName),
       iconUrl: optionsIconUrl ?? savedWebView.iconUrl,
       tooltip: optionsTooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,

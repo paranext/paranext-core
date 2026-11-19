@@ -1365,6 +1365,15 @@ describe('hasNonCollapsedSelection', () => {
     expect(hasNonCollapsedSelection({ start, end: { ...start } })).toBe(false);
   });
 
+  it('is false when the end has the start values with its keys in another order', () => {
+    expect(
+      hasNonCollapsedSelection({
+        start: { jsonPath: '$.content[1].content[0]', offset: 0 },
+        end: { offset: 0, jsonPath: '$.content[1].content[0]' },
+      }),
+    ).toBe(false);
+  });
+
   it('is false when there is no selection', () => {
     expect(hasNonCollapsedSelection(undefined)).toBe(false);
   });
@@ -1434,7 +1443,7 @@ describe('menus.json dynamic conditions', () => {
   ];
 
   it.each(COMMANDS_WITH_PER_MODE_VARIANTS)(
-    'declares the same when and enabledWhen on both per-mode items of %s',
+    'declares the same label, group, command, when and enabledWhen on both per-mode items of %s',
     (command) => {
       const variants = topMenu.items.filter(
         (item: { command?: string }) => item.command === command,
@@ -1442,6 +1451,9 @@ describe('menus.json dynamic conditions', () => {
       expect(variants).toHaveLength(2);
       expect(variants[0].when).toEqual(expect.any(String));
       expect(variants[0].enabledWhen).toEqual(expect.any(String));
+      expect(variants[1].label).toBe(variants[0].label);
+      expect(variants[1].group).toBe(variants[0].group);
+      expect(variants[1].command).toBe(variants[0].command);
       expect(variants[1].when).toBe(variants[0].when);
       expect(variants[1].enabledWhen).toBe(variants[0].enabledWhen);
     },
