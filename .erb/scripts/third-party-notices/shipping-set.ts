@@ -385,15 +385,20 @@ export type ImportedPackage = {
 
 /**
  * Folders whose files exist only to serve tests: mocks, the fixtures that
- * `paratext-bible-internal-extensions` keeps in `__test-fixtures__` (which import `vitest`), and
- * the setup files and stubs that `paratext-assistant` keeps in `test-utils` (which import `vitest`
- * and `@testing-library/*`). `test-utils` is the folder form of the `*.test-utils.*` file name
- * below.
+ * `paratext-bible-internal-extensions` keeps in `__test-fixtures__` (which import `vitest`), the
+ * setup files and stubs that `paratext-assistant` keeps in `test-utils` (which import `vitest` and
+ * `@testing-library/*`), and `__tests__`, which Jest's default `testMatch` treats as test code
+ * throughout. `test-utils` is the folder form of the `*.test-utils.*` file name below. Helpers in
+ * `__tests__` often miss that name: this repository's `src/main/services/__tests__/` has
+ * `service-router-test.util.ts` and `message-port-main-shim.test.util.ts`.
+ *
+ * `testing` is deliberately absent: `src/renderer/testing/` holds renderer panels that ship.
  */
 const TEST_SUPPORT_FOLDERS = new Set([
   '__mocks__',
   '__fixtures__',
   '__test-fixtures__',
+  '__tests__',
   'test-utils',
 ]);
 
