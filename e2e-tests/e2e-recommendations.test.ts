@@ -46,20 +46,33 @@ describe('subset-sources.json', () => {
     expect(expectedKeys.filter((name) => !keys.includes(name))).toEqual([]);
   });
 
-  // The recommender collapses these specs into one command only when each has a key of its own.
-  it('has a key for every no-unasked-edits spec of the scripture editor', () => {
-    const missing = fs
-      .readdirSync(path.join(ISOLATED_DIRECTORY, 'scripture-editor'))
-      .filter((name) => name.startsWith('no-unasked-edits-') && name.endsWith('.spec.ts'))
-      .map((name) => `scripture-editor/${name}`)
-      .filter((key) => !keys.includes(key));
-    expect(missing).toEqual([]);
+  // A prefix key is a path filter inside a subset (`scripture-editor/no-unasked-edits-`). One that
+  // matches no spec silently recommends nothing, so it must match at least one.
+  const specPaths = fs
+    .readdirSync(ISOLATED_DIRECTORY, { recursive: true, encoding: 'utf8' })
+    .map((entry) => entry.split(path.sep).join('/'))
+    .filter((entry) => entry.endsWith('.spec.ts'));
+  const isPrefixKey = (key: string) => key.includes('/') && !key.endsWith('.spec.ts');
+
+  it('has a prefix key for the no-unasked-edits family, covering every spec in it', () => {
+    expect(keys).toContain('scripture-editor/no-unasked-edits-');
+    const family = specPaths.filter((entry) =>
+      entry.startsWith('scripture-editor/no-unasked-edits-'),
+    );
+    expect(family.length).toBeGreaterThan(1);
   });
 
-  it.each(keys)('%s names a subset or spec that exists', (key) => {
-    const stat = fs.statSync(path.join(ISOLATED_DIRECTORY, key), { throwIfNoEntry: false });
-    expect(key.endsWith('.spec.ts') ? stat?.isFile() : stat?.isDirectory()).toBe(true);
+  it.each(keys.filter(isPrefixKey))('prefix key %s matches at least one spec file', (key) => {
+    expect(specPaths.filter((entry) => entry.startsWith(key))).not.toEqual([]);
   });
+
+  it.each(keys.filter((key) => !isPrefixKey(key)))(
+    '%s names a subset or spec that exists',
+    (key) => {
+      const stat = fs.statSync(path.join(ISOLATED_DIRECTORY, key), { throwIfNoEntry: false });
+      expect(key.endsWith('.spec.ts') ? stat?.isFile() : stat?.isDirectory()).toBe(true);
+    },
+  );
 
   it.each(keys)('%s has exactly the lists main and incidental', (key) => {
     expect(Object.keys(mapping[key]).sort()).toEqual(['incidental', 'main']);
@@ -331,37 +344,72 @@ describe('recommendE2eTests', () => {
     expect(recommendedKeys(recommend([file], { sources: real }))).toContain(expectedKey);
   });
 
-  it('collapses the no-unasked-edits specs into one command in the real mapping', () => {
-    const real: SubsetSources = JSON.parse(fs.readFileSync(MAPPING_PATH, 'utf8'));
+  it('recommends the no-unasked-edits specs as one prefix key running exactly them, in the real mapping', () => {
     const editorDirectory = path.join(ISOLATED_DIRECTORY, 'scripture-editor');
     const specNames = fs
       .readdirSync(editorDirectory)
       .filter((name) => name.endsWith('.spec.ts'))
       .sort();
-    const expectedMembers = specNames
-      .filter((name) => name.startsWith('no-unasked-edits-'))
-      .map((name) => `scripture-editor/${name}`);
-    expect(expectedMembers.length).toBeGreaterThan(1);
+    const family = specNames.filter((name) => name.startsWith('no-unasked-edits-'));
+    expect(family.length).toBeGreaterThan(1);
     const report = recommend(['c-sharp/Projects/ParatextProjectDataProvider.cs'], {
-      sources: real,
+      sources: mapping,
+      coreSpecs: [`e2e-tests/tests/isolated/scripture-editor/${family[0]}`],
       specFilesBySubset: {
         'scripture-editor': specNames.map(
           (name) => `e2e-tests/tests/isolated/scripture-editor/${name}`,
         ),
       },
     });
-    const collapsed = report.recommendations.filter(
+    const item = report.recommendations.filter(
       (recommendation) => recommendation.key === 'scripture-editor/no-unasked-edits-',
     );
-    expect(collapsed).toHaveLength(1);
-    expect(collapsed[0].command).toBe(
+    expect(item).toHaveLength(1);
+    expect(item[0].command).toBe(
       'npm run test:e2e:isolated e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-',
     );
-    expect(collapsed[0].memberKeys).toEqual(expectedMembers);
-    expect(collapsed[0].ci).toMatchObject({ kind: 'subset', specCount: expectedMembers.length });
+    expect(item[0].memberKeys).toBeUndefined();
+    expect(item[0].ci).toEqual({
+      kind: 'subset',
+      alwaysCoreSpecCount: 1,
+      editorCoreSpecCount: 0,
+      specCount: family.length,
+    });
     expect(recommendedKeys(report).filter((key) => key.includes('no-unasked-edits-'))).toEqual([
       'scripture-editor/no-unasked-edits-',
     ]);
+  });
+
+  it('lets a prefix key win over its subset and folds into the subset when it is recommended', () => {
+    const sources: SubsetSources = {
+      a: { main: ['src/a/'], incidental: [] },
+      'a/x-': { main: ['src/a/x.ts', 'src/b/'], incidental: [] },
+    };
+    expect(recommendedKeys(recommend(['src/a/x.ts'], { sources }))).toEqual(['a/x-']);
+    const both = recommend(['src/a/x.ts', 'src/a/y.ts'], { sources });
+    expect(recommendedKeys(both)).toEqual(['a']);
+    expect(both.recommendations[0].matchedFiles).toEqual(['src/a/x.ts', 'src/a/y.ts']);
+  });
+
+  it('counts the specs a prefix key runs from the subset spec list', () => {
+    const report = recommend(['src/b/f.ts'], {
+      sources: { 'a/x-': { main: ['src/b/'], incidental: [] } },
+      coreSpecs: ['e2e-tests/tests/isolated/a/x-one.spec.ts'],
+      editorCoreSpecs: ['e2e-tests/tests/isolated/a/y.spec.ts'],
+      specFilesBySubset: {
+        a: [
+          'e2e-tests/tests/isolated/a/x-one.spec.ts',
+          'e2e-tests/tests/isolated/a/x-two.spec.ts',
+          'e2e-tests/tests/isolated/a/y.spec.ts',
+        ],
+      },
+    });
+    expect(report.recommendations[0].ci).toEqual({
+      kind: 'subset',
+      alwaysCoreSpecCount: 1,
+      editorCoreSpecCount: 0,
+      specCount: 2,
+    });
   });
 
   it('collapses spec keys of one subset only when they matched the same files', () => {

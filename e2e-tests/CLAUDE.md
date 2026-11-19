@@ -59,7 +59,8 @@ entry in `test.yml` reaches no key through `main`: add it to the right key. A pr
 `e2e-recommendations.ts` reports it as `stalePrefixes`, and `/review-paratext` shows it to the
 author as a warning, so moving or deleting a source file a prefix names means updating the prefix.
 `/review-paratext` uses the map to recommend which subsets to run. A new
-`scripture-editor/no-unasked-edits-*.spec.ts` needs a spec key of its own too.
+`scripture-editor/no-unasked-edits-*.spec.ts` needs no key of its own: the prefix key
+`scripture-editor/no-unasked-edits-` covers it.
 
 `/review-paratext` stops asking whether a branch needs a new e2e test once the report's
 `specsChanged` is true: the branch changes an e2e spec or its support code (any `.ts` under

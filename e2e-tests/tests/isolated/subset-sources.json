@@ -423,77 +423,7 @@
       "src/main/services/book-chapter-control.service-router.ts"
     ]
   },
-  "scripture-editor/no-unasked-edits-footnotes-pane-power-standard.spec.ts": {
-    "main": [
-      "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "c-sharp/assets/usfm.sty",
-      "c-sharp/assets/usfm_sb.sty",
-      "src/node/polyfills/dom-globals.polyfill.ts",
-      "c-sharp/ParanextDataProvider.csproj"
-    ],
-    "incidental": []
-  },
-  "scripture-editor/no-unasked-edits-footnotes-pane-simple.spec.ts": {
-    "main": [
-      "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "c-sharp/assets/usfm.sty",
-      "c-sharp/assets/usfm_sb.sty",
-      "src/node/polyfills/dom-globals.polyfill.ts",
-      "c-sharp/ParanextDataProvider.csproj"
-    ],
-    "incidental": []
-  },
-  "scripture-editor/no-unasked-edits-invisible-characters-off-power-standard.spec.ts": {
-    "main": [
-      "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "c-sharp/assets/usfm.sty",
-      "c-sharp/assets/usfm_sb.sty",
-      "src/node/polyfills/dom-globals.polyfill.ts",
-      "c-sharp/ParanextDataProvider.csproj"
-    ],
-    "incidental": []
-  },
-  "scripture-editor/no-unasked-edits-invisible-characters-on-power-standard.spec.ts": {
-    "main": [
-      "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "c-sharp/assets/usfm.sty",
-      "c-sharp/assets/usfm_sb.sty",
-      "src/node/polyfills/dom-globals.polyfill.ts",
-      "c-sharp/ParanextDataProvider.csproj"
-    ],
-    "incidental": []
-  },
-  "scripture-editor/no-unasked-edits-invisible-characters-on-simple-paragraph-structure.spec.ts": {
-    "main": [
-      "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "c-sharp/assets/usfm.sty",
-      "c-sharp/assets/usfm_sb.sty",
-      "src/node/polyfills/dom-globals.polyfill.ts",
-      "c-sharp/ParanextDataProvider.csproj"
-    ],
-    "incidental": []
-  },
-  "scripture-editor/no-unasked-edits-power-preview.spec.ts": {
-    "main": [
-      "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "c-sharp/assets/usfm.sty",
-      "c-sharp/assets/usfm_sb.sty",
-      "src/node/polyfills/dom-globals.polyfill.ts",
-      "c-sharp/ParanextDataProvider.csproj"
-    ],
-    "incidental": []
-  },
-  "scripture-editor/no-unasked-edits-power-standard.spec.ts": {
-    "main": [
-      "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "c-sharp/assets/usfm.sty",
-      "c-sharp/assets/usfm_sb.sty",
-      "src/node/polyfills/dom-globals.polyfill.ts",
-      "c-sharp/ParanextDataProvider.csproj"
-    ],
-    "incidental": []
-  },
-  "scripture-editor/no-unasked-edits-simple-paragraph-structure.spec.ts": {
+  "scripture-editor/no-unasked-edits-": {
     "main": [
       "c-sharp/Projects/ParatextProjectDataProvider.cs",
       "c-sharp/assets/usfm.sty",

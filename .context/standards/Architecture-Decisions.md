@@ -2909,17 +2909,21 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   source a spec exists to test: a spec's imports and selectors name what it drives, not what it
   verifies, and an ordinary editor change reached 10 of 35 groups when every touched file counted.
 - **Decision:** `e2e-tests/tests/isolated/subset-sources.json` maps each key (a subset directory, a
-  loose spec, or a spec key: one spec inside a subset that names sources of its own) to repository
-  path prefixes, and `e2e-tests/e2e-recommendations.ts` matches a branch's changed files against it
+  loose spec, a spec key: one spec inside a subset that names sources of its own, or a prefix key:
+  a path prefix inside a subset, such as `scripture-editor/no-unasked-edits-`, that names the
+  sources of every spec starting with it, new ones included, and must match at least one spec file)
+  to repository path prefixes, and `e2e-tests/e2e-recommendations.ts` matches a branch's changed files against it
   for `/review-paratext` Step 3.5. The rules:
   - **`main` versus `incidental`.** `main` is source the group exists to test and produces a
     recommendation; `incidental` is source the group only drives on its way and produces an
     "also exercised" line, never a question.
-  - **A spec key wins over its subset** for a file that reaches both, so a change to one data
-    provider file runs the eight specs that judge it, not the whole editor subset. When the subset
-    is recommended anyway, the spec key is folded into it. Spec keys of one subset that matched the
-    same files collapse into one path-filter command, only when that command runs exactly those
-    specs.
+  - **A spec key or prefix key wins over its subset** for a file that reaches both, so a change to
+    one data provider file runs the specs that judge it (the `no-unasked-edits-` family), not the
+    whole editor subset. When the subset is recommended anyway, the key is folded into it. A family
+    of specs that shares its sources gets one prefix key rather than one spec key per spec, so a
+    new spec in the family is covered without a map edit. Spec keys of one subset that matched the
+    same files still collapse into one path-filter command, only when that command runs exactly
+    those specs.
   - **What counts as app code.** `NON_RUNTIME` lists the shapes the app never loads (tests,
     stories, docs, dotfiles, package and build metadata). A unit test runs it over every tracked
     file under the source roots and fails on a file that is plainly not app code but still

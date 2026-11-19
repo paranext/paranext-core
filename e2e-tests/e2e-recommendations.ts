@@ -24,10 +24,14 @@ import {
  * only drive along the way (`incidental`). A trailing `/` makes a prefix a directory.
  *
  * A key is a subset (a directory under `tests/isolated/`, such as `docking`), a loose spec directly
- * under it (`comments-tab.spec.ts`) or a spec key: one spec file inside a subset
- * (`scripture-editor/chapter-marker-repair.spec.ts`), which lets that spec name sources of its own.
- * A file that reaches both a subset and one of its spec keys through `main` counts for the spec key
- * first; the report then folds the spec key into the subset when both are recommended.
+ * under it (`comments-tab.spec.ts`), a spec key: one spec file inside a subset
+ * (`scripture-editor/chapter-marker-repair.spec.ts`), which lets that spec name sources of its own,
+ * or a prefix key: a path prefix inside a subset that Playwright takes as a filter
+ * (`scripture-editor/no-unasked-edits-`), which names the sources of every spec starting with it,
+ * new ones included. A prefix key is valid only if it matches at least one spec file
+ * (`e2e-recommendations.test.ts` checks). A file that reaches both a subset and one of its spec or
+ * prefix keys through `main` counts for that key first; the report then folds the key into the
+ * subset when both are recommended.
  */
 export type SubsetSources = Record<string, { main: string[]; incidental: string[] }>;
 
@@ -297,6 +301,9 @@ const matchesAny = (file: string, prefixes: string[]) =>
 
 const isSpecKey = (key: string) => key.endsWith('.spec.ts');
 
+/** A key that is a path filter inside a subset (`scripture-editor/no-unasked-edits-`). */
+const isPrefixKey = (key: string) => key.includes('/') && !isSpecKey(key);
+
 /** The subset a spec key (or collapsed prefix) lives in; undefined for a subset or a loose spec. */
 const subsetOfNestedKey = (key: string) => (key.includes('/') ? key.split('/')[0] : undefined);
 
@@ -328,7 +335,10 @@ function ciStatus(key: string, input: RecommendInput): CiStatus {
     if (input.editorCoreSpecs.includes(specPath)) return { kind: 'spec', coreList: 'editor' };
     return { kind: 'spec', coreList: 'none' };
   }
-  const specs = input.specFilesBySubset[key] ?? [];
+  // A prefix key runs the specs of its subset that start with it; a subset runs all of its own.
+  const specs = (input.specFilesBySubset[subsetOfNestedKey(key) ?? key] ?? []).filter(
+    (spec) => !isPrefixKey(key) || spec.startsWith(`${ISOLATED_PREFIX}${key}`),
+  );
   return { kind: 'subset', ...countCoreSpecs(specs, input), specCount: specs.length };
 }
 
