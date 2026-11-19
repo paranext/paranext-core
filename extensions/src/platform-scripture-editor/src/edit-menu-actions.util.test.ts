@@ -234,6 +234,7 @@ describe('runKeepingBrowserSelection', () => {
   }
 
   afterEach(() => {
+    vi.restoreAllMocks();
     window.getSelection()?.removeAllRanges();
     document.body.replaceChildren();
   });
@@ -276,7 +277,6 @@ describe('runKeepingBrowserSelection', () => {
     runKeepingBrowserSelection(() => {});
 
     expect(setBaseAndExtent).not.toHaveBeenCalled();
-    setBaseAndExtent.mockRestore();
   });
 
   it('puts nothing back when the selected text is gone', () => {
@@ -288,6 +288,17 @@ describe('runKeepingBrowserSelection', () => {
     });
 
     expect(window.getSelection()?.toString()).toBe('');
+  });
+
+  it('does not throw when the selected text got shorter than the old selection', () => {
+    const { text } = selectText(0, 9);
+
+    expect(() =>
+      runKeepingBrowserSelection(() => {
+        text.textContent = 'gr';
+        moveSelectionAway();
+      }),
+    ).not.toThrow();
   });
 
   it('runs the action when there is no selection to keep', () => {
