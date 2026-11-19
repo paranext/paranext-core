@@ -152,11 +152,29 @@ export function getMenuSectionsWithItems(menuData: Localized<MultiColumnMenu>): 
  */
 export type LeadingIconSlot = 'none' | 'icon';
 
-/** The fields of a menu item that decide whether it shows a leading icon */
-type ItemWithLeadingIcon = {
+/**
+ * The fields of a menu item that decide whether it shows a leading icon
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ItemWithLeadingIcon = {
+  /**
+   * Name of the item's leading icon
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
   iconNameBefore?: string;
+  /**
+   * Image path of the item's leading icon
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
   iconPathBefore?: string;
-  /** Defined on a checkbox item, whose check indicator takes the leading slot */
+  /**
+   * Defined on a checkbox item, whose check indicator takes the leading slot
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
   checked?: boolean;
 };
 

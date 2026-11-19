@@ -25,7 +25,12 @@ import {
   DropdownMenuTrigger,
   Z_INDEX_OVERLAY,
 } from 'platform-bible-react';
-import { getLeadingIconSlot, MenuItemIcon, ShortcutKeys } from 'platform-bible-react/experimental';
+import {
+  getLeadingIconSlot,
+  type LeadingIconSlot,
+  MenuItemIcon,
+  ShortcutKeys,
+} from 'platform-bible-react/experimental';
 import {
   type CSSProperties,
   type ReactNode,
@@ -150,11 +155,14 @@ const SUBMENU_CLOSE_DELAY_MS = 100;
 function HoverableSubmenu({
   label,
   items,
+  leadingSlot,
   onSelect,
   onEscape,
   overlayId,
 }: {
   label: string;
+  /** The leading icon slot of the list this submenu's trigger sits in */
+  leadingSlot: LeadingIconSlot;
   items: OverlayContextMenuItem[];
   onSelect: (result: OverlayContextMenuResult) => void;
   onEscape?: () => void;
@@ -193,6 +201,8 @@ function HoverableSubmenu({
         onPointerEnter={scheduleOpen}
         onPointerLeave={scheduleClose}
       >
+        {/* A submenu has no icon of its own; its trigger only keeps the list's labels aligned */}
+        <MenuItemIcon menuLabel={label} leading leadingSlot={leadingSlot} />
         {label}
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
@@ -257,7 +267,7 @@ function renderMenuItems(
           <MenuItemIcon
             iconName={item.iconName}
             icon={item.iconPath}
-            menuLabel={typeof item.label === 'string' ? item.label : String(item.label)}
+            menuLabel={item.label}
             leading
             leadingSlot={leadingSlot}
           />
@@ -280,6 +290,7 @@ function renderMenuItems(
           key={item.id !== undefined ? `submenu-id-${item.id}` : `submenu-${i}`}
           label={typeof item.label === 'string' ? item.label : String(item.label)}
           items={item.items}
+          leadingSlot={leadingSlot}
           onSelect={onSelect}
           onEscape={onEscape}
           overlayId={overlayId}

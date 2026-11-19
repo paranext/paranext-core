@@ -165,6 +165,48 @@ describe('OverlayContextMenuPresentational', () => {
       expect(without.querySelector(SPACER)).not.toBeNull();
     });
 
+    it('gives a submenu trigger the leading spacer when an item in its list has an icon', () => {
+      renderItems([
+        { type: 'item', id: 'find', label: 'Find', iconName: 'search' },
+        { type: 'submenu', label: 'More', items: [{ type: 'item', id: 'x', label: 'X' }] },
+      ]);
+
+      expect(screen.getByRole('menuitem', { name: 'More' }).querySelector(SPACER)).not.toBeNull();
+    });
+
+    it('reserves no spacer for a submenu trigger when no item in its list has an icon', () => {
+      renderItems([
+        { type: 'item', id: 'a', label: 'A' },
+        { type: 'submenu', label: 'More', items: [{ type: 'item', id: 'x', label: 'X' }] },
+      ]);
+
+      expect(screen.getByRole('menuitem', { name: 'More' }).querySelector(SPACER)).toBeNull();
+    });
+
+    it('draws nothing for an unknown icon name with no path, and does not reserve a slot alone', () => {
+      renderItems([
+        { type: 'item', id: 'odd', label: 'Odd', iconName: 'not-a-known-icon' },
+        { type: 'item', id: 'plain', label: 'Plain' },
+      ]);
+
+      const odd = screen.getByRole('menuitem', { name: 'Odd' });
+      expect(odd.querySelector('svg')).toBeNull();
+      expect(odd.querySelector('img')).toBeNull();
+      expect(odd.querySelector(SPACER)).toBeNull();
+      expect(screen.getByRole('menuitem', { name: 'Plain' }).querySelector(SPACER)).toBeNull();
+    });
+
+    it('treats an unknown icon name with no path like an icon-less row beside a drawn icon', () => {
+      renderItems([
+        { type: 'item', id: 'find', label: 'Find', iconName: 'search' },
+        { type: 'item', id: 'odd', label: 'Odd', iconName: 'not-a-known-icon' },
+      ]);
+
+      const odd = screen.getByRole('menuitem', { name: 'Odd' });
+      expect(odd.querySelector('svg')).toBeNull();
+      expect(odd.querySelector(SPACER)).not.toBeNull();
+    });
+
     it('reserves no spacer when no item has an icon', () => {
       renderItems([
         { type: 'item', id: 'a', label: 'A' },
