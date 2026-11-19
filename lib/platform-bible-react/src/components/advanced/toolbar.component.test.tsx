@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
 import { ShrinkStepOverride } from '@/context/shrink-step-override.component';
 import {
@@ -131,6 +133,110 @@ describe('Toolbar', () => {
       // outside it — that is the property the thresholds depend on, not the identity of the node.
       expect(observed.className).not.toMatch(/tw:ps-\[85px\]/);
       expect(observed.className).not.toMatch(/(?:^|\s)tw:px-4(?:\s|$)/);
+    });
+  });
+
+  describe('app menu icon', () => {
+    const MENU: Localized<MultiColumnMenu> = {
+      columns: {
+        'platform.app': { label: 'Paratext', order: 1 },
+        'platform.help': { label: 'Help', order: 2 },
+      },
+      groups: {
+        'platform.appGeneral': { column: 'platform.app', order: 1 },
+        'platform.helpGeneral': { column: 'platform.help', order: 1 },
+      },
+      items: [
+        {
+          label: 'Settings',
+          localizeNotes: '',
+          group: 'platform.appGeneral',
+          order: 1,
+          command: 'platform.openSettings',
+        },
+        {
+          label: 'About',
+          localizeNotes: '',
+          group: 'platform.helpGeneral',
+          order: 1,
+          command: 'platform.about',
+        },
+      ],
+    };
+
+    beforeAll(() => {
+      // Radix's Popper-positioned menu content needs these, which jsdom does not ship
+      if (typeof globalThis.ResizeObserver === 'undefined')
+        globalThis.ResizeObserver = RecordingResizeObserver;
+      if (typeof Element.prototype.hasPointerCapture !== 'function')
+        Element.prototype.hasPointerCapture = () => false;
+      if (typeof Element.prototype.scrollIntoView !== 'function')
+        Element.prototype.scrollIntoView = () => {};
+    });
+
+    // userEvent-driven Radix menus can take seconds per click on a contended Windows CI worker
+    vi.setConfig({ testTimeout: 20_000 });
+
+    function renderWithIcon() {
+      render(
+        <Toolbar
+          onSelectMenuItem={() => {}}
+          menuData={MENU}
+          appMenuIcon={<img src="logo.png" alt="Application Logo" />}
+        >
+          <span>Content</span>
+        </Toolbar>,
+      );
+      return screen.getByRole('button', { name: 'Application Logo' });
+    }
+
+    it('opens the app menu when the icon is clicked', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const icon = renderWithIcon();
+
+      expect(screen.queryByRole('menuitem', { name: 'Settings' })).toBeNull();
+
+      await user.click(icon);
+
+      expect(await screen.findByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'About' })).toBeNull();
+    });
+
+    it('closes the app menu when the icon is clicked while it is open', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const icon = renderWithIcon();
+
+      await user.click(icon);
+      await screen.findByRole('menuitem', { name: 'Settings' });
+      await user.click(icon);
+
+      expect(screen.queryByRole('menuitem', { name: 'Settings' })).toBeNull();
+    });
+
+    it('switches to the app menu when the icon is clicked while another menu is open', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const icon = renderWithIcon();
+
+      await user.click(screen.getByRole('menuitem', { name: 'Help' }));
+      await screen.findByRole('menuitem', { name: 'About' });
+      await user.click(icon);
+
+      expect(await screen.findByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'About' })).toBeNull();
+    });
+
+    it('renders the icon without a button when there is no menu to open', () => {
+      render(
+        <Toolbar
+          onSelectMenuItem={() => {}}
+          appMenuIcon={<img src="logo.png" alt="Application Logo" />}
+        >
+          <span>Content</span>
+        </Toolbar>,
+      );
+
+      expect(screen.getByRole('img', { name: 'Application Logo' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Application Logo' })).toBeNull();
     });
   });
 });
