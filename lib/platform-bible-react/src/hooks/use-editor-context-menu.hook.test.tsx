@@ -914,6 +914,13 @@ describe('useEditorContextMenu', () => {
 
       first.resolve(undefined);
       await flush();
+      // The debounced request waits out the retry delay, then settles without a retry: the wheel
+      // dismissed it.
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 100);
+        });
+      });
       expect(api.isPending()).toBe(false);
     });
 
@@ -1139,10 +1146,29 @@ describe('useEditorContextMenu', () => {
       );
     }
 
-    it('keeps the request open on the pointerdown of a macOS Ctrl+click the hook will claim', () => {
+    /**
+     * Makes the frame report `platform` through `navigator.platform` and, when given,
+     * `navigator.userAgentData.platform`; undone by {@link restorePlatform}.
+     */
+    function stubPlatform(platform: string, userAgentDataPlatform?: string) {
+      Object.defineProperty(navigator, 'platform', { configurable: true, get: () => platform });
+      if (userAgentDataPlatform !== undefined)
+        Object.defineProperty(navigator, 'userAgentData', {
+          configurable: true,
+          get: () => ({ platform: userAgentDataPlatform }),
+        });
+    }
+
+    function restorePlatform() {
+      // Removes the own properties `stubPlatform` put over jsdom's prototype getters.
+      Reflect.deleteProperty(navigator, 'platform');
+      Reflect.deleteProperty(navigator, 'userAgentData');
+    }
+
+    function renderWithOpenRequest() {
       const dismissMenu = vi.fn();
       let api!: ReturnType<typeof useEditorContextMenu>;
-      const { getByTestId } = render(
+      const utils = render(
         <Host
           requestMenu={() => new Promise<string | undefined>(() => {})}
           dismissMenu={dismissMenu}
@@ -1151,13 +1177,57 @@ describe('useEditorContextMenu', () => {
           }}
         />,
       );
-      rightClick(getByTestId('text'));
+      rightClick(utils.getByTestId('text'));
+      return { ...utils, dismissMenu, isPending: () => api.isPending() };
+    }
 
-      ctrlPrimaryPointerDown(getByTestId('text'));
+    it('keeps the request open on the pointerdown of a macOS Ctrl+click the hook will claim', () => {
+      stubPlatform('MacIntel');
+      try {
+        const { getByTestId, dismissMenu, isPending } = renderWithOpenRequest();
 
-      expect(dismissMenu).not.toHaveBeenCalled();
-      expect(api.isPending()).toBe(true);
+        ctrlPrimaryPointerDown(getByTestId('text'));
+
+        expect(dismissMenu).not.toHaveBeenCalled();
+        expect(isPending()).toBe(true);
+      } finally {
+        restorePlatform();
+      }
     });
+
+    it('reads macOS from userAgentData ahead of navigator.platform', () => {
+      stubPlatform('Linux x86_64', 'macOS');
+      try {
+        const { getByTestId, dismissMenu, isPending } = renderWithOpenRequest();
+
+        ctrlPrimaryPointerDown(getByTestId('text'));
+
+        expect(dismissMenu).not.toHaveBeenCalled();
+        expect(isPending()).toBe(true);
+      } finally {
+        restorePlatform();
+      }
+    });
+
+    it.each([
+      ['Windows', 'Win32'],
+      ['Linux', 'Linux x86_64'],
+    ])(
+      'drops the open request on a Ctrl+click on %s, where it raises no context menu',
+      (_name, platform) => {
+        stubPlatform(platform);
+        try {
+          const { getByTestId, dismissMenu, isPending } = renderWithOpenRequest();
+
+          ctrlPrimaryPointerDown(getByTestId('text'));
+
+          expect(dismissMenu).toHaveBeenCalledTimes(1);
+          expect(isPending()).toBe(false);
+        } finally {
+          restorePlatform();
+        }
+      },
+    );
 
     it('drops the open request on a primary-button pointerdown without Ctrl on the text (control)', () => {
       const dismissMenu = vi.fn();
@@ -1468,5 +1538,175 @@ describe('useEditorContextMenu', () => {
     act(() => api.dismiss());
 
     expect(dismissMenu).toHaveBeenCalledTimes(1);
+  });
+
+  describe('retrying a request the platform debounced', () => {
+    const debounced = () =>
+      newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /**
+     * Answers each `requestMenu` call with the next outcome: a command string resolves, anything
+     * else (a platform error) rejects; a call past the list never settles.
+     */
+    function requestMenuAnswering(...outcomes: unknown[]) {
+      const queue = [...outcomes];
+      return vi.fn<UseEditorContextMenuOptions['requestMenu']>(() => {
+        if (queue.length === 0) return new Promise(() => {});
+        const outcome = queue.shift();
+        return typeof outcome === 'string' ? Promise.resolve(outcome) : Promise.reject(outcome);
+      });
+    }
+
+    function renderRetrying(requestMenu: UseEditorContextMenuOptions['requestMenu']) {
+      const onPick = vi.fn();
+      const onError = vi.fn();
+      const dismissMenu = vi.fn();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const utils = render(
+        <Host
+          requestMenu={requestMenu}
+          onPick={onPick}
+          onError={onError}
+          dismissMenu={dismissMenu}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      return { ...utils, onPick, onError, dismissMenu, api: () => api };
+    }
+
+    async function advance(ms: number) {
+      await act(async () => {
+        vi.advanceTimersByTime(ms);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    it('asks once more just past the cooldown, with the same request, and picks from it', async () => {
+      const requestMenu = requestMenuAnswering(debounced(), 'cmd');
+      const { getByTestId, onPick, onError, api } = renderRetrying(requestMenu);
+      rightClick(getByTestId('text'), 12, 34);
+      await flush();
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+      expect(api().isPending()).toBe(true);
+
+      await advance(74);
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+      await advance(1);
+
+      expect(requestMenu).toHaveBeenCalledTimes(2);
+      expect(requestMenu.mock.calls[1][0]).toBe(requestMenu.mock.calls[0][0]);
+      expect(onPick).toHaveBeenCalledExactlyOnceWith('cmd', requestMenu.mock.calls[0][0]);
+      expect(onError).not.toHaveBeenCalled();
+      expect(api().isPending()).toBe(false);
+    });
+
+    it('does not retry a request a newer right-click replaced', async () => {
+      const requestMenu = requestMenuAnswering(debounced());
+      const { getByTestId, api } = renderRetrying(requestMenu);
+      rightClick(getByTestId('text'));
+      await flush();
+      rightClick(getByTestId('text'));
+      expect(requestMenu).toHaveBeenCalledTimes(2);
+
+      await advance(75);
+
+      expect(requestMenu).toHaveBeenCalledTimes(2);
+      // The newer request is still the open one.
+      expect(api().isPending()).toBe(true);
+    });
+
+    it('does not retry a request dismissed while it waited', async () => {
+      const requestMenu = requestMenuAnswering(debounced(), 'cmd');
+      const { getByTestId, onPick, api } = renderRetrying(requestMenu);
+      rightClick(getByTestId('text'));
+      await flush();
+      act(() => api().dismiss());
+
+      await advance(75);
+
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+      expect(onPick).not.toHaveBeenCalled();
+      expect(api().isPending()).toBe(false);
+    });
+
+    it('does not retry a request dropped by a click back into the frame', async () => {
+      const requestMenu = requestMenuAnswering(debounced(), 'cmd');
+      const { getByTestId, api } = renderRetrying(requestMenu);
+      rightClick(getByTestId('text'));
+      await flush();
+      fireEvent.pointerDown(getByTestId('outside'));
+
+      await advance(75);
+
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+      expect(api().isPending()).toBe(false);
+    });
+
+    it('does not retry after unmount, and leaves no timer behind', async () => {
+      const requestMenu = requestMenuAnswering(debounced(), 'cmd');
+      const { getByTestId, unmount } = renderRetrying(requestMenu);
+      rightClick(getByTestId('text'));
+      await flush();
+
+      unmount();
+
+      expect(vi.getTimerCount()).toBe(0);
+      await advance(75);
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays quiet when the retry is debounced too, and settles', async () => {
+      const requestMenu = requestMenuAnswering(debounced(), debounced());
+      const { getByTestId, onError, api } = renderRetrying(requestMenu);
+      rightClick(getByTestId('text'));
+      await flush();
+
+      await advance(75);
+      await advance(75);
+
+      expect(requestMenu).toHaveBeenCalledTimes(2);
+      expect(onError).not.toHaveBeenCalled();
+      expect(api().isPending()).toBe(false);
+    });
+
+    it('keeps the key claim bounded from the right-click while the retry is open', async () => {
+      const requestMenu = requestMenuAnswering(debounced());
+      const { getByTestId, api } = renderRetrying(requestMenu);
+      rightClick(getByTestId('text'));
+      await flush();
+      await advance(75);
+      expect(requestMenu).toHaveBeenCalledTimes(2);
+      expect(api().isClaimingKeys()).toBe(true);
+
+      await advance(2000 - 75 - 1);
+      expect(api().isClaimingKeys()).toBe(true);
+      await advance(1);
+
+      expect(api().isClaimingKeys()).toBe(false);
+      expect(api().isPending()).toBe(true);
+    });
+
+    it('does not retry any other rejection (control)', async () => {
+      const requestMenu = requestMenuAnswering(newPlatformError('replaced', ABORTED), 'cmd');
+      const { getByTestId, api } = renderRetrying(requestMenu);
+      rightClick(getByTestId('text'));
+      await flush();
+
+      await advance(75);
+
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+      expect(api().isPending()).toBe(false);
+    });
   });
 });
