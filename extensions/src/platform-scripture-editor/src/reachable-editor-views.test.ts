@@ -154,9 +154,8 @@ const SIMPLE_VIEW = {
 };
 
 /*
- * The editor views the app offers, per interface mode and saved view type. No row edits notes in
- * the popover: the footnote popover is unreachable, and every note edit goes through the footnotes
- * pane's row editor.
+ * The editor views the app offers, per interface mode and saved view type. Every note edit goes
+ * through the footnotes pane's row editor.
  *
  * If you change which editor views the app offers, also update scripture-editors
  * `packages/platform/src/editor/editorViews.test-helpers.tsx` (EDITOR_VIEWS and its app-surface

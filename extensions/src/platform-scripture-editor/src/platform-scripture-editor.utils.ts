@@ -498,8 +498,8 @@ export function validateCommentSelection(
  * highlighted. Every view the editor shows uses it: Standard view, Power's Preview (the read-only
  * Formatted view, where a note caller still jumps to its note in the pane) and Simple mode's
  * Formatted view, which edits notes exactly as Standard view does while its own text keeps hiding
- * markers. Only a 'markers' view type keeps the popover model, and the editor never displays one
- * once `platform.interfaceMode` has loaded (see {@link resolveViewTypeForInterfaceMode}).
+ * markers. The editor never displays a 'markers' view once `platform.interfaceMode` has loaded (see
+ * {@link resolveViewTypeForInterfaceMode}).
  *
  * The answer does not depend on `isPowerMode`; the option stays so every call site passes the same
  * view facts. While `platform.interfaceMode` is still loading, the displayed view type is the
@@ -525,16 +525,16 @@ export function usesPaneNoteModel({
 
 /**
  * Where a note is edited: the footnotes pane (a view using the pane note model — see
- * {@link usesPaneNoteModel}), the popover, or nowhere.
+ * {@link usesPaneNoteModel}), or nowhere.
  */
-export type NoteEditingSurface = 'pane' | 'popover' | 'none';
+export type NoteEditingSurface = 'pane' | 'none';
 
 /**
  * Decides the note-editing surface for a click on a note caller. A view using the pane note model
- * (see {@link usesPaneNoteModel}) edits notes in the footnotes pane, in place, matching PT9's model;
- * every other view keeps the popover. A read-only text has no editing surface at all — a caller
- * click in a pane-model view still navigates (see {@link decideNoteCallerClickAction}) but never
- * opens an editor; in any other view the caller is inert.
+ * (see {@link usesPaneNoteModel}) edits notes in the footnotes pane, in place, matching PT9's model.
+ * A read-only text has no editing surface at all — a caller click in a pane-model view still
+ * navigates (see {@link decideNoteCallerClickAction}) but never opens an editor; in any other view
+ * the caller is inert. A view that does not use the pane note model has no editing surface either.
  *
  * @param usesPaneModel Whether the view uses the pane note model ({@link usesPaneNoteModel})
  * @param isReadOnly Whether the text is read-only (editing is disabled)
@@ -548,7 +548,7 @@ export function resolveNoteEditingSurface({
   isReadOnly: boolean;
 }): NoteEditingSurface {
   if (isReadOnly) return 'none';
-  return usesPaneModel ? 'pane' : 'popover';
+  return usesPaneModel ? 'pane' : 'none';
 }
 
 /**
@@ -647,10 +647,6 @@ export type NoteCallerClickState = {
    * `noteCallerOnClick` guard.
    */
   isCollapsed: boolean | undefined;
-  /** The note key of an in-progress note-editing session, if any (popover or pane). */
-  editingNoteKey: string | undefined;
-  /** Whether the footnote-editor popover is actually shown right now. */
-  popoverShown: boolean;
   /** Whether the footnotes pane's visibility TOGGLE is on (it may still lack data to render). */
   paneVisible: boolean;
   /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
@@ -673,32 +669,18 @@ export type NoteCallerClickState = {
 /** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
 export type NoteCallerClickAction =
   | 'ignore-expanded'
-  | 'ignore-popover-open'
   | 'ignore-read-only'
-  | 'open-popover'
   | 'open-pane-editor'
   | 'navigate-only';
 
 /** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
 export type NoteCallerClickDecision = {
   /**
-   * True when `editingNoteKey` belongs to a popover session whose popover is no longer shown —
-   * orphaned bookkeeping that would otherwise dead-end every future caller click; clearing it keeps
-   * the failure benign. A pane-editor session keeps its key between clicks by design (the row stays
-   * open across navigation), so it is never stale. The caller must clear the editing-session refs
-   * before acting.
-   */
-  clearStaleEditingSession: boolean;
-  /**
    * What the caller click resolves to:
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
-   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored,
-   *   including in a pane-model view the popover outlived a view or interface-mode switch into.
    * - `ignore-read-only` — the text is read-only in a view that does not use the pane note model, so
    *   the caller is inert: the pane's navigation model belongs to pane-model views alone.
-   * - `open-popover` — open the footnote-editor popover for the clicked note (every view that does
-   *   not use the pane note model).
    * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (a pane-model
    *   view).
    * - `navigate-only` — the text is read-only in a pane-model view, so there is no editing surface;
@@ -724,61 +706,37 @@ export type NoteCallerClickDecision = {
  *
  * The editing surface ({@link NoteCallerClickState.surface}, from {@link resolveNoteEditingSurface})
  * decides where a routed click opens an editor: the footnotes pane in a view using the pane note
- * model, the popover everywhere else, and nowhere in a read-only text, where the click still
- * navigates without opening an editor. In every case:
+ * model, and nowhere in a read-only text, where the click still navigates without opening an
+ * editor. In every case:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
  * - A read-only text outside a pane-model view does nothing either: the pane's navigate-to-note model
  *   belongs to pane-model views, and every other view keeps the caller inert.
- * - While a popover is really shown, a popover-surface click is ignored (one session at a time). A
- *   pane-editor session has no such limit — its row stays open across clicks.
- * - A popover session's key left behind without a shown popover is STALE and must not block the
- *   click; a pane-editor session's key is never stale, since the pane keeps it by design.
+ * - A pane-editor session has no one-at-a-time limit: its row stays open across clicks.
  *
  * Alongside whichever action is chosen, the pane highlights the clicked note when it is rendered,
  * and a click also SHOWS the pane when it is toggled off and either the interface is in Power mode
  * or the view uses the pane note model.
- *
- * {@link NoteCallerClickDecision.clearStaleEditingSession} is decided independently of the action
- * and is reported on EVERY branch, the dead-click ones included: orphaned popover bookkeeping has
- * to be cleared whether or not this particular click does anything with it, or it dead-ends every
- * future click.
  */
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
-  const clearStaleEditingSession =
-    state.editingNoteKey !== undefined && !state.popoverShown && state.surface !== 'pane';
   const showPane = !state.paneVisible && (state.isPowerMode || state.usesPaneModel);
   const sendPaneFocusRequest = state.paneRendered || showPane;
 
   if (!state.isCollapsed)
     return {
-      clearStaleEditingSession,
       action: 'ignore-expanded',
       sendPaneFocusRequest: false,
       showPane: false,
     };
   if (state.surface === 'none' && !state.usesPaneModel)
     return {
-      clearStaleEditingSession,
       action: 'ignore-read-only',
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  // On every editable surface, not just the popover's: a popover opened before the view switched to
-  // the pane model applies its text only on Save, so handing the session to the row editor would
-  // discard what was typed.
-  if (state.surface !== 'none' && state.popoverShown)
-    return {
-      clearStaleEditingSession,
-      action: 'ignore-popover-open',
-      sendPaneFocusRequest: false,
-      showPane: false,
-    };
-
   let action: NoteCallerClickAction = 'navigate-only';
   if (state.surface === 'pane') action = 'open-pane-editor';
-  else if (state.surface === 'popover') action = 'open-popover';
-  return { clearStaleEditingSession, action, sendPaneFocusRequest, showPane };
+  return { action, sendPaneFocusRequest, showPane };
 }
 
 /** Snapshot of what an editor change did to an open pane note-editing session. */

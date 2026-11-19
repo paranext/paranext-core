@@ -357,7 +357,7 @@ export const TARGET_CHAR_TEXT =
 export interface TargetVerseEditor {
   editorId: string;
   editorFrame: FrameLocator;
-  /** The editor's marker-editable input (`.first()`: an open footnote popover carries its own). */
+  /** The editor's marker-editable input (`.first()`: an open footnote row editor carries its own). */
   editorInput: Locator;
   /** The chapter's USJ as read once the chapter finished loading. */
   chapterUsj: UsjDocument;

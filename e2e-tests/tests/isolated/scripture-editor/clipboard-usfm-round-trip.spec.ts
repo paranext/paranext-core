@@ -214,7 +214,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     // Jonah 1 (same book used by type-through-save-echo.spec.ts) — a small single chapter that
     // opens with a `\p` paragraph marker immediately followed by `\v 1`.
     await navigateToolbarBcv(mainPage, 'Jonah 1:1');
-    // `.first()`: a pasted footnote opens the note popover, whose own editor also matches
+    // `.first()`: a pasted footnote opens its row editor in the footnotes pane, whose own editor also matches
     // `.editor-input.marker-editable`; the document editor is the first in DOM order and is the one
     // every step reads and types into.
     const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
@@ -545,7 +545,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     await test.step('pasting Paratext 9 clipboard html decodes the footnote from its `usfm:` comment', async () => {
       // Counted rather than assumed: Jonah 1 ships four notes of its own and the step above pasted a
       // fifth, so only the DELTA can show that this paste produced a note.
-      // Scoped to the document editor: an open note popover renders its own copy of a note.
+      // Scoped to the document editor: an open note row editor renders its own copy of a note.
       const noteCallers = editorInput.locator('span.immutable-note-caller');
       const callerCountBeforePaste = await noteCallers.count();
 

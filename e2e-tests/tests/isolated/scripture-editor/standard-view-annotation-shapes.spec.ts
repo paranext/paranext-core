@@ -164,7 +164,7 @@ test.describe('scripture editor annotation shapes', () => {
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
 
     await navigateToolbarBcv(mainPage, CHAPTER_REFERENCE);
-    // `.first()`: an open footnote popover carries its own `.editor-input.marker-editable`.
+    // `.first()`: an open footnote row editor carries its own `.editor-input.marker-editable`.
     const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
     await expect(editorInput).toBeAttached({ timeout: 60_000 });
     // Positive control, and the gate that the chapter finished loading before its USJ is read.

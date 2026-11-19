@@ -201,7 +201,7 @@ palette is open — the palette holds focus — but the caret it had is captured
 restored on every way the session ends, so the user lands back where they were. An earlier design
 made the content element non-editable instead; that worked, but it blurred the editor, so keys
 landed on the page body, the caret was lost for good, focus did not come back after a `\` palette
-closed, and the popover and the footnote pane each needed their own copy. Routing is now simply
+closed, and the main editor and the footnote editor each needed their own copy. Routing is now simply
 "the editor has focus", in both consumers.
 
 **The editor's own settles are suspended while a palette is open.** Three clocks would otherwise
@@ -236,7 +236,7 @@ than a marker landing somewhere they never chose. The drop itself still lands; t
 for the commit, not for the content.
 
 If the editor turns read-only mid-session (an automatic Send/Receive), the web view ends the
-session — including palettes it opened for the footnote popover's editor — because the editor's
+session — including palettes it opened for the footnote row editor — because the editor's
 commit methods throw in read-only mode.
 
 ### 3.3 Nothing may change the editor under an open palette
@@ -269,11 +269,6 @@ The refusal itself is asked on BOTH commit routes, which is what makes it the ba
 - a TYPED commit (Space on the typed marker, `*`, the `\` commit-and-reopen, and the selection-wrap
   Space) applies straight from the key router, which asks the same function before each one.
 
-**Known gap:** the footnote popover has no live close — nothing there closes its palette when the
-note changes. It therefore relies entirely on the refusal, which is what protects the data: a note
-that changes under an open palette (a mouse drop, say) refuses the next commit rather than applying
-it at a caret pointing into different content. Closing at change time there is still worth adding.
-
 ### 3.4 Every way a session ends restores the caret
 
 A mouse click on the palette blurs the editor (the overlay renders outside its document) and
@@ -296,6 +291,10 @@ check sees a marker selected then.
 ## 4. The footnote editor
 
 `lib/platform-bible-react/src/components/advanced/footnote-editor/`.
+
+The app edits every note in the footnotes pane's row editor (the component's `inline` mode). The
+component's non-inline mode, a Save/Cancel editor meant for a popover, remains in the library for
+other hosts; no view in the app opens it, and the popover notes below describe that mode.
 
 - **The editor owns the note.** The popover's note type and caller are applied to its own editor
   (`applyUpdate`) and read back from it; they are not re-derived from React state on the way out.
@@ -353,7 +352,7 @@ check sees a marker selected then.
   renders as a glyph) has to change the other side too, or clicks land off by the difference.
 - **In a pane-model view (Standard view, or Simple's Formatted view, where the pane and its row
   editor get Standard's view options), the same component runs `inline` inside the footnotes pane
-  — there is no popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply
+  — there is no popover in the app.** The note-shell, caret-guard, and `updateCaller` invariants above apply
   unchanged. Its live-apply re-keys the note in the parent editor, so the host must re-sync its
   session key from `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new
   `noteOps` identity for its own live-apply — that reloads the editor mid-typing. An unclosed note

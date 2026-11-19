@@ -205,34 +205,6 @@ describe('note pane model wiring', () => {
     ).toBe(true);
   });
 
-  it('only navigates to a pane row’s note while a popover still holds the session', () => {
-    // The popover applies its text only on Save, so a row editor opened over it would discard
-    // what was typed. The text still moves to the note, as Space on the row does.
-    const handler = variableInitializer(sourceFile, 'handleFootnoteEditRequested');
-    const guard = descendants(handler).find(
-      (node): node is ts.IfStatement =>
-        ts.isIfStatement(node) &&
-        node.expression.getText(sourceFile) === 'showFootnoteEditorRef.current',
-    );
-    const callsIn = (root: ts.Node) =>
-      descendants(root).flatMap((node) =>
-        ts.isCallExpression(node) ? [node.expression.getText(sourceFile)] : [],
-      );
-    const firstEdit = descendants(handler).find(
-      (node) =>
-        ts.isCallExpression(node) &&
-        ['closeFootnoteEditorRef.current', 'startPaneNoteEdit'].includes(
-          node.expression.getText(sourceFile),
-        ),
-    );
-    expect(guard).toBeDefined();
-    expect(firstEdit).toBeDefined();
-    expect(guard?.getStart(sourceFile)).toBeLessThan(firstEdit?.getStart(sourceFile) ?? 0);
-    const thenStatement = guard?.thenStatement;
-    expect(thenStatement && callsIn(thenStatement)).toEqual(['navigateToNote']);
-    expect(thenStatement && descendants(thenStatement).some(ts.isReturnStatement)).toBe(true);
-  });
-
   it('renders the open session’s row editor whatever the editing surface', () => {
     // Unmounting the row editor before the session's close runs flushes its note unsettled,
     // losing a marker rename still pending under its caret.
