@@ -201,6 +201,7 @@ import {
   createContextMenuCommandEffects,
   dispatchContextMenuPick,
   getContextMenuShowOptions,
+  logContextMenuOutcome,
 } from './editor-context-menu-pick.util';
 import { PaneFootnoteEditorContextMenu } from './pane-footnote-editor-context-menu.component';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
@@ -5284,10 +5285,15 @@ function PlatformScriptureEditor({
       isEnabled: isEditorTextShown,
       hasNonTextSelection: () => !!editorRef.current?.getSelectedParaMarker(),
       requestMenu: (request) =>
-        papi.overlays.showContextMenu(
-          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        logContextMenuOutcome(
+          papi.overlays.showContextMenu(
+            SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+            webViewId,
+            getContextMenuShowOptions(request, true),
+          ),
           webViewId,
-          getContextMenuShowOptions(request, true),
+          'editor',
+          logger,
         ),
       dismissMenu: () => papi.overlays.dismissContextMenu(webViewId),
       onPick: (command, request) =>

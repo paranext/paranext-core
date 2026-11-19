@@ -2,7 +2,7 @@ import type { ViewOptions } from '@eten-tech-foundation/platform-editor';
 import type papi from '@papi/frontend';
 import type { CommandHandlers } from 'papi-shared-types';
 import type { EditorContextMenuRequest } from 'platform-bible-react/experimental';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { EditMenuActionCommand, isEditMenuCommand } from './edit-menu-actions.util';
 import { getEditorOpenFindArgs } from './find-trigger.util';
 
@@ -68,6 +68,39 @@ export function getContextMenuShowOptions(
       [CONTEXT_MENU_IS_MAIN_EDITOR_KEY]: isMainEditor,
     },
   };
+}
+
+/**
+ * Logs, at debug level, a context-menu request that ends without a pick: one that rejects (the menu
+ * hook drops a replaced, debounced or not-visible request without a trace) or one that resolves
+ * with nothing picked. Either way the request settles exactly as it would without this, so a
+ * right-click that showed no menu can be told apart in the log from one whose menu was dismissed.
+ *
+ * @param request The `showContextMenu` call for one right-click
+ * @param webViewId The web view the menu was requested for
+ * @param editorName Names the editor in the log line, for example `'editor'`
+ * @param logger Receives the debug lines
+ * @returns `request`'s own outcome
+ */
+export async function logContextMenuOutcome(
+  request: Promise<string | undefined>,
+  webViewId: string,
+  editorName: string,
+  logger: { debug: (message: string) => void },
+): Promise<string | undefined> {
+  let command: string | undefined;
+  try {
+    command = await request;
+  } catch (error) {
+    const code = isPlatformError(error) && error.code ? `${error.code} ` : '';
+    logger.debug(
+      `The ${editorName} context menu of web view ${webViewId} was rejected: ${code}${getErrorMessage(error)}`,
+    );
+    throw error;
+  }
+  if (command === undefined)
+    logger.debug(`The ${editorName} context menu of web view ${webViewId} closed without a pick`);
+  return command;
 }
 
 /** What {@link createContextMenuCommandEffects} needs from the editor that owns the menu. */

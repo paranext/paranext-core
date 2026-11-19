@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorContextMenuRequest } from 'platform-bible-react/experimental';
+import { ABORTED, newPlatformError } from 'platform-bible-utils';
 import {
   createContextMenuCommandEffects,
   dispatchContextMenuPick,
   getContextMenuShowOptions,
+  logContextMenuOutcome,
 } from './editor-context-menu-pick.util';
 import { EDIT_MENU_COMMANDS } from './edit-menu-actions.util';
 import { getEditorViewOptions } from './editor-view-options.util';
@@ -170,5 +172,49 @@ describe('createContextMenuCommandEffects', () => {
 
     expect(warn.mock.calls[0][0]).toContain('footnote editor');
     expect(warn.mock.calls[0][0]).toContain('no such command');
+  });
+});
+
+describe('logContextMenuOutcome', () => {
+  const WEB_VIEW_ID = 'web-view-7';
+  const makeLogger = () => ({ debug: vi.fn() });
+
+  it('hands a pick on unchanged and logs nothing', async () => {
+    const logger = makeLogger();
+
+    await expect(
+      logContextMenuOutcome(Promise.resolve('some.command'), WEB_VIEW_ID, 'editor', logger),
+    ).resolves.toBe('some.command');
+
+    expect(logger.debug).not.toHaveBeenCalled();
+  });
+
+  it('logs a menu that closed without a pick, naming the web view', async () => {
+    const logger = makeLogger();
+
+    await expect(
+      logContextMenuOutcome(Promise.resolve(undefined), WEB_VIEW_ID, 'editor', logger),
+    ).resolves.toBeUndefined();
+
+    expect(logger.debug).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/editor.*web-view-7.*without a pick/),
+    );
+  });
+
+  it('logs a rejection with its code and message, then rethrows the same error', async () => {
+    const logger = makeLogger();
+    const error = newPlatformError('Overlay was replaced by a new request', ABORTED);
+
+    await expect(
+      logContextMenuOutcome(Promise.reject(error), WEB_VIEW_ID, 'footnote editor', logger),
+    ).rejects.toBe(error);
+
+    expect(logger.debug).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(
+        new RegExp(
+          `footnote editor.*web-view-7.*${ABORTED}.*Overlay was replaced by a new request`,
+        ),
+      ),
+    );
   });
 });
