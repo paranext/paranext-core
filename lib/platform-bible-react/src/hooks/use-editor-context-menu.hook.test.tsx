@@ -476,12 +476,53 @@ describe('useEditorContextMenu', () => {
     });
   });
 
+  describe('telling a keyboard-raised menu from a mouse one', () => {
+    function contextMenuWith(target: Element, init: MouseEventInit) {
+      act(() => {
+        target.dispatchEvent(
+          new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 12,
+            clientY: 34,
+            ...init,
+          }),
+        );
+      });
+    }
+
+    it.each([
+      // A mouse-raised menu opens where the click was; a keyboard-raised one at the caret.
+      ['Shift+F10 and the Menu key (button -1)', true, { button: -1 }, expect.anything()],
+      ['a right-click (button 2)', false, { button: 2 }, { x: 12, y: 34 }],
+      [
+        'a macOS Ctrl+click (button 0 with Ctrl)',
+        false,
+        { button: 0, ctrlKey: true },
+        { x: 12, y: 34 },
+      ],
+      ['button 0 without Ctrl', true, { button: 0 }, expect.anything()],
+    ])('%s is keyboard-raised: %s', (_name, isKeyboardInvoked, init, position) => {
+      const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
+        () => new Promise(() => {}),
+      );
+      const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+
+      contextMenuWith(getByTestId('text'), init);
+
+      expect(requestMenu).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ isKeyboardInvoked, position }),
+      );
+    });
+  });
+
   describe('a keyboard-raised contextmenu', () => {
     function keyboardContextMenu(target: Element) {
       const event = new MouseEvent('contextmenu', {
         bubbles: true,
         cancelable: true,
-        button: 0,
+        // What Shift+F10 and the Menu key send.
+        button: -1,
         clientX: 0,
         clientY: 0,
       });
@@ -632,7 +673,7 @@ describe('useEditorContextMenu', () => {
     function keyboardContextMenuOn(target: Element) {
       act(() => {
         target.dispatchEvent(
-          new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 0 }),
+          new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: -1 }),
         );
       });
     }
@@ -1089,6 +1130,68 @@ describe('useEditorContextMenu', () => {
       await flush();
 
       expect(onPick).toHaveBeenCalledTimes(1);
+    });
+
+    function ctrlPrimaryPointerDown(target: Element, ctrlKey = true) {
+      fireEvent(
+        target,
+        new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, ctrlKey }),
+      );
+    }
+
+    it('keeps the request open on the pointerdown of a macOS Ctrl+click the hook will claim', () => {
+      const dismissMenu = vi.fn();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => new Promise<string | undefined>(() => {})}
+          dismissMenu={dismissMenu}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      rightClick(getByTestId('text'));
+
+      ctrlPrimaryPointerDown(getByTestId('text'));
+
+      expect(dismissMenu).not.toHaveBeenCalled();
+      expect(api.isPending()).toBe(true);
+    });
+
+    it('drops the open request on a primary-button pointerdown without Ctrl on the text (control)', () => {
+      const dismissMenu = vi.fn();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => new Promise<string | undefined>(() => {})}
+          dismissMenu={dismissMenu}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      rightClick(getByTestId('text'));
+
+      ctrlPrimaryPointerDown(getByTestId('text'), false);
+
+      expect(dismissMenu).toHaveBeenCalledTimes(1);
+      expect(api.isPending()).toBe(false);
+    });
+
+    it('drops the open request on the pointerdown of a Ctrl+click outside the container', () => {
+      const dismissMenu = vi.fn();
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => new Promise<string | undefined>(() => {})}
+          dismissMenu={dismissMenu}
+        />,
+      );
+      rightClick(getByTestId('text'));
+
+      ctrlPrimaryPointerDown(getByTestId('outside'));
+
+      expect(dismissMenu).toHaveBeenCalledTimes(1);
     });
 
     it('drops the open request on the pointerdown of a right-click outside the container', () => {

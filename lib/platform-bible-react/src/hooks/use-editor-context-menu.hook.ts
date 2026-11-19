@@ -160,6 +160,20 @@ function isElement(node: Node): node is Element {
   return node.nodeType === 1;
 }
 
+/**
+ * Whether a `contextmenu` event came from the keyboard. Shift+F10 and the Menu key send `button`
+ * -1, a right-click sends 2, and a macOS Ctrl+click sends 0 with `ctrlKey`, which is a mouse
+ * right-click too. Anything else counts as keyboard-raised.
+ */
+function isKeyboardRaised(event: MouseEvent): boolean {
+  return event.button !== 2 && !isCtrlPrimaryClick(event);
+}
+
+/** Whether a mouse event is a primary-button press with Ctrl held: a right-click on macOS. */
+function isCtrlPrimaryClick(event: MouseEvent): boolean {
+  return event.button === 0 && event.ctrlKey;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
 }
@@ -342,9 +356,7 @@ export function useEditorContextMenu(
 
       // Read from the browser now: the editor learns of a selection change only after the event.
       const selection = getSelectionInside(container);
-      // Button 2 means mouse-raised; anything else counts as keyboard-raised. That may misclassify
-      // a macOS Ctrl+click and a touch long-press.
-      const isKeyboardInvoked = event.button !== 2;
+      const isKeyboardInvoked = isKeyboardRaised(event);
       const request: EditorContextMenuRequest = {
         position: isKeyboardInvoked
           ? getKeyboardPosition(container)
@@ -400,9 +412,11 @@ export function useEditorContextMenu(
     };
 
     const handlePointerDown = (event: PointerEvent) => {
-      // A right-click the hook will claim replaces the open menu with its own request, so it must
-      // not also dismiss. Any other pointerdown, a right-click elsewhere included, closes the menu.
-      if (event.button === 2 && findClaimingContainer(event.target)) return;
+      // A right-click the hook will claim (a macOS Ctrl+click included) replaces the open menu with
+      // its own request, so it must not also dismiss. Any other pointerdown, a right-click
+      // elsewhere included, closes the menu.
+      if ((event.button === 2 || isCtrlPrimaryClick(event)) && findClaimingContainer(event.target))
+        return;
       if (openRequestsRef.current.size > 0) dropOpenRequests();
     };
 
