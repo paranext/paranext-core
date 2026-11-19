@@ -45,6 +45,8 @@ const editorMountSpy = vi.fn();
 /** The editor handle's `copy` and `focus`, which a picked Copy must and must not call. */
 const editorCopySpy = vi.fn();
 const editorFocusSpy = vi.fn();
+/** What the mocked editor reports as its selection: a real read-only editor holds one. */
+const editorState: { selection: unknown } = { selection: undefined };
 
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
   Editorial: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
@@ -53,7 +55,7 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
       setUsj: setUsjSpy,
       copy: editorCopySpy,
       focus: editorFocusSpy,
-      getSelection: () => undefined,
+      getSelection: () => editorState.selection,
       getSelectedParaMarker: () => undefined,
     }));
     React.useEffect(() => {
@@ -241,6 +243,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
   setUsjSpy.mockClear();
+  editorState.selection = undefined;
   capturedEditorOptions.mockClear();
   editorMountSpy.mockClear();
 });
@@ -1879,7 +1882,16 @@ describe('ModelTextPanel right-click menu', () => {
       requestMenu: vi.fn(async () => COPY_COMMAND),
     });
     await renderShownPanel({ contextMenu });
+    // Counted from here on: only the frames the pick asks for matter
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
     selectTextIn(screen.getByTestId('editorial'));
+    // A real read-only editor holds the selection the user made: its own `focus()` would then land
+    // a caret at the end of the chapter and move the reference.
+    editorState.selection = { start: { offset: 0 }, end: { offset: 4 } };
 
     rightClick(screen.getByText(EDITOR_TEXT));
     await flushMenuRequest();
@@ -1891,6 +1903,14 @@ describe('ModelTextPanel right-click menu', () => {
       editorCopySpy.mock.invocationCallOrder[0],
     );
     expect(contextMenu.openFind).not.toHaveBeenCalled();
+
+    // The menu hands focus back to its tab as it closes; the next frame returns it to this frame
+    act(() => [...frames].forEach((frame) => frame(0)));
+    expect(windowFocus).toHaveBeenCalledTimes(2);
+    expect(windowFocus.mock.invocationCallOrder[1]).toBeGreaterThan(
+      editorCopySpy.mock.invocationCallOrder[0],
+    );
+    expect(editorFocusSpy).not.toHaveBeenCalled();
   });
 
   it('hands a picked Find the text that was selected when the menu opened', async () => {
@@ -1939,6 +1959,28 @@ describe('ModelTextPanel right-click menu', () => {
       expect(contextMenu.dismissMenu).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('closes an open menu when a different model text is shown', async () => {
+    const OTHER_RESOURCE: DblResourceData = {
+      ...INSTALLED_RESOURCE,
+      dblEntryUid: 'uid-other',
+      projectId: 'project-other',
+    };
+    const requestMenu = vi.fn(() => new Promise<string | undefined>(() => {}));
+    const contextMenu = makeContextMenuCallbacks({ requestMenu });
+    const { rerender, props } = await renderShownPanel({
+      contextMenu,
+      dblResources: [INSTALLED_RESOURCE, OTHER_RESOURCE],
+    });
+    rightClick(screen.getByText(EDITOR_TEXT));
+    expect(requestMenu).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ModelTextPanel {...props} modelTextsState={readyState(configuredModelText('uid-other'))} />,
+    );
+
+    expect(contextMenu.dismissMenu).toHaveBeenCalledTimes(1);
+  });
 
   it('closes an open menu when the panel goes away', async () => {
     const requestMenu = vi.fn(() => new Promise<string | undefined>(() => {}));

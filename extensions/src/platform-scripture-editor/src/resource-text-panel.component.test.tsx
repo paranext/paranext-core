@@ -41,6 +41,8 @@ const capturedEditorOptions = vi.fn();
 /** The editor handle's `copy` and `focus`, which a picked Copy must and must not call. */
 const editorCopySpy = vi.fn();
 const editorFocusSpy = vi.fn();
+/** What the mocked editor reports as its selection: a real read-only editor holds one. */
+const editorState: { selection: unknown } = { selection: undefined };
 
 /**
  * Drives `useViewVisibility` from the tests.
@@ -88,7 +90,7 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
       setUsj: setUsjSpy,
       copy: editorCopySpy,
       focus: editorFocusSpy,
-      getSelection: () => undefined,
+      getSelection: () => editorState.selection,
       getSelectedParaMarker: () => undefined,
     }));
     return <div data-testid="editorial">Some scripture text</div>;
@@ -324,6 +326,7 @@ const WAITING_FOR_CONTENT = {
 
 afterEach(() => {
   setUsjSpy.mockClear();
+  editorState.selection = undefined;
   // `restoreAllMocks` would also undo the `document.body` height spy installed in `beforeAll`,
   // which every test depends on to start out visible.
   vi.clearAllMocks();
@@ -1219,7 +1222,16 @@ describe('ResourceTextPanel right-click menu', () => {
       requestMenu: vi.fn(async () => COPY_COMMAND),
     });
     renderPanel({ contextMenu });
+    // Counted from here on: only the frames the pick asks for matter
+    const frames: FrameRequestCallback[] = [];
+    const frameSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
     selectTextIn(screen.getByTestId('editorial'));
+    // A real read-only editor holds the selection the user made: its own `focus()` would then land
+    // a caret at the end of the chapter and move the reference.
+    editorState.selection = { start: { offset: 0 }, end: { offset: 4 } };
 
     rightClick(screen.getByText(EDITOR_TEXT));
     await flushMenuRequest();
@@ -1232,7 +1244,16 @@ describe('ResourceTextPanel right-click menu', () => {
     );
     expect(contextMenu.openFind).not.toHaveBeenCalled();
     expect(contextMenu.sendCommand).not.toHaveBeenCalled();
+
+    // The menu hands focus back to its tab as it closes; the next frame returns it to this frame
+    act(() => [...frames].forEach((frame) => frame(0)));
+    expect(windowFocus).toHaveBeenCalledTimes(2);
+    expect(windowFocus.mock.invocationCallOrder[1]).toBeGreaterThan(
+      editorCopySpy.mock.invocationCallOrder[0],
+    );
+    expect(editorFocusSpy).not.toHaveBeenCalled();
     windowFocus.mockRestore();
+    frameSpy.mockRestore();
   });
 
   it('hands a picked Find the text that was selected when the menu opened', async () => {

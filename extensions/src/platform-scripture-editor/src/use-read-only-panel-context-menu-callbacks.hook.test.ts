@@ -102,11 +102,15 @@ describe('createReadOnlyPanelContextMenuCallbacks', () => {
     resolved.callbacks.requestMenu(REQUEST);
     const unresolved = setup({ projectId: undefined });
     unresolved.callbacks.requestMenu(REQUEST);
+    // An empty id is no project: Find sends nothing for it, so the item must not look usable
+    const empty = setup({ projectId: '' });
+    empty.callbacks.requestMenu(REQUEST);
 
     const canFindOf = (showContextMenu: ReturnType<typeof vi.fn>) =>
       showContextMenu.mock.calls[0][2].contextKeys[CONTEXT_MENU_CAN_FIND_KEY];
     expect(canFindOf(resolved.showContextMenu)).toBe(true);
     expect(canFindOf(unresolved.showContextMenu)).toBe(false);
+    expect(canFindOf(empty.showContextMenu)).toBe(false);
   });
 
   it("closes the menu of the panel's own tab", () => {

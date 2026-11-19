@@ -19,7 +19,6 @@ import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { getModelResourceProjectId, isDblResourceReference } from './resource-reference.utils';
-import { MODEL_TEXT_PANEL_WEBVIEW_TYPE } from './model-text-panel.const';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useReadOnlyPanelContextMenuCallbacks } from './use-read-only-panel-context-menu-callbacks.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
@@ -54,6 +53,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
  */
 globalThis.webViewComponent = function ModelTextPanelWebView({
   id: webViewId,
+  webViewType,
   projectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
@@ -130,7 +130,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   useOpenFindShortcut(webViewId, modelResourceProjectId);
   const contextMenuCallbacks = useReadOnlyPanelContextMenuCallbacks(
     webViewId,
-    MODEL_TEXT_PANEL_WEBVIEW_TYPE,
+    webViewType,
     modelResourceProjectId,
   );
 
