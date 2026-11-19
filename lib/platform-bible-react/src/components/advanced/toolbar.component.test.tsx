@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
 import { ShrinkStepOverride } from '@/context/shrink-step-override.component';
 import {
@@ -136,6 +136,7 @@ describe('Toolbar', () => {
     });
   });
 
+  // userEvent-driven Radix menus can take seconds per click on a contended Windows CI worker
   describe('app menu icon', () => {
     const MENU: Localized<MultiColumnMenu> = {
       columns: {
@@ -164,18 +165,22 @@ describe('Toolbar', () => {
       ],
     };
 
+    const originalResizeObserver = globalThis.ResizeObserver;
+    const originalHasPointerCapture = Element.prototype.hasPointerCapture;
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+
+    // Radix's Popper-positioned menu content needs these, which jsdom does not ship
     beforeAll(() => {
-      // Radix's Popper-positioned menu content needs these, which jsdom does not ship
-      if (typeof globalThis.ResizeObserver === 'undefined')
-        globalThis.ResizeObserver = RecordingResizeObserver;
-      if (typeof Element.prototype.hasPointerCapture !== 'function')
-        Element.prototype.hasPointerCapture = () => false;
-      if (typeof Element.prototype.scrollIntoView !== 'function')
-        Element.prototype.scrollIntoView = () => {};
+      globalThis.ResizeObserver ??= RecordingResizeObserver;
+      Element.prototype.hasPointerCapture ??= () => false;
+      Element.prototype.scrollIntoView ??= () => {};
     });
 
-    // userEvent-driven Radix menus can take seconds per click on a contended Windows CI worker
-    vi.setConfig({ testTimeout: 20_000 });
+    afterAll(() => {
+      globalThis.ResizeObserver = originalResizeObserver;
+      Element.prototype.hasPointerCapture = originalHasPointerCapture;
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    });
 
     function renderWithIcon() {
       render(
@@ -238,5 +243,5 @@ describe('Toolbar', () => {
       expect(screen.getByRole('img', { name: 'Application Logo' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Application Logo' })).toBeNull();
     });
-  });
+  }, 20_000);
 });

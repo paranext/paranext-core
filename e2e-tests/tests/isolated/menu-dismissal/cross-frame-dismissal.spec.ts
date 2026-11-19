@@ -89,6 +89,8 @@ async function getToolbarNeutralPoint(mainPage: Page): Promise<Point> {
   };
   const hit = await mainPage.evaluate(({ x, y }) => {
     const element = document.elementFromPoint(x, y);
+    // The effective app region is the nearest ancestor's that is not `none`; a profile without a
+    // drag area reports `none` everywhere.
     let appRegion = 'none';
     for (let current = element; current; current = current.parentElement) {
       const style = getComputedStyle(current);
