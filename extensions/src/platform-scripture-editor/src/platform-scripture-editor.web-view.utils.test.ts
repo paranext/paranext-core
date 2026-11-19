@@ -28,6 +28,7 @@ import {
   getEditorFocusLocation,
   getEditorWebViewContextKeyNames,
   getEditorWebViewContextKeys,
+  hasNonCollapsedSelection,
   INSERT_CONTEXT_MENU_STRING_KEYS,
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
@@ -1291,15 +1292,17 @@ describe('getEditorFocusLocation', () => {
 });
 
 describe('getEditorWebViewContextKeys', () => {
-  it('names the four per-web-view keys from the web view id', () => {
+  it('names the five per-web-view keys from the web view id', () => {
     const keys = getEditorWebViewContextKeys('wv1', {
       isReadOnly: false,
       isPreview: false,
       isSyncBlocked: false,
       footnotesPaneVisible: false,
+      hasSelection: false,
     });
     expect(Object.keys(keys).sort()).toEqual([
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.hasSelection',
       'platformScriptureEditor.webView.wv1.isPreview',
       'platformScriptureEditor.webView.wv1.isReadOnly',
       'platformScriptureEditor.webView.wv1.isSyncBlocked',
@@ -1315,31 +1318,55 @@ describe('getEditorWebViewContextKeys', () => {
           isPreview: true,
           isSyncBlocked: true,
           footnotesPaneVisible: true,
+          hasSelection: true,
         }),
       ),
     );
     expect([...names].sort()).toEqual([
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.hasSelection',
       'platformScriptureEditor.webView.wv1.isPreview',
       'platformScriptureEditor.webView.wv1.isReadOnly',
       'platformScriptureEditor.webView.wv1.isSyncBlocked',
     ]);
   });
 
-  it('mirrors isReadOnly, isPreview, isSyncBlocked and footnotesPaneVisible', () => {
+  it('mirrors isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible and hasSelection', () => {
     expect(
       getEditorWebViewContextKeys('wv1', {
         isReadOnly: true,
         isPreview: true,
         isSyncBlocked: false,
         footnotesPaneVisible: true,
+        hasSelection: true,
       }),
     ).toEqual({
       'platformScriptureEditor.webView.wv1.isReadOnly': true,
       'platformScriptureEditor.webView.wv1.isPreview': true,
       'platformScriptureEditor.webView.wv1.isSyncBlocked': false,
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible': true,
+      'platformScriptureEditor.webView.wv1.hasSelection': true,
     });
+  });
+});
+
+describe('hasNonCollapsedSelection', () => {
+  const start = { jsonPath: '$.content[1].content[0]', offset: 0 };
+
+  it('is true for a range whose end differs from its start', () => {
+    expect(hasNonCollapsedSelection({ start, end: { ...start, offset: 4 } })).toBe(true);
+  });
+
+  it('is false for a caret with no end', () => {
+    expect(hasNonCollapsedSelection({ start })).toBe(false);
+  });
+
+  it('is false when the end equals the start', () => {
+    expect(hasNonCollapsedSelection({ start, end: { ...start } })).toBe(false);
+  });
+
+  it('is false when there is no selection', () => {
+    expect(hasNonCollapsedSelection(undefined)).toBe(false);
   });
 });
 
@@ -1359,6 +1386,7 @@ describe('menus.json dynamic conditions', () => {
     'platformScriptureEditor.webView.wv.isPreview': false,
     'platformScriptureEditor.webView.wv.isSyncBlocked': false,
     'platformScriptureEditor.webView.wv.footnotesPaneVisible': true,
+    'platformScriptureEditor.webView.wv.hasSelection': true,
   };
 
   const evaluate = (overrides: Record<string, boolean> = {}) => {
