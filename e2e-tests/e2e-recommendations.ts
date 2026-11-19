@@ -4,7 +4,8 @@
  * The mapping lives in `tests/isolated/subset-sources.json`. {@link recommendE2eTests} is pure: it
  * takes the changed files, the mapping and the CI spec lists, and returns a report. The
  * command-line entry point at the bottom of the file reads git and the spec lists and prints the
- * report as JSON.
+ * report as JSON. The reasoning behind the map is `adr-e2e-recommendations-source-map` in
+ * `.context/standards/Architecture-Decisions.md`.
  */
 import { execFileSync } from 'child_process';
 import fs from 'fs';
