@@ -555,16 +555,17 @@ function makeEditorialLogger(): {
 // follow the stable-reference pattern (EDITORIAL_OPTIONS) to avoid forcing reconciliations.
 const EDITORIAL_LOGGER = makeEditorialLogger();
 
-// Module-level no-op defaults so omitting the callbacks does not generate a fresh
-// function identity on every render (which would falsely invalidate the annotation
-// effect's dependency array). Identity-stable defaults are the cheapest way to
-// guarantee the effect re-runs only when an actual handler changes.
-/** The command the pane's context menu Copy item runs; the pane runs it itself. */
+/** The web view type whose `contextMenu` contribution the pane's right-click menu is built from. */
 const ENHANCED_RESOURCE_WEB_VIEW_TYPE = 'platformEnhancedResources.enhancedResource';
+/** The command the pane's context menu Copy item runs; the pane runs it itself. */
 const COPY_SELECTION_COMMAND = 'platformEnhancedResources.copySelection';
 /** The fact the context menu's Copy item reads to know whether any text is selected. */
 const CONTEXT_MENU_HAS_SELECTION_KEY = 'platformEnhancedResources.contextMenu.hasSelection';
 
+// Module-level no-op defaults so omitting the callbacks does not generate a fresh
+// function identity on every render (which would falsely invalidate the annotation
+// effect's dependency array). Identity-stable defaults are the cheapest way to
+// guarantee the effect re-runs only when an actual handler changes.
 const NOOP_TOKEN_CLICK: NonNullable<EnhancedScripturePaneProps['onTokenClick']> = () => {};
 const NOOP_TOKEN_CONTEXT_MENU: NonNullable<
   EnhancedScripturePaneProps['onTokenContextMenu']
