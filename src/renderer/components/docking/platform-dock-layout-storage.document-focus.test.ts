@@ -134,13 +134,13 @@ describe('taking document focus when a web view is docked', () => {
       vi.stubGlobal(
         'IntersectionObserver',
         class {
-          constructor(callback: () => void) {
-            observerCallbacks.push(callback);
-          }
-
           observe = vi.fn();
 
           disconnect = disconnect;
+
+          constructor(callback: () => void) {
+            observerCallbacks.push(callback);
+          }
         },
       );
     });
