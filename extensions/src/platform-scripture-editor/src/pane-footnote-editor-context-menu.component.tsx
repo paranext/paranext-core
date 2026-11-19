@@ -49,9 +49,10 @@ export type PaneFootnoteEditorContextMenuProps = {
  *
  * The wrapper is `display: contents`: the row editor stays the layout child of its row.
  *
- * The clipboard commands run on the row editor's handle after it takes focus, because the clipboard
- * read behind Paste needs the frame focused and the menu hands focus back to its tab
- * asynchronously. Find and every other command are sent on like the main text's menu sends them.
+ * The clipboard commands run on the row editor's handle, which puts back a selection the menu's
+ * focus change dropped and focuses the note text before it acts (the clipboard read behind Paste
+ * needs the frame focused, and the menu hands focus back to its tab asynchronously). Find and every
+ * other command are sent on like the main text's menu sends them.
  */
 export function PaneFootnoteEditorContextMenu({
   webViewId,
@@ -79,13 +80,13 @@ export function PaneFootnoteEditorContextMenu({
         runClipboardCommand: (clipboardCommand) => {
           const rowEditor = rowEditorRef.current;
           const method = CLIPBOARD_METHOD_BY_COMMAND[clipboardCommand];
-          // Undo and Redo are not items of this menu, and the row editor has its own buttons.
+          // Undo and Redo are not items of this menu, and the row editor has its own buttons;
+          // `dispatchContextMenuPick` never passes them here, the check keeps the type honest.
           if (!method) return;
           if (!rowEditor) {
             notifyActionBlocked();
             return;
           }
-          rowEditor.focus();
           try {
             rowEditor[method]();
           } catch (e) {
