@@ -214,9 +214,11 @@ function readWorkflowTimeouts(): { workflow: string; job: unknown[]; steps: unkn
     const parsed: unknown = parseYaml(
       readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8'),
     );
-    const jobs = (
-      isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : []
-    ).filter(isRecord);
+    // A job that calls a reusable workflow (`uses:`) cannot carry `timeout-minutes`; its timeouts
+    // are those of the called workflow's own jobs.
+    const jobs = (isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : [])
+      .filter(isRecord)
+      .filter((job) => !('uses' in job));
     const steps = jobs
       .flatMap((job) => (Array.isArray(job.steps) ? job.steps : []))
       .filter(isRecord)

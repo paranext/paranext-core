@@ -299,14 +299,19 @@ export interface PaneEditingSession {
    * `useEditorPdpSync` holds the delivery instead, as it does for the Scripture text.
    */
   focusLocation: EditorFocusLocation;
-  /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
+  /**
+   * `Date.now()` of the last edit made in this view — in the Scripture text or the pane's row
+   * editor — or `undefined` if none was. One stamp for both, so a footnote just inserted from the
+   * text (which puts the caret in its row before anything is typed there) or a row clicked right
+   * after typing in the text is held for the rest of the window.
+   */
   lastEditAtMs: number | undefined;
 }
 
 /**
  * Whether the footnotes pane owns the chapter's content, as the focused Scripture editor does: a
- * note session is open in the pane, focus is in the pane, and a note was edited there within
- * {@link EDITOR_OWNERSHIP_WINDOW_MS}. Says nothing about where the window's focus is;
+ * note session is open in the pane, focus is in the pane, and the view (the text or a pane row) was
+ * edited within {@link EDITOR_OWNERSHIP_WINDOW_MS}. Says nothing about where the window's focus is;
  * {@link resolveEditingSessionActivity} and `useEditorPdpSync` each decide what that means for an
  * incoming update.
  */
@@ -353,14 +358,14 @@ export function doesPaneSessionOwnContent(
  * session suppresses.
  *
  * Tracked as PT-4817. The intended fix is a staleness bound like the note session's refreshed-at
- * bound — a palette session defers only within the editor-ownership window of the last local edit,
- * after which the update applies and the change guard closes the palette — not dismissing the
+ * bound — a palette session defers only within the editor-ownership window of the last edit in this
+ * view, after which the update applies and the change guard closes the palette — not dismissing the
  * palette on unrelated keys. An automatic Send/Receive dismisses the palette before it writes, so
  * that particular collision is closed; other external writers can still be overwritten.
  *
- * A pane session is never reported stale: it stops holding updates back once the user stops editing
- * in it (see {@link EditingSessionActivityInput.paneSession}), and the update it then lets through
- * ends the session itself.
+ * A pane session is never reported stale: it stops holding updates back once nothing in the view
+ * has been edited for the window (see {@link EditingSessionActivityInput.paneSession}), and the
+ * update it then lets through ends the session itself.
  *
  * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
  *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear
@@ -615,9 +620,11 @@ export function deriveReadOnlyFlags({
  * insert — is directly unit-testable against injected fakes rather than only observable end to
  * end.
  *
- * Checks read-only BEFORE calling `commitSnapshot`: a read-only top-menu click (which reaches this
- * with no prior gate — the menu item itself has no enablement) must not write a forced, empty
- * version-history commit. The refusal is logged, not shown to the user.
+ * Checks read-only BEFORE calling `commitSnapshot`. The menu items are gated by `enabledWhen`
+ * (`adr-menus-gate-declaratively-with-context-keys`), but a request can still reach this while the
+ * editor is read-only — through the editor's keyboard shortcut, a direct command call, or a menu
+ * gate that has not caught up with the editor's state — and a refused insert must not write a
+ * forced, empty version-history commit. The refusal is logged, not shown to the user.
  *
  * @param kind Which textual note to insert.
  * @param hasEditor Whether the editor is currently mounted.
@@ -703,20 +710,28 @@ export interface InsertContextMenuState {
   isReadOnly: boolean;
   canUserCreateComments: boolean;
   isSyncBlocked: boolean;
+  /**
+   * Whether the project is a resource (`platform.isPublished`). A resource can never be edited or
+   * commented on, so it gets no insert items at all rather than disabled ones.
+   */
+  isResource: boolean;
 }
 
 /**
  * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu's
  * `platformScriptureEditor.insert` column (`contributions/menus.json`, every group in that column)
  * — same items, same order; pinned by the parity test in
- * `platform-scripture-editor.web-view.utils.test.ts`.
+ * `platform-scripture-editor.web-view.utils.test.ts`. A resource gets none of them, mirroring the
+ * `when` that removes the same items from the top menu; the editor then shows only its built-in
+ * clipboard entries.
  */
 export function createInsertContextMenuItems(
   localizedStrings: LanguageStrings,
   actions: InsertContextMenuActions,
   state: InsertContextMenuState,
 ): ContextMenuOptionConfig[] {
-  const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
+  const { isReadOnly, canUserCreateComments, isSyncBlocked, isResource } = state;
+  if (isResource) return [];
   return [
     {
       title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
@@ -783,6 +798,31 @@ export function isEditorContextMenuOpen(editorContainer: Element | null | undefi
   return isEditorContextMenuOpenFor(editorContainer);
 }
 
+/** The facts one editor web view publishes about itself; both key functions below map over this */
+const EDITOR_WEB_VIEW_CONTEXT_FACTS = [
+  'isReadOnly',
+  'isPreview',
+  'isSyncBlocked',
+  'footnotesPaneVisible',
+] as const;
+
+function getEditorWebViewContextKeyPrefix(webViewId: string): string {
+  return `platformScriptureEditor.webView.${webViewId}`;
+}
+
+/**
+ * Lists the names of the context keys one editor web view publishes, for removing them when it
+ * closes. Derived from the same fact list as {@link getEditorWebViewContextKeys}, so the two cannot
+ * disagree.
+ *
+ * @param webViewId The web view's id
+ * @returns The full context key names, one per published fact
+ */
+export function getEditorWebViewContextKeyNames(webViewId: string): string[] {
+  const prefix = getEditorWebViewContextKeyPrefix(webViewId);
+  return EDITOR_WEB_VIEW_CONTEXT_FACTS.map((fact) => `${prefix}.${fact}`);
+}
+
 /**
  * Where keyboard focus is, from this editor's point of view (see {@link EditorFocusLocation}).
  * Projects the subject to a web view id as core's `getWebViewIdFromFocusSubject` does (extensions
@@ -811,4 +851,22 @@ export function getEditorFocusLocation(
   if (subjectWebViewId !== ownWebViewId) return 'anotherWebView';
   if (focusSubject?.focusType === 'webView' && !doesEditorDocumentHaveFocus) return 'settling';
   return 'thisEditor';
+}
+
+/**
+ * Names the context keys one editor web view publishes about itself, which its menu items'
+ * `enabledWhen` / `checkedWhen` expressions read.
+ *
+ * @param webViewId The web view's id
+ * @param state The facts to publish
+ * @returns Context key name -> value, one entry per published fact
+ */
+export function getEditorWebViewContextKeys(
+  webViewId: string,
+  state: Record<(typeof EDITOR_WEB_VIEW_CONTEXT_FACTS)[number], boolean>,
+): Record<string, boolean> {
+  const prefix = getEditorWebViewContextKeyPrefix(webViewId);
+  return Object.fromEntries(
+    EDITOR_WEB_VIEW_CONTEXT_FACTS.map((fact) => [`${prefix}.${fact}`, state[fact]]),
+  );
 }

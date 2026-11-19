@@ -1,8 +1,20 @@
-import { generateUsjCss, StyleInfo } from '@eten-tech-foundation/platform-editor';
+import {
+  generateUsjCss,
+  generateUsjFontCss,
+  StyleInfo,
+} from '@eten-tech-foundation/platform-editor';
 import type { ScriptureEditorViewType } from 'platform-scripture-editor';
 import { useStylesheet } from 'platform-bible-react';
 import { useMemo } from 'react';
-import { FOOTNOTE_ROWS_SELECTOR, generateProjectFontCss } from './project-font-css.util';
+
+/**
+ * Scope for the footnotes pane's read-only rows: the rows of the pane's list, never the row being
+ * edited (the editor in that row has its own project sheet) and never the main editor. It targets
+ * each row's `<li>` because that element carries the platform's `scripture-font` family, which
+ * would beat anything inherited from the list.
+ */
+export const FOOTNOTE_ROWS_SELECTOR =
+  "[data-footnotes-pane] .formatted-font > li:not([data-state='editing'])";
 
 /**
  * Which project sheet a view gets from {@link useProjectStylesheet}: the whole sheet in the Standard
@@ -30,7 +42,7 @@ export function useProjectStylesheet(
     if (!styleInfo) return '';
     return mode === 'full'
       ? generateUsjCss(styleInfo, { rtl: effectiveRtl })
-      : generateProjectFontCss(styleInfo);
+      : generateUsjFontCss(styleInfo);
   }, [styleInfo, effectiveRtl, mode]);
   useStylesheet(css);
 }
@@ -41,7 +53,8 @@ export function useProjectStylesheet(
  */
 export function useFootnotePaneFontStylesheet(styleInfo: StyleInfo | undefined): void {
   const css = useMemo(
-    () => generateProjectFontCss(styleInfo, { containerSelector: FOOTNOTE_ROWS_SELECTOR }),
+    () =>
+      styleInfo ? generateUsjFontCss(styleInfo, { containerSelector: FOOTNOTE_ROWS_SELECTOR }) : '',
     [styleInfo],
   );
   useStylesheet(css);

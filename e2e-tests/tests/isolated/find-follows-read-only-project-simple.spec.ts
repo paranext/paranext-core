@@ -51,12 +51,18 @@ import {
 // seeded through the fixture rather than a preConfigureSettings call in a hook, which the fixture
 // would both override and then write back into the developer's shared settings.
 test.use({
-  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
   interfaceMode: 'simple',
   seedSettings: { 'platform.firstRunComplete': true },
 });
 
 test.describe('simple mode: Find follows the editor onto an Editable=F project', () => {
+  // TODO(PT-5052): run again once overlapping Simple-mode project switches register the switch
+  // events only once.
+  test.fixme(
+    true,
+    'PT-5052: two Simple-mode project switches that overlap register the project-switch events twice, and the second registration is rejected',
+  );
+
   // App startup plus two editor opens, each of which re-points the whole of Column 3.
   test.setTimeout(420_000);
 

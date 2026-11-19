@@ -57,7 +57,7 @@ const WEB_PROJECT_ASSETS_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB
  * scans this folder exactly once at startup (there is no on-demand rescan), so a test project
  * written here is discoverable only if it exists before the app launches.
  */
-const PARATEXT_PROJECTS_ROOT = path.join(
+export const PARATEXT_PROJECTS_ROOT = path.join(
   os.homedir(),
   '.platform.bible',
   'projects',

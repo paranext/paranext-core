@@ -86,7 +86,7 @@ describe('selected paragraph marker row', () => {
 
   it('measures the reach in a gutter width registered as a length, not in the paragraph’s own font size', () => {
     // An unregistered `4em` resolves where it is used, so a `\mt1` (166%) would push the bar past
-    // the editor's edge, where it is clipped, and an `\s1` (0.8 of the base size) would stop it inside the gutter.
+    // the editor's edge, where it is clipped, and a `\cd` (91%) would stop it inside the gutter.
     expect(declarations).toMatch(
       /@property --psc-para-marker-gutter-width\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true[^}]*initial-value:/,
     );
@@ -113,6 +113,13 @@ describe('selected paragraph marker row', () => {
   it('strengthens the selected glyph', () => {
     const glyph = block(`${SELECTED_ROW} > .marker:not(.verse):not(.chapter):first-child`);
     expect(glyph).toContain('font-weight: 700');
+  });
+
+  it('keeps an unselected glyph regular, even in a bold heading', () => {
+    const glyph = block(
+      '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child',
+    );
+    expect(glyph).toMatch(/(?:^|[;\s])font-weight: 400;/);
   });
 
   it('keeps the selected row visible in forced colors, which drop the box-shadow and fill', () => {

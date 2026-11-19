@@ -93,91 +93,93 @@ async function expectControlWithinRow(
 }
 
 test.describe('Title bar at narrow window widths', () => {
-  test('Simple-mode controls fit without clipping at the minimum window width', async ({
+  // Both checks run against the same Simple-mode app at the minimum width, so they share one launch.
+  // Each step applies the minimum width itself (a no-op once the window is already there) and
+  // re-reads the bar, so neither depends on what the other did. A failing first step stops the test
+  // before the second runs.
+  test('Simple-mode title bar fits at the minimum window width', async ({
     electronApp,
     mainPage,
   }) => {
+    // The suite's per-test default (120 s) for each of the two checks.
+    test.setTimeout(2 * 120_000);
     await waitForAppReady(mainPage);
     await waitForLocalizedTitleBar(mainPage);
-    await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
 
     const contentRow = mainPage.locator('[data-testid="toolbar-content-row"]');
-    await expect(contentRow).toBeVisible();
 
-    const overflow = await contentRow.evaluate((el) => ({
-      scrollWidth: el.scrollWidth,
-      clientWidth: el.clientWidth,
-    }));
+    await test.step('Simple-mode controls fit without clipping at the minimum window width', async () => {
+      await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
+      await expect(contentRow).toBeVisible();
 
-    expect(
-      overflow.scrollWidth,
-      `Title bar overflows by ${overflow.scrollWidth - overflow.clientWidth}px at the minimum window width — controls are being clipped`,
-    ).toBeLessThanOrEqual(overflow.clientWidth + ROUNDING_TOLERANCE_PX);
+      const overflow = await contentRow.evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      }));
 
-    // The overflow assertion above cannot fail in a core build, and it is worth being explicit
-    // about why rather than leaving a green test that proves less than it looks like it does.
-    // Reproducing the reported clipping needs a CROWDED bar, and two of the controls that crowd it
-    // — the marketing version badge and the sync button — do not render here: the badge is driven
-    // by `marketingVersion`, which is empty in paranext-core (it is set in Paratext 10,
-    // where this was reported), and send/receive is unavailable in the test environment. Without
-    // them the content area is never squeezed at any width the window can actually reach, and at
-    // widths narrow enough to squeeze it the bar overflows with or without the fix.
-    //
-    // So the root cause gets a direct assertion. `min-width: auto` is the flex default that floored
-    // this area at its intrinsic width and made the row clip instead of shrink (PT-4218); computed
-    // `0px` is the fix, and this fails the moment the class is dropped.
-    const contentArea = mainPage.locator('[data-testid="toolbar-content-area"]');
-    await expect(contentArea).toBeAttached();
-    const contentAreaMinWidth = await contentArea.evaluate((el) => getComputedStyle(el).minWidth);
-    expect(
-      contentAreaMinWidth,
-      'The toolbar content area must be able to shrink below its intrinsic width, or narrow windows clip the trailing controls',
-    ).toBe('0px');
+      expect(
+        overflow.scrollWidth,
+        `Title bar overflows by ${overflow.scrollWidth - overflow.clientWidth}px at the minimum window width — controls are being clipped`,
+      ).toBeLessThanOrEqual(overflow.clientWidth + ROUNDING_TOLERANCE_PX);
 
-    // NOT asserted here: that the DOCUMENT does not scroll horizontally. That overflow is a
-    // separate mechanism owned by the dock layout, not the title bar — rc-dock sums each Simple
-    // mode column's `panelLock.minWidth` and adds a per-divider reserve, so the columns and the
-    // window minimum have to be derived from each other or the dock demands more width than the
-    // narrowest permitted window can give (see `simple-layout.data.ts` and
-    // `adr-simple-mode-column-minimums`). Keeping that out of this spec is deliberate: it would wire
-    // these toolbar assertions to a failure they do not own, and `simple-layout.data.test.ts`
-    // already pins the column arithmetic directly.
-  });
+      // The overflow assertion above cannot fail in a core build, and it is worth being explicit
+      // about why rather than leaving a green test that proves less than it looks like it does.
+      // Reproducing the reported clipping needs a CROWDED bar, and two of the controls that crowd it
+      // — the marketing version badge and the sync button — do not render here: the badge is driven
+      // by `marketingVersion`, which is empty in paranext-core (it is set in Paratext 10,
+      // where this was reported), and send/receive is unavailable in the test environment. Without
+      // them the content area is never squeezed at any width the window can actually reach, and at
+      // widths narrow enough to squeeze it the bar overflows with or without the fix.
+      //
+      // So the root cause gets a direct assertion. `min-width: auto` is the flex default that floored
+      // this area at its intrinsic width and made the row clip instead of shrink (PT-4218); computed
+      // `0px` is the fix, and this fails the moment the class is dropped.
+      const contentArea = mainPage.locator('[data-testid="toolbar-content-area"]');
+      await expect(contentArea).toBeAttached();
+      const contentAreaMinWidth = await contentArea.evaluate((el) => getComputedStyle(el).minWidth);
+      expect(
+        contentAreaMinWidth,
+        'The toolbar content area must be able to shrink below its intrinsic width, or narrow windows clip the trailing controls',
+      ).toBe('0px');
 
-  test('essential Simple-mode controls stay visible and in-bounds when narrow', async ({
-    electronApp,
-    mainPage,
-  }) => {
-    await waitForAppReady(mainPage);
-    await waitForLocalizedTitleBar(mainPage);
-    await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
+      // NOT asserted here: that the DOCUMENT does not scroll horizontally. That overflow is a
+      // separate mechanism owned by the dock layout, not the title bar — rc-dock sums each Simple
+      // mode column's `panelLock.minWidth` and adds a per-divider reserve, so the columns and the
+      // window minimum have to be derived from each other or the dock demands more width than the
+      // narrowest permitted window can give (see `simple-layout.data.ts` and
+      // `adr-simple-mode-column-minimums`). Keeping that out of this spec is deliberate: it would wire
+      // these toolbar assertions to a failure they do not own, and `simple-layout.data.test.ts`
+      // already pins the column arithmetic directly.
+    });
 
-    const contentRow = mainPage.locator('[data-testid="toolbar-content-row"]');
-    await expect(contentRow).toBeVisible();
+    await test.step('essential Simple-mode controls stay visible and in-bounds when narrow', async () => {
+      await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
+      await expect(contentRow).toBeVisible();
 
-    // The title bar's flex re-layout can still land a frame or two after `setWindowWidth` resolves
-    // (that wait only confirms `window.innerWidth`, not that the row has finished reflowing), so a
-    // measurement taken immediately can catch a control mid-shift. Retry the whole
-    // measure-and-assert pass, re-reading the boxes fresh each time, until layout has settled.
-    await expect(async () => {
-      const rowBox = await contentRow.boundingBox();
-      expect(rowBox).not.toBeNull();
-      if (!rowBox) return;
+      // The title bar's flex re-layout can still land a frame or two after `setWindowWidth` resolves
+      // (that wait only confirms `window.innerWidth`, not that the row has finished reflowing), so a
+      // measurement taken immediately can catch a control mid-shift. Retry the whole
+      // measure-and-assert pass, re-reading the boxes fresh each time, until layout has settled.
+      await expect(async () => {
+        const rowBox = await contentRow.boundingBox();
+        expect(rowBox).not.toBeNull();
+        if (!rowBox) return;
 
-      // Guards against "fixing" the overflow by hiding the controls the ticket is about. Both are
-      // named in the report as things the user could no longer reach.
-      await expectControlWithinRow(
-        mainPage,
-        rowBox,
-        'BCV control',
-        '[aria-label="book-chapter-trigger"]',
-      );
-      await expectControlWithinRow(
-        mainPage,
-        rowBox,
-        'profile button',
-        '[data-testid="user-profile-popover-trigger"]',
-      );
-    }).toPass({ timeout: 10_000 });
+        // Guards against "fixing" the overflow by hiding the controls the ticket is about. Both are
+        // named in the report as things the user could no longer reach.
+        await expectControlWithinRow(
+          mainPage,
+          rowBox,
+          'BCV control',
+          '[aria-label="book-chapter-trigger"]',
+        );
+        await expectControlWithinRow(
+          mainPage,
+          rowBox,
+          'profile button',
+          '[data-testid="user-profile-popover-trigger"]',
+        );
+      }).toPass({ timeout: 10_000 });
+    });
   });
 });

@@ -10,6 +10,7 @@ vi.mock('@papi/backend', () => ({
     },
     localization: {
       getLocalizedString: vi.fn().mockResolvedValue('Manage Books'),
+      getLocalizedProjectTitle: vi.fn().mockResolvedValue('Manage Books — project-1'),
     },
   },
 }));
@@ -17,6 +18,7 @@ vi.mock('@papi/backend', () => ({
 const { ManageBooksWebViewProvider, MANAGE_BOOKS_WEB_VIEW_TYPE } = await import(
   './manage-books.web-view-provider'
 );
+const { default: papi } = await import('@papi/backend');
 
 /**
  * Both builders are typed against the REAL contract rather than cast to `never`. That is the whole
@@ -95,6 +97,30 @@ describe('ManageBooksWebViewProvider transient launch options', () => {
 
     transientLaunchKeys.forEach((key) => {
       expect(result?.state?.[key]).toBeUndefined();
+    });
+  });
+});
+
+describe('ManageBooksWebViewProvider title', () => {
+  it("opens with the project's localized title", async () => {
+    const result = await new ManageBooksWebViewProvider().getWebView(savedWebView(), options());
+
+    expect(result?.title).toBe('Manage Books — project-1');
+    expect(papi.localization.getLocalizedProjectTitle).toHaveBeenCalledWith({
+      localizeKey: '%manageBooks_dialog_titleWithProject%',
+      projectId: 'project-1',
+    });
+  });
+
+  it('opens with the plain dialog title when there is no project', async () => {
+    const result = await new ManageBooksWebViewProvider().getWebView(
+      savedWebView(),
+      options({ projectId: undefined }),
+    );
+
+    expect(result?.title).toBe('Manage Books');
+    expect(papi.localization.getLocalizedString).toHaveBeenCalledWith({
+      localizeKey: '%manageBooks_dialog_title%',
     });
   });
 });

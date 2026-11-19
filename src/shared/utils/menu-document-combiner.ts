@@ -18,6 +18,8 @@ import {
   DeepPartial,
   Localized,
   LocalizeKey,
+  getTemplateVarNames,
+  getErrorMessage,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import { localizationService } from '@shared/services/localization.service';
@@ -211,6 +213,78 @@ async function localizeMenuItems(menuItems: Localized<MenuItemBase>[] | undefine
   });
 }
 
+/** Template variables available to when-expressions in web-view-scoped menus */
+const WEB_VIEW_MENU_TEMPLATE_VARS = ['webViewId', 'webViewType', 'projectId'];
+/**
+ * Template variables available to when-expressions in the main menu (none: its expressions can
+ * reference only global keys)
+ */
+const MAIN_MENU_TEMPLATE_VARS: string[] = [];
+/**
+ * Template variables available to when-expressions in tab menus. A tab menu acts on the tab frame
+ * rather than on the web view's contents, and the tab title evaluates it from the tab's own
+ * identity, so `{projectId}` is not available there
+ */
+const TAB_MENU_TEMPLATE_VARS = ['webViewId', 'webViewType'];
+
+const WHEN_EXPRESSION_PROPERTIES = ['when', 'enabledWhen', 'checkedWhen'] as const;
+
+function checkWhenExpressionsOnItems(
+  menuItems: DeepPartial<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]> | undefined,
+  allowedTemplateVars: string[],
+  menuDescription: string,
+  /**
+   * True for tab menus and context menus: they can disable a command item but show no checkmarks
+   * and cannot disable a submenu
+   */
+  limitedSurface = false,
+): void {
+  if (!menuItems) return;
+  menuItems.forEach((menuItem) => {
+    if (!menuItem) return;
+    WHEN_EXPRESSION_PROPERTIES.forEach((expressionProperty) => {
+      if (limitedSurface) {
+        // enabledWhen and checkedWhen only exist on the item types that declare them; reading them
+        // off the union is safe
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const limitedItem = menuItem as Partial<MenuItemContainingCommand>;
+        if (expressionProperty === 'checkedWhen' && limitedItem.checkedWhen !== undefined)
+          throw new Error(
+            `Menu item '${menuItem.label}' in ${menuDescription} uses checkedWhen, but this menu shows no checkmarks. Remove checkedWhen or move the item to mainMenu or a top menu`,
+          );
+        if (
+          expressionProperty === 'enabledWhen' &&
+          limitedItem.enabledWhen !== undefined &&
+          limitedItem.command === undefined
+        )
+          throw new Error(
+            `Menu item '${menuItem.label}' in ${menuDescription} uses enabledWhen on a submenu, but this menu can only disable command items`,
+          );
+      }
+      // checkedWhen only exists on command items; reading it off the union is safe
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const expression = (menuItem as Partial<MenuItemContainingCommand>)[expressionProperty];
+      if (expression === undefined) return;
+      let templateVarNames: string[];
+      try {
+        templateVarNames = getTemplateVarNames(expression);
+      } catch (error) {
+        throw new Error(
+          `Invalid ${expressionProperty} expression '${expression}' on menu item '${menuItem.label}' in ${menuDescription}: ${getErrorMessage(error)}`,
+        );
+      }
+      templateVarNames.forEach((templateVarName) => {
+        if (!allowedTemplateVars.includes(templateVarName))
+          throw new Error(
+            `Unknown template variable {${templateVarName}} in ${expressionProperty} expression '${expression}' on menu item '${menuItem.label}' in ${menuDescription}. Allowed template variables: ${
+              allowedTemplateVars.length > 0 ? allowedTemplateVars.join(', ') : '(none)'
+            }`,
+          );
+      });
+    });
+  });
+}
+
 // #endregion
 
 /**
@@ -302,6 +376,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
     checkNewColumns(newMenus.mainMenu?.columns, namePrefix, currentMenus?.mainMenu.columns);
     checkNewGroups(newMenus.mainMenu?.groups, namePrefix, currentMenus?.mainMenu.columns);
     checkNewMenuItems(newMenus.mainMenu?.items, namePrefix, currentMenus?.mainMenu.groups);
+    checkWhenExpressionsOnItems(newMenus.mainMenu?.items, MAIN_MENU_TEMPLATE_VARS, 'mainMenu');
     checkNewColumns(
       newMenus.defaultWebViewTopMenu?.columns,
       namePrefix,
@@ -317,6 +392,11 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       namePrefix,
       currentMenus?.defaultWebViewTopMenu.groups,
     );
+    checkWhenExpressionsOnItems(
+      newMenus.defaultWebViewTopMenu?.items,
+      WEB_VIEW_MENU_TEMPLATE_VARS,
+      'defaultWebViewTopMenu',
+    );
     checkNewGroups(newMenus.defaultWebViewContextMenu?.groups, namePrefix, undefined);
     checkNewMenuItems(
       newMenus.defaultWebViewContextMenu?.items,
@@ -328,6 +408,18 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       newMenus.defaultWebViewTabMenu?.items,
       namePrefix,
       currentMenus?.defaultWebViewTabMenu?.groups,
+    );
+    checkWhenExpressionsOnItems(
+      newMenus.defaultWebViewTabMenu?.items,
+      TAB_MENU_TEMPLATE_VARS,
+      'defaultWebViewTabMenu',
+      true,
+    );
+    checkWhenExpressionsOnItems(
+      newMenus.defaultWebViewContextMenu?.items,
+      WEB_VIEW_MENU_TEMPLATE_VARS,
+      'defaultWebViewContextMenu',
+      true,
     );
     const newWebViewMenus = newMenus?.webViewMenus;
     if (!newWebViewMenus) return;
@@ -346,6 +438,11 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       checkNewColumns(newWebView?.topMenu?.columns, namePrefix, currentWebView?.topMenu?.columns);
       checkNewGroups(newWebView?.topMenu?.groups, namePrefix, currentWebView?.topMenu?.columns);
       checkNewMenuItems(newWebView?.topMenu?.items, namePrefix, currentWebView?.topMenu?.groups);
+      checkWhenExpressionsOnItems(
+        newWebView?.topMenu?.items,
+        WEB_VIEW_MENU_TEMPLATE_VARS,
+        `webViewMenus.${webViewName}.topMenu`,
+      );
       checkNewGroups(newWebView?.contextMenu?.groups, namePrefix, undefined);
       checkNewMenuItems(
         newWebView?.contextMenu?.items,
@@ -354,6 +451,18 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       );
       checkNewGroups(newWebView?.tabMenu?.groups, namePrefix, undefined);
       checkNewMenuItems(newWebView?.tabMenu?.items, namePrefix, currentWebView?.tabMenu?.groups);
+      checkWhenExpressionsOnItems(
+        newWebView?.tabMenu?.items,
+        TAB_MENU_TEMPLATE_VARS,
+        `webViewMenus.${webViewName}.tabMenu`,
+        true,
+      );
+      checkWhenExpressionsOnItems(
+        newWebView?.contextMenu?.items,
+        WEB_VIEW_MENU_TEMPLATE_VARS,
+        `webViewMenus.${webViewName}.contextMenu`,
+        true,
+      );
     });
 
     // TODO: Validate that extensions only add to objects that are marked as extensible
@@ -367,13 +476,31 @@ export class MenuDocumentCombiner extends DocumentCombiner {
     checkColumnsForDuplicateOrdering(allMenus.mainMenu.columns);
     checkMenuGroupsForDuplicateOrdering(allMenus.mainMenu.groups);
     checkMenuItemsForDuplicateOrdering(allMenus.mainMenu.items);
+    checkWhenExpressionsOnItems(allMenus.mainMenu.items, MAIN_MENU_TEMPLATE_VARS, 'mainMenu');
     checkColumnsForDuplicateOrdering(allMenus.defaultWebViewTopMenu.columns);
     checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewTopMenu.groups);
     checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewTopMenu.items);
+    checkWhenExpressionsOnItems(
+      allMenus.defaultWebViewTopMenu.items,
+      WEB_VIEW_MENU_TEMPLATE_VARS,
+      'defaultWebViewTopMenu',
+    );
     checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewContextMenu.groups);
     checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewContextMenu.items);
     checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewTabMenu?.groups);
     checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewTabMenu?.items);
+    checkWhenExpressionsOnItems(
+      allMenus.defaultWebViewTabMenu?.items,
+      TAB_MENU_TEMPLATE_VARS,
+      'defaultWebViewTabMenu',
+      true,
+    );
+    checkWhenExpressionsOnItems(
+      allMenus.defaultWebViewContextMenu.items,
+      WEB_VIEW_MENU_TEMPLATE_VARS,
+      'defaultWebViewContextMenu',
+      true,
+    );
     Object.getOwnPropertyNames(allMenus.webViewMenus).forEach((webViewName: string) => {
       // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -381,10 +508,27 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       checkColumnsForDuplicateOrdering(webViewMenu.topMenu?.columns);
       checkMenuGroupsForDuplicateOrdering(webViewMenu.topMenu?.groups);
       checkMenuItemsForDuplicateOrdering(webViewMenu.topMenu?.items);
+      checkWhenExpressionsOnItems(
+        webViewMenu.topMenu?.items,
+        WEB_VIEW_MENU_TEMPLATE_VARS,
+        `webViewMenus.${webViewName}.topMenu`,
+      );
       checkMenuGroupsForDuplicateOrdering(webViewMenu.contextMenu?.groups);
       checkMenuItemsForDuplicateOrdering(webViewMenu.contextMenu?.items);
       checkMenuGroupsForDuplicateOrdering(webViewMenu.tabMenu?.groups);
       checkMenuItemsForDuplicateOrdering(webViewMenu.tabMenu?.items);
+      checkWhenExpressionsOnItems(
+        webViewMenu.tabMenu?.items,
+        TAB_MENU_TEMPLATE_VARS,
+        `webViewMenus.${webViewName}.tabMenu`,
+        true,
+      );
+      checkWhenExpressionsOnItems(
+        webViewMenu.contextMenu?.items,
+        WEB_VIEW_MENU_TEMPLATE_VARS,
+        `webViewMenus.${webViewName}.contextMenu`,
+        true,
+      );
     });
   }
 

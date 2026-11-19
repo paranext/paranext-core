@@ -27,7 +27,7 @@ on:
 
 jobs:
   test:
-    name: Build on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
+    name: Build on ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
@@ -39,7 +39,6 @@ jobs:
       matrix:
         # Make sure these match with the env values above and the `include` entries below
         os: [windows-latest, macos-15, ubuntu-22.04]
-        dotnet_version: [8.0.x]
         # The name each leg uploads its app under, and the name its cleanup step deletes by
         include:
           - os: windows-latest
@@ -159,7 +158,7 @@ jobs:
         timeout-minutes: 90
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet_version }}
+          global-json-file: global.json
 
       # The notices generator restores the .NET closure once per runtime identifier - four passes -
       # on top of the build's own restore. `~/.npm` is cached by setup-node and the bundler gems by
@@ -196,6 +195,17 @@ jobs:
         with:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
+
+      # npm 10 installs a lockfile whose nested entries fall outside the range their workspace
+      # declares. npm 11 (Node.js 24), which the extension repos' CI uses to install this repo,
+      # re-resolves them and fails `npm ci` when that changes a locked version, so whether it breaks
+      # depends on the registry. `npm ls` fails on every such entry under both npm versions, and it
+      # reads only the lockfile, so it runs before `npm ci` and on one OS.
+      # To fix a failure: delete the reported keys from package-lock.json, then run npm 10's
+      # `npm install --package-lock-only --ignore-scripts`. npm will not drop them on its own.
+      - name: Check the lockfile's entries match their declared ranges
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm ls --all --package-lock-only
 
       # licensee (Ruby) identifies license texts for the third-party notices generator. Linux only:
       # the generator writes the artifact only on Linux, and the other legs verify against the
@@ -522,3 +532,101 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: true
+
+  # Which spec lists the `e2e-core` job below runs. The core list always; the editor list as well
+  # when a pull request touches a path matched by `editor_paths` below (the Scripture editor and
+  # what it saves through), and on every run that is not a pull request.
+  e2e-core-selection:
+    name: E2E core, pick the spec lists
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    # Reads the pull request's changed files and nothing else; it does not check out the repository.
+    permissions:
+      pull-requests: read
+    outputs:
+      spec_lists: ${{ steps.pick.outputs.spec_lists }}
+
+    steps:
+      - name: Pick the spec lists
+        id: pick
+        timeout-minutes: 90
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          spec_lists="e2e-tests/core-specs.txt"
+          # The paths whose change runs the editor list too, one ERE per line, each naming one
+          # thing (e2e-tests/core-specs.test.ts checks that every line matches a tracked file):
+          # - the Scripture editor extension, and the editor package pin (dev-packages.json);
+          # - the editor list, the two specs it names, their shared body, and the two modules that
+          #   judge what counts as an unasked edit;
+          # - the USFM<->USX<->USJ conversion path: the TypeScript USX<->USJ conversion in the
+          #   platform-scripture project data provider, the DOM polyfill it runs on, the C# USFM<->USX
+          #   conversion in ParatextProjectDataProvider.cs, the chapter-marker correction it applies
+          #   to USFM before writing it, the ParatextData version pin in the C# project file
+          #   (ParatextData does the USFM<->USX conversion), and the default USFM stylesheets it
+          #   parses project text with;
+          # - a curated, non-exhaustive subset of the platform-bible-react parts the editor web view
+          #   renders: the footnote editor, the marker menu and palette helpers, the editor keyboard
+          #   shortcuts, and the demo editor stylesheets the extension imports by path. Other shared
+          #   components, hooks and primitives it uses do not trigger the editor list.
+          # The list over-matches on purpose, since over-running a report-only job is the safe
+          # direction: test and story files in the listed folders count too, the project data
+          # provider folder also holds the finder's model, and the C# project file changes for any
+          # dependency.
+          editor_paths=()
+          editor_paths+=('extensions/src/platform-scripture-editor/')
+          editor_paths+=('dev-packages\.json$')
+          editor_paths+=('e2e-tests/core-specs-editor\.txt$')
+          editor_paths+=('e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-power-standard\.spec\.ts$')
+          editor_paths+=('e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-simple-paragraph-structure\.spec\.ts$')
+          editor_paths+=('e2e-tests/fixtures/no-unasked-edits\.body\.ts$')
+          editor_paths+=('e2e-tests/fixtures/project-write-judging\.ts$')
+          editor_paths+=('e2e-tests/fixtures/usfm-units\.ts$')
+          editor_paths+=('extensions/src/platform-scripture/src/project-data-provider/')
+          editor_paths+=('src/node/polyfills/dom-globals\.')
+          editor_paths+=('c-sharp/Projects/ParatextProjectDataProvider\.cs$')
+          editor_paths+=('c-sharp/Projects/ChapterMarkerCorrection\.cs$')
+          editor_paths+=('c-sharp/ParanextDataProvider\.csproj$')
+          editor_paths+=('c-sharp/assets/usfm\.sty$')
+          editor_paths+=('c-sharp/assets/usfm_sb\.sty$')
+          editor_paths+=('lib/platform-bible-react/src/components/advanced/footnote-editor/')
+          editor_paths+=('lib/platform-bible-react/src/components/advanced/marker-menu\.')
+          editor_paths+=('lib/platform-bible-react/src/components/advanced/(use-)?marker-palette-')
+          editor_paths+=('lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts\.')
+          editor_paths+=('lib/platform-bible-react/src/components/demo/scripture-editor/')
+          editor_pattern="^($(IFS='|'; echo "${editor_paths[*]}"))"
+          if [ -z "$PULL_REQUEST_NUMBER" ]; then
+            spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
+          else
+            # If the lookup fails, run both lists: failing here would skip the whole e2e-core job.
+            # A renamed file's old path counts too, so moving a file out of a listed path still runs
+            # the editor list. `timeout` turns a hung lookup into a failed one, which runs both lists.
+            if changed_files=$(timeout 2m gh api "repos/${{ github.repository }}/pulls/$PULL_REQUEST_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)'); then
+              if printf '%s\n' "$changed_files" | grep -q -E "$editor_pattern"; then
+                spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
+              fi
+            else
+              echo "::warning title=Changed files unavailable::Could not list the pull request's changed files, so the editor spec list runs too."
+              spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
+            fi
+          fi
+          echo "Spec lists: $spec_lists"
+          echo "spec_lists=$spec_lists" >> "$GITHUB_OUTPUT"
+
+  # The isolated end-to-end specs that guard data loss and core flows, on every pull request. A
+  # job of its own beside the builds, so it adds no waiting time. It reports without blocking.
+  # TODO(PT-5088): make it blocking (drop `report_only`) and a required check once it has run for
+  # about two weeks without failing a pull request that did not cause the failure.
+  e2e-core:
+    name: E2E core
+    needs: e2e-core-selection
+    # The called workflow only reads the repository; it can never get more than this.
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e-isolated.yml
+    with:
+      spec_lists: ${{ needs.e2e-core-selection.outputs.spec_lists }}
+      report_only: true
+      timeout_minutes: 75
+      artifact_name: playwright-results-e2e-core

@@ -246,10 +246,11 @@ function renderMenuItems(
     } else if (item.type === 'submenu') {
       result.push(
         <HoverableSubmenu
-          // Use index for a stable key — labels are not guaranteed unique (LocalizeKeys may resolve
-          // to the same string), which would cause key collisions and unstable submenu behavior.
+          // Key by the contributed item's id so an open submenu survives items appearing above it.
+          // Labels are not unique (LocalizeKeys may resolve to the same string), so a submenu
+          // without an id falls back to its index.
           // eslint-disable-next-line react/no-array-index-key
-          key={`submenu-${i}`}
+          key={item.id !== undefined ? `submenu-id-${item.id}` : `submenu-${i}`}
           label={typeof item.label === 'string' ? item.label : String(item.label)}
           items={item.items}
           onSelect={onSelect}
@@ -356,7 +357,10 @@ type OverlayContextMenuProps = {
 export function OverlayContextMenu({ overlay }: OverlayContextMenuProps) {
   const hasResolved = useRef(false);
 
-  const localizeKeys = useMemo(() => collectContextMenuKeys(overlay.items), [overlay.items]);
+  const localizeKeys = useMemo(
+    () => overlay.localizeKeys ?? collectContextMenuKeys(overlay.items),
+    [overlay.localizeKeys, overlay.items],
+  );
   const [localizedStrings] = useLocalizedStrings(localizeKeys);
 
   const localizedItems = useMemo(

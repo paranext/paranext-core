@@ -55,7 +55,9 @@ import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { registerDisplayMediaRequestHandler } from '@main/services/display-media-request.util';
+import { registerUsersnapNetworkErrorLogging } from '@main/services/usersnap-network-error-log.util';
 import { registerLeakedCertificateCheck } from '@main/services/leaked-certificate-check.util';
+import { registerPapiPortRequestBlock } from '@main/services/papi-port-request-block.util';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
@@ -2445,9 +2447,18 @@ async function main() {
       // web views with `allowSameOrigin: false` and any other iframe are denied (see
       // `selectDisplayMediaSource`).
       registerDisplayMediaRequestHandler(session.defaultSession, USERSNAP_SPACE_API_KEY);
+      // Logs why Usersnap requests failed, which the renderer cannot see. This takes defaultSession's
+      // only onCompleted and onErrorOccurred listeners (Electron keeps one per event), so route any
+      // other use of those events through it rather than registering another.
+      registerUsersnapNetworkErrorLogging(session.defaultSession, USERSNAP_SPACE_API_KEY);
 
       // TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
       registerLeakedCertificateCheck(session.defaultSession);
+
+      // Web views can borrow the renderer's native WebSocket, so the PAPI port is closed to every
+      // renderer window here. This owns the default session's only `onBeforeRequest` listener;
+      // registering another would replace it and silently reopen the port.
+      registerPapiPortRequestBlock(session.defaultSession);
 
       // Install Chromium devtools extensions once (not per-window)
       if (isDebug) {

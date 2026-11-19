@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 
 namespace TestParanextDataProvider
 {
@@ -13,9 +14,10 @@ namespace TestParanextDataProvider
             string name,
             PapiClient papiClient,
             ProjectDetails projectDetails,
-            LocalParatextProjects paratextProjects
+            LocalParatextProjects paratextProjects,
+            ContextKeys? contextKeys = null
         )
-            : base(name, papiClient, projectDetails, paratextProjects) { }
+            : base(name, papiClient, projectDetails, paratextProjects, contextKeys) { }
 
         /// <summary>
         /// The names this PDP would register as wire methods, so tests can assert the wire surface

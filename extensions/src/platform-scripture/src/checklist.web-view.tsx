@@ -1,6 +1,12 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
-import { useData, useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
+import {
+  useData,
+  useEvaluatedMenu,
+  useLocalizedProjectTitle,
+  useLocalizedStrings,
+  useProjectDataProvider,
+} from '@papi/frontend/react';
 import {
   useEvent,
   ScopeSelector,
@@ -23,6 +29,7 @@ import {
   type ScopeWithRange,
 } from 'platform-bible-react/experimental';
 import {
+  createMenuTemplateVars,
   defaultScrRef,
   formatReplacementString,
   formatScrRef,
@@ -220,11 +227,22 @@ export function toChecklistSelectorRows(
  *   component, backing per-web-view persistence for the checklist settings.
  */
 global.webViewComponent = function ChecklistWebView({
+  id: webViewId,
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
 }: WebViewProps) {
+  // The provider titles the tab only when it opens; the project picker retargets the tab without
+  // reopening it. Same localize key as `checklist.web-view-provider.ts`, so the title keeps its shape.
+  const tabTitle = useLocalizedProjectTitle({
+    localizeKey: '%markersChecklist_windowTitle%',
+    projectId,
+  });
+  useEffect(() => {
+    if (tabTitle !== undefined) updateWebViewDefinition({ title: tabTitle });
+  }, [tabTitle, updateWebViewDefinition]);
+
   // ─── UI-PKG-004: persisted state slots ────────────────────────────────────
 
   // ─── Scroll group binding (drives currentScrRef + goto setter) ────────
@@ -574,6 +592,18 @@ global.webViewComponent = function ChecklistWebView({
     }
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
+
+  const menuTemplateVars = useMemo(
+    () =>
+      createMenuTemplateVars({
+        webViewId,
+        webViewType: MARKERS_CHECKLIST_WEB_VIEW_TYPE,
+        projectId,
+      }),
+    [webViewId, projectId],
+  );
+
+  const projectMenuData = useEvaluatedMenu(webViewMenu.topMenu, menuTemplateVars);
 
   // ─── Subscribe to the "open settings" network event (UI-PKG-003) ─────────
 
@@ -1067,7 +1097,7 @@ global.webViewComponent = function ChecklistWebView({
         onShowVerseTextChange={handleShowVerseTextChange}
         matchCountLabel={matchCountLabel}
         onRetry={handleRetry}
-        projectMenuData={webViewMenu.topMenu}
+        projectMenuData={projectMenuData}
         onSelectProjectMenuItem={handleSelectProjectMenuItem}
         onGotoLinkClick={handleGotoLinkClick}
         // onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003).

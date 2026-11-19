@@ -1122,16 +1122,29 @@ function findAdjacentTabGroup(
 }
 
 /**
+ * Whether `tabGroup` may take a new tab at all. Both of these must hold:
+ *
+ * - Its rc-dock `group` matches the new tab's. rc-dock's drag and drop never mixes groups, but
+ *   `dockMove` does not check, so this must.
+ * - It is not locked in place (`panelLock`). Simple mode's fixed columns are, and a tab added to one
+ *   would become its active tab and hide the tab the column is there to show; in the model-text and
+ *   editor columns, whose tab bar is hidden, that tab could not even be reached again.
+ *
+ * @param tabGroup The tab group the new tab would be added to
+ * @param tab The new tab
+ */
+function canTabGroupTakeTab(tabGroup: PanelData, tab: RCDockTabInfo): boolean {
+  return tabGroup.group === tab.group && !tabGroup.panelLock;
+}
+
+/**
  * Whether a new tab should be added to `adjacentTabGroup`, the tab group on the `direction` side of
  * `targetTabGroup`, rather than get a tab group of its own beside the target. All of these must
  * hold:
  *
  * - The group has tabs. A tab group with none is the stand-in rc-dock keeps where a maximized group
  *   will be restored, which would drop a tab added to it.
- * - It is of the new tab's rc-dock group. rc-dock refuses to drop a tab into a group of another one.
- * - It is not locked in place (`panelLock`). Simple mode's fixed columns are, and a tab added to one
- *   would become its active tab and hide the tab the column is there to show; in the model-text and
- *   editor columns, whose tab bar is hidden, that tab could not even be reached again.
+ * - It can take the tab at all (see {@link canTabGroupTakeTab}).
  * - It is at least as wide (as tall for `top` and `bottom`) as the tab group rc-dock would create
  *   beside the target, so joining never leaves the new tab less room than a group of its own.
  *
@@ -1147,8 +1160,8 @@ function canJoinAdjacentTabGroup(
   tab: RCDockTabInfo,
   direction: PanelSideDirection,
 ): boolean {
-  if (adjacentTabGroup.tabs.length === 0 || adjacentTabGroup.group !== tab.group) return false;
-  if (adjacentTabGroup.panelLock) return false;
+  if (adjacentTabGroup.tabs.length === 0 || !canTabGroupTakeTab(adjacentTabGroup, tab))
+    return false;
   const axis = getModeAlong(direction);
   return (
     getExtentInDock(adjacentTabGroup, axis) >=
@@ -1279,16 +1292,36 @@ function dockAtReadingEndEdge(
     moveFloatingTabGroupClear(dockLayout, floatingTabGroupId, tab.id, edge);
 }
 
+/** A panel direction that places the new tab in the target's own tab group, beside the target tab */
+type TabPositionDirection = 'before-tab' | 'after-tab';
+
+function isTabPositionDirection(direction: PanelDirection): direction is TabPositionDirection {
+  return direction === 'before-tab' || direction === 'after-tab';
+}
+
 /**
- * Adds a new tab beside the tab group holding `targetTab`: into the tab group already on that side
- * if there is one it can join, otherwise as a tab group of its own.
+ * The side of the target's tab group, in reading order, that a tab position falls back to when the
+ * new tab cannot join the target's group. Other directions pass through.
+ */
+function toSideDirection(direction: PanelDirection): PanelDirection {
+  if (direction === 'before-tab') return 'left';
+  if (direction === 'after-tab') return 'right';
+  return direction;
+}
+
+/**
+ * Adds a new tab beside `targetTab` or beside the tab group holding it.
  *
- * - A target tab group that is not in the docked area (it is in rc-dock's floating, maximized or
- *   window layer) gets the new tab as a tab group of its own at the reading-end edge of the docked
- *   area instead, whichever side was asked for (see {@link dockAtReadingEndEdge}). rc-dock would
- *   otherwise wrap both groups in a new box inside that layer. Those layers draw only the tab
+ * - `before-tab` and `after-tab` put the new tab in the target's own tab group, just before or after
+ *   the target tab, wherever that group is. A group that cannot take the tab (see
+ *   {@link canTabGroupTakeTab}) gets it beside the group instead, as `left` would for `before-tab`,
+ *   or `right` for `after-tab`.
+ * - For a side, a target tab group that is not in the docked area (it is in rc-dock's floating,
+ *   maximized or window layer) gets the new tab as a tab group of its own at the reading-end edge
+ *   of the docked area, whichever side was asked for (see {@link dockAtReadingEndEdge}). rc-dock
+ *   would otherwise wrap both groups in a new box inside that layer. Those layers draw only the tab
  *   groups directly inside them, so both groups would disappear while their tabs stayed open.
- * - A docked target whose `direction` side holds a tab group that can take the tab (see
+ * - For a side, a docked target whose `direction` side holds a tab group that can take the tab (see
  *   {@link findAdjacentTabGroup} and {@link canJoinAdjacentTabGroup}) gets the new tab added to that
  *   group as its active tab, rather than a new group squeezed in between. Otherwise the new tab
  *   gets a tab group of its own beside the target's.
@@ -1299,7 +1332,8 @@ function dockAtReadingEndEdge(
  * @param tab The new tab to add
  * @param targetTab The tab to place the new tab beside. If it is not a tab in a tab group, the new
  *   tab is placed against the docked area as a whole
- * @param direction The side of the target's tab group to place the new tab on, in reading order
+ * @param direction Where to place the new tab, in reading order: a side of the target's tab group,
+ *   or a position beside the target tab
  */
 function addTabAsPanel(
   dockLayout: DockLayout,
@@ -1308,9 +1342,20 @@ function addTabAsPanel(
   direction: PanelDirection,
 ): void {
   const { dockbox } = dockLayout.getLayout();
-  const resolvedDirection = resolvePanelDirection(direction);
   const targetTabGroup =
     isTab(targetTab) && isPanel(targetTab.parent) ? targetTab.parent : undefined;
+
+  if (
+    isTabPositionDirection(direction) &&
+    isTab(targetTab) &&
+    targetTabGroup &&
+    canTabGroupTakeTab(targetTabGroup, tab)
+  ) {
+    dockLayout.dockMove(tab, targetTab, direction);
+    return;
+  }
+
+  const resolvedDirection = resolvePanelDirection(toSideDirection(direction));
 
   if (!targetTabGroup) {
     dockLayout.dockMove(tab, dockbox, resolvedDirection);

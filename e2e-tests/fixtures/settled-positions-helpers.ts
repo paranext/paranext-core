@@ -268,6 +268,21 @@ export async function setScrollGroupRef(scrRef: SerializedVerseRef): Promise<boo
 }
 
 /**
+ * Reads scroll group A's current reference and returns a function that puts it back, for tests that
+ * move the running app's shared reference. Best-effort: cleanup must not fail a test, and a
+ * reference that could not be read is left alone. It restores book/chapter/verse only; the group's
+ * source project and back/forward history are not restored.
+ */
+export async function saveScrollGroupRef(): Promise<() => Promise<void>> {
+  const saved = await getScrollGroupRef().catch(() => undefined);
+  return async () => {
+    const { book, chapterNum, verseNum } = saved ?? {};
+    if (book && chapterNum !== undefined && verseNum !== undefined)
+      await setScrollGroupRef({ ...saved, book, chapterNum, verseNum }).catch(() => false);
+  };
+}
+
+/**
  * Move scroll group A to `scrRef` from the RENDERER, through its own `papi.scrollGroups.setScrRef`
  * — the renderer-side write another view or the toolbar makes, which predicts the new reference
  * locally before the host confirms it. A web view subscribed to the group renders that reference

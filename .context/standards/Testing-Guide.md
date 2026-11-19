@@ -1284,18 +1284,32 @@ async function clickEditorMenuItem(page: Page, projectName: string, itemLabel: R
 
 Where a spec lives is decided by how it gets its app, and that choice also picks its config:
 
-- `tests/isolated/{feature}/` — the default. Each test launches its own Electron, so specs are
-  self-contained and can run in CI. Uses `isolated.fixture` and `playwright.config.ts`.
+- `tests/isolated/{feature}/` — the default. Each spec launches its own Electron (one per test, or
+  one per worker in a few subsets such as `find`), so specs are self-contained. CI runs the core
+  lists on every pull request and every isolated spec nightly (see "What CI runs" in
+  `e2e-tests/CLAUDE.md`). Uses `isolated.fixture` and `playwright.config.ts`.
 - `tests/attached/` — for specs that must attach to an app you started yourself (`refresh.sh`),
   because they cannot own its lifecycle. Uses `cdp.fixture` and `playwright-cdp.config.ts`.
   Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
   port 8876 is bound, which is exactly the state these specs need.
 - `tests/enhanced-resources/`, `tests/manage-books/`, `tests/markers-checklist/` — older
-  local-only suites that also use `cdp.fixture` and the CDP config. They are not part of any
-  standard run (see their READMEs for what collects each and why), so put new work in one of the
-  three directories above rather than extending them.
-- `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
-  tests, apart from the bare-Electron checks its README describes.
+  local-only suites that also use `cdp.fixture`. They are not part of any standard run, and parts
+  of them are parked, meaning collected by no config: all of `tests/manage-books/` and
+  `tests/markers-checklist/`, and the files listed in `PARKED_ENHANCED_RESOURCES_SPECS`
+  (`e2e-tests/parked-enhanced-resources.ts`) in `tests/enhanced-resources/`. See "Local-only directories" in `e2e-tests/CLAUDE.md` and each
+  directory's README, and put new work in `tests/isolated/` or `tests/attached/` rather than
+  extending them.
+- `tests/smoke/` — what CI's build jobs run on every pull request. Launch-based,
+  `app.fixture`/`papi.fixture`; not for per-feature tests, apart from the bare-Electron checks its
+  README describes.
+
+Each `test()` on `isolated.fixture` starts and tears down its own app (specs on `comment.fixture`,
+and the `find/` and `menu-dismissal/` directories, share one app per worker), so checks that can share one launch
+state go in a single `test()` as `test.step()`s; a check that needs a fresh app or different launch
+settings gets its own `test()`. The "Independent" item in the Test Quality Checklist above applies per `test()`,
+not per step. Linux, including WSL2, is the supported platform for the isolated suite; native
+Windows and macOS are best effort (see
+[`e2e-tests/tests/isolated/README.md`](../../e2e-tests/tests/isolated/README.md#supported-platform)).
 
 ```
 e2e-tests/
@@ -1314,7 +1328,7 @@ e2e-tests/
     │   └── {feature}/
     │       └── {feature}.spec.ts
     ├── attached/                 # Attaches to an app you started (playwright-cdp.config.ts)
-    ├── smoke/                    # What CI runs
+    ├── smoke/                    # Run by CI's build jobs
     └── _example/                 # Templates
 ```
 
@@ -1447,8 +1461,9 @@ A cross-screen journey test that only checks `toBeVisible()` proves the page ren
 
 ```bash
 # CDP mode (app already running via ./.erb/scripts/refresh.sh)
-# Swap tests/attached/ for tests/enhanced-resources/, tests/manage-books/ or
-# tests/markers-checklist/ to run one of the local-only suites.
+# Swap tests/attached/ for tests/enhanced-resources/ (only its files that are not parked) to run
+# the local-only suite. tests/manage-books/ and tests/markers-checklist/ are parked and collected
+# by no config; see "Local-only directories" in e2e-tests/CLAUDE.md.
 npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
 
 # CDP mode with HTML report
@@ -1457,8 +1472,11 @@ npx playwright show-report e2e-tests/playwright-report
 
 # Standalone mode (launches its own Electron, port 8876 must be free). Each project in
 # playwright.config.ts has its own testDir, so path-filter inside it: `isolated` →
-# tests/isolated/** (most feature tests), `smoke` → tests/smoke/** (what CI runs, via
-# `npm run test:e2e:smoke`), `enhanced-resources` → tests/enhanced-resources/**.
+# tests/isolated/** (most feature tests; CI runs a core set of them, see "What CI runs" in
+# e2e-tests/CLAUDE.md), `smoke` → tests/smoke/** (run by CI's build jobs, via
+# `npm run test:e2e:smoke`). tests/attached/ and tests/enhanced-resources/ have no project there:
+# their specs attach to a running app, which that config's globalSetup rejects, so run them in CDP
+# mode.
 npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated --reporter=list
 
 # WSL2: wrap a standalone-mode run so its Electron windows do not take over the Windows desktop.
@@ -1468,10 +1486,12 @@ npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playw
 e2e-tests/run-e2e-wsl.sh --wrap npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated
 ```
 
-**On an Electron upgrade, re-run `tests/isolated/web-view-lifecycle/` by hand.** CI runs only the
-smoke project (`.github/workflows/test.yml`), and that subset is the only place that would notice
-Chromium no longer firing `unload` in web view iframes: the React web view bootstrap unmounts a
-replaced document's root on `unload`, and `extension-teardown-listeners.spec.ts` goes red if it stops.
+**On an Electron upgrade, check that `tests/isolated/web-view-lifecycle/` passes.** That subset is
+the only place that would notice Chromium no longer firing `unload` in web view iframes: the React
+web view bootstrap unmounts a replaced document's root on `unload`, and the teardown-listener step
+of `stale-root-unmount.spec.ts` goes red if it stops. CI's `e2e-core` job runs that spec on every
+pull request, but only reports a failure as a warning, so read its result on the upgrade's pull
+request rather than relying on a red check.
 
 ### Manually Testing the First-Run Wizard
 

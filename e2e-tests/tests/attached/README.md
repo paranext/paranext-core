@@ -23,7 +23,7 @@ directory is collected by it automatically; there is nothing to register.
 **The rule:** an attach spec whose feature has no directory of its own goes here. A feature that
 already has its own directory keeps its attach specs there — which is why
 `tests/enhanced-resources/`, `tests/manage-books/` and `tests/markers-checklist/` hold their own
-`cdp.fixture` specs rather than moving here. This directory is for the leftovers, not for every
+`cdp.fixture` specs (the last two parked) rather than moving here. This directory is for the leftovers, not for every
 attach spec in the tree.
 
 Beyond that, a spec should only attach at all if it genuinely cannot launch its own app — normally
