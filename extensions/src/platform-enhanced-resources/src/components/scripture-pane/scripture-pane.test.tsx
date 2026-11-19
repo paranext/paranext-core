@@ -4,7 +4,7 @@
 /* eslint-disable no-type-assertion/no-type-assertion */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
@@ -24,6 +24,9 @@ const setAnnotationSpy = vi.fn();
 const removeAnnotationSpy = vi.fn();
 // D-012: spy on Editorial's imperative `setUsj()` so we can verify the chapter-change sync.
 const setUsjSpy = vi.fn();
+// The editor handle's copy and focus, which the context menu's Copy pick drives.
+const copySpy = vi.fn();
+const focusSpy = vi.fn();
 // D-008: capture the logger that EnhancedScripturePane passes to <Editorial> so we can verify
 // the wrapper downgrades the "Failed to find start or end node of the annotation" error.
 let lastEditorialLogger:
@@ -38,13 +41,18 @@ let lastEditorialLogger:
 // `extraValidMarkers` and — critically — that its identity stays STABLE across USJ changes that
 // don't change the marker set (an identity change would make the real Editorial reconcile and
 // destroy Marble marks).
-let lastEditorialOptions: { nodes?: { extraValidMarkers?: readonly string[] } } | undefined;
+let lastEditorialOptions:
+  | { hasBuiltInContextMenu?: boolean; nodes?: { extraValidMarkers?: readonly string[] } }
+  | undefined;
 
 // papi.overlays is an external boundary; mock it so unit tests can assert on
 // hover-lifecycle calls without spinning up the real overlay service.
 const mockShowPopover = vi.fn();
 const mockUpdatePopover = vi.fn();
 const mockDismissPopover = vi.fn();
+const mockShowContextMenu = vi.fn();
+const mockDismissContextMenu = vi.fn();
+const mockSendCommand = vi.fn();
 
 vi.mock('@papi/frontend', () => ({
   default: {
@@ -52,7 +60,10 @@ vi.mock('@papi/frontend', () => ({
       showPopover: (...args: unknown[]) => mockShowPopover(...args),
       updatePopover: (...args: unknown[]) => mockUpdatePopover(...args),
       dismissPopover: (...args: unknown[]) => mockDismissPopover(...args),
+      showContextMenu: (...args: unknown[]) => mockShowContextMenu(...args),
+      dismissContextMenu: (...args: unknown[]) => mockDismissContextMenu(...args),
     },
+    commands: { sendCommand: (...args: unknown[]) => mockSendCommand(...args) },
   },
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -95,12 +106,16 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
         setAnnotation: (...args: unknown[]) => void;
         removeAnnotation: (...args: unknown[]) => void;
         setUsj: (...args: unknown[]) => void;
+        copy: () => void;
+        focus: () => void;
       }>,
     ) {
       React.useImperativeHandle(ref, () => ({
         setAnnotation: setAnnotationSpy,
         removeAnnotation: removeAnnotationSpy,
         setUsj: setUsjSpy,
+        copy: copySpy,
+        focus: focusSpy,
       }));
       // D-008: capture the logger so tests can drive it as the editor would.
       lastEditorialLogger = props.logger;
@@ -267,6 +282,13 @@ beforeEach(() => {
   setAnnotationSpy.mockClear();
   removeAnnotationSpy.mockClear();
   setUsjSpy.mockClear();
+  copySpy.mockReset();
+  focusSpy.mockReset();
+  mockShowContextMenu.mockReset();
+  mockShowContextMenu.mockResolvedValue(undefined);
+  mockDismissContextMenu.mockReset();
+  mockSendCommand.mockReset();
+  mockSendCommand.mockResolvedValue(undefined);
   mockShowPopover.mockReset();
   mockShowPopover.mockResolvedValue('overlay-1');
   mockUpdatePopover.mockReset();
@@ -372,6 +394,8 @@ describe('EnhancedScripturePane', () => {
         />,
       );
       const optionsForPnJmp = lastEditorialOptions;
+      // The editor package's own right-click menu stays off for every set of markers
+      expect(optionsForPnJmp?.hasBuiltInContextMenu).toBe(false);
       expect(optionsForPnJmp?.nodes?.extraValidMarkers).toEqual(['jmp', 'pn']);
 
       // Same set, different first-seen order (plus a duplicate) → same key → SAME options identity.
@@ -394,6 +418,7 @@ describe('EnhancedScripturePane', () => {
       );
       expect(lastEditorialOptions).not.toBe(optionsForPnJmp);
       expect(lastEditorialOptions?.nodes?.extraValidMarkers).toEqual(['jmp', 'pn', 'xtSee']);
+      expect(lastEditorialOptions?.hasBuiltInContextMenu).toBe(false);
     });
   });
 
@@ -2057,5 +2082,212 @@ describe('detectSourceLanguage', () => {
   it('detects whichever language appears first in mixed text', () => {
     // Latin 'logos' first (no detection), then Greek - the loop returns at the first match.
     expect(detectSourceLanguage('logos λόγος')).toBe('Greek');
+  });
+});
+
+describe('EnhancedScripturePane platform context menu', () => {
+  const HAS_SELECTION_KEY = 'platformEnhancedResources.contextMenu.hasSelection';
+  const WORD: MarbleAnnotation = {
+    usjPath: '$.content[0].content[1]',
+    kind: 'word',
+    annotationId: 'wg-001',
+    metadata: {},
+  };
+
+  function renderPane(props: Partial<React.ComponentProps<typeof EnhancedScripturePane>> = {}) {
+    return render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(3)}
+        annotations={[]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        {...props}
+      />,
+    );
+  }
+
+  function rightClick(element: Element) {
+    act(() => {
+      fireEvent(
+        element,
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          button: 2,
+          clientX: 12,
+          clientY: 34,
+        }),
+      );
+    });
+  }
+
+  function selectTextIn(element: Element) {
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.selectAllChildren(element);
+  }
+
+  async function flushMenuRequest() {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  /** Puts text in the mocked editor so there is something to select. */
+  function addTextToEditor(): Element {
+    const editor = screen.getByTestId('mock-editorial');
+    editor.textContent = 'In the beginning';
+    return editor;
+  }
+
+  it('opens the platform menu for a right-click in the text, run by the pane and not the platform', async () => {
+    renderPane();
+    const editor = addTextToEditor();
+    selectTextIn(editor);
+    rightClick(editor);
+    await flushMenuRequest();
+
+    expect(mockShowContextMenu).toHaveBeenCalledTimes(1);
+    expect(mockShowContextMenu).toHaveBeenCalledWith(
+      'platformEnhancedResources.enhancedResource',
+      'test-webview',
+      expect.objectContaining({
+        position: { x: 12, y: 34 },
+        shouldRunCommand: false,
+        contextKeys: { [HAS_SELECTION_KEY]: true },
+      }),
+    );
+  });
+
+  it('reports no selection when nothing is selected', async () => {
+    renderPane();
+    const editor = addTextToEditor();
+    window.getSelection()?.removeAllRanges();
+    rightClick(editor);
+    await flushMenuRequest();
+
+    expect(mockShowContextMenu).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ contextKeys: { [HAS_SELECTION_KEY]: false } }),
+    );
+  });
+
+  it('claims no right-click while the pane shows its loading, empty or error state', async () => {
+    const { rerender } = renderPane();
+    rightClick(addTextToEditor());
+    await flushMenuRequest();
+    // The editor's container exists only while the editor is shown, so the pane's `isEnabled` is a
+    // second guard on top of that. Positive control: the same right-click is claimed while shown
+    expect(mockShowContextMenu).toHaveBeenCalledTimes(1);
+    mockShowContextMenu.mockClear();
+
+    [{ isLoading: true }, { usj: undefined }, { errorMessage: 'boom' }].forEach((props) => {
+      rerender(
+        <EnhancedScripturePane
+          usj={makeTestUsj(3)}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+          {...props}
+        />,
+      );
+      rightClick(document.body);
+    });
+    await flushMenuRequest();
+    expect(mockShowContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('focuses the frame, never the editor, and copies with the browser selection kept', async () => {
+    const frameFocusSpy = vi.spyOn(window, 'focus').mockImplementation(() => {});
+    mockShowContextMenu.mockResolvedValue('platformEnhancedResources.copySelection');
+    renderPane();
+    const editor = addTextToEditor();
+    selectTextIn(editor);
+    // The editor's own copy moves the browser selection away, as it does on a hidden element
+    copySpy.mockImplementation(() => window.getSelection()?.removeAllRanges());
+    rightClick(editor);
+    await flushMenuRequest();
+
+    expect(frameFocusSpy).toHaveBeenCalledTimes(1);
+    expect(focusSpy).not.toHaveBeenCalled();
+    expect(copySpy).toHaveBeenCalledTimes(1);
+    // The selection survived the copy: only the selection-keeping wrapper restores it
+    expect(window.getSelection()?.toString()).toBe('In the beginning');
+    // The frame was focused before the copy ran
+    expect(frameFocusSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      copySpy.mock.invocationCallOrder[0],
+    );
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('sends any other picked command, such as another extension contributed, with the web view id', async () => {
+    mockShowContextMenu.mockResolvedValue('otherExtension.doThing');
+    renderPane();
+    rightClick(addTextToEditor());
+    await flushMenuRequest();
+
+    expect(mockSendCommand).toHaveBeenCalledWith('otherExtension.doThing', 'test-webview');
+    expect(copySpy).not.toHaveBeenCalled();
+  });
+
+  it('logs at warn when a picked command cannot be sent', async () => {
+    const papiModule = await import('@papi/frontend');
+    const papiLogger = papiModule.logger as unknown as { warn: ReturnType<typeof vi.fn> };
+    papiLogger.warn.mockClear();
+    mockShowContextMenu.mockResolvedValue('otherExtension.doThing');
+    mockSendCommand.mockRejectedValue(new Error('no such command'));
+    renderPane();
+    rightClick(addTextToEditor());
+    await flushMenuRequest();
+    await flushMenuRequest();
+
+    expect(papiLogger.warn).toHaveBeenCalledWith(expect.stringContaining('no such command'));
+  });
+
+  it('logs at warn when the menu request fails', async () => {
+    const papiModule = await import('@papi/frontend');
+    const papiLogger = papiModule.logger as unknown as { warn: ReturnType<typeof vi.fn> };
+    papiLogger.warn.mockClear();
+    mockShowContextMenu.mockRejectedValue(new Error('menu service down'));
+    renderPane();
+    rightClick(addTextToEditor());
+    await flushMenuRequest();
+
+    expect(papiLogger.warn).toHaveBeenCalledWith(expect.stringContaining('menu service down'));
+  });
+
+  it('opens the menu and still reaches onTokenContextMenu for a right-click on an annotated word', async () => {
+    const onTokenContextMenu = vi.fn();
+    renderPane({ annotations: [WORD], onTokenContextMenu });
+    await flushMenuRequest();
+    const editor = addTextToEditor();
+    selectTextIn(editor);
+
+    // The editor reports the click on the mark through the handler the pane registered; the DOM
+    // event the menu hook listens for is the same right-click.
+    const callbacks = setAnnotationSpy.mock.calls[0][3] as {
+      onClick: (event: { button: number }, type: string, id: string, textContent: string) => void;
+    };
+    callbacks.onClick({ button: 2 }, 'marble-word', 'wg-001', 'word');
+    rightClick(editor);
+    await flushMenuRequest();
+
+    expect(onTokenContextMenu).toHaveBeenCalledTimes(1);
+    expect(onTokenContextMenu).toHaveBeenCalledWith('wg-001', WORD, expect.anything());
+    expect(mockShowContextMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('dismisses an open menu when the pane unmounts', async () => {
+    // A request that never settles stays open
+    mockShowContextMenu.mockReturnValue(new Promise(() => {}));
+    const { unmount } = renderPane();
+    rightClick(addTextToEditor());
+    await flushMenuRequest();
+    expect(mockShowContextMenu).toHaveBeenCalledTimes(1);
+    expect(mockDismissContextMenu).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(mockDismissContextMenu).toHaveBeenCalledWith('test-webview');
   });
 });
