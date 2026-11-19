@@ -106,7 +106,12 @@ git fetch origin --quiet 2>/dev/null || true
 
 # A branch with an open pull request is reviewed against that pull request's base (a stacked branch
 # targets its parent branch, not main); otherwise the base is origin/main.
-PR_BASE=$(gh pr view --json baseRefName --jq .baseRefName 2>/dev/null || echo "")
+CURRENT_BRANCH=$(git branch --show-current)
+PR_BASE=""
+# A detached HEAD has no branch name, and an empty --head would match any open pull request.
+if [ -n "$CURRENT_BRANCH" ]; then
+  PR_BASE=$(gh pr list --head "$CURRENT_BRANCH" --state open --json baseRefName,isCrossRepository --jq '[.[] | select(.isCrossRepository | not)][0].baseRefName // empty' 2>/dev/null || echo "")
+fi
 if [ -n "$PR_BASE" ]; then
   git fetch origin "$PR_BASE" --quiet 2>/dev/null || true
   CANDIDATE_BASE="origin/$PR_BASE"
@@ -122,7 +127,7 @@ if [ -z "$MAIN_MERGE_BASE" ] && [ "$CANDIDATE_BASE" != "origin/main" ]; then
 fi
 
 if [ -z "$MAIN_MERGE_BASE" ]; then
-  echo "BASE_BRANCH=UNKNOWN"
+  BASE_BRANCH="UNKNOWN"
   echo "ERROR: Could not detect base branch — will ask author"
 else
   BASE_BRANCH="$CANDIDATE_BASE"
@@ -357,9 +362,9 @@ This step never starts a test run and never blocks the review. It prints a stale
 
 **Stale-prefix warning** (printed, no question) — applies when `stalePrefixes` is non-empty: print one line, "The e2e map names files that no longer exist: <prefixes>. Please update `e2e-tests/tests/isolated/subset-sources.json`." Record it in `E2E_TEST_NOTES` as "map warning: <prefixes>".
 
-**Full-run pointer** (printed, no question, not recorded) — applies when Step 1.3's list of changed files (after the worktree-noise exclusion), or the branch's commits (`git diff --name-only <MERGE_BASE> HEAD`, which a lock file's uncommitted name rewrite never reaches), include a dependency file (a `package.json` or `package-lock.json` at the root or under `release/app/`, `dev-packages.json`, `global.json`, a `.csproj` or `.props` under `c-sharp/`, or a patch under `patches/`), whether or not anything else in this step applies: print one line, "This branch changes dependency files; `npm run test:e2e:isolated all` runs the whole isolated suite (about an hour), and CI runs it nightly on `main`."
+**Full-run pointer** (printed, no question, not recorded) — applies when Step 1.3's list of changed files (after the worktree-noise exclusion), the branch's commits (`git diff --name-only <MERGE_BASE> HEAD`, which a lock file's uncommitted name rewrite never reaches) or its untracked files (`git ls-files --others --exclude-standard`, such as a new patch) include a dependency file (a `package.json` or `package-lock.json` at the root or under `release/app/`, `dev-packages.json`, `global.json`, a `.csproj` or `.props` under `c-sharp/`, or a patch under `patches/`), whether or not anything else in this step applies: print one line, "This branch changes dependency files; `npm run test:e2e:isolated all` runs the whole isolated suite (about an hour), and CI runs it nightly on `main`."
 
-**Run part** (a question) — applies when `recommendations` is non-empty. List each key with its `command` and its CI status in words, from `ci`:
+**Run part** (a question) — applies when `recommendations` is non-empty. List each key with its `command` and its CI status in words, from `ci` (when `BASE_BRANCH` without its `origin/` prefix matches none of the branch names or patterns in the `pull_request` `branches` filter of `.github/workflows/test.yml`, CI's pull-request workflow does not run for this branch yet: say the CI status applies once its pull request targets one of them, normally `main`; skip this note when the author named the base by hand):
 
 - `kind: 'spec'`, `coreList: 'always'` → "also runs in CI on every pull request"
 - `kind: 'spec'`, `coreList: 'editor'` → "runs in CI only on pull requests that touch the Scripture editor (see 'What CI runs' in `e2e-tests/CLAUDE.md`)", then add, from `editorListRuns`, ", so it runs in CI for this branch" (`true`), ", so it does not run in CI for this branch" (`false`) or " (could not tell whether CI runs the editor list for this branch)" (`'unknown'`)
