@@ -1536,6 +1536,9 @@ describe('Scripture editor right-click menu', () => {
       await rightClick(screen.getByTestId('editorial'));
 
       expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`${WEB_VIEW_ID} was requested.*main editor: true`)),
+      );
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
         expect.stringMatching(new RegExp(`${WEB_VIEW_ID}.*without a pick`)),
       );
     });
