@@ -679,6 +679,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
       'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'lib/platform-bible-react/src/hooks/use-editor-context-menu.hook.ts',
     ],
   },
   {

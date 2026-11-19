@@ -171,6 +171,12 @@ export {
 } from './components/advanced/menus/menu.util';
 export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';
 export {
+  useEditorContextMenu,
+  type EditorContextMenuRequest,
+  type UseEditorContextMenuOptions,
+  type UseEditorContextMenuResult,
+} from './hooks/use-editor-context-menu.hook';
+export {
   LucideIcon,
   LUCIDE_ICON_NAMES,
   type LucideIconProps,

@@ -2059,6 +2059,133 @@ export type ShortcutKeysProps = {
  */
 export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * What the platform context menu needs to know about one right-click (or keyboard-raised context
+ * menu) in an editor.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export type EditorContextMenuRequest = {
+	/**
+	 * Frame-relative position the menu opens at, in the coordinates `showContextMenu` expects.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	position: {
+		x: number;
+		y: number;
+	};
+	/**
+	 * Whether the browser selection is non-collapsed and inside the container, or the host reports a
+	 * non-text selection.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	hasSelection: boolean;
+	/**
+	 * Text of the browser selection when it is inside the container, `''` otherwise.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	selectedText: string;
+	/**
+	 * Whether the context menu came from the keyboard (Shift+F10, the Menu key) rather than a mouse
+	 * click.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	isKeyboardInvoked: boolean;
+};
+/**
+ * Options for {@link useEditorContextMenu}.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export type UseEditorContextMenuOptions = {
+	/**
+	 * The editor's own element. Never a wrapper that holds other editors: a right-click anywhere
+	 * inside it is claimed.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	containerRef: React$1.RefObject<HTMLElement | null>;
+	/**
+	 * Whether right-clicks are claimed. Defaults to `true`.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	isEnabled?: boolean;
+	/**
+	 * Reports a selection that is not a browser range (for example a selected paragraph marker), so
+	 * Copy stays enabled for it.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	hasNonTextSelection?: () => boolean;
+	/**
+	 * Opens the platform menu and resolves with the picked command, or `undefined` when the menu
+	 * closed without a pick.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	requestMenu: (request: EditorContextMenuRequest) => Promise<string | undefined>;
+	/**
+	 * Closes the open platform menu.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	dismissMenu: () => void | Promise<void>;
+	/**
+	 * Runs synchronously in the continuation of `requestMenu` when the user picked a command.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	onPick: (command: string, request: EditorContextMenuRequest) => void;
+	/**
+	 * Receives any rejection of `requestMenu` or `dismissMenu` other than the expected ones (a newer
+	 * menu replaced this one, debounce, tab not visible).
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	onError?: (error: unknown) => void;
+};
+/**
+ * What {@link useEditorContextMenu} hands back.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export type UseEditorContextMenuResult = {
+	/**
+	 * Closes the pending menu, if any. For the host's own reasons (a book or chapter change).
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	dismiss: () => void;
+	/**
+	 * Whether a request is open: true from the right-click until the request settles. Hosts read it
+	 * to keep their own key handling away from a key the pending menu owns.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	isPending: () => boolean;
+};
+/**
+ * Claims the right-click inside one editor, samples what the menu needs to know, asks the host to
+ * open the platform context menu, and hands the picked command back. The library cannot reach PAPI,
+ * so the host passes the two platform calls in.
+ *
+ * While a request is open the keyboard belongs to the menu: every key except bare modifiers is
+ * claimed on the frame's window, and Escape also closes the menu. A `wheel` or `touchmove` closes
+ * it too. Not a `scroll` listener: opening the menu blurs the editor, which can scroll the frame by
+ * itself and would close the menu the moment it opens.
+ *
+ * One instance per editor.
+ *
+ * @param options See {@link UseEditorContextMenuOptions}
+ * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
+ * @experimental This hook is unstable and may change shape or disappear without notice
+ */
+export declare function useEditorContextMenu(options: UseEditorContextMenuOptions): UseEditorContextMenuResult;
+/**
  * Names (lucide kebab-case) of the icons `LucideIcon` can render
  *
  * @experimental This export is unstable and may change shape or disappear without notice
