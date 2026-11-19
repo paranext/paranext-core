@@ -35,7 +35,7 @@ import {
   registerExtensionHostStartedEvent,
 } from '@extension-host/announce-extension-host-started';
 import { markStartup } from '@shared/utils/startup-timing.util';
-import { setLaunchSecrets } from '@client/services/launch-secrets';
+import { setLaunchSecrets, setLaunchSecretsArrival } from '@client/services/launch-secrets';
 import { receiveLaunchSecrets } from '@extension-host/receive-launch-secrets';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 import { installSourceMappedStackTraces } from '@extension-host/services/extension-stack-traces.util';
@@ -51,12 +51,15 @@ logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
 markStartup(STARTUP_MARK_PROCESS_START);
 
 // Listen for the launch secrets before anything else can run: main sends them right after forking,
-// and the connection to main presents them. No extension loads before that connection is made.
-const launchSecretsReceived = receiveLaunchSecrets({
-  process,
-  setLaunchSecrets,
-  exitProcess: (code) => process.exit(code),
-});
+// and the connection to main presents them, waiting for them however early it is asked for. No
+// extension loads before that connection is made.
+setLaunchSecretsArrival(
+  receiveLaunchSecrets({
+    process,
+    setLaunchSecrets,
+    exitProcess: (code) => process.exit(code),
+  }),
+);
 
 // Make a graceful way to tear down the process since Windows and POSIX operating systems handle it differently
 process.on('message', (message) => {
@@ -112,7 +115,6 @@ process.on('unhandledRejection', (reason) => {
     // subscribed yet, so exit now: main reports a non-zero exit it did not ask for as a crash, and
     // every window shows the extensions-have-stopped banner instead of nothing answering.
     try {
-      await launchSecretsReceived;
       await networkService.initialize();
     } catch (error) {
       logger.error(

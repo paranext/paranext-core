@@ -402,7 +402,7 @@ export class RpcWebSocketListener
       throw new Error(
         `The PAPI network is not accepting clients (status ${this.connectionStatus})`,
       );
-    // Only renderers connect this way, and a WebView can drive its renderer's connection
+    // Only renderers connect this way; `'renderer'` therefore includes their WebViews
     this.serveClient(socket, name, 'renderer');
     logger.info(`PAPI client ${name} connected over a local port as renderer`);
   }
@@ -448,6 +448,24 @@ export class RpcWebSocketListener
             required: false,
             summary: 'Documentation for the method in OpenRPC format',
             schema: { type: 'object' },
+          },
+          {
+            name: 'options',
+            required: false,
+            summary:
+              'Registration options. `allowedCallers` lists the processes that may call the method (main always may); when omitted, any connection may. Ignored for request types the platform restricts itself.',
+            schema: {
+              type: 'object',
+              properties: {
+                allowedCallers: {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                    enum: ['renderer', 'extensionHost', 'dotnetDataProvider'],
+                  },
+                },
+              },
+            },
           },
         ],
         result: {

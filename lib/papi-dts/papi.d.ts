@@ -2314,7 +2314,10 @@ declare module 'shared/models/papi-network-event-emitter.model' {
   export default PapiNetworkEventEmitter;
 }
 declare module 'shared/models/network.model' {
-  /** A process main can identify on the PAPI network */
+  /**
+   * A process main can identify: `'renderer'` (the app's windows and every WebView in them),
+   * `'extensionHost'` (all backend extensions), `'dotnetDataProvider'`.
+   */
   export type RequestCallerProcess = 'renderer' | 'extensionHost' | 'dotnetDataProvider';
   /** Options related to calling a method over the network */
   export type NetworkMethodHandlerOptions = {
@@ -2324,12 +2327,11 @@ declare module 'shared/models/network.model' {
      */
     timeoutMilliseconds?: number;
     /**
-     * Processes allowed to call this handler. When omitted, any connection may call it. Main can
-     * always call it.
+     * Processes that may call this handler; main always may. When omitted, anything may call it,
+     * including browser pages and local tools. A refused caller gets `MethodNotFound`.
      *
-     * This identifies processes, not extensions: every extension shares the extension host process,
-     * so `'extensionHost'` admits all of them. A request type that core restricts itself keeps core's
-     * rule; this option is ignored for it.
+     * Names processes, not extensions: `'extensionHost'` admits every extension and `'renderer'`
+     * every WebView. Ignored for request types the platform restricts itself.
      */
     allowedCallers?: readonly RequestCallerProcess[];
   };
@@ -2815,6 +2817,13 @@ declare module 'client/services/launch-secrets' {
   import type { LaunchSecrets } from 'shared/data/rpc.model';
   /** Keeps the secrets main handed this process until the connection to main takes them */
   export function setLaunchSecrets(secrets: LaunchSecrets): void;
+  /**
+   * Makes the connection to main wait until secrets on their way have arrived, so a PAPI call made
+   * before then cannot connect unidentified
+   */
+  export function setLaunchSecretsArrival(arrival: Promise<void>): void;
+  /** Resolves once secrets on their way have arrived; at once when none are expected */
+  export function waitForLaunchSecretsArrival(): Promise<void>;
   /**
    * Returns the secrets once, then forgets them, so nothing that runs after the connection is made
    * can read them.
@@ -6762,8 +6771,9 @@ declare module 'papi-shared-types' {
     /** Get the operating system platform */
     'platform.getOSPlatform': () => Promise<string | undefined>;
     /**
-     * Get the current log file content for debugging purposes. Only the app's windows may call it;
-     * the extension host and other connections are refused with `MethodNotFound`.
+     * Get the current log file content for debugging purposes. Only the app's windows, including
+     * any WebView in them, may call it; the extension host and other connections are refused with
+     * `MethodNotFound`.
      */
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
@@ -7010,8 +7020,8 @@ declare module 'papi-shared-types' {
      * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
      * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
      * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console. Only the
-     * app's windows may call it; the extension host and other connections are refused with
-     * `MethodNotFound`.
+     * app's windows, including any WebView in them, may call it; the extension host and other
+     * connections are refused with `MethodNotFound`.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice

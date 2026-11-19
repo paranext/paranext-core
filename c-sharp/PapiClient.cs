@@ -386,7 +386,9 @@ internal class PapiClient : IDisposable
             // locally. StreamJsonRpc cannot remove the method it added, but main never routes the
             // type here.
             _localMethods.TryRemove(requestType, out _);
-            Console.WriteLine($"Registration refused for request type \"{requestType}\"");
+            Console.WriteLine(
+                $"Main did not accept the registration of request type \"{requestType}\" (for example, the name is already registered or restricted to another process)"
+            );
             return false;
         }
 

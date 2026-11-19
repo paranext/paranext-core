@@ -7768,9 +7768,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the next launch connects. A frozen table in `src/shared/data/request-access.data.ts` names, for a
   short list of request types, who may call (main always may) and the one identity that may
   register. Registrants can restrict their own handlers with `allowedCallers` on
-  `NetworkMethodHandlerOptions`, which cannot widen a row. `RpcServer` enforces both on every
+  `NetworkMethodHandlerOptions`, ignored for a request type the table restricts. `RpcServer` enforces both on every
   remote call (before the event branch, per request in a batch) and registration;
-  `RpcClient.request` enforces them on the in-process shortcut. The `Origin` check is removed.
+  `RpcClient.request` enforces them on the in-process shortcut, and .NET's `PapiClient` calls its own
+  handlers directly. The `Origin` check is removed.
 - **Alternatives:** Deny by default: closes the browser-page hole, but every external client would
   need a credential route, and it reverses the position that browser clients (the OpenRPC
   playground, browser-based testing) are legitimate. Read-only unless identified: needs every
@@ -9589,8 +9590,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`src/main/services/rpc-websocket-listener.ts`).
 - **Decision:** C# (`c-sharp/Users/RegistryAccessTokenService.cs`) mints and caches the tokens, so
   the registration code never leaves that process. It handles
-  `requestRegistryTokens:getAccessToken`, a request type outside the `command:` category. The
-  extension host
+  `requestRegistryTokens:getAccessToken`, a request type outside the `command:` category that
+  extension code can't send through PAPI. The extension host
   (`src/extension-host/services/request-registry-tokens.service.ts`) hands a getter only to
   extensions that declare the `requestRegistryTokens` elevated privilege and list the services in
   `paratextRegistryTokenResources` (exact match), following the `handleUri` pattern. C# requests
@@ -9612,9 +9613,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   change. The gate is only as strong as extension review, as with `createProcess` and `handleUri`:
   all extensions share one JavaScript realm in the extension host, so a malicious installed
   extension can wrap shared built-ins and see another extension's tokens. The allowlist stops honest
-  mistakes; the real control is which extensions get installed. Which processes may call the request
-  type is decided by connection identity: see the amendment of 2026-11-13. Revisit when PT-4750
-  lands (throw codes instead of returning them), or if a consent prompt becomes necessary.
+  mistakes; the real control is which extensions get installed. Local processes on the loopback
+  WebSocket can also call the request type; they already run as the user and can read the user's
+  Paratext data directly. A web page in the user's browser could too, because
+  WebSocket connections are not authenticated, and so could any installed extension's web view,
+  privilege or not, through the native `window.top.WebSocket` or its window's PAPI connection;
+  unlike the other PAPI methods they can call, this one returns a credential that works off the
+  machine. So, as an insecure temporary stopgap that is not a security boundary, main refuses this
+  request type from any WebSocket connection whose handshake carried an `Origin` header (browsers
+  always send one) and from renderer connections. It trusts a header instead of identifying the
+  caller, and PT-2893's caller identification must replace it. Rejecting browser connections
+  outright is not the answer, since browser clients are legitimate (the OpenRPC playground that
+  `platform.openDeveloperDocumentationUrl` opens, and browser-based PAPI testing); the stopgap
+  refuses them only this request type. Authenticating the clients the main process launches, so
+  sensitive request types can be limited to the extension host, is open work in PT-2893, deferred
+  as of 2026-10-20 until after the November release; a renderer connection can't be trusted with
+  them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of
+  returning them), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
+  then), or if a consent prompt becomes necessary.
 - **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
   `Disabled`, so tokens are refused for it in every location. A saved `VpnRequired`, the
   not-yet-available "Block internet when in sensitive locations" option, is refused in every
@@ -9630,10 +9646,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Amended 2026-11-13:** Main now identifies each connection by a per-launch secret, and only the
   extension host process may call `requestRegistryTokens:` request types and only the data
   provider main launched may register them (`adr-papi-connection-identity-and-access-table`). The
-  `Origin`-header stopgap this entry described is removed, and its description deleted here so it
-  does not read as an available approach; git history keeps it. The request type was never out of
-  extension code's reach: extensions share the extension host's connection, so the allowlist is
-  what stands between an extension and a token. This meets the WebSocket-authentication revisit
+  `Origin`-header stopgap described above is removed. A web page or WebView can no longer send the
+  request type, because it is not the extension host's connection. The public PAPI surface gives
+  extensions no way to send this request type, so an honest extension reaches it only through the
+  privilege getter, which checks the allowlist; a malicious extension sharing the host's connection
+  can still send it directly. This meets the WebSocket-authentication revisit
   condition the 2026-11-03 amendment refers to; the consent-prompt and PT-4884 conditions remain.
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path

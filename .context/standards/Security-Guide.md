@@ -226,9 +226,16 @@ connection says about itself:
 Main creates both secrets per launch with `crypto.randomBytes(32)` and hands them over by fork IPC
 (extension host), standard input (packaged .NET) or an environment variable set only in the spawn
 options (`dotnet watch` in development). It keeps only a SHA-256 digest of each client secret and
-compares digests in constant time. A wrong secret is refused outright; main proves itself to the
+compares digests in constant time. A wrong secret is refused outright (401); main proves itself to the
 child by returning the server secret in its handshake reply. Secrets never appear on a command line,
 in main's own environment, or in a log.
+
+The child presents its client secret in the `x-papi-client-secret` handshake header and checks main's
+`x-papi-server-secret` reply, then drops its secrets: they are used once, at connect. Each launched
+identity has **one open connection**: a second handshake with the same launch's secret is refused
+with 409 until the first closes (.NET retries briefly, for `dotnet watch` restarts), and a
+connection from an earlier launch is closed when the next launch connects. The renderer is not a
+WebSocket client, so its identity comes from the port broker, not a header.
 
 **Unidentified clients keep everything except a short restricted list.** Browser clients are
 legitimate: `platform.openDeveloperDocumentationUrl` opens the OpenRPC playground against this
@@ -240,25 +247,29 @@ WebSocket, and developers test PAPI calls from browsers and tools. The table in
 | `requestRegistryTokens:` (whole category) | `extensionHost` | `dotnetDataProvider` |
 | The internet settings setters | `renderer`, `extensionHost` | `dotnetDataProvider` |
 | `command:paratextRegistration.setParatextRegistrationData` | `renderer`, `extensionHost` | `dotnetDataProvider` |
+| `command:paratextRegistration.validateParatextRegistrationData` | `renderer`, `extensionHost` | `dotnetDataProvider` |
 | `command:paratextRegistration.resetForFirstRun` | main only | `dotnetDataProvider` |
 | `command:platform.resetFirstRun` | `renderer` | `main` |
 | `object:DataProtectionService.encryptString` / `.decryptString` | `extensionHost` | `main` |
 | `command:platform.getLogFileContent` | `renderer` | `main` |
 
-Main is always allowed to call. A request type with no row can be registered by anyone, as before.
-A process that registered a restricted request type may call it only if the row lists it. The same
-check runs on the in-process shortcut in `RpcClient.request`, so a handler in the calling process
-answers only callers the rules allow. Refusals answer `MethodNotFound` with
+Main is always allowed to call. A request type with no row can be registered by anyone, and the
+first to register it receives every call: a request type whose handler is handed a secret needs a
+row for its registrant even when its callers are harmless, as `validateParatextRegistrationData` has. A TS process
+applies the same check to its own handlers in `RpcClient.request`, so a handler in the calling
+process answers only callers the rules allow. .NET's `PapiClient` calls its own handlers directly,
+because no third-party code runs there. Refusals answer `MethodNotFound` with
 `'<method>' is not available on this connection` and are logged with the identity.
 
-**An extension can restrict its own handlers.** `allowedCallers` on `registerCommand` /
-`registerRequestHandler` names the processes that may call the handler (see
-[Extension-Development-Guide.md](Extension-Development-Guide.md)). It cannot widen a table row, and a
-client that registers the name first can receive the calls but cannot make the real handler act.
+**An extension can restrict its own handlers.** `allowedCallers` on `registerCommand` names
+the processes that may call the handler (see
+[Extension-Development-Guide.md](Extension-Development-Guide.md)). It is ignored for a request type
+the table restricts, and a client that registers the name first can receive the calls but cannot
+make the real handler act.
 
 **The guarantee is "only the extension host process", not "only extensions with the privilege".**
-Main cannot tell extensions apart: they share the extension host's connection. Deciding how to keep
-one extension from acting as another is PT-5072.
+See [What connection identity does not protect against](#what-connection-identity-does-not-protect-against).
+Deciding how to keep one extension from acting as another is PT-5072.
 
 **A child started without main loses the restricted features.** `npm run start:extension-host` and
 VS Code's "Debug Extension Host" have no IPC channel, and `npm run start:data` and "Debug .NET Core"
@@ -276,24 +287,22 @@ Registry-set lifetime (currently 20 minutes), and are valid only at the named se
 
 Main lets only the extension host process call `requestRegistryTokens:` request types and only the
 data provider main launched register them (see [PAPI connection identity](#papi-connection-identity)).
-The C# handler does not check the allowlist itself, and the extension name it logs is the one the
-extension host process supplies. Extension code is not kept from sending the request type: it runs
-in the extension host and shares its connection, so the allowlist is what stands between an
-extension and a token.
-
-The allowlist stops honest mistakes, not a malicious installed extension. All extensions share one
-JavaScript realm in the extension host, so an installed extension can wrap shared built-ins (for
-example `JSON.parse`, `Promise.prototype.then`, the writable `globalThis.fetch`, or `Object.freeze`
-before activation) and see another extension's tokens without holding the privilege, or send the
-request type on the extension host's connection itself. `createProcess` has the same limit. The real
-control is which extensions get installed.
+The C# handler does not check the allowlist itself. The public PAPI surface gives extensions no way
+to send this request type, so an honest extension reaches it only through the privilege getter,
+which checks the allowlist. Main cannot tell extensions apart on the host's connection, so a
+malicious extension can still send it directly (see
+[What connection identity does not protect against](#what-connection-identity-does-not-protect-against)).
 
 ### What connection identity does not protect against
 
-- **A malicious installed extension.** Every extension shares one realm and one connection with the
-  extension host. It can patch shared built-ins to send any request on the host's connection, or to
-  read another extension's token. Main cannot tell that traffic from the host's own. The real
-  boundary is which extensions get installed, until extensions run in separate processes.
+- **A malicious installed extension.** Every extension shares one JavaScript realm and one
+  connection with the extension host. It can wrap shared built-ins (for example `JSON.parse`,
+  `Promise.prototype.then`, the writable `globalThis.fetch`, or `Object.freeze` before activation)
+  to read another extension's token without holding the privilege, act as another extension, or
+  send any request on the host's connection, including ones the privilege APIs guard
+  (`requestRegistryTokens:`, `createProcess`). Main cannot tell that traffic from the host's own, so
+  the allowlists stop honest mistakes, not this. The real boundary is which extensions get
+  installed, until extensions run in separate processes.
 - **A bad extension's WebView** for rows that allow `renderer`: a WebView can drive its window's PAPI
   connection, and reach other renderer internals through `window.top` (open work: PT-5065).
 - **Malware running as the same user.** It can read process memory and, on Linux, a process's

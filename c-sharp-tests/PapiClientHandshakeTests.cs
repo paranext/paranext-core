@@ -156,7 +156,7 @@ internal class PapiClientHandshakeTests
         Assert.That(client.LocalMethodNames, Does.Not.Contain("command:test.refused"));
         Assert.That(
             _capturedOut.ToString(),
-            Does.Contain("Registration refused for request type \"command:test.refused\"")
+            Does.Contain("Main did not accept the registration of request type \"command:test.refused\"")
         );
     }
 

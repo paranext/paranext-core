@@ -130,8 +130,9 @@ declare module 'papi-shared-types' {
     /** Get the operating system platform */
     'platform.getOSPlatform': () => Promise<string | undefined>;
     /**
-     * Get the current log file content for debugging purposes. Only the app's windows may call it;
-     * the extension host and other connections are refused with `MethodNotFound`.
+     * Get the current log file content for debugging purposes. Only the app's windows, including
+     * any WebView in them, may call it; the extension host and other connections are refused with
+     * `MethodNotFound`.
      */
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
@@ -387,8 +388,8 @@ declare module 'papi-shared-types' {
      * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
      * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
      * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console. Only the
-     * app's windows may call it; the extension host and other connections are refused with
-     * `MethodNotFound`.
+     * app's windows, including any WebView in them, may call it; the extension host and other
+     * connections are refused with `MethodNotFound`.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice

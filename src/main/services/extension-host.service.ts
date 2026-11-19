@@ -395,7 +395,7 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
       ...launchSecrets,
     };
     extensionHost.send(launchSecretsMessage, (error) => {
-      // The child exits on its own if the secrets never arrive; the error itself is what to log
+      // Log only: the child exits by itself if the secrets never arrive
       if (error)
         logger.error(`Could not send the extension host its launch secrets: ${error.message}`);
     });

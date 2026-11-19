@@ -47,14 +47,15 @@ internal static class InternetSettingsLogic
     public static bool IsSecretChanged(string? submitted) => submitted != PLACEHOLDER_PASSWORD;
 
     /// <summary>
-    /// The password the caller must supply for real for this change, or null when the change is
-    /// fine. Echoing back the placeholder keeps the saved password, so a change of the host that
-    /// password is sent to must come with the password itself: otherwise anyone who can call the
+    /// Name of the password field (<see cref="PROXY_PASSWORD"/> or <see cref="DBL_PASSWORD"/>) the
+    /// caller must send for real, or null. Sending back the placeholder keeps the saved password, so
+    /// a change of where that password goes must include it: otherwise anyone who can call the
     /// setter could send the saved password to a host of their choosing.
     /// </summary>
     /// <remarks>
-    /// Pass the hosts as they will be saved: a proxy host the mode clears, or an empty server
-    /// override, is null. Clearing a host sends the password nowhere new, so it needs nothing.
+    /// Pass the hosts as they will be saved: a proxy host the mode clears is null. A null or empty
+    /// host counts as cleared, and clearing a host sends the password nowhere new, so it needs
+    /// nothing.
     /// <c>SelectedServer</c> picks among known servers, and the user name, DBL email and GBC
     /// override reach no saved password, so none of them is an input.
     /// </remarks>

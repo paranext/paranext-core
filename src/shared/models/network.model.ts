@@ -1,4 +1,7 @@
-/** A process main can identify on the PAPI network */
+/**
+ * A process main can identify: `'renderer'` (the app's windows and every WebView in them),
+ * `'extensionHost'` (all backend extensions), `'dotnetDataProvider'`.
+ */
 export type RequestCallerProcess = 'renderer' | 'extensionHost' | 'dotnetDataProvider';
 
 /** Options related to calling a method over the network */
@@ -9,12 +12,11 @@ export type NetworkMethodHandlerOptions = {
    */
   timeoutMilliseconds?: number;
   /**
-   * Processes allowed to call this handler. When omitted, any connection may call it. Main can
-   * always call it.
+   * Processes that may call this handler; main always may. When omitted, anything may call it,
+   * including browser pages and local tools. A refused caller gets `MethodNotFound`.
    *
-   * This identifies processes, not extensions: every extension shares the extension host process,
-   * so `'extensionHost'` admits all of them. A request type that core restricts itself keeps core's
-   * rule; this option is ignored for it.
+   * Names processes, not extensions: `'extensionHost'` admits every extension and `'renderer'`
+   * every WebView. Ignored for request types the platform restricts itself.
    */
   allowedCallers?: readonly RequestCallerProcess[];
 };
