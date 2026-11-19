@@ -250,6 +250,8 @@ const APP_ROOTS = [
   'lib/',
   '.erb/',
   'assets/',
+  // Paratext 9's marker stylesheets, which the editor's own stylesheets import.
+  'data/',
   'patches/',
   'release/app/',
   'dev-packages.json',
@@ -664,7 +666,9 @@ export function isEntryPoint(
   try {
     return resolve(entry) === resolve(selfPath);
   } catch (error) {
-    if (path.basename(entry) !== path.basename(selfPath)) return false;
+    // Compared without the extension, so `tsx e2e-tests/e2e-recommendations` counts too.
+    const stem = (file: string) => path.basename(file, path.extname(file));
+    if (stem(entry) !== stem(selfPath)) return false;
     throw new Error(
       `cannot tell whether ${entry} is this module: ${error instanceof Error ? error.message : String(error)}`,
     );

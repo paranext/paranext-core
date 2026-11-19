@@ -575,11 +575,13 @@ describe('recommendE2eTests', () => {
     expect(runtime('electron-builder.json5')).toBe(true);
     expect(runtime('tailwind.config.ts')).toBe(true);
     expect(runtime('assets/localization/en.json')).toBe(true);
+    // The editor's marker stylesheets import these.
+    expect(runtime('data/pt9-css/hbkeng.css')).toBe(true);
     expect(runtime('.claude/commands/review-paratext.md')).toBe(false);
   });
 
   // Only the app's own roots count, so a new top-level tool or script never needs an exclusion.
-  it.each(['tools/some-tool.ts', 'refresh.sh', 'stop-processes.mjs', 'data/pt9-css/x.css'])(
+  it.each(['tools/some-tool.ts', 'refresh.sh', 'stop-processes.mjs', 'platform.bible-dev.desktop'])(
     'does not count %s, outside the roots that build the app, as an app change',
     (file) => {
       expect(recommend([file]).runtimeChanged).toBe(false);
@@ -892,8 +894,6 @@ describe('recommendE2eTests', () => {
   });
 });
 
-// The rows above pin the shapes someone thought of; this sweep catches the ones nobody did, by
-// running the classifier over every tracked file under the source roots.
 describe('the editor list and the map', () => {
   // CI runs the editor list for every path `editor_paths` names; a runtime file among them that no
   // key lists would be recommended nothing, so the map must follow that list.
@@ -968,8 +968,18 @@ describe('deciding whether the module is the entry point', () => {
       }),
     ).toThrow(/cannot tell whether/);
   });
+
+  it('refuses to guess for a start that leaves out the extension', () => {
+    expect(() =>
+      isEntryPoint('e2e-tests/e2e-recommendations', self, () => {
+        throw new Error('ENOENT');
+      }),
+    ).toThrow(/cannot tell whether/);
+  });
 });
 
+// The rows above pin the shapes someone thought of; this sweep catches the ones nobody did, by
+// running the classifier over every tracked file under the source roots.
 describe('classifying the tracked source files', () => {
   // Extensions of the files the app loads or bundles from the source roots, taken from what is
   // tracked there: code, style sheets, markup, the data the .NET data provider reads, and images.
