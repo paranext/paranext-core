@@ -679,8 +679,9 @@ export type NoteCallerClickDecision = {
    * What the caller click resolves to:
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
-   * - `ignore-read-only` — the text is read-only in a view that does not use the pane note model, so
-   *   the caller is inert: the pane's navigation model belongs to pane-model views alone.
+   * - `ignore-read-only` — the click has no editing surface and the view does not use the pane note
+   *   model, so the caller is inert: the pane's navigation model belongs to pane-model views
+   *   alone.
    * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (a pane-model
    *   view).
    * - `navigate-only` — the text is read-only in a pane-model view, so there is no editing surface;

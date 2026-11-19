@@ -197,10 +197,10 @@ export function useEditorPdpSync({
   /**
    * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing SESSION
    * owns the editor's content even though the editor itself is blurred — a marker-palette session
-   * (the palette overlay outside the iframe holds focus) or an open footnote-editor popover (its
-   * own inner editor holds focus while its edits haven't reached the PDP yet). Replacing the editor
-   * mid-session would regenerate every Lexical node key, killing the session (the popover's Save
-   * then targets a dead key and silently no-ops). Same-document deferral only — a
+   * (the palette overlay outside the iframe holds focus) or an open footnote row editor (its own
+   * inner editor holds focus while its edits haven't reached the PDP yet). Replacing the editor
+   * mid-session would regenerate every Lexical node key, killing the session (the row editor's next
+   * apply then targets a dead key and silently no-ops). Same-document deferral only — a
    * different-document update (navigation) always replaces, exactly as for live typing.
    */
   isEditingSessionActive?: () => boolean;
@@ -469,7 +469,7 @@ export function useEditorPdpSync({
       // Focus is asked of the editor instance itself via `editorRef.current.isFocused()`, so the
       // answer is scoped to THIS editor's own content-editable root rather than a global
       // `document.querySelector('.editor-input')` that couples to the CSS class name and to DOM
-      // order (a footnote-editor popover renders its own `.editor-input`).
+      // order (a footnote row editor renders its own `.editor-input`).
       //
       // `isFocused()` alone overstates the claim: each web view's iframe keeps its own focused
       // element, so the editor still reports focus after the user clicks into Find.
@@ -486,10 +486,10 @@ export function useEditorPdpSync({
       // or another app's concurrent write has to land — not be overwritten by the focused editor's
       // pre-merge content — however long ago the user last typed, and the window is what bounds
       // the deferral. An active editing SESSION (marker palette, footnote
-      // popover — `isEditingSessionActive`) still defers regardless of the window: typing inside
-      // the popover's own editor never stamps the main editor's local-edit timestamp, and
+      // row editor — `isEditingSessionActive`) still defers regardless of the window: the
+      // pane's session claims only on the Scripture editor's terms (see above), and
       // replacing the main editor mid-session regenerates every Lexical key and kills the session.
-      // The predicate bounds only the footnote-popover session web-view-side (a wedged note session
+      // The predicate bounds only the footnote note session web-view-side (a wedged note session
       // stops deferring once stale). A marker-palette session has no bound: while one stays open,
       // every differing same-document update is deferred and the editor's content pushed over it,
       // including a genuine external merge — a known gap documented on

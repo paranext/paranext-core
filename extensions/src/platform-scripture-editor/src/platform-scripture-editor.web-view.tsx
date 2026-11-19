@@ -4693,6 +4693,7 @@ function PlatformScriptureEditor({
       // while the pane is rendered, and only when the NOTES changed — see `liveEditorUsj` for why
       // this stays off the hot path otherwise.
       if (footnotesPaneRenderedRef.current) publishLiveEditorUsjIfNotesChanged(settledUsj);
+      // A note-editing session exists only together with a footnotes pane row (`paneEditingIndex`).
       if (editingNoteKey.current) {
         // Any editor change that lands while the note-editing session is open counts as
         // interaction with it — most importantly the row editor's own apply path

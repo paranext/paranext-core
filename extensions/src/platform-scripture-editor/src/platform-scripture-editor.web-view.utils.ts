@@ -252,10 +252,9 @@ export function flushRowEditsThenSave(
 }
 
 /**
- * How long, in milliseconds, a footnote-popover editing session may sit without any interaction
- * (opening it, editing in it, or saving from it) before the PDP-sync deferral treats it as STALE —
- * abandoned bookkeeping rather than a live session — and stops letting it hold incoming updates at
- * bay.
+ * How long, in milliseconds, a note-editing session may sit without any interaction (opening it,
+ * editing in it, or applying from it) before the PDP-sync deferral treats it as STALE — abandoned
+ * bookkeeping rather than a live session — and stops letting it hold incoming updates at bay.
  *
  * Deliberately the same value as {@link WRITE_GUARD_RELEASE_AFTER_MS}: both bound how long one piece
  * of orphaned state (an unsettled write there, an editing-session key here) may wedge the editor's
@@ -268,8 +267,8 @@ export interface EditingSessionActivityInput {
   /** Whether a marker-palette session is currently open for the editor. */
   hasPaletteSession: boolean;
   /**
-   * Lexical node key of the note whose footnote-popover editing session is open, or `undefined`
-   * when no note is being edited.
+   * Lexical node key of the note whose editing session is open, or `undefined` when no note is
+   * being edited.
    */
   editingNoteKey: string | undefined;
   /**
@@ -281,11 +280,10 @@ export interface EditingSessionActivityInput {
   /** `Date.now()` at the moment of the decision. */
   nowMs: number;
   /**
-   * Set when the open note session is the footnotes pane's row editor; `undefined` for the popover.
-   * The row editor applies each edit to the text as it is made, as the Scripture editor itself
-   * does, so it holds incoming updates back on the Scripture editor's terms (see
-   * {@link doesPaneSessionOwnContent}). The popover applies nothing until Save, so its session holds
-   * them back until it closes or goes stale.
+   * Set when the open note session is the footnotes pane's row editor. The row editor applies each
+   * edit to the text as it is made, as the Scripture editor itself does, so it holds incoming
+   * updates back on the Scripture editor's terms (see {@link doesPaneSessionOwnContent}). Without
+   * it, an open note session holds updates back until it closes or goes stale.
    */
   paneSession?: PaneEditingSession;
 }
@@ -331,17 +329,17 @@ export function doesPaneSessionOwnContent(
 }
 
 /**
- * Decides whether an editing SESSION (marker palette, or a note edit in the popover or the
- * footnotes pane) should keep the PDP-sync deferral open, applying the
- * {@link STALE_NOTE_EDITING_SESSION_MS} time bound to a popover note session.
+ * Decides whether an editing SESSION (marker palette, or a note edit in the footnotes pane) should
+ * keep the PDP-sync deferral open, applying the {@link STALE_NOTE_EDITING_SESSION_MS} time bound to
+ * a note session.
  *
  * The note-session bound exists because the session key alone is not proof of a live session: if
- * the popover dies without cleanup, the orphaned key would otherwise defer every incoming PDP
+ * the row editor dies without cleanup, the orphaned key would otherwise defer every incoming PDP
  * update until the user happens to click another note caller (the only other stale-session recovery
  * path is click-triggered). A session the user is actively working in refreshes its timestamp on
- * every edit in and save from the popover, so a live long edit never trips the bound; a session
+ * every edit in and apply from the row editor, so a live long edit never trips the bound; a session
  * older than the bound is reported stale so the caller can clear it (via the normal footnote-editor
- * close path, keeping popover state consistent) and stop deferring.
+ * close path) and stop deferring.
  *
  * A palette session carries no time bound here: its lifecycle is owned by the overlay service's
  * show promise, which settles on select, dismiss, or replacement rejection.
@@ -789,7 +787,7 @@ export function createInsertContextMenuItems(
  *   end the press before the menu's listener ran at all.
  *
  * Scoped to ONE editor: `ContextMenuPlugin` mounts once per Lexical editor instance (the main
- * Standard-view editor and the footnote-editor popover each have their own), and every instance's
+ * Standard-view editor and the footnote row editor each have their own), and every instance's
  * portal shares the same classes, so a document-wide check cannot tell whose menu is open. See
  * {@link isEditorContextMenuOpenFor} for the per-editor signal this reads.
  *
