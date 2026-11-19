@@ -105,8 +105,9 @@ export interface FootnoteEditorHandle {
   /**
    * Puts DOM focus back in the note text, on the caret the editor last held. When the editor has
    * lost its selection (a menu or toolbar took focus), the selection captured as focus left is put
-   * back first, so focus does not land at the end of the document. Does nothing while the inner
-   * editor is not mounted.
+   * back first, so focus does not land at the end of the document. When there is still no selection
+   * to land on, or the editor is read-only, only the frame's window is focused and the selection is
+   * left alone. Does nothing while the inner editor is not mounted.
    */
   focus: () => void;
   /**
@@ -117,34 +118,34 @@ export interface FootnoteEditorHandle {
   /**
    * Cuts the selected note text to the clipboard. Puts the selection captured when focus last left
    * the editor back first, if the editor has none now (a menu or toolbar took focus), then focuses
-   * the note text. Does nothing while the inner editor is not mounted. Throws when the inner editor
-   * is read-only; the host handles that.
+   * as {@link FootnoteEditorHandle.focus} does. Does nothing while the inner editor is not mounted.
+   * Throws when the inner editor is read-only; the host handles that.
    *
    * @experimental This method is unstable and may change shape or disappear without notice
    */
   cut: () => void;
   /**
    * Copies the selected note text to the clipboard. Puts the selection captured when focus last
-   * left the editor back first, if the editor has none now, then focuses the note text. Does
-   * nothing while the inner editor is not mounted.
+   * left the editor back first, if the editor has none now, then focuses as
+   * {@link FootnoteEditorHandle.focus} does. Does nothing while the inner editor is not mounted.
    *
    * @experimental This method is unstable and may change shape or disappear without notice
    */
   copy: () => void;
   /**
    * Pastes the clipboard's contents at the selection. Puts the selection captured when focus last
-   * left the editor back first, if the editor has none now, then focuses the note text. Does
-   * nothing while the inner editor is not mounted. Throws when the inner editor is read-only; the
-   * host handles that.
+   * left the editor back first, if the editor has none now, then focuses as
+   * {@link FootnoteEditorHandle.focus} does. Does nothing while the inner editor is not mounted.
+   * Throws when the inner editor is read-only; the host handles that.
    *
    * @experimental This method is unstable and may change shape or disappear without notice
    */
   paste: () => void;
   /**
    * Pastes the clipboard's contents at the selection as plain text. Puts the selection captured
-   * when focus last left the editor back first, if the editor has none now, then focuses the note
-   * text. Does nothing while the inner editor is not mounted. Throws when the inner editor is
-   * read-only; the host handles that.
+   * when focus last left the editor back first, if the editor has none now, then focuses as
+   * {@link FootnoteEditorHandle.focus} does. Does nothing while the inner editor is not mounted.
+   * Throws when the inner editor is read-only; the host handles that.
    *
    * @experimental This method is unstable and may change shape or disappear without notice
    */
@@ -783,6 +784,7 @@ export default function FootnoteEditor({
     }),
     [editorOptions, defaultMarkerMenuTrigger, hasBuiltInContextMenu],
   );
+  const isReadonly = !!options.isReadonly;
 
   // Read at event time by the keydown guards, so a host passing a new closure does not re-register
   // their document listeners.
@@ -1136,9 +1138,14 @@ export default function FootnoteEditor({
   /**
    * Focuses the inner editor, after putting back the caret or selection focus last left it with
    * when the editor has none now (a menu took focus and Lexical's blur handling dropped it). Unlike
-   * {@link restoreSelectionIfLost} it never falls back to selecting the note: with nothing captured,
-   * focus keeps the editor's own behavior. A selected paragraph marker counts as a live selection,
-   * as there.
+   * {@link restoreSelectionIfLost} it never falls back to selecting the note. A selected paragraph
+   * marker counts as a live selection, as there.
+   *
+   * The inner editor's `focus()` re-asserts the selection it holds, and with none it puts the caret
+   * at the end of the note; it also re-reads the browser selection, which the editor's own copy
+   * leaves at the end of the note. So it is called only when the editor is editable and has a
+   * selection to land on. Otherwise only the frame's window is focused, which brings keyboard
+   * shortcuts back to the frame and leaves the selection where it is.
    *
    * @returns The inner editor, or `undefined` while it is not mounted
    */
@@ -1150,9 +1157,10 @@ export default function FootnoteEditor({
     // and the editor would then report a selection and the restore would never run.
     if (lastFocusOutSelection && !editor.getSelection() && !editor.getSelectedParaMarker())
       editor.setSelection(lastFocusOutSelection);
-    editor.focus();
+    if (!isReadonly && (editor.getSelection() || editor.getSelectedParaMarker())) editor.focus();
+    else (editorParentRef.current?.ownerDocument.defaultView ?? window).focus();
     return editor;
-  }, []);
+  }, [isReadonly]);
 
   const runClipboardMethod = useCallback(
     (method: 'cut' | 'copy' | 'paste' | 'pastePlainText') => {

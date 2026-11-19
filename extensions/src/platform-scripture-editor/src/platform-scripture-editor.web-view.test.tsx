@@ -1166,6 +1166,69 @@ describe('Scripture editor right-click menu', () => {
       expect(calls.slice(0, 2)).toEqual(['focus', 'copy']);
       expect(calls).not.toContain('setSelection');
     });
+
+    /**
+     * Runs the refocus the action schedules for the next frame at once, and records the frame's own
+     * `window.focus()`, which focuses the tab without touching the selection.
+     */
+    const watchFocus = (calls: string[]) => {
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      });
+      vi.stubGlobal(
+        'focus',
+        vi.fn(() => {
+          calls.push('frameFocus');
+        }),
+      );
+    };
+
+    it('never focuses the editor when it has no selection to land on, only the frame', async () => {
+      // No caret was ever captured, so the restore has nothing to put back, and the editor's
+      // focus() would place a caret at the end of the chapter and move the reference there.
+      mockShowContextMenu.mockResolvedValue(COPY);
+      const { calls, setLiveSelection } = stubEditor({}, { emulateLexicalFocus: true });
+      await renderEditor();
+      // Mounting focuses the editor once, which gives the stand-in a selection; drop it.
+      setLiveSelection(undefined);
+      calls.length = 0;
+      watchFocus(calls);
+
+      await rightClick(screen.getByTestId('editorial'));
+
+      expect(calls).toContain('copy');
+      expect(calls).not.toContain('focus');
+      expect(calls[0]).toBe('frameFocus');
+    });
+
+    it('never focuses a read-only editor around a Copy, only the frame', async () => {
+      // A read-only editor's text cannot take focus, and its focus() re-reads the browser
+      // selection, which the copy itself leaves at the end of the chapter.
+      mockShowContextMenu.mockResolvedValue(COPY);
+      const stub = stubEditor({}, { emulateLexicalFocus: true });
+      await renderEditor({ state: { isReadOnly: true } });
+      stub.setLiveSelection(SELECTED);
+      stub.calls.length = 0;
+      watchFocus(stub.calls);
+
+      await rightClick(screen.getByTestId('editorial'));
+
+      expect(stub.calls).toEqual(['frameFocus', 'copy', 'frameFocus']);
+    });
+
+    it('focuses an editable editor holding a selection before and after the Copy (control)', async () => {
+      mockShowContextMenu.mockResolvedValue(COPY);
+      const stub = stubEditor({}, { emulateLexicalFocus: true });
+      await renderEditor();
+      stub.setLiveSelection(SELECTED);
+      stub.calls.length = 0;
+      watchFocus(stub.calls);
+
+      await rightClick(screen.getByTestId('editorial'));
+
+      expect(stub.calls).toEqual(['focus', 'copy', 'focus']);
+    });
   });
 
   it('opens Find with the arguments Ctrl+F sends, from the selection', async () => {

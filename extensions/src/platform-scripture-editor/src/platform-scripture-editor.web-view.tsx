@@ -277,6 +277,7 @@ import {
   getEditorWebViewContextKeys,
   hasNonCollapsedSelection,
   flushRowEditsThenSave,
+  focusEditorKeepingSelection,
   forgetCaretSnapshotIfParaMarkerSelected,
   generateInlineMarkerMenuListItems,
   getChapterKey,
@@ -2133,7 +2134,10 @@ function PlatformScriptureEditor({
           restoreSelectionIfLost: (editor) =>
             restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
           onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
-          focusEditor: () => requestAnimationFrame(() => editorRef.current?.focus()),
+          focusEditor: () =>
+            requestAnimationFrame(() =>
+              focusEditorKeepingSelection(editorRef.current, !isReadOnlyEffective),
+            ),
         },
       ),
     [
@@ -5270,8 +5274,9 @@ function PlatformScriptureEditor({
             // find a selection and leave it there.
             restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
             // The menu hands focus back to its tab asynchronously; the clipboard read behind Paste
-            // needs the frame focused when it runs, so focus the editor first.
-            editorRef.current?.focus();
+            // needs the frame focused when it runs, so focus first. The editor itself only when it
+            // has a selection to land on, so that a pick can never move the caret or the reference.
+            focusEditorKeepingSelection(editorRef.current, !isReadOnlyEffective);
             runEditMenuCommand(clipboardCommand);
           },
           ...createContextMenuCommandEffects({

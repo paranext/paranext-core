@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createRef, forwardRef, ReactNode, useImperativeHandle } from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
 import { ContentZoomRoot } from '@/components/advanced/content-zoom-root.component';
 import userEvent from '@testing-library/user-event';
@@ -2166,6 +2166,10 @@ describe('FootnoteEditorHandle clipboard methods', () => {
     end: { jsonPath: '$.content[0].content[0].content[0].content[0]', offset: 4 },
   };
   const methods = ['cut', 'copy', 'paste', 'pastePlainText'] as const;
+  // Undoes the `window.focus` spies.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   const USER_LIVE_SELECTION: SelectionRange = {
     start: { jsonPath: '$.content[0]', offset: 0 },
     end: { jsonPath: '$.content[0]', offset: 2 },
@@ -2315,6 +2319,42 @@ describe('FootnoteEditorHandle clipboard methods', () => {
     expect(editorRef.setSelection).not.toHaveBeenCalled();
     expect(editorRef.selectNote).not.toHaveBeenCalled();
     expect(editorRef.paste).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(methods)(
+    '%s focuses only the frame when the editor has no selection after the restore',
+    (method) => {
+      // The inner editor's focus() would put the caret at the end of the note.
+      const { handle, editorRef } = renderWithHandle();
+      modelFocusSelectingDocumentEnd(editorRef);
+      const frameFocus = vi.spyOn(window, 'focus').mockImplementation(() => {});
+
+      handle[method]();
+
+      expect(editorRef.focus).not.toHaveBeenCalled();
+      expect(frameFocus).toHaveBeenCalledTimes(1);
+      expect(frameFocus.mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(editorRef[method]).mock.invocationCallOrder[0],
+      );
+    },
+  );
+
+  it('focuses only the frame for a read-only editor, which cannot take the caret', () => {
+    const handleRef = createRef<FootnoteEditorHandle>();
+    renderFootnoteEditor({ view, isReadonly: true }, undefined, {
+      inline: true,
+      extraProps: { ref: handleRef },
+    });
+    const editorRef = mockEditorRefHolder.current;
+    modelFocusSelectingDocumentEnd(editorRef);
+    vi.mocked(editorRef.getSelection).mockReturnValue(USER_LIVE_SELECTION);
+    const frameFocus = vi.spyOn(window, 'focus').mockImplementation(() => {});
+
+    handleRef.current?.copy();
+
+    expect(editorRef.focus).not.toHaveBeenCalled();
+    expect(frameFocus).toHaveBeenCalledTimes(1);
+    expect(editorRef.copy).toHaveBeenCalledTimes(1);
   });
 
   it.each(methods)('%s does not throw while the inner editor is missing', (method) => {
