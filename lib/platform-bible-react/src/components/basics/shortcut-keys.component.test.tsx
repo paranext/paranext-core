@@ -320,6 +320,17 @@ describe('ShortcutKeys tooltip', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     });
 
+    it('gives the keycap tooltip no exit animation, so its layer goes before the menu sees the key', async () => {
+      // jsdom runs no CSS animations, so the test above passes even with one. In a browser, Radix
+      // keeps the content (and the layer that swallows Escape) mounted until an exit animation ends,
+      // so this class is what the single-Escape behavior depends on there.
+      renderMenu();
+      await openMenuAndHoverFirstKeycaps();
+      expect(document.querySelector('[data-slot="tooltip-content"]')).toHaveClass(
+        'tw:data-closed:animate-none!',
+      );
+    });
+
     it('closes the keycap tooltip when a key moves through the menu', async () => {
       renderMenu();
       const user = await openMenuAndHoverFirstKeycaps();

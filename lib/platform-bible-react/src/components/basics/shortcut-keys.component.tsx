@@ -275,8 +275,8 @@ export function ShortcutKeys({ hint }: ShortcutKeysProps) {
   // key before anything else sees the key: `window` capture runs ahead of the menu's own listeners
   // on `document`, and `flushSync` takes the tooltip's layer off the stack before they run. Any key,
   // not only Escape, since an arrow key moves the menu away from the item the tooltip describes.
-  // This relies on the tooltip's content unmounting at once: an exit animation that Radix's
-  // `Presence` waits for would keep the layer on top and bring the second Escape back.
+  // This relies on the tooltip's content unmounting at once, so its exit animation is turned off
+  // below: Radix's `Presence` keeps the content, and its layer, mounted until an exit animation ends.
   useEffect(() => {
     if (!isTooltipOpen) return undefined;
     const closeTooltip = () => flushSync(() => setIsTooltipOpen(false));
@@ -302,7 +302,15 @@ export function ShortcutKeys({ hint }: ShortcutKeysProps) {
           Radix flips it to the other side, which beats clipping it. The shared tooltip nudges its
           arrow flush against the content only for top and bottom tooltips; without the same nudge
           here the side arrow's tip pokes into the keycaps */}
-        <TooltipContent side={getInlineEndSide()} arrowClassName="tw:translate-y-[calc(-50%-1px)]">
+        <TooltipContent
+          side={getInlineEndSide()}
+          // No exit animation, so a key that closes the tooltip removes its layer at once (see the
+          // keydown listener above); it still fades in. Important, because the shared content's
+          // own exit-animation class comes later in the stylesheet, and not inline, because Radix's
+          // popper sets its own inline `animation`
+          className="tw:data-closed:animate-none!"
+          arrowClassName="tw:translate-y-[calc(-50%-1px)]"
+        >
           <ShortcutReadout template={tooltipTemplate} hint={hint} locale={locale} />
         </TooltipContent>
       </Tooltip>
