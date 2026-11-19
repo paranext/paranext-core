@@ -47,7 +47,9 @@ Using the
 
 Make sure to
 
-- Show the selection with a start side checkbox (not on the end side like the [default New York style](https://ui.shadcn.com/docs/components/select)) -- up for UX discussion
+- Show the selection with a check mark on the start side, not on the end side like the [default New York style](https://ui.shadcn.com/docs/components/select). This applies to Select, Combobox and other Command lists, and to the checkbox and radio items of dropdown, context and menubar menus
+  - In a list where rows can be checked, keep the check's space on every row so all labels line up (for `CommandItem`, pass `data-checked={isSelected}` on every row)
+  - In menus whose items have icons, an item keeps its icon and a smaller check sits after it, where the label would otherwise begin
 - Provide context by using headings and grouping
 - Apply sorting
 - Do not break the default component's focus and hover styles, overflow and grow-shrink behavior (if any, improve it)

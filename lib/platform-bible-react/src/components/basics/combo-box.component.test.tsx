@@ -24,10 +24,10 @@ describe('ComboBox check', () => {
     const options = await openComboBox('Beta');
     expect(options).toHaveLength(3);
     options.forEach((option) => {
-      expect(option).toHaveAttribute(
-        'data-checked',
-        option.textContent === 'Beta' ? 'true' : 'false',
-      );
+      const expected = option.textContent === 'Beta' ? 'true' : 'false';
+      expect(option).toHaveAttribute('data-checked', expected);
+      // Screen readers hear the selection, since the check itself is aria-hidden
+      expect(option).toHaveAttribute('aria-checked', expected);
     });
   });
 

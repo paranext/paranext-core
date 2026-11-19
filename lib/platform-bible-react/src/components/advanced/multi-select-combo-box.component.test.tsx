@@ -36,6 +36,8 @@ describe('MultiSelectComboBox check', () => {
     options.forEach((option) => {
       const isSelected = /Alpha|Gamma/.test(option.textContent ?? '');
       expect(option).toHaveAttribute('data-checked', isSelected ? 'true' : 'false');
+      // Screen readers hear the selection, since the check itself is aria-hidden
+      expect(option).toHaveAttribute('aria-checked', isSelected ? 'true' : 'false');
     });
   });
 });

@@ -234,8 +234,9 @@ export function InterfaceLanguagePicker({
                 // aria-current (not aria-selected, which cmdk uses for the keyboard-highlighted item).
                 // `data-checked` drives the leading check mark the vendored CommandItem renders, so we
                 // don't render our own icon (that would double it up). It is set on every row, not
-                // only the selected one, so every label starts at the same offset. We still add a
-                // visually-hidden label so screen readers announce the selection.
+                // only the selected one, so every label starts at the same offset, and CommandItem
+                // turns it into `aria-checked`. The visually hidden label stays for screen readers
+                // that do not announce `aria-checked` on list options.
                 aria-current={isSelected ? 'true' : undefined}
                 data-checked={isSelected}
                 onSelect={() => onChange(tag)}

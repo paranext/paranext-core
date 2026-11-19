@@ -246,8 +246,9 @@ function CommandSeparator({
  * - On rows that are never checkable (command palettes, grids), omit `data-checked`: no check is
  *   rendered.
  *
- * The check is visual only. Announce the selection to assistive technology yourself, for example
- * with `aria-current` or a visually hidden label. Do not draw a check of your own alongside it.
+ * `data-checked` also sets `aria-checked`, so screen readers announce each row as checked or not
+ * checked. Pass your own `aria-checked` to override it (for example `'mixed'`). Do not draw a check
+ * of your own alongside it.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/command}
  * @see cmdk Documentation: {@link https://cmdk.paco.me/}
@@ -273,6 +274,9 @@ function CommandItem({
       // CUSTOM: Re-attach data-checked, which is destructured out of props above, so the item keeps
       // the attribute
       data-checked={dataChecked}
+      // CUSTOM: Announce the check state to assistive technology, since the check itself is
+      // aria-hidden. Placed before the spread so a caller's own aria-checked wins.
+      aria-checked={dataChecked}
       {...props}
     >
       {/* CUSTOM: Moved the check from after the children (tw:ms-auto, at the trailing edge) to

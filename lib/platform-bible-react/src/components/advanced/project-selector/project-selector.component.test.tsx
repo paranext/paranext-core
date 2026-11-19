@@ -746,6 +746,25 @@ describe('renderProjectIndicator', () => {
     expect(screen.getByTestId('indicator-ScriptureResource')).toBeInTheDocument();
   });
 
+  it('checks the selected project and announces every row as checked or not', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+    expect(rowFor('P1')).toHaveAttribute('data-checked', 'true');
+    expect(rowFor('P1')).toHaveAttribute('aria-checked', 'true');
+    expect(rowFor('R1')).toHaveAttribute('data-checked', 'false');
+    expect(rowFor('R1')).toHaveAttribute('aria-checked', 'false');
+  });
+
   it('reserves the indicator column on every row, even where the renderer returns nothing', async () => {
     const user = setupUser();
     render(

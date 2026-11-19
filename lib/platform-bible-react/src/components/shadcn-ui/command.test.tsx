@@ -195,6 +195,29 @@ describe('CommandItem check', () => {
     expect(row.firstElementChild).toHaveTextContent('Genesis 1:1');
   });
 
+  it('announces the check state through aria-checked, and only on checkable items', () => {
+    renderRows();
+    expect(rowOf('Checked')).toHaveAttribute('aria-checked', 'true');
+    expect(rowOf('Unchecked')).toHaveAttribute('aria-checked', 'false');
+    expect(rowOf('Plain')).not.toHaveAttribute('aria-checked');
+  });
+
+  it("lets a caller's own aria-checked win, for states data-checked cannot express", () => {
+    render(
+      <Command>
+        <CommandList>
+          <CommandItem value="partial" data-checked aria-checked="mixed">
+            Partial
+          </CommandItem>
+        </CommandList>
+      </Command>,
+    );
+    expect(screen.getByRole('option', { name: 'Partial' })).toHaveAttribute(
+      'aria-checked',
+      'mixed',
+    );
+  });
+
   it('hides the check from assistive technology, since it is decorative', () => {
     renderRows();
     expect(checkOf(rowOf('Checked'))).toHaveAttribute('aria-hidden', 'true');

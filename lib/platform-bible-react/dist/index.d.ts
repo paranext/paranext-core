@@ -3587,8 +3587,9 @@ export declare function CommandGroup({ className, ...props }: React$1.ComponentP
  * - On rows that are never checkable (command palettes, grids), omit `data-checked`: no check is
  *   rendered.
  *
- * The check is visual only. Announce the selection to assistive technology yourself, for example
- * with `aria-current` or a visually hidden label. Do not draw a check of your own alongside it.
+ * `data-checked` also sets `aria-checked`, so screen readers announce each row as checked or not
+ * checked. Pass your own `aria-checked` to override it (for example `'mixed'`). Do not draw a check
+ * of your own alongside it.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/command}
  * @see cmdk Documentation: {@link https://cmdk.paco.me/}
