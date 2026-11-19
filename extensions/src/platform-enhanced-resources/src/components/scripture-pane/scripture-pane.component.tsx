@@ -1272,20 +1272,23 @@ export function EnhancedScripturePane({
       data-testid="er-scripture-pane"
     >
       <div
-        ref={editorContainerRef}
         // `overflow-auto` + `min-h-0` + `flex-1` is the same triple the platform-scripture-editor
         // uses on its scrolling region so the editor content scrolls vertically when it exceeds
         // the available pane height; without this the outer `overflow-hidden` simply clips long
         // chapters.
         className="tw:flex tw:h-auto tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto"
       >
-        <Editorial
-          ref={editorRef}
-          defaultUsj={usj}
-          scrRef={scrRef}
-          logger={EDITORIAL_LOGGER}
-          options={editorialOptions}
-        />
+        {/* `contents` keeps the layout as if the editor were a direct child; the wrapper holds only
+            the editor, so the filter status line below is outside the context menu's container. */}
+        <div ref={editorContainerRef} className="tw:contents">
+          <Editorial
+            ref={editorRef}
+            defaultUsj={usj}
+            scrRef={scrRef}
+            logger={EDITORIAL_LOGGER}
+            options={editorialOptions}
+          />
+        </div>
         {filteredTokenId && (
           <p
             role="status"

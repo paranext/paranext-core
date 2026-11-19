@@ -19,6 +19,10 @@ const WEB_VIEW_TYPE = 'platformEnhancedResources.enhancedResource';
 
 type MenusDocument = JsonDocumentLike & { webViewMenus: Record<string, unknown> };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && !!value;
+}
+
 /** Every shipped extension's menus combined with the platform's, this one's through `edit`. */
 function combine(edit: (menus: MenusDocument) => void): PlatformMenus {
   const combiner = new MenuDocumentCombiner(menuDataObject);
@@ -37,7 +41,8 @@ function combine(edit: (menus: MenusDocument) => void): PlatformMenus {
 
 describe('Enhanced Resources context menu contribution', () => {
   const withoutContextMenu = combine((menus) => {
-    const entry: { contextMenu?: unknown } = menus.webViewMenus[WEB_VIEW_TYPE];
+    const entry = menus.webViewMenus[WEB_VIEW_TYPE];
+    if (!isRecord(entry)) throw new Error(`${WEB_VIEW_TYPE} has no webViewMenus entry`);
     // The control test below fails if this stripped nothing: it expects no served context menu
     delete entry.contextMenu;
   });

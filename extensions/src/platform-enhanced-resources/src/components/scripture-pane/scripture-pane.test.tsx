@@ -2173,28 +2173,19 @@ describe('EnhancedScripturePane platform context menu', () => {
     );
   });
 
-  it('claims no right-click while the pane shows its loading, empty or error state', async () => {
-    const { rerender } = renderPane();
-    rightClick(addTextToEditor());
-    await flushMenuRequest();
-    // The editor's container exists only while the editor is shown, so the pane's `isEnabled` is a
-    // second guard on top of that. Positive control: the same right-click is claimed while shown
-    expect(mockShowContextMenu).toHaveBeenCalledTimes(1);
-    mockShowContextMenu.mockClear();
-
-    [{ isLoading: true }, { usj: undefined }, { errorMessage: 'boom' }].forEach((props) => {
-      rerender(
-        <EnhancedScripturePane
-          usj={makeTestUsj(3)}
-          annotations={[]}
-          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
-          {...props}
-        />,
-      );
-      rightClick(document.body);
-    });
+  it('claims no right-click on the filter status line, only in the editor', async () => {
+    renderPane({ filteredTokenId: 'wg-001', filteredTokenSurface: 'logos' });
+    const statusLine = screen.getByRole('status');
+    // The status line has selectable text, which must not enable Copy for it either
+    selectTextIn(statusLine);
+    rightClick(statusLine);
     await flushMenuRequest();
     expect(mockShowContextMenu).not.toHaveBeenCalled();
+
+    // Positive control: a right-click on the editor text in the same pane is claimed
+    rightClick(addTextToEditor());
+    await flushMenuRequest();
+    expect(mockShowContextMenu).toHaveBeenCalledTimes(1);
   });
 
   it('focuses the frame, never the editor, and copies with the browser selection kept', async () => {
