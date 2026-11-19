@@ -46,6 +46,8 @@ export type ToolbarProps = PropsWithChildren<{
    * does in Paratext 9; clicking it again closes the menu. Its accessible name comes from the icon
    * itself, e.g. an `img`'s `alt`. Without `menuData` there is no menu to open, so it renders as a
    * plain icon.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
    */
   appMenuIcon?: ReactNode;
 
