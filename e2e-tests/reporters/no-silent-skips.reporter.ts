@@ -104,6 +104,10 @@ export interface LostTestsSplit<T> {
  * failure, an unexpected worker exit) still runs `_failTestWithErrors` and leaves a completed
  * `'skipped'` result behind, which is what makes the split precise: a no-results test during a
  * stopped-early run is exactly what stopping early looks like, not a silent loss.
+ *
+ * A `--global-timeout` stop (`'timedout'`) is the exception to that split: the test still running
+ * when the time ran out is given a completed `'skipped'` result too, so every lost test in such a
+ * run is the timeout's doing. The run's own `'timedout'` status already fails it.
  */
 export function findLostTests<T extends TestOutcomeLike>(
   tests: T[],
@@ -115,6 +119,7 @@ export function findLostTests<T extends TestOutcomeLike>(
 
   const allLost = tests.filter(wasLost);
   if (!stoppedEarly) return { lost: allLost, notRunBecauseStoppedEarly: [] };
+  if (runStatus === 'timedout') return { lost: [], notRunBecauseStoppedEarly: allLost };
 
   return {
     lost: allLost.filter((test) => test.results.length > 0),
@@ -206,8 +211,8 @@ class NoSilentSkipsReporter implements Reporter {
       // it (or through the run's own `interrupted` or `timedout` status), so this does not also
       // fail the run.
       console.log(
-        `\n${notRunBecauseStoppedEarly.length} test(s) did not run because the run stopped ` +
-          `early:\n${notRunBecauseStoppedEarly.map(describeTest).join('\n')}\n`,
+        `\n${notRunBecauseStoppedEarly.length} test(s) did not run, or did not finish, because ` +
+          `the run stopped early:\n${notRunBecauseStoppedEarly.map(describeTest).join('\n')}\n`,
       );
     }
 

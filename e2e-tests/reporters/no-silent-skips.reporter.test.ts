@@ -128,6 +128,22 @@ describe('findLostTests', () => {
     expect(lost).toEqual([genuinelyLost]);
     expect(notRunBecauseStoppedEarly).toEqual([]);
   });
+
+  it('reports the test a --global-timeout cut off as "stopped early" too, not lost', () => {
+    // Playwright gives the test that was still running when the global timeout ran out a
+    // completed 'skipped' result, and the ones it never reached none. Both are the timeout's doing,
+    // and the run's own 'timedout' status already fails it.
+    const cutOff = declaredTest(['skipped']);
+    const neverReached = declaredTest([]);
+
+    const { lost, notRunBecauseStoppedEarly } = findLostTests(
+      [ran, cutOff, neverReached],
+      'timedout',
+      true,
+    );
+    expect(lost).toEqual([]);
+    expect(notRunBecauseStoppedEarly).toEqual([cutOff, neverReached]);
+  });
 });
 
 describe('isMaxFailuresStopMessage', () => {
