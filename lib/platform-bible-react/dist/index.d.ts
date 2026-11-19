@@ -12,7 +12,7 @@ import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyCommen
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefCallback, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PointerEvent as PointerEvent$1, PropsWithChildren, ReactNode, Ref, RefCallback, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -2702,6 +2702,10 @@ export type ToolbarCompoundLabelProps = {
  * absorb ~all of it, so it clips to nothing before the primary gives up a character — and the
  * primary keeps an ellipsis of its own rather than being cut mid-glyph by the trigger's
  * `overflow-hidden`. Only the abbreviation and dropped steps need the caller to say so.
+ *
+ * Hover and keyboard focus are read from the control the label sits in (the nearest `button`,
+ * `combobox` or focusable ancestor), and the tooltip opens clear of that whole control rather than
+ * of the text alone.
  */
 export declare function ToolbarCompoundLabel({ primary, secondary, separator, secondaryFirst, showSecondary, isPartial, fullText, className, }: ToolbarCompoundLabelProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
@@ -4903,6 +4907,13 @@ export type UseTruncationTooltipResult<T extends HTMLElement> = {
 	onPointerEnter: () => void;
 	/** Pointer-leave handler for the trigger; closes the tooltip. */
 	onPointerLeave: () => void;
+	/**
+	 * Pointer-move handler for the `TooltipTrigger`. Required whenever the tooltip passes Radix's
+	 * closes through `onOpenChange`: it stops Radix's own hover handling, whose zero-delay open can
+	 * still read this controlled tooltip as closed, broadcast Radix's "another tooltip opened" event,
+	 * and so close the tooltip right after `onPointerEnter` opened it.
+	 */
+	onPointerMove: (event: React$1.PointerEvent) => void;
 };
 /**
  * Drives a controlled tooltip that opens on hover only when the trigger element's text is actually
@@ -4911,10 +4922,11 @@ export type UseTruncationTooltipResult<T extends HTMLElement> = {
  * when the text already fits.
  *
  * Attach the returned `ref` to the truncating trigger element, spread `onPointerEnter` /
- * `onPointerLeave` onto it, and pass `open` to a controlled Radix `<Tooltip open={...}>`.
+ * `onPointerLeave` / `onPointerMove` onto the `TooltipTrigger`, and pass `open` to a controlled
+ * Radix `<Tooltip open={...}>`.
  *
  * @typeParam T - The type of the trigger element (e.g. `HTMLSpanElement`, `HTMLDivElement`).
- * @returns An object with `ref`, `open`, `onPointerEnter`, and `onPointerLeave`.
+ * @returns An object with `ref`, `open`, `onPointerEnter`, `onPointerLeave`, and `onPointerMove`.
  */
 export declare function useTruncationTooltip<T extends HTMLElement>(): UseTruncationTooltipResult<T>;
 /** Properties of one option contained in a listbox */

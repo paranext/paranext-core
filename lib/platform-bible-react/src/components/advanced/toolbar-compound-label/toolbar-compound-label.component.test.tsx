@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeAll, beforeEach, describe, expect, test } from 'vitest';
@@ -365,6 +365,82 @@ describe('ToolbarCompoundLabel', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('hover covers the whole control the label sits in', () => {
+    /** Lets zero-delay timers and the effects they trigger run. */
+    async function waitForTimers() {
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+    }
+
+    function renderInButton() {
+      render(
+        <button type="button">
+          <ToolbarCompoundLabel
+            primary="GEN"
+            secondary="1:1"
+            showSecondary={false}
+            fullText="Genesis 1:1"
+          />
+          <span>chevron</span>
+        </button>,
+      );
+    }
+
+    test('stays open once Radix has seen the pointer move over the label', async () => {
+      // Radix runs its own open on a zero-delay timer that still reads the tooltip as closed, so it
+      // broadcasts its "another tooltip opened" event and this tooltip, already open, closes
+      // itself. In the app that is a tooltip that blinks on every entry. A browser delivers the
+      // entry and the first move in one task, before React re-renders; `userEvent.hover` renders
+      // between them and hides the race, so both are dispatched inside one `act` here. jsdom ships
+      // no `PointerEvent` constructor, and React and Radix read only the type and target.
+      renderInButton();
+      const primary = screen.getByText('GEN');
+
+      act(() => {
+        primary.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+        primary.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }));
+      });
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await waitForTimers();
+
+      expect(screen.queryByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+    });
+
+    test('opens when the pointer enters the control away from the text', async () => {
+      renderInButton();
+
+      await userEvent.hover(screen.getByText('chevron'));
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+    });
+
+    test('stays open while the pointer moves from the text to the rest of the control', async () => {
+      renderInButton();
+
+      await userEvent.hover(screen.getByText('GEN'));
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await userEvent.hover(screen.getByText('chevron'));
+      await waitForTimers();
+
+      expect(screen.queryByRole('tooltip')).toBeInTheDocument();
+    });
+
+    test('closes when the pointer leaves the control', async () => {
+      renderInButton();
+
+      await userEvent.hover(screen.getByText('chevron'));
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await userEvent.unhover(screen.getByRole('button'));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      });
     });
   });
 });

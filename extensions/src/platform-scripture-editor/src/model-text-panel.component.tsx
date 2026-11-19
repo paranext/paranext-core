@@ -242,6 +242,7 @@ export function ModelTextPanel({
     open: isModelTextLabelTruncatedHovered,
     onPointerEnter: onModelTextLabelPointerEnter,
     onPointerLeave: onModelTextLabelPointerLeave,
+    onPointerMove: onModelTextLabelPointerMove,
   } = useTruncationTooltip<HTMLSpanElement>();
 
   const [isSelecting, setIsSelecting] = useState(false);
@@ -930,6 +931,7 @@ export function ModelTextPanel({
               asChild
               onPointerEnter={onModelTextLabelPointerEnter}
               onPointerLeave={onModelTextLabelPointerLeave}
+              onPointerMove={onModelTextLabelPointerMove}
               onFocus={(event) => {
                 if (event.currentTarget.matches(':focus-visible')) onModelTextLabelPointerEnter();
               }}

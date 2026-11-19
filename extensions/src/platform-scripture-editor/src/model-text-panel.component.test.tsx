@@ -1681,6 +1681,30 @@ describe('ModelTextPanel changing a model text the user chose', () => {
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     });
 
+    it('stays open once the pointer has moved over the header', async () => {
+      // Radix's own hover handling opens on a zero-delay timer that can still read this controlled
+      // tooltip as closed; it then broadcasts its "another tooltip opened" event and the tooltip
+      // closes itself the moment it appears. A browser delivers the entry and the first move in one
+      // task, before React re-renders, so both are dispatched inside one `act`. jsdom ships no
+      // `PointerEvent` constructor, and React and Radix read only the type and target.
+      clipLabel();
+      renderUserChosenWeb();
+      const header = await screen.findByRole('button', { name: CHANGE_WEB });
+
+      act(() => {
+        header.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+        header.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }));
+      });
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+
+      expect(screen.queryByRole('tooltip')).toHaveTextContent('WEB - World English Bible');
+    });
+
     it('closes on Escape', async () => {
       clipLabel();
       arriveBy(true);

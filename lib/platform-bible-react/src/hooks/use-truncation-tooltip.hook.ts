@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type RefObject } from 'react';
+import { useCallback, useRef, useState, type PointerEvent, type RefObject } from 'react';
 
 /** State and handlers for driving a controlled tooltip that only opens when its trigger is clipped. */
 export type UseTruncationTooltipResult<T extends HTMLElement> = {
@@ -10,6 +10,13 @@ export type UseTruncationTooltipResult<T extends HTMLElement> = {
   onPointerEnter: () => void;
   /** Pointer-leave handler for the trigger; closes the tooltip. */
   onPointerLeave: () => void;
+  /**
+   * Pointer-move handler for the `TooltipTrigger`. Required whenever the tooltip passes Radix's
+   * closes through `onOpenChange`: it stops Radix's own hover handling, whose zero-delay open can
+   * still read this controlled tooltip as closed, broadcast Radix's "another tooltip opened" event,
+   * and so close the tooltip right after `onPointerEnter` opened it.
+   */
+  onPointerMove: (event: PointerEvent) => void;
 };
 
 /**
@@ -19,10 +26,11 @@ export type UseTruncationTooltipResult<T extends HTMLElement> = {
  * when the text already fits.
  *
  * Attach the returned `ref` to the truncating trigger element, spread `onPointerEnter` /
- * `onPointerLeave` onto it, and pass `open` to a controlled Radix `<Tooltip open={...}>`.
+ * `onPointerLeave` / `onPointerMove` onto the `TooltipTrigger`, and pass `open` to a controlled
+ * Radix `<Tooltip open={...}>`.
  *
  * @typeParam T - The type of the trigger element (e.g. `HTMLSpanElement`, `HTMLDivElement`).
- * @returns An object with `ref`, `open`, `onPointerEnter`, and `onPointerLeave`.
+ * @returns An object with `ref`, `open`, `onPointerEnter`, `onPointerLeave`, and `onPointerMove`.
  */
 export function useTruncationTooltip<T extends HTMLElement>(): UseTruncationTooltipResult<T> {
   const [open, setOpen] = useState(false);
@@ -39,7 +47,11 @@ export function useTruncationTooltip<T extends HTMLElement>(): UseTruncationTool
 
   const onPointerLeave = useCallback(() => setOpen(false), []);
 
-  return { ref, open, onPointerEnter, onPointerLeave };
+  // Radix's trigger skips its own handler for an event an earlier handler has default-prevented.
+  // Pointer moves have no default action of their own, so nothing else is lost.
+  const onPointerMove = useCallback((event: PointerEvent) => event.preventDefault(), []);
+
+  return { ref, open, onPointerEnter, onPointerLeave, onPointerMove };
 }
 
 export default useTruncationTooltip;
