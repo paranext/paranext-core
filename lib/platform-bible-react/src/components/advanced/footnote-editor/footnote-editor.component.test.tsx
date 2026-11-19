@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { forwardRef, ReactNode, useImperativeHandle } from 'react';
+import { createRef, forwardRef, ReactNode, useImperativeHandle } from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
 import { ContentZoomRoot } from '@/components/advanced/content-zoom-root.component';
@@ -14,7 +14,9 @@ import type {
 } from '@eten-tech-foundation/platform-editor';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import FootnoteEditor, {
+  FootnoteEditorHandle,
   FootnoteEditorMarkerPalette,
+  FootnoteEditorProps,
   markerMenuItemToPaletteItem,
 } from './footnote-editor.component';
 import { installPopoverJsdomStubs } from './footnote-editor.test-harness';
@@ -175,7 +177,12 @@ function renderFootnoteEditor(
   {
     inline = false,
     wrapper,
-  }: { inline?: boolean; wrapper?: (props: { children: ReactNode }) => ReactNode } = {},
+    extraProps,
+  }: {
+    inline?: boolean;
+    wrapper?: (props: { children: ReactNode }) => ReactNode;
+    extraProps?: Partial<FootnoteEditorProps>;
+  } = {},
 ) {
   // EditorRef has many required methods; using a partial mock via type assertion is simpler than
   // stubbing all of them in a test (same rationale as
@@ -228,6 +235,7 @@ function renderFootnoteEditor(
       localizedStrings={buildLocalizedStrings()}
       markerPalette={markerPalette}
       inline={inline}
+      {...extraProps}
     />
   );
 
@@ -2123,4 +2131,145 @@ describe('note-type switch over content the note carries without char attributes
       ]),
     );
   });
+});
+
+describe('FootnoteEditor hasBuiltInContextMenu', () => {
+  const view: EditorOptions['view'] = {
+    markerMode: 'editable',
+    hasSpacing: true,
+    isFormattedFont: true,
+  };
+
+  function lastOptions(): EditorOptions {
+    return mockRegisterOptions.mock.calls.at(-1)?.[0];
+  }
+
+  it('keeps the editor package built-in context menu unless the host turns it off', () => {
+    renderFootnoteEditor({ view });
+    expect(lastOptions().hasBuiltInContextMenu).toBe(true);
+  });
+
+  it('hands a host-turned-off built-in menu to the inner editor', () => {
+    renderFootnoteEditor({ view }, undefined, { extraProps: { hasBuiltInContextMenu: false } });
+    expect(lastOptions().hasBuiltInContextMenu).toBe(false);
+  });
+});
+
+describe('FootnoteEditorHandle clipboard methods', () => {
+  const view: EditorOptions['view'] = {
+    markerMode: 'editable',
+    hasSpacing: true,
+    isFormattedFont: true,
+  };
+  const SNAPSHOT: SelectionRange = {
+    start: { jsonPath: '$.content[0].content[0].content[0].content[0]', offset: 1 },
+    end: { jsonPath: '$.content[0].content[0].content[0].content[0]', offset: 4 },
+  };
+  const methods = ['cut', 'copy', 'paste', 'pastePlainText'] as const;
+
+  function renderWithHandle() {
+    const handleRef = createRef<FootnoteEditorHandle>();
+    const utils = renderFootnoteEditor({ view }, undefined, {
+      inline: true,
+      extraProps: { ref: handleRef },
+    });
+    const handle = handleRef.current;
+    if (!handle) throw new Error('handle not set');
+    return { ...utils, handle };
+  }
+
+  /** Fires the focus-out the capture listens for, with the editor reporting `selection`. */
+  function leaveEditorWithSelection(
+    editorInput: HTMLElement,
+    editor: EditorRef,
+    selection: SelectionRange | undefined,
+  ) {
+    vi.mocked(editor.getSelection).mockReturnValue(selection);
+    editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  }
+
+  it.each(methods)('%s runs the inner editor method', (method) => {
+    const { handle, editorRef } = renderWithHandle();
+    handle[method]();
+    expect(editorRef[method]).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(methods)(
+    '%s restores the snapshot selection first when the editor has none',
+    (method) => {
+      const { handle, editorRef, editorInput } = renderWithHandle();
+      leaveEditorWithSelection(editorInput, editorRef, SNAPSHOT);
+      vi.mocked(editorRef.getSelection).mockReturnValue(undefined);
+
+      handle[method]();
+
+      expect(editorRef.setSelection).toHaveBeenCalledWith(SNAPSHOT);
+      expect(vi.mocked(editorRef.setSelection).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(editorRef[method]).mock.invocationCallOrder[0],
+      );
+    },
+  );
+
+  it('leaves a live selection alone (control)', () => {
+    const { handle, editorRef, editorInput } = renderWithHandle();
+    leaveEditorWithSelection(editorInput, editorRef, SNAPSHOT);
+    // The editor still holds a selection of its own by the time the method runs.
+    vi.mocked(editorRef.getSelection).mockReturnValue({
+      start: { jsonPath: '$.content[0]', offset: 0 },
+      end: { jsonPath: '$.content[0]', offset: 2 },
+    });
+
+    handle.copy();
+
+    expect(editorRef.setSelection).not.toHaveBeenCalled();
+    expect(editorRef.copy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restore a caret over a selected paragraph marker', () => {
+    const { handle, editorRef, editorInput } = renderWithHandle();
+    leaveEditorWithSelection(editorInput, editorRef, SNAPSHOT);
+    vi.mocked(editorRef.getSelection).mockReturnValue(undefined);
+    // Only that a marker is selected matters, not which one.
+    vi.mocked(editorRef.getSelectedParaMarker).mockReturnValue(
+      // A stand-in marker: the code under test only asks whether one is selected.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { marker: 'p' } as unknown as ReturnType<EditorRef['getSelectedParaMarker']>,
+    );
+
+    handle.copy();
+
+    expect(editorRef.setSelection).not.toHaveBeenCalled();
+    expect(editorRef.copy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not select anything when focus never left the editor with a selection', () => {
+    const { handle, editorRef } = renderWithHandle();
+    vi.mocked(editorRef.getSelection).mockReturnValue(undefined);
+
+    handle.paste();
+
+    expect(editorRef.setSelection).not.toHaveBeenCalled();
+    expect(editorRef.selectNote).not.toHaveBeenCalled();
+    expect(editorRef.paste).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(methods)('%s does not throw while the inner editor is missing', (method) => {
+    const { handle, rerenderScrRef } = renderWithHandle();
+    // The mock holder is typed as always present; this test removes it to model an unmounted editor.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    mockEditorRefHolder.current = undefined as unknown as EditorRef;
+    rerenderScrRef(scrRef);
+    expect(() => handle[method]()).not.toThrow();
+  });
+
+  it.each(['cut', 'paste', 'pastePlainText'] as const)(
+    '%s lets the inner editor failure (read-only) reach the host',
+    (method) => {
+      const { handle, editorRef } = renderWithHandle();
+      vi.mocked(editorRef[method]).mockImplementation(() => {
+        throw new Error('read-only');
+      });
+      expect(() => handle[method]()).toThrow('read-only');
+    },
+  );
 });

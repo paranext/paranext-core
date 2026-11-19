@@ -261,6 +261,42 @@ describe('FootnoteEditor Enter over a non-editable-marker host does nothing', ()
     });
   });
 
+  describe.each(nonEditableViews)('%s with a menu the host owns', (_name, view) => {
+    it('claims Enter while the host menu claims the keyboard, so it never reaches the editor', async () => {
+      const { editorInput, lexical } = await renderPopoverAndWaitForInit(view, {
+        extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => true },
+      });
+      await placeCaretAtFtEnd(lexical, editorInput);
+      const textBefore = noteText(lexical);
+      const childCountBefore = rootChildCount(lexical);
+      const editorSawEnter = vi.fn();
+      editorInput.addEventListener('keydown', editorSawEnter);
+
+      const enter = await pressEnter(editorInput);
+      editorInput.removeEventListener('keydown', editorSawEnter);
+
+      expect(enter.defaultPrevented).toBe(true);
+      expect(editorSawEnter).not.toHaveBeenCalled();
+      expect(rootChildCount(lexical)).toBe(childCountBefore);
+      expect(noteText(lexical)).toBe(textBefore);
+    });
+
+    it('claims Enter as usual once the host menu no longer claims the keyboard', async () => {
+      const { editorInput, lexical } = await renderPopoverAndWaitForInit(view, {
+        extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => false },
+      });
+      await placeCaretAtFtEnd(lexical, editorInput);
+      const editorSawEnter = vi.fn();
+      editorInput.addEventListener('keydown', editorSawEnter);
+
+      const enter = await pressEnter(editorInput);
+      editorInput.removeEventListener('keydown', editorSawEnter);
+
+      expect(enter.defaultPrevented).toBe(true);
+      expect(editorSawEnter).not.toHaveBeenCalled();
+    });
+  });
+
   it('Standard view keeps its `\\fp` break on Enter', async () => {
     const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView);
     await placeCaretAtFtEnd(lexical, editorInput);

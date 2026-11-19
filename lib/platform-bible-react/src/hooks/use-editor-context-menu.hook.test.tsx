@@ -1169,6 +1169,94 @@ describe('useEditorContextMenu', () => {
     expect(dismissMenu).not.toHaveBeenCalled();
   });
 
+  describe('isClaimingKeys', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function renderPending() {
+      const pending = deferred<string | undefined>();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const utils = render(
+        <Host
+          requestMenu={() => pending.promise}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      return { pending, getApi: () => api, ...utils };
+    }
+
+    it('is false before any right-click and true right after one', () => {
+      const { getApi, getByTestId } = renderPending();
+      expect(getApi().isClaimingKeys()).toBe(false);
+
+      rightClick(getByTestId('text'));
+
+      expect(getApi().isClaimingKeys()).toBe(true);
+    });
+
+    it('is false once the request settles', async () => {
+      const { pending, getApi, getByTestId } = renderPending();
+      rightClick(getByTestId('text'));
+      expect(getApi().isClaimingKeys()).toBe(true);
+
+      pending.resolve(undefined);
+      await flush();
+
+      expect(getApi().isClaimingKeys()).toBe(false);
+    });
+
+    it('is false after two seconds while the request is still pending', () => {
+      const { getApi, getByTestId } = renderPending();
+      rightClick(getByTestId('text'));
+
+      act(() => {
+        vi.advanceTimersByTime(1900);
+      });
+      expect(getApi().isClaimingKeys()).toBe(true);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(getApi().isClaimingKeys()).toBe(false);
+      expect(getApi().isPending()).toBe(true);
+    });
+
+    it('is false after a pointerdown drops the request', () => {
+      const { getApi, getByTestId } = renderPending();
+      rightClick(getByTestId('text'));
+
+      fireEvent.pointerDown(getByTestId('outside'));
+
+      expect(getApi().isClaimingKeys()).toBe(false);
+    });
+
+    it('is false after dismiss()', () => {
+      const { getApi, getByTestId } = renderPending();
+      rightClick(getByTestId('text'));
+
+      act(() => getApi().dismiss());
+
+      expect(getApi().isClaimingKeys()).toBe(false);
+    });
+
+    it('is false after unmount', () => {
+      const { getApi, getByTestId, unmount } = renderPending();
+      rightClick(getByTestId('text'));
+      const { isClaimingKeys } = getApi();
+
+      unmount();
+
+      expect(isClaimingKeys()).toBe(false);
+    });
+  });
+
   it('dismiss() closes a pending menu through dismissMenu', () => {
     const dismissMenu = vi.fn();
     let api!: ReturnType<typeof useEditorContextMenu>;

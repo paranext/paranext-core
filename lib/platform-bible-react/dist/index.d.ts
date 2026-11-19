@@ -1421,6 +1421,39 @@ export interface FootnoteEditorHandle {
 	 * document's active element, so it stays true while the window itself is not focused.
 	 */
 	containsFocus: () => boolean;
+	/**
+	 * Cuts the selected note text to the clipboard. Restores the selection captured when focus last
+	 * left the editor first, if the editor has none now (a menu or toolbar took focus). Does nothing
+	 * while the inner editor is not mounted. Throws when the inner editor is read-only; the host
+	 * handles that.
+	 *
+	 * @experimental This method is unstable and may change shape or disappear without notice
+	 */
+	cut: () => void;
+	/**
+	 * Copies the selected note text to the clipboard. Restores the selection captured when focus last
+	 * left the editor first, if the editor has none now. Does nothing while the inner editor is not
+	 * mounted.
+	 *
+	 * @experimental This method is unstable and may change shape or disappear without notice
+	 */
+	copy: () => void;
+	/**
+	 * Pastes the clipboard's contents at the selection. Restores the selection captured when focus
+	 * last left the editor first, if the editor has none now. Does nothing while the inner editor is
+	 * not mounted. Throws when the inner editor is read-only; the host handles that.
+	 *
+	 * @experimental This method is unstable and may change shape or disappear without notice
+	 */
+	paste: () => void;
+	/**
+	 * Pastes the clipboard's contents at the selection as plain text. Restores the selection captured
+	 * when focus last left the editor first, if the editor has none now. Does nothing while the inner
+	 * editor is not mounted. Throws when the inner editor is read-only; the host handles that.
+	 *
+	 * @experimental This method is unstable and may change shape or disappear without notice
+	 */
+	pastePlainText: () => void;
 }
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
@@ -1511,6 +1544,25 @@ export interface FootnoteEditorProps {
 	 * a long live edit is never treated as an abandoned session).
 	 */
 	onNoteEdit?: () => void;
+	/**
+	 * Whether the inner editor shows the editor package's own right-click menu. A host that serves
+	 * the right-click itself (a platform context menu) passes `false`; the inner editor then opens
+	 * nothing on a right-click and this component stops reading the built-in menu's open state.
+	 *
+	 * @default true
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	hasBuiltInContextMenu?: boolean;
+	/**
+	 * Whether a context menu the host owns is claiming the keyboard for this editor. The menu lives
+	 * outside this document and cannot receive keys, so while this returns `true` the editor claims
+	 * the marker trigger and Enter and drops them, so neither opens a palette nor splits a paragraph
+	 * under the menu. Once it returns `false` the editor behaves as if no menu were open, so a host
+	 * passes the signal that lapses with the menu's own key claim, not one that outlives it.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	isHostContextMenuClaimingKeys?: () => boolean;
 }
 interface FootnoteEditorMarkerPalette extends PaletteDriver {
 	/**
@@ -1546,7 +1598,7 @@ export declare const INLINE_APPLY_DEBOUNCE_MS = 300;
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, ref, initialCaretPosition, markerPalette, onNoteEdit, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, ref, initialCaretPosition, markerPalette, onNoteEdit, hasBuiltInContextMenu, isHostContextMenuClaimingKeys, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the MarkerMenu component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily

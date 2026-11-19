@@ -2164,13 +2164,22 @@ export type UseEditorContextMenuResult = {
 	dismiss: () => void;
 	/**
 	 * Whether a request is open: true from the right-click until the request settles (or the user
-	 * clicks back into the frame). Hosts read it to keep their own key handling away from a key the
-	 * pending menu owns. The hook's own key claim is shorter: it lapses two seconds after the
-	 * right-click even while this stays true.
+	 * clicks back into the frame). It stays true when the request stalls, long after the menu stopped
+	 * owning the keyboard, so a host gates its own key handling on {@link isClaimingKeys}, not on
+	 * this.
 	 *
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	isPending: () => boolean;
+	/**
+	 * Whether the hook is claiming the keyboard for its menu right now: true from the right-click
+	 * until the request settles or two seconds have passed, whichever comes first, and false after
+	 * `dismiss`, a dropped request or unmount. Hosts read it to keep their own key handling away from
+	 * a key the menu owns; once it is false the editor must behave as if no menu were pending.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	isClaimingKeys: () => boolean;
 };
 /**
  * Claims the right-click inside one editor, samples what the menu needs to know, asks the host to
@@ -2194,7 +2203,8 @@ export type UseEditorContextMenuResult = {
  *
  * The key claim is a capture-phase `keydown` listener on the window, registered when the hook
  * mounts. It stops listeners registered after it, but not window-capture listeners registered
- * earlier, which run first: those must gate on `isPending()` themselves.
+ * earlier, which run first: those must gate on `isClaimingKeys()` themselves. Not on `isPending()`:
+ * that stays true for a stalled request after the claim has lapsed.
  *
  * One instance per editor.
  *
