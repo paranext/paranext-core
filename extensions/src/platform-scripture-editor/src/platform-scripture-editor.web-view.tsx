@@ -271,6 +271,7 @@ import {
   deriveReadOnlyFlags,
   getEditorWebViewContextKeyNames,
   getEditorWebViewContextKeys,
+  hasNonCollapsedSelection,
   flushRowEditsThenSave,
   forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
@@ -1208,19 +1209,30 @@ function PlatformScriptureEditor({
     [viewType, isPowerMode],
   );
 
+  // Whether the editor's own selection is a range. Only a selection the editor reports changes it:
+  // an `undefined` report is a blur (opening a menu blurs the editor, whose selection stays and is
+  // what Copy copies), so it leaves the value alone. A chapter change clears it.
+  const [hasSelection, setHasSelection] = useState(false);
+
+  useEffect(() => {
+    setHasSelection(false);
+  }, [scrRef.book, scrRef.chapterNum]);
+
   // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
   // them when this web view closes. Hidden case: a hidden tab keeps publishing and its menu keeps
   // re-evaluating on every key change (the hook subscribes regardless of visibility), so it is
-  // current whenever the tab is shown; nothing waits for activation.
+  // current whenever the tab is shown; nothing waits for activation. `hasSelection` is data-driven
+  // too, so a selection or chapter change in a hidden tab needs no catch-up.
   useEffect(() => {
     const keys = getEditorWebViewContextKeys(webViewId, {
       isReadOnly,
       isPreview,
       isSyncBlocked,
       footnotesPaneVisible,
+      hasSelection,
     });
     Object.entries(keys).forEach(([key, value]) => papi.contextKeys.set(key, value));
-  }, [webViewId, isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible]);
+  }, [webViewId, isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible, hasSelection]);
 
   useEffect(() => {
     return () => {
@@ -4902,6 +4914,7 @@ function PlatformScriptureEditor({
   const handleSelectionChange = useCallback(
     async (change: SelectionRange | undefined) => {
       currentSelectionRef.current = change;
+      if (change) setHasSelection(hasNonCollapsedSelection(change));
 
       // Convert to ScriptureRangeUsjVerseRefChapterLocation format
       let scriptureSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;

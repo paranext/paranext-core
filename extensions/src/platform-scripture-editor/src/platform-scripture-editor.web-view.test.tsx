@@ -26,6 +26,8 @@ const {
   projectDataProviders,
   projectSettings,
   loadingProjectSettings,
+  mockContextKeysSet,
+  captureSelectionHandler,
 } = vi.hoisted(() => ({
   mockUseProjectData: vi.fn(),
   mockUseLocalizedStrings: vi.fn(),
@@ -43,6 +45,9 @@ const {
   projectSettings: new Map<string, unknown>(),
   /** Project settings whose read is still pending, by key; they read as their default meanwhile. */
   loadingProjectSettings: new Set<string>(),
+  mockContextKeysSet: vi.fn(),
+  /** Receives the `onSelectionChange` the stubbed editor was last rendered with. */
+  captureSelectionHandler: vi.fn<(handler: unknown) => void>(),
 }));
 
 /** What each key localizes to by default; any other key echoes itself, as an unresolved one does. */
@@ -85,8 +90,15 @@ vi.mock('@papi/frontend', () => {
   const service: unknown = new Proxy(() => Promise.resolve(undefined), {
     get: (_target, property) => (property === 'then' ? undefined : service),
   });
+  const papi: unknown = new Proxy(
+    {},
+    {
+      get: (_target, property) =>
+        property === 'contextKeys' ? { set: mockContextKeysSet, remove: vi.fn() } : service,
+    },
+  );
   return {
-    default: service,
+    default: papi,
     logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
   };
 });
@@ -124,7 +136,8 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
   const original = await importOriginal<typeof import('@eten-tech-foundation/platform-editor')>();
   return {
     ...original,
-    Editorial: React.forwardRef((_props, ref) => {
+    Editorial: React.forwardRef((props: Record<string, unknown>, ref) => {
+      captureSelectionHandler(props.onSelectionChange);
       React.useImperativeHandle(ref, () => editorHandle.current);
       return <div data-testid="editorial" />;
     }),
@@ -157,6 +170,7 @@ function makeProps(
   unsupportedReason: string,
   state: Record<string, unknown> = {},
   book = 'GEN',
+  chapterNum = 1,
 ): WebViewProps {
   // The object literal only provides the minimum props needed for testing — the double cast
   // avoids satisfying every optional field of WebViewProps.
@@ -176,7 +190,7 @@ function makeProps(
       },
     ),
     useWebViewScrollGroupScrRef: vi.fn(() => [
-      { book, chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+      { book, chapterNum, verseNum: 1, versificationStr: 'English' },
       vi.fn(),
       undefined,
       vi.fn(),
@@ -201,6 +215,8 @@ beforeEach(() => {
   mockNotifyEditActionBlocked.mockClear();
   chapterUsjValue.current = undefined;
   editorHandle.current = undefined;
+  captureSelectionHandler.mockClear();
+  mockContextKeysSet.mockClear();
   projectDataProviders.clear();
   projectSettings.clear();
   loadingProjectSettings.clear();
@@ -533,5 +549,87 @@ describe('Scripture editor while the invisible-characters setting cannot be read
     expect(screen.getByTestId('editorial')).toBeInTheDocument();
     expect(screen.queryByText(BANNER_KEY)).not.toBeInTheDocument();
     expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+});
+
+describe('Scripture editor hasSelection context key', () => {
+  const HAS_SELECTION_KEY = 'platformScriptureEditor.webView.editor-web-view-id.hasSelection';
+  const start = { jsonPath: '$.content[2].content[1]', offset: 0 };
+  const range = { start, end: { ...start, offset: 5 } };
+
+  const chapterWithText = {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
+      },
+    ],
+  };
+
+  /** The values published for the key, in order. */
+  const publishedValues = () =>
+    mockContextKeysSet.mock.calls
+      .filter(([key]) => key === HAS_SELECTION_KEY)
+      .map(([, value]) => value);
+
+  const EditorWebViewUnderTest = getEditorWebView();
+  const webViewElement = (chapterNum = 1) => (
+    <EditorWebViewUnderTest {...makeProps('', { isReadOnly: false }, 'GEN', chapterNum)} />
+  );
+
+  const selectInEditor = async (selection: unknown) => {
+    await act(async () => {
+      const handler = captureSelectionHandler.mock.lastCall?.[0];
+      expect(handler).toBeInstanceOf(Function);
+      if (typeof handler === 'function') await handler(selection);
+    });
+  };
+
+  it('publishes hasSelection true for a range and keeps it when the editor reports no selection on blur', async () => {
+    chapterUsjValue.current = chapterWithText;
+    await act(async () => {
+      render(webViewElement());
+    });
+    // Positive control: the key starts false.
+    expect(publishedValues()).toEqual([false]);
+
+    await selectInEditor(range);
+    await selectInEditor(undefined);
+
+    expect(publishedValues()).toEqual([false, true]);
+  });
+
+  it('publishes hasSelection false when a later selection is a caret, writing only on a flip', async () => {
+    chapterUsjValue.current = chapterWithText;
+    await act(async () => {
+      render(webViewElement());
+    });
+
+    await selectInEditor(range);
+    await selectInEditor({ start, end: { ...start, offset: 7 } });
+    await selectInEditor({ start });
+
+    expect(publishedValues()).toEqual([false, true, false]);
+  });
+
+  it('publishes hasSelection false after a chapter change', async () => {
+    chapterUsjValue.current = chapterWithText;
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(webViewElement(1));
+    });
+    await selectInEditor(range);
+    expect(publishedValues()).toEqual([false, true]);
+
+    await act(async () => {
+      result?.rerender(webViewElement(2));
+    });
+
+    expect(publishedValues()).toEqual([false, true, false]);
   });
 });
