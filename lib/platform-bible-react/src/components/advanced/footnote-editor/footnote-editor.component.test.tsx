@@ -2166,6 +2166,10 @@ describe('FootnoteEditorHandle clipboard methods', () => {
     end: { jsonPath: '$.content[0].content[0].content[0].content[0]', offset: 4 },
   };
   const methods = ['cut', 'copy', 'paste', 'pastePlainText'] as const;
+  const USER_LIVE_SELECTION: SelectionRange = {
+    start: { jsonPath: '$.content[0]', offset: 0 },
+    end: { jsonPath: '$.content[0]', offset: 2 },
+  };
 
   function renderWithHandle() {
     const handleRef = createRef<FootnoteEditorHandle>();
@@ -2194,35 +2198,95 @@ describe('FootnoteEditorHandle clipboard methods', () => {
     expect(editorRef[method]).toHaveBeenCalledTimes(1);
   });
 
-  it.each(methods)(
-    '%s restores the snapshot selection first when the editor has none',
+  const END_OF_DOCUMENT: SelectionRange = {
+    start: { jsonPath: '$.content[0]', offset: 99 },
+    end: { jsonPath: '$.content[0]', offset: 99 },
+  };
+
+  /**
+   * Models the real inner editor's `focus`: with no selection it places a caret at the end of the
+   * document, which the later `getSelection` then reports.
+   */
+  function modelFocusSelectingDocumentEnd(editor: EditorRef) {
+    // Calls made while mounting must not stand in for the ones under test.
+    [
+      editor.focus,
+      editor.setSelection,
+      editor.cut,
+      editor.copy,
+      editor.paste,
+      editor.pastePlainText,
+    ]
+      .map((method) => vi.mocked(method))
+      .forEach((method) => method.mockClear());
+    let selection: SelectionRange | undefined;
+    vi.mocked(editor.getSelection).mockImplementation(() => selection);
+    vi.mocked(editor.setSelection).mockImplementation((range) => {
+      selection = range;
+    });
+    vi.mocked(editor.focus).mockImplementation(() => {
+      selection ??= END_OF_DOCUMENT;
+    });
+  }
+
+  it.each(['cut', 'copy', 'paste', 'pastePlainText'] as const)(
+    '%s restores the snapshot, then focuses, then acts, when the editor has no selection',
     (method) => {
       const { handle, editorRef, editorInput } = renderWithHandle();
       leaveEditorWithSelection(editorInput, editorRef, SNAPSHOT);
-      vi.mocked(editorRef.getSelection).mockReturnValue(undefined);
+      modelFocusSelectingDocumentEnd(editorRef);
 
       handle[method]();
 
       expect(editorRef.setSelection).toHaveBeenCalledWith(SNAPSHOT);
-      expect(vi.mocked(editorRef.setSelection).mock.invocationCallOrder[0]).toBeLessThan(
+      const setSelectionOrder = vi.mocked(editorRef.setSelection).mock.invocationCallOrder[0];
+      const focusOrder = vi.mocked(editorRef.focus).mock.invocationCallOrder[0];
+      const methodOrder = vi.mocked(editorRef[method]).mock.invocationCallOrder[0];
+      expect(setSelectionOrder).toBeLessThan(focusOrder);
+      expect(focusOrder).toBeLessThan(methodOrder);
+    },
+  );
+
+  it.each(['cut', 'copy', 'paste', 'pastePlainText'] as const)(
+    '%s with a live selection only focuses, then acts (control)',
+    (method) => {
+      const { handle, editorRef, editorInput } = renderWithHandle();
+      leaveEditorWithSelection(editorInput, editorRef, SNAPSHOT);
+      modelFocusSelectingDocumentEnd(editorRef);
+      vi.mocked(editorRef.getSelection).mockReturnValue(USER_LIVE_SELECTION);
+
+      handle[method]();
+
+      expect(editorRef.setSelection).not.toHaveBeenCalled();
+      expect(vi.mocked(editorRef.focus).mock.invocationCallOrder[0]).toBeLessThan(
         vi.mocked(editorRef[method]).mock.invocationCallOrder[0],
       );
     },
   );
 
-  it('leaves a live selection alone (control)', () => {
+  it('focus restores the snapshot first when the editor has no selection', () => {
     const { handle, editorRef, editorInput } = renderWithHandle();
     leaveEditorWithSelection(editorInput, editorRef, SNAPSHOT);
-    // The editor still holds a selection of its own by the time the method runs.
-    vi.mocked(editorRef.getSelection).mockReturnValue({
-      start: { jsonPath: '$.content[0]', offset: 0 },
-      end: { jsonPath: '$.content[0]', offset: 2 },
-    });
+    modelFocusSelectingDocumentEnd(editorRef);
 
-    handle.copy();
+    handle.focus();
+
+    expect(editorRef.setSelection).toHaveBeenCalledWith(SNAPSHOT);
+    expect(vi.mocked(editorRef.setSelection).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(editorRef.focus).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('focus leaves a live selection alone (control)', () => {
+    const { handle, editorRef, editorInput } = renderWithHandle();
+    leaveEditorWithSelection(editorInput, editorRef, SNAPSHOT);
+    modelFocusSelectingDocumentEnd(editorRef);
+    vi.mocked(editorRef.getSelection).mockReturnValue(USER_LIVE_SELECTION);
+
+    handle.focus();
 
     expect(editorRef.setSelection).not.toHaveBeenCalled();
-    expect(editorRef.copy).toHaveBeenCalledTimes(1);
+    expect(editorRef.focus).toHaveBeenCalledTimes(1);
   });
 
   it('does not restore a caret over a selected paragraph marker', () => {

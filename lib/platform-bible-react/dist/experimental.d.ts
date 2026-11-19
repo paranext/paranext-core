@@ -2209,7 +2209,7 @@ export type UseEditorContextMenuResult = {
  * One instance per editor.
  *
  * @param options See {@link UseEditorContextMenuOptions}
- * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
+ * @returns `dismiss`, `isPending` and `isClaimingKeys`, see {@link UseEditorContextMenuResult}
  * @experimental This hook is unstable and may change shape or disappear without notice
  */
 export declare function useEditorContextMenu(options: UseEditorContextMenuOptions): UseEditorContextMenuResult;
