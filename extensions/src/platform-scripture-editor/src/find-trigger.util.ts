@@ -104,3 +104,28 @@ export function getOpenFindTriggerArgs(
     sourceProjectId,
   };
 }
+
+/**
+ * {@link getOpenFindTriggerArgs} for the text selected in an editor's display: the selection is
+ * respelled the way the project spells a no-break space (Find searches the project's text, not the
+ * editor's stand-in for it) before it is normalized. Ctrl+F and the editor's context menu both
+ * build their Find arguments here, so they cannot drift.
+ *
+ * @param webViewId The triggering tab's own web view id.
+ * @param sourceProjectId Project id of the scripture the tab is showing, or `undefined` while none
+ *   is resolved.
+ * @param displayedSelection The text selected in the editor's display, as the browser reports it.
+ * @param viewOptions The editor's view options, which say how the project spells a no-break space.
+ */
+export function getEditorOpenFindArgs(
+  webViewId: string,
+  sourceProjectId: string | undefined,
+  displayedSelection: string,
+  viewOptions: ViewOptions | undefined,
+): OpenFindTriggerArgs | undefined {
+  return getOpenFindTriggerArgs(
+    webViewId,
+    sourceProjectId,
+    toUsfmNbspSpelling(displayedSelection, viewOptions),
+  );
+}

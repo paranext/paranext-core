@@ -1,8 +1,8 @@
-import { toUsfmNbspSpelling, ViewOptions } from '@eten-tech-foundation/platform-editor';
+import type { ViewOptions } from '@eten-tech-foundation/platform-editor';
 import papi, { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEffect } from 'react';
-import { getOpenFindTriggerArgs } from './find-trigger.util';
+import { getEditorOpenFindArgs } from './find-trigger.util';
 
 /**
  * Binds Ctrl+F to open Find for the scripture a tab is showing. Shared by every scripture tab type
@@ -36,11 +36,12 @@ export function useOpenFindShortcut(
       // them app-wide. Ctrl rather than Cmd on macOS is deliberate; see the doc comment above.
       if (event.shiftKey || event.altKey || event.metaKey) return;
       if (!event.ctrlKey || event.key.toLowerCase() !== 'f') return;
-      // `getOpenFindTriggerArgs` normalizes the selection, so the raw value goes in here.
-      const args = getOpenFindTriggerArgs(
+      // `getEditorOpenFindArgs` normalizes the selection, so the raw value goes in here.
+      const args = getEditorOpenFindArgs(
         webViewId,
         sourceProjectId,
-        toUsfmNbspSpelling(window.getSelection()?.toString() ?? '', viewOptions),
+        window.getSelection()?.toString() ?? '',
+        viewOptions,
       );
       if (!args) {
         logger.debug(

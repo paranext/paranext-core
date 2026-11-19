@@ -34,7 +34,7 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
     // Prettier keeps the wrapper and its only child on one line when they fit, so the optional
     // spaces accept either layout.
     expect(source).toMatch(
-      /<InPortal node={editorPortalNode}> <PortalContents> <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"> ?{renderEditor\(\)} ?<\/div>/,
+      /<InPortal node={editorPortalNode}> <PortalContents> <div ref={mainEditorWrapperRef} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"> ?{renderEditor\(\)} ?<\/div>/,
     );
     expect(source).toMatch(
       /const editorTree = \( <TwoStepDeleteTooltipOverlay> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot> <EditorKeyboardShortcuts editorRef={editorRef}>/,

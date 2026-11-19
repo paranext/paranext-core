@@ -32,6 +32,10 @@ const {
   webViewMenu,
   mockContextKeysSet,
   captureSelectionHandler,
+  mockShowContextMenu,
+  mockDismissContextMenu,
+  mockSendCommand,
+  editorialOptions,
 } = vi.hoisted(() => ({
   mockUseProjectData: vi.fn(),
   mockUseLocalizedStrings: vi.fn(),
@@ -60,6 +64,14 @@ const {
   mockContextKeysSet: vi.fn(),
   /** Receives the `onSelectionChange` the stubbed editor was last rendered with. */
   captureSelectionHandler: vi.fn<(handler: unknown) => void>(),
+  /** Stands in for `papi.overlays.showContextMenu`. */
+  mockShowContextMenu: vi.fn(),
+  /** Stands in for `papi.overlays.dismissContextMenu`. */
+  mockDismissContextMenu: vi.fn(),
+  /** Stands in for `papi.commands.sendCommand`. */
+  mockSendCommand: vi.fn(),
+  /** The `options` the stubbed editor was last rendered with. */
+  editorialOptions: { current: undefined as unknown },
 }));
 
 /** What each key localizes to by default; any other key echoes itself, as an unresolved one does. */
@@ -116,6 +128,24 @@ vi.mock('@papi/frontend', () => {
         if (property === 'localization') {
           return { getLocalizedStrings: mockGetLocalizedStrings };
         }
+        if (property === 'overlays') {
+          return new Proxy(
+            {},
+            {
+              get: (_overlays, method) => {
+                if (method === 'showContextMenu') return mockShowContextMenu;
+                if (method === 'dismissContextMenu') return mockDismissContextMenu;
+                return service;
+              },
+            },
+          );
+        }
+        if (property === 'commands') {
+          return new Proxy(
+            {},
+            { get: (_commands, method) => (method === 'sendCommand' ? mockSendCommand : service) },
+          );
+        }
         return service;
       },
     },
@@ -171,6 +201,7 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
     ...original,
     Editorial: React.forwardRef((props: Record<string, unknown>, ref) => {
       captureSelectionHandler(props.onSelectionChange);
+      editorialOptions.current = props.options;
       React.useImperativeHandle(ref, () => editorHandle.current);
       return <div data-testid="editorial" />;
     }),
@@ -250,6 +281,13 @@ beforeEach(() => {
   editorHandle.current = undefined;
   captureSelectionHandler.mockClear();
   mockContextKeysSet.mockClear();
+  editorialOptions.current = undefined;
+  mockShowContextMenu.mockReset();
+  mockShowContextMenu.mockResolvedValue(undefined);
+  mockDismissContextMenu.mockReset();
+  mockDismissContextMenu.mockResolvedValue(undefined);
+  mockSendCommand.mockReset();
+  mockSendCommand.mockResolvedValue(undefined);
   projectDataProviders.clear();
   projectSettings.clear();
   loadingProjectSettings.clear();
@@ -282,6 +320,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -990,5 +1029,312 @@ describe('Scripture editor resource wiring', () => {
     await renderTab(makeProps('', { isReadOnly: true }));
 
     expect(projectColumnLabel()).toBe('Project');
+  });
+});
+
+describe('Scripture editor right-click menu', () => {
+  const WEB_VIEW_ID = 'editor-web-view-id';
+  const COPY = 'platformScriptureEditor.copySelection';
+
+  const chapterWithFootnote = {
+    ...chapterWithText,
+    content: [
+      ...chapterWithText.content.slice(0, 2),
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'a~b',
+          { type: 'note', marker: 'f', caller: '+', content: ['A footnote text'] },
+        ],
+      },
+    ],
+  };
+
+  const renderEditor = async (state: Record<string, unknown> = {}, chapterNum = 1) => {
+    chapterUsjValue.current = chapterWithText;
+    const EditorWebView = getEditorWebView();
+    const elementFor = (chapter: number, viewState: Record<string, unknown>) => (
+      <EditorWebView {...makeProps('', { isReadOnly: false, ...viewState }, 'GEN', chapter)} />
+    );
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(elementFor(chapterNum, state));
+    });
+    return {
+      rerender: (chapter: number, viewState: Record<string, unknown> = state) =>
+        act(async () => {
+          result?.rerender(elementFor(chapter, viewState));
+        }),
+    };
+  };
+
+  const rightClick = (target: Element) =>
+    act(async () => {
+      fireEvent.contextMenu(target, { button: 2, clientX: 10, clientY: 20 });
+    });
+
+  /**
+   * What the stubbed editor exposes: the named methods record their call into `calls`, and any
+   * other method the web view reaches for does nothing.
+   */
+  const stubEditor = (overrides: Record<string, unknown> = {}) => {
+    const calls: string[] = [];
+    const getMarkerMenuContext = vi.fn();
+    const insertMarker = vi.fn();
+    const record = (name: string) =>
+      vi.fn(() => {
+        calls.push(name);
+      });
+    const known: Record<string, unknown> = {
+      focus: record('focus'),
+      copy: record('copy'),
+      cut: record('cut'),
+      paste: record('paste'),
+      pastePlainText: record('pastePlainText'),
+      isFocused: () => true,
+      getSelection: () => undefined,
+      getSelectedParaMarker: () => undefined,
+      getMarkerMenuContext,
+      insertMarker,
+      ...overrides,
+    };
+    editorHandle.current = new Proxy(known, {
+      get: (target, property) => {
+        if (typeof property !== 'string' || property === 'then') return undefined;
+        if (!(property in target)) target[property] = vi.fn();
+        return target[property];
+      },
+    });
+    return { calls, getMarkerMenuContext, insertMarker };
+  };
+
+  it('stops the editor from showing its own right-click menu', async () => {
+    await renderEditor();
+
+    const options = editorialOptions.current;
+    expect(options).toMatchObject({ hasBuiltInContextMenu: false });
+    expect(options).not.toHaveProperty('contextMenu');
+  });
+
+  it('opens the platform menu at the click without running the pick, with the main editor key', async () => {
+    stubEditor();
+    await renderEditor();
+
+    await rightClick(screen.getByTestId('editorial'));
+
+    expect(mockShowContextMenu).toHaveBeenCalledExactlyOnceWith(
+      'platformScriptureEditor.react',
+      WEB_VIEW_ID,
+      {
+        position: { x: 10, y: 20 },
+        shouldRunCommand: false,
+        contextKeys: {
+          'platformScriptureEditor.contextMenu.hasSelection': false,
+          'platformScriptureEditor.contextMenu.isMainEditor': true,
+        },
+      },
+    );
+  });
+
+  it('reports a selected paragraph marker as a selection', async () => {
+    stubEditor({ getSelectedParaMarker: () => ({ marker: 'p' }) });
+    await renderEditor();
+
+    await rightClick(screen.getByTestId('editorial'));
+
+    expect(mockShowContextMenu.mock.lastCall?.[2]).toMatchObject({
+      contextKeys: { 'platformScriptureEditor.contextMenu.hasSelection': true },
+    });
+  });
+
+  it('opens no menu for a right-click on a header alert', async () => {
+    stubEditor();
+    await renderEditor({ decorations: { headers: { 'header-1': { title: '%header_title%' } } } });
+    // Positive control: the editor itself is served, so the silence below is not vacuous.
+    await rightClick(screen.getByTestId('editorial'));
+    expect(mockShowContextMenu).toHaveBeenCalledTimes(1);
+    mockShowContextMenu.mockClear();
+
+    const alert = screen.queryByRole('alert');
+    expect(alert).toBeInTheDocument();
+    if (alert) await rightClick(alert);
+
+    expect(mockShowContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('opens no menu for a right-click in the footnotes pane', async () => {
+    stubEditor();
+    chapterUsjValue.current = chapterWithFootnote;
+    const EditorWebView = getEditorWebView();
+    await act(async () => {
+      render(
+        <EditorWebView {...makeProps('', { footnotesPaneVisible: true, isReadOnly: false })} />,
+      );
+    });
+    // Positive control: the editor itself is served.
+    await rightClick(screen.getByTestId('editorial'));
+    expect(mockShowContextMenu).toHaveBeenCalledTimes(1);
+    mockShowContextMenu.mockClear();
+
+    await rightClick(screen.getAllByRole('option')[0]);
+
+    expect(mockShowContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('focuses the editor before a picked Copy runs', async () => {
+    const { calls } = stubEditor();
+    mockShowContextMenu.mockResolvedValue(COPY);
+    await renderEditor();
+    // The web view focuses the editor itself while mounting; only the pick's calls matter here.
+    calls.length = 0;
+
+    await rightClick(screen.getByTestId('editorial'));
+
+    expect(calls.slice(0, 2)).toEqual(['focus', 'copy']);
+  });
+
+  it('runs a picked Paste as plain text on the editor', async () => {
+    const { calls } = stubEditor();
+    mockShowContextMenu.mockResolvedValue('platformScriptureEditor.pasteAsPlainTextAtSelection');
+    await renderEditor();
+    calls.length = 0;
+
+    await rightClick(screen.getByTestId('editorial'));
+
+    expect(calls.slice(0, 2)).toEqual(['focus', 'pastePlainText']);
+  });
+
+  it('opens Find with the arguments Ctrl+F sends, from the selection', async () => {
+    stubEditor();
+    mockShowContextMenu.mockResolvedValue('platformScripture.openFind');
+    await renderEditor();
+    const editorial = screen.getByTestId('editorial');
+    editorial.textContent = 'grace ';
+    window.getSelection()?.selectAllChildren(editorial);
+
+    await rightClick(editorial);
+
+    expect(mockShowContextMenu.mock.lastCall?.[2]).toMatchObject({
+      contextKeys: { 'platformScriptureEditor.contextMenu.hasSelection': true },
+    });
+    expect(mockSendCommand).toHaveBeenCalledExactlyOnceWith(
+      'platformScripture.openFind',
+      WEB_VIEW_ID,
+      'grace',
+      PROJECT_ID,
+    );
+  });
+
+  it('sends any other picked command with the web view id', async () => {
+    stubEditor();
+    mockShowContextMenu.mockResolvedValue('platformScriptureEditor.insertFootnoteAtSelection');
+    await renderEditor();
+
+    await rightClick(screen.getByTestId('editorial'));
+
+    expect(mockSendCommand).toHaveBeenCalledExactlyOnceWith(
+      'platformScriptureEditor.insertFootnoteAtSelection',
+      WEB_VIEW_ID,
+    );
+  });
+
+  describe('while the menu request is pending', () => {
+    // Standard view's palettes exist in Power mode only.
+    beforeEach(() => appSettings.set('platform.interfaceMode', 'power'));
+
+    /** Right-clicks with a menu that never answers, then lets the hook's own key claim lapse. */
+    const openPendingMenu = async () => {
+      mockShowContextMenu.mockReturnValue(new Promise(() => {}));
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      await rightClick(screen.getByTestId('editorial'));
+      await act(async () => {
+        vi.advanceTimersByTime(2100);
+      });
+    };
+
+    const press = (init: KeyboardEventInit) =>
+      act(async () => {
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }),
+        );
+      });
+
+    it('leaves Enter to the menu instead of opening the paragraph palette, and opens it once none is pending', async () => {
+      const { getMarkerMenuContext: getContext } = stubEditor();
+      await renderEditor({ viewType: 'standard' });
+      // Control: with no menu pending the same key reaches the palette's context lookup.
+      await press({ key: 'Enter' });
+      expect(getContext).toHaveBeenCalledTimes(1);
+      getContext.mockClear();
+
+      await openPendingMenu();
+      await press({ key: 'Enter' });
+
+      expect(getContext).not.toHaveBeenCalled();
+    });
+
+    it('claims the backslash so it is not typed behind the menu', async () => {
+      stubEditor();
+      await renderEditor({ viewType: 'standard' });
+      const unclaimed = new KeyboardEvent('keydown', {
+        key: '\\',
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(async () => {
+        window.dispatchEvent(unclaimed);
+      });
+      // Control: with nothing pending and nothing to offer, the key is left alone.
+      expect(unclaimed.defaultPrevented).toBe(false);
+
+      await openPendingMenu();
+      const claimed = new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true });
+      await act(async () => {
+        window.dispatchEvent(claimed);
+      });
+
+      expect(claimed.defaultPrevented).toBe(true);
+    });
+
+    it('does not insert a footnote from the keyboard, and does once none is pending', async () => {
+      const { insertMarker } = stubEditor();
+      await renderEditor({ viewType: 'standard' });
+      // Control: Ctrl+T inserts a footnote when no menu is pending.
+      await press({ key: 't', ctrlKey: true });
+      expect(insertMarker).toHaveBeenCalledTimes(1);
+      insertMarker.mockClear();
+
+      await openPendingMenu();
+      await press({ key: 't', ctrlKey: true });
+
+      expect(insertMarker).not.toHaveBeenCalled();
+    });
+  });
+
+  it('closes a pending menu when the chapter changes, and not before', async () => {
+    stubEditor();
+    mockShowContextMenu.mockReturnValue(new Promise(() => {}));
+    const { rerender } = await renderEditor();
+    await rightClick(screen.getByTestId('editorial'));
+    expect(mockDismissContextMenu).not.toHaveBeenCalled();
+
+    await rerender(2);
+
+    expect(mockDismissContextMenu).toHaveBeenCalledWith(WEB_VIEW_ID);
+  });
+
+  it('closes a pending menu when the Scripture view type changes', async () => {
+    appSettings.set('platform.interfaceMode', 'power');
+    stubEditor();
+    mockShowContextMenu.mockReturnValue(new Promise(() => {}));
+    const { rerender } = await renderEditor({ viewType: 'standard' });
+    await rightClick(screen.getByTestId('editorial'));
+    expect(mockDismissContextMenu).not.toHaveBeenCalled();
+
+    await rerender(1, { viewType: 'formatted' });
+
+    expect(mockDismissContextMenu).toHaveBeenCalledWith(WEB_VIEW_ID);
   });
 });

@@ -19,8 +19,6 @@ import {
   parseWhenExpression,
 } from 'platform-bible-utils';
 import {
-  CONTEXT_MENU_ACTION_TO_NOTE_KIND,
-  createInsertContextMenuItems,
   deriveReadOnlyFlags,
   flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
@@ -29,7 +27,6 @@ import {
   getEditorWebViewContextKeyNames,
   getEditorWebViewContextKeys,
   hasNonCollapsedSelection,
-  INSERT_CONTEXT_MENU_STRING_KEYS,
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
@@ -1056,183 +1053,6 @@ describe('insertNoteAtCurrentSelectionCore', () => {
       `commitSnapshot:LOC:${NOTE_INSERT_CONFIG.insertEndnoteAtSelection.commitMessageKey}`,
       `insertMarker:${NOTE_INSERT_CONFIG.insertEndnoteAtSelection.marker}`,
     ]);
-  });
-});
-
-describe('CONTEXT_MENU_ACTION_TO_NOTE_KIND', () => {
-  // Per-action, not aggregate: a table iterated in bulk can't tell a cross-wired entry (e.g. the
-  // footnote action mapped to the endnote kind) from a correct one, since every kind still appears
-  // somewhere in the table either way.
-  it.each([
-    ['insertFootnote', 'insertFootnoteAtSelection'],
-    ['insertCrossReference', 'insertCrossReferenceAtSelection'],
-    ['insertEndnote', 'insertEndnoteAtSelection'],
-  ] as const)('%s maps to %s', (action, kind) => {
-    expect(CONTEXT_MENU_ACTION_TO_NOTE_KIND[action]).toBe(kind);
-  });
-
-  it('maps each action to a distinct kind', () => {
-    const kinds = Object.values(CONTEXT_MENU_ACTION_TO_NOTE_KIND);
-    expect(new Set(kinds).size).toBe(kinds.length);
-  });
-});
-
-describe('createInsertContextMenuItems', () => {
-  // Parity contract: the context menu must offer exactly the Insert-menu inserts, in menu order.
-  // Read the Insert menu straight from the contribution so a menus.json change without a
-  // context-menu twin fails this test.
-  const menusJson = JSON.parse(
-    readFileSync(join(__dirname, '../contributions/menus.json'), 'utf8'),
-  );
-  const { groups, items: topMenuItems } =
-    menusJson.webViewMenus['platformScriptureEditor.react'].topMenu;
-  // Taken from the Insert COLUMN rather than the one group in it today: keyed on the group name, a
-  // second group added to that column would put an item in the Insert menu with no context-menu
-  // twin and leave this guard green.
-  const insertGroupOrders = new Map<string, number>(
-    Object.entries(groups)
-      .filter(([, group]) => group.column === 'platformScriptureEditor.insert')
-      .map(([name, group]): [string, number] => [name, group.order]),
-  );
-  const insertMenuItems: {
-    label: string;
-    group: string;
-    order: number;
-    hiddenInterfaceModes?: string[];
-    when?: string;
-  }[] = topMenuItems
-    .filter((item: { group: string }) => insertGroupOrders.has(item.group))
-    .sort(
-      (a: { group: string; order: number }, b: { group: string; order: number }) =>
-        (insertGroupOrders.get(a.group) ?? 0) - (insertGroupOrders.get(b.group) ?? 0) ||
-        a.order - b.order,
-    );
-
-  const makeActions = () => ({
-    insertFootnote: vi.fn(),
-    insertCrossReference: vi.fn(),
-    insertEndnote: vi.fn(),
-    insertComment: vi.fn(),
-  });
-
-  // Localized-strings stub: key -> `LOC:<key>` so titles are traceable to keys.
-  const strings = Object.fromEntries(
-    insertMenuItems.map((item) => [item.label, `LOC:${item.label}`]),
-  );
-
-  const ENABLED = {
-    isReadOnly: false,
-    canUserCreateComments: true,
-    isSyncBlocked: false,
-    isResource: false,
-  };
-
-  it('offers exactly the Insert-menu items, localized, in the same order', () => {
-    const items = createInsertContextMenuItems(strings, makeActions(), ENABLED);
-    expect(items.map((i) => i.title)).toEqual(insertMenuItems.map((i) => `LOC:${i.label}`));
-  });
-
-  // The builder and the web view's localized-strings list must ask for the SAME keys — a key
-  // present in one and not the other resolves to `undefined` and renders a blank row. Asserting
-  // against the exported list (rather than the menus.json labels above) catches that drift
-  // directly: every title this builder can produce must resolve through one of these keys.
-  it('resolves every title through a key in INSERT_CONTEXT_MENU_STRING_KEYS', () => {
-    const keyedStrings = Object.fromEntries(
-      INSERT_CONTEXT_MENU_STRING_KEYS.map((key) => [key, key]),
-    );
-    const items = createInsertContextMenuItems(keyedStrings, makeActions(), ENABLED);
-    items.forEach((item) => {
-      expect(INSERT_CONTEXT_MENU_STRING_KEYS).toContain(item.title);
-    });
-  });
-
-  // createInsertContextMenuItems takes no interface-mode input, so it cannot honor a per-mode
-  // hide: an Insert-column item hidden from Simple mode's top menu would still show up here. The
-  // parity test above compares labels/order only and would pass vacuously in that case, so pin the
-  // gap directly rather than leaving it latent.
-  it('has no Insert-column item declaring hiddenInterfaceModes, since the builder cannot honor it', () => {
-    const itemsWithHiddenModes = insertMenuItems.filter(
-      (item) => item.hiddenInterfaceModes?.length,
-    );
-    expect(itemsWithHiddenModes).toEqual([]);
-  });
-
-  it('disables note inserts when read-only and the comment insert per permission', () => {
-    const readOnly = createInsertContextMenuItems(strings, makeActions(), {
-      ...ENABLED,
-      isReadOnly: true,
-    });
-    expect(readOnly.map((i) => !!i.isDisabled)).toEqual([false, true, true, true]);
-    const noCommentPermission = createInsertContextMenuItems(strings, makeActions(), {
-      ...ENABLED,
-      canUserCreateComments: false,
-    });
-    expect(noCommentPermission.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
-  });
-
-  it('keeps Insert comment selectable in read-only text when the user may comment', () => {
-    const items = createInsertContextMenuItems(strings, makeActions(), {
-      ...ENABLED,
-      isReadOnly: true,
-      canUserCreateComments: true,
-      isSyncBlocked: false,
-    });
-    expect(items[0].isDisabled).toBe(false);
-    expect(items.slice(1).every((i) => i.isDisabled)).toBe(true);
-  });
-
-  // A sync freeze reaches the note inserts through the editor's own read-only state, so only the
-  // comment insert — which does not go through the editor — needs the flag directly.
-  it('disables the comment insert while sync-blocked', () => {
-    const syncBlocked = createInsertContextMenuItems(strings, makeActions(), {
-      ...ENABLED,
-      isSyncBlocked: true,
-    });
-    expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
-  });
-
-  // Mirrors the top menu, where every insert item carries `when: !…isResource` and so is removed
-  // (not greyed out) for a resource.
-  it('omits every insert item for a resource, whatever the other state says', () => {
-    const resource = createInsertContextMenuItems(strings, makeActions(), {
-      ...ENABLED,
-      isResource: true,
-    });
-    expect(resource).toEqual([]);
-    const readOnlyResource = createInsertContextMenuItems(strings, makeActions(), {
-      isReadOnly: true,
-      canUserCreateComments: false,
-      isSyncBlocked: true,
-      isResource: true,
-    });
-    expect(readOnlyResource).toEqual([]);
-  });
-
-  it('gates every Insert-column item in the top menu on the project not being a resource', () => {
-    expect(insertMenuItems.length).toBeGreaterThan(0);
-    insertMenuItems.forEach((item) => {
-      expect(item.when).toBe('!platform.project.{projectId}.isResource');
-    });
-  });
-
-  // Per-item, not aggregate: calling every item's onSelect and counting each action's TOTAL calls
-  // passes under any permutation of the item-to-action mapping — it cannot tell "Insert footnote"
-  // wired to insertCrossReference from the correct wiring. Asserting ONE item's onSelect against
-  // every action's call count catches exactly that cross-wiring.
-  it.each([
-    [0, 'insertComment'],
-    [1, 'insertFootnote'],
-    [2, 'insertCrossReference'],
-    [3, 'insertEndnote'],
-  ] as const)('item %i runs ONLY its own action (%s)', (index, actionName) => {
-    const actions = makeActions();
-    const items = createInsertContextMenuItems(strings, actions, ENABLED);
-    items[index].onSelect();
-    (['insertFootnote', 'insertCrossReference', 'insertEndnote', 'insertComment'] as const).forEach(
-      (name) => {
-        expect(actions[name]).toHaveBeenCalledTimes(name === actionName ? 1 : 0);
-      },
-    );
   });
 });
 
