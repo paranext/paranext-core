@@ -301,6 +301,61 @@ describe('useEditorPdpSync', () => {
     expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled(); // no cross-chapter save-back
   });
 
+  // An edit made before the switch would otherwise still claim the chapter the editor now shows:
+  // coming back to a chapter whose last save is still running loads the copy from before that save,
+  // and the save's own update would then be deferred and that older copy pushed over it.
+  it('applies, rather than defers, a later update of the chapter it navigated to when nothing has been edited there', () => {
+    const lev15 = makeChapterUsj('15', 'Chapter fifteen text.', { verseNumber: '1' });
+    const lev15Saved = makeChapterUsj('15', 'Chapter fifteen text, saved.', { verseNumber: '1' });
+    let editorUsj: Usj = levUsj;
+
+    const setUsjSpy = vi.fn((usj: Usj) => {
+      editorUsj = usj;
+    });
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorUsj,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({
+        usjFromPdp,
+        documentSelector,
+      }: {
+        usjFromPdp: Usj;
+        documentSelector: EditorDocumentSelector;
+      }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          documentSelector,
+          editorRef,
+          usjSentToPdp,
+          lastLocalEditTimestamp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: levUsj, documentSelector: lev14Selector } },
+    );
+    // The user edits LEV 14, then navigates to LEV 15.
+    lastLocalEditTimestamp.current = Date.now();
+    act(() => rerender({ usjFromPdp: lev15, documentSelector: lev15Selector }));
+    setUsjSpy.mockClear();
+
+    act(() => rerender({ usjFromPdp: lev15Saved, documentSelector: lev15Selector }));
+
+    expect(setUsjSpy).toHaveBeenCalledWith(lev15Saved);
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+  });
+
   // Regression: cross-BOOK navigation to the SAME chapter number while focused. Chapter USJ
   // carries no book marker, so a content-derived identity collapses to the chapter number alone
   // — GEN 1 and EXO 1 read as the "same document", the new book's content was deferred, and
@@ -2003,8 +2058,9 @@ describe('useEditorPdpSync', () => {
       // First external update applies (window expired)...
       act(() => rerender({ usjFromPdp: externalChange }));
       expect(setUsjSpy).toHaveBeenCalledOnce();
-      // ...and applying it must not refresh the last-local-edit stamp: only a LOCAL edit does.
-      expect(lastLocalEditTimestamp.current).toBe(Date.now() - EDITOR_OWNERSHIP_WINDOW_MS);
+      // ...and applying it must not refresh the last-local-edit stamp: only a LOCAL edit does. The
+      // apply forgets it instead, since the editor no longer holds that edit.
+      expect(lastLocalEditTimestamp.current).toBeUndefined();
 
       // So a second external update arriving right after (still no local edit) also applies
       // instead of being deferred behind a window the apply would have re-armed.

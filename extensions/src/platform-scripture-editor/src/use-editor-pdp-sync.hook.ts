@@ -481,8 +481,9 @@ export function useEditorPdpSync({
       // `'settling'` holds the delivery (above) until the subject moves; if it has not moved within
       // FOCUS_SETTLE_GRACE_MS the user has left the window, and the update is applied. A
       // Send/Receive (`isSyncBlocked`) ends the claim, and so does focus reaching another web view,
-      // even if it comes back before the update arrives. The footnotes pane claims on the same
-      // terms (`isFootnotesPaneOwner`).
+      // even if it comes back before the update arrives, and so does an incoming chapter replacing
+      // the document the edit was made in. The footnotes pane claims on the same terms
+      // (`isFootnotesPaneOwner`).
       //
       // Once the last edit in this view is OLDER than the window, focus alone confers nothing: the
       // incoming update is applied exactly as if the editor were unfocused, and nothing is pushed
@@ -656,6 +657,11 @@ export function useEditorPdpSync({
         usjKnownBeforeDelivery,
         usjFromPdp,
       );
+      // Edits made to the document being replaced give no claim on the one replacing it: the
+      // editor now holds the PDP's copy and no edit of its own. Otherwise an edit made before a
+      // chapter switch would still claim the chapter when the user comes back to it, and the editor
+      // would push the copy it just loaded over a later save of that very edit.
+      if (lastAppliedDocumentSelector.current) lastLocalEditTimestamp.current = undefined;
       lastAppliedDocumentSelector.current = documentSelector;
       setEditorUsj.current(usjFromPdp);
     }

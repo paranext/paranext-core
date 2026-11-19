@@ -1535,6 +1535,25 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     expect(lostEditsNotices()).toHaveLength(0);
   });
 
+  it('takes its own save back from the backend when the user returns to the chapter before that save lands', async () => {
+    const editor = await setUp();
+    editor.focus();
+    editor.type('In the beginning God');
+    // Leaving sends the waiting save, which is still running when the user comes back.
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    await editor.goToChapter(1);
+    expect(editor.saves).toHaveLength(1);
+
+    await editor.finishSave(0);
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+
+    // The editor came back holding the chapter from before that save, with no edit of its own since,
+    // so it must not push that older copy over the save.
+    expect(editor.saves.map((save) => verseText(save.usj))).toEqual(['In the beginning God']);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
   it('reports nothing on leaving the chapter after the editor returns to what the running save sends', async () => {
     const editor = await setUp();
     editor.type('In the beginning God');
