@@ -696,6 +696,81 @@ describe('showContextMenu contribution integration', () => {
       expect(sendCommand).not.toHaveBeenCalled();
     });
 
+    describe('dismissContextMenu while the menu is still being prepared', () => {
+      function deferred<T>() {
+        let settle!: (value: T) => void;
+        const promise = new Promise<T>((resolve) => {
+          settle = resolve;
+        });
+        return { promise, resolve: settle };
+      }
+
+      const readyMenu: Localized<WebViewMenu> = {
+        includeDefaults: false,
+        topMenu: undefined,
+        contextMenu: {
+          groups: { 'ext.group1': { order: 1 } },
+          items: [
+            { command: 'ext.cmd', group: 'ext.group1', label: 'Cmd', order: 1, localizeNotes: '' },
+          ],
+        },
+      };
+
+      it('cancels a request whose menu data is still pending', async () => {
+        const menuData = deferred<Localized<WebViewMenu>>();
+        mockGetWebViewMenu.mockReturnValueOnce(menuData.promise);
+        const promise = overlayService.showContextMenu('ext.myWebView', 'pending-wv');
+
+        await overlayService.dismissContextMenu('pending-wv');
+        menuData.resolve(readyMenu);
+
+        await expect(promise).resolves.toBeUndefined();
+        expect(getOverlays()).toEqual([]);
+        expect(sendCommand).not.toHaveBeenCalled();
+      });
+
+      it('cancels a request whose project lookup is still pending', async () => {
+        const lookup = deferred<SavedWebViewDefinition | undefined>();
+        vi.mocked(webViewService.getOpenWebViewDefinition).mockReturnValueOnce(lookup.promise);
+        mockGetWebViewMenu.mockResolvedValue({
+          ...readyMenu,
+          contextMenu: singleItemMenu({ enabledWhen: 'ext.project.{projectId}.flag' }),
+        });
+        const promise = overlayService.showContextMenu('ext.myWebView', 'lookup-wv');
+        await vi.waitFor(() => expect(webViewService.getOpenWebViewDefinition).toHaveBeenCalled());
+
+        await overlayService.dismissContextMenu('lookup-wv');
+        lookup.resolve({ id: 'lookup-wv', webViewType: 'ext.myWebView', projectId: 'proj1' });
+
+        await expect(promise).resolves.toBeUndefined();
+        expect(getOverlays()).toEqual([]);
+        expect(sendCommand).not.toHaveBeenCalled();
+      });
+
+      it('does not affect a request that starts after the dismissal', async () => {
+        await overlayService.dismissContextMenu('later-wv');
+
+        const { promise, overlay } = await openMenu(singleItemMenu({}), undefined, 'later-wv');
+
+        expect(overlay.items).toHaveLength(1);
+        overlay.resolve(undefined);
+        await promise;
+      });
+
+      it("does not cancel another web view's pending request", async () => {
+        const menuData = deferred<Localized<WebViewMenu>>();
+        mockGetWebViewMenu.mockReturnValueOnce(menuData.promise);
+        const promise = overlayService.showContextMenu('ext.myWebView', 'wv-b');
+
+        await overlayService.dismissContextMenu('wv-a');
+        menuData.resolve(readyMenu);
+
+        await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+        asContextMenuOverlay(getOverlays()[0]).resolve(undefined);
+        await promise;
+      });
+    });
+
     it('dismissContextMenu is a no-op without an open menu', async () => {
       await expect(overlayService.dismissContextMenu('nobody')).resolves.toBeUndefined();
     });

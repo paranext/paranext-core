@@ -13549,7 +13549,9 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     dismissCommandPalette(webViewId: string): Promise<void>;
     /**
      * Dismisses the open context menu for the given WebView, resolving its `showContextMenu` promise
-     * with `undefined`; no command runs. No-op if no context menu is open for that WebView.
+     * with `undefined`; no command runs. It also cancels a context menu of that WebView that is still
+     * being prepared, so that menu never opens. No-op if the WebView has no context menu open or
+     * being prepared.
      *
      * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
      *
