@@ -89,6 +89,29 @@ describe('taking document focus when a web view is docked', () => {
     expect(focusSpy).toHaveBeenCalled();
   });
 
+  it('focuses the web view frame, not the tab header that names the same web view', () => {
+    // The tab's header carries the web view id too and comes first in the document. Its panel's
+    // first child is the frame's wrapper: focusing that instead would leave a tab whose content
+    // never had a focused element (a read-only text) with no keyboard focus inside its frame.
+    const header = document.createElement('div');
+    header.setAttribute('data-web-view-id', TAB_ID);
+    document.body.prepend(header);
+    const panel = document.createElement('div');
+    panel.setAttribute('data-tab-id', TAB_ID);
+    const wrapper = document.createElement('div');
+    panel.appendChild(wrapper);
+    document.body.appendChild(panel);
+    try {
+      focusTab(instance(localMockDockLayout), TAB_ID);
+
+      expect(focusSpy).toHaveBeenCalled();
+      expect(document.activeElement).not.toBe(wrapper);
+    } finally {
+      header.remove();
+      panel.remove();
+    }
+  });
+
   it('leaves document focus alone when the window is still waiting for its first activation', () => {
     focusTab(instance(localMockDockLayout), TAB_ID, true);
 
