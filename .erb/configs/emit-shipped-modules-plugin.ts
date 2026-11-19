@@ -1,3 +1,8 @@
+// Copied into paranext-extension-template and paranext-multi-extension-template as
+// `webpack/emit-shipped-modules-plugin.ts`, and the notices generator reads the manifests those
+// copies write too - so a change to the manifest format or the build-id stamp has to be made in
+// the copies as well. The copies keep this code but have their own comments, which describe the
+// templates' build; the design rationale is recorded here.
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -29,8 +34,7 @@ function buildId(outputDir: string): string {
 }
 
 /**
- * Whether this compiler's persistent filesystem cache directory already held content before this
- * run started.
+ * Whether this compiler's persistent filesystem cache already held content before this run started.
  *
  * `finishModules` fires for every module THIS compilation's graph walks - but a module webpack
  * restores from a warm filesystem cache does not re-run its loaders, and a loader that injects new
@@ -45,9 +49,9 @@ function buildId(outputDir: string): string {
  * - So this cannot be caught by diffing bundle output, only by knowing the cache's temperature at
  *   build time.
  *
- * Detected the crude-but-provable way: whether `cache.cacheDirectory` already held content when
- * this run started, checked in `beforeRun` before webpack has a chance to populate it for THIS run.
- * A directory that predates this run means SOME module in this compilation may be served from it
+ * Detected the crude-but-provable way: whether the cache's directory already held content when this
+ * run started, checked in `beforeRun` before webpack has a chance to populate it for THIS run. A
+ * directory that predates this run means SOME module in this compilation may be served from it
  * rather than rebuilt - which is precisely the condition that under-reports - so this errs toward
  * over-flagging (a warm cache whose relevant modules would have rebuilt identically anyway still
  * gets marked warm) rather than under-flagging, which is the safe direction for a legal artifact.
@@ -56,6 +60,12 @@ function buildId(outputDir: string): string {
  * `shipping-set.ts`'s refusal message and its test coverage), and directory presence is the
  * mechanism that is trivial to prove both ways.
  *
+ * The directory inspected is `cacheLocation`, where webpack stores the cache. Unless a
+ * configuration sets it, webpack fills it in before the build starts as
+ * `<cacheDirectory>/<name>-<mode>`, so each configuration and mode has its own. Reading
+ * `cacheDirectory` instead would inspect a directory webpack never writes to whenever a
+ * configuration names its own `cacheLocation`, and answer cold on a warm build.
+ *
  * Only `renderer` (`.erb/configs/webpack.config.renderer.prod.ts`) and the two extension bundles
  * (`extensions/webpack/webpack.config.base.ts`, narrowed per bundle by `extensionCacheDirectory`)
  * configure a filesystem cache at all - `main` and `extension-host` set none, so
@@ -63,22 +73,29 @@ function buildId(outputDir: string): string {
  * them; a single `npm run build` invocation is one process with no cross-process memory cache to be
  * warm from either.
  *
- * The directory each extension bundle watches is its OWN, per bundle and per mode. Sharing one
- * makes this answer wrong twice over: `extension-main` declares `dependencies: ['webView']`, so it
- * starts only after `extension-web-view` has written its entries and reads as warm on a genuinely
- * cold build; and a release job's production extension build inherits the development build's
- * cache, so its manifests cannot be verified at all and the per-platform check can only run against
- * the development graph. `extensionCacheDirectory` documents both.
+ * The directory each extension bundle's cache occupies is its OWN, per bundle and per mode:
+ * `extensionCacheDirectory` names one per bundle and mode, and the `<name>-<mode>` folder webpack
+ * derives for `cacheLocation` would separate them even inside a shared `cacheDirectory`. Inspecting
+ * a folder the bundles share would make this answer wrong twice over: `extension-main` declares
+ * `dependencies: ['webView']`, so it starts only after `extension-web-view` has written its entries
+ * and would read as warm on a genuinely cold build; and a release job's production extension build
+ * would inherit the development build's cache, so its manifests could not be verified at all and
+ * the per-platform check could only run against the development graph. `extensionCacheDirectory`
+ * documents both.
  */
 export function isWarmFilesystemCache(cache: webpack.Configuration['cache']): boolean {
   if (!cache || typeof cache !== 'object' || cache.type !== 'filesystem') return false;
-  // webpack's own default when a filesystem cache names no directory. Reporting COLD for that is
-  // the one branch here that would draw a permissive verdict from absent information: the default
-  // directory is warm on any tree built twice, and a manifest written over it would then be trusted
-  // for a legal artifact. Nothing in this repository configures a filesystem cache without naming a
-  // directory, so this is a guard rather than a live path - but the safe answer to "which directory
-  // is this cache in?" is webpack's answer, not "there isn't one".
-  const dir = cache.cacheDirectory || path.join(process.cwd(), 'node_modules', '.cache', 'webpack');
+  // webpack fills in `cacheLocation` and `cacheDirectory` before `beforeRun` fires, so the later
+  // fallbacks serve only a cache object webpack has not normalized. The last is webpack's own
+  // default directory. Reporting COLD for a cache that names no directory is the one branch here
+  // that would draw a permissive verdict from absent information: the default directory is warm on
+  // any tree built twice, and a manifest written over it would then be trusted for a legal artifact.
+  // The safe answer to "which directory is this cache in?" is webpack's answer, not "there isn't
+  // one".
+  const dir =
+    cache.cacheLocation ||
+    cache.cacheDirectory ||
+    path.join(process.cwd(), 'node_modules', '.cache', 'webpack');
   try {
     return fs.readdirSync(dir).length > 0;
   } catch (error: unknown) {
@@ -148,14 +165,19 @@ export class EmitShippedModulesPlugin {
     compiler.hooks.watchRun.tap(NAME, startRun);
 
     // The PARENT compilation only, which is what `thisCompilation` means: `createChildCompiler`
-    // copies every hook's taps to the child EXCEPT the six webpack names in its exclusion list, and
-    // `thisCompilation` is on that list while `compilation` is not. A child compiler runs its
-    // own module graph that this hook never sees, and two kinds exist in webpack: one whose output
-    // ships (`new Worker(new URL(…))`) and one whose output is executed at build time and thrown
-    // away (`HtmlWebpackPlugin`, which compiles `src/renderer/index.ejs` to a function that emits
-    // the HTML). Tapping children indiscriminately would put the second kind's packages into a
-    // legal document as things this project redistributes, which is the same error as omitting the
-    // first kind, inverted.
+    // copies every hook's taps to the child EXCEPT the seven webpack names in its exclusion list
+    // (`make`, `compile`, `emit`, `afterEmit`, `invalid`, `done` and `thisCompilation`), and
+    // `compilation` is not on that list. A child compiler runs its own module graph that this hook
+    // never sees, and two kinds exist: one whose output ships (a plugin or loader that runs its own
+    // child compiler to emit a file the bundle loads, such as `worker-loader`) and one whose output
+    // is executed at build time and thrown away (`HtmlWebpackPlugin`, which compiles
+    // `src/renderer/index.ejs` to a function that emits the HTML). Tapping children
+    // indiscriminately would put the second kind's packages into a legal document as things this
+    // project redistributes, which is the same error as omitting the first kind, inverted.
+    //
+    // Webpack 5's own `new Worker(new URL('./x', import.meta.url))` is not a child compilation:
+    // `WorkerPlugin` adds the worker as an async block with its own entry options in this same
+    // compilation, so the `finishModules` tap below already sees the worker's modules.
     //
     // Measured across all five bundles: `main`, `extension-host`, `extension-main` and
     // `extension-web-view` create no child compilers at all, and `renderer` creates exactly one -
@@ -163,9 +185,9 @@ export class EmitShippedModulesPlugin {
     // repository's own `index.ejs`. Neither is an installed package, so today children contribute
     // nothing the parent graph does not already carry and none of them ship.
     //
-    // What changes that: the first `new Worker(new URL('./x', import.meta.url))` in this codebase.
-    // Its child compilation DOES ship, and it would need tapping - excluding `HtmlWebpackCompiler`
-    // by the name the `childCompiler` hook passes.
+    // What changes that: the first plugin or loader here whose child compiler's output ships. That
+    // child compilation would need tapping - excluding `HtmlWebpackCompiler` by the name the
+    // `childCompiler` hook passes.
     compiler.hooks.thisCompilation.tap(NAME, (compilation) => {
       compilation.hooks.finishModules.tap(NAME, (modules) => {
         // `Iterable<Module>`, not an array: webpack passes a Set at runtime, so `.forEach` happens
@@ -188,22 +210,32 @@ export class EmitShippedModulesPlugin {
     });
 
     compiler.hooks.done.tap(NAME, (stats) => {
+      const { bundleName, outputDir } = this.options;
+      const out = path.join(outputDir, `${bundleName}.json`);
       // `done` fires whether or not the compilation succeeded, and a failed compilation's module
       // graph is whatever the compiler has walked when it gives up. Writing that would stamp a
       // PARTIAL list with the current build id, which passes both of the generator's guards - the
       // stamps agree (one id) and the list is non-empty - and silently shortens the shipping set.
       // `concurrently --kill-others-on-fail` makes this reachable on any failed `npm run build`.
-      // Leaving the previous manifest in place instead fails closed: it carries an earlier build
-      // id, which the mixed-vintage check reports with the remedy that rebuilds everything.
+      // The failed bundle's previous manifest is removed instead, so the generator refuses the set
+      // for a missing bundle. Keeping it is not safe: `prebuild` writes the id file once, and every
+      // rebuild of a watch session reads that same id, so a manifest from an earlier rebuild of the
+      // session carries the id its sibling's new manifest does and the mixed-vintage check cannot
+      // tell them apart.
       if (stats.hasErrors()) {
-        console.log(
-          `${NAME}: compilation failed, so no manifest was written for ${this.options.bundleName}`,
-        );
+        try {
+          fs.rmSync(out, { force: true });
+          console.log(`${NAME}: compilation failed, so ${out} was removed rather than rewritten`);
+        } catch (error: unknown) {
+          // A manifest another process holds open (`EPERM`, `EBUSY` on Windows) must not end an
+          // `npm run watch` session either, for the same reason as a failed write below.
+          console.warn(
+            `[${NAME}] compilation failed and ${out} could not be removed (${error instanceof Error ? error.message : String(error)}). ` +
+              'It may carry the current build id, so do not generate notices from this build.',
+          );
+        }
         return;
       }
-      const { bundleName, outputDir } = this.options;
-      fs.mkdirSync(outputDir, { recursive: true });
-      const out = path.join(outputDir, `${bundleName}.json`);
       const build = buildId(outputDir);
       // Staged and renamed, like the artifact and lock `main.ts` writes: five of these are written
       // concurrently and read by a separate process, and a reader that catches one mid-write gets a
@@ -239,8 +271,30 @@ export class EmitShippedModulesPlugin {
         existing = undefined;
       }
       if (existing === contents) return;
-      fs.writeFileSync(tmp, contents);
-      fs.renameSync(tmp, out);
+      try {
+        fs.mkdirSync(outputDir, { recursive: true });
+        fs.writeFileSync(tmp, contents);
+        fs.renameSync(tmp, out);
+      } catch (error: unknown) {
+        // A throw from a `done` tap fails a one-shot build and ends a watch session (webpack-cli
+        // exits on it), and most builds produce no notices - every development build, `npm start` -
+        // so a manifest that cannot be written (a locked or read-only `.notices`, a full disk) must
+        // not stop them, for the same reason `isWarmFilesystemCache` warns rather than throws.
+        // Whatever was there is removed, since an earlier manifest from the same watch session
+        // carries the current build id; the generator then refuses the set for a missing required
+        // bundle.
+        console.warn(
+          `[${NAME}] could not write ${out} (${error instanceof Error ? error.message : String(error)}). ` +
+            'No manifest was written for this bundle, so the notices generator will refuse this build.',
+        );
+        try {
+          fs.rmSync(out, { force: true });
+          fs.rmSync(tmp, { force: true });
+        } catch {
+          // Nothing more can be done; the warning above already says the manifest is unusable.
+        }
+        return;
+      }
       console.log(
         `${NAME}: wrote ${resources.size} module paths to ${out} (build ${build}${cacheWarm ? ', warm cache' : ''})`,
       );

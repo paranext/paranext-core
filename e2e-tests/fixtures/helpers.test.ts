@@ -5,9 +5,11 @@
  * `assertDeclaredWindowSize` takes only `evaluate`, not the full Playwright `Page`, so these drive
  * it directly with a stub instead of a real browser connection.
  */
+import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDeclaredWindowSize,
+  buildLaunchEnv,
   ASSERT_INTERFACE_MODE_TIMEOUT_MS,
   DEFAULT_WINDOW_SIZE,
   isLocalizedAboutMenuItem,
@@ -191,5 +193,74 @@ describe('killProcessTree', () => {
       expect(() => killProcessTree(4242, 'SIGKILL', 'linux', deps)).not.toThrow();
       expect(deps.kill).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+describe('buildLaunchEnv', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('launches quiet even when the shell exports DEV_NOISY=true', () => {
+    // Both ways a launcher could read the shell: the real environment and the `childEnv` copy.
+    vi.stubEnv('DEV_NOISY', 'true');
+    expect(buildLaunchEnv({ DEV_NOISY: 'true' }, '/tmp/profile').DEV_NOISY).toBe('false');
+  });
+
+  it('lets envOverrides turn DEV_NOISY on', () => {
+    const env = buildLaunchEnv({ DEV_NOISY: 'false' }, '/tmp/profile', {
+      envOverrides: { DEV_NOISY: 'true' },
+    });
+    expect(env.DEV_NOISY).toBe('true');
+  });
+
+  it('hides DevTools when the shell does not set PT_NO_DEVTOOLS', () => {
+    // The shell reaches buildLaunchEnv only through `childEnv`; a value in the real environment
+    // that `childEnv` lacks must not leak in.
+    vi.stubEnv('PT_NO_DEVTOOLS', 'false');
+    expect(buildLaunchEnv({}, '/tmp/profile').PT_NO_DEVTOOLS).toBe('true');
+  });
+
+  it('shows DevTools when the shell exports PT_NO_DEVTOOLS=false', () => {
+    vi.stubEnv('PT_NO_DEVTOOLS', undefined);
+    expect(buildLaunchEnv({ PT_NO_DEVTOOLS: 'false' }, '/tmp/profile').PT_NO_DEVTOOLS).toBe(
+      'false',
+    );
+  });
+
+  it('lets envOverrides hide DevTools over the shell value', () => {
+    const env = buildLaunchEnv({ PT_NO_DEVTOOLS: 'false' }, '/tmp/profile', {
+      envOverrides: { PT_NO_DEVTOOLS: 'true' },
+    });
+    expect(env.PT_NO_DEVTOOLS).toBe('true');
+  });
+
+  it('pins the test defaults over the shell', () => {
+    const env = buildLaunchEnv(
+      { NODE_ENV: 'production', PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'false' },
+      '/tmp/profile',
+      { isolatedProjectRoot: true },
+    );
+    expect(env.NODE_ENV).toBe('development');
+    expect(env.PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT).toBe('true');
+    expect(env.PLATFORM_BIBLE_PROJECT_ROOT_FOLDER).toBe(path.join('/tmp/profile', 'projects'));
+  });
+
+  it('leaves the project root unset unless the launch asks for an isolated one', () => {
+    expect(buildLaunchEnv({}, '/tmp/profile').PLATFORM_BIBLE_PROJECT_ROOT_FOLDER).toBeUndefined();
+  });
+
+  it('lets envOverrides win over the pinned test defaults', () => {
+    const env = buildLaunchEnv({}, '/tmp/profile', {
+      isolatedProjectRoot: true,
+      envOverrides: {
+        NODE_ENV: 'production',
+        PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'false',
+        PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: '/elsewhere',
+      },
+    });
+    expect(env.NODE_ENV).toBe('production');
+    expect(env.PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT).toBe('false');
+    expect(env.PLATFORM_BIBLE_PROJECT_ROOT_FOLDER).toBe('/elsewhere');
   });
 });

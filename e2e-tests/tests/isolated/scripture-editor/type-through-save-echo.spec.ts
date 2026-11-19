@@ -41,7 +41,7 @@ import {
 // target. DEV_NOISY=false keeps the normal Home layout (see preview-read-only-power-mode.spec.ts).
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 // Distinctive all-caps tokens that never appear in the WEB text, so a `toContainText` match is

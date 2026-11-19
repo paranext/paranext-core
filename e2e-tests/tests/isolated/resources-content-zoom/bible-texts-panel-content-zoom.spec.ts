@@ -52,7 +52,6 @@ import {
 // known limitation of this coverage, not something to fix by converting the spec to Simple mode.
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
 });
 
 /**

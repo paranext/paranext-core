@@ -82,7 +82,8 @@ describe('ParagraphStyleTrigger', () => {
     //
     // Every step, because the cap is not step-dependent the way the floor and the chevron are — and
     // the e2e spec that measures the real geometry runs in the `isolated` Playwright project, which
-    // CI does not run.
+    // CI runs only in the nightly full run and for the specs in the core lists (see "What CI runs"
+    // in e2e-tests/CLAUDE.md).
     [undefined, SHRINK_STEP.TIGHTER, SHRINK_STEP.MINIMUM].forEach((shrinkStep) => {
       const { unmount } = renderTrigger(shrinkStep);
 

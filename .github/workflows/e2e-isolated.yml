@@ -1,0 +1,249 @@
+name: E2E isolated specs
+
+# Runs isolated end-to-end specs (e2e-tests/tests/isolated/: each starts its own copy of the app and
+# exercises one feature) on one Linux runner. Called by test.yml for the core set on every pull
+# request and by e2e-nightly.yml for the whole suite; it has no trigger of its own.
+#
+# It builds for itself: a job cannot reuse another job's output without an artifact hand-over, and
+# the development bundles the specs need are built by e2e-tests/global-setup.ts on first use.
+#
+# A job that reaches its time limit is cancelled, and a cancelled job skips every step after the
+# one that was running: the warnings and the artifact upload, exactly on the run that most needs
+# them. So no step is left to run into that limit. Every setup step has its own 20-minute timeout,
+# far longer than a healthy step takes, so a hang fails that step instead; and the specs get only
+# the time the setup left over, minus a few minutes for the steps after them (see "Run the specs").
+# The setup steps mirror the build job's setup in test.yml: keep the two in step, except that this
+# file reads package.json with `jq` and pins third-party actions to a commit. A pinned commit never
+# updates by itself. TODO(PT-5030): do the same in test.yml, and let Dependabot propose pin updates.
+#
+# The job only reads the repository: its token is read-only, and checkout does not leave the token
+# in the git config, so the install scripts and the specs cannot write to the repository.
+
+on:
+  workflow_call:
+    inputs:
+      spec_lists:
+        description:
+          'Space-separated files that list the specs to run, one repository path per line (# starts
+          a comment). Empty runs every isolated spec.'
+        type: string
+        required: false
+        default: ''
+      shard:
+        description: 'Playwright shard to run, as "<index>/<total>". Empty runs everything selected.'
+        type: string
+        required: false
+        default: ''
+      report_only:
+        description: 'A failing spec raises a warning and leaves the job green.'
+        type: boolean
+        required: false
+        default: false
+      fail_on_flaky:
+        description: 'A spec that passes only on its retry fails the run (the retry still runs).'
+        type: boolean
+        required: false
+        default: false
+      timeout_minutes:
+        description: 'Time limit of the whole job, in minutes.'
+        type: number
+        required: false
+        default: 60
+      artifact_name:
+        description: 'Name of the uploaded Playwright results; unique within the calling run.'
+        type: string
+        required: true
+
+jobs:
+  run:
+    name: ubuntu-22.04
+    runs-on: ubuntu-22.04
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    # With `report_only`, a failure anywhere in the job keeps the workflow run green. A spec failure
+    # shows only as a warning (the step-level `continue-on-error` on "Run the specs"); a setup
+    # failure or a job timeout may still show this job's own check as failed.
+    continue-on-error: ${{ inputs.report_only }}
+    permissions:
+      contents: read
+
+    steps:
+      # "Run the specs" gives Playwright the time that is left of the job's limit.
+      - name: Note when the job started
+        timeout-minutes: 20
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Check out Git repository
+        timeout-minutes: 20
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install .NET
+        timeout-minutes: 20
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        timeout-minutes: 20
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props',
+            '.config/dotnet-tools.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Read the Node.js version from package.json
+        id: package_json
+        timeout-minutes: 20
+        run: |
+          node_version=$(jq -r '.volta.node // empty' package.json)
+          if [ -z "$node_version" ]; then
+            echo "::error title=No Node.js version::package.json has no volta.node"
+            exit 1
+          fi
+          echo "node=$node_version" >> "$GITHUB_OUTPUT"
+
+      - name: Install Volta and toolchain
+        timeout-minutes: 20
+        uses: volta-cli/action@5c175f92dea6f48441c436471e6479dbc192e194 # v4.2.1
+
+      - name: Install Node.js and NPM
+        timeout-minutes: 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.package_json.outputs.node }}
+          cache: npm
+
+      - name: Install packages
+        timeout-minutes: 20
+        run: npm ci
+
+      - name: Build
+        timeout-minutes: 20
+        run: npm run build
+
+      # Installs only the system libraries Electron needs on a bare runner: the specs launch the
+      # app's own Electron, so no Playwright browser download is needed.
+      - name: Install Playwright system libraries
+        timeout-minutes: 20
+        run: npx playwright install-deps chromium
+
+      # One Xvfb at 1920x1080x24: xvfb-run's default screen (1280x1024, 8-bit colour) is too small
+      # for the docking specs. One retry, so a single timing race does not fail the run (unless
+      # `fail_on_flaky` is set); a later step names every test that needed it.
+      # `--trace=retain-on-failure` keeps the trace of each failed attempt, which the config's
+      # `on-first-retry` would replace with the passing one. For specs on `isolated.fixture` that is
+      # a DOM trace of the app (`electron-trace.zip`); every test also gets Playwright's own
+      # `trace.zip`, which has the test's steps and output but no DOM.
+      # `--global-timeout` ends the run with its reports written while the job still has time to
+      # upload them: the job's limit, minus what the setup took, minus `reserve_seconds` for the
+      # steps after this one.
+      - name: Run the specs
+        id: specs
+        continue-on-error: ${{ inputs.report_only }}
+        env:
+          SPEC_LISTS: ${{ inputs.spec_lists }}
+          SHARD: ${{ inputs.shard }}
+          FAIL_ON_FLAKY: ${{ inputs.fail_on_flaky }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+          E2E_JSON_REPORT: ${{ github.workspace }}/e2e-tests/e2e-results.json
+        run: |
+          reserve_seconds=180
+          minimum_seconds=300
+          remaining_seconds=$(( TIMEOUT_MINUTES * 60 - ($(date +%s) - JOB_START) - reserve_seconds ))
+          if [ "$remaining_seconds" -lt "$minimum_seconds" ]; then
+            echo "::error title=No time left for the specs::The setup left ${remaining_seconds}s of the job's ${TIMEOUT_MINUTES}-minute limit for the specs; at least ${minimum_seconds}s are needed."
+            exit 1
+          fi
+          selection=(all)
+          if [ -n "$SPEC_LISTS" ]; then
+            # A list that cannot be read would otherwise fail inside the process substitution below
+            # and leave the other list running alone, with no error.
+            # $SPEC_LISTS is split into its file names on purpose
+            # shellcheck disable=SC2086
+            for spec_list in $SPEC_LISTS; do
+              if [ ! -r "$spec_list" ]; then
+                echo "::error title=Spec list missing::$spec_list"
+                exit 1
+              fi
+            done
+            # shellcheck disable=SC2086
+            mapfile -t selection < <(cat $SPEC_LISTS | grep -v -e '^#' -e '^[[:space:]]*$')
+            # An empty selection would run the whole suite instead of the listed specs
+            if [ "${#selection[@]}" -eq 0 ]; then
+              echo "::error title=No specs selected::$SPEC_LISTS list no specs"
+              exit 1
+            fi
+          fi
+          playwright_args=(--retries=1 --trace=retain-on-failure "--global-timeout=$(( remaining_seconds * 1000 ))")
+          if [ -n "$SHARD" ]; then
+            playwright_args+=("--shard=$SHARD")
+          fi
+          if [ "$FAIL_ON_FLAKY" = "true" ]; then
+            playwright_args+=(--fail-on-flaky-tests)
+          fi
+          echo "Selection: ${#selection[@]} entries; Playwright arguments: ${playwright_args[*]}"
+          xvfb-run --auto-servernum -s '-screen 0 1920x1080x24' \
+            npm run test:e2e:isolated -- "${selection[@]}" "${playwright_args[@]}"
+
+      # Inputs reach the shell through `env`, never through `${{ }}` in the script text, so a value
+      # is never parsed as shell.
+      - name: Warn on a failure that does not block
+        if: ${{ steps.specs.outcome == 'failure' }}
+        env:
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        run: echo "::warning title=E2E isolated specs failed (not blocking)::Isolated end-to-end specs failed, or ran out of time, but did not fail the build. See the $ARTIFACT_NAME artifact."
+
+      # Otherwise a broken build in a report-only run, whose workflow run stays green, would show
+      # only in the job log.
+      - name: Warn when setup failed in a report-only run
+        if: ${{ failure() && inputs.report_only }}
+        run: echo "::warning title=E2E isolated setup failed::A setup step failed before the specs could run; see this job's log."
+
+      # Playwright reports a run that `--global-timeout` ended as "Timed out waiting <n>s for the
+      # <stage> to run" (in colour codes, so this matches inside the message). The warning says so
+      # plainly, since the failures alone read like broken tests. Re-check the wording when
+      # Playwright is upgraded.
+      - name: Warn when the specs ran out of time
+        if: ${{ !cancelled() && hashFiles('e2e-tests/e2e-results.json') != '' }}
+        continue-on-error: true
+        env:
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+        run: |
+          if jq -e '[.errors[]?.message // empty | select(test("Timed out waiting [0-9.]+s for the .* to run"))] | length > 0' \
+            e2e-tests/e2e-results.json > /dev/null; then
+            echo "::warning title=E2E specs ran out of time::The specs reached the time the job's ${TIMEOUT_MINUTES}-minute limit left them and were stopped; the tests not yet run are listed in the job log. See the $ARTIFACT_NAME artifact."
+          fi
+
+      # A test that passed only on its retry is a defect to look at, not a pass to forget. Only a
+      # report, so it never decides the job's result; a run cut short can leave the file unreadable.
+      - name: Warn about tests that passed only on their retry
+        if: ${{ !cancelled() && hashFiles('e2e-tests/e2e-results.json') != '' }}
+        continue-on-error: true
+        env:
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        run: |
+          if ! flaky_tests=$(jq -r '.. | objects | select(has("tests") and has("file") and has("title"))
+            | . as $spec | .tests[] | select(.status == "flaky") | "\($spec.file): \($spec.title)"' \
+            e2e-tests/e2e-results.json); then
+            echo "::warning title=E2E report unreadable::Could not read e2e-tests/e2e-results.json, so tests that passed only on their retry are not listed."
+            exit 0
+          fi
+          while IFS= read -r flaky_test; do
+            [ -n "$flaky_test" ] || continue
+            echo "::warning title=E2E test passed only on its retry::$flaky_test (the failed attempt's traces and screenshot are in the $ARTIFACT_NAME artifact)"
+          done <<< "$flaky_tests"
+
+      - name: Upload Playwright test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          retention-days: 7
+          path: |
+            e2e-tests/test-results/
+            e2e-tests/playwright-report/
+            e2e-tests/e2e-results.json
+          if-no-files-found: ignore

@@ -22,5 +22,4 @@ export const PARKED_ENHANCED_RESOURCES_SPECS: string[] = [
   '**/enhanced-resources/enhanced-resources-functional-UI-PKG-008.spec.ts',
   '**/enhanced-resources/enhanced-resources-journey.spec.ts',
   '**/enhanced-resources/text-collection-schema.spec.ts',
-  '**/enhanced-resources/scripture-text-grid.spec.ts',
 ];

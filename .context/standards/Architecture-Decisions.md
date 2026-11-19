@@ -2861,6 +2861,45 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-e2e-core-set-per-pull-request: Pull requests run a small report-only set of isolated e2e specs; the full isolated suite runs nightly and fails on a flaky test
+
+- **Date:** 2026-11-17
+- **Status:** Accepted
+- **Context:** The isolated e2e suite (`e2e-tests/tests/isolated/`) took about an hour on a
+  developer machine and ran in no CI job, so a break in a feature's end-to-end behavior was noticed
+  only when someone ran it by hand. Each spec starts its own copy of the app, so adding specs to
+  every pull request multiplies the cost, and a timing race in the app could turn unrelated
+  pull requests red.
+- **Decision:** Three parts, wired through `.github/workflows/test.yml`, `e2e-isolated.yml` and
+  `e2e-nightly.yml`. (1) Every pull request runs the `e2e-core` job: the isolated specs listed in
+  `e2e-tests/core-specs.txt`. It is report-only: a spec failure shows as a warning on the run, not
+  a red check. (2) A second list, `e2e-tests/core-specs-editor.txt`, runs as well when the pull
+  request changes a path matched by `editor_paths` in `test.yml`, a curated list of the Scripture
+  editor, what it saves through (its USFM↔USX↔USJ conversion path) and the editor list's own specs,
+  described in full beside it; if the changed-files lookup fails, both lists run. (3) A nightly run
+  (`e2e-nightly.yml`, also startable by hand) runs every isolated spec over eight runners and fails
+  the run on a test that passes only on its retry (`--fail-on-flaky-tests`). Every run allows one
+  retry per test and keeps the traces of each failed attempt (`--trace=retain-on-failure`): a DOM
+  trace of the app for specs on `isolated.fixture`, which records the Electron app's context
+  itself because Playwright's own tracing does not reach an app started with `_electron.launch()`.
+  The specs stop on their own (`--global-timeout`, from the time the setup left) before the job's
+  limit, because a job that reaches its limit is cancelled and skips the reporting and upload
+  steps. The per-pull-request job names a test that needed its retry in a warning. Adding or
+  removing a core spec means editing the list, and `e2e-tests/core-specs.test.ts` keeps the lists,
+  the workflow, the specs and every `editor_paths` entry in agreement with the repository.
+- **Alternatives:** Run the whole isolated suite on every pull request — rejected: about an hour
+  locally and longer on a runner, too slow for a per-pull-request check. Make the core job blocking
+  from day one — rejected: an app race would mark unrelated pull requests red while the job is still
+  proving itself. Fail the per-pull-request job on a test that passes only on its retry — rejected
+  as too strict there; it warns instead, and the nightly run, which blocks nothing, is the one that
+  fails.
+- **Consequences:** Pull requests get early, non-blocking signal on the specs that matter most;
+  the rest of the suite is covered a day late. The `editor_paths` list is curated by hand and
+  over-matches on purpose (over-running a report-only job is the safe direction), so it needs
+  upkeep as the editor's dependencies move. Revisit once the job has proven stable: TODO(PT-5088)
+  makes it a required check.
+- **Source:** PT-5015.
+
 ## adr-editor-annotation-exact-locations: An annotation holds exactly the bytes its range names, and removal reporting follows whatever holds it now
 
 - **Date:** 2026-09-29
@@ -4890,6 +4929,54 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
 
+## adr-implied-paragraph-reports-p-and-bar-follows-top-level-block: Verses outside any paragraph marker report `p`, and the character-marker bar follows the caret's top-level block
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** Verses that sit outside any paragraph marker load as an `ImpliedParaNode`, which
+  renders as a bare `<p>` with no USFM class. Two things broke for a caret there in Simple mode.
+  The editor's `StateChangePlugin` (scripture-editors,
+  `libs/shared-react/src/plugins/usj/StateChangePlugin.tsx`) emitted no state change for an implied
+  paragraph, so the host kept the previous block's `blockMarker` — typically `id` — and scoped the
+  character-marker menu to `\id`'s children (`ior`). And the bar resolved the caret's block with
+  `EDITOR_PARA_SELECTOR` (`.para[class*="usfm_"]`, `editor-dom.util.ts`), which neither the bare
+  `<p>` nor the `\id` line (`p.book.usfm_id`) matches, so the bar held its last position.
+- **Decision:** (1) An implied paragraph reports `p` as its block marker: `StateChangePlugin`
+  accepts `$isSomeParaNode` (paragraph or implied paragraph) at both its verse-block resolution and
+  its reporting guard, and `ImpliedParaNode.getMarker()` already returns `PARA_MARKER_DEFAULT`
+  (scripture-editors `docs/markers-inventories/implemented-markers-inventory.md` documents that).
+  (2) The character-marker bar anchors to the caret's **top-level block** — the child of
+  `.editor-input` that holds it (`findTopLevelEditorBlock`), the DOM twin of Lexical's
+  `getTopLevelElement()` and the block `ActiveTextPlugin` outlines — while the paragraph-marker
+  tooltip keeps `EDITOR_PARA_SELECTOR`, because it names a marked paragraph. Before the first caret,
+  the bar anchors to the first block that holds text (`findFirstTextBlock`): it skips the `\id`
+  line (class `book`) and chapter lines (class `chapter`) and takes the next block whether or not it
+  has a paragraph marker, so a chapter that opens with unmarked verses starts the bar beside them
+  rather than beside a later `\p` that may be off-screen.
+- **Alternatives:** Report `undefined` for an implied paragraph — rejected: the character-marker
+  menu returns no items without a parent marker, which disables the button in exactly the place the
+  user is typing. Add an `isImpliedPara` field to `StateChangeSnapshot` — rejected: public API growth
+  for one consumer, when `p` is already what the node says it is. Give the implied paragraph an
+  `implied-para` class in the editor and widen the selector — rejected: a new cross-repo class
+  contract, and it would still miss the `\id` and chapter lines; the top-level-block rule rests on
+  Lexical's own invariant that root children render as the contenteditable's children. Read the
+  `psc-active-text` class `ActiveTextPlugin` puts on the active block — rejected: it exists only in
+  views with `hasActiveTextFocusBox`, and the plugin removes it on blur, which is exactly when the
+  character-marker menu takes focus and the bar must hold.
+- **Consequences:** In Power mode the paragraph-style trigger reads `p` for text that has no `\p`
+  (Simple mode is structure-protected, so the cost is Power-only); retagging an implied paragraph
+  from that menu was already reachable, because the stale `id` left it enabled. The bar follows the
+  caret onto the `\id` and chapter lines too, and its button is disabled on both: `c` has no
+  character markers, and `generateCharacterMarkerMenuListItems` offers none for `id` even though
+  `usfmMarkers` lists `ior` among `\id`'s children (they name what may follow `\id`, and `ior`
+  belongs inside `\io`). Hiding the bar on those lines was rejected: it would flicker as the caret
+  moves past them. `findTopLevelEditorBlock`
+  assumes root-level nodes render as direct children of the contenteditable. The read-only block
+  verse layout already wraps paragraphs in a verse-block element, where it would resolve to the
+  wrapper; as of 2026-11-12 the bar is not mounted in that layout. Revisit before mounting the bar
+  anywhere the editor wraps its blocks.
+- **Source:** PT-4763.
+
 ## adr-interface-mode-decides-the-window-set: The interface mode decides how many windows exist, and the persisted entry list is that set
 
 - **Date:** 2026-09-02
@@ -6658,6 +6745,32 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (checked-in canonical texts; a regex import scan; a copyleft denylist), none of which reached
   `main`.
 
+## adr-notices-manifest-plugin-copied-into-templates: The extension templates carry copies of the module-manifest plugin and its build-id script, not an npm package
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:** Itemizing an extension zip built in another repository
+  (`adr-notices-overlay-for-downstream-products`, amended 2026-11-09) needs that repository's
+  webpack build to write the same stamped module manifests this repository's build writes. Two
+  files produce them here: `.erb/configs/emit-shipped-modules-plugin.ts`, the webpack plugin that
+  writes each bundle's manifest, and `.erb/scripts/notices-build-id.ts`, which mints the build id
+  every manifest of one build is stamped with. Extension repositories start from
+  `paranext-extension-template` or `paranext-multi-extension-template`, so the templates are where
+  those files have to reach.
+- **Decision:** Copy both files into the two extension templates rather than publish them as an
+  npm package. Each template copy's header names the paranext-core file it must be kept in step
+  with. The copies keep the same code, apart from their import paths and how the build-id script
+  finds the manifest folder (through the template's `webpack.util.ts`, `noticesManifestFolder`),
+  but carry their own comments, which describe the template's build; the design rationale stays in
+  the paranext-core files. In the templates the copies sit in `#region shared with` regions, so
+  the two templates stay in step with each other the way their other shared code does.
+- **Alternatives:** Publishing the plugin and the build-id script as an npm package - rejected: two
+  small files did not justify a package's publishing and versioning setup.
+- **Consequences:** A change to the manifest format or to the build-id stamp has to be made in
+  paranext-core and in both templates, and an extension repository picks it up through its next
+  template merge. Nothing in paranext-core checks that the copies agree with its files; the headers
+  are what point a maintainer at them. **Revisit** if the files grow, or if a third consumer appears.
+
 ## adr-notices-overlay-for-downstream-products: A downstream product runs this generator with its own policy overlay
 
 - **Date:** 2026-09-09
@@ -6724,6 +6837,29 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
+- **Amended 2026-11-09 (PT-4604):** an overlay can now itemize an external extension that is built
+  alongside the product, by recording `"itemized": true` with a `sourceCheckout` that names an
+  `externalExtensionCheckouts` entry; that entry records the checkout's `path` and its minimum
+  package counts. The table is keyed by name, as `separatePrograms` and `externalExtensions` are,
+  and the name is what the document's heading and the run's messages call the checkout. Keying it
+  by path instead would require every entry and the table to spell a folder the same way, or the
+  generator to reconcile two spellings. A checkout's `path` resolves against the overlay's folder
+  whenever an overlay is selected, and against the base policy file's folder otherwise, because the
+  checkout sits beside the downstream build whose overlay records it. That differs from a separate
+  program's evidence paths, which resolve against the repository root because the evidence is a
+  file in this tree. The generator reads the checkout's webpack module manifests and applies the
+  same safety checks as for this repository's own build: production manifests only, the packages
+  compiled from this repository found in its own shipping set, the minimums, an import
+  cross-check, and a refusal of any license pointer to a `.LICENSE.txt` file that does not ship.
+  The stylesheet scan and the import cross-check read the extensions' source in either template's
+  layout: each workspace's `src` folder when the checkout declares `workspaces`, or its own `src/`
+  when it declares none. A required manifest with an empty module list is refused as it is here,
+  except an `extension-web-view` list in a checkout with no `*.web-view.tsx` file, whose web-view
+  build has nothing to compile. `"itemized": false` remains for zips built elsewhere. Rejected: packing the package list inside
+  each zip and reading it from there. A zip carries package names but no license files, so every
+  row would lack its notice, and without the extension's source the stylesheet scan and import
+  cross-check that confirm the list is complete cannot run. How the extension templates come to
+  write those manifests is `adr-notices-manifest-plugin-copied-into-templates`.
 
 ## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
 
@@ -7004,7 +7140,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-panel-open-joins-the-group-beside-it: A `'panel'` open joins the tab group beside its target when that group can take it; a target that is not docked gets a new group at the reading-end edge of the dock
 
 - **Date:** 2026-10-12
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-11-17 for `before-tab` and `after-tab`.
 - **Context:** A `{ type: 'panel' }` open docked the new tab beside its target with rc-dock's
   `dockMove(tab, targetTabGroup, direction)`. Beside a floating or maximized target, rc-dock wrapped
   both tab groups in a new box inside the floating or maximized layer, which draws only the tab
@@ -7028,7 +7164,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     top-level docked group; in a vertical one rc-dock's own 30% share stands (`dockAtReadingEndEdge`).
     A floating target that would cover it is slid sideways, narrowed when the room beside the new
     group is narrower than the float, and left alone when there is no room at all
-    (`moveFloatingTabGroupClear`).
+    (`moveFloatingTabGroupClear`). *(Amended 2026-11-17: this holds for `left`, `right`, `top`, and
+    `bottom` only; `before-tab` and `after-tab` join the target's own group wherever it is. See the
+    amendment below.)*
   - `direction` is in reading order: core swaps `left` and `right` in a right-to-left UI
     (`resolvePanelDirection`), since rc-dock lays the dock out left to right whatever the UI
     direction.
@@ -7057,6 +7195,23 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   may be split from slightly early; a neighbour narrower than the group a split would create is
   never joined.
 - **Source:** PT-3138 (PR #2881 and its review).
+- **Amended 2026-11-17 (sillsdev/interlinearizer-extension#611, PR #2994):** `before-tab` and
+  `after-tab` add the new tab to the target's own tab group, as its active tab, just before or after
+  the target (rc-dock's `addNextToTab`), when that group can take it (`canTabGroupTakeTab`: it is of
+  the new tab's rc-dock group and not `panelLock`). This is checked before whether the target is
+  docked, so it applies to floating and maximized groups too. A group that cannot take the tab falls
+  back to `left` for `before-tab` and `right` for `after-tab`, which then follow the rules above.
+  Joining a group outside the dock does not bring back the bug the reading-end-edge rule exists for:
+  `addNextToTab` only splices the tab into the existing group and never wraps a new box around it,
+  and rc-dock's `restorePanel` brings the new tab back with a maximized group when it is restored.
+  The placement is a `PanelLayout` direction rather than a target-tab option on `TabLayout` because
+  it needs no new public API (`before-tab` and `after-tab` were already `PanelDirection` values),
+  and the fallback needs a direction, which `TabLayout` does not have. `before-tab` and `after-tab`
+  follow the tab order, which core treats as reading order, as `DirectionFromTab` does: `after-tab`
+  inserts where `nextTab` from the target goes. Their fallbacks are sides, mirrored like any other,
+  so both paths land on the same reading side. rc-dock draws the tab strip left to right whatever
+  the UI direction, so in a right-to-left UI a joined tab is drawn to the target's right today, just
+  as `nextTab` moves right. Mirroring the strip with CSS would correct both together.
 
 ## adr-panel-readiness-from-sources: Panel readiness is derived from whether data sources arrived, never from a filtered result
 
