@@ -48,8 +48,12 @@ type EvaluatedItem = {
 };
 
 /** The evaluated context menu's items in display order (group order, then item order). */
-function evaluate(overrides: Record<string, boolean> = {}): EvaluatedItem[] {
+function evaluate(
+  overrides: Record<string, boolean> = {},
+  absentKeys: string[] = [],
+): EvaluatedItem[] {
   const facts = { ...ALL_FACTS_ON, ...overrides };
+  absentKeys.forEach((key) => delete facts[key]);
   const evaluated: { groups: Record<string, { order: number }>; items: EvaluatedItem[] } =
     evaluateMenu(contextMenu, (key: string) => facts[key], TEMPLATE_VARS);
   return [...evaluated.items].sort(
@@ -77,7 +81,50 @@ const isDisabled = (items: EvaluatedItem[], command: string) => {
   return matches[0].disabled === true;
 };
 
+/** Each fact the clipboard items' editable condition reads, with the value that blocks editing. */
+const EDITABLE_FACTS_BLOCKING: [string, boolean][] = [
+  ['platform.project.p1.isEditable', false],
+  ['platformScripture.project.p1.canEditScripture', false],
+  ['platformScriptureEditor.webView.wv.isReadOnly', true],
+  ['platformScriptureEditor.webView.wv.isPreview', true],
+  ['platformScriptureEditor.webView.wv.isSyncBlocked', true],
+];
+
 describe('platform-scripture-editor context menu contribution', () => {
+  it('enables Cut, Paste and Paste as plain text when every editable fact is permissive', () => {
+    const items = evaluate();
+    [CUT, PASTE, PASTE_PLAIN].forEach((command) => expect(isDisabled(items, command)).toBe(false));
+  });
+
+  it.each(EDITABLE_FACTS_BLOCKING)(
+    'disables Cut, Paste and Paste as plain text on its own when %s is %s',
+    (fact, blockingValue) => {
+      const items = evaluate({ [fact]: blockingValue });
+      [CUT, PASTE, PASTE_PLAIN].forEach((command) => expect(isDisabled(items, command)).toBe(true));
+      // Copy and Find read without editing
+      [COPY, FIND].forEach((command) => expect(isDisabled(items, command)).toBe(false));
+    },
+  );
+
+  it('disables Cut and Copy when the selection key is absent, not just false', () => {
+    const items = evaluate({}, [HAS_SELECTION]);
+    expect(isDisabled(items, CUT)).toBe(true);
+    expect(isDisabled(items, COPY)).toBe(true);
+  });
+
+  it('shows no Insert item when the main-editor key is absent, not just false', () => {
+    const items = evaluate({}, [IS_MAIN_EDITOR]);
+    expect(commandsOf(items)).toEqual([CUT, COPY, PASTE, PASTE_PLAIN, FIND]);
+  });
+
+  it('shows exactly one Copy, the project one without an icon, when the resource fact is unset', () => {
+    const copies = evaluate({}, ['platform.project.p1.isResource']).filter(
+      (item) => item.command === COPY,
+    );
+    expect(copies).toHaveLength(1);
+    expect(copies[0].iconNameBefore).toBeUndefined();
+  });
+
   it('shows every item in a project main editor with a selection, in order, all enabled', () => {
     const items = evaluate();
     expect(commandsOf(items)).toEqual([CUT, COPY, PASTE, PASTE_PLAIN, FIND, ...INSERT_COMMANDS]);
@@ -167,15 +214,19 @@ describe('platform-scripture-editor context menu contribution', () => {
  *   resource Edit section, Simple's Tools and resources); the context menu shows one Find in both
  *   modes, so matching any one twin's label and icon is enough.
  */
+const RESOURCE_COPY_LABEL = '%webView_platformScriptureEditor_copy%';
 const TWIN_EXCEPTIONS: Record<string, string> = {
-  [`${COPY}|clipboard-copy`]: 'resource Copy is labelled "Copy", not "Copy selection"',
-  [`${PASTE_PLAIN}|`]: 'new command, no top-menu twin',
+  [`${COPY}|clipboard-copy|${RESOURCE_COPY_LABEL}`]:
+    'resource Copy is labelled "Copy", not "Copy selection"',
+  [`${PASTE_PLAIN}||%webView_platformScriptureEditor_pasteAsPlainText%`]:
+    'new command, no top-menu twin',
 };
 
 describe('context menu items look like their top-menu twins', () => {
   const twinsOf = (command: string | undefined) =>
     topMenu.items.filter((item) => item.command === command);
-  const exceptionKey = (item: MenuItem) => `${item.command}|${item.iconNameBefore ?? ''}`;
+  const exceptionKey = (item: MenuItem) =>
+    `${item.command}|${item.iconNameBefore ?? ''}|${item.label}`;
 
   it.each(contextMenu.items.filter((item) => !(exceptionKey(item) in TWIN_EXCEPTIONS)))(
     '$command ($label) has the label key and icon of a top-menu twin',
@@ -206,12 +257,26 @@ describe('context menu items look like their top-menu twins', () => {
     expect(resourceTwin?.label).toBe('%webView_platformScriptureEditor_copySelection%');
   });
 
-  it('gives each Insert item the enabledWhen of its twin and a when that adds the main-editor key', () => {
+  it('gives each Insert item the enabledWhen of its only twin and a when that adds the main-editor key', () => {
     INSERT_COMMANDS.forEach((command) => {
       const item = contextMenu.items.find((candidate) => candidate.command === command);
-      const [twin] = twinsOf(command);
-      expect(item?.enabledWhen).toBe(twin.enabledWhen);
-      expect(item?.when).toBe(`${twin.when} && ${IS_MAIN_EDITOR}`);
+      const twins = twinsOf(command);
+      expect(twins).toHaveLength(1);
+      expect(item?.enabledWhen).toBe(twins[0].enabledWhen);
+      expect(item?.when).toBe(`${twins[0].when} && ${IS_MAIN_EDITOR}`);
     });
+  });
+
+  it('gives the clipboard items exactly the editable condition of their top-menu twins', () => {
+    const [topCut] = twinsOf(CUT);
+    const [topPaste] = twinsOf(PASTE);
+    const contextItem = (command: string) =>
+      contextMenu.items.find((item) => item.command === command);
+    expect(twinsOf(CUT)).toHaveLength(1);
+    expect(twinsOf(PASTE)).toHaveLength(1);
+    expect(topCut.enabledWhen).toBe(topPaste.enabledWhen);
+    expect(contextItem(PASTE)?.enabledWhen).toBe(topPaste.enabledWhen);
+    expect(contextItem(PASTE_PLAIN)?.enabledWhen).toBe(topPaste.enabledWhen);
+    expect(contextItem(CUT)?.enabledWhen).toBe(`${topCut.enabledWhen} && ${HAS_SELECTION}`);
   });
 });
