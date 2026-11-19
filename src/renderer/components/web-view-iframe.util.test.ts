@@ -24,9 +24,7 @@ describe('getWebViewIframe', () => {
     expect(result).toBeNull();
   });
 
-  it('should return null without throwing when webViewId contains CSS selector characters', () => {
-    // Without CSS.escape, characters like " or ] would break the attribute selector
-    // and cause querySelector to throw a DOMException
+  it('compares an id with quote or bracket characters as a plain value: null, no throw', () => {
     expect(() => getWebViewIframe('malicious"]iframe')).not.toThrow();
     expect(getWebViewIframe('malicious"]iframe')).toBeNull();
   });
