@@ -1925,10 +1925,9 @@ describe('a linked repository whose modules an extension bundle compiled', () =>
 
 describe('packages only another platform installs', () => {
   // npm honours `os`/`cpu`, so a platform-restricted optional dependency is absent from the tree
-  // everywhere else - and this artifact is generated on Linux. `fsevents` is the live case: chokidar
-  // pulls it into the `main` and `extension-host` bundles on macOS, and no Linux run can observe it,
-  // so the macOS installer redistributes a package the document does not list. Listed in the policy
-  // and described from `package-lock.json`, the way a dev link is.
+  // everywhere else - and this artifact is generated on Linux. When a bundle reaches one, such as the
+  // macOS-only `fsevents`, that platform's installer redistributes a package no Linux run can
+  // observe. Listed in the policy and described from `package-lock.json`, the way a dev link is.
 
   function writeRootLock(packages: Record<string, object>) {
     fs.writeFileSync(
