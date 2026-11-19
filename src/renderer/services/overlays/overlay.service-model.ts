@@ -284,8 +284,8 @@ export type { PaletteFilterMode };
 export interface IOverlayService {
   /**
    * Shows a context menu from menu.json contributions registered for the given webViewType. Fetches
-   * menu data, renders the menu, and auto-executes the selected command. Returns the command string
-   * that was executed, or undefined if dismissed.
+   * menu data, renders the menu, and runs the selected command unless `shouldRunCommand` is
+   * `false`. Returns the picked command string, or undefined if dismissed.
    *
    * The menu is drawn at interface scale, whatever content zoom the requesting WebView's pane is
    * at.
