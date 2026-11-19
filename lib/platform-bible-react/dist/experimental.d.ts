@@ -2142,7 +2142,8 @@ export type UseEditorContextMenuOptions = {
 	onPick: (command: string, request: EditorContextMenuRequest) => void;
 	/**
 	 * Receives any rejection of `requestMenu` or `dismissMenu` other than the expected ones (a newer
-	 * menu replaced this one, debounce, tab not visible), and anything `onPick` throws. The hook
+	 * menu replaced this one, debounce, tab not visible), and anything `onPick` throws. A debounced
+	 * request is asked for once more just past the cooldown before it counts as expected. The hook
 	 * swallows an unexpected failure only when this is absent, and never lets a throwing `onError`
 	 * escape.
 	 *
@@ -2200,6 +2201,13 @@ export type UseEditorContextMenuResult = {
  * the menu the moment it opens.
  *
  * A pick that resolves after `dismiss()`, after the pointer-down drop, or after unmount is ignored.
+ *
+ * The expected rejections are quiet: a newer menu replaced this one (`ABORTED`), the tab is not
+ * visible (`FAILED_PRECONDITION`), and the overlay service's debounce (`RESOURCE_EXHAUSTED`). A
+ * debounced request is asked for once more, with the same facts and position, 75 ms later, unless a
+ * newer right-click, a dismissal, a pointer-down drop or unmount came first; it stays pending
+ * meanwhile, and the key claim still ends two seconds after the right-click. A second debounce is
+ * quiet too.
  *
  * The key claim is a capture-phase `keydown` listener on the window, registered when the hook
  * mounts. It stops listeners registered after it, but not window-capture listeners registered

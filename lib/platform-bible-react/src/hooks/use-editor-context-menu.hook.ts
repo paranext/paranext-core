@@ -88,7 +88,8 @@ export type UseEditorContextMenuOptions = {
   onPick: (command: string, request: EditorContextMenuRequest) => void;
   /**
    * Receives any rejection of `requestMenu` or `dismissMenu` other than the expected ones (a newer
-   * menu replaced this one, debounce, tab not visible), and anything `onPick` throws. The hook
+   * menu replaced this one, debounce, tab not visible), and anything `onPick` throws. A debounced
+   * request is asked for once more just past the cooldown before it counts as expected. The hook
    * swallows an unexpected failure only when this is absent, and never lets a throwing `onError`
    * escape.
    *
@@ -145,9 +146,20 @@ const KEYBOARD_FALLBACK_INSET = 8;
  * is up it holds focus in the app window, so a lapsed claim loses nothing.
  */
 const KEY_CLAIM_MS = 2000;
+/**
+ * How long the hook waits before asking once more for a menu the platform dropped with
+ * `RESOURCE_EXHAUSTED`: just past the overlay service's 50 ms debounce cooldown. The hook sends one
+ * request per real right-click, so a debounced one would otherwise be a right-click that shows
+ * nothing.
+ */
+const DEBOUNCE_RETRY_MS = 75;
 
 function isQuietError(error: unknown): boolean {
   return isPlatformError(error) && error.code !== undefined && QUIET_ERROR_CODES.has(error.code);
+}
+
+function isDebounceRejection(error: unknown): boolean {
+  return isPlatformError(error) && error.code === RESOURCE_EXHAUSTED;
 }
 
 // Duck-typed rather than `instanceof`: a target from another realm (an iframe) fails the check
@@ -172,6 +184,23 @@ function isKeyboardRaised(event: MouseEvent): boolean {
 /** Whether a mouse event is a primary-button press with Ctrl held: a right-click on macOS. */
 function isCtrlPrimaryClick(event: MouseEvent): boolean {
   return event.button === 0 && event.ctrlKey;
+}
+
+/**
+ * Whether the frame runs on macOS, the only platform that turns a Ctrl+click into a right-click (a
+ * `contextmenu`). Elsewhere a Ctrl+click is an ordinary click, so its press must close an open menu
+ * like any other. Read at event time; `userAgentData` first, where the browser offers it.
+ */
+function isMacPlatform(): boolean {
+  const userAgentData: unknown = Reflect.get(navigator, 'userAgentData');
+  const userAgentDataPlatform =
+    typeof userAgentData === 'object' &&
+    userAgentData &&
+    'platform' in userAgentData &&
+    typeof userAgentData.platform === 'string'
+      ? userAgentData.platform
+      : undefined;
+  return /mac/i.test(userAgentDataPlatform || navigator.platform || '');
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -253,6 +282,13 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
  *
  * A pick that resolves after `dismiss()`, after the pointer-down drop, or after unmount is ignored.
  *
+ * The expected rejections are quiet: a newer menu replaced this one (`ABORTED`), the tab is not
+ * visible (`FAILED_PRECONDITION`), and the overlay service's debounce (`RESOURCE_EXHAUSTED`). A
+ * debounced request is asked for once more, with the same facts and position, 75 ms later, unless a
+ * newer right-click, a dismissal, a pointer-down drop or unmount came first; it stays pending
+ * meanwhile, and the key claim still ends two seconds after the right-click. A second debounce is
+ * quiet too.
+ *
  * The key claim is a capture-phase `keydown` listener on the window, registered when the hook
  * mounts. It stops listeners registered after it, but not window-capture listeners registered
  * earlier, which run first: those must gate on `isClaimingKeys()` themselves. Not on `isPending()`:
@@ -332,6 +368,8 @@ export function useEditorContextMenu(
     // window. The container is resolved per event: it may not exist yet, or be rebuilt later.
     const doc = document;
     const win = window;
+    /** Retries waiting for the debounce cooldown to pass; cleared on unmount. */
+    const retryTimers = new Set<ReturnType<typeof setTimeout>>();
 
     /** The container when this event's target is somewhere the hook claims a right-click. */
     const findClaimingContainer = (target: EventTarget | null): HTMLElement | undefined => {
@@ -381,14 +419,40 @@ export function useEditorContextMenu(
         return dismissedRequestsRef.current.delete(requestId) || isUnmountedRef.current;
       };
 
+      /**
+       * Waits out the debounce cooldown, then answers whether this request is still the one wanted.
+       * Never answers after unmount: the timer is cleared then.
+       */
+      const waitForDebounceRetry = () =>
+        new Promise<boolean>((resolve) => {
+          const timer = setTimeout(() => {
+            retryTimers.delete(timer);
+            // A pointer-down drop marks the request dismissed too, so this covers it.
+            resolve(
+              nextRequestIdRef.current === requestId &&
+                !dismissedRequestsRef.current.has(requestId),
+            );
+          }, DEBOUNCE_RETRY_MS);
+          retryTimers.add(timer);
+        });
+
       const run = async () => {
         let command: string | undefined;
         try {
           command = await optionsRef.current.requestMenu(request);
         } catch (error) {
-          settle();
-          reportError(error);
-          return;
+          if (!isDebounceRejection(error) || !(await waitForDebounceRetry())) {
+            settle();
+            reportError(error);
+            return;
+          }
+          try {
+            command = await optionsRef.current.requestMenu(request);
+          } catch (retryError) {
+            settle();
+            reportError(retryError);
+            return;
+          }
         }
         const isIgnored = settle();
         if (command === undefined || isIgnored) return;
@@ -415,8 +479,9 @@ export function useEditorContextMenu(
       // A right-click the hook will claim (a macOS Ctrl+click included) replaces the open menu with
       // its own request, so it must not also dismiss. Any other pointerdown, a right-click
       // elsewhere included, closes the menu.
-      if ((event.button === 2 || isCtrlPrimaryClick(event)) && findClaimingContainer(event.target))
-        return;
+      const isRightClickPress =
+        event.button === 2 || (isCtrlPrimaryClick(event) && isMacPlatform());
+      if (isRightClickPress && findClaimingContainer(event.target)) return;
       if (openRequestsRef.current.size > 0) dropOpenRequests();
     };
 
@@ -446,6 +511,8 @@ export function useEditorContextMenu(
       win.removeEventListener('keydown', handleKeyDown, true);
       // A menu still open when the editor goes away must not outlive it, nor pick into it.
       isUnmountedRef.current = true;
+      retryTimers.forEach((timer) => clearTimeout(timer));
+      retryTimers.clear();
       if (openRequests.size > 0) dismissOpenRequests();
       endKeyClaim();
     };
