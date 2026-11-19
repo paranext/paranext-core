@@ -21,7 +21,9 @@ const RESTRICTED_REQUESTS: { method: string; params: unknown[] }[] = [
   { method: 'command:paratextRegistration.resetForFirstRun', params: ['keep'] },
   {
     method: 'object:paratextRegistration.internetSettingsDataProvider-data.setInternetSettings',
-    params: [undefined, {}],
+    // A payload .NET rejects while parsing: should the access check ever let this through, the
+    // setter must not save anything, since it writes the account's shared internet settings
+    params: [undefined, { selectedServer: 'NotAServer' }],
   },
 ];
 

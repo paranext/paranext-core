@@ -14,9 +14,8 @@ namespace Paranext.DataProvider.Users;
 /// <remarks>
 /// Main lets only the extension host process send the request type and only this process register
 /// it, by identifying each connection from the secret main issued it at launch. The extension host
-/// checks the requesting extension's manifest for the privilege before forwarding a request here,
-/// so the extension name is the one the extension host process supplies. See "Paratext Registry
-/// access tokens" in <c>.context/standards/Security-Guide.md</c>.
+/// checks the requesting extension's manifest for the privilege before forwarding a request here.
+/// See "Paratext Registry access tokens" in <c>.context/standards/Security-Guide.md</c>.
 /// </remarks>
 internal sealed class RegistryAccessTokenService(
     PapiClient papiClient,
@@ -82,8 +81,8 @@ internal sealed class RegistryAccessTokenService(
         // Keeps running: the rest of the data provider still works without this service
         if (!isRegistered)
             Console.Error.WriteLine(
-                $"The Registry access token service is unavailable: main refused to register "
-                    + $"{REQUEST_TYPE}. Main accepts it only from a data provider it started itself."
+                $"The Registry access token service is unavailable: main did not accept the "
+                    + $"registration of {REQUEST_TYPE}; PapiClient logs why."
             );
     }
 
@@ -198,8 +197,9 @@ internal sealed class RegistryAccessTokenService(
             PruneCache();
             if (_cache.TryGetValue(key, out CachedToken? cached))
             {
-                // Once per extension name per token, without a line per call. The name comes from
-                // the extension host process, the only process main lets send this request.
+                // Once per extension name per token, without a line per call. The name is what the
+                // extension host sent; an extension that bypasses the privilege API can claim any
+                // name, so this logs a claim.
                 if (cached.AddRecipient(extensionName))
                     LogHandout(reused: true, extensionName, resource, scopes, cached.ExpiresAt);
                 return RegistryAccessTokenResult.Success(cached.AccessToken, cached.ExpiresAt);

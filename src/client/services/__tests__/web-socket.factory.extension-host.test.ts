@@ -106,6 +106,34 @@ describe('createWebSocket in the extension host', () => {
     expect(identity).toBe('unidentified');
   });
 
+  it('waits for secrets that are on their way before connecting', async () => {
+    const { server, handshakes, url } = await startServer(CREDENTIALS.serverSecret);
+    servers.push(server);
+    const modules = await loadFreshModules();
+    let markArrived: () => void = () => {};
+    modules.setLaunchSecretsArrival(
+      new Promise<void>((resolve) => {
+        markArrived = resolve;
+      }),
+    );
+
+    // An early caller asks for the connection before the secrets arrive
+    const socketPromise = modules.createWebSocket(url);
+    // Let the factory get as far as it can, past the socket module's import, before they arrive
+    await import('@extension-host/services/extension-host-web-socket.model');
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    modules.setLaunchSecrets(CREDENTIALS);
+    markArrived();
+    const socket = await socketPromise;
+    sockets.push(socket);
+
+    expect(await outcomeOf(socket)).toBe('open');
+    expect(handshakes[0]?.headers[PAPI_CLIENT_SECRET_HEADER]).toBe(CREDENTIALS.clientSecret);
+    expect(modules.getLocalConnectionIdentity()).toBe('extensionHost');
+  });
+
   it('presents the secrets only once', async () => {
     const { server, handshakes, url } = await startServer(CREDENTIALS.serverSecret);
     servers.push(server);

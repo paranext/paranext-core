@@ -667,4 +667,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.9   | 2026-10-27 | Add "Tab Icons" under WebViews: tabs name a lucide icon with `iconName` instead of shipping theme variants. |
 | 1.1.10  | 2026-11-16 | Add "Per-Project Tab Titles" under WebViews: build them with `getLocalizedProjectTitle` and `useLocalizedProjectTitle`. |
 | 1.1.11  | 2026-11-17 | `'panel'` layouts: `'before-tab'` and `'after-tab'` open in the target's own tab group. |
-| 1.2.0   | 2026-11-17 | Add "Restricting who may call a command": `allowedCallers` on command and request handler registration, and what it does not protect against. |
+| 1.2.0   | 2026-11-17 | Add "Restricting who may call a command": `allowedCallers` on command registration, and what it does not protect against. |

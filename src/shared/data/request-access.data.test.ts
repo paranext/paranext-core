@@ -15,6 +15,7 @@ const RESTRICTED_REQUEST_TYPES = [
   'object:paratextRegistration.internetSettingsDataProvider-data.setInternetSettings',
   'command:paratextRegistration.setParatextDataInternetSettings',
   'command:paratextRegistration.setParatextRegistrationData',
+  'command:paratextRegistration.validateParatextRegistrationData',
   'command:paratextRegistration.resetForFirstRun',
   'command:platform.resetFirstRun',
   'object:DataProtectionService.encryptString',
@@ -69,6 +70,13 @@ describe('request access table', () => {
     expect(isRegistrationAllowed('command:platform.getLogFileContent', 'main')).toBe(true);
     expect(isRegistrationAllowed('command:platform.getLogFileContent', 'renderer')).toBe(false);
     expect(isRegistrationAllowed('command:anything.else', 'unidentified')).toBe(true);
+    // Whoever handles the registration check receives the user's name and registration code
+    expect(
+      isRegistrationAllowed(
+        'command:paratextRegistration.validateParatextRegistrationData',
+        'unidentified',
+      ),
+    ).toBe(false);
   });
 
   it('applies a registrant restriction to unlisted request types', () => {
@@ -125,6 +133,7 @@ describe('request access table', () => {
     const restrictedCommands: CommandNames[] = [
       'paratextRegistration.setParatextDataInternetSettings',
       'paratextRegistration.setParatextRegistrationData',
+      'paratextRegistration.validateParatextRegistrationData',
       'paratextRegistration.resetForFirstRun',
       'platform.resetFirstRun',
       'platform.getLogFileContent',

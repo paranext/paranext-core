@@ -30,15 +30,10 @@ If `websocat` is not available, ask the user to install it before proceeding.
 ### 2. Some Request Types Are Refused to This Client
 
 This client presents no launch secret, so main serves it as `unidentified`. Main refuses an
-unidentified connection these request types (the error is `'<method>' is not available on this
-connection`): `requestRegistryTokens:*`, `command:platform.getLogFileContent`,
-`command:platform.resetFirstRun`, `command:paratextRegistration.setParatextRegistrationData`,
-`command:paratextRegistration.resetForFirstRun`, the internet settings setters
-(`object:paratextRegistration.internetSettingsDataProvider-data.setInternetSettings` and
-`command:paratextRegistration.setParatextDataInternetSettings`) and
-`object:DataProtectionService.encryptString` / `.decryptString`. It also refuses any handler whose
-registrant restricted its callers with `allowedCallers`. The table is `src/shared/data/request-access.data.ts`.
-Everything else works as before. To read the log, read the log file (see the `log-inspector` skill).
+unidentified connection the request types listed in `src/shared/data/request-access.data.ts` (the
+error is `MethodNotFound`: `'<method>' is not available on this connection`). It also refuses any
+handler whose registrant restricted its callers with `allowedCallers`. Everything else works.
+To read the log, read the log file (see the `log-inspector` skill).
 
 ### 3. Platform.Bible Must Be Running
 

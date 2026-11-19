@@ -2,11 +2,25 @@ import type { ConnectionIdentity } from '@shared/data/request-access.data';
 import type { LaunchSecrets } from '@shared/data/rpc.model';
 
 let launchSecrets: LaunchSecrets | undefined;
+let launchSecretsArrival: Promise<void> = Promise.resolve();
 let localConnectionIdentity: ConnectionIdentity = 'unidentified';
 
 /** Keeps the secrets main handed this process until the connection to main takes them */
 export function setLaunchSecrets(secrets: LaunchSecrets): void {
   launchSecrets = secrets;
+}
+
+/**
+ * Makes the connection to main wait until secrets on their way have arrived, so a PAPI call made
+ * before then cannot connect unidentified
+ */
+export function setLaunchSecretsArrival(arrival: Promise<void>): void {
+  launchSecretsArrival = arrival;
+}
+
+/** Resolves once secrets on their way have arrived; at once when none are expected */
+export function waitForLaunchSecretsArrival(): Promise<void> {
+  return launchSecretsArrival;
 }
 
 /**

@@ -111,6 +111,18 @@ internal class LaunchSecretsTests
         );
     }
 
+    /// <summary>
+    /// Main passes these to .NET, and `dotnet-data-provider.service.test.ts` pins the same literals,
+    /// so a rename on either side alone fails a test. Dev runs use only the variable, so a drifted
+    /// flag would otherwise break only packaged builds.
+    /// </summary>
+    [Test]
+    public void LaunchChannelNames_MatchWhatMainSends()
+    {
+        Assert.That(LaunchSecrets.STANDARD_INPUT_FLAG, Is.EqualTo("--launch-secrets-on-stdin"));
+        Assert.That(LaunchSecrets.ENVIRONMENT_VARIABLE, Is.EqualTo("PAPI_LAUNCH_SECRETS"));
+    }
+
     [Test]
     public void Read_Neither_ReturnsNull()
     {
