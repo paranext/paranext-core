@@ -106,8 +106,8 @@ export function blockProcessModuleAccess(): void {
     writable: true,
     configurable: true,
   });
-  // The host's standard input is `/dev/null`, so Node makes `process.stdin` a file stream, which
-  // carries the whole `fs` module. The original is a getter that creates that stream on first read;
+  // The host's standard input is the null device (`/dev/null`, `NUL` on Windows), so Node makes
+  // `process.stdin` a file stream, which carries the whole `fs` module. The original is a getter that creates that stream on first read;
   // nothing in the host reads it, so replacing it here means the file stream is never created.
   Object.defineProperty(process, 'stdin', {
     value: Readable.from([]),
