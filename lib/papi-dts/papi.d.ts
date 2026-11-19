@@ -12714,7 +12714,11 @@ declare module 'shared/services/context-keys.service' {
   export const papiContextKeysService: IContextKeysService;
 }
 declare module 'shared/utils/evaluate-menu-recording-reads.util' {
-  import { EvaluatableMenu, WhenExpressionErrorHandler } from 'platform-bible-utils';
+  import {
+    ContextKeyValue,
+    EvaluatableMenu,
+    WhenExpressionErrorHandler,
+  } from 'platform-bible-utils';
   /**
    * A menu evaluated against the current context keys, with the keys the evaluation actually read
    *
@@ -12743,6 +12747,10 @@ declare module 'shared/utils/evaluate-menu-recording-reads.util' {
    * @param menu The menu document to evaluate
    * @param templateVars Values for `{placeholder}` segments in expression property references
    * @param onError Called for each expression that fails to evaluate
+   * @param requestContextKeys Context keys supplied by the caller for this evaluation. A key present
+   *   here (own property) is answered from it and shadows a shared key of the same name; every other
+   *   key comes from the context keys service. Read keys are recorded either way. (Experimental: this
+   *   parameter is unstable and may change or disappear without notice)
    * @returns The evaluated menu and the set of keys it read
    * @experimental This function is unstable and may change or disappear without notice
    */
@@ -12750,6 +12758,7 @@ declare module 'shared/utils/evaluate-menu-recording-reads.util' {
     menu: T,
     templateVars: Record<string, string | undefined>,
     onError: WhenExpressionErrorHandler,
+    requestContextKeys?: Readonly<Record<string, ContextKeyValue>>,
   ): MenuEvaluationWithReads<T>;
 }
 declare module 'renderer/hooks/papi-hooks/use-evaluated-menu.hook' {
@@ -13101,7 +13110,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * so this service provides a way for them to request overlays that the renderer hosts on their
    * behalf.
    */
-  import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+  import { ContextKeyValue, LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
   import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
   import type { PaletteFilterMode } from 'platform-bible-react/experimental';
   import type { ReactElement } from 'react';
@@ -13380,7 +13389,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
      *   from within a WebView iframe.
      * @param options Optional context including the position for the menu
-     * @returns The command string that was executed, or `undefined` if dismissed
+     * @returns The command string that was picked (and run, unless `shouldRunCommand` is `false`), or
+     *   `undefined` if dismissed
      * @throws PlatformError with code ABORTED if replaced by another context menu from the same
      *   WebView
      */
@@ -13392,6 +13402,23 @@ declare module 'renderer/services/overlays/overlay.service-model' {
           x: number;
           y: number;
         };
+        /**
+         * Whether the service runs the picked command. Defaults to `true`. With `false` the pick only
+         * resolves the promise, so the caller decides what to do with it. A caller that runs the
+         * command itself should note that an item whose command duplicates another visible item's
+         * command cannot be told apart by the resolved value.
+         *
+         * @experimental This option is unstable and may change or disappear without notice
+         */
+        shouldRunCommand?: boolean;
+        /**
+         * Context keys for this request only, evaluated by the menu's `when` and `enabledWhen`
+         * expressions as if they were shared context keys. A request key shadows a shared key of the
+         * same name and is never written to the shared context key service.
+         *
+         * @experimental This option is unstable and may change or disappear without notice
+         */
+        contextKeys?: Record<string, ContextKeyValue>;
       },
     ): Promise<string | undefined>;
     /**
@@ -13508,6 +13535,16 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * @param webViewId The ID of the WebView whose command palette should be dismissed
      */
     dismissCommandPalette(webViewId: string): Promise<void>;
+    /**
+     * Dismisses the open context menu for the given WebView, resolving its `showContextMenu` promise
+     * with `undefined`; no command runs. No-op if no context menu is open for that WebView.
+     *
+     * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+     *
+     * @param webViewId The ID of the WebView whose context menu should be dismissed
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    dismissContextMenu(webViewId: string): Promise<void>;
   }
   /**
    * Internal representation of an active overlay stored in the overlay store. Each entry holds the
