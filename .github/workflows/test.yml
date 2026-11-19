@@ -623,5 +623,5 @@ jobs:
     with:
       spec_lists: ${{ needs.e2e-core-selection.outputs.spec_lists }}
       report_only: true
-      timeout_minutes: 60
+      timeout_minutes: 75
       artifact_name: playwright-results-e2e-core

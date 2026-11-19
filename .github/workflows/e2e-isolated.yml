@@ -7,13 +7,14 @@ name: E2E isolated specs
 # It builds for itself: a job cannot reuse another job's output without an artifact hand-over, and
 # the development bundles the specs need are built by e2e-tests/global-setup.ts on first use.
 #
-# Every setup step has its own 20-minute timeout, well under the caller's job budget: a hang there
-# fails that step and leaves the job time for the steps that run on `!cancelled()` (the warnings,
-# the artifact upload). Recent runs take about two minutes per step.
+# A job that reaches its time limit is cancelled, and a cancelled job skips every step after the
+# one that was running: the warnings and the artifact upload, exactly on the run that most needs
+# them. So no step is left to run into that limit. Every setup step has its own 20-minute timeout
+# (recent runs take about two minutes per step), and the specs get only the time the setup left
+# over, minus a few minutes for the steps after them (see "Run the specs").
 # The setup steps mirror the build job's setup in test.yml: keep the two in step, except that this
 # file reads package.json with `jq` and pins third-party actions to a commit. A pinned commit never
 # updates by itself. TODO(PT-5030): do the same in test.yml, and let Dependabot propose pin updates.
-# With `report_only`, the job as a whole is non-blocking, not only the spec step.
 #
 # The job only reads the repository: its token is read-only, and checkout does not leave the token
 # in the git config, so the install scripts and the specs cannot write to the repository.
@@ -39,7 +40,7 @@ on:
         required: false
         default: false
       fail_on_flaky:
-        description: 'A spec that passes only on its retry fails the run (the retry and its trace still run).'
+        description: 'A spec that passes only on its retry fails the run (the retry still runs).'
         type: boolean
         required: false
         default: false
@@ -58,13 +59,19 @@ jobs:
     name: ubuntu-22.04
     runs-on: ubuntu-22.04
     timeout-minutes: ${{ inputs.timeout_minutes }}
-    # A failure anywhere in the job (checkout, install, build, timeout) must not turn a report-only
-    # check red. The step-level `continue-on-error` below stays so the warning step sees the outcome.
+    # With `report_only`, a failure anywhere in the job keeps the workflow run green. A spec failure
+    # shows only as a warning (the step-level `continue-on-error` on "Run the specs"); a setup
+    # failure or a job timeout may still show this job's own check as failed.
     continue-on-error: ${{ inputs.report_only }}
     permissions:
       contents: read
 
     steps:
+      # "Run the specs" gives Playwright the time that is left of the job's limit.
+      - name: Note when the job started
+        timeout-minutes: 20
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Check out Git repository
         timeout-minutes: 20
         uses: actions/checkout@v4
@@ -124,9 +131,14 @@ jobs:
 
       # One Xvfb at 1920x1080x24: xvfb-run's default screen (1280x1024, 8-bit colour) is too small
       # for the docking specs. One retry, so a single timing race does not fail the run (unless
-      # `fail_on_flaky` is set); the next step names every test that needed it.
-      # `--trace=retain-on-failure` keeps the trace of the failed attempt, which the config's
-      # `on-first-retry` would replace with the passing one.
+      # `fail_on_flaky` is set); a later step names every test that needed it.
+      # `--trace=retain-on-failure` keeps the trace of each failed attempt, which the config's
+      # `on-first-retry` would replace with the passing one. For specs on `isolated.fixture` that is
+      # a DOM trace of the app (`electron-trace.zip`); every test also gets Playwright's own
+      # `trace.zip`, which has the test's steps and output but no DOM.
+      # `--global-timeout` ends the run with its reports written while the job still has time to
+      # upload them: the job's limit, minus what the setup took, minus 3 minutes for the steps after
+      # this one.
       - name: Run the specs
         id: specs
         continue-on-error: ${{ inputs.report_only }}
@@ -134,8 +146,14 @@ jobs:
           SPEC_LISTS: ${{ inputs.spec_lists }}
           SHARD: ${{ inputs.shard }}
           FAIL_ON_FLAKY: ${{ inputs.fail_on_flaky }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
           E2E_JSON_REPORT: ${{ github.workspace }}/e2e-tests/e2e-results.json
         run: |
+          remaining_seconds=$(( TIMEOUT_MINUTES * 60 - ($(date +%s) - JOB_START) - 180 ))
+          if [ "$remaining_seconds" -lt 300 ]; then
+            echo "::error title=No time left for the specs::The setup left ${remaining_seconds}s of the job's ${TIMEOUT_MINUTES}-minute limit for the specs; at least 300s are needed."
+            exit 1
+          fi
           selection=(all)
           if [ -n "$SPEC_LISTS" ]; then
             # A list that cannot be read would otherwise fail inside the process substitution below
@@ -156,7 +174,7 @@ jobs:
               exit 1
             fi
           fi
-          playwright_args=(--retries=1 --trace=retain-on-failure)
+          playwright_args=(--retries=1 --trace=retain-on-failure "--global-timeout=$(( remaining_seconds * 1000 ))")
           if [ -n "$SHARD" ]; then
             playwright_args+=("--shard=$SHARD")
           fi
@@ -169,13 +187,25 @@ jobs:
 
       - name: Warn on a failure that does not block
         if: ${{ steps.specs.outcome == 'failure' }}
-        run: echo "::warning title=E2E isolated specs failed (not blocking)::Isolated end-to-end specs failed but did not fail the build. See the ${{ inputs.artifact_name }} artifact."
+        run: echo "::warning title=E2E isolated specs failed (not blocking)::Isolated end-to-end specs failed, or ran out of time, but did not fail the build. See the ${{ inputs.artifact_name }} artifact."
 
-      # The job-level continue-on-error keeps a report-only run green when a setup step fails too,
-      # so say so on the run: otherwise a broken build would show only in the job log.
+      # Otherwise a broken build in a report-only run, whose workflow run stays green, would show
+      # only in the job log.
       - name: Warn when setup failed in a report-only run
         if: ${{ failure() && inputs.report_only }}
-        run: echo "::warning title=E2E isolated setup failed (not blocking)::A setup step failed before the specs could run; see this job's log."
+        run: echo "::warning title=E2E isolated setup failed::A setup step failed before the specs could run; see this job's log."
+
+      # Playwright reports a run that `--global-timeout` ended as "Timed out waiting …" (in colour
+      # codes, so this matches a substring). Says so plainly, since the failures alone read like
+      # broken tests.
+      - name: Warn when the specs ran out of time
+        if: ${{ !cancelled() && hashFiles('e2e-tests/e2e-results.json') != '' }}
+        continue-on-error: true
+        run: |
+          if jq -e '[.errors[]?.message // empty | select(test("Timed out waiting"))] | length > 0' \
+            e2e-tests/e2e-results.json > /dev/null; then
+            echo "::warning title=E2E specs ran out of time::The specs reached the time the job's ${{ inputs.timeout_minutes }}-minute limit left them and were stopped; the tests not yet run are listed in the job log. See the ${{ inputs.artifact_name }} artifact."
+          fi
 
       # A test that passed only on its retry is a defect to look at, not a pass to forget. Only a
       # report, so it never decides the job's result; a run cut short can leave the file unreadable.
@@ -191,7 +221,7 @@ jobs:
           fi
           while IFS= read -r flaky_test; do
             [ -n "$flaky_test" ] || continue
-            echo "::warning title=E2E test passed only on its retry::$flaky_test (trace of the failed attempt in the ${{ inputs.artifact_name }} artifact)"
+            echo "::warning title=E2E test passed only on its retry::$flaky_test (the failed attempt's traces and screenshot are in the ${{ inputs.artifact_name }} artifact)"
           done <<< "$flaky_tests"
 
       - name: Upload Playwright test results
