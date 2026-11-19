@@ -13012,7 +13012,19 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
         type: 'item';
         id: string;
         label: string | LocalizeKey;
-        icon?: PlatformIconName;
+        /**
+         * Name of a curated icon drawn before the label. Wins over `iconPath` when it names a known
+         * icon.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
+         */
+        iconName?: PlatformIconName;
+        /**
+         * URL of an image drawn before the label, used when `iconName` is absent or not a known icon.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
+         */
+        iconPath?: string;
         shortcut?: string;
         disabled?: boolean;
       }

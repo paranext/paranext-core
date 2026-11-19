@@ -147,6 +147,8 @@ export function getMenuSectionsWithItems(menuData: Localized<MultiColumnMenu>): 
 /**
  * Whether a menu list reserves a leading icon slot, so every label in the list lines up. The slot
  * is 16px, the size of a named icon; an image icon is capped to it.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
  */
 export type LeadingIconSlot = 'none' | 'icon';
 
@@ -167,6 +169,7 @@ type ItemWithLeadingIcon = {
  * @returns `'icon'` if any item has a leading icon — a known named icon or an image path — or is a
  *   checkbox item (`checked` is defined), and `'none'` otherwise. An unknown icon name counts only
  *   through the image path beside it, if any
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export function getLeadingIconSlot(items: ItemWithLeadingIcon[]): LeadingIconSlot {
   return items.some(

@@ -98,11 +98,12 @@ export function convertContributionToContextMenuItems(
   function buildItemsFromGroups(groupIds: string[]): OverlayContextMenuItem[] {
     const result: OverlayContextMenuItem[] = [];
 
-    groupIds.forEach((groupId, i) => {
+    groupIds.forEach((groupId) => {
       const groupItems = itemsByGroup.get(groupId) ?? [];
 
-      // Add separator between groups (not before the first group)
-      if (i > 0 && groupItems.length > 0) {
+      // Separate a group from what precedes it. Groups can be empty (items hidden for the interface
+      // mode), so the test is whether anything was emitted, not the group's position.
+      if (result.length > 0 && groupItems.length > 0) {
         result.push({ type: 'separator' });
       }
 
@@ -120,6 +121,8 @@ export function convertContributionToContextMenuItems(
             type: 'item',
             id: item.command,
             label: item.label,
+            ...(item.iconNameBefore ? { iconName: item.iconNameBefore } : {}),
+            ...(item.iconPathBefore ? { iconPath: item.iconPathBefore } : {}),
             ...(item.shortcut ? { shortcut: item.shortcut } : {}),
             ...(item.disabled ? { disabled: true } : {}),
           });
