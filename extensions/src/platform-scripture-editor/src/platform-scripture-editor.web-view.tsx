@@ -162,12 +162,16 @@ import {
   scrollToAnnotation,
   scrollToNoteCaller,
   scrollToVerse,
+  FOOTNOTES_ROWS_ATTRIBUTE,
 } from './editor-dom.util';
 import {
   type EditMenuActionCommand,
+  type EditMenuCommand,
   handleEditMenuCommand,
   isEditMenuCommand,
 } from './edit-menu-actions.util';
+import { readFootnotesSelectionState, runFootnotesEditMenuCommand } from './edit-target.util';
+import { useEditTarget } from './use-edit-target.hook';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import {
   editorHoldsUnsavedChanges,
@@ -1170,37 +1174,15 @@ function PlatformScriptureEditor({
     [viewType, isPowerMode],
   );
 
-  // Whether the editor's own selection is a range. Only a selection the editor reports changes it:
-  // an `undefined` report is a blur (opening a menu blurs the editor, whose selection stays and is
-  // what Copy copies), so it leaves the value alone. A chapter change or a Scripture view switch
+  // Whether the main editor's own selection is a range. Only a selection the editor reports changes
+  // it: an `undefined` report is a blur (opening a menu blurs the editor, whose selection stays and
+  // is what Copy copies), so it leaves the value alone. A chapter change or a Scripture view switch
   // replaces the editor's content and drops its selection without reporting one, so each clears it.
-  const [hasSelection, setHasSelection] = useState(false);
+  const [mainHasSelection, setMainHasSelection] = useState(false);
 
   useEffect(() => {
-    setHasSelection(false);
+    setMainHasSelection(false);
   }, [scrRef.book, scrRef.chapterNum, viewType]);
-
-  // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
-  // them when this web view closes. Hidden case: a hidden tab keeps publishing and its menu keeps
-  // re-evaluating on every key change (the hook subscribes regardless of visibility), so it is
-  // current whenever the tab is shown; nothing waits for activation. `hasSelection` is data-driven
-  // too, so a selection or chapter change in a hidden tab needs no catch-up.
-  useEffect(() => {
-    const keys = getEditorWebViewContextKeys(webViewId, {
-      isReadOnly,
-      isPreview,
-      isSyncBlocked,
-      footnotesPaneVisible,
-      hasSelection,
-    });
-    Object.entries(keys).forEach(([key, value]) => papi.contextKeys.set(key, value));
-  }, [webViewId, isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible, hasSelection]);
-
-  useEffect(() => {
-    return () => {
-      getEditorWebViewContextKeyNames(webViewId).forEach((key) => papi.contextKeys.remove(key));
-    };
-  }, [webViewId]);
 
   const isPowerModeRef = useRef(isPowerMode);
 
@@ -1313,6 +1295,57 @@ function PlatformScriptureEditor({
   useEffect(() => {
     paneEditingIndexRef.current = paneEditingIndex;
   }, [paneEditingIndex]);
+
+  // The main editor's element, for the text's right-click menu and for telling where the browser
+  // selection is. A ref starts out as null for React to be able to set it as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const mainEditorWrapperRef = useRef<HTMLDivElement>(null);
+
+  // The editor the top menu's Edit commands act on: the one the user last selected in, decided by
+  // where the browser selection is rather than by the main editor's own selection report.
+  const editTarget = useEditTarget({
+    getRoots: () => ({
+      mainEditorRoot: mainEditorWrapperRef.current,
+      footnotesRows: document.querySelector(`[${FOOTNOTES_ROWS_ATTRIBUTE}]`),
+    }),
+    isRowEditorOpen: paneEditingIndex !== undefined,
+    resetToken: `${projectId}|${scrRef.book}|${scrRef.chapterNum}|${viewType}`,
+    mainHasSelection,
+  });
+  const editTargetRef = useRef(editTarget);
+  editTargetRef.current = editTarget;
+
+  // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
+  // them when this web view closes. Hidden case: a hidden tab keeps publishing and its menu keeps
+  // re-evaluating on every key change (the hook subscribes regardless of visibility), so it is
+  // current whenever the tab is shown; nothing waits for activation. `hasSelection` and
+  // `editTargetIsEditable` are data-driven too, so a selection or chapter change in a hidden tab
+  // needs no catch-up.
+  useEffect(() => {
+    const keys = getEditorWebViewContextKeys(webViewId, {
+      isReadOnly,
+      isPreview,
+      isSyncBlocked,
+      footnotesPaneVisible,
+      hasSelection: editTarget.hasSelection,
+      editTargetIsEditable: editTarget.isEditable,
+    });
+    Object.entries(keys).forEach(([key, value]) => papi.contextKeys.set(key, value));
+  }, [
+    webViewId,
+    isReadOnly,
+    isPreview,
+    isSyncBlocked,
+    footnotesPaneVisible,
+    editTarget.hasSelection,
+    editTarget.isEditable,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      getEditorWebViewContextKeyNames(webViewId).forEach((key) => papi.contextKeys.remove(key));
+    };
+  }, [webViewId]);
 
   /**
    * Always-current {@link navigateToNote}, which is declared far below this point: the ref keeps
@@ -4779,7 +4812,7 @@ function PlatformScriptureEditor({
   const handleSelectionChange = useCallback(
     async (change: SelectionRange | undefined) => {
       currentSelectionRef.current = change;
-      if (change) setHasSelection(hasNonCollapsedSelection(change));
+      if (change) setMainHasSelection(hasNonCollapsedSelection(change));
 
       // Convert to ScriptureRangeUsjVerseRefChapterLocation format
       let scriptureSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
@@ -5185,6 +5218,27 @@ function PlatformScriptureEditor({
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
+  // Top-menu Cut, Copy and Paste while the footnotes pane is the edit target. The main editor is
+  // never consulted: with nothing in the pane to act on, the command does nothing (Copy) or says it
+  // is blocked (Cut, Paste).
+  const runFootnotesEditCommand = useCallback(
+    (command: EditMenuCommand) => {
+      const rows = document.querySelector(`[${FOOTNOTES_ROWS_ATTRIBUTE}]`);
+      runFootnotesEditMenuCommand(command, {
+        rowEditor:
+          paneEditingIndexRef.current !== undefined ? paneNoteEditorRef.current : undefined,
+        isSelectionInRowEditor: editTargetRef.current.isSelectionInRowEditor,
+        hasRowsSelection: readFootnotesSelectionState(document.getSelection(), rows).hasSelection,
+        copyBrowserSelection: () => {
+          document.execCommand('copy');
+        },
+        notifyActionBlocked: () => notifyEditActionBlocked(localizedStrings),
+        onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
+      });
+    },
+    [localizedStrings],
+  );
+
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
       // Cut, Copy and Paste act on this editor and need the click's user activation for the
@@ -5192,7 +5246,8 @@ function PlatformScriptureEditor({
       // Their actions drive the editor directly, past the events `usePauseEditing` holds off, so a
       // chapter still loading blocks them here instead.
       if (isEditMenuCommand(projectMenuCommand.command)) {
-        runEditMenuCommand(projectMenuCommand.command);
+        if (editTargetRef.current.target === 'main') runEditMenuCommand(projectMenuCommand.command);
+        else runFootnotesEditCommand(projectMenuCommand.command);
         return;
       }
       // Find is the one menu command that needs more than the tab id: it carries this tab's current
@@ -5223,7 +5278,7 @@ function PlatformScriptureEditor({
           ),
         );
     },
-    [getMenuFindSelectionText, runEditMenuCommand, webViewId],
+    [getMenuFindSelectionText, runEditMenuCommand, runFootnotesEditCommand, webViewId],
   );
 
   // #region Context Menu
@@ -5252,9 +5307,6 @@ function PlatformScriptureEditor({
   // wrapper, not `editorContainerRef`: that also holds the footnotes pane, its row editor and the
   // header alerts, none of which this menu serves. It is enabled in every state that shows the
   // text, read-only, Preview and resources included: the menu's own conditions decide its items.
-  // A ref starts out as null for React to be able to set it as an element ref
-  // eslint-disable-next-line no-null/no-null
-  const mainEditorWrapperRef = useRef<HTMLDivElement>(null);
   const { dismiss: dismissEditorContextMenu, isClaimingKeys: isEditorContextMenuClaimingKeys } =
     useEditorContextMenu({
       containerRef: mainEditorWrapperRef,

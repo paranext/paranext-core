@@ -37,6 +37,8 @@ const {
   mockSendCommand,
   editorialOptions,
   mockLoggerDebug,
+  rowEditorHandle,
+  toolbarSelectHandler,
 } = vi.hoisted(() => ({
   mockUseProjectData: vi.fn(),
   mockUseLocalizedStrings: vi.fn(),
@@ -75,6 +77,13 @@ const {
   editorialOptions: { current: undefined as unknown },
   /** Stands in for `logger.debug`. */
   mockLoggerDebug: vi.fn(),
+  /**
+   * What the footnotes pane's row editor's inner editor exposes through its ref; the main editor's
+   * handle when unset. The row editor is the stubbed editor instance given no selection handler.
+   */
+  rowEditorHandle: { current: undefined as unknown },
+  /** The `onSelectProjectMenuItem` the toolbar was last rendered with. */
+  toolbarSelectHandler: { current: undefined as unknown },
 }));
 
 /** What each key localizes to by default; any other key echoes itself, as an unresolved one does. */
@@ -192,6 +201,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     // Wraps the real toolbar so a test can read the menu it was handed.
     TabToolbar: ({ projectMenuData, ...props }: Record<string, unknown>) => {
       toolbarProps.current = projectMenuData;
+      toolbarSelectHandler.current = props.onSelectProjectMenuItem;
       return <original.TabToolbar projectMenuData={projectMenuData} {...props} />;
     },
   };
@@ -205,7 +215,11 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
     Editorial: React.forwardRef((props: Record<string, unknown>, ref) => {
       captureSelectionHandler(props.onSelectionChange);
       editorialOptions.current = props.options;
-      React.useImperativeHandle(ref, () => editorHandle.current);
+      React.useImperativeHandle(ref, () =>
+        props.onSelectionChange === undefined && rowEditorHandle.current
+          ? rowEditorHandle.current
+          : editorHandle.current,
+      );
       return (
         <div data-testid="editorial">
           <div className="editor-input" data-testid="editor-input" />
@@ -286,6 +300,8 @@ beforeEach(() => {
   mockNotifyEditActionBlocked.mockClear();
   chapterUsjValue.current = undefined;
   editorHandle.current = undefined;
+  rowEditorHandle.current = undefined;
+  toolbarSelectHandler.current = undefined;
   captureSelectionHandler.mockClear();
   mockContextKeysSet.mockClear();
   editorialOptions.current = undefined;
@@ -1495,8 +1511,11 @@ describe('Scripture editor right-click menu', () => {
       });
     };
 
+    /** The main editor stub of the last {@link openRowEditor}, to read what reached the main text. */
+    let openedMainEditor: ReturnType<typeof stubEditor> | undefined;
+
     const openRowEditor = async () => {
-      stubEditor();
+      openedMainEditor = stubEditor();
       chapterUsjValue.current = chapterWithFootnote;
       appSettings.set('platform.interfaceMode', 'power');
       await renderEditor({ state: { footnotesPaneVisible: true, viewType: 'standard' } });
@@ -1536,6 +1555,248 @@ describe('Scripture editor right-click menu', () => {
           }),
         }),
       );
+    });
+
+    describe('top-menu Edit commands follow the editor last worked in', () => {
+      const CUT = 'platformScriptureEditor.cutSelection';
+      const PASTE = 'platformScriptureEditor.pasteAtSelection';
+      const PASTE_PLAIN = 'platformScriptureEditor.pasteAsPlainTextAtSelection';
+      const HAS_SELECTION = `platformScriptureEditor.webView.${WEB_VIEW_ID}.hasSelection`;
+      const EDITABLE = `platformScriptureEditor.webView.${WEB_VIEW_ID}.editTargetIsEditable`;
+
+      /** What reached the main editor's clipboard methods (its focus calls are not the concern). */
+      const clipboardCallsOn = (editor: { calls: string[] }) =>
+        editor.calls.filter((name) => ['cut', 'copy', 'paste', 'pastePlainText'].includes(name));
+
+      const lastPublished = (key: string) =>
+        mockContextKeysSet.mock.calls.findLast(([name]) => name === key)?.[1];
+
+      /** Stands in for the row editor's inner editor, recording into `rowCalls`. */
+      const stubRowEditor = () => {
+        const rowCalls: string[] = [];
+        const record = (name: string) =>
+          vi.fn(() => {
+            rowCalls.push(name);
+          });
+        const known: Record<string, unknown> = {
+          focus: record('focus'),
+          copy: record('copy'),
+          cut: record('cut'),
+          paste: record('paste'),
+          pastePlainText: record('pastePlainText'),
+          getSelection: () => ({ start: selectionStart }),
+          setSelection: vi.fn(),
+          getSelectedParaMarker: () => undefined,
+        };
+        rowEditorHandle.current = new Proxy(known, {
+          get: (target, property) => {
+            if (typeof property !== 'string' || property === 'then') return undefined;
+            if (!(property in target)) target[property] = vi.fn();
+            return target[property];
+          },
+        });
+        return rowCalls;
+      };
+
+      /** Opens the row editor with both editors recording their calls. */
+      const openRowEditorRecording = async () => {
+        const rowCalls = stubRowEditor();
+        const inputs = await openRowEditor();
+        const main = openedMainEditor;
+        if (!main) throw new Error('The main editor was not stubbed');
+        return { rowCalls, main, mainInput: inputs[0], rowInput: inputs[1] };
+      };
+
+      /**
+       * Selects the text of `node` in the document, as the user would, and lets the web view see
+       * it.
+       */
+      const selectIn = async (node: Element, { collapsed = false } = {}) => {
+        if (!node.textContent) node.textContent = 'some text';
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        if (collapsed) range.collapse(true);
+        const selection = document.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        await act(async () => {
+          document.dispatchEvent(new Event('selectionchange'));
+        });
+      };
+
+      const runTopMenu = (command: string) =>
+        act(async () => {
+          const handler = toolbarSelectHandler.current;
+          if (typeof handler !== 'function') throw new Error('The toolbar has no select handler');
+          handler({ command });
+        });
+
+      const reportMainSelection = (selection: unknown) =>
+        act(async () => {
+          const handler = captureSelectionHandler.mock.lastCall?.[0];
+          if (typeof handler === 'function') await handler(selection);
+        });
+
+      let execCommand: ReturnType<typeof vi.fn>;
+      beforeEach(() => {
+        execCommand = vi.fn(() => true);
+        Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+      });
+      afterEach(() => {
+        Reflect.deleteProperty(document, 'execCommand');
+        document.getSelection()?.removeAllRanges();
+      });
+
+      /** The pane with its one footnote as a read-only row; no row session open. */
+      const renderWithReadOnlyRow = async () => {
+        const main = stubEditor();
+        chapterUsjValue.current = chapterWithFootnote;
+        appSettings.set('platform.interfaceMode', 'power');
+        const tab = await renderEditor({
+          state: { footnotesPaneVisible: true, viewType: 'standard' },
+        });
+        const [row] = screen.getAllByRole('option');
+        return { main, row, rerender: tab.rerender };
+      };
+
+      it('sends the commands to the main text until the user selects in a footnote', async () => {
+        const { main } = await renderWithReadOnlyRow();
+        main.setLiveSelection(selectionRange);
+
+        await runTopMenu(CUT);
+        await runTopMenu(COPY);
+        await runTopMenu(PASTE);
+
+        expect(main.calls).toEqual(expect.arrayContaining(['cut', 'copy', 'paste']));
+        expect(lastPublished(EDITABLE)).toBe(true);
+        expect(mockNotifyEditActionBlocked).not.toHaveBeenCalled();
+      });
+
+      it('reads a selection in a read-only row: Copy goes through the pane, Cut and Paste are blocked, the main text is never touched', async () => {
+        const { main, row } = await renderWithReadOnlyRow();
+        main.setLiveSelection(selectionRange);
+
+        await selectIn(row);
+
+        expect(lastPublished(HAS_SELECTION)).toBe(true);
+        expect(lastPublished(EDITABLE)).toBe(false);
+
+        await runTopMenu(COPY);
+        expect(execCommand).toHaveBeenCalledExactlyOnceWith('copy');
+        expect(mockNotifyEditActionBlocked).not.toHaveBeenCalled();
+
+        await runTopMenu(CUT);
+        await runTopMenu(PASTE);
+        await runTopMenu(PASTE_PLAIN);
+        expect(mockNotifyEditActionBlocked).toHaveBeenCalledTimes(3);
+        // The main editor holds a live selection and every one of its methods is a recorder, so a
+        // fallback to the main text would show up here.
+        expect(clipboardCallsOn(main)).toEqual([]);
+        expect(execCommand).toHaveBeenCalledOnce();
+      });
+
+      it('publishes the target selection: the main text range stops counting once the user is in a footnote', async () => {
+        const { row } = await renderWithReadOnlyRow();
+        await reportMainSelection(selectionRange);
+        expect(lastPublished(HAS_SELECTION)).toBe(true);
+
+        await selectIn(row, { collapsed: true });
+        expect(lastPublished(HAS_SELECTION)).toBe(false);
+
+        await selectIn(row);
+        expect(lastPublished(HAS_SELECTION)).toBe(true);
+      });
+
+      it('does nothing for Copy, and shows no notice, when the read-only row has only a caret', async () => {
+        const { main, row } = await renderWithReadOnlyRow();
+
+        await selectIn(row, { collapsed: true });
+        await runTopMenu(COPY);
+
+        expect(execCommand).not.toHaveBeenCalled();
+        expect(mockNotifyEditActionBlocked).not.toHaveBeenCalled();
+        expect(clipboardCallsOn(main)).toEqual([]);
+      });
+
+      it('sends Cut, Copy and Paste to the open row editor, never to the main text', async () => {
+        const { rowCalls, main, rowInput } = await openRowEditorRecording();
+        main.setLiveSelection(selectionRange);
+
+        await selectIn(rowInput);
+
+        expect(lastPublished(EDITABLE)).toBe(true);
+        expect(lastPublished(HAS_SELECTION)).toBe(true);
+        await runTopMenu(CUT);
+        await runTopMenu(COPY);
+        await runTopMenu(PASTE);
+        await runTopMenu(PASTE_PLAIN);
+
+        expect(rowCalls.filter((name) => name !== 'focus')).toEqual([
+          'cut',
+          'copy',
+          'paste',
+          'pastePlainText',
+        ]);
+        expect(clipboardCallsOn(main)).toEqual([]);
+      });
+
+      it('keeps the target when the selection moves somewhere that is neither editor', async () => {
+        const { rowCalls, rowInput } = await openRowEditorRecording();
+        await selectIn(rowInput);
+
+        const outside = document.createElement('button');
+        outside.textContent = 'toolbar';
+        document.body.append(outside);
+        await selectIn(outside);
+        outside.remove();
+
+        expect(lastPublished(EDITABLE)).toBe(true);
+        expect(lastPublished(HAS_SELECTION)).toBe(true);
+        await runTopMenu(COPY);
+        expect(rowCalls).toContain('copy');
+      });
+
+      it('moves the target back to the main text when the user selects there', async () => {
+        const { rowCalls, main, mainInput, rowInput } = await openRowEditorRecording();
+        await selectIn(rowInput);
+        await selectIn(mainInput);
+
+        await runTopMenu(COPY);
+
+        expect(main.calls).toContain('copy');
+        expect(rowCalls).not.toContain('copy');
+        expect(lastPublished(EDITABLE)).toBe(true);
+      });
+
+      it('is not moved by the main editor reporting a selection while the user is in a footnote', async () => {
+        const { rowCalls, main, rowInput } = await openRowEditorRecording();
+        // A caret in the row: the footnote selection is not a range.
+        await selectIn(rowInput, { collapsed: true });
+        expect(lastPublished(HAS_SELECTION)).toBe(false);
+
+        await reportMainSelection(selectionRange);
+
+        // The report is the main text's own business: it neither sets the key nor moves the target.
+        expect(lastPublished(HAS_SELECTION)).toBe(false);
+        expect(lastPublished(EDITABLE)).toBe(true);
+        await runTopMenu(COPY);
+        expect(rowCalls).toContain('copy');
+        expect(clipboardCallsOn(main)).toEqual([]);
+      });
+
+      it('goes back to the main text after the chapter changes', async () => {
+        const { main, row, rerender } = await renderWithReadOnlyRow();
+        main.setLiveSelection(selectionRange);
+        await selectIn(row);
+        expect(lastPublished(EDITABLE)).toBe(false);
+
+        await rerender({ chapterNum: 2 });
+
+        expect(lastPublished(EDITABLE)).toBe(true);
+        await runTopMenu(COPY);
+        expect(main.calls).toContain('copy');
+        expect(execCommand).not.toHaveBeenCalled();
+      });
     });
   });
 });

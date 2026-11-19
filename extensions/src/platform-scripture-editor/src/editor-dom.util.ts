@@ -1043,6 +1043,12 @@ export function keepScrollPositionAcross(
 export const FOOTNOTES_PANE_ATTRIBUTE = 'data-footnotes-pane';
 
 /**
+ * Attribute that marks the footnotes pane's list of rows (the row editor and the read-only rows),
+ * not the pane's header or close button, so a selection can be told apart as inside the rows.
+ */
+export const FOOTNOTES_ROWS_ATTRIBUTE = 'data-footnotes-rows';
+
+/**
  * Puts DOM focus on the footnotes pane's selected row, which is where a row-editing session was
  * opened from. Call it after ending a session from inside the row editor (Escape): the editor is
  * unmounting, so without this focus falls to the document body and the next keystroke goes
