@@ -23,6 +23,7 @@ import {
 import { getSharedContextKey } from '@/context/shared-context.util';
 import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
 import {
+  READOUT_OPEN_DELAY_MS,
   getInlineEndSide,
   getShortcutKeyNames,
   getShortcutKeycaps,
@@ -264,6 +265,17 @@ describe('ShortcutKeys tooltip', () => {
       registry[key] = original;
       vi.resetModules();
     }
+  });
+
+  it('waits for the pointer to rest on the keycaps before opening', async () => {
+    renderWithStrings(<ShortcutKeys hint="Ctrl++" />);
+    await hoverKeycaps();
+    // Not yet: a pointer passing over the keycaps opens nothing
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    // Positive control: resting there opens it once the delay has passed
+    expect(
+      await screen.findByRole('tooltip', undefined, { timeout: READOUT_OPEN_DELAY_MS + 1000 }),
+    ).toHaveTextContent('Press Control and +');
   });
 
   it('shows each key name in the tooltip as a keycap', async () => {

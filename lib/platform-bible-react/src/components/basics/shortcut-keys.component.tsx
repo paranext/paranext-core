@@ -194,6 +194,9 @@ function ShortcutReadout({
   ));
 }
 
+/** How long the pointer rests on the keycaps before the readout opens */
+export const READOUT_OPEN_DELAY_MS = 400;
+
 /**
  * The side of the keycaps at the inline end of the layout, where the tooltip goes: right in a
  * left-to-right layout, left in a right-to-left one. Exported for tests only; not part of the
@@ -288,8 +291,9 @@ export function ShortcutKeys({ hint }: ShortcutKeysProps) {
   // A template without `{keys}` is no template: while the strings load, the value is the key itself
   if (isInTooltip || !tooltipTemplate || !includes(tooltipTemplate, '{keys}')) return keys;
   return (
-    // Its own provider, so the keycaps get a tooltip in any menu, whether or not one is above them
-    <TooltipProvider>
+    // Its own provider, so the keycaps get a tooltip in any menu, whether or not one is above them.
+    // The delay keeps a pointer passing down a menu's shortcut column from flashing a readout per row
+    <TooltipProvider delayDuration={READOUT_OPEN_DELAY_MS}>
       <Tooltip open={isTooltipOpen} onOpenChange={setIsTooltipOpen}>
         {/* A wrapper rather than `asChild` on the keycaps: the trigger would replace their `data-slot`,
           and `Kbd` ignores the pointer, so the hover has to land on something around it */}
