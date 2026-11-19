@@ -2179,7 +2179,8 @@ export type UseEditorContextMenuResult = {
  *
  * The listeners sit on the frame's own document and window and resolve `containerRef.current` when
  * an event arrives, so a container that mounts late or is rebuilt is still served. The container
- * must be the editor's own element, never a wrapper that holds other editors.
+ * must be the editor's own element, never a wrapper that holds other editors, and must live in the
+ * document the hook runs in.
  *
  * While a request is open the keyboard belongs to the menu: every key except bare modifiers is
  * claimed on the frame's window, and Escape also closes the menu. The claim lasts until the request
