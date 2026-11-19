@@ -79,7 +79,7 @@ export function createReadOnlyPanelContextMenuCallbacks({
         papiService.overlays.showContextMenu(
           webViewType,
           webViewId,
-          getReadOnlyPanelContextMenuShowOptions(request, projectId !== undefined),
+          getReadOnlyPanelContextMenuShowOptions(request, !!projectId),
         ),
       ),
     dismissMenu: () => papiService.overlays.dismissContextMenu(webViewId),

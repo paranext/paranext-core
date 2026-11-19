@@ -57,10 +57,7 @@ import {
   RESOURCE_REMOVED_FROM_USER_LIST_KEY,
 } from './scripture-text-grid-persistence.utils';
 import { ResourceTextPanel } from './resource-text-panel.component';
-import {
-  getResourceTextPanelWebViewType,
-  RESOURCE_PANEL_STRING_KEYS,
-} from './resource-text-panel.const';
+import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { useReadOnlyPanelContextMenuCallbacks } from './use-read-only-panel-context-menu-callbacks.hook';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 import {
@@ -105,6 +102,7 @@ const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
  */
 globalThis.webViewComponent = function ResourceTextPanelWebView({
   id: webViewId,
+  webViewType,
   projectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
@@ -445,7 +443,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   useOpenFindShortcut(webViewId, resourceProjectId);
   const contextMenuCallbacks = useReadOnlyPanelContextMenuCallbacks(
     webViewId,
-    getResourceTextPanelWebViewType(resourceType),
+    webViewType,
     resourceProjectId,
   );
 

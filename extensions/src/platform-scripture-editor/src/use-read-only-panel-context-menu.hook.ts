@@ -81,6 +81,10 @@ export function useReadOnlyPanelContextMenu({
           if (!editor) return;
           focusEditorKeepingSelection(editor, false);
           runEditMenuAction(clipboardCommand, editor, { isReadOnly: true });
+          // The menu hands focus back to its tab as it closes; return it to the frame so the
+          // panel's keyboard shortcuts (Ctrl+F) keep working. Frame focus only, never the
+          // editor's own `focus()`.
+          requestAnimationFrame(() => focusEditorKeepingSelection(editorRef.current, false));
         },
         openFind: callbacks.openFind,
         sendCommand: callbacks.sendCommand,

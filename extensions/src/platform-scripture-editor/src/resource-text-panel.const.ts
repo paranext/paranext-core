@@ -1,4 +1,4 @@
-import type { LocalizedStringValue, ResourceType } from 'platform-bible-utils';
+import type { LocalizedStringValue } from 'platform-bible-utils';
 import { RESOURCE_PANEL_TYPED_STRING_KEYS } from './resource-panel-strings.utils';
 import type { InstallFailureMessageKeys } from './install-failure-message.utils';
 import { RESOURCE_COLLECTION_OPTIONS_KEYS } from './resource-collection-options/resource-collection-options.types';
@@ -80,18 +80,3 @@ export const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleText
 
 /** The web view type of the Commentaries panel. */
 export const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
-
-/**
- * The web view type a resource panel runs as. One web view serves both types, so the type follows
- * the resource type the panel shows: a Scripture resource is the Bible Texts panel, anything else
- * the Commentaries panel.
- *
- * @param resourceType The resource type the panel shows
- */
-export function getResourceTextPanelWebViewType(
-  resourceType: ResourceType,
-): typeof BIBLE_TEXTS_PANEL_WEBVIEW_TYPE | typeof COMMENTARIES_PANEL_WEBVIEW_TYPE {
-  return resourceType === 'ScriptureResource'
-    ? BIBLE_TEXTS_PANEL_WEBVIEW_TYPE
-    : COMMENTARIES_PANEL_WEBVIEW_TYPE;
-}

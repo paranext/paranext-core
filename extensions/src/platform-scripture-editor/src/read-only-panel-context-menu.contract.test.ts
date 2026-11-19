@@ -6,7 +6,6 @@ import { MODEL_TEXT_PANEL_WEBVIEW_TYPE } from './model-text-panel.const';
 import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
-  getResourceTextPanelWebViewType,
 } from './resource-text-panel.const';
 
 const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -27,9 +26,16 @@ const PAPI_FREE_FILES = [
   'focus-editor-keeping-selection.util.ts',
   'edit-menu-actions.util.ts',
   'editor-context-menu-pick.util.ts',
+  'find-trigger.util.ts',
 ];
 
 describe('read-only panel context menu wiring', () => {
+  it('keeps the three types apart and as the contribution spells them', () => {
+    expect(BIBLE_TEXTS_PANEL_WEBVIEW_TYPE).toBe('platformScriptureEditor.bibleTexts');
+    expect(COMMENTARIES_PANEL_WEBVIEW_TYPE).toBe('platformScriptureEditor.commentaries');
+    expect(MODEL_TEXT_PANEL_WEBVIEW_TYPE).toBe('platformScriptureEditor.modelText');
+  });
+
   it.each(PAPI_FREE_FILES)('%s imports nothing from @papi at runtime', (fileName) => {
     const importLines = readSource(fileName)
       .split('\n')
@@ -56,25 +62,5 @@ describe('read-only panel context menu wiring', () => {
     ].forEach((webViewType) => {
       expect(menus.webViewMenus[webViewType]?.contextMenu?.items.length).toBeGreaterThan(0);
     });
-  });
-});
-
-describe('getResourceTextPanelWebViewType', () => {
-  it('serves a Scripture resource as the Bible Texts panel', () => {
-    expect(getResourceTextPanelWebViewType('ScriptureResource')).toBe(
-      BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
-    );
-  });
-
-  it('serves a commentary as the Commentaries panel', () => {
-    expect(getResourceTextPanelWebViewType('CommentaryResource')).toBe(
-      COMMENTARIES_PANEL_WEBVIEW_TYPE,
-    );
-  });
-
-  it('keeps the three types apart and as the contribution spells them', () => {
-    expect(BIBLE_TEXTS_PANEL_WEBVIEW_TYPE).toBe('platformScriptureEditor.bibleTexts');
-    expect(COMMENTARIES_PANEL_WEBVIEW_TYPE).toBe('platformScriptureEditor.commentaries');
-    expect(MODEL_TEXT_PANEL_WEBVIEW_TYPE).toBe('platformScriptureEditor.modelText');
   });
 });
