@@ -965,23 +965,62 @@ describe('useEditorContextMenu', () => {
       expect(onPick).not.toHaveBeenCalled();
     });
 
-    it('keeps the request open on the pointerdown of a right-click', () => {
+    function rightButtonPointerDown(target: Element) {
+      // Jsdom lacks PointerEvent; the hook reads only `button`, which a MouseEvent carries.
+      fireEvent(
+        target,
+        new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 2 }),
+      );
+    }
+
+    it('keeps the request open on the pointerdown of a right-click the hook will claim', async () => {
+      const first = deferred<string | undefined>();
+      const second = deferred<string | undefined>();
+      const queue = [first, second];
       const dismissMenu = vi.fn();
+      const onPick = vi.fn();
+      let api!: ReturnType<typeof useEditorContextMenu>;
       const { getByTestId } = render(
         <Host
-          requestMenu={() => new Promise<string | undefined>(() => {})}
+          requestMenu={() => queue.shift()?.promise ?? Promise.resolve(undefined)}
           dismissMenu={dismissMenu}
+          onPick={onPick}
+          onApi={(value) => {
+            api = value;
+          }}
         />,
       );
       rightClick(getByTestId('text'));
 
-      // Jsdom lacks PointerEvent; the hook reads only `button`, which a MouseEvent carries.
-      fireEvent(
-        getByTestId('text'),
-        new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 2 }),
-      );
-
+      rightButtonPointerDown(getByTestId('text'));
       expect(dismissMenu).not.toHaveBeenCalled();
+      expect(api.isPending()).toBe(true);
+      rightClick(getByTestId('text'));
+      first.reject(newPlatformError('replaced', ABORTED));
+      second.resolve('cmd');
+      await flush();
+
+      expect(onPick).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops the open request on the pointerdown of a right-click outside the container', () => {
+      const dismissMenu = vi.fn();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => new Promise<string | undefined>(() => {})}
+          dismissMenu={dismissMenu}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      rightClick(getByTestId('text'));
+
+      rightButtonPointerDown(getByTestId('outside'));
+
+      expect(dismissMenu).toHaveBeenCalledTimes(1);
+      expect(api.isPending()).toBe(false);
     });
 
     it('ignores a pointerdown while nothing is pending', () => {
