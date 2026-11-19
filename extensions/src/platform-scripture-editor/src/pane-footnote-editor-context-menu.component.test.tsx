@@ -109,6 +109,7 @@ function setup() {
   return {
     ...utils,
     handle,
+    rowEditorRef,
     notifyActionBlocked,
     rightClick,
     flush,
@@ -216,7 +217,7 @@ describe('PaneFootnoteEditorContextMenu', () => {
       ['platformScriptureEditor.copySelection', 'copy'],
       ['platformScriptureEditor.pasteAtSelection', 'paste'],
       ['platformScriptureEditor.pasteAsPlainTextAtSelection', 'pastePlainText'],
-    ] as const)('%s focuses the row editor, then calls its %s', async (command, method) => {
+    ] as const)("%s calls only the row editor handle's %s", async (command, method) => {
       const settle = openRequest();
       const { getByTestId, rightClick, flush, handle } = setup();
       rightClick(getByTestId('note-text'));
@@ -225,13 +226,49 @@ describe('PaneFootnoteEditorContextMenu', () => {
       await flush();
 
       expect(handle[method]).toHaveBeenCalledTimes(1);
-      expect(handle.focus.mock.invocationCallOrder[0]).toBeLessThan(
-        handle[method].mock.invocationCallOrder[0],
-      );
       const others = (['cut', 'copy', 'paste', 'pastePlainText'] as const).filter(
         (other) => other !== method,
       );
       others.forEach((other) => expect(handle[other]).not.toHaveBeenCalled());
+      // Restoring the selection and focusing are the handle's own job, in that order, so the
+      // wrapper must not focus ahead of the method.
+      expect(handle.focus).not.toHaveBeenCalled();
+    });
+
+    it('returns focus to the note text on the next animation frame', async () => {
+      const frames: FrameRequestCallback[] = [];
+      const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+      try {
+        const settle = openRequest();
+        const { getByTestId, rightClick, flush, handle } = setup();
+        rightClick(getByTestId('note-text'));
+        settle('platformScriptureEditor.copySelection');
+        await flush();
+        expect(handle.focus).not.toHaveBeenCalled();
+
+        frames.forEach((callback) => callback(0));
+
+        expect(handle.focus).toHaveBeenCalledTimes(1);
+      } finally {
+        raf.mockRestore();
+      }
+    });
+
+    it('tells the user the action is blocked when the row editor is gone', async () => {
+      const settle = openRequest();
+      const { getByTestId, rightClick, flush, rowEditorRef, notifyActionBlocked } = setup();
+      rightClick(getByTestId('note-text'));
+      // The ref's own type for "no editor mounted" is null.
+      // eslint-disable-next-line no-null/no-null
+      rowEditorRef.current = null;
+
+      settle('platformScriptureEditor.copySelection');
+      await flush();
+
+      expect(notifyActionBlocked).toHaveBeenCalledTimes(1);
     });
 
     it('tells the user the action is blocked, and logs it, when the row editor refuses it', async () => {
