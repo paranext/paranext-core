@@ -2116,14 +2116,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     it guards, so nothing on the call-time path may be looked up when a call is judged. The
     installer captures `Error`, `captureStackTrace`, `Object` and its static methods, `String` and
     its `toLowerCase` / `indexOf` / `slice`, `Reflect.apply` / `Reflect.deleteProperty` /
-    `Reflect.get`, the original
-    `createElement` / `createElementNS` and the `CallSite` methods; `isCreateElementCallerAllowed`
-    uses `RegExp.prototype.exec` and `Reflect.apply` captured when its module loads. Everything else
-    on the path is an operator (`!!`, not `Boolean(...)`) or an own property of a value the guard
-    created or V8 handed it — no free globals, `.call` / `.apply`, iterators or spread. The tag list
-    is a null-prototype record. A non-string tag argument is coerced once and the original
-    receives the coerced string; a string primitive is passed through unchanged. If `onRejected`
-    returns instead of throwing, the guard throws its own error.
+    `Reflect.get`, the original `createElement` / `createElementNS` and the `CallSite` methods;
+    `isCreateElementCallerAllowed` uses `RegExp.prototype.exec` and `Reflect.apply` captured when
+    its module loads. Everything else on the path is an operator (`!!`, not `Boolean(...)`) or an
+    own property of a value the guard created or V8 handed it — no free globals, `.call` / `.apply`,
+    iterators or spread. The tag list is a null-prototype record. A non-string tag argument is
+    coerced once and the original receives the coerced string; a string primitive is passed through
+    unchanged. If `onRejected` returns instead of throwing, the guard throws its own error.
   - **Own the stack-trace machinery.** The installer makes `Error.prepareStackTrace` a
     non-configurable accessor whose getter returns the guard's formatter only during a guard
     capture, and also locks `window.Error` (non-writable, non-configurable): under an embedder

@@ -276,8 +276,9 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
 
     // A string primitive cannot change between the check and the native call, so only another
     // value (whose conversion could answer differently the second time) needs a converted copy
-    const isStringName = typeof args[0] === 'string';
-    const tagName: string = isStringName ? args[0] : RealmString(args[0]);
+    const name = args[0];
+    const isStringName = typeof name === 'string';
+    const tagName: string = isStringName ? name : RealmString(name);
     const lowerTagName: string = apply(toLowerCase, tagName, []);
     if (restrictedTags[lowerTagName] === true) judgeCaller(lowerTagName, createElement);
     return apply(
@@ -291,8 +292,9 @@ export function installCreateElementGuard(options: CreateElementGuardOptions): {
     if (args.length < 2) return apply(originalCreateElementNS, this, args);
 
     // See `createElement` for why a string primitive is passed through as is
-    const isStringName = typeof args[1] === 'string';
-    const qualifiedName: string = isStringName ? args[1] : RealmString(args[1]);
+    const name = args[1];
+    const isStringName = typeof name === 'string';
+    const qualifiedName: string = isStringName ? name : RealmString(name);
     const colonIndex: number = apply(indexOf, qualifiedName, [':']);
     const localName: string =
       colonIndex === -1 ? qualifiedName : apply(slice, qualifiedName, [colonIndex + 1]);
