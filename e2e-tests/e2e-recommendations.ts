@@ -86,7 +86,8 @@ export interface E2eRecommendationReport {
   /**
    * Changed runtime source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists,
    * so no recommendation can cover them; only files under those three roots are listed. Files
-   * `NON_RUNTIME` matches are never reported here, nor are deleted files, and neither is `lib/`:
+   * `NON_RUNTIME` matches are never reported here, nor are deleted files or `localizedStrings.json`
+   * files (keys can still list them, since e2e locators use visible text), and neither is `lib/`:
    * library code is reached through the extensions and renderer components that consume it, so a
    * `lib/` file is reported only through the keys that list it.
    */
@@ -96,9 +97,9 @@ export interface E2eRecommendationReport {
   /**
    * Changed files that can carry a dependency change, sorted: the root `package.json`,
    * `package-lock.json`, `release/app/package.json`, `release/app/package-lock.json`,
-   * `dev-packages.json`, `global.json`, any `.csproj` or `.props` file under `c-sharp/` and
-   * anything under `patches/`. A hint: whether a dependency actually changed is read from their
-   * diffs in the end-to-end tests step of `/review-paratext`.
+   * `dev-packages.json`, `global.json`, the two `.config/dotnet-tools.json` files, any `.csproj` or
+   * `.props` file under `c-sharp/` and anything under `patches/`. A hint: whether a dependency
+   * actually changed is read from their diffs in the end-to-end tests step of `/review-paratext`.
    */
   dependencyFiles: string[];
   /**
@@ -228,13 +229,16 @@ const NON_RUNTIME = new RegExp(
 export const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 
 /**
- * The `editor_paths` entries read through `read`, or undefined when `read` throws: a malformed line
- * in `test.yml` then costs the report its `editorListRuns` answer (`'unknown'`) instead of the
- * whole report.
+ * The `editor_paths` entries read through `read`, or undefined when `read` throws or the entries do
+ * not form a JavaScript regular expression (an entry `grep -E` accepts can still be rejected here):
+ * a malformed line in `test.yml` then costs the report its `editorListRuns` answer (`'unknown'`)
+ * instead of the whole report.
  */
 export function readEditorPaths(read: () => string[]): string[] | undefined {
   try {
-    return read();
+    const entries = read();
+    editorPathsPattern(entries);
+    return entries;
   } catch (error) {
     process.stderr.write(
       `e2e-recommendations: could not read editor_paths from test.yml, so editorListRuns is unknown: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -264,9 +268,9 @@ const isE2eSpecSupport = (file: string) => {
 
 /**
  * Whether `file` can carry a dependency change: the root `package.json`, `package-lock.json`,
- * `release/app/package.json`, `release/app/package-lock.json`, `dev-packages.json` and
- * `global.json`, a `.csproj` or `.props` file under `c-sharp/`, or anything under `patches/`. A
- * path test only: the diff decides whether a dependency changed.
+ * `release/app/package.json`, `release/app/package-lock.json`, `dev-packages.json`, `global.json`
+ * and the `.config/dotnet-tools.json` files, a `.csproj` or `.props` file under `c-sharp/`, or
+ * anything under `patches/`. A path test only: the diff decides whether a dependency changed.
  */
 const isDependencyFile = (file: string) =>
   [
@@ -276,6 +280,9 @@ const isDependencyFile = (file: string) =>
     'release/app/package-lock.json',
     'dev-packages.json',
     'global.json',
+    // The .NET tool pins (the C# formatter, the NuGet license tool).
+    '.config/dotnet-tools.json',
+    'c-sharp/.config/dotnet-tools.json',
   ].includes(file) ||
   (file.startsWith('c-sharp/') && /\.(csproj|props)$/.test(file)) ||
   file.startsWith('patches/');

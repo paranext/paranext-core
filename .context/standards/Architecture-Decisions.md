@@ -2938,7 +2938,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     an e2e spec changed, stale prefixes and whether CI runs the editor list. For two questions that
     depend on what a diff says it only hands over a hint. `dependencyFiles` lists the changed files
     that can carry a dependency change (the root and `release/app` `package.json` and lock files,
-    `dev-packages.json`, `global.json`, `.csproj` and `.props` files under `c-sharp/`, anything
+    `dev-packages.json`, `global.json`, the `.config/dotnet-tools.json` tool pins, `.csproj` and
+    `.props` files under `c-sharp/`, anything
     under `patches/`), by path alone. The end-to-end tests step of `/review-paratext` reads their diffs and judges whether a dependency,
     an engine or SDK pin or a patch really changed (a package's own release version, a script or
     formatting does not; a dev tool's bump does); if so it recommends the full isolated run

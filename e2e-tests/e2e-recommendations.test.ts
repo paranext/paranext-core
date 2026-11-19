@@ -640,6 +640,8 @@ describe('recommendE2eTests', () => {
     'release/app/package-lock.json',
     'dev-packages.json',
     'global.json',
+    '.config/dotnet-tools.json',
+    'c-sharp/.config/dotnet-tools.json',
     'c-sharp/ParanextDataProvider.csproj',
     'c-sharp/Directory.Build.props',
     'patches/rc-dock+3.3.2.patch',
@@ -1008,6 +1010,21 @@ describe('reading the editor paths for the command line', () => {
       expect(
         readEditorPaths(() => parseEditorPathEntries('editor_paths+=("dev-packages")\n')),
       ).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(written.join('')).toContain('e2e-recommendations: could not read editor_paths');
+  });
+
+  it('warns on stderr and returns undefined when an entry is not a valid regular expression', () => {
+    const written: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+    try {
+      // `grep -E` accepts a leading `*`; a JavaScript RegExp rejects it.
+      expect(readEditorPaths(() => ['src/a/', '*foo'])).toBeUndefined();
     } finally {
       spy.mockRestore();
     }

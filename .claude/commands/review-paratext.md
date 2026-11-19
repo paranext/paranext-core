@@ -330,10 +330,10 @@ It prints a JSON report with these fields:
 
 - `recommendations`: isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`.
 - `alsoExercised`: keys whose specs only drive the changed files along the way, each with its `key` and `matchedFiles`.
-- `uncoveredFiles`: changed, existing runtime files under `src/`, `extensions/src/` and `c-sharp/` that no key lists; only files under those three roots are listed, so an extension's own webpack or PostCSS configuration under `extensions/src/` is listed when no key names it, while the top-level build configuration is not. Files that hold no code a key could list (tests, stories, docs, licenses, tool configuration, package, TypeScript and .NET project metadata except the data provider's own `c-sharp/ParanextDataProvider.csproj`, image and icon assets; `NON_RUNTIME` in `e2e-tests/e2e-recommendations.ts`) are never listed. A `lib/` file is never listed here: a `lib/` change reaches you only through the keys that name it, or through the Add part's third condition.
+- `uncoveredFiles`: changed, existing runtime files under `src/`, `extensions/src/` and `c-sharp/` that no key lists; only files under those three roots are listed, so an extension's own webpack or PostCSS configuration under `extensions/src/` is listed when no key names it, while the top-level build configuration is not. Files that hold no code a key could list (tests, stories, docs, licenses, tool configuration, package, TypeScript and .NET project metadata except the data provider's own `c-sharp/ParanextDataProvider.csproj`, image and icon assets; `NON_RUNTIME` in `e2e-tests/e2e-recommendations.ts`) are never listed, and neither are `localizedStrings.json` files (keys can still list them, since e2e locators use visible text). A `lib/` file is never listed here: a `lib/` change reaches you only through the keys that name it, or through the Add part's third condition.
 - `entryPointFiles`: changed menu, web view provider and command or request handler registration files.
 - `specsChanged`: whether the branch changes an e2e spec or its support code: any file under `e2e-tests/tests/` or `e2e-tests/fixtures/`, any `.ts` file under `e2e-tests/reporters/`, the global setup or teardown, a Playwright config, `e2e-tests/scoped-cleanup.ts`, `e2e-tests/parked-enhanced-resources.ts`, `e2e-tests/run-isolated.mjs` or `e2e-tests/run-e2e-wsl.sh`, except unit tests, Markdown files and `e2e-tests/tests/isolated/subset-sources.json`.
-- `dependencyFiles`: changed files (tracked or untracked, existing or deleted) that can carry a dependency change: the root `package.json` and `package-lock.json`, `release/app/package.json` and `release/app/package-lock.json`, `dev-packages.json`, `global.json`, any `.csproj` or `.props` file under `c-sharp/`, and anything under `patches/`. A hint only: a path test, not a verdict. You decide from their diffs whether a dependency changed (see the Full-run part).
+- `dependencyFiles`: changed files (tracked or untracked, existing or deleted) that can carry a dependency change: the root `package.json` and `package-lock.json`, `release/app/package.json` and `release/app/package-lock.json`, `dev-packages.json`, `global.json`, `.config/dotnet-tools.json` and `c-sharp/.config/dotnet-tools.json`, any `.csproj` or `.props` file under `c-sharp/`, and anything under `patches/`. A hint only: a path test, not a verdict. You decide from their diffs whether a dependency changed (see the Full-run part).
 - `stalePrefixes`: paths in the map (`e2e-tests/tests/isolated/subset-sources.json`) that match no tracked file, because a source was moved or deleted.
 - `editorListRuns`: whether the changed files make CI run the editor spec list too on this branch's pull request: `true`, `false`, or `'unknown'` when the CI path list could not be read.
 
@@ -343,13 +343,11 @@ This step never starts a test run and never blocks the review. It prints a stale
 
 **Stale-prefix warning** (printed, no question) — applies when `stalePrefixes` is non-empty: print one line, "The e2e map names files that no longer exist: <prefixes>. Please update `e2e-tests/tests/isolated/subset-sources.json`." Record it in `E2E_TEST_NOTES` as "map warning: <prefixes>".
 
-**Full-run part** (judged, no question of its own) — applies when `dependencyFiles` is non-empty and you judge, from their diffs, that a dependency really changed. Read the `package.json`, `dev-packages.json`, `global.json`, project and patch diffs in full (`git diff <MERGE_BASE> -- <file>`, or the content of an untracked file). A lock file's diff can run to thousands of lines, so read it bounded: `git diff --stat <MERGE_BASE> -- <lock file>`, then `git diff -U0 <MERGE_BASE> -- <lock file> | head -n 200` (an untracked lock file: `head -n 200 <lock file>`). An empty diff of a tracked lock file means it did not change. When a dependency change in a listed `package.json` accounts for the lock change, judge from the `package.json`; otherwise judge from the lock file's own bounded diff. A dependency, an engine or SDK pin (`volta`, `engines`, `global.json`, a .NET target framework) or a patch actually changing counts, a dev tool's version bump included. These do not count:
+**Full-run part** (judged, no question of its own) — applies when `dependencyFiles` is non-empty and you judge, from their diffs, that a dependency really changed. Read the diffs of every listed file except the lock files in full (`git diff <MERGE_BASE> -- <file>`, or the content of an untracked file). Do not read a lock file's diff: it can run to thousands of lines, and with little context it does not show which package a line belongs to. Count its changed `resolved` and `integrity` lines instead: `git diff <MERGE_BASE> -- <lock file> | grep -cE '^[-+] +"(resolved|integrity)"'`. A count above 0 means an installed package changed, since adding, removing or bumping a package always changes its `resolved` and `integrity` lines. 0 means none did: a release bump and the worktree `name` rewrite Step 1.2 describes change only `version` and `name` lines, and a workspace declaring a package that was already installed, or narrowing a range to the installed version, changes only a `dependencies` line. An untracked lock file counts as a dependency change. A dependency, an engine or SDK pin (`volta`, `engines`, `global.json`, a .NET target framework), a tool pin or a patch actually changing counts, a dev tool's version bump included. These do not count:
 
 - a change confined to a package's own release `version` field;
-- a lock file change confined to the `version` of the root package or of a workspace package (`packages["lib/…"]`, `packages["extensions/…"]`): a release bump; confirm it in that workspace's `package.json`;
 - a change confined to `scripts`;
 - a whitespace or formatting change only;
-- a lock file change confined to the top-level `"name"` field (and `packages[""].name`): the worktree rewrite Step 1.2 describes;
 - a dependency of a test project, of the Roslyn analyzers (`c-sharp/Paranext.Analyzers.Tests/`, `c-sharp/Paranext.Analyzers/`) or a build-only package (a `PackageReference` with `PrivateAssets="all"`, such as the analyzers `c-sharp/Directory.Build.props` adds), which the app never loads.
 
 Any other change to a dependency counts. When it applies, the first item of the list is the full isolated run, `npm run test:e2e:isolated all` (about an hour; CI runs it only nightly on `main`); say it covers the other recommended items, which are then listed for information only, and the also-exercised groups, which are not listed. If the diffs show nothing that counts, say nothing about it.
@@ -357,7 +355,7 @@ Any other change to a dependency counts. When it applies, the first item of the 
 **Run part** (a question) — applies when `recommendations` is non-empty or the Full-run part applies. List each key with its `command` and its CI status in words, from `ci`:
 
 - `kind: 'spec'`, `coreList: 'always'` → "also runs in CI on every pull request"
-- `kind: 'spec'`, `coreList: 'editor'` → "runs in CI only on pull requests that touch the Scripture editor (see 'What CI runs' in `e2e-tests/CLAUDE.md`); `editorListRuns` says whether this branch does: say 'so it runs in CI for this branch' when true, 'so it does not run in CI for this branch' when false and 'could not tell whether CI runs the editor list for this branch' when `'unknown'`"
+- `kind: 'spec'`, `coreList: 'editor'` → "runs in CI only on pull requests that touch the Scripture editor (see 'What CI runs' in `e2e-tests/CLAUDE.md`)", then add, from `editorListRuns`, ", so it runs in CI for this branch" (`true`), ", so it does not run in CI for this branch" (`false`) or " (could not tell whether CI runs the editor list for this branch)" (`'unknown'`)
 - `kind: 'spec'`, `coreList: 'none'` → "is in neither pull-request list (see 'What CI runs' in `e2e-tests/CLAUDE.md`)"
 - `kind: 'subset'` → "CI runs `alwaysCoreSpecCount` of its `specCount` spec files on every pull request (see 'What CI runs' in `e2e-tests/CLAUDE.md`)". When `editorCoreSpecCount` is above 0, add "plus `editorCoreSpecCount` on pull requests that touch the Scripture editor" and then, from `editorListRuns`, "and this branch's pull request does" (`true`), "and this branch's pull request does not" (`false`) or "(could not tell whether CI runs the editor list for this branch)" (`'unknown'`); when it is 0, add neither. When `specCount` is 0 the spec list is unknown: say the spec count is unknown instead of "0 of 0". For example: "CI runs 2 of its 3 spec files on every pull request" (`editorCoreSpecCount` 0); "CI runs 4 of its 20 spec files on every pull request, plus 6 on pull requests that touch the Scripture editor, and this branch's pull request does" (`editorCoreSpecCount` 6, `editorListRuns` true)
 
@@ -369,7 +367,11 @@ Then ask:
 
 When the Full-run part applies, ask this instead of the per-key question: "A dependency changed, so run the full isolated suite (the first item above). Did you run it? (ran and passed / ran and failed / not run, and why)".
 
-Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>: not run: <reason>". For a collapsed item, record one line for the item and name its `memberKeys` beside it. When the Full-run part applies, record one line `all: ran, passed`, `all: ran, failed: <what>` or `all: not run: <reason>`; record the other items as "covered by all" only when the full run passed, and otherwise as "<key>: not run: full run not done" (or "<key>: ran, failed: …" when the failure was in that key's specs).
+Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>: not run: <reason>". For a collapsed item, record one line for the item and name its `memberKeys` beside it. When the Full-run part applies, record one line `all: ran, passed`, `all: ran, failed: <what>` or `all: not run: <reason>`; then record each other item from what actually ran:
+
+- the full run passed → "<key>: covered by all";
+- the full run ran and failed → "<key>: ran, failed: <what>" for a key whose specs failed, "<key>: ran in all, passed" for the others;
+- the full run was not run → the author's answer for a key they ran on its own, otherwise "<key>: not run: full run not done".
 
 **Also-exercised line** (no question) — applies when `alsoExercised` is non-empty and the Full-run part does not apply, whether or not `recommendations` is: print one line naming those keys: "These also open the code you changed, if you want to run more: <keys>."
 
@@ -406,11 +408,10 @@ Synthesize from the conversation:
 - Any explanations provided for flagged items
 - Any unresolved items (Critical/Important findings the author could not explain)
 - The author's design explanation from Step 3.3 (if that question was asked), including any uncertainties they expressed
-- The end-to-end test answers from Step 3.5 (`E2E_TEST_NOTES`; keep them separate, they get their own summary section)
 - **Areas the author did not understand or deferred to AI**: if the author said something like "the AI handled it", "I'm not sure how this works", or could not explain a section, list those areas explicitly as "Author does not understand: [area]". Do NOT reframe this as satisfaction or acceptance.
 - Any additional context the author volunteered
 
-Store as `INTERVIEW_NOTES` for the output phase.
+Store as `INTERVIEW_NOTES` for the output phase. Leave the end-to-end test answers (`E2E_TEST_NOTES`) out of it: Step 4.2 writes them to their own section.
 
 ---
 
@@ -543,9 +544,10 @@ Include **ALL** findings in each section — open, dismissed, and fixed.
 
 [Only present when `E2E_TEST_NOTES` is not empty. It can also hold a single "not checked: <error>"
 line when the recommendations command could not run. Otherwise, one bullet per line recorded in
-`E2E_TEST_NOTES`: the map warning if any, the `all` line when the full run was recommended (with
-the other items "covered by all" only when it passed), each recommended key with the author's answer ("ran, passed", "ran,
-failed: …", "not run: …") and, for a collapsed item, its member keys; then the add-part answer
+`E2E_TEST_NOTES`: the map warning if any, the `all` line when the full run was recommended, each
+recommended key with its recorded answer ("ran, passed", "ran, failed: …", "not run: …", or under
+the full run "covered by all" or "ran in all, passed") and, for a collapsed item, its member keys;
+then the add-part answer
 ("added: …", "extended: …", "not needed: …", "to do: …") if it was asked. Omit this heading
 entirely otherwise.]
 
