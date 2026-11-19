@@ -18,7 +18,6 @@ import {
   clampToScrollRange,
   clampTopToVisibleArea,
   computeRangeScrollTop,
-  createNoteAnchorSource,
   createPendingCommentAnchorSource,
   createPendingCommentCenterAnchorSource,
   findFirstTextBlock,
@@ -1989,90 +1988,6 @@ describe('createPendingCommentAnchorSource', () => {
     });
 
     expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 100, width: 0, height: 20 });
-  });
-});
-
-describe('createNoteAnchorSource', () => {
-  afterEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  it('measures the passed-in element directly when it is still connected', () => {
-    const container = addEditorContainer();
-    const caller = document.createElement('span');
-    container.append(caller);
-    stubClientRects(caller, [new DOMRect(30, 60, 12, 18)]);
-    const getElementByKey = vi.fn();
-
-    const source = createNoteAnchorSource(caller, 'note-1', getElementByKey);
-
-    // leftEdgeRect: zero-width, full-height, pinned to the left edge.
-    expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 60, width: 0, height: 18 });
-    expect(getElementByKey).not.toHaveBeenCalled();
-  });
-
-  it('returns undefined when the connected element has no layout', () => {
-    const container = addEditorContainer();
-    const caller = document.createElement('span');
-    container.append(caller);
-    stubClientRects(caller, []);
-
-    const source = createNoteAnchorSource(caller, 'note-1', vi.fn());
-
-    expect(source.measure()).toBeUndefined();
-  });
-
-  it('falls back to the key lookup once the passed-in element is detached', () => {
-    const caller = document.createElement('span'); // never appended -> not connected
-    const replacement = document.createElement('span');
-    document.body.append(replacement);
-    stubClientRects(replacement, [new DOMRect(15, 45, 10, 20)]);
-    const getElementByKey = vi.fn().mockReturnValue(replacement);
-
-    const source = createNoteAnchorSource(caller, 'note-1', getElementByKey);
-
-    expect(rectNumbers(source.measure())).toEqual({ x: 15, y: 45, width: 0, height: 20 });
-    expect(getElementByKey).toHaveBeenCalledWith('note-1');
-  });
-
-  it('returns undefined when detached and the key lookup finds nothing', () => {
-    const caller = document.createElement('span'); // never appended -> not connected
-
-    const source = createNoteAnchorSource(caller, 'note-1', vi.fn().mockReturnValue(undefined));
-
-    expect(source.measure()).toBeUndefined();
-  });
-
-  it('returns undefined when detached and the looked-up element has no layout', () => {
-    const caller = document.createElement('span'); // never appended -> not connected
-    const replacement = document.createElement('span');
-    document.body.append(replacement);
-    stubClientRects(replacement, []);
-
-    const source = createNoteAnchorSource(caller, 'note-1', vi.fn().mockReturnValue(replacement));
-
-    expect(source.measure()).toBeUndefined();
-  });
-
-  it("reports the nearest '.editor-input' ancestor as the context element", () => {
-    const editorInput = document.createElement('div');
-    editorInput.className = 'editor-input';
-    document.body.append(editorInput);
-    const caller = document.createElement('span');
-    editorInput.append(caller);
-
-    const source = createNoteAnchorSource(caller, 'note-1', vi.fn());
-
-    expect(source.contextElement).toBe(editorInput);
-  });
-
-  it('reports the element itself as the context element when no editor-input ancestor exists', () => {
-    const caller = document.createElement('span');
-    document.body.append(caller);
-
-    const source = createNoteAnchorSource(caller, 'note-1', vi.fn());
-
-    expect(source.contextElement).toBe(caller);
   });
 });
 

@@ -29,8 +29,8 @@ export function shouldRoutePaletteKey(options: {
   if (isReadOnly) return false;
   // Focus is the whole rule. Keys belong to whatever holds focus: the main editor's own keys route
   // here, the palette's come back through key forwarding, and anything else in this web view — the
-  // footnote popover's editor, a comment box — keeps its own. `isFocused()` is scoped to the MAIN
-  // editor instance, so the popover's `.editor-input` is never mistaken for it.
+  // footnote row editor, a comment box — keeps its own. `isFocused()` is scoped to the MAIN
+  // editor instance, so the row editor's `.editor-input` is never mistaken for it.
   return isEditorFocused;
 }
 
