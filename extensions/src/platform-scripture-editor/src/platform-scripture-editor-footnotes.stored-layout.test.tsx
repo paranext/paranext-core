@@ -172,9 +172,9 @@ describe('FootnotesLayout pane location request', () => {
     expect(stateWrites).toContainEqual(['footnotesPanePosition', 'trailing']);
   });
 
-  it('leaves a hidden pane where it was', () => {
+  it('moves a hidden pane, which the editor opens on the same request', () => {
     render(layout(false));
     requestLocationChange();
-    expect(stateWrites.filter(([key]) => key === 'footnotesPanePosition')).toEqual([]);
+    expect(stateWrites).toContainEqual(['footnotesPanePosition', 'trailing']);
   });
 });

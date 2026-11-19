@@ -282,8 +282,7 @@ test.describe('footnotes pane and the Scripture text scroll position', () => {
     });
 
     await test.step('moving the pane beside the text, then closing or reopening it there, keeps the same verses in view', async () => {
-      // The position change only takes effect while the pane is visible (`FootnotesLayout` only
-      // listens for it then), and the previous step left it open.
+      // The previous step left the pane open, so this only moves it.
       await sendCommandWithId(
         mainPage,
         'platformScriptureEditor.changeFootnotesPaneLocation',

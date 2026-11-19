@@ -535,3 +535,81 @@ describe('Scripture editor while the invisible-characters setting cannot be read
     expect(screen.getAllByRole('option')).toHaveLength(1);
   });
 });
+
+describe('Scripture editor "Change footnote pane location" request', () => {
+  const chapterWithFootnote = {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'In the beginning',
+          { type: 'note', marker: 'f', caller: '+', content: ['A footnote text'] },
+        ],
+      },
+    ],
+  };
+
+  /** Props whose web-view state is kept per key across renders, starting from `initialState`. */
+  function makeStatefulProps(initialState: Record<string, unknown>): WebViewProps {
+    const props = makeProps('', initialState);
+    return {
+      ...props,
+      // useWebViewState is generic (key → TState) but this stand-in can't express that genericity.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      useWebViewState: (key: string, defaultValue: any) => {
+        const [value, setValue] = React.useState(
+          key in initialState ? initialState[key] : defaultValue,
+        );
+        return [value, setValue, () => setValue(defaultValue)];
+      },
+    };
+  }
+
+  async function requestLocationChange() {
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { method: 'changeFootnotesPaneLocation' } }),
+      );
+    });
+  }
+
+  it('opens a hidden footnotes pane', async () => {
+    chapterUsjValue.current = chapterWithFootnote;
+    const EditorWebView = getEditorWebView();
+    await act(async () => {
+      render(
+        <EditorWebView
+          {...makeStatefulProps({ footnotesPaneVisible: false, isReadOnly: false })}
+        />,
+      );
+    });
+    // Positive control: the pane starts closed, so its footnote row is not listed.
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+
+    await requestLocationChange();
+
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+
+  it('keeps a shown footnotes pane open', async () => {
+    chapterUsjValue.current = chapterWithFootnote;
+    const EditorWebView = getEditorWebView();
+    await act(async () => {
+      render(
+        <EditorWebView {...makeStatefulProps({ footnotesPaneVisible: true, isReadOnly: false })} />,
+      );
+    });
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+
+    await requestLocationChange();
+
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+});
