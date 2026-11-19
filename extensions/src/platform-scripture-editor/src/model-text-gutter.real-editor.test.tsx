@@ -3,11 +3,22 @@
 // the panel's own tests stand `Editorial` in with a mock, so only this file can show what a reader
 // of Column 1 actually gets from those options.
 import '@testing-library/jest-dom';
-import { Editorial } from '@eten-tech-foundation/platform-editor';
+import {
+  Editorial,
+  getDefaultViewOptions,
+  type ViewOptions,
+} from '@eten-tech-foundation/platform-editor';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { fireEvent, render, waitFor } from '@testing-library/react';
+import { join } from 'path';
+import postcss from 'postcss';
+import { compile } from 'sass';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getModelTextViewOptions } from './editor-view-options.util';
+import {
+  getEditorViewOptions,
+  getModelTextViewOptions,
+  MODEL_TEXT_ROOT_CLASS_NAME,
+} from './editor-view-options.util';
 
 const PROSE_TEXT = 'Paul, a servant of Christ Jesus.';
 const POETRY_TEXT = 'Grace to you and peace.';
@@ -33,14 +44,81 @@ const CHAPTER_USJ: Usj = {
   ],
 };
 
-/** Mounts the editor as the Model Text panel does: read-only, unless `isReadonly` says otherwise. */
+/**
+ * Mounts the editor as the Model Text panel does: read-only, unless `isReadonly` says otherwise,
+ * inside the panel's root class.
+ */
 function renderModelTextEditor(isReadonly = true) {
   return render(
-    <Editorial
-      defaultUsj={CHAPTER_USJ}
-      options={{ isReadonly, view: getModelTextViewOptions(false) }}
-    />,
+    <div className={MODEL_TEXT_ROOT_CLASS_NAME}>
+      <Editorial
+        defaultUsj={CHAPTER_USJ}
+        options={{ isReadonly, view: getModelTextViewOptions(false) }}
+      />
+    </div>,
   );
+}
+
+/** Mounts the editor read-only with `view` and no root class of the panel's. */
+function renderReadOnlyEditor(view: ViewOptions) {
+  return render(<Editorial defaultUsj={CHAPTER_USJ} options={{ isReadonly: true, view }} />);
+}
+
+/**
+ * Every selector in the shipped `_usj-nodes.scss`, each with any pseudo-element taken off, so it
+ * matches the element whose `::after` it styles; split into those jsdom can match and those its
+ * selector engine cannot parse.
+ */
+const USJ_NODES_SELECTORS = (() => {
+  const matchable: string[] = [];
+  const unmatchable: string[] = [];
+  postcss.parse(compile(join(__dirname, '_usj-nodes.scss')).css).walkRules((rule) => {
+    const { parent } = rule;
+    if (parent?.type === 'atrule' && 'name' in parent && String(parent.name).endsWith('keyframes'))
+      return;
+    rule.selectors.forEach((selector) => {
+      const elementSelector = selector.replace(/::[\w-]+/g, '').trim();
+      if (!elementSelector) return;
+      try {
+        document.documentElement.matches(elementSelector);
+        matchable.push(elementSelector);
+      } catch {
+        unmatchable.push(elementSelector);
+      }
+    });
+  });
+  return { matchable, unmatchable };
+})();
+
+/**
+ * The gutter's own chapter and verse number selectors: those that skip the Model Text panel's root
+ * class.
+ */
+const GUTTER_NUMBER_SELECTORS = USJ_NODES_SELECTORS.matchable.filter((selector) =>
+  selector.includes(`.${MODEL_TEXT_ROOT_CLASS_NAME} `),
+);
+
+/**
+ * Whether a selector's subject (its last compound selector, after any `:not(…)`-style argument
+ * lists are taken out) is a chapter or verse number.
+ */
+function isAimedAtNumbers(selector: string): boolean {
+  const withoutArguments = selector.replace(/\((?:[^()]|\([^()]*\))*\)/g, '');
+  const subject = withoutArguments.split(/[\s>+~]+/).pop() ?? '';
+  return /\.(usfm_c|usfm_v|verse|chapter)\b/.test(subject);
+}
+
+/** The `_usj-nodes.scss` selectors that reach `element`. */
+function selectorsReaching(element: Element): string[] {
+  return USJ_NODES_SELECTORS.matchable.filter((selector) => element.matches(selector));
+}
+
+/** The `_usj-nodes.scss` selectors that reach the chapter number and the first verse number. */
+function numberSelectors(root: HTMLElement): { chapter: string[]; verse: string[] } {
+  const chapter = root.querySelector('.usfm_c');
+  const verse = root.querySelector('.usfm_v');
+  if (!chapter || !verse) throw new Error('no chapter or verse number rendered');
+  return { chapter: selectorsReaching(chapter), verse: selectorsReaching(verse) };
 }
 
 /**
@@ -214,6 +292,39 @@ describe('the Model Text view in the real editor', () => {
     await copyGlyphBackslash(root);
 
     expect(window.getSelection()?.toString()).toBe('\\');
+  });
+
+  // The number cases below compare only the selectors jsdom can match. This keeps a rule styling a
+  // number from dropping out of both sides of that comparison unseen.
+  it('can match every stylesheet selector aimed at a chapter or verse number', () => {
+    // The control: the same filter finds the gutter's own number rules among those jsdom matches.
+    expect(GUTTER_NUMBER_SELECTORS).not.toEqual([]);
+    expect(USJ_NODES_SELECTORS.matchable.filter(isAimedAtNumbers)).toEqual(
+      expect.arrayContaining(GUTTER_NUMBER_SELECTORS),
+    );
+    expect(USJ_NODES_SELECTORS.unmatchable.filter(isAimedAtNumbers)).toEqual([]);
+  });
+
+  it('styles chapter and verse numbers as the resource panels do', async () => {
+    const modelText = await findEditorRoot(renderModelTextEditor().container);
+    const resource = await findEditorRoot(
+      renderReadOnlyEditor({ ...getDefaultViewOptions(), allowInvisibleCharacters: false })
+        .container,
+    );
+
+    expect(numberSelectors(modelText)).toEqual(numberSelectors(resource));
+  });
+
+  // The control for the case above: the Scripture editor's paragraph-structure view, which carries
+  // the same gutter class, keeps its own larger chapter number and accent-colored verse numbers.
+  it('leaves the Scripture editor’s own chapter and verse number style alone', async () => {
+    const scripture = await findEditorRoot(
+      renderReadOnlyEditor(getEditorViewOptions('formatted', false, false)).container,
+    );
+
+    const { chapter, verse } = numberSelectors(scripture);
+    expect(GUTTER_NUMBER_SELECTORS).not.toEqual([]);
+    expect([...chapter, ...verse]).toEqual(expect.arrayContaining(GUTTER_NUMBER_SELECTORS));
   });
 
   // TODO(PT-4911): a copy of a selection inside a gutter glyph alone (a double-click on the glyph

@@ -14,6 +14,9 @@
    The Simple-mode verse and ellipsis sizes are base-relative here
    (`--psc-base-font-size`, in the gutter section) and intentionally not in the demo copy, where
    no project stylesheet is injected.
+   The gutter's verse and chapter number rules skip the Model Text panel (`.model-text-root`), so
+   it keeps the resource panels' number style; keep that condition when re-syncing them, as the
+   demo copy does (a cross-copy pin in usj-nodes-styles.test.ts checks both).
    The gutter `\s`-`\s3` rule matches eten-tech-foundation/scripture-editors#486; that PR's
    empty-verse ellipsis changes (`font-weight: normal`, `cursor: text`) are not copied.
    The source's four `local()`-only Charis SIL @font-face rules are dropped. */
@@ -2759,8 +2762,9 @@ span.read img {
 /* ── Gutter markers ───────────────────────────────────────────────────────────
    Applied via .psc-gutter-markers when viewOptions.hasGutterParaMarkers is true.
    Shows paragraph-level USFM markers in a fixed-width gutter, styles verse and
-   chapter numbers, and sets --para-indent / --verse-text-start for each paragraph
-   type (the latter is also consumed by the active focus box for alignment). */
+   chapter numbers (except in the Model Text panel; see below), and sets
+   --para-indent / --verse-text-start for each paragraph type (the latter is also
+   consumed by the active focus box for alignment). */
 
 /* The editor's own font size, as an absolute length computed once on `.psc-gutter-markers`
    (registered, so `1em` resolves there rather than in each descendant's font size). The verse
@@ -2789,8 +2793,16 @@ span.read img {
   --psc-empty-verse-ellipsis-width: var(--psc-verse-number-size);
 }
 
-.psc-gutter-markers .usfm_v,
-.psc-gutter-markers span.verse {
+/* The verse and chapter number styles below are the Scripture editor's own. The Model Text panel
+   (root class `model-text-root`, MODEL_TEXT_ROOT_CLASS_NAME in editor-view-options.util.ts) shows
+   gutter markers too but keeps the numbers the resource panels show, so these three rules skip it.
+   `:where()` keeps each rule's specificity what the editor's source gives it. The condition is not
+   in the editor's source; the platform-bible-react demo copy carries it too. The `.verse.marker`
+   pair further down needs no such condition: it applies only with visible markers, and the panel
+   hides them. The RTL verse isolation further down still applies to the panel on purpose: it
+   decides where a verse number sits in right-to-left text, not how the number looks. */
+.psc-gutter-markers:where(:not(.model-text-root *)) .usfm_v,
+.psc-gutter-markers:where(:not(.model-text-root *)) span.verse {
   font-size: var(--psc-verse-number-size);
   font-weight: 700;
   color: var(--scripture-accent);
@@ -2805,14 +2817,14 @@ span.read img {
    and render a large decorative number via ::after using the data-number attribute.
    font-size: 0 suppresses the raw marker text; screen readers may still announce it,
    which is acceptable since the ::after content duplicates it as a number. */
-.psc-gutter-markers .usfm_c {
+.psc-gutter-markers:where(:not(.model-text-root *)) .usfm_c {
   display: block;
   font-size: 0;
   line-height: 0;
   padding: 0.5rem 0 0.25rem;
 }
 
-.psc-gutter-markers .usfm_c::after {
+.psc-gutter-markers:where(:not(.model-text-root *)) .usfm_c::after {
   content: attr(data-number);
   display: block;
   font-size: 5rem;

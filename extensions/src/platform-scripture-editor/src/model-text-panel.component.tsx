@@ -71,7 +71,7 @@ import type {
 } from './model-text-panel.const';
 import { MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS } from './model-text-panel.const';
 import { getInstallFailureMessageKey } from './install-failure-message.utils';
-import { getModelTextViewOptions } from './editor-view-options.util';
+import { getModelTextViewOptions, MODEL_TEXT_ROOT_CLASS_NAME } from './editor-view-options.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -908,9 +908,12 @@ export function ModelTextPanel({
   // rounded top corners — see _simple-mode.scss) is applied unconditionally, unlike the
   // Scripture Editor's conditional use of the same class. It must not also carry
   // `character-marker-bar-host`: this panel has no character-marker bar, and that class would
-  // reserve the bar's width beside its gutter-marker text.
+  // reserve the bar's width beside its gutter-marker text. `MODEL_TEXT_ROOT_CLASS_NAME` keeps the
+  // resource panels' chapter and verse number style here (see `_usj-nodes.scss`).
   return (
-    <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
+    <div
+      className={`tw:flex tw:h-screen tw:flex-col editor-container-simple ${MODEL_TEXT_ROOT_CLASS_NAME}`}
+    >
       {modelTextLabel && (
         <TooltipProvider>
           <Tooltip

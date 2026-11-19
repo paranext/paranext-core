@@ -9,8 +9,8 @@ import type { ScriptureEditorViewType } from 'platform-scripture-editor';
 
 /**
  * The paragraph-structure preset: hidden markers, with each paragraph's marker in a gutter. The
- * Scripture editor in Simple mode and the Model Text panel both use it, so the two columns line
- * up.
+ * Scripture editor in Simple mode and the Model Text panel both use it, so the two columns can be
+ * matched paragraph by paragraph.
  */
 function getParagraphStructureViewOptions(): ViewOptions {
   return getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) ?? getDefaultViewOptions();
@@ -53,6 +53,14 @@ export function getEditorViewOptions(
 ): ViewOptions {
   return { ...getViewOptionsForType(viewType, isPowerMode), allowInvisibleCharacters };
 }
+
+/**
+ * The class on the Model Text panel's root element. With it, chapter and verse numbers keep the
+ * look they have in the resource panels: `_usj-nodes.scss`'s gutter view restyles them for the
+ * Scripture editor only, so the text being translated stands apart from the text it is drafted
+ * from.
+ */
+export const MODEL_TEXT_ROOT_CLASS_NAME = 'model-text-root';
 
 /**
  * The editor's view options for the Model Text panel: the read-only text a Simple user drafts from,
