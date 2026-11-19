@@ -2872,17 +2872,21 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pull requests red.
 - **Decision:** Three parts, wired through `.github/workflows/test.yml`, `e2e-isolated.yml` and
   `e2e-nightly.yml`. (1) Every pull request runs the `e2e-core` job: the isolated specs listed in
-  `e2e-tests/core-specs.txt`. It is report-only: a failure shows as a warning on the run, not a red
-  check. (2) A second list, `e2e-tests/core-specs-editor.txt`, runs as well when the pull request
-  changes a path matched by the curated `editor_paths` pattern (the Scripture editor extension, the
-  editor package pin, the C# USFM/USJ conversion code, the `platform-bible-react` parts the editor
-  web view renders, the editor list and its specs); if the changed-files lookup fails, both lists
-  run. (3) A nightly run (`e2e-nightly.yml`, also startable by hand) runs every isolated spec over
-  eight runners and fails the run on a test that passes only on its retry
-  (`--fail-on-flaky-tests`). Every run allows one retry per test and keeps the trace of each failed
-  attempt (`--trace=retain-on-failure`); the per-pull-request job names a test that needed its retry
-  in a warning. Adding or removing a core spec means editing the list, and
-  `e2e-tests/core-specs.test.ts` keeps the lists, the workflow and the specs in agreement.
+  `e2e-tests/core-specs.txt`. It is report-only: a spec failure shows as a warning on the run, not
+  a red check. (2) A second list, `e2e-tests/core-specs-editor.txt`, runs as well when the pull
+  request changes a path matched by `editor_paths` in `test.yml`, a curated list of the Scripture
+  editor, what it saves through (its USFM↔USX↔USJ conversion path) and the editor list's own specs,
+  described in full beside it; if the changed-files lookup fails, both lists run. (3) A nightly run
+  (`e2e-nightly.yml`, also startable by hand) runs every isolated spec over eight runners and fails
+  the run on a test that passes only on its retry (`--fail-on-flaky-tests`). Every run allows one
+  retry per test and keeps the traces of each failed attempt (`--trace=retain-on-failure`): a DOM
+  trace of the app for specs on `isolated.fixture`, which records the Electron app's context
+  itself because Playwright's own tracing does not reach an app started with `_electron.launch()`.
+  The specs stop on their own (`--global-timeout`, from the time the setup left) before the job's
+  limit, because a job that reaches its limit is cancelled and skips the reporting and upload
+  steps. The per-pull-request job names a test that needed its retry in a warning. Adding or
+  removing a core spec means editing the list, and `e2e-tests/core-specs.test.ts` keeps the lists,
+  the workflow, the specs and every `editor_paths` entry in agreement with the repository.
 - **Alternatives:** Run the whole isolated suite on every pull request — rejected: about an hour
   locally and longer on a runner, too slow for a per-pull-request check. Make the core job blocking
   from day one — rejected: an app race would mark unrelated pull requests red while the job is still
@@ -2890,7 +2894,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   as too strict there; it warns instead, and the nightly run, which blocks nothing, is the one that
   fails.
 - **Consequences:** Pull requests get early, non-blocking signal on the specs that matter most;
-  the rest of the suite is covered a day late. The `editor_paths` pattern is curated by hand and
+  the rest of the suite is covered a day late. The `editor_paths` list is curated by hand and
   over-matches on purpose (over-running a report-only job is the safe direction), so it needs
   upkeep as the editor's dependencies move. Revisit once the job has proven stable: TODO(PT-5088)
   makes it a required check.

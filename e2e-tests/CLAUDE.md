@@ -145,11 +145,9 @@ one of these.
 
 - **Every pull request:** the smoke suite (in the build jobs of `.github/workflows/test.yml`), and
   the `e2e-core` job: the isolated specs listed in `e2e-tests/core-specs.txt`, plus those in
-  `e2e-tests/core-specs-editor.txt` when the pull request touches the Scripture editor extension,
-  `dev-packages.json`, the C# USFM/USJ conversion code, the `platform-bible-react` parts the editor
-  web view renders (the footnote editor, the marker menu and palette helpers, the editor keyboard
-  shortcuts, the demo editor stylesheets), or the editor list itself, the two specs it names and
-  `fixtures/no-unasked-edits.body.ts`. If the changed-files lookup fails, both lists run.
+  `e2e-tests/core-specs-editor.txt` when the pull request touches a path matched by `editor_paths`
+  in `test.yml` (the Scripture editor, what it saves through, and the editor list's own specs; the
+  full list is described beside `editor_paths`). If the changed-files lookup fails, both lists run.
   To add or remove a spec, edit the list.
 - **Every night** (`.github/workflows/e2e-nightly.yml`, also startable by hand): every isolated
   spec, split over eight runners. GitHub runs the schedule only on `main`. A red nightly run is the
@@ -159,9 +157,13 @@ one of these.
 - Both run on Linux with **one retry**. A test that passed only on its retry is named in a warning
   on the run ("E2E test passed only on its retry"): treat it as a defect, like any flaky test. On
   the nightly run it also fails the run (`--fail-on-flaky-tests`), since nobody opens a green nightly
-  run and it blocks no pull request. The trace of each failed attempt is kept in the run's
-  `playwright-results-…` artifact. `e2e-core` reports without blocking: a failure shows as a
-  warning on the run, not as a red check.
+  run and it blocks no pull request. Each failed attempt keeps, in the run's `playwright-results-…`
+  artifact, a failure screenshot (`failure.png`), Playwright's `trace.zip` (the test's steps and output, no DOM) and,
+  for specs on `fixtures/isolated.fixture.ts`, `electron-trace.zip`: a DOM trace of the app, lost
+  if the app had already died. The specs stop on their own before the job's time limit, so the
+  reports still upload; a warning says when they ran out of time. `e2e-core` reports without
+  blocking: a spec failure shows as a warning on the run, not as a red check (a setup failure or a
+  job timeout may still show the job's check as failed).
 
 ## Window size and DevTools
 
