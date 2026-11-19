@@ -12,114 +12,77 @@ function declaration(property: string, value: string | number): string {
   return `  ${property}: ${value};`;
 }
 
-/**
- * The whitespace-separated values of a CSS shorthand, with a parenthesized value (`var(--gap)`,
- * `calc(1px + 2px)`) kept whole.
- */
-function shorthandValues(value: string): string[] {
-  const values: string[] = [];
-  let depth = 0;
-  let current = '';
-  [...value.trim()].forEach((character) => {
-    if (character === '(') depth += 1;
-    if (character === ')') depth -= 1;
-    if (depth === 0 && /\s/.test(character)) {
-      if (current) values.push(current);
-      current = '';
-    } else current += character;
-  });
-  if (current) values.push(current);
-  return values;
-}
-
-/** Whether `value` holds a `/` outside parentheses: an elliptical radius, not a `calc()` division. */
-function hasTopLevelSlash(value: string): boolean {
-  let depth = 0;
-  return [...value].some((character) => {
-    if (character === '(') depth += 1;
-    if (character === ')') depth -= 1;
-    return depth === 0 && character === '/';
-  });
-}
-
-/** The declarations of the three rules a registered style becomes. */
-type EdgeDeclarations = {
-  /** On every element the annotation paints. */
+/** The declarations of the rules a registered style becomes. */
+type StyleDeclarations = {
+  /** On every element the annotation paints, exactly as the host wrote them. */
   every: string[];
-  /** On the first element it paints only. */
-  start: string[];
-  /** On the last element it paints only. */
-  end: string[];
+  /** Removes the inline-start sides from an element the annotation's first element is not. */
+  notStart: string[];
+  /** Removes the inline-end sides from an element the annotation's last element is not. */
+  notEnd: string[];
 };
 
+/** The box properties whose inline sides are removed from elements that are not an edge. */
+const BOX_PROPERTIES = ['padding', 'margin', 'border', 'borderRadius'] as const;
+
+/** The declarations that zero one box property's inline-start and inline-end sides. */
+const REMOVED_SIDES: Record<(typeof BOX_PROPERTIES)[number], { start: string[]; end: string[] }> = {
+  padding: { start: ['padding-inline-start: 0'], end: ['padding-inline-end: 0'] },
+  margin: { start: ['margin-inline-start: 0'], end: ['margin-inline-end: 0'] },
+  border: { start: ['border-inline-start: none'], end: ['border-inline-end: none'] },
+  borderRadius: {
+    start: ['border-start-start-radius: 0', 'border-end-start-radius: 0'],
+    end: ['border-start-end-radius: 0', 'border-end-end-radius: 0'],
+  },
+};
+
+/** Whether a CSS value carries a priority, with or without a space before the `!`. */
+function isImportant(value: string | number): boolean {
+  return /!\s*important\s*$/i.test(String(value));
+}
+
 /**
- * Convert annotation style properties to CSS declarations, splitting the box properties across the
- * elements an annotation paints so that one spanning several elements (a verse number and the text
- * after it, text on both sides of a char span's edge) draws one box rather than one per element:
+ * Convert annotation style properties to CSS declarations. Every property goes on the base rule
+ * exactly as the host wrote it, and the box properties (`border`, `borderRadius`, `padding`,
+ * `margin`) also get two override rules that remove the sides that do not belong on an element
+ * which is not an edge of the annotation, so an annotation spanning several elements (a verse
+ * number and the text after it, text on both sides of a char span's edge) draws one box rather than
+ * one per element:
  *
- * - `border`: the block sides on every element, the inline-start side on the first and the inline-end
- *   side on the last.
- * - `borderRadius` with one value: the two start corners on the first element and the two end corners
- *   on the last. Several values or an elliptical `/` form stay on every element.
- * - `padding` and `margin` with one or two values: the block part on every element, the inline part
- *   on the first element's start and the last element's end. Three or four values stay on every
- *   element.
+ * - An element that is not the first loses its inline-start padding, margin, border and the two start
+ *   corners' radii.
+ * - An element that is not the last loses the inline-end equivalents.
  *
- * A `padding`, `margin` or `borderRadius` value with a priority (`!important`), or an empty one, is
- * not split: it stays on every element as written, since the priority would be read as one of its
- * values. So is one holding a `var()`, whose custom property may hold several values: copied whole
- * into each split longhand, a block longhand or a corner radius would read them with a different
- * meaning, and an inline-side longhand, which takes one, would be invalid. A `border` is split
- * whatever its value, each side taking the value as written.
+ * Removing sides, rather than splitting the value, works for any value form: a `var()`, three or
+ * four values, an elliptical radius, a priority. A host value with `!important` gets an override
+ * with `!important` too, and the override's selector (`:not()` adds a class, so specificity
+ * (0,2,0)) outranks the base rule's (0,1,0) when both are important.
  *
- * An annotation that paints one element gets all three rules, so it is drawn as the unsplit style
- * draws it. Logical properties put the start on the right in right-to-left text.
+ * An annotation that paints one element carries both edge classes, so nothing is removed and it is
+ * drawn exactly as the style reads. A middle element loses both inline sides. An element no edge
+ * class is put on (a gutter glyph beside other painted elements, the content of a collapsed note)
+ * keeps only the block sides. Logical properties put the start on the right in right-to-left text.
  */
-function stylesToCss(properties: AnnotationStyleProperties): EdgeDeclarations {
+function stylesToCss(properties: AnnotationStyleProperties): StyleDeclarations {
   const every: string[] = [];
-  const start: string[] = [];
-  const end: string[] = [];
+  const notStart: string[] = [];
+  const notEnd: string[] = [];
 
   Object.entries(properties).forEach(([key, value]) => {
     if (value === undefined) return;
-    const cssProperty = toKebabCase(key);
-    const values = shorthandValues(String(value));
-    const isSplittable =
-      values.length > 0 && !values.some((part) => part.includes('!') || part.includes('var('));
-
-    if (key === 'border') {
-      every.push(declaration('border-block', value));
-      start.push(declaration('border-inline-start', value));
-      end.push(declaration('border-inline-end', value));
-      return;
-    }
-    if (
-      key === 'borderRadius' &&
-      isSplittable &&
-      values.length === 1 &&
-      !hasTopLevelSlash(String(value))
-    ) {
-      start.push(
-        declaration('border-start-start-radius', value),
-        declaration('border-end-start-radius', value),
-      );
-      end.push(
-        declaration('border-start-end-radius', value),
-        declaration('border-end-end-radius', value),
-      );
-      return;
-    }
-    if ((key === 'padding' || key === 'margin') && isSplittable && values.length <= 2) {
-      const [block, inline = block] = values;
-      every.push(declaration(`${cssProperty}-block`, block));
-      start.push(declaration(`${cssProperty}-inline-start`, inline));
-      end.push(declaration(`${cssProperty}-inline-end`, inline));
-      return;
-    }
-    every.push(declaration(cssProperty, value));
+    every.push(declaration(toKebabCase(key), value));
   });
 
-  return { every, start, end };
+  BOX_PROPERTIES.forEach((key) => {
+    const value = properties[key];
+    if (value === undefined) return;
+    const priority = isImportant(value) ? ' !important' : '';
+    const { start, end } = REMOVED_SIDES[key];
+    notStart.push(...start.map((removed) => `  ${removed}${priority};`));
+    notEnd.push(...end.map((removed) => `  ${removed}${priority};`));
+  });
+
+  return { every, notStart, notEnd };
 }
 
 /** Storage for annotation styles with their nonces and definitions. */
@@ -182,22 +145,23 @@ export class AnnotationStyleDataProviderEngine
     // Generate CSS rules for each registered annotation style
     [...this.#styleEntriesByName.values()].forEach((entry) => {
       const { typeName, definition } = entry;
-      const { every, start, end } = stylesToCss(definition);
+      const { every, notStart, notEnd } = stylesToCss(definition);
 
       // Rules targeting the class names the editor paints an annotation of this type with: one on
-      // every element it paints, and one each on its first and last element. These need to keep up
+      // every element it paints, and one each on its first and last element, which the override
+      // rules exclude. These need to keep up
       // with the editor's annotation class names. See the annotation documentation:
       // https://github.com/paranext/scripture-editors/tree/main/packages/platform#annotation-styles
       // The regex replaces unexpected characters with hyphens to ensure class names are acceptable
       // Note that the regex could result in consecutive and/or trailing hyphens
       const type = `external-${typeName.replace(/[^a-zA-Z0-9-]/g, '-')}`;
-      const rule = (prefix: string, declarations: string[]) => {
-        if (declarations.length > 0)
-          cssRules.push(`.${prefix}-${type} {\n${declarations.join('\n')}\n}`);
+      const base = `.editor-typed-mark-${type}`;
+      const rule = (selector: string, declarations: string[]) => {
+        if (declarations.length > 0) cssRules.push(`${selector} {\n${declarations.join('\n')}\n}`);
       };
-      rule('editor-typed-mark', every);
-      rule('editor-typed-markStart', start);
-      rule('editor-typed-markEnd', end);
+      rule(base, every);
+      rule(`${base}:not(.editor-typed-markStart-${type})`, notStart);
+      rule(`${base}:not(.editor-typed-markEnd-${type})`, notEnd);
     });
 
     this.#latestStylesheet = cssRules.join('\n\n');

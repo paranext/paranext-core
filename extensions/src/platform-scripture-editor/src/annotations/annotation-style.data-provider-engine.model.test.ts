@@ -8,8 +8,17 @@ async function stylesheetFor(properties: AnnotationStyleProperties): Promise<str
   return engine.getAnnotationStylesheet();
 }
 
+const BASE = '.editor-typed-mark-external-check';
+const NOT_START = `${BASE}:not(.editor-typed-markStart-external-check)`;
+const NOT_END = `${BASE}:not(.editor-typed-markEnd-external-check)`;
+
+/** One CSS rule as the engine writes it. */
+function rule(selector: string, ...declarations: string[]): string {
+  return `${selector} {\n${declarations.map((d) => `  ${d};`).join('\n')}\n}`;
+}
+
 describe('AnnotationStyleDataProviderEngine stylesheet', () => {
-  it('splits a border and a one-value radius across the first, every and last element', async () => {
+  it('keeps a border and radius whole on the base and removes the inline sides elsewhere', async () => {
     expect(
       await stylesheetFor({
         backgroundColor: 'rgba(255, 0, 0, 0.1)',
@@ -18,44 +27,49 @@ describe('AnnotationStyleDataProviderEngine stylesheet', () => {
       }),
     ).toBe(
       [
-        '.editor-typed-mark-external-check {\n' +
-          '  background-color: rgba(255, 0, 0, 0.1);\n' +
-          '  border-block: 1px solid red;\n' +
-          '}',
-        '.editor-typed-markStart-external-check {\n' +
-          '  border-inline-start: 1px solid red;\n' +
-          '  border-start-start-radius: 4px;\n' +
-          '  border-end-start-radius: 4px;\n' +
-          '}',
-        '.editor-typed-markEnd-external-check {\n' +
-          '  border-inline-end: 1px solid red;\n' +
-          '  border-start-end-radius: 4px;\n' +
-          '  border-end-end-radius: 4px;\n' +
-          '}',
+        rule(
+          BASE,
+          'background-color: rgba(255, 0, 0, 0.1)',
+          'border: 1px solid red',
+          'border-radius: 4px',
+        ),
+        rule(
+          NOT_START,
+          'border-inline-start: none',
+          'border-start-start-radius: 0',
+          'border-end-start-radius: 0',
+        ),
+        rule(
+          NOT_END,
+          'border-inline-end: none',
+          'border-start-end-radius: 0',
+          'border-end-end-radius: 0',
+        ),
       ].join('\n\n'),
     );
   });
 
-  it('splits two-value padding and margin into a block part and inline start and end parts', async () => {
-    expect(await stylesheetFor({ padding: '1px 4px', margin: '2px 3px' })).toBe(
+  it('keeps one- and two-value padding and margin whole and removes their inline sides', async () => {
+    expect(await stylesheetFor({ padding: '1px 4px', margin: '2px' })).toBe(
       [
-        '.editor-typed-mark-external-check {\n' +
-          '  padding-block: 1px;\n' +
-          '  margin-block: 2px;\n' +
-          '}',
-        '.editor-typed-markStart-external-check {\n' +
-          '  padding-inline-start: 4px;\n' +
-          '  margin-inline-start: 3px;\n' +
-          '}',
-        '.editor-typed-markEnd-external-check {\n' +
-          '  padding-inline-end: 4px;\n' +
-          '  margin-inline-end: 3px;\n' +
-          '}',
+        rule(BASE, 'padding: 1px 4px', 'margin: 2px'),
+        rule(NOT_START, 'padding-inline-start: 0', 'margin-inline-start: 0'),
+        rule(NOT_END, 'padding-inline-end: 0', 'margin-inline-end: 0'),
       ].join('\n\n'),
     );
   });
 
-  it('keeps a padding, margin or radius that uses a var() whole on every element', async () => {
+  it('handles three- and four-value padding and margin', async () => {
+    expect(await stylesheetFor({ padding: '1px 2px 3px', margin: '1px 2px 3px 4px' })).toBe(
+      [
+        rule(BASE, 'padding: 1px 2px 3px', 'margin: 1px 2px 3px 4px'),
+        rule(NOT_START, 'padding-inline-start: 0', 'margin-inline-start: 0'),
+        rule(NOT_END, 'padding-inline-end: 0', 'margin-inline-end: 0'),
+      ].join('\n\n'),
+    );
+  });
+
+  it('handles a var() holding several values and a var() beside another value', async () => {
     expect(
       await stylesheetFor({
         padding: 'var(--gap)',
@@ -63,98 +77,108 @@ describe('AnnotationStyleDataProviderEngine stylesheet', () => {
         borderRadius: 'var(--r)',
       }),
     ).toBe(
-      '.editor-typed-mark-external-check {\n' +
-        '  padding: var(--gap);\n' +
-        '  margin: 1px var(--gap);\n' +
-        '  border-radius: var(--r);\n' +
-        '}',
+      [
+        rule(BASE, 'padding: var(--gap)', 'margin: 1px var(--gap)', 'border-radius: var(--r)'),
+        rule(
+          NOT_START,
+          'padding-inline-start: 0',
+          'margin-inline-start: 0',
+          'border-start-start-radius: 0',
+          'border-end-start-radius: 0',
+        ),
+        rule(
+          NOT_END,
+          'padding-inline-end: 0',
+          'margin-inline-end: 0',
+          'border-start-end-radius: 0',
+          'border-end-end-radius: 0',
+        ),
+      ].join('\n\n'),
     );
   });
 
-  it('keeps a parenthesized value whole when splitting a shorthand', async () => {
-    const stylesheet = await stylesheetFor({ padding: 'calc(1px + 2px) 4px' });
-    expect(stylesheet).toContain('  padding-block: calc(1px + 2px);');
-    expect(stylesheet).toContain('  padding-inline-start: 4px;');
-  });
-
-  it('keeps three- and four-value padding and margin and a several-value radius on every element', async () => {
-    expect(
-      await stylesheetFor({
-        padding: '1px 2px 3px',
-        margin: '1px 2px 3px 4px',
-        borderRadius: '4px 8px',
-      }),
-    ).toBe(
-      '.editor-typed-mark-external-check {\n' +
-        '  padding: 1px 2px 3px;\n' +
-        '  margin: 1px 2px 3px 4px;\n' +
-        '  border-radius: 4px 8px;\n' +
-        '}',
-    );
-  });
-
-  it('splits a one-value radius that divides inside calc()', async () => {
-    const stylesheet = await stylesheetFor({ borderRadius: 'calc(8px / 2)' });
-    expect(stylesheet).toContain('  border-start-start-radius: calc(8px / 2);');
-    expect(stylesheet).not.toContain('  border-radius:');
-  });
-
-  it('keeps an elliptical radius on every element', async () => {
+  it('handles an elliptical and a several-value radius', async () => {
     expect(await stylesheetFor({ borderRadius: '4px/8px' })).toBe(
-      '.editor-typed-mark-external-check {\n  border-radius: 4px/8px;\n}',
+      [
+        rule(BASE, 'border-radius: 4px/8px'),
+        rule(NOT_START, 'border-start-start-radius: 0', 'border-end-start-radius: 0'),
+        rule(NOT_END, 'border-start-end-radius: 0', 'border-end-end-radius: 0'),
+      ].join('\n\n'),
     );
+    expect(await stylesheetFor({ borderRadius: '4px 8px' })).toContain('border-radius: 4px 8px;');
   });
 
-  it('keeps a padding, margin or radius with a priority whole on every element', async () => {
+  it('gives an override a priority when the host value has one, spaced or not', async () => {
     expect(
       await stylesheetFor({
         padding: '2px !important',
-        margin: '1px 2px !important',
+        margin: '1px 2px!important',
+        border: '1px solid red !important',
         borderRadius: '4px !important',
       }),
     ).toBe(
-      '.editor-typed-mark-external-check {\n' +
-        '  padding: 2px !important;\n' +
-        '  margin: 1px 2px !important;\n' +
-        '  border-radius: 4px !important;\n' +
-        '}',
+      [
+        rule(
+          BASE,
+          'padding: 2px !important',
+          'margin: 1px 2px!important',
+          'border: 1px solid red !important',
+          'border-radius: 4px !important',
+        ),
+        rule(
+          NOT_START,
+          'padding-inline-start: 0 !important',
+          'margin-inline-start: 0 !important',
+          'border-inline-start: none !important',
+          'border-start-start-radius: 0 !important',
+          'border-end-start-radius: 0 !important',
+        ),
+        rule(
+          NOT_END,
+          'padding-inline-end: 0 !important',
+          'margin-inline-end: 0 !important',
+          'border-inline-end: none !important',
+          'border-start-end-radius: 0 !important',
+          'border-end-end-radius: 0 !important',
+        ),
+      ].join('\n\n'),
     );
   });
 
-  it('keeps a padding with a priority written without a space whole on every element', async () => {
-    const stylesheet = await stylesheetFor({ padding: '2px 4px!important' });
-    expect(stylesheet).toContain('  padding: 2px 4px!important;');
-    expect(stylesheet).not.toContain('padding-block');
+  it('gives only the override of an important property a priority', async () => {
+    const stylesheet = await stylesheetFor({ padding: '2px !important', margin: '2px' });
+    expect(stylesheet).toContain('  padding-inline-start: 0 !important;');
+    expect(stylesheet).toContain('  margin-inline-start: 0;');
   });
 
-  it('splits a border with a priority, each side taking the value as written', async () => {
-    const stylesheet = await stylesheetFor({ border: '1px solid red !important' });
-    expect(stylesheet).toContain('  border-block: 1px solid red !important;');
-    expect(stylesheet).toContain('  border-inline-start: 1px solid red !important;');
-    expect(stylesheet).toContain('  border-inline-end: 1px solid red !important;');
-  });
-
-  it('keeps an empty padding or margin as written instead of splitting nothing', async () => {
-    expect(await stylesheetFor({ padding: '', margin: ' ' })).toBe(
-      '.editor-typed-mark-external-check {\n  padding: ;\n  margin:  ;\n}',
-    );
-  });
-
-  it('writes no start or end rule for a style with no box property', async () => {
+  it('writes only the base rule for a style with no box property', async () => {
     expect(
       await stylesheetFor({ textDecorationLine: 'underline', textDecorationStyle: 'wavy' }),
-    ).toBe(
-      '.editor-typed-mark-external-check {\n' +
-        '  text-decoration-line: underline;\n' +
-        '  text-decoration-style: wavy;\n' +
-        '}',
-    );
+    ).toBe(rule(BASE, 'text-decoration-line: underline', 'text-decoration-style: wavy'));
   });
 
-  it('writes only the start and end rules for a style that is only a one-value radius', async () => {
+  it('writes an override rule only for the box properties the style sets', async () => {
     const stylesheet = await stylesheetFor({ borderRadius: '2px' });
-    expect(stylesheet).not.toContain('.editor-typed-mark-external-check {');
-    expect(stylesheet).toContain('.editor-typed-markStart-external-check {');
-    expect(stylesheet).toContain('.editor-typed-markEnd-external-check {');
+    expect(stylesheet).not.toContain('padding');
+    expect(stylesheet).toContain('border-start-start-radius: 0;');
+  });
+
+  it('keeps several registered types from interfering', async () => {
+    const engine = new AnnotationStyleDataProviderEngine();
+    await engine.registerAnnotationStyle('one', { padding: '1px' });
+    await engine.registerAnnotationStyle('two', { color: 'red' });
+    await engine.registerAnnotationStyle('thr/ee', { border: '1px solid red' });
+    const stylesheet = await engine.getAnnotationStylesheet();
+    expect(stylesheet).toContain(
+      '.editor-typed-mark-external-one:not(.editor-typed-markStart-external-one) {\n' +
+        '  padding-inline-start: 0;',
+    );
+    expect(stylesheet).toContain('.editor-typed-mark-external-two {\n  color: red;\n}');
+    expect(stylesheet).not.toContain('external-two:not');
+    expect(stylesheet).toContain(
+      '.editor-typed-mark-external-thr-ee:not(.editor-typed-markEnd-external-thr-ee) {\n' +
+        '  border-inline-end: none;',
+    );
+    expect(stylesheet).not.toContain('external-one {\n  border');
   });
 });

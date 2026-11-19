@@ -2872,19 +2872,20 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   annotation over `15 In the beginning` reads as three boxes with seams between them. Content-only
   annotations crossing a char span had the same seams before display bytes were painted at all.
   Extensions style annotations only through `platformScriptureEditor.annotationStyle`'s
-  `registerAnnotationStyle`, a constrained style object the data provider turns into one rule on
+  `registerAnnotationStyle`, a constrained style object the data provider turns into rules on
   `.editor-typed-mark-external-<type>`, so they cannot write a selector of their own.
 - **Decision:** The editor puts `<theme.typedMarkStart>-<type>` (`editor-typed-markStart-…`) on the
   first element each annotation paints and `<theme.typedMarkEnd>-<type>` on its last, by document
   order, across marks, display-byte pieces and decorator sub-spans, per annotation, so two
-  overlapping annotations of one type each get their own. The annotation style data provider splits
-  the box properties of a registered style across the three classes, so a registered style draws
-  one box with no change to the API: `border` becomes `border-block` on every element and
-  `border-inline-start`/`-end` on the first and last; a one-value `borderRadius` becomes the two
-  start corners on the first and the two end corners on the last; one- or two-value `padding` and
-  `margin` put the block part on every element and the inline part on the first's start and the
-  last's end. Every other form, and every other property, stays on the base class as before.
-  Logical properties put the start on the right in right-to-left text. Core's hard-coded Find
+  overlapping annotations of one type each get their own. The annotation style data provider
+  splits the box properties of a registered style by subtraction, so a registered style draws one
+  box with no change to the API: every property goes on the base class exactly as the host wrote it,
+  and `padding`, `margin`, `border` and `borderRadius` also get two override rules,
+  `.editor-typed-mark-external-<type>:not(.editor-typed-markStart-external-<type>)` and the same
+  with `markEnd`, that zero the inline-start (or inline-end) padding and margin, set that side's
+  border to `none`, and zero that side's two corner radii. A host value carrying `!important` gets
+  an override carrying it too. No value is parsed, so every form splits: a `var()`, three or four
+  values, an elliptical radius, a priority. Logical properties put the start on the right in right-to-left text. Core's hard-coded Find
   current-result style and Enhanced Resources' marble-word rules (`scripture-pane.component.tsx`)
   round only their outer corners the same way, by hand.
 - **Alternatives:** **Sibling selectors** (`.x + .x`, `.x:has(+ .x)`) — rejected: they work only
@@ -2895,9 +2896,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   type** (one box around the union of a type's annotations) — rejected: overlapping annotations are
   separate findings and read as separate boxes. **An edge-aware style object in the API** —
   rejected: splitting inside the data provider keeps every extension's existing registration
-  correct.
-- **Consequences:** An annotation painting one element gets both classes and draws exactly as an
-  unsplit style would. A line wrap inside an annotation leaves the line ends open, as one long
+  correct. **Parsing each value into block, start and end parts** — rejected: it cannot split what
+  it cannot parse (a `var()` that may hold several values, three or four values, an elliptical
+  radius, a priority), which then drew one box per element.
+- **Consequences:** An annotation painting one element gets both classes, so nothing is removed and
+  it draws exactly as the style reads; a middle element loses both inline sides; an element no edge
+  class is put on keeps only the block sides. Every box value form splits. The cost is that the
+  override selectors have specificity (0,2,0) (the `:not()` counts its argument), so a host
+  stylesheet that sets a box property on the base class at lower specificity cannot reach the
+  removed sides, and an important host value is matched only by an important override. A line wrap inside an annotation leaves the line ends open, as one long
   inline element does. An element a collapsed note hides (anything in its content but its caller,
   decided from the tree so it holds in a hidden tab) never counts as first or last: a box running
   into a collapsed footnote ends on the last element still shown, its caller included, and moves

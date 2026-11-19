@@ -730,7 +730,9 @@ test.describe('scripture editor annotation shapes', () => {
       await expect(mark).toHaveCount(1, { timeout: 30_000 });
       // A hidden element still reports its computed style, so the registered rule having reached
       // the page shows on the mark itself; only then does the unchanged width mean anything.
-      await expect(mark).toHaveCSS('padding', '6px', { timeout: 30_000 });
+      // No edge class is on a mark in collapsed content, so its inline padding is removed (with
+      // the priority) and only the block padding is left.
+      await expect(mark).toHaveCSS('padding', '6px 0px', { timeout: 30_000 });
       expect((await noteElement.boundingBox())?.width).toBe(widthBefore);
       await expect(mark).toHaveCSS('display', 'none');
     });

@@ -558,15 +558,13 @@ declare module 'platform-scripture-editor' {
    * Supports CSS custom properties (e.g., `var(--primary)`) for theme-aware styling.
    *
    * An annotation can paint several elements — a verse number and the text after it, text on both
-   * sides of a character style's edge. `border`, a one-value `borderRadius`, and one- or two-value
-   * `padding` and `margin` are split across them so the annotation draws one box: the top and
-   * bottom on every element, and the leading and trailing sides (and corners) only on its first and
-   * last element. Each element's top and bottom follow its own font size and baseline, so over a
-   * raised, smaller verse number they sit inside the text's. An annotation that paints one element
-   * is drawn as the style reads. A `padding`, `margin` or `borderRadius` with `!important`, or an
-   * empty one, is not split: it applies to every element as written. A `padding`, `margin` or
-   * `borderRadius` that uses a `var()` is not split either, since the custom property may hold
-   * several values.
+   * sides of a character style's edge. `border`, `borderRadius`, `padding` and `margin` are drawn
+   * as one box across them whatever their value (a `var()`, three or four values, an elliptical
+   * radius, `!important`): every element gets the value as written, then loses the leading sides
+   * (and corners) unless it is the first element and the trailing sides unless it is the last. Each
+   * element's top and bottom follow its own font size and baseline, so over a raised, smaller verse
+   * number they sit inside the text's. An annotation that paints one element is drawn as the style
+   * reads.
    */
   export type AnnotationStyleProperties = {
     /**
@@ -592,9 +590,8 @@ declare module 'platform-scripture-editor' {
     border?: string;
 
     /**
-     * Border radius for rounded corners. A single value rounds only the outer corners of everything
-     * an annotation paints (the leading corners of its first element and the trailing corners of
-     * its last); several values or an elliptical `/` form round every element it paints.
+     * Border radius for rounded corners. Only the outer corners of everything an annotation paints
+     * stay rounded: the leading corners of its first element and the trailing corners of its last.
      *
      * @example '4px'
      *
@@ -643,9 +640,8 @@ declare module 'platform-scripture-editor' {
     fontWeight?: string | number;
 
     /**
-     * Margin. With one or two values, the vertical part applies to every element an annotation
-     * paints and the horizontal part only before its first element and after its last; three or
-     * four values apply to every element.
+     * Margin. The top and bottom apply to every element an annotation paints and the horizontal
+     * parts only before its first element and after its last.
      *
      * @example '2px'
      *
@@ -663,9 +659,8 @@ declare module 'platform-scripture-editor' {
     opacity?: string | number;
 
     /**
-     * Padding. With one or two values, the vertical part applies to every element an annotation
-     * paints and the horizontal part only inside the leading side of its first element and the
-     * trailing side of its last; three or four values apply to every element.
+     * Padding. The top and bottom apply to every element an annotation paints and the horizontal
+     * parts only inside the leading side of its first element and the trailing side of its last.
      *
      * @example '2px'
      *
