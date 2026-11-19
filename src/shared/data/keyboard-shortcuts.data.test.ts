@@ -23,11 +23,17 @@ const EXPECTED_MENU_HINTS: Record<
 > = {
   'platformScripture.openFind': {
     hints: { darwin: '⌃F', win32: 'Ctrl+F', linux: 'Ctrl+F' },
-    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+    menus: [
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.contextMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
   },
   'platformScriptureEditor.insertCommentAtSelection': {
     hints: { darwin: '⌥⌘M', win32: 'Ctrl+Shift+N', linux: 'Ctrl+Shift+N' },
-    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+    menus: [
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.contextMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
   },
   'platformScriptureEditor.undo': {
     hints: { darwin: '⌘Z', win32: 'Ctrl+Z', linux: 'Ctrl+Z' },
@@ -47,11 +53,17 @@ const EXPECTED_MENU_HINTS: Record<
   },
   'platformScriptureEditor.insertFootnoteAtSelection': {
     hints: { darwin: '⌃T', win32: 'Ctrl+T', linux: 'Ctrl+T' },
-    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+    menus: [
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.contextMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
   },
   'platformScriptureEditor.insertCrossReferenceAtSelection': {
     hints: { darwin: '⌃⇧T', win32: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
-    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+    menus: [
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.contextMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
   },
   'platformGetResources.openHome': {
     hints: { darwin: '⌘O', win32: 'Ctrl+O', linux: 'Ctrl+O' },
