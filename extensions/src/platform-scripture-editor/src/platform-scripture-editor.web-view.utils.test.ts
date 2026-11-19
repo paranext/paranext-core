@@ -1578,6 +1578,26 @@ describe('menus.json dynamic conditions', () => {
     ).toBe(false);
   });
 
+  describe('Switch Scripture view check marks', () => {
+    const checkedState = (isPreview: boolean) => {
+      const { items } = evaluate({ 'platformScriptureEditor.webView.wv.isPreview': isPreview });
+      const find = (command: string) =>
+        items.find((item: { command?: string }) => item.command === command);
+      return {
+        standard: find('platformScriptureEditor.setViewStandard')?.checked,
+        preview: find('platformScriptureEditor.setViewPreview')?.checked,
+      };
+    };
+
+    it('checks Standard view, not Preview, when the tab shows Standard view', () => {
+      expect(checkedState(false)).toEqual({ standard: true, preview: false });
+    });
+
+    it('checks Preview, not Standard view, when the tab shows Preview', () => {
+      expect(checkedState(true)).toEqual({ standard: false, preview: true });
+    });
+  });
+
   it('parses every when-expression in the document', () => {
     const expressions: string[] = [];
     const collect = (node: unknown) => {

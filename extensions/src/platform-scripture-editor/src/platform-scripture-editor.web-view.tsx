@@ -220,6 +220,7 @@ import {
   deepEqualAcrossIframes,
   findEditorUsjNotes,
   formatEditorTitle,
+  getEditorTitleEditability,
   generateParagraphMenuListItems,
   getSimpleModeRootClassNames,
   getViewTypeToSave,
@@ -1773,13 +1774,16 @@ function PlatformScriptureEditor({
       if (
         unformattedTitle === NO_UPDATE_TITLE ||
         projectName === defaultProjectName ||
-        resolvedIsDurablyReadOnly === undefined
+        resolvedIsDurablyReadOnly === undefined ||
+        // `isResource` defaults to false while loading; formatting then would show a resource's
+        // read-only indicator until the setting arrives.
+        isIsPublishedLoading
       )
         return NO_UPDATE_TITLE;
       const updatedTitle = await formatEditorTitle(
         unformattedTitle,
         projectId,
-        resolvedIsDurablyReadOnly,
+        getEditorTitleEditability(isResource, resolvedIsDurablyReadOnly),
         async () => projectName,
         papi.localization.getLocalizedStrings,
       );
@@ -1788,7 +1792,15 @@ function PlatformScriptureEditor({
       if (updatedTitle === title) return NO_UPDATE_TITLE;
 
       return updatedTitle;
-    }, [resolvedIsDurablyReadOnly, title, projectId, projectName, unformattedTitle]),
+    }, [
+      resolvedIsDurablyReadOnly,
+      isResource,
+      isIsPublishedLoading,
+      title,
+      projectId,
+      projectName,
+      unformattedTitle,
+    ]),
     NO_UPDATE_TITLE,
   );
 

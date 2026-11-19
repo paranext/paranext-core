@@ -215,6 +215,7 @@
             "localizeNotes": "Scripture editor top menu (Power) > View > Switch Scripture view > Standard view — shows the editable view with visible paragraph markers",
             "group": "platformScriptureEditor.viewModes",
             "order": 1,
+            "checkedWhen": "!platformScriptureEditor.webView.{webViewId}.isPreview",
             "command": "platformScriptureEditor.setViewStandard"
           },
           {
@@ -223,6 +224,7 @@
             "localizeNotes": "Scripture editor top menu (Power) > View > Switch Scripture view > Preview — shows the read-only formatted view of the text, the way it reads when published",
             "group": "platformScriptureEditor.viewModes",
             "order": 2,
+            "checkedWhen": "platformScriptureEditor.webView.{webViewId}.isPreview",
             "command": "platformScriptureEditor.setViewPreview"
           },
           {
