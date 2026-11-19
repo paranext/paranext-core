@@ -56,7 +56,7 @@ describe('subset-sources.json', () => {
     .map((entry) => entry.split(path.sep).join('/'))
     .filter((entry) => entry.endsWith('.spec.ts'));
 
-  it('has a prefix key for the no-unasked-edits family, covering every spec in it', () => {
+  it('lists a prefix key for the no-unasked-edits family, which holds more than one spec', () => {
     expect(keys).toContain('scripture-editor/no-unasked-edits-');
     const family = specPaths.filter((entry) =>
       entry.startsWith('scripture-editor/no-unasked-edits-'),
@@ -243,13 +243,17 @@ describe('recommendE2eTests', () => {
     const sources: SubsetSources = {
       a: { main: ['src/a/'], incidental: [] },
       'a/x.spec.ts': { main: ['src/c/'], incidental: ['src/shared/'] },
-      b: { main: ['src/b/'], incidental: ['src/shared/'] },
+      b: { main: ['src/b/'], incidental: ['src/shared/w/'] },
       'b/y.spec.ts': { main: ['src/d/'], incidental: ['src/shared/y/'] },
     };
-    const report = recommend(['src/a/f.ts', 'src/shared/y/z.ts', 'src/shared/w.ts'], { sources });
+    // The spec key's file is one its own subset does not match, so it reaches the report only
+    // through the merge.
+    const report = recommend(['src/a/f.ts', 'src/shared/y/z.ts', 'src/shared/w/q.ts'], {
+      sources,
+    });
     expect(recommendedKeys(report)).toEqual(['a']);
     expect(report.alsoExercised).toEqual([
-      { key: 'b', matchedFiles: ['src/shared/w.ts', 'src/shared/y/z.ts'] },
+      { key: 'b', matchedFiles: ['src/shared/w/q.ts', 'src/shared/y/z.ts'] },
     ]);
   });
 
@@ -946,12 +950,12 @@ describe('readSpecFilesBySubset', () => {
 
   it('lists the scripture editor specs, the no-unasked-edits family included', () => {
     const editorSpecs = specFiles['scripture-editor'];
-    expect(editorSpecs.length).toBeGreaterThan(8);
-    expect(
-      editorSpecs.filter((spec) =>
-        spec.startsWith('e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-'),
-      ).length,
-    ).toBeGreaterThan(1);
+    const family = editorSpecs.filter((spec) =>
+      spec.startsWith('e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-'),
+    );
+    expect(family.length).toBeGreaterThan(1);
+    // The subset holds specs beyond the family.
+    expect(editorSpecs.length).toBeGreaterThan(family.length);
   });
 
   it.each(keys.filter((key) => !key.includes('/') && !isSpecKey(key)))(
@@ -1180,6 +1184,8 @@ describe('readGitChanges', () => {
       'git',
       [
         '-c',
+        'core.autocrlf=false',
+        '-c',
         'user.name=Test',
         '-c',
         'user.email=test@example.com',
@@ -1335,7 +1341,8 @@ describe('command-line entry point', () => {
       ['--import', 'tsx', path.join(__dirname, 'e2e-recommendations.ts'), 'HEAD'],
       { cwd: REPOSITORY_ROOT, encoding: 'utf8', timeout: 120_000 },
     );
-    expect(Object.keys(JSON.parse(output)).sort()).toEqual([
+    const report = JSON.parse(output);
+    expect(Object.keys(report).sort()).toEqual([
       'alsoExercised',
       'editorListRuns',
       'entryPointFiles',
@@ -1344,6 +1351,18 @@ describe('command-line entry point', () => {
       'stalePrefixes',
       'uncoveredFiles',
     ]);
+    // A boolean (not 'unknown') proves test.yml was read. If this fails, check the `editor_paths`
+    // lines in .github/workflows/test.yml before suspecting the command line: the report says
+    // 'unknown' when that list cannot be parsed.
+    expect(typeof report.editorListRuns).toBe('boolean');
+    expect(typeof report.specsChanged).toBe('boolean');
+    [
+      'alsoExercised',
+      'entryPointFiles',
+      'recommendations',
+      'stalePrefixes',
+      'uncoveredFiles',
+    ].forEach((field) => expect(Array.isArray(report[field])).toBe(true));
   }, 150_000);
 
   // Creating a symbolic link needs elevated rights on Windows.

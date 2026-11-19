@@ -157,7 +157,7 @@ const SOURCE_ROOTS = ['src/', 'extensions/src/', 'c-sharp/'];
  * handlers, and a declaration matches too, so the result is a prompt to look at the diff, not proof
  * that a command was added. Sending a command does not match.
  */
-export const REGISTRATION_PATTERN =
+const REGISTRATION_PATTERN =
   'registerCommand\\(|registerWebViewProvider\\(|RegisterRequestHandlerAsync\\(|registerRequestHandler\\(';
 
 /**
@@ -167,9 +167,9 @@ export const REGISTRATION_PATTERN =
  * sheets and data, are runtime), every dotfile and dot-directory below the top level (the
  * formatter, linter, editor and Git configuration, `.github/` workflows, `.vscode/` settings),
  * spelling and TypeScript configuration, licenses, the extension template's release scripts and the
- * Roslyn analyzers. One alternative per line, each with its reason. `e2e-recommendations.test.ts`
- * runs this over every tracked file under the source roots and fails on a file that is plainly not
- * app code but matches none of these.
+ * Roslyn analyzers. One group of alternatives per line, each with its reason.
+ * `e2e-recommendations.test.ts` runs this over every tracked file under the source roots and fails
+ * on a file that is plainly not app code but matches none of these.
  */
 const NON_RUNTIME = new RegExp(
   [
@@ -193,10 +193,10 @@ const NON_RUNTIME = new RegExp(
     String.raw`^c-sharp\/icon\.ico$`,
     // C# test projects (`Foo.Tests/`).
     String.raw`(^|\/)[^/]*Tests\/`,
-    // Package and extension metadata: a design decision, not an oversight (a version or
-    // dependency bump changes no behaviour an e2e spec can see, and the nightly full run catches
-    // what a bump breaks). A change to a manifest's main, menus, settings or activation events goes
-    // unnoticed here: a release bumps every manifest's version at once.
+    // Package and extension metadata: a design decision, not an oversight (a key cannot name what
+    // a version or dependency bump tests, and the nightly full run covers dependency changes). A
+    // change to a manifest's main, menus, settings or activation events goes unnoticed here: a
+    // release bumps every manifest's version at once.
     String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
     // .NET build metadata: projects, shared build properties, the solution and IDE settings. The
     // data provider's own project file is the exception: it pins ParatextData, which does the

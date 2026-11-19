@@ -2931,23 +2931,20 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     unit test runs it over every tracked file under the source roots and fails on a file that is
     plainly not app code but still classified as runtime; `LOADED_EXTENSIONS` in that test names the
     file types the app does load. A file no key lists and `NON_RUNTIME` does not match is
-    "uncovered", one of the conditions that can trigger the "does this need a new e2e test?"
-    question (the others are in the Add part of `/review-paratext`'s end-to-end tests step).
+    "uncovered" (only files under `src/`, `extensions/src/` and `c-sharp/` are reported), one of
+    the conditions that can trigger the "does this need a new e2e test?" question (the others are
+    in the Add part of `/review-paratext`'s end-to-end tests step).
   - **Lookups are deterministic; the app-behaviour judgment is the model's.** The script answers
     what a path lookup can: the map's recommendations and also-exercised keys, uncovered files,
     entry points, whether an e2e spec changed, stale prefixes and whether CI runs the editor list.
     Whether the branch changes what the app does, which gates the "needs a new e2e test?" question,
-    is judged by the reviewing model from the diff. Path rules for "an app change" were rejected:
-    every narrower rule had counterexamples, and a coarse one still needed per-format exceptions.
-    The judgment is not unit-tested and can vary between runs; the step is advisory, so that is
-    accepted.
+    is judged by the reviewing model from the diff. The judgment is not unit-tested and can vary
+    between runs; the step is advisory, so that is accepted.
   - **Dependency changes get a pointer, not a judgment.** When a dependency changes (a package
     file, the lock file, `dev-packages.json`, a .NET package reference, `global.json` or a patch
     under `patches/`, recognised by file name in the changed-file list), the step only mentions
     that the full isolated run (`npm run test:e2e:isolated all`) exists, takes about an hour and
     runs nightly on `main`, because the nightly full run catches what a dependency bump breaks.
-    Rejected: parsing the dependency formats, counting lock-file lines and reading capped lock-file
-    diffs. Each misread some cases, for little gain over the nightly run.
   - **An unreadable `editor_paths` is `'unknown'`, not false.** If the path list in `test.yml`
     cannot be parsed, `editorListRuns` is `'unknown'` and the report is still printed; answering
     false would claim the editor spec list does not run when nothing was checked.
@@ -2963,9 +2960,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Alternatives:** Derive the mapping from the specs (their imports, selectors and commands) —
   rejected: it finds what a spec drives, not what it tests, and recommends close to the full suite.
   A single prefix list per group with no main/incidental split — rejected for the same reason.
-  Fail the unit test on a stale prefix — rejected: it would block pull requests that move a source
-  file for a reason unrelated to e2e, to protect a suggestion. Run the recommended specs
-  automatically — rejected: the step is a reminder and never starts a run or blocks the review.
+  Path rules for "an app change" were rejected: every narrower rule had counterexamples, and a
+  coarse one still needed per-format exceptions. Rejected: parsing the dependency formats, counting
+  lock-file lines and reading capped lock-file diffs. Each misread some cases, for little gain over
+  the nightly run. Fail the unit test on a stale prefix — rejected: it would block pull requests
+  that move a source file for a reason unrelated to e2e, to protect a suggestion. Run the
+  recommended specs automatically — rejected: the step is a reminder and never starts a run or
+  blocks the review.
 - **Consequences:** A new group, or a new kind of non-app file, needs an edit to the map, to
   `NON_RUNTIME` or to `LOADED_EXTENSIONS`, and the unit test says which. A map entry can be wrong
   while every check passes (they prove an entry exists and names real paths, not that it is right),
