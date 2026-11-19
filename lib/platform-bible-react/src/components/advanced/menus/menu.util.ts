@@ -159,8 +159,9 @@ type ItemWithLeadingIcon = {
 /**
  * Picks the leading icon slot for one rendered list of menu items (one dropdown content, one
  * submenu content, or one menubar menu). Items without a leading icon reserve the same slot as the
- * items that have one, so all labels in the list start at the same position. A checkbox item does
- * not claim the slot: its check sits after it (see `MenuCheckSlot`).
+ * items that have one, so their icons and labels line up. A checkbox item does not claim the slot:
+ * its check sits after it (see `MenuCheckSlot`), so a checkbox item's label starts that much
+ * further in than a plain item's.
  *
  * @param items The items rendered in the list, including submenu trigger items
  * @returns `'icon'` if any item has a leading icon — a known named icon or an image path — and
