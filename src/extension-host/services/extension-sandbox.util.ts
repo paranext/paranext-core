@@ -146,6 +146,13 @@ function createCodeGenerationRefuser(name: string, functionPrototype: object): (
  * `constructor`.
  */
 export function blockCodeGenerationFromStrings(): void {
+  // Node.js loads its built-in `fetch` implementation (undici) on first use, and some of its modules
+  // read the global `Function` as they load (Node.js 24's `lib/web/webidl` does). Without this,
+  // `fetch`, `Headers`, `Request`, `Response`, `FormData`, `WebSocket`, `MessageEvent` and
+  // `CloseEvent` all throw `ReferenceError: Function is not defined` on first use. Constructing a
+  // `Headers` loads undici while `Function` still exists, without touching the network.
+  new Headers().has('accept');
+
   Reflect.deleteProperty(globalThis, 'eval');
   Reflect.deleteProperty(globalThis, 'Function');
 
