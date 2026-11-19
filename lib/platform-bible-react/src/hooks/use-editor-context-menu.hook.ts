@@ -181,17 +181,22 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
   const selection = doc.getSelection();
   const { focusNode } = selection ?? {};
   if (selection && focusNode && selection.rangeCount > 0 && container.contains(focusNode)) {
-    const caret = doc.createRange();
-    caret.setStart(focusNode, selection.focusOffset);
-    caret.collapse(true);
-    const rects = caret.getClientRects();
-    if (rects.length > 0) {
-      const last = rects[rects.length - 1];
-      return place(last.left, last.bottom);
+    try {
+      const caret = doc.createRange();
+      caret.setStart(focusNode, selection.focusOffset);
+      caret.collapse(true);
+      const rects = caret.getClientRects();
+      if (rects.length > 0) {
+        const last = rects[rects.length - 1];
+        return place(last.left, last.bottom);
+      }
+      // A collapsed caret often has no client rect list but does have a bounding rect.
+      const bounds = caret.getBoundingClientRect?.();
+      if (bounds && (bounds.width > 0 || bounds.height > 0))
+        return place(bounds.left, bounds.bottom);
+    } catch {
+      // An offset that went stale in the same turn cannot be measured; use the container instead.
     }
-    // A collapsed caret often has no client rect list but does have a bounding rect.
-    const bounds = caret.getBoundingClientRect?.();
-    if (bounds && (bounds.width > 0 || bounds.height > 0)) return place(bounds.left, bounds.bottom);
   }
 
   const box = container.getBoundingClientRect();
@@ -205,7 +210,8 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
  *
  * The listeners sit on the frame's own document and window and resolve `containerRef.current` when
  * an event arrives, so a container that mounts late or is rebuilt is still served. The container
- * must be the editor's own element, never a wrapper that holds other editors.
+ * must be the editor's own element, never a wrapper that holds other editors, and must live in the
+ * document the hook runs in.
  *
  * While a request is open the keyboard belongs to the menu: every key except bare modifiers is
  * claimed on the frame's window, and Escape also closes the menu. The claim lasts until the request
@@ -363,7 +369,9 @@ export function useEditorContextMenu(
       if (openRequestsRef.current.size > 0) dismissOpenRequests();
     };
 
-    const handlePointerDown = () => {
+    const handlePointerDown = (event: PointerEvent) => {
+      // A right-click replaces the open menu with its own request, so it must not also dismiss.
+      if (event.button === 2) return;
       if (openRequestsRef.current.size > 0) dropOpenRequests();
     };
 

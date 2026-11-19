@@ -513,6 +513,25 @@ describe('useEditorContextMenu', () => {
       );
     });
 
+    it('falls back to the container when the selection focus offset cannot be measured', () => {
+      const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
+        () => new Promise(() => {}),
+      );
+      const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+      selectNodeContents(getByTestId('text'));
+      stubRangeClientRects(() => {
+        throw new Error('IndexSizeError');
+      });
+      vi.spyOn(getByTestId('container'), 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(50, 60, 200, 200),
+      );
+
+      const event = keyboardContextMenu(getByTestId('container'));
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(requestMenu.mock.calls[0][0].position).toEqual({ x: 58, y: 68 });
+    });
+
     it('ignores a selection outside the container and uses the container fallback', () => {
       const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
         () => new Promise(() => {}),
@@ -944,6 +963,25 @@ describe('useEditorContextMenu', () => {
       pending.resolve('cmd');
       await flush();
       expect(onPick).not.toHaveBeenCalled();
+    });
+
+    it('keeps the request open on the pointerdown of a right-click', () => {
+      const dismissMenu = vi.fn();
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => new Promise<string | undefined>(() => {})}
+          dismissMenu={dismissMenu}
+        />,
+      );
+      rightClick(getByTestId('text'));
+
+      // Jsdom lacks PointerEvent; the hook reads only `button`, which a MouseEvent carries.
+      fireEvent(
+        getByTestId('text'),
+        new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 2 }),
+      );
+
+      expect(dismissMenu).not.toHaveBeenCalled();
     });
 
     it('ignores a pointerdown while nothing is pending', () => {
