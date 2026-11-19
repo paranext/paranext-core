@@ -43,8 +43,14 @@ describe('editor context menu served by the menu data service, then converted', 
       );
       const entries = convertContributionToContextMenuItems(served.contextMenu);
       expect(entries[0]?.type).toBe('item');
-      // The editor's three groups are separated by exactly two separators
-      expect(entries.filter((entry) => entry.type === 'separator')).toHaveLength(2);
+      // Separators only ever sit between items: none leads, trails or doubles up
+      expect(entries[entries.length - 1]?.type).toBe('item');
+      const separatorsNotFollowedByItem = entries.filter(
+        (entry, index) => entry.type === 'separator' && entries[index + 1]?.type !== 'item',
+      );
+      expect(separatorsNotFollowedByItem).toEqual([]);
+      // Control: the editor's groups do produce separators, so the checks above had something to see
+      expect(entries.some((entry) => entry.type === 'separator')).toBe(true);
     },
   );
 });

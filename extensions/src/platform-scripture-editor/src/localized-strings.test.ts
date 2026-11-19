@@ -818,3 +818,40 @@ describe.each(['en', 'es'] as const)('editor Project menu labels in %s', (locale
     expect(allKeys(locale).has(key)).toBe(true);
   });
 });
+
+// The right-click menu's Insert items and Paste as plain text carry labels this extension owns. Each
+// needs a Spanish value that is not just the English one copied (nothing else catches that), and the
+// keys are read from the contributed items so an item added or relabelled stays covered.
+const CONTEXT_MENU_OWN_LABEL_COMMANDS = [
+  'platformScriptureEditor.insertCommentAtSelection',
+  'platformScriptureEditor.insertFootnoteAtSelection',
+  'platformScriptureEditor.insertCrossReferenceAtSelection',
+  'platformScriptureEditor.insertEndnoteAtSelection',
+  'platformScriptureEditor.pasteAsPlainTextAtSelection',
+];
+const contextMenuOwnLabelKeys = editorMenus.webViewMenus[
+  'platformScriptureEditor.react'
+].contextMenu.items
+  .filter((item) => CONTEXT_MENU_OWN_LABEL_COMMANDS.includes(item.command))
+  .map((item) => item.label);
+
+describe('right-click menu own labels', () => {
+  it('covers one label for each of the four Insert items and Paste as plain text', () => {
+    expect(contextMenuOwnLabelKeys).toHaveLength(CONTEXT_MENU_OWN_LABEL_COMMANDS.length);
+    expect(contextMenuOwnLabelKeys).toContain('%webView_platformScriptureEditor_pasteAsPlainText%');
+  });
+
+  describe.each(contextMenuOwnLabelKeys)('%s', (key) => {
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label that differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  });
+});
