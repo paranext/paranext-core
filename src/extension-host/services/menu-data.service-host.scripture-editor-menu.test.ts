@@ -9,7 +9,10 @@ import { describe, expect, test } from 'vitest';
 // module resolution treats `extensions` (excluded from the root tsconfig's `include`) any
 // differently for an explicit relative import than for a file this project owns.
 import { getMenuSectionsWithItems } from '../../../lib/platform-bible-react/src/components/advanced/menus/menu.util';
-import { EDIT_MENU_COMMANDS } from '../../../extensions/src/platform-scripture-editor/src/edit-menu-actions.util';
+import {
+  EDIT_MENU_COMMANDS,
+  isEditMenuCommand,
+} from '../../../extensions/src/platform-scripture-editor/src/edit-menu-actions.util';
 import {
   EXTENSIONS_DIR,
   getMenuContributingExtensions,
@@ -552,6 +555,38 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect([...EDIT_MENU_COMMANDS]).toEqual([
       ...new Set([...flyoutClipboard, ...contextMenuClipboardCommandIds()]),
     ]);
+  });
+
+  /**
+   * Every command the editor's right-click menu runs must be one the web view can run: an
+   * intercepted clipboard command (in the clipboard group, which the union test above reads), Find
+   * (routed to its own handler), or a command the top menu already uses (the Insert items,
+   * registered PAPI commands). Any other command, such as a clipboard item moved to another group
+   * or a made-up one, would be sent as an unregistered PAPI command.
+   */
+  test('every command of the right-click menu is intercepted, Find, or one the top menu already runs', () => {
+    const menus = JSON.parse(readFileSync(EDITOR_MENUS_PATH, 'utf8'));
+    const { items }: { items: { group: string; command?: string }[] } =
+      menus.webViewMenus[SCRIPTURE_EDITOR_WEB_VIEW_TYPE].contextMenu;
+    const commandItems = items.flatMap((item) =>
+      item.command ? [{ group: item.group, command: item.command }] : [],
+    );
+    // Positive control: the menu has command items, and each class below is represented
+    expect(commandItems.length).toBeGreaterThan(5);
+    const topMenuCommands = declaredEditorCommandIds();
+    const unexplained = commandItems
+      .filter(({ group, command }) => {
+        const isIntercepted = isEditMenuCommand(command);
+        if (isIntercepted) return group !== 'platformScriptureEditor.contextClipboard';
+        if (group === 'platformScriptureEditor.contextClipboard') return true;
+        return command !== 'platformScripture.openFind' && !topMenuCommands.has(command);
+      })
+      .map(({ group, command }) => `${command} in ${group}`);
+    expect(unexplained).toEqual([]);
+    expect(commandItems.some(({ command }) => command === 'platformScripture.openFind')).toBe(true);
+    expect(
+      commandItems.some(({ command }) => command.startsWith('platformScriptureEditor.insert')),
+    ).toBe(true);
   });
 
   /**
