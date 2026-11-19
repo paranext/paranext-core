@@ -23,6 +23,26 @@
     "items": []
   },
   "webViewMenus": {
-    "platformEnhancedResources.enhancedResource": {}
+    "platformEnhancedResources.enhancedResource": {
+      "contextMenu": {
+        "groups": {
+          "platformEnhancedResources.contextClipboard": {
+            "order": 3,
+            "isExperimental": true
+          }
+        },
+        "items": [
+          {
+            "label": "%enhancedResources_scripturePane_copy%",
+            "localizeNotes": "Enhanced resource Scripture pane right-click menu > Copy (the selected text)",
+            "iconNameBefore": "clipboard-copy",
+            "group": "platformEnhancedResources.contextClipboard",
+            "order": 1,
+            "command": "platformEnhancedResources.copySelection",
+            "enabledWhen": "platformEnhancedResources.contextMenu.hasSelection"
+          }
+        ]
+      }
+    }
   }
 }

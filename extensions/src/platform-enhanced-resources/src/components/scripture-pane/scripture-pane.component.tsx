@@ -15,6 +15,7 @@ import {
 import type { ContentJsonPath, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
+import type { CommandHandlers } from 'papi-shared-types';
 import {
   Alert,
   AlertDescription,
@@ -24,7 +25,11 @@ import {
   useExtraValidMarkers,
   useStylesheet,
 } from 'platform-bible-react';
-import { type LocalizedStringValue } from 'platform-bible-utils';
+import {
+  runKeepingBrowserSelection,
+  useEditorContextMenu,
+} from 'platform-bible-react/experimental';
+import { getErrorMessage, type LocalizedStringValue } from 'platform-bible-utils';
 import type { MarbleAnnotation } from '../../lib/marble-converter';
 import type { EnhancedResourcesNetworkObject } from '../../lib/use-enhanced-resources-proxy';
 import {
@@ -493,9 +498,13 @@ function useLatestRef<T>(value: T): MutableRefObject<T> {
 // No `allowInvisibleCharacters` here: this pane shows an enhanced resource, not a Paratext project,
 // so there is no `platformScripture.allowInvisibleCharacters` to read. Copying therefore behaves as
 // it does in a project with the setting off, writing each no-break space as `~`.
+//
+// `hasBuiltInContextMenu: false` turns off the editor package's own right-click menu (English only);
+// the pane serves the platform context menu instead (see `useEditorContextMenu` below).
 const EDITORIAL_OPTIONS = {
   isReadonly: true,
   hasExternalUI: true,
+  hasBuiltInContextMenu: false,
   view: { ...getDefaultViewOptions(), showCharMarkerTitles: false },
 } as const;
 
@@ -550,6 +559,12 @@ const EDITORIAL_LOGGER = makeEditorialLogger();
 // function identity on every render (which would falsely invalidate the annotation
 // effect's dependency array). Identity-stable defaults are the cheapest way to
 // guarantee the effect re-runs only when an actual handler changes.
+/** The command the pane's context menu Copy item runs; the pane runs it itself. */
+const ENHANCED_RESOURCE_WEB_VIEW_TYPE = 'platformEnhancedResources.enhancedResource';
+const COPY_SELECTION_COMMAND = 'platformEnhancedResources.copySelection';
+/** The fact the context menu's Copy item reads to know whether any text is selected. */
+const CONTEXT_MENU_HAS_SELECTION_KEY = 'platformEnhancedResources.contextMenu.hasSelection';
+
 const NOOP_TOKEN_CLICK: NonNullable<EnhancedScripturePaneProps['onTokenClick']> = () => {};
 const NOOP_TOKEN_CONTEXT_MENU: NonNullable<
   EnhancedScripturePaneProps['onTokenContextMenu']
@@ -574,6 +589,9 @@ export function EnhancedScripturePane({
   // Editorial's forwarded ref is typed `EditorRef | null`; we match that to satisfy the prop type.
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+  // The element that directly wraps `<Editorial>`: the context menu claims right-clicks inside it.
+  // eslint-disable-next-line no-null/no-null
+  const editorContainerRef = useRef<HTMLDivElement | null>(null);
   // Inject the marble annotation stylesheet so the `<mark>` elements Editorial creates have a
   // visible treatment. The stylesheet is static; useStylesheet adds a single `<style>` tag for
   // the lifetime of this component.
@@ -1169,6 +1187,47 @@ export function EnhancedScripturePane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usj, annotations, lemmaIndex]);
 
+  // Serves the pane's right-click (and Shift+F10 / the Menu key) with the platform context menu. A
+  // right-click on an annotated word also still reaches `onTokenContextMenu`: the editor's mark
+  // handler and this hook's `contextmenu` listener are independent.
+  //
+  // Copy focuses the frame without touching the editor's selection (a read-only editor's own
+  // `focus()` would put a caret at the end of the text), then runs the editor's copy with the
+  // browser selection kept, since that copy would otherwise leave it on a hidden element at the end.
+  //
+  // Hidden-tab case: intentionally not handled. A hidden tab receives no right-click, so no request
+  // can start there.
+  useEditorContextMenu({
+    containerRef: editorContainerRef,
+    isEnabled: !errorMessage && !isLoading && !!usj,
+    requestMenu: (request) =>
+      papi.overlays.showContextMenu(ENHANCED_RESOURCE_WEB_VIEW_TYPE, globalThis.webViewId, {
+        position: request.position,
+        shouldRunCommand: false,
+        contextKeys: { [CONTEXT_MENU_HAS_SELECTION_KEY]: request.hasSelection },
+      }),
+    dismissMenu: () => papi.overlays.dismissContextMenu(globalThis.webViewId),
+    onPick: (command) => {
+      if (command === COPY_SELECTION_COMMAND) {
+        window.focus();
+        runKeepingBrowserSelection(() => editorRef.current?.copy());
+        return;
+      }
+      papi.commands
+        // The picked command is one another extension contributed to this menu, so it is one of
+        // the registered command handlers in papi
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        .sendCommand(command as keyof CommandHandlers, globalThis.webViewId)
+        .catch((e) =>
+          logger.warn(
+            `EnhancedScripturePane: failed to run ${command} from the context menu: ${getErrorMessage(e)}`,
+          ),
+        );
+    },
+    onError: (error) =>
+      logger.warn(`EnhancedScripturePane: the context menu failed: ${getErrorMessage(error)}`),
+  });
+
   if (errorMessage) {
     return (
       <Alert variant="destructive" data-testid="er-scripture-pane" className="tw:m-4">
@@ -1212,6 +1271,7 @@ export function EnhancedScripturePane({
       data-testid="er-scripture-pane"
     >
       <div
+        ref={editorContainerRef}
         // `overflow-auto` + `min-h-0` + `flex-1` is the same triple the platform-scripture-editor
         // uses on its scrolling region so the editor content scrolls vertically when it exceeds
         // the available pane height; without this the outer `overflow-hidden` simply clips long
