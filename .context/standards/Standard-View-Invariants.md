@@ -201,8 +201,8 @@ palette is open — the palette holds focus — but the caret it had is captured
 restored on every way the session ends, so the user lands back where they were. An earlier design
 made the content element non-editable instead; that worked, but it blurred the editor, so keys
 landed on the page body, the caret was lost for good, focus did not come back after a `\` palette
-closed, and the main editor and the footnote editor each needed their own copy. Routing is now simply
-"the editor has focus", in both consumers.
+closed, and the main editor and the footnote editor each needed their own copy. Routing is now
+simply "the editor has focus", in both consumers.
 
 **The editor's own settles are suspended while a palette is open.** Three clocks would otherwise
 close one: the blur settle as focus moves to the palette, the idle settle a second later, and the
@@ -352,8 +352,8 @@ other hosts; no view in the app opens it, and the popover notes below describe t
   renders as a glyph) has to change the other side too, or clicks land off by the difference.
 - **In a pane-model view (Standard view, or Simple's Formatted view, where the pane and its row
   editor get Standard's view options), the same component runs `inline` inside the footnotes pane
-  — there is no popover in the app.** The note-shell, caret-guard, and `updateCaller` invariants above apply
-  unchanged. Its live-apply re-keys the note in the parent editor, so the host must re-sync its
+  — there is no popover in the app.** The note-shell, caret-guard, and `updateCaller` invariants
+  above apply unchanged. Its live-apply re-keys the note in the parent editor, so the host must re-sync its
   session key from `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new
   `noteOps` identity for its own live-apply — that reloads the editor mid-typing. An unclosed note
   (the one kind the text shows the content of) is edited in place in the text as well, as PT9 does,

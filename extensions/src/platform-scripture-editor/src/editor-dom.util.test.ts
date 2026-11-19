@@ -1173,11 +1173,11 @@ describe('getEditorSelectionRange', () => {
     expect(getEditorSelectionRange()?.toString()).toBe('Lasha');
   });
 
-  it('ignores a selection outside the editor content, such as a footnote popover', () => {
+  it('ignores a selection outside the editor content, such as a footnote row editor', () => {
     buildEditorDom({ verseNumbers: [] });
-    const popover = document.createElement('div');
-    document.body.append(popover);
-    selectText(popover, 'footnote text', 0, 8);
+    const noteEditor = document.createElement('div');
+    document.body.append(noteEditor);
+    selectText(noteEditor, 'footnote text', 0, 8);
 
     expect(getEditorSelectionRange()).toBeUndefined();
   });

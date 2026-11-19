@@ -3005,7 +3005,7 @@ function PlatformScriptureEditor({
           !shouldRunEditorChord(chordMatch.chord, {
             isReadOnly: isReadOnlyEffective,
             // Scoped to the main editor via `isFocused()`, so the insert chords don't fire while the
-            // the footnote row editor or the comment editor popover (which have their own
+            // footnote row editor or the comment editor popover (which have their own
             // `.editor-input`) has focus
             isEditorFocused: !!editorRef.current?.isFocused(),
             isPowerMode,
