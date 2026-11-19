@@ -90,9 +90,10 @@ export interface E2eRecommendationReport {
   /** Changed files that add, change or remove a menu, web view or command registration, sorted. */
   entryPointFiles: string[];
   /**
-   * Whether any changed file is runtime code: not matched by `NON_RUNTIME`, and under `src/`,
-   * `extensions/src/`, `c-sharp/` or `lib/`. False for a change to documentation, tests, stories,
-   * tool configuration or e2e files alone.
+   * Whether any changed file changes the app: not matched by `NON_RUNTIME`, outside `e2e-tests/`,
+   * and outside the top-level dot-directories other than `.erb/`. App and library code, build
+   * configuration and patches count; documentation, tests, stories, tool configuration, CI
+   * workflows and e2e files alone do not.
    */
   runtimeChanged: boolean;
   /**
@@ -208,7 +209,13 @@ const NON_RUNTIME = new RegExp(
 const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
 /** Library code is runtime but reached through the source roots that consume it. */
-const isRuntimeRoot = (file: string) => isInSourceRoot(file) || file.startsWith('lib/');
+/**
+ * Whether a runtime file (one {@link NON_RUNTIME} does not exclude) changes the app: everything but
+ * the e2e suite itself and the top-level dot-directories other than `.erb/` (CI workflows, agent
+ * and editor configuration). Build configuration and patches count, since they change what runs.
+ */
+const changesTheApp = (file: string) =>
+  !file.startsWith('e2e-tests/') && !/^\.(?!erb\/)/.test(file);
 const isE2eSpecSupport = (file: string) =>
   file.endsWith('.ts') &&
   !file.endsWith('.test.ts') &&
@@ -437,6 +444,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     ...input.sources[key].incidental,
   ]);
   const deleted = new Set(input.deletedFiles);
+  const editorPattern = editorPathsPattern(input.editorPaths);
   const uncoveredFiles = runtimeFiles
     .filter(isInSourceRoot)
     .filter((file) => !deleted.has(file))
@@ -459,11 +467,14 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     alsoExercised,
     uncoveredFiles,
     entryPointFiles,
-    runtimeChanged: runtimeFiles.some(isRuntimeRoot),
-    stalePrefixes: findStalePrefixes(input.sources, input.trackedFiles),
+    runtimeChanged: runtimeFiles.some(changesTheApp),
+    // A deletion not yet staged is still in `git ls-files --cached`; the branch's diff says it is gone.
+    stalePrefixes: findStalePrefixes(
+      input.sources,
+      input.trackedFiles.filter((file) => !deleted.has(file)),
+    ),
     editorListRuns:
-      input.editorPaths.length > 0 &&
-      input.changedFiles.some((file) => editorPathsPattern(input.editorPaths).test(file)),
+      input.editorPaths.length > 0 && input.changedFiles.some((file) => editorPattern.test(file)),
     specsChanged: input.changedFiles.some(isE2eSpecSupport),
   };
 }

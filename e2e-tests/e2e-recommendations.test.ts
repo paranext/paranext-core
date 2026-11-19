@@ -527,6 +527,18 @@ describe('recommendE2eTests', () => {
     ]);
   });
 
+  it('counts a file the branch deleted as gone, even while git still tracks it', () => {
+    // `git ls-files --cached` keeps listing a file deleted from the working tree until the
+    // deletion is staged; the branch's own diff already names it as deleted.
+    expect(
+      recommend(['src/b/only.ts'], {
+        sources: { a: { main: ['src/a/', 'src/b/'], incidental: [] } },
+        trackedFiles: ['src/a/x.ts', 'src/b/only.ts'],
+        deletedFiles: ['src/b/only.ts'],
+      }).stalePrefixes,
+    ).toEqual(['src/b/']);
+  });
+
   it('reports no stale prefix when every prefix names a tracked file', () => {
     expect(
       recommend([], {
@@ -548,6 +560,15 @@ describe('recommendE2eTests', () => {
     expect(runtime('e2e-tests/tests/isolated/docking/x.spec.ts')).toBe(false);
     expect(runtime('.github/workflows/test.yml')).toBe(false);
     expect(recommend([]).runtimeChanged).toBe(false);
+  });
+
+  it('counts a change to what builds or patches the app as runtime', () => {
+    const runtime = (file: string) => recommend([file]).runtimeChanged;
+    expect(runtime('.erb/configs/webpack.config.renderer.dev.ts')).toBe(true);
+    expect(runtime('extensions/webpack/webpack.config.base.ts')).toBe(true);
+    expect(runtime('patches/rc-dock+3.3.2.patch')).toBe(true);
+    expect(runtime('dev-packages.json')).toBe(true);
+    expect(runtime('.claude/commands/review-paratext.md')).toBe(false);
   });
 
   it('says whether the changed files make CI run the editor list', () => {
