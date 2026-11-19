@@ -3,13 +3,13 @@ import type papi from '@papi/frontend';
 import type { CommandHandlers } from 'papi-shared-types';
 import type { EditorContextMenuRequest } from 'platform-bible-react/experimental';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
-import { EditMenuActionCommand, isEditMenuCommand } from './edit-menu-actions.util';
+import { EditMenuCommand, isEditMenuCommand } from './edit-menu-actions.util';
 import { getEditorOpenFindArgs } from './find-trigger.util';
 
 /** What a picked context-menu command does to the editor that was clicked. */
 export type ContextMenuPickEffects = {
   /** Runs a clipboard command on the clicked editor, focusing that editor first. */
-  runClipboardCommand: (command: EditMenuActionCommand) => void;
+  runClipboardCommand: (command: EditMenuCommand) => void;
   /** Opens Find, searching for the text that was selected when the menu opened. */
   openFind: (selectedText: string) => void;
   /** Sends any other command, with the clicked tab's web view id. */
