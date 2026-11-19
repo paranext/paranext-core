@@ -270,3 +270,116 @@ describe('FootnoteEditor context-menu gate (the popover claims `\\` while its ow
     expect(show).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('FootnoteEditor context-menu gate (a menu the host owns)', () => {
+  it('claims and drops `\\` while the host menu claims the keyboard, without opening the marker palette', async () => {
+    const { markerPalette, show } = makeMarkerPalette();
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      markerPalette,
+      extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => true },
+    });
+    await placeCaretInNote(lexical, editorInput);
+
+    let defaultPrevented = false;
+    await act(async () => {
+      defaultPrevented = dispatchBackslash(editorInput);
+      await Promise.resolve();
+    });
+
+    expect(defaultPrevented).toBe(true);
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it('does not collapse a non-collapsed selection while the host menu claims the keyboard', async () => {
+    const { markerPalette } = makeMarkerPalette();
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      markerPalette,
+      extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => true },
+    });
+    await selectAllInPopover(lexical, editorInput);
+    expect(document.getSelection()?.isCollapsed).toBe(false);
+
+    await act(async () => {
+      dispatchBackslash(editorInput);
+      await Promise.resolve();
+    });
+
+    expect(document.getSelection()?.isCollapsed).toBe(false);
+  });
+
+  it('opens the marker palette on `\\` once the host menu no longer claims the keyboard', async () => {
+    const { markerPalette, show } = makeMarkerPalette();
+    let isClaiming = true;
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      markerPalette,
+      extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => isClaiming },
+    });
+    await placeCaretInNote(lexical, editorInput);
+    isClaiming = false;
+
+    await act(async () => {
+      dispatchBackslash(editorInput);
+      await Promise.resolve();
+    });
+
+    expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the built-in menu marker when the built-in menu is turned off', async () => {
+    const { markerPalette, show } = makeMarkerPalette();
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      markerPalette,
+      extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => false },
+    });
+    await placeCaretInNote(lexical, editorInput);
+    // The mark the built-in menu leaves on its editor root while open. With that menu off nothing in
+    // this editor sets it, so it must not stop the palette from opening.
+    editorInput.setAttribute('aria-controls', 'editor-context-menu');
+
+    await act(async () => {
+      dispatchBackslash(editorInput);
+      await Promise.resolve();
+    });
+
+    expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Enter with the caret inside the note is the `\\fp` break in Standard view: the editor's own
+   * handler, which a menu in another document must never trigger. Sees whether the key got there.
+   */
+  async function pressEnterInNote(editorInput: HTMLElement) {
+    const editorSawEnter = vi.fn();
+    editorInput.addEventListener('keydown', editorSawEnter);
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    await act(async () => {
+      editorInput.dispatchEvent(event);
+      await Promise.resolve();
+    });
+    editorInput.removeEventListener('keydown', editorSawEnter);
+    return { event, editorSawEnter };
+  }
+
+  it('claims Enter while the host menu claims the keyboard, so it never reaches the editor', async () => {
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => true },
+    });
+    await placeCaretInNote(lexical, editorInput);
+
+    const { event, editorSawEnter } = await pressEnterInNote(editorInput);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(editorSawEnter).not.toHaveBeenCalled();
+  });
+
+  it('leaves Enter in the note to the editor when no host menu claims the keyboard (control)', async () => {
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => false },
+    });
+    await placeCaretInNote(lexical, editorInput);
+
+    const { editorSawEnter } = await pressEnterInNote(editorInput);
+
+    expect(editorSawEnter).toHaveBeenCalled();
+  });
+});
