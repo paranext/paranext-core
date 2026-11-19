@@ -95,14 +95,6 @@ export interface E2eRecommendationReport {
   /** Changed files that add, change or remove a menu, web view or command registration, sorted. */
   entryPointFiles: string[];
   /**
-   * Changed files that can carry a dependency change, sorted: the root `package.json`,
-   * `package-lock.json`, `release/app/package.json`, `release/app/package-lock.json`,
-   * `dev-packages.json`, `global.json`, any `.csproj` or `.props` file under `c-sharp/` and
-   * anything under `patches/`. A hint: whether a dependency actually changed is read from their
-   * diffs in the end-to-end tests step of `/review-paratext`.
-   */
-  dependencyFiles: string[];
-  /**
    * Prefixes in `subset-sources.json` that match no tracked file, sorted: a moved or deleted source
    * a key still names. Such a prefix silently stops matching, so the map needs updating.
    */
@@ -202,10 +194,9 @@ const NON_RUNTIME = new RegExp(
     // C# test projects (`Foo.Tests/`).
     String.raw`(^|\/)[^/]*Tests\/`,
     // Package and extension metadata: a design decision, not an oversight (a version or
-    // dependency bump changes no behaviour an e2e spec can see; the end-to-end tests step of
-    // `/review-paratext` weighs the dependency files separately). A change to a manifest's main,
-    // menus, settings or activation events goes unnoticed here: a release bumps every manifest's
-    // version at once.
+    // dependency bump changes no behaviour an e2e spec can see, and the nightly full run catches
+    // what a bump breaks). A change to a manifest's main, menus, settings or activation events goes
+    // unnoticed here: a release bumps every manifest's version at once.
     String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
     // .NET build metadata: projects, shared build properties, the solution and IDE settings. The
     // data provider's own project file is the exception: it pins ParatextData, which does the
@@ -270,25 +261,6 @@ const isE2eSpecSupport = (file: string) => {
   );
 };
 
-/**
- * Whether `file` can carry a dependency change: the root `package.json`, `package-lock.json`,
- * `release/app/package.json`, `release/app/package-lock.json`, `dev-packages.json` and
- * `global.json`, a `.csproj` or `.props` file under `c-sharp/`, or anything under `patches/`. The
- * `.config/dotnet-tools.json` files are not listed: they pin only developer tools. A path test
- * only: the diff decides whether a dependency changed.
- */
-const isDependencyFile = (file: string) =>
-  [
-    'package.json',
-    'package-lock.json',
-    'release/app/package.json',
-    'release/app/package-lock.json',
-    'dev-packages.json',
-    'global.json',
-  ].includes(file) ||
-  (file.startsWith('c-sharp/') && /\.(csproj|props)$/.test(file)) ||
-  file.startsWith('patches/');
-
 /** Menu contributions of the extensions and the core menu data. */
 const isMenuFile = (file: string) =>
   file.endsWith('contributions/menus.json') || file === 'src/extension-host/data/menu.data.json';
@@ -300,7 +272,7 @@ function matchesPrefix(file: string, prefix: string): boolean {
 const matchesAny = (file: string, prefixes: string[]) =>
   prefixes.some((prefix) => matchesPrefix(file, prefix));
 
-const isSpecKey = (key: string) => key.endsWith('.spec.ts');
+export const isSpecKey = (key: string) => key.endsWith('.spec.ts');
 
 /** A key that is a path filter inside a subset (`scripture-editor/no-unasked-edits-`). */
 export const isPrefixKey = (key: string) => key.includes('/') && !isSpecKey(key);
@@ -562,7 +534,6 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     alsoExercised,
     uncoveredFiles,
     entryPointFiles,
-    dependencyFiles: input.changedFiles.filter(isDependencyFile).sort(),
     // A deletion not yet staged is still in `git ls-files --cached`; the branch's diff says it is gone.
     stalePrefixes: findStalePrefixes(
       input.sources,
@@ -658,6 +629,20 @@ export function readGitChanges(
 }
 
 /**
+ * The spec files of every subset key of `sources` (a top-level directory under `tests/isolated/`),
+ * read from this repository: what `ci.specCount` and the collapse check count.
+ */
+export function readSpecFilesBySubset(sources: SubsetSources): Record<string, string[]> {
+  const specFilesBySubset: Record<string, string[]> = {};
+  Object.keys(sources)
+    .filter((key) => !key.includes('/') && !isSpecKey(key))
+    .forEach((key) => {
+      specFilesBySubset[key] = listSpecFiles(path.join(REPO_ROOT, ISOLATED_PREFIX, key));
+    });
+  return specFilesBySubset;
+}
+
+/**
  * Prints the {@link E2eRecommendationReport} for the working tree against `mergeBase` as JSON on
  * stdout.
  */
@@ -665,12 +650,7 @@ function runCli(mergeBase: string): void {
   const sources: SubsetSources = JSON.parse(
     fs.readFileSync(path.join(REPO_ROOT, 'e2e-tests/tests/isolated/subset-sources.json'), 'utf8'),
   );
-  const specFilesBySubset: Record<string, string[]> = {};
-  Object.keys(sources)
-    .filter((key) => !key.includes('/') && !isSpecKey(key))
-    .forEach((key) => {
-      specFilesBySubset[key] = listSpecFiles(path.join(REPO_ROOT, ISOLATED_PREFIX, key));
-    });
+  const specFilesBySubset = readSpecFilesBySubset(sources);
 
   const report = recommendE2eTests({
     ...readGitChanges(REPO_ROOT, mergeBase),

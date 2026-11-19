@@ -2933,24 +2933,21 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     file types the app does load. A file no key lists and `NON_RUNTIME` does not match is
     "uncovered", one of the conditions that can trigger the "does this need a new e2e test?"
     question (the others are in the Add part of `/review-paratext`'s end-to-end tests step).
-  - **Lookups are deterministic; judgments are the model's.** The script answers what a path lookup
-    can: the map's recommendations and also-exercised keys, uncovered files, entry points, whether
-    an e2e spec changed, stale prefixes and whether CI runs the editor list. For two questions that
-    depend on what a diff says it only hands over a hint. `dependencyFiles` lists the changed files
-    that can carry a dependency change (the root and `release/app` `package.json` and lock files,
-    `dev-packages.json`, `global.json`, `.csproj` and `.props` files under `c-sharp/`, anything
-    under `patches/`), by path alone. The end-to-end tests step of `/review-paratext` reads their
-    diffs (a lock file's only as a count of its changed `resolved` and `integrity` lines) and judges
-    whether a dependency, an engine or SDK pin or a patch really changed (a package's own release version, a script or
-    formatting does not; a dev tool's bump does); if so it recommends the full isolated run
-    (`npm run test:e2e:isolated all`), because a dependency can break any area and no subset stands
-    in for it. Whether the branch changes what the app does, which gates the "needs a new e2e
-    test?" question, is judged the same way from the diff. The alternatives were rejected: path
-    rules for "an app change" (every narrower rule had counterexamples, and a coarse one still
-    needed per-format exceptions), parsing each dependency format (npm fields, lock lines, NuGet
-    references, SDK pins, patches: every format has shapes a parser misses), and no hint at all
-    (nothing would remind the model to look at a dependency bump). The judgment is not unit-tested
-    and can vary between runs; the step is advisory, so that is accepted.
+  - **Lookups are deterministic; the app-behaviour judgment is the model's.** The script answers
+    what a path lookup can: the map's recommendations and also-exercised keys, uncovered files,
+    entry points, whether an e2e spec changed, stale prefixes and whether CI runs the editor list.
+    Whether the branch changes what the app does, which gates the "needs a new e2e test?" question,
+    is judged by the reviewing model from the diff. Path rules for "an app change" were rejected:
+    every narrower rule had counterexamples, and a coarse one still needed per-format exceptions.
+    The judgment is not unit-tested and can vary between runs; the step is advisory, so that is
+    accepted.
+  - **Dependency changes get a pointer, not a judgment.** When a dependency changes (a package
+    file, the lock file, `dev-packages.json`, a .NET package reference, `global.json` or a patch
+    under `patches/`, recognised by file name in the changed-file list), the step only mentions
+    that the full isolated run (`npm run test:e2e:isolated all`) exists, takes about an hour and
+    runs nightly on `main`, because the nightly full run catches what a dependency bump breaks.
+    Rejected: parsing the dependency formats, counting lock-file lines and reading capped lock-file
+    diffs. Each misread some cases, for little gain over the nightly run.
   - **An unreadable `editor_paths` is `'unknown'`, not false.** If the path list in `test.yml`
     cannot be parsed, `editorListRuns` is `'unknown'` and the report is still printed; answering
     false would claim the editor spec list does not run when nothing was checked.

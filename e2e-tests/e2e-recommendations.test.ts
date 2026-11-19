@@ -20,8 +20,10 @@ import {
   isEntryPoint,
   isNonRuntime,
   isPrefixKey,
+  isSpecKey,
   readEditorPaths,
   readGitChanges,
+  readSpecFilesBySubset,
   recommendE2eTests,
   RecommendInput,
   SubsetSources,
@@ -633,49 +635,6 @@ describe('recommendE2eTests', () => {
     ).toEqual([]);
   });
 
-  it.each([
-    'package.json',
-    'package-lock.json',
-    'release/app/package.json',
-    'release/app/package-lock.json',
-    'dev-packages.json',
-    'global.json',
-    'c-sharp/ParanextDataProvider.csproj',
-    'c-sharp/Directory.Build.props',
-    'patches/rc-dock+3.3.2.patch',
-    'patches/new+1.0.0.patch',
-  ])('lists %s as a file that can carry a dependency change', (file) => {
-    expect(recommend([file]).dependencyFiles).toEqual([file]);
-  });
-
-  it.each([
-    'src/main/x.ts',
-    'extensions/src/hello-rock3/package.json',
-    'extensions/package.json',
-    'lib/platform-bible-react/package.json',
-    'README.md',
-    'c-sharp/Projects/ParatextProjectDataProvider.cs',
-    'c-sharp-tests/c-sharp-tests.csproj',
-    'e2e-tests/core-specs.txt',
-    // These pin only developer tools (the C# formatter, the NuGet license tool).
-    '.config/dotnet-tools.json',
-    'c-sharp/.config/dotnet-tools.json',
-  ])('does not list %s as a dependency file', (file) => {
-    expect(recommend([file]).dependencyFiles).toEqual([]);
-  });
-
-  it('lists the dependency files among the changed files, sorted', () => {
-    expect(
-      recommend([
-        'src/main/x.ts',
-        'patches/b.patch',
-        'package.json',
-        'global.json',
-        'patches/a.patch',
-      ]).dependencyFiles,
-    ).toEqual(['global.json', 'package.json', 'patches/a.patch', 'patches/b.patch']);
-  });
-
   it('says whether the changed files make CI run the editor list', () => {
     const editorPaths = ['extensions/src/platform-scripture-editor/', 'dev-packages\\.json$'];
     expect(recommend(['dev-packages.json'], { editorPaths }).editorListRuns).toBe(true);
@@ -821,12 +780,21 @@ describe('recommendE2eTests', () => {
   });
 
   it('stays silent for a test-only, stories-only or docs-only change in a covered area', () => {
+    const sources = {
+      dialogs: { main: ['src/renderer/components/dialogs/'], incidental: ['src/renderer/hooks/'] },
+    };
+    // Control: the area is covered, so its app code is recommended.
+    expect(
+      recommendedKeys(
+        recommend(['src/renderer/components/dialogs/alert-dialog.component.tsx'], { sources }),
+      ),
+    ).toEqual(['dialogs']);
     [
       'src/renderer/components/dialogs/alert-dialog.component.test.tsx',
       'src/renderer/components/dialogs/team-layout.stories.tsx',
       'src/renderer/hooks/README.md',
     ].forEach((file) => {
-      const report = recommend([file]);
+      const report = recommend([file], { sources });
       expect({ file, keys: recommendedKeys(report) }).toEqual({ file, keys: [] });
       expect({ file, alsoExercised: report.alsoExercised }).toEqual({ file, alsoExercised: [] });
     });
@@ -973,6 +941,27 @@ describe('recommendE2eTests', () => {
   });
 });
 
+describe('readSpecFilesBySubset', () => {
+  const specFiles = readSpecFilesBySubset(mapping);
+
+  it('lists the scripture editor specs, the no-unasked-edits family included', () => {
+    const editorSpecs = specFiles['scripture-editor'];
+    expect(editorSpecs.length).toBeGreaterThan(8);
+    expect(
+      editorSpecs.filter((spec) =>
+        spec.startsWith('e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-'),
+      ).length,
+    ).toBeGreaterThan(1);
+  });
+
+  it.each(keys.filter((key) => !key.includes('/') && !isSpecKey(key)))(
+    'lists at least one spec for the subset %s',
+    (key) => {
+      expect(specFiles[key]?.length ?? 0).toBeGreaterThan(0);
+    },
+  );
+});
+
 describe('the editor list and the map', () => {
   // CI runs the editor list for every path `editor_paths` names; a runtime file among them that no
   // key lists would be recommended nothing, so the map must follow that list.
@@ -991,8 +980,13 @@ describe('the editor list and the map', () => {
       (file) => pattern.test(file) && !isNonRuntime(file) && !file.startsWith('e2e-tests/'),
     );
     expect(triggering).toContain('c-sharp/assets/usfm.sty');
-    // One path per line, so a failure lists every file the map leaves out.
-    expect(triggering.filter((file) => !reachesAKey(file)).join('\n')).toBe('');
+    const unmapped = triggering.filter((file) => !reachesAKey(file));
+    // One path per line, so a failure lists every file the map leaves out, with the fix.
+    expect(
+      unmapped.length === 0
+        ? 'all mapped'
+        : `No key in e2e-tests/tests/isolated/subset-sources.json lists these files, which make CI run the editor list. Add each to the main list of the right key (see "The isolated e2e map" in e2e-tests/CLAUDE.md):\n${unmapped.join('\n')}`,
+    ).toBe('all mapped');
   });
 });
 
@@ -1286,15 +1280,6 @@ describe('readGitChanges', () => {
     });
   });
 
-  it('lists an untracked patch among the changed files, so the report lists it as a dependency file', () => {
-    withTemporaryRepository((repoRoot, baseSha) => {
-      writeFile(repoRoot, 'patches/zz+1.0.0.patch', 'a patch\n');
-      const { changedFiles } = readGitChanges(repoRoot, baseSha);
-      expect(changedFiles).toContain('patches/zz+1.0.0.patch');
-      expect(recommend(changedFiles).dependencyFiles).toEqual(['patches/zz+1.0.0.patch']);
-    });
-  });
-
   it('treats a ref that starts with a dash as a ref, not an option', () => {
     withTemporaryRepository((repoRoot) => {
       expect(() => readGitChanges(repoRoot, '--output=injected.txt')).toThrow();
@@ -1352,7 +1337,6 @@ describe('command-line entry point', () => {
     );
     expect(Object.keys(JSON.parse(output)).sort()).toEqual([
       'alsoExercised',
-      'dependencyFiles',
       'editorListRuns',
       'entryPointFiles',
       'recommendations',
