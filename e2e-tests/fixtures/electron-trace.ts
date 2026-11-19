@@ -7,8 +7,12 @@ export type TraceOption = PlaywrightWorkerOptions['trace'];
 export interface ElectronTracePlan {
   /** Whether to record a trace on this attempt. */
   record: boolean;
-  /** Record DOM snapshots (what the trace viewer shows for each action). */
-  snapshots: boolean;
+  /**
+   * Which snapshots to record on each action (what the trace viewer shows for it). `true` means DOM
+   * snapshots. The `{ dom, aria, screen }` form chooses the kinds, and `tracing.start` takes it
+   * as-is, as Playwright passes it for a browser test.
+   */
+  snapshots: NonNullable<Exclude<TraceOption, string>['snapshots']>;
   /** Record a screencast alongside the snapshots. */
   screenshots: boolean;
   /** Keep the recorded trace only when the attempt failed; otherwise it is always kept. */
@@ -22,10 +26,11 @@ export interface ElectronTracePlan {
  * traces only the browser contexts its browser types created. The test runner still writes a
  * steps-only `trace.zip` for each test, but with no DOM snapshots in it. A fixture that launches
  * Electron records the app's context itself, and this decides when, mirroring the rules of
- * `TestTracing._shouldCaptureTrace` and `_shouldAbandonTrace` in
- * `playwright/lib/worker/testTracing.js` so that the option means the same here as it does for a
- * browser test. Re-check those rules when Playwright is upgraded; a new trace mode fails
- * `typecheck:e2e` at the `switch` below.
+ * `TestTracing._shouldCaptureTrace` and `_shouldAbandonTrace` so that the option means the same
+ * here as it does for a browser test. As of Playwright 1.65 that class is bundled into
+ * `playwright/lib/worker/workerProcessEntry.js`; earlier versions had it in `testTracing.js`.
+ * Re-check those rules when Playwright is upgraded; a new trace mode fails `typecheck:e2e` at the
+ * `switch` below.
  */
 export function electronTracePlan(trace: TraceOption, retry: number): ElectronTracePlan {
   const options = typeof trace === 'string' ? { mode: trace } : trace;
@@ -37,6 +42,7 @@ export function electronTracePlan(trace: TraceOption, retry: number): ElectronTr
       break;
     case 'on':
     case 'retain-on-failure':
+    case 'retain-on-failure-and-retries':
       record = true;
       break;
     case 'on-first-retry':
@@ -57,6 +63,10 @@ export function electronTracePlan(trace: TraceOption, retry: number): ElectronTr
     record,
     snapshots: typeof trace === 'string' ? true : (trace.snapshots ?? true),
     screenshots: typeof trace === 'string' ? true : (trace.screenshots ?? true),
-    keepOnlyOnFailure: mode === 'retain-on-failure' || mode === 'retain-on-first-failure',
+    // `retain-on-failure-and-retries` keeps every retry's trace, but a first run's only if it failed
+    keepOnlyOnFailure:
+      mode === 'retain-on-failure' ||
+      mode === 'retain-on-first-failure' ||
+      (mode === 'retain-on-failure-and-retries' && retry === 0),
   };
 }
