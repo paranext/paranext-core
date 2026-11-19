@@ -9,6 +9,7 @@ import {
   createContextMenuCommandEffects,
   dispatchContextMenuPick,
   getContextMenuShowOptions,
+  logContextMenuOutcome,
 } from './editor-context-menu-pick.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
 
@@ -69,10 +70,15 @@ export function PaneFootnoteEditorContextMenu({
   const { isClaimingKeys } = useEditorContextMenu({
     containerRef: wrapperRef,
     requestMenu: (request) =>
-      papi.overlays.showContextMenu(
-        SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+      logContextMenuOutcome(
+        papi.overlays.showContextMenu(
+          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+          webViewId,
+          getContextMenuShowOptions(request, false),
+        ),
         webViewId,
-        getContextMenuShowOptions(request, false),
+        'footnote editor',
+        logger,
       ),
     dismissMenu: () => papi.overlays.dismissContextMenu(webViewId),
     onPick: (command, request) =>

@@ -3,24 +3,30 @@ import { act, fireEvent, render } from '@testing-library/react';
 import type { FootnoteEditorHandle } from 'platform-bible-react';
 import type { RefObject } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ABORTED, newPlatformError } from 'platform-bible-utils';
 import { PaneFootnoteEditorContextMenu } from './pane-footnote-editor-context-menu.component';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
 
-const { mockShowContextMenu, mockDismissContextMenu, mockSendCommand, mockLoggerWarn } = vi.hoisted(
-  () => ({
-    mockShowContextMenu: vi.fn(),
-    mockDismissContextMenu: vi.fn(),
-    mockSendCommand: vi.fn(),
-    mockLoggerWarn: vi.fn(),
-  }),
-);
+const {
+  mockShowContextMenu,
+  mockDismissContextMenu,
+  mockSendCommand,
+  mockLoggerWarn,
+  mockLoggerDebug,
+} = vi.hoisted(() => ({
+  mockShowContextMenu: vi.fn(),
+  mockDismissContextMenu: vi.fn(),
+  mockSendCommand: vi.fn(),
+  mockLoggerWarn: vi.fn(),
+  mockLoggerDebug: vi.fn(),
+}));
 
 vi.mock('@papi/frontend', () => ({
   default: {
     overlays: { showContextMenu: mockShowContextMenu, dismissContextMenu: mockDismissContextMenu },
     commands: { sendCommand: mockSendCommand },
   },
-  logger: { warn: mockLoggerWarn, error: vi.fn(), info: vi.fn(), debug: vi.fn() },
+  logger: { warn: mockLoggerWarn, error: vi.fn(), info: vi.fn(), debug: mockLoggerDebug },
 }));
 
 const WEB_VIEW_ID = 'web-view-1';
@@ -125,6 +131,7 @@ describe('PaneFootnoteEditorContextMenu', () => {
     mockSendCommand.mockReset();
     mockSendCommand.mockResolvedValue(undefined);
     mockLoggerWarn.mockReset();
+    mockLoggerDebug.mockReset();
   });
 
   describe('opening the menu', () => {
@@ -193,6 +200,35 @@ describe('PaneFootnoteEditorContextMenu', () => {
       unmount();
 
       expect(mockDismissContextMenu).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a menu that shows no pick', () => {
+    it('logs a request the platform rejected, with its code, naming the web view', async () => {
+      mockShowContextMenu.mockRejectedValueOnce(
+        newPlatformError('Overlay was replaced by a new request', ABORTED),
+      );
+      const { getByTestId, rightClick, flush } = setup();
+
+      rightClick(getByTestId('note-text'));
+      await flush();
+
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`footnote editor.*${WEB_VIEW_ID}.*${ABORTED}.*replaced`)),
+      );
+      // Still one of the hook's quiet rejections: nothing reaches the warning log.
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
+    it('logs a menu that closed without a pick, naming the web view', async () => {
+      const { getByTestId, rightClick, flush } = setup();
+
+      rightClick(getByTestId('note-text'));
+      await flush();
+
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`footnote editor.*${WEB_VIEW_ID}.*without a pick`)),
+      );
     });
   });
 

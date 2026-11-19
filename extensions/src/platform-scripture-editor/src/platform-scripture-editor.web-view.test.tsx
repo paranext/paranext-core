@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
-import { newPlatformError } from 'platform-bible-utils';
+import { newPlatformError, RESOURCE_EXHAUSTED } from 'platform-bible-utils';
 import { EMPTY_CHAPTER_VIEW_KEYS } from './empty-chapter-view.const';
 
 // ---------------------------------------------------------------------------
@@ -36,6 +36,7 @@ const {
   mockDismissContextMenu,
   mockSendCommand,
   editorialOptions,
+  mockLoggerDebug,
 } = vi.hoisted(() => ({
   mockUseProjectData: vi.fn(),
   mockUseLocalizedStrings: vi.fn(),
@@ -72,6 +73,8 @@ const {
   mockSendCommand: vi.fn(),
   /** The `options` the stubbed editor was last rendered with. */
   editorialOptions: { current: undefined as unknown },
+  /** Stands in for `logger.debug`. */
+  mockLoggerDebug: vi.fn(),
 }));
 
 /** What each key localizes to by default; any other key echoes itself, as an unresolved one does. */
@@ -152,7 +155,7 @@ vi.mock('@papi/frontend', () => {
   );
   return {
     default: papi,
-    logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
+    logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: mockLoggerDebug },
   };
 });
 
@@ -1297,6 +1300,36 @@ describe('Scripture editor right-click menu', () => {
       'Mr. Abraham',
       PROJECT_ID,
     );
+  });
+
+  describe('a menu that shows no pick', () => {
+    beforeEach(() => mockLoggerDebug.mockReset());
+
+    it('logs a request the platform rejected, with its code, naming the web view', async () => {
+      stubEditor();
+      mockShowContextMenu.mockRejectedValue(
+        newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED),
+      );
+      await renderEditor();
+
+      await rightClick(screen.getByTestId('editorial'));
+
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`${WEB_VIEW_ID}.*${RESOURCE_EXHAUSTED}.*debounce`)),
+      );
+    });
+
+    it('logs a menu that closed without a pick, naming the web view', async () => {
+      stubEditor();
+      mockShowContextMenu.mockResolvedValue(undefined);
+      await renderEditor();
+
+      await rightClick(screen.getByTestId('editorial'));
+
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`${WEB_VIEW_ID}.*without a pick`)),
+      );
+    });
   });
 
   it('sends any other picked command with the web view id', async () => {
