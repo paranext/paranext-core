@@ -2861,6 +2861,45 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-e2e-core-set-per-pull-request: Pull requests run a small report-only set of isolated e2e specs; the full isolated suite runs nightly and fails on a flaky test
+
+- **Date:** 2026-11-17
+- **Status:** Accepted
+- **Context:** The isolated e2e suite (`e2e-tests/tests/isolated/`) took about an hour on a
+  developer machine and ran in no CI job, so a break in a feature's end-to-end behavior was noticed
+  only when someone ran it by hand. Each spec starts its own copy of the app, so adding specs to
+  every pull request multiplies the cost, and a timing race in the app could turn unrelated
+  pull requests red.
+- **Decision:** Three parts, wired through `.github/workflows/test.yml`, `e2e-isolated.yml` and
+  `e2e-nightly.yml`. (1) Every pull request runs the `e2e-core` job: the isolated specs listed in
+  `e2e-tests/core-specs.txt`. It is report-only: a spec failure shows as a warning on the run, not
+  a red check. (2) A second list, `e2e-tests/core-specs-editor.txt`, runs as well when the pull
+  request changes a path matched by `editor_paths` in `test.yml`, a curated list of the Scripture
+  editor, what it saves through (its USFM↔USX↔USJ conversion path) and the editor list's own specs,
+  described in full beside it; if the changed-files lookup fails, both lists run. (3) A nightly run
+  (`e2e-nightly.yml`, also startable by hand) runs every isolated spec over eight runners and fails
+  the run on a test that passes only on its retry (`--fail-on-flaky-tests`). Every run allows one
+  retry per test and keeps the traces of each failed attempt (`--trace=retain-on-failure`): a DOM
+  trace of the app for specs on `isolated.fixture`, which records the Electron app's context
+  itself because Playwright's own tracing does not reach an app started with `_electron.launch()`.
+  The specs stop on their own (`--global-timeout`, from the time the setup left) before the job's
+  limit, because a job that reaches its limit is cancelled and skips the reporting and upload
+  steps. The per-pull-request job names a test that needed its retry in a warning. Adding or
+  removing a core spec means editing the list, and `e2e-tests/core-specs.test.ts` keeps the lists,
+  the workflow, the specs and every `editor_paths` entry in agreement with the repository.
+- **Alternatives:** Run the whole isolated suite on every pull request — rejected: about an hour
+  locally and longer on a runner, too slow for a per-pull-request check. Make the core job blocking
+  from day one — rejected: an app race would mark unrelated pull requests red while the job is still
+  proving itself. Fail the per-pull-request job on a test that passes only on its retry — rejected
+  as too strict there; it warns instead, and the nightly run, which blocks nothing, is the one that
+  fails.
+- **Consequences:** Pull requests get early, non-blocking signal on the specs that matter most;
+  the rest of the suite is covered a day late. The `editor_paths` list is curated by hand and
+  over-matches on purpose (over-running a report-only job is the safe direction), so it needs
+  upkeep as the editor's dependencies move. Revisit once the job has proven stable: TODO(PT-5088)
+  makes it a required check.
+- **Source:** PT-5015.
+
 ## adr-editor-annotation-exact-locations: An annotation holds exactly the bytes its range names, and removal reporting follows whatever holds it now
 
 - **Date:** 2026-09-29
@@ -4889,6 +4928,54 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `.claude/rules/architecture/react-patterns.md`.
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
+
+## adr-implied-paragraph-reports-p-and-bar-follows-top-level-block: Verses outside any paragraph marker report `p`, and the character-marker bar follows the caret's top-level block
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** Verses that sit outside any paragraph marker load as an `ImpliedParaNode`, which
+  renders as a bare `<p>` with no USFM class. Two things broke for a caret there in Simple mode.
+  The editor's `StateChangePlugin` (scripture-editors,
+  `libs/shared-react/src/plugins/usj/StateChangePlugin.tsx`) emitted no state change for an implied
+  paragraph, so the host kept the previous block's `blockMarker` — typically `id` — and scoped the
+  character-marker menu to `\id`'s children (`ior`). And the bar resolved the caret's block with
+  `EDITOR_PARA_SELECTOR` (`.para[class*="usfm_"]`, `editor-dom.util.ts`), which neither the bare
+  `<p>` nor the `\id` line (`p.book.usfm_id`) matches, so the bar held its last position.
+- **Decision:** (1) An implied paragraph reports `p` as its block marker: `StateChangePlugin`
+  accepts `$isSomeParaNode` (paragraph or implied paragraph) at both its verse-block resolution and
+  its reporting guard, and `ImpliedParaNode.getMarker()` already returns `PARA_MARKER_DEFAULT`
+  (scripture-editors `docs/markers-inventories/implemented-markers-inventory.md` documents that).
+  (2) The character-marker bar anchors to the caret's **top-level block** — the child of
+  `.editor-input` that holds it (`findTopLevelEditorBlock`), the DOM twin of Lexical's
+  `getTopLevelElement()` and the block `ActiveTextPlugin` outlines — while the paragraph-marker
+  tooltip keeps `EDITOR_PARA_SELECTOR`, because it names a marked paragraph. Before the first caret,
+  the bar anchors to the first block that holds text (`findFirstTextBlock`): it skips the `\id`
+  line (class `book`) and chapter lines (class `chapter`) and takes the next block whether or not it
+  has a paragraph marker, so a chapter that opens with unmarked verses starts the bar beside them
+  rather than beside a later `\p` that may be off-screen.
+- **Alternatives:** Report `undefined` for an implied paragraph — rejected: the character-marker
+  menu returns no items without a parent marker, which disables the button in exactly the place the
+  user is typing. Add an `isImpliedPara` field to `StateChangeSnapshot` — rejected: public API growth
+  for one consumer, when `p` is already what the node says it is. Give the implied paragraph an
+  `implied-para` class in the editor and widen the selector — rejected: a new cross-repo class
+  contract, and it would still miss the `\id` and chapter lines; the top-level-block rule rests on
+  Lexical's own invariant that root children render as the contenteditable's children. Read the
+  `psc-active-text` class `ActiveTextPlugin` puts on the active block — rejected: it exists only in
+  views with `hasActiveTextFocusBox`, and the plugin removes it on blur, which is exactly when the
+  character-marker menu takes focus and the bar must hold.
+- **Consequences:** In Power mode the paragraph-style trigger reads `p` for text that has no `\p`
+  (Simple mode is structure-protected, so the cost is Power-only); retagging an implied paragraph
+  from that menu was already reachable, because the stale `id` left it enabled. The bar follows the
+  caret onto the `\id` and chapter lines too, and its button is disabled on both: `c` has no
+  character markers, and `generateCharacterMarkerMenuListItems` offers none for `id` even though
+  `usfmMarkers` lists `ior` among `\id`'s children (they name what may follow `\id`, and `ior`
+  belongs inside `\io`). Hiding the bar on those lines was rejected: it would flicker as the caret
+  moves past them. `findTopLevelEditorBlock`
+  assumes root-level nodes render as direct children of the contenteditable. The read-only block
+  verse layout already wraps paragraphs in a verse-block element, where it would resolve to the
+  wrapper; as of 2026-11-12 the bar is not mounted in that layout. Revisit before mounting the bar
+  anywhere the editor wraps its blocks.
+- **Source:** PT-4763.
 
 ## adr-interface-mode-decides-the-window-set: The interface mode decides how many windows exist, and the persisted entry list is that set
 

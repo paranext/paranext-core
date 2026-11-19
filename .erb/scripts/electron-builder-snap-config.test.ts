@@ -178,13 +178,9 @@ function readWorkflowJobs(workflow: string): Record<string, unknown>[] {
 }
 
 /**
- * The Ubuntu runner labels each snap-building workflow's matrix lists, named so a failure says
- * which workflow. Reads both matrix shapes the workflows use: an `os` list and `include` entries
- * that each set `os`.
- *
- * Only `ubuntu-*` labels count, because the snap's `core` base pins an Ubuntu release. A Linux leg
- * moved to a label without that prefix (a custom larger runner, say) is left out, so the check
- * fails with an empty list for that workflow rather than a mismatched label.
+ * The `ubuntu-*` labels in each snap-building workflow's matrix (an `os` list or `include[].os`),
+ * named so a failure says which workflow. The prefix picks the Linux leg out of the other OSes, so
+ * a Linux leg on a label without it is not counted.
  */
 function readWorkflowLinuxRunners(): { workflow: string; runners: string[] }[] {
   return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
@@ -232,7 +228,9 @@ const JOB_TIMEOUT_MINUTES = 180;
  */
 function readWorkflowTimeouts(): { workflow: string; job: unknown[]; steps: unknown[] }[] {
   return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
-    const jobs = readWorkflowJobs(workflow);
+    // A job that calls a reusable workflow (`uses:`) cannot carry `timeout-minutes`; its timeouts
+    // are those of the called workflow's own jobs.
+    const jobs = readWorkflowJobs(workflow).filter((job) => !('uses' in job));
     const steps = jobs
       .flatMap((job) => (Array.isArray(job.steps) ? job.steps : []))
       .filter(isRecord)

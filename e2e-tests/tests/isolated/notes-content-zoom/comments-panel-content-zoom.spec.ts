@@ -235,7 +235,6 @@ test.describe('Comments panel content zoom in Simple mode', () => {
 powerModeTest.describe('Comments panel content zoom in Power mode', () => {
   powerModeTest.use({
     interfaceMode: 'power',
-    electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
     seedSettings: {
       'platform.webViewContentZoom': 1,
       [CONTENT_ZOOM_MEMORY_SETTING]: {},

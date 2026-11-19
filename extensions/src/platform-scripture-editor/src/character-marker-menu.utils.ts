@@ -50,6 +50,14 @@ export const ALL_USFM_MARKER_DESCRIPTION_KEYS = Object.values(usfmMarkers)
   .filter((description) => !!description);
 
 /**
+ * Block markers whose own text takes no character markers, even though `usfmMarkers` lists some
+ * among their children. `\id`'s children are the markers that may follow it in the book's opening,
+ * and its Introduction group brings in `ior`, which belongs inside an `\io` line. The `\id` line
+ * itself holds only the book code and a description.
+ */
+const BLOCK_MARKERS_WITHOUT_CHARACTER_MARKERS: ReadonlySet<string> = new Set(['id']);
+
+/**
  * Whether a marker row's action would do nothing, so the row must render unavailable rather than
  * silently swallowing the click.
  *
@@ -114,9 +122,9 @@ function isMarkerRowInert(
  *   it never falls back to adding, because adding nests.
  * @returns The list of character marker menu items, sorted by marker code. Empty when
  *   `parentMarker` is absent or contributes no character markers — whether it has no children at
- *   all (e.g. `c`) or only non-character children (e.g. `mt`). That wins over the remove row, so
- *   the result is `[]` even when a marker is applied and `removeCharacterMarker` is supplied; the
- *   menu never offers "Remove" with nothing to add.
+ *   all (e.g. `c`), only non-character children (e.g. `mt`), or is the `\id` line. That wins over
+ *   the remove row, so the result is `[]` even when a marker is applied and `removeCharacterMarker`
+ *   is supplied; the menu never offers "Remove" with nothing to add.
  */
 export function generateCharacterMarkerMenuListItems(
   editorRef: MutableRefObject<EditorRef | null>,
@@ -168,7 +176,7 @@ export function generateCharacterMarkerMenuListItems(
     isChapterLoading?: () => boolean;
   },
 ): MarkerMenuItem[] {
-  if (!parentMarker) return [];
+  if (!parentMarker || BLOCK_MARKERS_WITHOUT_CHARACTER_MARKERS.has(parentMarker)) return [];
 
   const markerDetails = usfmMarkers[parentMarker];
   if (!markerDetails?.children) return [];

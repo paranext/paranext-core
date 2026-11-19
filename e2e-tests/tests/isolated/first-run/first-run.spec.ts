@@ -408,9 +408,9 @@ async function reachSyncConsentAfterUnrestricted(
 
 test.describe('First-run sync consent gate', () => {
   // The isolated project root gives the editor switch a project that exists on every machine.
-  // DEV_NOISY=false keeps the Simple layout's own editor slot, which the switch replaces.
+  // The default quiet layout keeps the Simple layout's own editor slot, which the switch replaces.
   test.use({
-    electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+    electronLaunchOptions: { isolatedProjectRoot: true },
   });
   // The wizard path's cold-start budgets (see 'First-run wizard' above) plus a sample-project
   // install and an editor open, each of which is also budgeted for a cold boot.

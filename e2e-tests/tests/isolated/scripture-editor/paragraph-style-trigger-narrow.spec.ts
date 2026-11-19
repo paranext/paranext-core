@@ -30,7 +30,7 @@ import {
 
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 /** Sub-pixel layout rounding shows up as a 1px excess that is not a real overrun. */

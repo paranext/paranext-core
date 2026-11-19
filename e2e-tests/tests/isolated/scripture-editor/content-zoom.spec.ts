@@ -61,7 +61,7 @@ import {
 
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
   seedSettings: {
     'platform.webViewContentZoom': 1,
     [CONTENT_ZOOM_MEMORY_SETTING]: {},

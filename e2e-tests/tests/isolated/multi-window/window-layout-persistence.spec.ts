@@ -129,7 +129,6 @@ import {
  */
 const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
   isolatedProjectRoot: true,
-  envOverrides: { DEV_NOISY: 'false' },
 };
 
 /** Position and size of a window, as reported by `BrowserWindow.getBounds()`. */
