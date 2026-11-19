@@ -1217,6 +1217,32 @@ describe('Scripture editor right-click menu', () => {
       expect(stub.calls).toEqual(['frameFocus', 'copy', 'frameFocus']);
     });
 
+    it('leaves the browser selection where it was after a Copy that moved it', async () => {
+      // The editor's copy selects a hidden element it appends at the end of the document and
+      // leaves the browser selection there; a read-only editor then takes that as its selection.
+      mockShowContextMenu.mockResolvedValue(COPY);
+      stubEditor({
+        copy: () => {
+          const input = screen.getByTestId('editor-input');
+          const hidden = document.createElement('span');
+          hidden.textContent = '#';
+          input.append(hidden);
+          window.getSelection()?.selectAllChildren(hidden);
+          hidden.remove();
+        },
+      });
+      await renderEditor({ state: { isReadOnly: true } });
+      const input = screen.getByTestId('editor-input');
+      input.textContent = 'grace and truth';
+      const text = input.firstChild;
+      if (!text) throw new Error('missing text node');
+      window.getSelection()?.setBaseAndExtent(text, 0, text, 5);
+
+      await rightClick(input);
+
+      expect(window.getSelection()?.toString()).toBe('grace');
+    });
+
     it('focuses an editable editor holding a selection before and after the Copy (control)', async () => {
       mockShowContextMenu.mockResolvedValue(COPY);
       const stub = stubEditor({}, { emulateLexicalFocus: true });
