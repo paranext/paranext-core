@@ -10,43 +10,17 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { readSpecList } from './e2e-recommendations';
+import {
+  editorPathsPattern,
+  ISOLATED_PREFIX,
+  parseEditorPathEntries,
+  readSpecList,
+  readWorkflow,
+} from './core-specs';
 
 const REPOSITORY_ROOT = path.join(__dirname, '..');
 const EDITOR_LIST = 'core-specs-editor.txt';
 const SPEC_LISTS = ['core-specs.txt', EDITOR_LIST];
-const ISOLATED_PREFIX = 'e2e-tests/tests/isolated/';
-
-/**
- * The entries of `editor_paths` in `.github/workflows/test.yml`'s `e2e-core-selection` job, one per
- * `editor_paths+=('…')` line: the paths whose change makes the pull-request job run
- * `core-specs-editor.txt` too. Each is POSIX ERE (for `grep -E`), whose syntax these entries share
- * with JavaScript.
- */
-function parseEditorPathEntries(workflow: string): string[] {
-  const lines = workflow.split('\n').filter((line) => line.includes('editor_paths+='));
-  // Bash accepts other forms (double quotes, a trailing comment) that this parse would skip, and a
-  // skipped entry would silently escape the checks below.
-  const unreadable = lines.filter((line) => !/^\s*editor_paths\+=\('[^']+'\)\s*$/.test(line));
-  if (unreadable.length > 0)
-    throw new Error(
-      `Write each editor_paths entry as editor_paths+=('<ERE>') on a line of its own: ${unreadable
-        .map((line) => line.trim())
-        .join(' | ')}`,
-    );
-  const entries = lines.map((line) => /'([^']+)'/.exec(line)?.[1] ?? '');
-  if (entries.length === 0) throw new Error("test.yml has no editor_paths+=('…') lines");
-  return entries;
-}
-
-function readWorkflow(): string {
-  return fs.readFileSync(path.join(REPOSITORY_ROOT, '.github', 'workflows', 'test.yml'), 'utf8');
-}
-
-/** The pattern the workflow builds from the entries: `^(` + the entries joined with `|` + `)`. */
-function editorPathsPattern(entries: string[]): RegExp {
-  return new RegExp(`^(${entries.join('|')})`);
-}
 
 /** The line in test.yml that builds the pattern {@link editorPathsPattern} mirrors. */
 const EDITOR_PATTERN_LINE = `editor_pattern="^($(IFS='|'; echo "\${editor_paths[*]}"))"`;
@@ -70,13 +44,13 @@ function trackedFiles(): string[] {
 // Renaming a list and updating only SPEC_LISTS would leave the workflow naming a file that no
 // longer exists (or never naming the new one), so the two sets must stay equal.
 it('names exactly the SPEC_LISTS files in test.yml', () => {
-  const workflow = readWorkflow();
+  const workflow = readWorkflow(REPOSITORY_ROOT);
   const named = new Set(workflow.match(/e2e-tests\/core-specs[A-Za-z0-9_-]*\.txt/g) ?? []);
   expect([...named].sort()).toEqual(SPEC_LISTS.map((list) => `e2e-tests/${list}`).sort());
 });
 
 describe('the editor list trigger in test.yml', () => {
-  const workflow = readWorkflow();
+  const workflow = readWorkflow(REPOSITORY_ROOT);
   const entries = parseEditorPathEntries(workflow);
   const editorPaths = editorPathsPattern(entries);
 
