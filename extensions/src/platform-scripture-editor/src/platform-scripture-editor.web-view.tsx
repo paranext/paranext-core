@@ -202,6 +202,7 @@ import { resolveMenuFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { usePauseEditing } from './use-pause-editing.hook';
+import { type NotifyLostEdits, useLostEditsReport } from './use-lost-edits-report.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import {
   getChapterForEditor,
@@ -545,48 +546,6 @@ function runInsertFromContextMenu(
 type MarkerMenuAnchorContext = MarkerMenuContext & {
   anchorRect?: { x: number; y: number; width: number; height: number };
 };
-
-/** A chapter whose latest edits were lost, as the warning and the user's notification name it. */
-type EditsLostInChapter = {
-  /** The chapter's key from `getChapterKey`, for the log */
-  chapterKey: string;
-  /** Localized name of the chapter's book, for the notification */
-  book: string;
-  chapterNum: number;
-};
-
-/** Edits in a chapter that the editor holds but has not sent, which only a later save can send. */
-type EditsHeldInChapter = EditsLostInChapter & {
-  /**
-   * What holds them back: a save of the chapter still in flight, or the user having moved on to
-   * another chapter, so a save of them is refused while the editor goes on showing this one
-   */
-  heldBy: 'runningSave' | 'navigation';
-};
-
-/**
- * Names a chapter for reporting edits lost in it.
- *
- * @param localizedBookNames Localized book names by book id; the book id stands in for one missing
- */
-function describeChapterWithLostEdits(
-  chapter: Pick<EditorDocumentSelector, 'book' | 'chapterNum' | 'versificationStr'>,
-  localizedBookNames: ReadonlyMap<string, string>,
-): EditsLostInChapter {
-  return {
-    chapterKey: getChapterKey(chapter.book, chapter.chapterNum, chapter.versificationStr),
-    book: localizedBookNames.get(chapter.book) ?? chapter.book,
-    chapterNum: chapter.chapterNum,
-  };
-}
-
-/** Forgets the edits recorded as held, if they are `chapterKey`'s. */
-function forgetEditsHeldFor(
-  heldRef: { current: EditsHeldInChapter | undefined },
-  chapterKey: string,
-): void {
-  if (heldRef.current?.chapterKey === chapterKey) heldRef.current = undefined;
-}
 
 /**
  * Notification ids for one editor's own save notices, so its own repeats update one toast each.
@@ -3339,7 +3298,7 @@ function PlatformScriptureEditor({
   }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
   // The localized name of the book on screen (e.g. "Jonah"), for the chapter-marker correction
-  // notice, and recorded in `localizedBookNames` below for the lost-edits notice. One key rather
+  // notice and, through `useLostEditsReport`, the lost-edits notice. One key rather
   // than the whole canon: a book this web view names is always one it has shown. `%Book.<id>%`
   // resolves for every canonical id — the localization service backfills the English names into the
   // backup language — but a web view renders before the strings arrive, so an unresolved lookup
@@ -3353,12 +3312,6 @@ function PlatformScriptureEditor({
     const localized = bookNameLocalizedStrings[`%Book.${scrRef.book}%`];
     return localized && !isLocalizeKey(localized) ? localized : scrRef.book;
   }, [bookNameLocalizedStrings, scrRef.book]);
-  // Localized names of the books this editor has shown, for naming a chapter it has since moved off
-  // (the editor keeps showing the chapter it is leaving until the next one loads).
-  const localizedBookNames = useRef(new Map<string, string>());
-  useEffect(() => {
-    localizedBookNames.current.set(scrRef.book, localizedBookName);
-  }, [scrRef.book, localizedBookName]);
 
   const [usjFromPdpPossiblyError, saveUsjToPdpRaw, isUsjFromPdpLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
@@ -3529,26 +3482,11 @@ function PlatformScriptureEditor({
   // set. Unlike `usjSentToPdp`, which `useEditorPdpSync` moves to every delivery, nothing else
   // moves it: a delivery that arrives mid-write says nothing about what that write carries.
   const usjBeingWrittenToPdp = useRef<Usj | undefined>(undefined);
-  // The chapter whose latest edits the editor holds without having sent them, if any: held back
-  // behind a write still in flight, or refused because the user had moved on to another chapter.
-  // Cleared wherever the editor turns out to hold nothing newer than the backend has or is being
-  // sent, and by `reportLostEdits` once the loss is reported.
-  const chapterWithHeldEdits = useRef<EditsHeldInChapter | undefined>(undefined);
-  // Set once `pagehide` fires: the editor is closing, so no loss reported from then on is routed to
-  // it, whatever reports it (a save the flush on closing sends can be refused and report too).
-  const isPageHiding = useRef(false);
 
-  /**
-   * Tells the user that their latest edits in a chapter were not saved, so they can check it and
-   * make them again.
-   *
-   * @param replacedByUpdate Whether a change made outside the editor replaced them, which the
-   *   notice then names as the reason
-   * @param routeToThisEditor Whether to show it in the window holding this editor. False when the
-   *   editor is closing, since a notice routed to it might never be shown.
-   */
-  const notifyLostEdits = useCallback(
-    (book: string, chapterNum: number, replacedByUpdate: boolean, routeToThisEditor: boolean) =>
+  // Tells the user that their latest edits in a chapter were not saved, so they can check it and
+  // make them again.
+  const notifyLostEdits = useCallback<NotifyLostEdits>(
+    (book, chapterNum, replacedByUpdate, routeToThisEditor) =>
       papi.notifications
         .send({
           message: formatReplacementString(
@@ -3570,65 +3508,9 @@ function PlatformScriptureEditor({
         }),
     [localizedStrings, projectName, webViewId],
   );
-  // Behind a ref so `reportLostEdits` keeps a stable identity: the report on the editor going away
-  // runs in the cleanup of an effect that depends on it, so a new identity would report mid-chapter.
-  const notifyLostEditsRef = useRef(notifyLostEdits);
-  useEffect(() => {
-    notifyLostEditsRef.current = notifyLostEdits;
-  }, [notifyLostEdits]);
+  // The edits the editor holds without having sent them, and the report when they are lost.
+  const lostEdits = useLostEditsReport(scrRef.book, localizedBookName, notifyLostEdits);
 
-  /**
-   * Warns and notifies the user, once, that their latest edits in a chapter were lost. Called at
-   * the moments edits the editor holds are lost: when an incoming chapter replaces the editor
-   * (another chapter after navigation, or this one without the editor's claim), and when the editor
-   * closes. Not on the chapter switch itself: the editor goes on showing the chapter it is leaving
-   * until the next one arrives, and if the user comes back to it first, its held edits are still
-   * sent.
-   *
-   * - Edits held back without being sent (`chapterWithHeldEdits`): behind a write still in flight,
-   *   whose update pushes them back only if it reaches an editor still showing the chapter and
-   *   still holding them, or refused because the user had moved on to another chapter. Call this
-   *   straight after flushing the pending save, so a flush held back that way is counted.
-   * - Edits whose save never reached the backend, thrown away by `discardUnsavedEdits`
-   *   (`discardedIn`).
-   *
-   * TODO(PT-5043): send the held edits instead of losing them when the editor leaves the chapter or
-   * closes.
-   *
-   * @param cause What took the edits away
-   * @param discardedIn The chapter whose unsent edits were just thrown away, if any
-   */
-  const reportLostEdits = useCallback(
-    (
-      cause: 'leftChapter' | 'editorClosed' | 'replacedByUpdate',
-      discardedIn?: EditsLostInChapter,
-    ) => {
-      const held = chapterWithHeldEdits.current;
-      const lost = held ?? discardedIn;
-      if (!lost) return;
-      chapterWithHeldEdits.current = undefined;
-      const what = {
-        leftChapter: `Left ${lost.chapterKey}`,
-        editorClosed: `The editor closed on ${lost.chapterKey}`,
-        replacedByUpdate: `An incoming update replaced ${lost.chapterKey}`,
-      }[cause];
-      const why = {
-        runningSave: 'a save of it was still in progress',
-        navigation: 'their save was refused because the user had moved on to another chapter',
-        none: 'they were never sent',
-      }[held?.heldBy ?? 'none'];
-      logger.warn(`${what} before its latest edits were saved (${why}); those edits are lost`);
-      // Held edits get the plain notice even when an update replaced them: that update can be the
-      // running write's own, reformatted by the backend, so "changed outside" might not be true.
-      notifyLostEditsRef.current(
-        lost.book,
-        lost.chapterNum,
-        cause === 'replacedByUpdate' && !held,
-        cause !== 'editorClosed' && !isPageHiding.current,
-      );
-    },
-    [],
-  );
   // Which save rejection the user has already been told about. A chapter the backend refuses is
   // refused again on every save for as long as the user keeps typing, so this is what turns that
   // run of identical rejections into one report; a write that completes clears it. Both transitions
@@ -4148,10 +4030,7 @@ function PlatformScriptureEditor({
             usjSentToPdp.current,
           )
         )
-          chapterWithHeldEdits.current = {
-            ...describeChapterWithLostEdits(editorDocument, localizedBookNames.current),
-            heldBy: 'navigation',
-          };
+          lostEdits.recordHeld(lostEdits.describeChapter(editorDocument), 'navigation');
         return Promise.resolve(false);
       }
 
@@ -4210,7 +4089,7 @@ function PlatformScriptureEditor({
       // matching it (an edit undone back to it) still has something waiting behind that write.
       if (currentlyWritingUsjToPdp.current) return saveUsjToPdpInternal(usjFromEditor);
       // The backend already has what the editor holds, so no edits of this chapter are waiting.
-      forgetEditsHeldFor(chapterWithHeldEdits, savedChapterKey);
+      lostEdits.forgetHeld(savedChapterKey);
       return Promise.resolve(false);
     }
 
@@ -4387,7 +4266,7 @@ function PlatformScriptureEditor({
       // editor stays on this chapter: when the in-flight write's update comes back,
       // `useEditorPdpSync` sends whatever the editor holds by then. It is lost if the editor
       // leaves the chapter, closes, or is replaced by an update first, which
-      // `reportLostEdits` warns about. If no update comes back (the write fails, or is declined
+      // `lostEdits.report` warns about. If no update comes back (the write fails, or is declined
       // while another update arrived during it), nothing sends it until the next edit. Checked here
       // rather than left to the guard, whose verdict arrives only after an `await`, so the held
       // chapter is recorded synchronously: a flush on leaving reads it straight after flushing.
@@ -4399,15 +4278,17 @@ function PlatformScriptureEditor({
           usjBeingWrittenToPdp.current &&
           deepEqualAcrossIframes(newUsj, usjBeingWrittenToPdp.current)
         ) {
-          forgetEditsHeldFor(chapterWithHeldEdits, savedChapterKey);
+          lostEdits.forgetHeld(savedChapterKey);
           return false;
         }
-        chapterWithHeldEdits.current = {
-          chapterKey: savedChapterKey,
-          book: savedBookName,
-          chapterNum: savedChapterSelector.chapterNum,
-          heldBy: 'runningSave',
-        };
+        lostEdits.recordHeld(
+          {
+            chapterKey: savedChapterKey,
+            book: savedBookName,
+            chapterNum: savedChapterSelector.chapterNum,
+          },
+          'runningSave',
+        );
         logger.debug(
           `saveUsjToPdp: waiting for the save of ${savedChapterKey} already in progress; the ` +
             "editor's latest changes are sent when that save's update comes back",
@@ -4424,7 +4305,7 @@ function PlatformScriptureEditor({
         const outcome = await withWriteInFlightGuard(currentlyWritingUsjToPdp, () => {
           usjSentToPdp.current = newUsj;
           usjBeingWrittenToPdp.current = newUsj;
-          forgetEditsHeldFor(chapterWithHeldEdits, savedChapterKey);
+          lostEdits.forgetHeld(savedChapterKey);
           return rawSave(newUsj);
         });
         if (!outcome.ran) {
@@ -4526,7 +4407,7 @@ function PlatformScriptureEditor({
               usjSentToPdp.current = usjFromPdp;
               // The revert takes back the edits held behind this write too, and the failure is
               // reported below, so leaving the chapter must not report them again.
-              forgetEditsHeldFor(chapterWithHeldEdits, savedChapterKey);
+              lostEdits.forgetHeld(savedChapterKey);
               // Forced: when the refused edit is a marker edit still in progress — a chapter or
               // verse number retyped — the stored document can equal the editor's own record from
               // before that edit, which the editor would take for a re-send of old text and keep
@@ -4562,6 +4443,7 @@ function PlatformScriptureEditor({
     notifyChapterMarkerCorrected,
     saveNotificationIds,
     webViewId,
+    lostEdits,
   ]);
 
   // #endregion PDP Save Write Path
@@ -4977,9 +4859,9 @@ function PlatformScriptureEditor({
   // Declared after the flush above, whose cleanup runs first, so a flush held back is counted.
   useEffect(() => {
     return () => {
-      reportLostEdits('editorClosed');
+      lostEdits.report('editorClosed');
     };
-  }, [reportLostEdits]);
+  }, [lostEdits]);
 
   // (2) Focus loss / page teardown: best-effort flush on window blur, on focus leaving the editor
   // for something else in this web view, and on pagehide/beforeunload. Each of these ends the
@@ -5002,9 +4884,9 @@ function PlatformScriptureEditor({
       );
     };
     const flushOnPageHide = () => {
-      isPageHiding.current = true;
+      lostEdits.markClosing();
       flush();
-      reportLostEdits('editorClosed');
+      lostEdits.report('editorClosed');
     };
     const flushOnBlur = () => {
       // A FOCUSED marker palette is an overlay OUTSIDE this iframe, so opening one blurs this
@@ -5044,7 +4926,7 @@ function PlatformScriptureEditor({
       window.removeEventListener('pagehide', flushOnPageHide);
       window.removeEventListener('beforeunload', flush);
     };
-  }, [saveUsjToPdpDebounced, reportLostEdits]);
+  }, [saveUsjToPdpDebounced, lostEdits]);
 
   /**
    * (3) External replace: throws away edits the editor has not saved, and reports them, just before
@@ -5064,19 +4946,16 @@ function PlatformScriptureEditor({
         saveUsjToPdpDebounced,
       );
       const editorDocument = editorDocumentSelector.current;
-      const lostIn = editorDocument
-        ? describeChapterWithLostEdits(editorDocument, localizedBookNames.current)
-        : undefined;
+      const lostIn = editorDocument ? lostEdits.describeChapter(editorDocument) : undefined;
       // Read only when edits were thrown away, and after the row's edits have landed, so they count.
       const editorUsj = discarded ? editorRef.current?.getUsj() : undefined;
       const isLoss = !!editorUsj && isDiscardingEditsALoss(editorUsj, lastKnownUsj, incomingUsj);
       // Nothing is lost when the editor holds only what it last sent or received, even with a save
       // held behind a running write: that held save carried edits the user has since undone.
-      if (discarded && !isLoss && lostIn)
-        forgetEditsHeldFor(chapterWithHeldEdits, lostIn.chapterKey);
-      reportLostEdits(cause, isLoss ? lostIn : undefined);
+      if (discarded && !isLoss && lostIn) lostEdits.forgetHeld(lostIn.chapterKey);
+      lostEdits.report(cause, isLoss ? lostIn : undefined);
     },
-    [saveUsjToPdpDebounced, reportLostEdits],
+    [saveUsjToPdpDebounced, lostEdits],
   );
 
   const handleEditorialUsjChange = useCallback(
