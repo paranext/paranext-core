@@ -83,11 +83,13 @@ describe('the editor list trigger in test.yml', () => {
   // so this checks every one of them.
   it.each(entries)('%s matches a file in the repository', (entry) => {
     const entryPattern = new RegExp(`^(${entry})`);
+    // Compared as text, so that a failure prints the fix.
     expect(
-      trackedFiles().some((file) => entryPattern.test(file)),
-      `No tracked file matches the editor_paths entry '${entry}': update editor_paths in ` +
-        '.github/workflows/test.yml to the path the editor now uses.',
-    ).toBe(true);
+      trackedFiles().some((file) => entryPattern.test(file))
+        ? 'matches a tracked file'
+        : `No tracked file matches the editor_paths entry '${entry}': update editor_paths in ` +
+            '.github/workflows/test.yml to the path the editor now uses.',
+    ).toBe('matches a tracked file');
   });
 
   // A pull request that changes one of the editor-list specs, or the list itself, must run that
