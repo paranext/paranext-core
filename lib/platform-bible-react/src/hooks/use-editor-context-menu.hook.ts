@@ -217,8 +217,9 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
  * claimed on the frame's window, and Escape also closes the menu. The claim lasts until the request
  * settles or two seconds have passed, whichever comes first. A `wheel`, `touchmove` or a
  * `pointerdown` in the frame closes the menu too (a `pointerdown` also drops the request, so a late
- * pick never reaches `onPick`). Not a `scroll` listener: opening the menu blurs the editor, which
- * can scroll the frame by itself and would close the menu the moment it opens.
+ * pick never reaches `onPick`, except the right-click the hook itself claims). Not a `scroll`
+ * listener: opening the menu blurs the editor, which can scroll the frame by itself and would close
+ * the menu the moment it opens.
  *
  * A pick that resolves after `dismiss()`, after the pointer-down drop, or after unmount is ignored.
  *
@@ -321,7 +322,8 @@ export function useEditorContextMenu(
 
       // Read from the browser now: the editor learns of a selection change only after the event.
       const selection = getSelectionInside(container);
-      // First version of the keyboard check: a mouse-raised event has button 2.
+      // Button 2 means mouse-raised; anything else counts as keyboard-raised. That may misclassify
+      // a macOS Ctrl+click and a touch long-press.
       const isKeyboardInvoked = event.button !== 2;
       const request: EditorContextMenuRequest = {
         position: isKeyboardInvoked

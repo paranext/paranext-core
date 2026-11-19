@@ -938,6 +938,36 @@ describe('useEditorContextMenu', () => {
       expect(api.isPending()).toBe(true);
     });
 
+    it('ends the claim when the request settles, well before two seconds', async () => {
+      const pending = deferred<string | undefined>();
+      const { getByTestId } = render(<Host requestMenu={() => pending.promise} />);
+      rightClick(getByTestId('text'));
+
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      pending.resolve(undefined);
+      await flush();
+
+      expect(keydownOnBody('a').defaultPrevented).toBe(false);
+    });
+
+    it('keeps the claim while a second request is still open after the first settles', async () => {
+      const first = deferred<string | undefined>();
+      const second = deferred<string | undefined>();
+      const queue = [first, second];
+      const { getByTestId } = render(
+        <Host requestMenu={() => queue.shift()?.promise ?? Promise.resolve(undefined)} />,
+      );
+      rightClick(getByTestId('text'));
+      rightClick(getByTestId('text'));
+
+      first.reject(newPlatformError('replaced', ABORTED));
+      await flush();
+
+      expect(keydownOnBody('a').defaultPrevented).toBe(true);
+    });
+
     it('drops the open request on a pointerdown in the frame', async () => {
       const pending = deferred<string | undefined>();
       const dismissMenu = vi.fn();
