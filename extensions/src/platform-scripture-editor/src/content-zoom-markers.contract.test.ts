@@ -71,7 +71,7 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
   it('renders the three popovers beside the editor without naming a zoom area for them', () => {
     // Pop-ups stay at interface scale. Positive control: the three popovers are still here.
     expect(source).toMatch(
-      /<Popover open={showMarkersMenu}>.*<Popover open={showFootnoteEditor}>.*<Popover open={showCommentEditor}>/,
+      /<Popover open={showMarkersMenu}\s.*<Popover open={showFootnoteEditor}>.*<Popover open={showCommentEditor}>/,
     );
     expect(source).not.toContain('ContentZoomAreaProvider');
   });
