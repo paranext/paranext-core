@@ -196,6 +196,8 @@ const NON_RUNTIME = new RegExp(
     String.raw`\/\.[^/]`,
     // Images and fonts; style sheets and data under assets/ stay runtime.
     String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
+    // The data provider executable's Windows icon (`ApplicationIcon` in its project file).
+    String.raw`^c-sharp\/icon\.ico$`,
     // C# test projects (`Foo.Tests/`).
     String.raw`(^|\/)[^/]*Tests\/`,
     // Package and extension metadata: a design decision, not an oversight (a version or

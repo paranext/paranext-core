@@ -46,7 +46,15 @@ config. Put it in `tests/attached/`.
 The `isolated` project covers the whole `tests/isolated/` tree, so a new spec file there is
 immediately discoverable and runnable without any config changes.
 
-A new subset directory or loose spec under `tests/isolated/` also needs an entry in
+Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
+project entry with `isolated/` (e.g., they need a completely different fixture or launch
+strategy). If you do, register a named project in `playwright.config.ts` whose specs launch their
+own Electron, as the `isolated` and `smoke` projects do, and add a `test:e2e:<name>` npm script if
+the suite is meant to be run routinely.
+
+### The isolated e2e map
+
+A new subset directory or loose spec under `tests/isolated/` needs an entry in
 `tests/isolated/subset-sources.json`: `main` lists the source prefixes the group is about,
 `incidental` the source it only drives. `e2e-recommendations.test.ts` fails when an entry is
 missing, and when a tracked file under `src/`, `extensions/src/` or `c-sharp/` that the app never
@@ -75,16 +83,11 @@ config, `scoped-cleanup.ts`, `parked-enhanced-resources.ts`, `run-isolated.mjs` 
 except unit tests, Markdown files and `tests/isolated/subset-sources.json`).
 
 The report also lists, as `dependencyFiles`, the changed files that can carry a dependency change
-(`package.json`, `package-lock.json`, `release/app/`'s two files, `dev-packages.json`,
-`global.json`, `.csproj` and `.props` files under `c-sharp/`, anything under `patches/`). It is a
-hint: `/review-paratext` reads their diffs and judges whether a dependency, an engine or SDK pin or
-a patch really changed, and then recommends the full isolated run (`npm run test:e2e:isolated all`).
-
-Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
-project entry with `isolated/` (e.g., they need a completely different fixture or launch
-strategy). If you do, register a named project in `playwright.config.ts` whose specs launch their
-own Electron, as the `isolated` and `smoke` projects do, and add a `test:e2e:<name>` npm script if
-the suite is meant to be run routinely.
+(the root `package.json` and `package-lock.json`, `release/app/`'s two files, `dev-packages.json`,
+`global.json`, `.csproj` and `.props` files under `c-sharp/`, anything under `patches/`; a
+workspace's dependency changes show in the root lock file). It is a hint: `/review-paratext` reads
+their diffs and judges whether a dependency, an engine or SDK pin or a patch really changed, and
+then recommends the full isolated run (`npm run test:e2e:isolated all`).
 
 ## What NOT to do
 

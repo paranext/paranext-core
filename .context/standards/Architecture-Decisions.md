@@ -2926,7 +2926,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     those specs.
   - **What counts as runtime code.** `NON_RUNTIME` in `e2e-recommendations.ts` lists the shapes of
     files no key could list (tests and their helpers, stories, docs, dotfiles, package and .NET
-    project metadata, image assets, formatter, linter, spelling and TypeScript configuration). A
+    project metadata except the data provider's own project file, which pins ParatextData, image
+    and icon assets, formatter, linter, spelling and TypeScript configuration). A
     unit test runs it over every tracked file under the source roots and fails on a file that is
     plainly not app code but still classified as runtime; `LOADED_EXTENSIONS` in that test names the
     file types the app does load. A file no key lists and `NON_RUNTIME` does not match is
@@ -2938,7 +2939,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     depend on what a diff says it only hands over a hint. `dependencyFiles` lists the changed files
     that can carry a dependency change (the root and `release/app` `package.json` and lock files,
     `dev-packages.json`, `global.json`, `.csproj` and `.props` files under `c-sharp/`, anything
-    under `patches/`), by path alone. Step 3.5 reads their diffs and judges whether a dependency,
+    under `patches/`), by path alone. The end-to-end tests step of `/review-paratext` reads their diffs and judges whether a dependency,
     an engine or SDK pin or a patch really changed (a package's own release version, a script or
     formatting does not; a dev tool's bump does); if so it recommends the full isolated run
     (`npm run test:e2e:isolated all`), because a dependency can break any area and no subset stands
@@ -2946,7 +2947,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     test?" question, is judged the same way from the diff. The alternatives were rejected: path
     rules for "an app change" (every narrower rule had counterexamples, and a coarse one still
     needed per-format exceptions), parsing each dependency format (npm fields, lock lines, NuGet
-    references, SDK pins, patches: each review round found another shape), and no hint at all
+    references, SDK pins, patches: every format has shapes a parser misses), and no hint at all
     (nothing would remind the model to look at a dependency bump). The judgment is not unit-tested
     and can vary between runs; the step is advisory, so that is accepted.
   - **An unreadable `editor_paths` is `'unknown'`, not false.** If the path list in `test.yml`

@@ -1,8 +1,9 @@
 /**
  * What CI's `e2e-core` job runs, read from the repository: the two core spec lists and the
  * `editor_paths` entries in `.github/workflows/test.yml` that decide whether a pull request also
- * runs the editor list. `core-specs.test.ts` checks them against the repository;
- * `e2e-recommendations.ts` reports from them what CI runs for a branch.
+ * runs the editor list, plus where the isolated specs live and the command that runs them.
+ * `core-specs.test.ts` checks them against the repository; `e2e-recommendations.ts` reports from
+ * them what CI runs for a branch.
  */
 import fs from 'fs';
 import path from 'path';

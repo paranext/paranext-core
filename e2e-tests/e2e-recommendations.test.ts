@@ -738,6 +738,8 @@ describe('recommendE2eTests', () => {
     'c-sharp/ParanextDataProvider.sln',
     'c-sharp/ParanextDataProvider.sln.DotSettings',
     'c-sharp/ai-analyzers.globalconfig',
+    // The data provider executable's Windows icon (`ApplicationIcon`), which no spec can see.
+    'c-sharp/icon.ico',
     'c-sharp/Paranext.Analyzers/DiagnosticIds.cs',
     'c-sharp/Paranext.Analyzers/Rules/BanTraceAnalyzer.cs',
     'extensions/src/hello-rock3/.eslintrc.js',
@@ -797,7 +799,9 @@ describe('recommendE2eTests', () => {
     'src/renderer/testing/test-panel.component.tsx',
     'src/renderer/context/papi-context/test.context.ts',
     'src/renderer/components/docking/platform-dock-layout-storage.util.ts',
-    'c-sharp/icon.ico',
+    // No tracked image sits outside an `assets/` directory, so this row stays synthetic: it pins
+    // that the image rule is anchored to `assets/`.
+    'src/renderer/components/x.png',
     // No tracked file has this shape; it pins that the TypeScript-configuration match ends at
     // `.json`.
     'src/x/tsconfig-helper.ts',
@@ -1060,7 +1064,6 @@ describe('classifying the tracked source files', () => {
     'css',
     'ejs',
     'html',
-    'ico',
     'js',
     'json',
     'ldml',
