@@ -790,14 +790,18 @@ function allKeys(locale: 'en' | 'es'): Set<string> {
 }
 
 /**
- * Every localize key the editor's top menu shows: column and item labels, plus item tooltips, which
- * resolve through the same `%key%` mechanism as labels.
+ * Every localize key the editor's top menu and right-click menu show: column and item labels, plus
+ * item tooltips, which resolve through the same `%key%` mechanism as labels.
  */
 function menuLocalizeKeys(): string[] {
-  const { topMenu } = editorMenus.webViewMenus['platformScriptureEditor.react'];
+  const { topMenu, contextMenu } = editorMenus.webViewMenus['platformScriptureEditor.react'];
   const keys: unknown[] = [
     ...Object.values(topMenu.columns).map((column) => column.label),
     ...topMenu.items.flatMap((item) => [item.label, 'tooltip' in item ? item.tooltip : undefined]),
+    ...contextMenu.items.flatMap((item) => [
+      item.label,
+      'tooltip' in item ? item.tooltip : undefined,
+    ]),
   ];
   return [
     ...new Set(keys.filter((key): key is string => typeof key === 'string' && /^%.*%$/.test(key))),

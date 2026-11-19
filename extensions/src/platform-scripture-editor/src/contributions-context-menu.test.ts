@@ -1,0 +1,217 @@
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { evaluateMenu, parseWhenExpression } from 'platform-bible-utils';
+
+type MenuItem = {
+  label: string;
+  group: string;
+  order: number;
+  command?: string;
+  iconNameBefore?: string;
+  when?: string;
+  enabledWhen?: string;
+};
+type Menu = {
+  groups: Record<string, { order: number; isExperimental?: boolean }>;
+  items: MenuItem[];
+};
+
+const menusJson = JSON.parse(readFileSync(join(__dirname, '../contributions/menus.json'), 'utf8'));
+const { topMenu, contextMenu }: { topMenu: Menu; contextMenu: Menu } =
+  menusJson.webViewMenus['platformScriptureEditor.react'];
+
+const TEMPLATE_VARS = { webViewId: 'wv', projectId: 'p1' };
+const HAS_SELECTION = 'platformScriptureEditor.contextMenu.hasSelection';
+const IS_MAIN_EDITOR = 'platformScriptureEditor.contextMenu.isMainEditor';
+
+/** Facts of an editable project's main editor with text selected. */
+const ALL_FACTS_ON: Record<string, boolean> = {
+  'platform.project.p1.isResource': false,
+  'platform.project.p1.isEditable': true,
+  'platformScripture.project.p1.canEditScripture': true,
+  'platformScripture.project.p1.canCreateComments': true,
+  'platformScriptureEditor.webView.wv.isReadOnly': false,
+  'platformScriptureEditor.webView.wv.isPreview': false,
+  'platformScriptureEditor.webView.wv.isSyncBlocked': false,
+  [HAS_SELECTION]: true,
+  [IS_MAIN_EDITOR]: true,
+};
+
+type EvaluatedItem = {
+  command?: string;
+  group: string;
+  order: number;
+  label?: string;
+  iconNameBefore?: string;
+  disabled?: boolean;
+};
+
+/** The evaluated context menu's items in display order (group order, then item order). */
+function evaluate(overrides: Record<string, boolean> = {}): EvaluatedItem[] {
+  const facts = { ...ALL_FACTS_ON, ...overrides };
+  const evaluated: { groups: Record<string, { order: number }>; items: EvaluatedItem[] } =
+    evaluateMenu(contextMenu, (key: string) => facts[key], TEMPLATE_VARS);
+  return [...evaluated.items].sort(
+    (a, b) =>
+      evaluated.groups[a.group].order - evaluated.groups[b.group].order || a.order - b.order,
+  );
+}
+
+const CUT = 'platformScriptureEditor.cutSelection';
+const COPY = 'platformScriptureEditor.copySelection';
+const PASTE = 'platformScriptureEditor.pasteAtSelection';
+const PASTE_PLAIN = 'platformScriptureEditor.pasteAsPlainTextAtSelection';
+const FIND = 'platformScripture.openFind';
+const INSERT_COMMENT = 'platformScriptureEditor.insertCommentAtSelection';
+const INSERT_FOOTNOTE = 'platformScriptureEditor.insertFootnoteAtSelection';
+const INSERT_CROSS_REFERENCE = 'platformScriptureEditor.insertCrossReferenceAtSelection';
+const INSERT_ENDNOTE = 'platformScriptureEditor.insertEndnoteAtSelection';
+const INSERT_COMMANDS = [INSERT_COMMENT, INSERT_FOOTNOTE, INSERT_CROSS_REFERENCE, INSERT_ENDNOTE];
+const NOTE_INSERT_COMMANDS = [INSERT_FOOTNOTE, INSERT_CROSS_REFERENCE, INSERT_ENDNOTE];
+
+const commandsOf = (items: EvaluatedItem[]) => items.map((item) => item.command);
+const isDisabled = (items: EvaluatedItem[], command: string) => {
+  const matches = items.filter((item) => item.command === command);
+  expect(matches).toHaveLength(1);
+  return matches[0].disabled === true;
+};
+
+describe('platform-scripture-editor context menu contribution', () => {
+  it('shows every item in a project main editor with a selection, in order, all enabled', () => {
+    const items = evaluate();
+    expect(commandsOf(items)).toEqual([CUT, COPY, PASTE, PASTE_PLAIN, FIND, ...INSERT_COMMANDS]);
+    items.forEach((item) => expect(item.disabled).toBeFalsy());
+  });
+
+  it('disables Cut and Copy while nothing is selected, and leaves the rest enabled', () => {
+    const items = evaluate({ [HAS_SELECTION]: false });
+    expect(isDisabled(items, CUT)).toBe(true);
+    expect(isDisabled(items, COPY)).toBe(true);
+    [PASTE, PASTE_PLAIN, FIND, ...INSERT_COMMANDS].forEach((command) =>
+      expect(isDisabled(items, command)).toBe(false),
+    );
+  });
+
+  it('shows exactly Copy (with the clipboard-copy icon) and Find on a resource', () => {
+    const resourceFacts = { 'platform.project.p1.isResource': true };
+    const items = evaluate(resourceFacts);
+    expect(commandsOf(items)).toEqual([COPY, FIND]);
+    expect(items[0]).toMatchObject({
+      label: '%webView_platformScriptureEditor_copy%',
+      iconNameBefore: 'clipboard-copy',
+    });
+    expect(items[0].disabled).toBeFalsy();
+    expect(isDisabled(evaluate({ ...resourceFacts, [HAS_SELECTION]: false }), COPY)).toBe(true);
+  });
+
+  it('offers the project Copy without an icon', () => {
+    const copy = evaluate().find((item) => item.command === COPY);
+    expect(copy?.iconNameBefore).toBeUndefined();
+  });
+
+  it('shows no Insert item outside the main editor, such as in a footnote row editor', () => {
+    const items = evaluate({ [IS_MAIN_EDITOR]: false });
+    expect(commandsOf(items)).toEqual([CUT, COPY, PASTE, PASTE_PLAIN, FIND]);
+  });
+
+  it('disables Cut, both Pastes and the note Inserts in a read-only tab, but not Insert comment', () => {
+    const items = evaluate({ 'platformScriptureEditor.webView.wv.isReadOnly': true });
+    [CUT, PASTE, PASTE_PLAIN, ...NOTE_INSERT_COMMANDS].forEach((command) =>
+      expect(isDisabled(items, command)).toBe(true),
+    );
+    [COPY, FIND, INSERT_COMMENT].forEach((command) =>
+      expect(isDisabled(items, command)).toBe(false),
+    );
+  });
+
+  it('keeps the items inside the declared groups, with unique orders within each group', () => {
+    const seen = new Set<string>();
+    contextMenu.items.forEach((item) => {
+      expect(contextMenu.groups).toHaveProperty([item.group]);
+      const key = `${item.group}#${item.order}`;
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
+    });
+  });
+
+  it('declares every group experimental, none at the orders the platform defaults own, and no item experimental', () => {
+    const groups = Object.values(contextMenu.groups);
+    expect(groups.length).toBeGreaterThan(0);
+    groups.forEach((group) => {
+      expect(group.isExperimental).toBe(true);
+      expect(group.order).toBeGreaterThanOrEqual(3);
+    });
+    contextMenu.items.forEach((item) => expect(item).not.toHaveProperty('isExperimental'));
+  });
+
+  it('parses every when-expression, request-scoped keys included', () => {
+    const expressions = contextMenu.items.flatMap((item) =>
+      [item.when, item.enabledWhen].filter((value): value is string => typeof value === 'string'),
+    );
+    expect(expressions.length).toBeGreaterThan(0);
+    expressions.forEach((expression) =>
+      expect(() => parseWhenExpression(expression)).not.toThrow(),
+    );
+  });
+});
+
+/**
+ * Context-menu items without a top-menu twin of the same command, label key and icon. Every other
+ * context item must match a top-menu item with the same command.
+ *
+ * - The resource Copy is labelled "Copy", as the request words it; the top menu's resource Copy says
+ *   "Copy selection". It keeps the twin's icon.
+ * - Paste as plain text is new and has no top-menu item.
+ * - Find has three top-menu twins that differ by interface mode (Power's Edit flyout, Power's
+ *   resource Edit section, Simple's Tools and resources); the context menu shows one Find in both
+ *   modes, so matching any one twin's label and icon is enough.
+ */
+const TWIN_EXCEPTIONS: Record<string, string> = {
+  [`${COPY}|clipboard-copy`]: 'resource Copy is labelled "Copy", not "Copy selection"',
+  [`${PASTE_PLAIN}|`]: 'new command, no top-menu twin',
+};
+
+describe('context menu items look like their top-menu twins', () => {
+  const twinsOf = (command: string | undefined) =>
+    topMenu.items.filter((item) => item.command === command);
+  const exceptionKey = (item: MenuItem) => `${item.command}|${item.iconNameBefore ?? ''}`;
+
+  it.each(contextMenu.items.filter((item) => !(exceptionKey(item) in TWIN_EXCEPTIONS)))(
+    '$command ($label) has the label key and icon of a top-menu twin',
+    (item) => {
+      expect(
+        twinsOf(item.command).some(
+          (twin) => twin.label === item.label && twin.iconNameBefore === item.iconNameBefore,
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('lists only exceptions that exist in the context menu', () => {
+    const present = contextMenu.items.map(exceptionKey);
+    Object.keys(TWIN_EXCEPTIONS).forEach((key) => expect(present).toContain(key));
+  });
+
+  it('gives Paste as plain text no top-menu twin', () => {
+    expect(twinsOf(PASTE_PLAIN)).toHaveLength(0);
+  });
+
+  it('labels the resource Copy "Copy" where its twin says "Copy selection", with the same icon', () => {
+    const contextCopy = contextMenu.items.find(
+      (item) => item.command === COPY && item.iconNameBefore === 'clipboard-copy',
+    );
+    const resourceTwin = twinsOf(COPY).find((item) => item.iconNameBefore === 'clipboard-copy');
+    expect(contextCopy?.label).toBe('%webView_platformScriptureEditor_copy%');
+    expect(resourceTwin?.label).toBe('%webView_platformScriptureEditor_copySelection%');
+  });
+
+  it('gives each Insert item the enabledWhen of its twin and a when that adds the main-editor key', () => {
+    INSERT_COMMANDS.forEach((command) => {
+      const item = contextMenu.items.find((candidate) => candidate.command === command);
+      const [twin] = twinsOf(command);
+      expect(item?.enabledWhen).toBe(twin.enabledWhen);
+      expect(item?.when).toBe(`${twin.when} && ${IS_MAIN_EDITOR}`);
+    });
+  });
+});
