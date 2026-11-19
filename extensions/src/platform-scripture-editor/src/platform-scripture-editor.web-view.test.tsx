@@ -555,7 +555,17 @@ describe('Scripture editor "Change footnote pane location" request', () => {
     ],
   };
 
-  /** Props whose web-view state is kept per key across renders, starting from `initialState`. */
+  /** Every write the web view made to its web-view state, in order, as `[key, value]`. */
+  let stateWrites: [string, unknown][] = [];
+
+  beforeEach(() => {
+    stateWrites = [];
+  });
+
+  /**
+   * Props whose web-view state is kept per key across renders, starting from `initialState`, and
+   * whose writes are recorded in {@link stateWrites}.
+   */
   function makeStatefulProps(initialState: Record<string, unknown>): WebViewProps {
     const props = makeProps('', initialState);
     return {
@@ -566,7 +576,14 @@ describe('Scripture editor "Change footnote pane location" request', () => {
         const [value, setValue] = React.useState(
           key in initialState ? initialState[key] : defaultValue,
         );
-        return [value, setValue, () => setValue(defaultValue)];
+        return [
+          value,
+          (stateValue: unknown) => {
+            stateWrites.push([key, stateValue]);
+            setValue(stateValue);
+          },
+          () => setValue(defaultValue),
+        ];
       },
     };
   }
@@ -579,7 +596,7 @@ describe('Scripture editor "Change footnote pane location" request', () => {
     });
   }
 
-  it('opens a hidden footnotes pane', async () => {
+  it('opens a hidden footnotes pane in the new position', async () => {
     chapterUsjValue.current = chapterWithFootnote;
     const EditorWebView = getEditorWebView();
     await act(async () => {
@@ -596,6 +613,8 @@ describe('Scripture editor "Change footnote pane location" request', () => {
     await requestLocationChange();
 
     expect(screen.getAllByRole('option')).toHaveLength(1);
+    // The pane starts at the bottom (the default), so it opens beside the text.
+    expect(stateWrites).toContainEqual(['footnotesPanePosition', 'trailing']);
   });
 
   it('keeps a shown footnotes pane open', async () => {
