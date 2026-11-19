@@ -3,7 +3,7 @@
  * `tests/isolated/subset-sources.json`.
  *
  * - The map: every subset and spec has a key (a missing one would never be recommended), the keys are
- *   well formed, and pins in the real map for files that were once missed.
+ *   well formed, and real-map pins that check a given source file reaches the expected key.
  * - The matcher, {@link recommendE2eTests}: main and incidental matching, spec keys and their
  *   collapsing, folding into a recommended subset, deleted files, stale prefixes, CI status.
  * - The classifier sweep: every tracked file under the source roots that is plainly not app code must

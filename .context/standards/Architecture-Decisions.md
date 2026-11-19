@@ -2930,7 +2930,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     unit test runs it over every tracked file under the source roots and fails on a file that is
     plainly not app code but still classified as runtime; `LOADED_EXTENSIONS` in that test names the
     file types the app does load. A file no key lists and `NON_RUNTIME` does not match is
-    "uncovered", which is what triggers the "does this need a new e2e test?" question.
+    "uncovered", one of the conditions that can trigger the "does this need a new e2e test?"
+    question (the others are in the Add part of `/review-paratext`'s end-to-end tests step).
   - **Lookups are deterministic; judgments are the model's.** The script answers what a path lookup
     can: the map's recommendations and also-exercised keys, uncovered files, entry points, whether
     an e2e spec changed, stale prefixes and whether CI runs the editor list. For two questions that

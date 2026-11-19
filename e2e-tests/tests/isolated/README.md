@@ -40,19 +40,25 @@ e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 
 A new subset directory or loose spec needs an entry in `subset-sources.json` (`main` = the source
 the group is about, `incidental` = source it only drives); `e2e-recommendations.test.ts` fails
-without one. A new `scripture-editor/no-unasked-edits-*.spec.ts` needs no key of its own: the prefix key
-`scripture-editor/no-unasked-edits-` covers it. A prefix key must match at least one spec file, or the
-test fails.
+without one.
+
+A new `scripture-editor/no-unasked-edits-*.spec.ts` needs no key of its own: the prefix key
+`scripture-editor/no-unasked-edits-` covers it. A prefix key must match at least one spec file, or
+the test fails.
+
 The test also fails when a tracked file under `src/`, `extensions/src/` or `c-sharp/` that the app
 never loads (a dotfile, a license, a story, a file type the app does not read) is still classified
 as runtime code. If the file is app code of a new type, add its extension to `LOADED_EXTENSIONS`
 in `e2e-recommendations.test.ts` (one file of a type the app does not load that still changes what
-it does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to
-`NON_RUNTIME` in `e2e-tests/e2e-recommendations.ts`. The
-test also fails when a runtime file that matches an `editor_paths` entry in `test.yml` reaches no
-key through `main`: add it to the right key. A prefix that names a file that no longer exists does
-not fail the test: the recommender reports it as `stalePrefixes`, and `/review-paratext` warns
-about it, so moving or deleting a source file a prefix names means updating the prefix.
+it does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to `NON_RUNTIME` in
+`e2e-tests/e2e-recommendations.ts`.
+
+The test also fails when a runtime file that matches an `editor_paths` entry in `test.yml` reaches
+no key through `main`: add it to the right key.
+
+A prefix that names a file that no longer exists does not fail the test: the recommender reports it
+as `stalePrefixes`, and `/review-paratext` warns about it, so moving or deleting a source file a
+prefix names means updating the prefix.
 
 A file named by a spec key or prefix key inside a subset (such as
 `scripture-editor/chapter-marker-repair.spec.ts` or `scripture-editor/no-unasked-edits-`) is

@@ -98,7 +98,7 @@ export interface E2eRecommendationReport {
    * `package-lock.json`, `release/app/package.json`, `release/app/package-lock.json`,
    * `dev-packages.json`, `global.json`, any `.csproj` or `.props` file under `c-sharp/` and
    * anything under `patches/`. A hint: whether a dependency actually changed is read from their
-   * diffs in Step 3.5.
+   * diffs in the end-to-end tests step of `/review-paratext`.
    */
   dependencyFiles: string[];
   /**
@@ -199,9 +199,10 @@ const NON_RUNTIME = new RegExp(
     // C# test projects (`Foo.Tests/`).
     String.raw`(^|\/)[^/]*Tests\/`,
     // Package and extension metadata: a design decision, not an oversight (a version or
-    // dependency bump changes no behaviour an e2e spec can see; step 3.5 weighs the dependency
-    // files separately). A change to a manifest's main, menus, settings or activation events goes
-    // unnoticed here: a release bumps every manifest's version at once.
+    // dependency bump changes no behaviour an e2e spec can see; the end-to-end tests step of
+    // `/review-paratext` weighs the dependency files separately). A change to a manifest's main,
+    // menus, settings or activation events goes unnoticed here: a release bumps every manifest's
+    // version at once.
     String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
     // .NET build metadata: projects, shared build properties, the solution and IDE settings. The
     // data provider's own project file is the exception: it pins ParatextData, which does the
