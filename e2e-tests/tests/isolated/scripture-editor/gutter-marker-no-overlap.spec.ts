@@ -60,7 +60,7 @@ import {
 test.use({
   interfaceMode: 'simple',
   seedSettings: { 'platform.firstRunComplete': true },
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 /**

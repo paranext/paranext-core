@@ -110,7 +110,7 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
       // teardown itself throws. A launch that throws gets no teardown from Playwright at all, so
       // without the outer finally the pins above would stay in the developer's real settings file.
       try {
-        const ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
+        const ctx = await launchElectronApp();
         try {
           await use(ctx);
         } finally {

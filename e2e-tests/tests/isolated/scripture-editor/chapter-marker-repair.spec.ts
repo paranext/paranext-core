@@ -60,7 +60,7 @@ import {
 // all. DEV_NOISY=false keeps the normal Home layout (see preview-read-only-power-mode.spec.ts).
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 /** The config's per-test default (`e2e-tests/playwright.config.ts`), `test.slow()` triples it. */

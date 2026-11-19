@@ -59,7 +59,7 @@ import {
 test.use({
   interfaceMode: 'power',
   seedSettings: { 'platform.firstRunComplete': true },
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
   // The verse-in-viewport assertions are geometry: how far down the pane Lamentations 3:66 sits,
   // and therefore whether it starts off screen, is decided by the window size. 1280x800 is the size
   // the chapter choice above is reasoned against.
