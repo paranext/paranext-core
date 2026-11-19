@@ -10249,18 +10249,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   holds its own grammar (`Press {keys}`); the component fills `{keys}` with
   `formatReplacementStringToArray`, joining the key names with `Intl.ListFormat` without a serial
   comma, in the language `%shortcutKeys_tooltip_language%` names. That string is localized beside
-  the template, so a locale that has not translated the template falls back to English for both,
-  and the "and" never comes from a different language than the rest of the sentence. The readout is
+  the template, so a locale that has not translated the template falls back to English for both, and
+  the "and" never comes from a different language than the rest of the sentence. The readout is
   worked out only while the tooltip is open. An open tooltip is the topmost Radix layer and would
   swallow a menu's Escape, so `ShortcutKeys` closes it on any keydown before the menu sees the key.
-  The root costs each web view one localized-strings subscription. Key names are English for now, as the hints themselves are
-  (`TODO(PT-4629)`). The value a shared context holds is read by copies built from different
-  versions of the library, so its shape must stay readable by older and newer copies; an extension
-  built against a version without these slots shows no keycap tooltip. `platform-bible-react` used
-  outside the app, such as in Storybook, shows no keycap tooltip unless it adds the provider. The web
-  view half is mounted from generated script text, so `shortcut-keys-localization-root-wiring.test.ts`
-  pins its wiring the way the error boundary's wiring test does, and `web-view.service-shard.test.ts`
-  runs the generated bridge under `vm`.
+  The root costs each web view one localized-strings subscription. Key names are English for now, as
+  the hints themselves are (`TODO(PT-4629)`). The value a shared context holds is read by copies
+  built from different versions of the library, so its shape must stay readable by older and newer
+  copies; an extension built against a version without these slots shows no keycap tooltip.
+  `platform-bible-react` used outside the app, such as in Storybook, shows no keycap tooltip unless
+  it adds the provider. The web view half is mounted from generated script text, so
+  `shortcut-keys-localization-root-wiring.test.ts` pins its wiring the way the error boundary's
+  wiring test does, and `web-view.service-shard.test.ts` runs the generated bridge under `vm`.
 
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 

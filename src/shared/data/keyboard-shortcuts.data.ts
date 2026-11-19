@@ -966,6 +966,19 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/renderer/components/sync-status-button.component.tsx'],
   },
   {
+    id: 'shortcut-keys-dismiss-tooltip',
+    purpose:
+      'Close the tooltip that reads out a menu item’s shortcut, then let the menu handle the same key',
+    category: 'Menus',
+    // Listens on `window` in the capture phase, but only while that tooltip is open, and closes it
+    // on any key, not only Escape: the open tooltip is the topmost Radix layer, so without this a
+    // menu would ignore its first Escape, and an arrow key would leave the tooltip describing the
+    // item the menu moved away from. The key itself is not consumed.
+    context: 'Shortcut keycaps in any menu, while their tooltip is open',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: ['lib/platform-bible-react/src/components/basics/shortcut-keys.component.tsx'],
+  },
+  {
     id: 'menubar-close',
     purpose: 'Close the open application menu',
     category: 'Menus',

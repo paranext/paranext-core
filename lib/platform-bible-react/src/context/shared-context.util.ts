@@ -12,7 +12,7 @@ import { Context, createContext } from 'react';
  *
  * The value each context holds is shared between copies built from different versions of this
  * library, so a change to its shape must stay readable by older and newer copies;
- * `shared-context.util.test.ts` pins the names and shapes so such a change shows in review. Only
+ * `shared-context.util.test.tsx` pins the names and shapes so such a change shows in review. Only
  * this library and Platform.Bible write these slots; an extension must not.
  *
  * @experimental This export is unstable and may change or disappear without notice

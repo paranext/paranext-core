@@ -121,8 +121,9 @@ export function getShortcutKeycaps(hint: string): { keycaps: string[]; separator
  * `Control` for `⌃` or `Ctrl`, `Command` for `⌘` — for text that reads the shortcut out rather than
  * showing it as keycaps.
  *
+ * Exported for tests only; not part of the package's API.
+ *
  * @param hint One key combination, as for {@link getShortcutKeycaps}
- * @experimental This function is unstable and may change or disappear without notice
  */
 export function getShortcutKeyNames(hint: string): string[] {
   return getShortcutKeycaps(hint).keycaps.map((keycap) => KEY_NAMES[keycap] ?? keycap);
@@ -195,7 +196,8 @@ function ShortcutReadout({
 
 /**
  * The side of the keycaps at the inline end of the layout, where the tooltip goes: right in a
- * left-to-right layout, left in a right-to-left one.
+ * left-to-right layout, left in a right-to-left one. Exported for tests only; not part of the
+ * package's API.
  */
 export function getInlineEndSide(): 'left' | 'right' {
   return readDirection() === 'rtl' ? 'left' : 'right';
@@ -273,6 +275,8 @@ export function ShortcutKeys({ hint }: ShortcutKeysProps) {
   // key before anything else sees the key: `window` capture runs ahead of the menu's own listeners
   // on `document`, and `flushSync` takes the tooltip's layer off the stack before they run. Any key,
   // not only Escape, since an arrow key moves the menu away from the item the tooltip describes.
+  // This relies on the tooltip's content unmounting at once: an exit animation that Radix's
+  // `Presence` waits for would keep the layer on top and bring the second Escape back.
   useEffect(() => {
     if (!isTooltipOpen) return undefined;
     const closeTooltip = () => flushSync(() => setIsTooltipOpen(false));
