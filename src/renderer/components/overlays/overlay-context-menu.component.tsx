@@ -25,7 +25,7 @@ import {
   DropdownMenuTrigger,
   Z_INDEX_OVERLAY,
 } from 'platform-bible-react';
-import { ShortcutKeys } from 'platform-bible-react/experimental';
+import { getLeadingIconSlot, MenuItemIcon, ShortcutKeys } from 'platform-bible-react/experimental';
 import {
   type CSSProperties,
   type ReactNode,
@@ -58,7 +58,19 @@ export type OverlayContextMenuItem =
       type: 'item';
       id: string;
       label: string | LocalizeKey;
-      icon?: PlatformIconName;
+      /**
+       * Name of a curated icon drawn before the label. Wins over `iconPath` when it names a known
+       * icon.
+       *
+       * @experimental This field is unstable and may change or disappear without notice
+       */
+      iconName?: PlatformIconName;
+      /**
+       * URL of an image drawn before the label, used when `iconName` is absent or not a known icon.
+       *
+       * @experimental This field is unstable and may change or disappear without notice
+       */
+      iconPath?: string;
       shortcut?: string;
       disabled?: boolean;
     }
@@ -214,6 +226,14 @@ function renderMenuItems(
 ): ReactNode[] {
   const result: ReactNode[] = [];
   let i = 0;
+  // One slot per list, so labels line up whether or not each item has an icon, as in the top menu
+  const leadingSlot = getLeadingIconSlot(
+    items.flatMap((entry) =>
+      entry.type === 'item'
+        ? [{ iconNameBefore: entry.iconName, iconPathBefore: entry.iconPath }]
+        : [],
+    ),
+  );
 
   while (i < items.length) {
     const item = items[i];
@@ -234,6 +254,13 @@ function renderMenuItems(
           style={HOVER_HIGHLIGHT_STYLE}
           onSelect={() => onSelect({ itemId: item.id })}
         >
+          <MenuItemIcon
+            iconName={item.iconName}
+            icon={item.iconPath}
+            menuLabel={typeof item.label === 'string' ? item.label : String(item.label)}
+            leading
+            leadingSlot={leadingSlot}
+          />
           {item.label}
           {item.shortcut && (
             <DropdownMenuShortcut>

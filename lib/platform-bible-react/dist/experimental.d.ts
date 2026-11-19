@@ -88,6 +88,31 @@ export declare function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem):
 type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 /** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
 export type ScopeWithRange = Scope | "range";
+/**
+ * Whether a menu list reserves a leading icon slot, so every label in the list lines up. The slot
+ * is 16px, the size of a named icon; an image icon is capped to it.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type LeadingIconSlot = "none" | "icon";
+type ItemWithLeadingIcon = {
+	iconNameBefore?: string;
+	iconPathBefore?: string;
+	/** Defined on a checkbox item, whose check indicator takes the leading slot */
+	checked?: boolean;
+};
+/**
+ * Picks the leading icon slot for one rendered list of menu items (one dropdown content, one
+ * submenu content, or one menubar menu). Items without a leading icon reserve the same slot as the
+ * items that have one, so all labels in the list start at the same position.
+ *
+ * @param items The items rendered in the list, including submenu trigger items
+ * @returns `'icon'` if any item has a leading icon — a known named icon or an image path — or is a
+ *   checkbox item (`checked` is defined), and `'none'` otherwise. An unknown icon name counts only
+ *   through the image path beside it, if any
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export declare function getLeadingIconSlot(items: ItemWithLeadingIcon[]): LeadingIconSlot;
 /** Visual layout variant for the scope options. */
 export type ScopeSelectorVariant = "radio" | "dropdown";
 /**
@@ -1940,6 +1965,52 @@ export type DeveloperSectionProps = {
 };
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare function DeveloperSection({ localizedStrings, selectedServer, onServerChange, disabled, }: DeveloperSectionProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Props for {@link MenuItemIcon}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type MenuItemIconProps = {
+	/**
+	 * Uri path of the image to display. Ignored when `iconName` names a known icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	icon?: string;
+	/**
+	 * Lucide icon name to display. Wins over `icon` when both are set, unless the name is not one of
+	 * the known icons: then `icon` is shown, and with no `icon` the slot counts as having no icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconName?: string;
+	/**
+	 * The label of the menu item
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	menuLabel: string;
+	/**
+	 * Whether the icon is leading or trailing
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	leading?: boolean;
+	/**
+	 * For a leading icon: the slot its list reserves. An item without an icon renders an empty spacer
+	 * the size of that slot so its label lines up with the labels of the items that have an icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	leadingSlot?: LeadingIconSlot;
+};
+/**
+ * Draws a menu item's icon: a named icon, an image, or (for a leading icon in a list that reserves a
+ * slot) an empty spacer so labels line up.
+ *
+ * @experimental This component is unstable and may change or disappear without notice
+ */
+export declare function MenuItemIcon({ icon, iconName, menuLabel, leading, leadingSlot }: MenuItemIconProps): import("react/jsx-runtime").JSX.Element | undefined;
 /**
  * Props for {@link ShortcutKeys}.
  *

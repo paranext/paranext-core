@@ -160,6 +160,11 @@ export {
   DEVELOPER_SECTION_STRING_KEYS,
 } from './components/advanced/developer-section/developer-section.component';
 export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
+export {
+  default as MenuItemIcon,
+  type MenuItemIconProps,
+} from './components/advanced/menus/menu-icon.component';
+export { getLeadingIconSlot, type LeadingIconSlot } from './components/advanced/menus/menu.util';
 export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';
 export {
   LucideIcon,

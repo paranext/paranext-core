@@ -122,6 +122,60 @@ describe('OverlayContextMenuPresentational', () => {
     expect(screen.getByRole('separator')).toBeInTheDocument();
   });
 
+  describe('item icons', () => {
+    const SPACER = '[data-slot="menu-icon-spacer"]';
+
+    function renderItems(items: OverlayContextMenuItem[]) {
+      render(
+        <OverlayContextMenuPresentational
+          items={items}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+    }
+
+    it('draws the named icon of an item', () => {
+      renderItems([{ type: 'item', id: 'find', label: 'Find', iconName: 'search' }]);
+
+      expect(screen.getByRole('menuitem', { name: 'Find' }).querySelector('svg')).not.toBeNull();
+    });
+
+    it('draws the image of an item that has an icon path and no icon name', () => {
+      renderItems([
+        { type: 'item', id: 'find', label: 'Find', iconPath: 'https://example.test/find.svg' },
+      ]);
+
+      expect(
+        // The image's alt text is part of the item's accessible name, so match by substring
+        screen.getByRole('menuitem', { name: /Find/ }).querySelector('img[src$="find.svg"]'),
+      ).not.toBeNull();
+    });
+
+    it('gives items without an icon the leading spacer when another item has one', () => {
+      renderItems([
+        { type: 'item', id: 'find', label: 'Find', iconName: 'search' },
+        { type: 'item', id: 'other', label: 'Other' },
+      ]);
+
+      const withIcon = screen.getByRole('menuitem', { name: 'Find' });
+      const without = screen.getByRole('menuitem', { name: 'Other' });
+      expect(withIcon.querySelector(SPACER)).toBeNull();
+      expect(without.querySelector(SPACER)).not.toBeNull();
+    });
+
+    it('reserves no spacer when no item has an icon', () => {
+      renderItems([
+        { type: 'item', id: 'a', label: 'A' },
+        { type: 'item', id: 'b', label: 'B' },
+      ]);
+
+      expect(screen.getByRole('menuitem', { name: 'A' }).querySelector(SPACER)).toBeNull();
+      expect(screen.getByRole('menuitem', { name: 'B' }).querySelector(SPACER)).toBeNull();
+    });
+  });
+
   it('shows the shortcut as keycaps beside an item that has one, and nothing beside one without', () => {
     const items: OverlayContextMenuItem[] = [
       { type: 'item', id: 'find', label: 'Find', shortcut: 'Ctrl+F' },
