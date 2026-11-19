@@ -326,16 +326,29 @@ Run, as a single bash command, substituting the literal `MERGE_BASE` SHA stored 
 npx tsx "$(git rev-parse --show-toplevel)/e2e-tests/e2e-recommendations.ts" <MERGE_BASE>
 ```
 
-It prints a JSON report: `recommendations` (isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`), `alsoExercised` (keys whose specs only drive the changed files along the way), `uncoveredFiles` (changed runtime source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists; files the app never loads, such as tests, stories, docs, licenses, tool configuration and package or .NET build metadata (`NON_RUNTIME` in that file), are never listed, while webpack, PostCSS and Tailwind configuration is runtime and is listed, and neither is `lib/`, because library code is reached through its consumers, so a library-only change can produce no output at all), `entryPointFiles` (changed menu, web view provider and command-registration files) and `specsChanged` (whether the branch changes an e2e spec or its support code: any `.ts` under `e2e-tests/tests/`, `e2e-tests/fixtures/` or `e2e-tests/reporters/`, the global setup or teardown, or a Playwright config, except unit tests). If the command fails, say so in one line, record `E2E_TEST_NOTES` as "not checked: <error>", and continue.
+It prints a JSON report with these fields:
 
-This step never starts a test run and never blocks the review. It has three parts: the Run part (one question), the Add part (one question) and the also-exercised line (printed, no question). Ask a question only when its part applies, each question as a separate message after the response to Step 3.4, waiting for the author's response before the next. If none of the three applies, print nothing and leave `E2E_TEST_NOTES` empty (the summary then gets no heading).
+- `recommendations`: isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`.
+- `alsoExercised`: keys whose specs only drive the changed files along the way, each with its `key` and `matchedFiles`.
+- `uncoveredFiles`: changed, existing runtime source files under `src/`, `extensions/src/` and `c-sharp/` that no key lists. Files the app never loads (tests, stories, docs, licenses, tool configuration, package and .NET build metadata; `NON_RUNTIME` in `e2e-tests/e2e-recommendations.ts`) are never listed, while webpack, PostCSS and Tailwind configuration is runtime and is listed. A `lib/` file is listed under no key unless some key names it.
+- `entryPointFiles`: changed menu, web view provider and command or request handler registration files.
+- `specsChanged`: whether the branch changes an e2e spec or its support code (any `.ts` under `e2e-tests/tests/`, `e2e-tests/fixtures/` or `e2e-tests/reporters/`, the global setup or teardown, or a Playwright config, except unit tests).
+- `runtimeChanged`: whether any changed file is runtime code, `lib/` included (false for documentation, tests, stories, tool configuration or e2e files alone).
+- `stalePrefixes`: paths in the map (`e2e-tests/tests/isolated/subset-sources.json`) that match no tracked file, because a source was moved or deleted.
+- `editorListRuns`: whether the changed files make CI run the editor spec list too on this branch's pull request.
+
+If the command fails, say so in one line, record `E2E_TEST_NOTES` as "not checked: <error>", and continue. Ignore, in every list of the report, a file that Step 1.2 classed as worktree noise and anything under `.review/`.
+
+This step never starts a test run and never blocks the review. It prints a stale-prefix warning (no question) and the also-exercised line (no question), and asks at most two questions: the Run question, then the Add question. Print everything in one message in this order: the stale-prefix warning if any, the list of recommended keys, the also-exercised line if any, then the Run question. Wait for the author's response; then, if the Add part applies, ask the Add question as a separate message and wait again. If nothing applies, print nothing and leave `E2E_TEST_NOTES` empty (the summary then gets no heading).
+
+**Stale-prefix warning** (printed, no question) — applies when `stalePrefixes` is non-empty: print one line, "The e2e map names files that no longer exist: <prefixes>. Please update `e2e-tests/tests/isolated/subset-sources.json`." Record it in `E2E_TEST_NOTES` as "map warning: <prefixes>".
 
 **Run part** (a question) — applies when `recommendations` is non-empty. List each key with its `command` and its CI status in words, from `ci`:
 
 - `kind: 'spec'`, `coreList: 'always'` → "also runs in CI on every pull request"
-- `kind: 'spec'`, `coreList: 'editor'` → "also runs in CI on some pull requests (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))"
-- `kind: 'spec'`, `coreList: 'none'` → "is in neither pull-request list (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))"
-- `kind: 'subset'` → "CI runs `alwaysCoreSpecCount` of its `specCount` spec files on every pull request, plus `editorCoreSpecCount` on pull requests that trigger the editor list (see [What CI runs](../../e2e-tests/CLAUDE.md#what-ci-runs))" (leave out the "plus" clause when `editorCoreSpecCount` is 0; when `specCount` is 0 the spec list is unknown, so say the spec count is unknown instead of "0 of 0")
+- `kind: 'spec'`, `coreList: 'editor'` → "runs in CI only on pull requests that touch the Scripture editor (see 'What CI runs' in `e2e-tests/CLAUDE.md`); `editorListRuns` says whether this branch does: say 'so it runs in CI for this branch' when true and 'so it does not run in CI for this branch' when false"
+- `kind: 'spec'`, `coreList: 'none'` → "is in neither pull-request list (see 'What CI runs' in `e2e-tests/CLAUDE.md`)"
+- `kind: 'subset'` → "CI runs `alwaysCoreSpecCount` of its `specCount` spec files on every pull request, plus `editorCoreSpecCount` on pull requests that touch the Scripture editor, and this branch's pull request does (or does not), from `editorListRuns` (see 'What CI runs' in `e2e-tests/CLAUDE.md`)" (leave out the "plus" clause when `editorCoreSpecCount` is 0; when `specCount` is 0 the spec list is unknown, so say the spec count is unknown instead of "0 of 0")
 
 A recommendation with `memberKeys` is several specs of one subset that matched the same files, collapsed into one command (its `key` is a path prefix that runs them all). List it once, as one item, say how many specs it runs (`ci.specCount`) with the same CI wording, and name the member keys only in the summary.
 
@@ -347,7 +360,7 @@ Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>:
 
 **Also-exercised line** (no question) — applies whenever `alsoExercised` is non-empty, whether or not `recommendations` is: print one line naming those keys: "These also open the code you changed, if you want to run more: <keys>."
 
-**Add part** (a question) — applies only when the diff has a runtime change (not docs, tests, stories or tool configuration alone; configuration that shapes the bundle, such as webpack, PostCSS or Tailwind, is a runtime change, see `NON_RUNTIME`) and `specsChanged` is false (any changed e2e spec, page object, fixture or spec helper suppresses the question), and then only when at least one of these holds:
+**Add part** (a question) — applies only when `runtimeChanged` is true and `specsChanged` is false (any changed e2e spec, page object, fixture or spec helper suppresses the question), and then only when at least one of these holds:
 
 1. `uncoveredFiles` is non-empty: name those files in the question.
 2. `entryPointFiles` is non-empty and the diff shows an entry point was **added** (a new menu item, web view provider or command registration), not only edited.

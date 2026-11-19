@@ -49,11 +49,15 @@ immediately discoverable and runnable without any config changes.
 A new subset directory or loose spec under `tests/isolated/` also needs an entry in
 `tests/isolated/subset-sources.json`: `main` lists the source prefixes the group is about,
 `incidental` the source it only drives. `e2e-recommendations.test.ts` fails when an entry is
-missing; when a prefix names a file that no longer exists (moving or deleting a source file a
-prefix names means updating the prefix); and when a tracked file under `src/`, `extensions/src/` or
-`c-sharp/` that the app never loads (a dotfile, a license, a story, a file type the app does not
-read) is still classified as runtime code (add its shape to `NON_RUNTIME` in
-`e2e-recommendations.ts`). `/review-paratext` uses the map to recommend which subsets to run. A new `scripture-editor/no-unasked-edits-*.spec.ts` needs a key of its own too.
+missing, and when a tracked file under `src/`, `extensions/src/` or `c-sharp/` that the app never
+loads (a dotfile, a license, a story, a file type the app does not read) is still classified as
+runtime code. If the file is app code of a new type, add its extension to `LOADED_EXTENSIONS` in
+`e2e-recommendations.test.ts`; otherwise add its shape to `NON_RUNTIME` in
+`e2e-recommendations.ts`. A prefix that names a file that no longer exists does not fail the test:
+`e2e-recommendations.ts` reports it as `stalePrefixes`, and `/review-paratext` shows it to the
+author as a warning, so moving or deleting a source file a prefix names means updating the prefix.
+`/review-paratext` uses the map to recommend which subsets to run. A new
+`scripture-editor/no-unasked-edits-*.spec.ts` needs a spec key of its own too.
 
 `/review-paratext` stops asking whether a branch needs a new e2e test once the report's
 `specsChanged` is true: the branch changes an e2e spec or its support code (any `.ts` under

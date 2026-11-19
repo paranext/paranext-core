@@ -40,16 +40,19 @@ e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 
 A new subset directory or loose spec needs an entry in `subset-sources.json` (`main` = the source
 the group is about, `incidental` = source it only drives); `e2e-recommendations.test.ts` fails
-without one. A new `scripture-editor/no-unasked-edits-*.spec.ts` also needs a key of its own. The
-test also fails when a prefix names a file that no longer exists, so moving or deleting a source
-file a prefix names means updating the prefix. It fails, too, when a tracked file under `src/`,
-`extensions/src/` or `c-sharp/` that the app never loads (a dotfile, a license, a story, a file
-type the app does not read) is still classified as runtime code; add its shape to `NON_RUNTIME`
-in `e2e-tests/e2e-recommendations.ts`.
+without one. A new `scripture-editor/no-unasked-edits-*.spec.ts` also needs a spec key of its own.
+The test also fails when a tracked file under `src/`, `extensions/src/` or `c-sharp/` that the app
+never loads (a dotfile, a license, a story, a file type the app does not read) is still classified
+as runtime code. If the file is app code of a new type, add its extension to `LOADED_EXTENSIONS`
+in `e2e-recommendations.test.ts`; otherwise add its shape to `NON_RUNTIME` in
+`e2e-tests/e2e-recommendations.ts`. A prefix that names a file that no longer exists does not fail
+the test: the recommender reports it as `stalePrefixes`, and `/review-paratext` warns about it, so
+moving or deleting a source file a prefix names means updating the prefix.
 
-A file named by a spec-level key inside a subset (such as
+A file named by a spec key inside a subset (such as
 `scripture-editor/chapter-marker-repair.spec.ts`) is recommended for that key only: listing the
-same file in the subset's own `main` has no effect, so leave it out there.
+same file in the subset's own `main` has no effect, so leave it out there. When the subset is
+recommended too, the spec key is folded into it.
 
 ## Spec files directly under `tests/isolated/`
 
