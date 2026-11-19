@@ -622,9 +622,6 @@ global.webViewComponent = function ChecklistWebView({
   // the copy action operates on the live web-view's visible data — there's no point in routing
   // it through PAPI just to send the result back.
 
-  // The window draws the project menu over every tab, so a narrow tab cannot cut it off. The picked
-  // item still comes back to `handleSelectProjectMenuItem`, with focus back in this frame, so Copy
-  // keeps the click's user activation for the clipboard.
   const openProjectMenuInOverlay = useCallback<OpenTabMenuInOverlay>(
     (menu, options) => papi.overlays.showTabMenu(menu, globalThis.webViewId, options),
     [],

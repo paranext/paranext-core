@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { addOverlay, clearAllOverlays } from '@renderer/services/overlays/overlay-store';
+import { logger } from '@shared/services/logger.service';
 import { OverlayTabMenu, OverlayTabMenuPresentational } from './overlay-tab-menu.component';
 
 // Radix DropdownMenu uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
@@ -175,7 +176,7 @@ describe('OverlayTabMenuPresentational', () => {
 describe('OverlayTabMenu', () => {
   afterEach(() => clearAllOverlays());
 
-  it('settles the overlay with the picked item, once', () => {
+  it('settles the overlay with the picked item', () => {
     const resolve = vi.fn();
     const overlay = {
       type: 'tabMenu' as const,
@@ -191,9 +192,36 @@ describe('OverlayTabMenu', () => {
     render(<OverlayTabMenu overlay={overlay} />);
 
     fireEvent.click(screen.getByRole('menuitem', { name: /^Insert footnote/ }));
-    fireEvent.keyDown(screen.getAllByRole('menu')[0], { key: 'Escape' });
 
     expect(resolve).toHaveBeenCalledTimes(1);
     expect(resolve).toHaveBeenCalledWith(MENU.items[2]);
+  });
+
+  it('settles as closed without a pick, and keeps the window up, when the menu fails to render', () => {
+    const resolve = vi.fn();
+    const logError = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    // React reports the caught error to the console as well
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const overlay = {
+      type: 'tabMenu' as const,
+      id: 'tab-menu-3',
+      webViewId: 'web-view-1',
+      // Menu data a web view could send that validation did not refuse, and that throws while
+      // rendering
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      menu: { ...MENU, columns: undefined } as unknown as typeof MENU,
+      anchor: ANCHOR,
+      focusFirstItem: false,
+      resolve,
+      reject: vi.fn(),
+    };
+    addOverlay(overlay);
+
+    expect(() => render(<OverlayTabMenu overlay={overlay} />)).not.toThrow();
+
+    expect(resolve).toHaveBeenCalledWith(undefined);
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('tab-menu-3'));
+    logError.mockRestore();
+    consoleError.mockRestore();
   });
 });

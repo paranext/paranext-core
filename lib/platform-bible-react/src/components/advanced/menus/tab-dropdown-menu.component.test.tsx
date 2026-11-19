@@ -3,7 +3,13 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import type { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
+import {
+  FAILED_PRECONDITION,
+  newPlatformError,
+  type Localized,
+  type MenuItemContainingCommand,
+  type MultiColumnMenu,
+} from 'platform-bible-utils';
 import { QUIET_FOCUS_ATTRIBUTE } from '@/utils/focus.util';
 import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
 import { persistDirection } from '@/utils/dir-helper.util';
@@ -755,12 +761,15 @@ describe('TabDropdownMenu opened in an overlay', () => {
     await waitFor(() => expect(onSelectMenuItem).toHaveBeenCalledWith(UNDO_ITEM));
   });
 
-  it('runs nothing when the overlay closes without a pick, or refuses to open', async () => {
+  it('runs nothing, and reports nothing, when the overlay closes without a pick or refuses to open', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const refusal = newPlatformError('Requesting WebView is not visible');
+    refusal.code = FAILED_PRECONDITION;
     const openMenuInOverlay = vi
       .fn<OpenTabMenuInOverlay>()
       .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('Requesting WebView is not visible'));
+      .mockRejectedValueOnce(refusal);
     const { trigger, onSelectMenuItem } = renderOverlayMenu(openMenuInOverlay);
 
     await user.click(trigger);
@@ -769,9 +778,68 @@ describe('TabDropdownMenu opened in an overlay', () => {
     await waitFor(() => expect(openMenuInOverlay).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
     expect(onSelectMenuItem).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
-  it('reports the menu as open while the overlay shows it, and asks for one menu at a time', async () => {
+  it('reports an unexpected failure to open the overlay', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failure = new Error('Menu has no items');
+    const { trigger, onSelectMenuItem } = renderOverlayMenu(async () => {
+      throw failure;
+    });
+
+    await user.click(trigger);
+
+    await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(String), failure));
+    expect(onSelectMenuItem).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it('closes the menu, rather than reopening it, when its trigger is clicked while it is open', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    let closeOverlay: (item: undefined) => void = () => {};
+    const openMenuInOverlay = vi.fn<OpenTabMenuInOverlay>(
+      () =>
+        new Promise((resolve) => {
+          closeOverlay = resolve;
+        }),
+    );
+    const { trigger } = renderOverlayMenu(openMenuInOverlay);
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    // In the app, pressing inside the frame blurs the window, which dismisses the overlay before
+    // the click arrives
+    trigger.addEventListener('pointerdown', () => closeOverlay(undefined));
+
+    // A real click takes long enough for the closed menu to render before the button comes up
+    await user.pointer({ keys: '[MouseLeft>]', target: trigger });
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    await user.pointer({ keys: '[/MouseLeft]', target: trigger });
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(openMenuInOverlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the focus ring after a pointer pick, but not after the menu closes without a pick', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const openMenuInOverlay = vi
+      .fn<OpenTabMenuInOverlay>()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(UNDO_ITEM);
+    const { trigger } = renderOverlayMenu(openMenuInOverlay);
+
+    // Opened with the pointer and closed without a pick, as by an Escape this frame never sees
+    await user.click(trigger);
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    expect(trigger.hasAttribute(QUIET_FOCUS_ATTRIBUTE)).toBe(false);
+
+    await user.click(trigger);
+    await waitFor(() => expect(trigger.hasAttribute(QUIET_FOCUS_ATTRIBUTE)).toBe(true));
+  });
+
+  it('reports the menu as open while the overlay shows it, and a click then does not ask for another', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     let closeOverlay: (item: undefined) => void = () => {};
     const openMenuInOverlay = vi.fn<OpenTabMenuInOverlay>(

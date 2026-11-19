@@ -22,7 +22,15 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { MenuIcon } from 'lucide-react';
-import { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
+import {
+  ABORTED,
+  FAILED_PRECONDITION,
+  isPlatformError,
+  Localized,
+  MenuItemContainingCommand,
+  MultiColumnMenu,
+  RESOURCE_EXHAUSTED,
+} from 'platform-bible-utils';
 import { Fragment, ReactNode, useCallback, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
@@ -48,11 +56,25 @@ import {
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
 
-/** Props a tab menu passes to the content of each of its submenus */
+/**
+ * Props a tab menu passes to the content of each of its submenus
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type TabMenuSubmenuContentProps = Omit<DropdownMenuSubContentProps, 'children'> & {
   /** Any `data-*` attribute, for whoever needs to recognize the submenu's content */
   [dataAttribute: `data-${string}`]: string | undefined;
 };
+
+/**
+ * Whether an error from opening a tab menu in the overlay is one of the overlay service's expected
+ * refusals: a hidden tab, a repeat inside its cooldown, or a menu that another request replaced
+ */
+const isExpectedOverlayRefusal = (error: unknown) =>
+  isPlatformError(error) &&
+  (error.code === FAILED_PRECONDITION ||
+    error.code === RESOURCE_EXHAUSTED ||
+    error.code === ABORTED);
 
 const createDropdownSeparator = (groupKey: string) => (
   <DropdownMenuSeparator key={`separator-${groupKey}`} />
@@ -217,15 +239,9 @@ export type TabDropdownMenuItemsProps = {
 };
 
 /**
- * The items of a tab menu, for rendering inside a `DropdownMenuContent`. Each column that has items
- * is a section, in column order, divided from the next by a line; columns without items are left
- * out. Groups within a column are not distinguished, while the groups of a submenu are divided by a
- * line. Items show their tooltip on hover and their `shortcut`, if any, at the end of the row. With
- * `showSectionHeadings`, each section is headed by its column label, except a column that sets
- * `isHeaderHidden`, whose label names the section for screen readers only.
- *
- * {@link TabDropdownMenu} renders these in its own dropdown, and {@link AnchoredTabMenu} in a menu
- * opened at a given rectangle.
+ * The body of a tab menu, for rendering inside a `DropdownMenuContent`; laid out as
+ * {@link TabDropdownMenu} describes. Shared by `TabDropdownMenu` and {@link AnchoredTabMenu} so the
+ * two cannot drift.
  */
 export function TabDropdownMenuItems({
   onSelectMenuItem,
@@ -277,7 +293,11 @@ export function TabDropdownMenuItems({
   });
 }
 
-/** Where a tab menu's trigger sits, in pixels relative to the viewport of the document it is in */
+/**
+ * Where a tab menu's trigger sits, in pixels relative to the viewport of the document it is in
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type TabMenuTriggerRect = { x: number; y: number; width: number; height: number };
 
 /**
@@ -292,11 +312,19 @@ export type TabMenuOverlayOptions = {
   focusFirstItem?: boolean;
 };
 
+/**
+ * Props for {@link AnchoredTabMenu}
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type AnchoredTabMenuProps = TabDropdownMenuItemsProps & {
   /** The rectangle of the trigger the menu belongs to; the menu opens below it, aligned to its start */
   anchor: TabMenuTriggerRect;
 
-  /** Called when the menu closes without a pick: Escape, a click away, or a submenu's Escape */
+  /**
+   * Called whenever the menu closes, including right after a pick (after `onSelectMenuItem`).
+   * Ignore it if the pick was already handled.
+   */
   onClose: () => void;
 
   /**
@@ -318,8 +346,8 @@ export type AnchoredTabMenuProps = TabDropdownMenuItemsProps & {
 /**
  * A tab menu that is open from the moment it renders, below a trigger rectangle given in this
  * document's coordinates rather than below a trigger element. It shows the items as
- * {@link TabDropdownMenuItems} does. The overlay service uses it to draw a web view's tab menu over
- * the whole window, below the rectangle of the trigger inside the web view.
+ * {@link TabDropdownMenu} does. The overlay service uses it to draw a web view's tab menu over the
+ * whole window, below the rectangle of the trigger inside the web view.
  *
  * @experimental This component is unstable and may change or disappear without notice
  */
@@ -331,8 +359,8 @@ export function AnchoredTabMenu({
   ...itemsProps
 }: AnchoredTabMenuProps) {
   // Radix moves to the first item only after a keydown in its own document, and the key that
-  // opened this menu may have been pressed in another one (a web view's frame). The content's portal
-  // mounts it a render late and its own mount effect focuses the menu, so wait a frame past both.
+  // opened this menu may have been pressed in another one (a web view's frame). Wait one frame,
+  // until the portal has mounted the content and Radix has focused the menu panel.
   const focusFirstItemOnMount = useCallback(
     (content: HTMLDivElement | null) => {
       if (!content || !focusFirstItem) return;
@@ -392,7 +420,10 @@ export function AnchoredTabMenu({
  * `papi.overlays.showTabMenu`.
  *
  * In a web view, pass `(menu, options) => papi.overlays.showTabMenu(menu, webViewId, options)`: the
- * window then draws the menu over every tab, so a narrow tab no longer cuts it or its flyouts off.
+ * window then draws the menu over every tab, so a narrow tab cannot cut it or its submenus off.
+ *
+ * A rejection is treated as no pick. The trigger expects the overlay service's refusals (a hidden
+ * tab, a repeat inside its cooldown, a menu replaced by another) and reports any other error.
  *
  * @experimental This type is unstable and may change or disappear without notice
  */
@@ -479,6 +510,10 @@ export default function TabDropdownMenu({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const restoreFocusRing = () => showFocusRing(triggerRef.current ?? undefined);
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
+  // Whether the overlay was open when the pointer went down on the trigger. Pressing the trigger
+  // dismisses the overlay (focus moves into this frame) before the click arrives, so the click must
+  // not open it again: like a dropdown trigger, a click on an open menu's trigger closes it.
+  const wasOverlayOpenAtPointerDownRef = useRef(false);
 
   if (openMenuInOverlay) {
     const openOverlay = async (isFromKeyboard: boolean) => {
@@ -492,13 +527,17 @@ export default function TabDropdownMenu({
           anchor: { x, y, width, height },
           focusFirstItem: isFromKeyboard,
         });
-      } catch {
+      } catch (error) {
         // The overlay refuses a request it cannot show (a hidden tab, a repeat inside its
         // cooldown) and drops a menu that another request replaced; either way nothing was picked
+        if (!isExpectedOverlayRefusal(error))
+          console.error('TabDropdownMenu: could not open the menu in the overlay', error);
       } finally {
         setIsOverlayOpen(false);
       }
-      if (getLastInteractionModality() === 'pointer') hideFocusRing(trigger);
+      // Only a pick is known to have come from the pointer: an Escape pressed in the overlay never
+      // reaches this frame's modality tracking, and a keyboard user should keep the ring
+      if (pickedItem && getLastInteractionModality() === 'pointer') hideFocusRing(trigger);
       // Run in the same task the pick settles in: some handlers need the pick's user activation.
       // The handler's type names the unlocalized item, as for a pick from the in-document menu.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -514,8 +553,15 @@ export default function TabDropdownMenu({
         variant={buttonVariant}
         size="icon"
         className={cn(QUIET_FOCUS_RING_SUPPRESSION, className)}
-        // A click that Enter or Space produced carries no click count
-        onClick={(event) => openOverlay(event.detail === 0)}
+        onPointerDown={() => {
+          wasOverlayOpenAtPointerDownRef.current = isOverlayOpen;
+        }}
+        onClick={(event) => {
+          // A click that Enter or Space produced carries no click count, and no pointer-down
+          const isFromKeyboard = event.detail === 0;
+          if (!isFromKeyboard && wasOverlayOpenAtPointerDownRef.current) return;
+          openOverlay(isFromKeyboard);
+        }}
         onKeyDown={(event) => {
           restoreFocusRing();
           // Like a dropdown trigger, ArrowDown opens the menu too

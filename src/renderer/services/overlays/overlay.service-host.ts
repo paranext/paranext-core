@@ -730,7 +730,7 @@ async function showTabMenu(
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
-  validateTabMenu(menu);
+  validateTabMenu(menu, options?.anchor);
 
   getOverlaysByWebView(webViewId)
     .filter((o) => o.type === 'tabMenu')
@@ -750,6 +750,9 @@ async function showTabMenu(
   announceLocalizedToScreenReader('%overlay_aria_tabMenuOpened%');
   noteOverlayCreated(overlayId);
 
+  // Focusing the web view below blurs this window synchronously, and the blur dismissal settles every
+  // open tab menu, this one included, while the store still holds it. Only the first settle counts.
+  let isSettled = false;
   return new Promise((resolve, reject) => {
     addOverlay({
       type: 'tabMenu',
@@ -759,6 +762,8 @@ async function showTabMenu(
       anchor: { x, y, width, height },
       focusFirstItem: options.focusFirstItem ?? false,
       resolve: (item) => {
+        if (isSettled) return;
+        isSettled = true;
         // The WebView runs the picked item as soon as this settles, and some items act on its own
         // document (the clipboard needs that document focused), so focus goes back synchronously
         // here rather than waiting for the window service below
@@ -767,6 +772,8 @@ async function showTabMenu(
         resolve(item);
       },
       reject: (reason?: unknown) => {
+        if (isSettled) return;
+        isSettled = true;
         settleTransientOverlayFocus(overlayId, false);
         reject(reason);
       },

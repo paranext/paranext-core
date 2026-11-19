@@ -5329,9 +5329,6 @@ function PlatformScriptureEditor({
     [getMenuFindSelectionText, runEditMenuCommand, webViewId],
   );
 
-  // The window draws the tab menus over every tab, so a narrow tab cannot cut them off. The picked
-  // item still comes back to `menuCommandHandler` here, with focus back in this frame, so Cut, Copy
-  // and Paste keep the click's user activation for the clipboard.
   const openMenuInOverlay = useCallback<OpenTabMenuInOverlay>(
     (menu, menuOptions) => papi.overlays.showTabMenu(menu, webViewId, menuOptions),
     [webViewId],

@@ -13370,8 +13370,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
   export type { TabMenuOverlayOptions, TabMenuTriggerRect };
   /**
    *
-   * Service for showing overlays (context menus, popovers, command palettes) that render outside
-   * iframe boundaries in the renderer's top-level document. Renderer-only service.
+   * Service for showing overlays (context menus, tab menus, popovers, command palettes) that render
+   * outside iframe boundaries in the renderer's top-level document. Renderer-only service.
    *
    * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
    * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -13411,18 +13411,19 @@ declare module 'renderer/services/overlays/overlay.service-model' {
       },
     ): Promise<string | undefined>;
     /**
-     * Shows a WebView's tab menu (the menu behind the button at the start of its tab toolbar) over
-     * the whole window, so a narrow tab cannot cut it or its submenus off. The menu is laid out as
-     * the tab menu is in the WebView: one section per column in column order, headed by the column
-     * labels, with the items' icons, shortcuts and tooltips.
+     * Shows one of a WebView's tab toolbar menus over the whole window, so a narrow tab cannot cut it
+     * or its submenus off. Laid out as the tab menu is in the WebView.
      *
      * Unlike {@link showContextMenu}, this runs no command: it settles with the item the user picked
      * and the WebView runs it, so a handler that acts inside the WebView (one that needs the click's
      * user activation, for the clipboard) still can. Focus is back in the WebView by the time it
      * settles with a pick.
      *
-     * Pass it to `TabToolbar` or `TabFloatingMenu` as `openMenuInOverlay` rather than calling it
-     * yourself.
+     * In a WebView, pass `TabToolbar` or `TabFloatingMenu` an `openMenuInOverlay` of `(menu, options)
+     * => papi.overlays.showTabMenu(menu, webViewId, options)` rather than calling it yourself.
+     *
+     * The menu shows the data it was opened with: changes to the menu while it is open (an item's
+     * enabled or checked state, for example) appear the next time it opens.
      *
      * The menu is drawn at interface scale, whatever content zoom the requesting WebView's pane is
      * at.
@@ -15976,13 +15977,16 @@ declare module 'renderer/services/overlays/overlay-validation' {
    */
   export function validateContextMenuItems(items: OverlayContextMenuItem[]): void;
   /**
-   * Validates a tab menu's item count and label lengths. Submenu depth is not checked: a tab menu
-   * only shows the submenus its menu data links to its items.
+   * Validates a tab menu and the anchor it opens at: the menu's shape (columns, groups and items as
+   * the tab menu reads them), its item count and label lengths, that no submenu contains itself, and
+   * that the anchor is a rectangle of finite numbers. The menu comes from a WebView but renders in
+   * the window, so anything here that would throw while rendering must be refused up front.
    *
    * @param menu The tab menu to validate
+   * @param anchor The rectangle of the menu's trigger
    * @throws PlatformError with code INVALID_ARGUMENT if validation fails
    */
-  export function validateTabMenu(menu: Localized<MultiColumnMenu>): void;
+  export function validateTabMenu(menu: Localized<MultiColumnMenu>, anchor: unknown): void;
   /**
    * Recursively validates menu items at a given depth.
    *
@@ -16498,8 +16502,8 @@ declare module '@papi/frontend' {
     window: IWindowService;
     /**
      *
-     * Service for showing overlays (context menus, popovers, command palettes) that render outside
-     * iframe boundaries in the renderer's top-level document. Renderer-only service.
+     * Service for showing overlays (context menus, tab menus, popovers, command palettes) that render
+     * outside iframe boundaries in the renderer's top-level document. Renderer-only service.
      *
      * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
      * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -16702,8 +16706,8 @@ declare module '@papi/frontend' {
   export const window: IWindowService;
   /**
    *
-   * Service for showing overlays (context menus, popovers, command palettes) that render outside
-   * iframe boundaries in the renderer's top-level document. Renderer-only service.
+   * Service for showing overlays (context menus, tab menus, popovers, command palettes) that render
+   * outside iframe boundaries in the renderer's top-level document. Renderer-only service.
    *
    * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
    * iframe bounds. This service accepts overlay requests from WebViews, translates their

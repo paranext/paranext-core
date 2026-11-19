@@ -48,24 +48,85 @@ export function validateContextMenuItems(items: OverlayContextMenuItem[]): void 
   validateMenuItems(items, 0);
 }
 
-/**
- * Most items a tab menu may hold, counting the items of its submenus. The largest contributed tab
- * menu, the scripture editor's, holds about 35.
- */
+/** Most items a tab menu may hold, counting the items of its submenus */
 const MAX_TAB_MENU_ITEMS = 200;
 
+/** Whether a value is a non-null object that is not an array */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && !!value && !Array.isArray(value);
+}
+
+/** Whether a value is a number that is neither NaN nor infinite */
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 /**
- * Validates a tab menu's item count and label lengths. Submenu depth is not checked: a tab menu
- * only shows the submenus its menu data links to its items.
+ * Throws if following the menu's submenus from any submenu item ever leads back to it. The tab menu
+ * builds its tree by following them, so a cycle would recurse forever while the window renders.
+ */
+function validateNoSubmenuCycle(menu: Localized<MultiColumnMenu>): void {
+  // Submenu items (the ones without a command) in each group
+  const submenuIdsByGroup = new Map<string, string[]>();
+  menu.items.forEach((item) => {
+    if ('command' in item) return;
+    submenuIdsByGroup.set(item.group, [...(submenuIdsByGroup.get(item.group) ?? []), item.id]);
+  });
+  const childSubmenuIds = (submenuId: string) =>
+    Object.entries(menu.groups).flatMap(([groupKey, group]) =>
+      'menuItem' in group && group.menuItem === submenuId
+        ? (submenuIdsByGroup.get(groupKey) ?? [])
+        : [],
+    );
+
+  const finished = new Set<string>();
+  const visit = (submenuId: string, path: Set<string>): void => {
+    if (path.has(submenuId)) throwValidationError(`Submenu ${submenuId} contains itself`);
+    if (finished.has(submenuId)) return;
+    path.add(submenuId);
+    childSubmenuIds(submenuId).forEach((childId) => visit(childId, path));
+    path.delete(submenuId);
+    finished.add(submenuId);
+  };
+  [...submenuIdsByGroup.values()].flat().forEach((submenuId) => visit(submenuId, new Set()));
+}
+
+/**
+ * Validates a tab menu and the anchor it opens at: the menu's shape (columns, groups and items as
+ * the tab menu reads them), its item count and label lengths, that no submenu contains itself, and
+ * that the anchor is a rectangle of finite numbers. The menu comes from a WebView but renders in
+ * the window, so anything here that would throw while rendering must be refused up front.
  *
  * @param menu The tab menu to validate
+ * @param anchor The rectangle of the menu's trigger
  * @throws PlatformError with code INVALID_ARGUMENT if validation fails
  */
-export function validateTabMenu(menu: Localized<MultiColumnMenu>): void {
-  if (!menu?.items || menu.items.length === 0) throwValidationError('Menu has no items');
+export function validateTabMenu(menu: Localized<MultiColumnMenu>, anchor: unknown): void {
+  if (!isRecord(menu)) throwValidationError('Menu is missing');
+  if (!isRecord(menu.columns)) throwValidationError('Menu has no columns');
+  if (!isRecord(menu.groups) || !Object.values(menu.groups).every(isRecord))
+    throwValidationError('Menu groups must be objects');
+  if (!Array.isArray(menu.items) || menu.items.length === 0)
+    throwValidationError('Menu has no items');
   if (menu.items.length > MAX_TAB_MENU_ITEMS)
     throwValidationError(`Too many menu items (max ${MAX_TAB_MENU_ITEMS})`);
-  menu.items.forEach((item) => validateLabelLength(item.label));
+  menu.items.forEach((item) => {
+    if (!isRecord(item) || typeof item.group !== 'string')
+      throwValidationError('Every menu item needs a group');
+    if (!('command' in item) && typeof item.id !== 'string')
+      throwValidationError('A submenu item needs an id');
+    validateLabelLength(item.label);
+  });
+  validateNoSubmenuCycle(menu);
+
+  if (
+    !isRecord(anchor) ||
+    !isFiniteNumber(anchor.x) ||
+    !isFiniteNumber(anchor.y) ||
+    !isFiniteNumber(anchor.width) ||
+    !isFiniteNumber(anchor.height)
+  )
+    throwValidationError('Anchor must have finite x, y, width and height');
 }
 
 /**

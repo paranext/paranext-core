@@ -52,9 +52,7 @@ export type TabToolbarCommonProps = {
   menuButtonIcon?: ReactNode;
 
   /**
-   * Opens the toolbar's menus outside this document instead of in it. In a web view, pass one that
-   * calls `papi.overlays.showTabMenu`, so the menus draw over the whole window instead of being cut
-   * off at the edge of a narrow tab. See `OpenTabMenuInOverlay`.
+   * Opens the toolbar's menus outside this document instead of in it. See `OpenTabMenuInOverlay`.
    *
    * @experimental This property is unstable and may change or disappear without notice
    */

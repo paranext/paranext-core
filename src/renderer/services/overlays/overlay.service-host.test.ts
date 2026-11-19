@@ -355,6 +355,24 @@ describe('overlay.service-host', () => {
       await picked;
     });
 
+    it('hands the pick back even though focusing the web view blurs the window, after the creation grace', async () => {
+      vi.useFakeTimers();
+      await startOverlayService();
+      const iframe = document.createElement('iframe');
+      // Focusing a frame blurs the top window synchronously, which runs the blur auto-dismissal
+      vi.spyOn(iframe, 'focus').mockImplementation(() => {
+        window.dispatchEvent(new Event('blur'));
+      });
+      vi.mocked(getWebViewIframe).mockReturnValue(iframe);
+
+      const picked = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+      vi.advanceTimersByTime(350);
+      getTabMenuOverlay().resolve(COPY_ITEM);
+
+      await expect(picked).resolves.toBe(COPY_ITEM);
+      expect(getOverlays()).toHaveLength(0);
+    });
+
     it('replaces an open tab menu from the same web view', async () => {
       const first = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
       resetDebounceState();

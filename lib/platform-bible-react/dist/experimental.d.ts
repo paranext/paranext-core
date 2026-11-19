@@ -96,7 +96,11 @@ interface SelectMenuItemHandler {
 export type ScopeSelectorVariant = "radio" | "dropdown";
 type DropdownMenuSubContentProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.SubContent>;
 type DropdownMenuContentProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Content>;
-/** Props a tab menu passes to the content of each of its submenus */
+/**
+ * Props a tab menu passes to the content of each of its submenus
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type TabMenuSubmenuContentProps = Omit<DropdownMenuSubContentProps, "children"> & {
 	/** Any `data-*` attribute, for whoever needs to recognize the submenu's content */
 	[dataAttribute: `data-${string}`]: string | undefined;
@@ -119,7 +123,11 @@ type TabDropdownMenuItemsProps = {
 	 */
 	submenuContentProps?: TabMenuSubmenuContentProps;
 };
-/** Where a tab menu's trigger sits, in pixels relative to the viewport of the document it is in */
+/**
+ * Where a tab menu's trigger sits, in pixels relative to the viewport of the document it is in
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type TabMenuTriggerRect = {
 	x: number;
 	y: number;
@@ -137,10 +145,18 @@ export type TabMenuOverlayOptions = {
 	/** Whether the menu was opened from the keyboard, so it opens with its first item focused */
 	focusFirstItem?: boolean;
 };
+/**
+ * Props for {@link AnchoredTabMenu}
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type AnchoredTabMenuProps = TabDropdownMenuItemsProps & {
 	/** The rectangle of the trigger the menu belongs to; the menu opens below it, aligned to its start */
 	anchor: TabMenuTriggerRect;
-	/** Called when the menu closes without a pick: Escape, a click away, or a submenu's Escape */
+	/**
+	 * Called whenever the menu closes, including right after a pick (after `onSelectMenuItem`).
+	 * Ignore it if the pick was already handled.
+	 */
 	onClose: () => void;
 	/**
 	 * Whether the menu opens with its first item focused, as a dropdown opened from the keyboard
@@ -159,8 +175,8 @@ export type AnchoredTabMenuProps = TabDropdownMenuItemsProps & {
 /**
  * A tab menu that is open from the moment it renders, below a trigger rectangle given in this
  * document's coordinates rather than below a trigger element. It shows the items as
- * {@link TabDropdownMenuItems} does. The overlay service uses it to draw a web view's tab menu over
- * the whole window, below the rectangle of the trigger inside the web view.
+ * {@link TabDropdownMenu} does. The overlay service uses it to draw a web view's tab menu over the
+ * whole window, below the rectangle of the trigger inside the web view.
  *
  * @experimental This component is unstable and may change or disappear without notice
  */
@@ -171,7 +187,10 @@ export declare function AnchoredTabMenu({ anchor, onClose, focusFirstItem, conte
  * `papi.overlays.showTabMenu`.
  *
  * In a web view, pass `(menu, options) => papi.overlays.showTabMenu(menu, webViewId, options)`: the
- * window then draws the menu over every tab, so a narrow tab no longer cuts it or its flyouts off.
+ * window then draws the menu over every tab, so a narrow tab cannot cut it or its submenus off.
+ *
+ * A rejection is treated as no pick. The trigger expects the overlay service's refusals (a hidden
+ * tab, a repeat inside its cooldown, a menu replaced by another) and reports any other error.
  *
  * @experimental This type is unstable and may change or disappear without notice
  */

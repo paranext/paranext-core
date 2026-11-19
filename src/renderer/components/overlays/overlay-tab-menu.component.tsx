@@ -1,8 +1,7 @@
 /**
  * Overlay tab menu component. Renders a WebView's tab menu in the renderer's top-level document,
- * below the rectangle of the trigger the WebView reported, so a narrow tab cannot cut it or its
- * submenus off. The items render exactly as they do in the WebView: sections in column order,
- * headed by their column labels (`AnchoredTabMenu` from `platform-bible-react`).
+ * below the rectangle of the trigger the WebView reported (see `IOverlayService.showTabMenu`), with
+ * `AnchoredTabMenu` from `platform-bible-react`.
  *
  * Contains both the presentational component (OverlayTabMenuPresentational, exported for tests) and
  * the store-connected component (OverlayTabMenu) that connects to the overlay store.
@@ -15,9 +14,15 @@ import {
   TabMenuTriggerRect,
 } from '@renderer/services/overlays/overlay.service-model';
 import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
+import { logger } from '@shared/services/logger.service';
 import { AnchoredTabMenu } from 'platform-bible-react/experimental';
-import type { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
-import { useCallback, useRef } from 'react';
+import {
+  getErrorMessage,
+  type Localized,
+  type MenuItemContainingCommand,
+  type MultiColumnMenu,
+} from 'platform-bible-utils';
+import { Component, PropsWithChildren, ReactNode, useCallback, useRef } from 'react';
 
 /** Props for the presentational OverlayTabMenuPresentational component */
 export type OverlayTabMenuPresentationalProps = {
@@ -29,7 +34,10 @@ export type OverlayTabMenuPresentationalProps = {
   focusFirstItem?: boolean;
   /** Called when the user picks an item */
   onSelect: (item: Localized<MenuItemContainingCommand>) => void;
-  /** Called when the menu closes without a pick */
+  /**
+   * Called whenever the menu closes, including right after a pick (after `onSelect`). Ignore it if
+   * the pick was already handled.
+   */
   onDismiss: () => void;
   /**
    * Called when the user presses Escape in the menu or one of its submenus, just before
@@ -86,6 +94,44 @@ export function OverlayTabMenuPresentational({
   );
 }
 
+type OverlayTabMenuErrorBoundaryProps = PropsWithChildren<{
+  /** Id of the tab menu overlay being guarded */
+  overlayId: string;
+}>;
+
+/**
+ * Keeps a tab menu that fails to render from taking the window down with it. The menu data comes
+ * from a WebView and `validateTabMenu` refuses the shapes known to throw, so this is the net for
+ * anything it misses: it logs the failure and settles the overlay as closed without a pick.
+ *
+ * Deliberately hook-free, like `WebViewErrorBoundary`: a hook here would run above the catch.
+ */
+class OverlayTabMenuErrorBoundary extends Component<
+  OverlayTabMenuErrorBoundaryProps,
+  { hasError: boolean }
+> {
+  constructor(props: OverlayTabMenuErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    const { overlayId } = this.props;
+    logger.error(`Tab menu overlay ${overlayId} failed to render: ${getErrorMessage(error)}`);
+    resolveAndRemoveOverlay(overlayId, 'tabMenu', undefined);
+  }
+
+  render(): ReactNode {
+    const { children } = this.props;
+    const { hasError } = this.state;
+    return hasError ? undefined : children;
+  }
+}
+
 type OverlayTabMenuProps = {
   overlay: Extract<OverlayEntry, { type: 'tabMenu' }>;
 };
@@ -93,7 +139,7 @@ type OverlayTabMenuProps = {
 /**
  * Production tab menu component, rendered by `OverlayHost`. Settles the overlay with the picked
  * item or with `undefined` when the menu closes, and delegates rendering to
- * {@link OverlayTabMenuPresentational}.
+ * {@link OverlayTabMenuPresentational} inside an error boundary of its own.
  */
 export function OverlayTabMenu({ overlay }: OverlayTabMenuProps) {
   const hasResolved = useRef(false);
@@ -121,14 +167,16 @@ export function OverlayTabMenu({ overlay }: OverlayTabMenuProps) {
   }, [overlay]);
 
   return (
-    <OverlayTabMenuPresentational
-      menu={overlay.menu}
-      anchor={overlay.anchor}
-      focusFirstItem={overlay.focusFirstItem}
-      onSelect={handleSelect}
-      onDismiss={handleDismiss}
-      onEscape={handleEscape}
-      overlayId={overlay.id}
-    />
+    <OverlayTabMenuErrorBoundary overlayId={overlay.id}>
+      <OverlayTabMenuPresentational
+        menu={overlay.menu}
+        anchor={overlay.anchor}
+        focusFirstItem={overlay.focusFirstItem}
+        onSelect={handleSelect}
+        onDismiss={handleDismiss}
+        onEscape={handleEscape}
+        overlayId={overlay.id}
+      />
+    </OverlayTabMenuErrorBoundary>
   );
 }

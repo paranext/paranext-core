@@ -267,9 +267,8 @@ export type ChecklistToolProps = {
   projectMenuData?: Localized<MultiColumnMenu> | undefined;
 
   /**
-   * Opens the project menu outside the web view, over the whole window, so a narrow tab cannot cut
-   * it off. The wiring layer passes one that calls `papi.overlays.showTabMenu`; without it, the
-   * menu opens inside the web view.
+   * Opens the project menu in the window's overlay; the wiring layer passes one that calls
+   * `papi.overlays.showTabMenu`. Without it, the menu opens inside the web view.
    */
   openProjectMenuInOverlay?: OpenTabMenuInOverlay;
 
