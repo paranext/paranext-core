@@ -581,12 +581,15 @@ describe('recommendE2eTests', () => {
   });
 
   // Only the app's own roots count, so a new top-level tool or script never needs an exclusion.
-  it.each(['tools/some-tool.ts', 'refresh.sh', 'stop-processes.mjs', 'platform.bible-dev.desktop'])(
-    'does not count %s, outside the roots that build the app, as an app change',
-    (file) => {
-      expect(recommend([file]).runtimeChanged).toBe(false);
-    },
-  );
+  it.each([
+    'tools/some-tool.ts',
+    'refresh.sh',
+    'stop-processes.mjs',
+    'platform.bible-dev.desktop',
+    '.erb/scripts/bump-versions.ts',
+  ])('does not count %s, outside the roots that build the app, as an app change', (file) => {
+    expect(recommend([file]).runtimeChanged).toBe(false);
+  });
 
   // Tool, test-runner and notice files at the top level, and the C# test projects, load into no
   // part of the app.

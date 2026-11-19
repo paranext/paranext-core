@@ -238,7 +238,7 @@ export function readEditorPathsOrEmpty(read: () => string[]): string[] {
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
 /**
  * The repository paths that make up or build the app: its source roots and `lib/`, the build
- * configuration (`.erb/`, the top-level PostCSS, Tailwind and electron-builder files), the
+ * configuration (`.erb/configs/`, the top-level PostCSS, Tailwind and electron-builder files), the
  * dependency patches and pins, and the shipped assets. Anything else at the top level (tools,
  * scripts, test runners, docs, CI) never reaches a user. Listed rather than excluded, so that a new
  * top-level tool or script needs no entry here.
@@ -248,7 +248,7 @@ const APP_ROOTS = [
   'extensions/',
   'c-sharp/',
   'lib/',
-  '.erb/',
+  '.erb/configs/',
   'assets/',
   // Paratext 9's marker stylesheets, which the editor's own stylesheets import.
   'data/',
