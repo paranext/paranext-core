@@ -3987,6 +3987,7 @@ const papiWebViewService: WebViewServiceType = {
   getWebView: openWebView,
   openWebView,
   reloadWebView,
+  closeWebView,
   getSavedWebViewDefinition: getOpenWebViewDefinition,
   getOpenWebViewDefinition,
   getAllOpenWebViewDefinitions,
@@ -4064,6 +4065,26 @@ async function captureAndCloseWebView(
 
   dockLayout.removeTabFromDock(webViewDefinition.id);
   return captured;
+}
+
+/** See {@link WebViewServiceType.closeWebView} */
+async function closeWebView(webViewId: WebViewId): Promise<boolean> {
+  if (typeof webViewId !== 'string' || !webViewId)
+    throw new Error(
+      `closeWebView needs a web view id; got ${typeof webViewId}. This method is reachable from any process, so it checks rather than trusts.`,
+    );
+  // Before reading the dock, for the reason `captureAndCloseWebView` gives: a load still running
+  // could otherwise put back the web view this closes.
+  await waitForLayoutLoadToSettle();
+  const dockLayout = await getDockLayout();
+  const webViewDefinition = dockLayout.getWebViewDefinition(webViewId);
+  if (!webViewDefinition) return false;
+  if (webViewDefinition.isClosable === false)
+    throw new Error(
+      `Cannot close web view ${webViewId}: its tab is one the user cannot close (isClosable: false).`,
+    );
+  dockLayout.removeTabFromDock(webViewId);
+  return true;
 }
 
 /**

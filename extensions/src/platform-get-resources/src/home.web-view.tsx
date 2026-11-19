@@ -24,7 +24,6 @@ import { useLocalProjects } from './use-local-projects.hook';
 import { useSyncActivity } from './use-sync-activity.hook';
 import { useSyncQueue } from './use-sync-queue.hook';
 import { isSimpleMode, openHomeItem } from './open-home-item';
-import { closeOwnDockTab } from './close-own-dock-tab.util';
 
 const defaultInterfaceLanguages: string[] = ['en'];
 
@@ -223,10 +222,6 @@ globalThis.webViewComponent = function HomeWebView({
   // stays open while it waits in the sync queue as well as while it runs.
   const [ownActiveSendReceiveProjects, setOwnActiveSendReceiveProjects] = useState<string[]>([]);
   const isOwnSendReceiveInProgress = ownActiveSendReceiveProjects.length > 0;
-  // How many of Home's own requests have not settled yet, counted alongside the list above. A ref, because the
-  // check after a project opens runs after an `await`, where state from the render that started the
-  // open would be stale.
-  const pendingOwnRequestCountRef = useRef(0);
   // Hidden case: keeps following while the tab is inactive; data-only and cheap, so the rows are
   // current when shown.
   const syncActivity = useSyncActivity();
@@ -398,7 +393,6 @@ globalThis.webViewComponent = function HomeWebView({
     unreportedRequestsRef.current.set(normalizedProjectId, namedAtRequest);
 
     setOwnActiveSendReceiveProjects((prev) => [...prev, projectId]);
-    pendingOwnRequestCountRef.current += 1;
     const isQueueIdle =
       !syncActivity.isSyncing &&
       syncQueue.waitingProjectIds.length === 0 &&
@@ -443,7 +437,6 @@ globalThis.webViewComponent = function HomeWebView({
       // callback's rejection and renders the message, but only ever saw a resolved promise.
       throw e;
     } finally {
-      pendingOwnRequestCountRef.current -= 1;
       unreportedRequestsRef.current.delete(normalizedProjectId);
       if (isMounted.current)
         setOptimisticRunningProjectIds((ids) => ids.filter((id) => id !== normalizedProjectId));
@@ -451,36 +444,45 @@ globalThis.webViewComponent = function HomeWebView({
     }
   };
 
+  // Opens from Home's list still waiting for their answer, and whether any project has opened since
+  // Home last decided whether to close. Refs, because both are read after an `await`.
+  const pendingOpenCountRef = useRef(0);
+  const hasProjectOpenedRef = useRef(false);
+
   /**
    * Opens an item from Home's list. In Simple mode, which shows one project at a time, Home then
    * closes once a project has opened, so the user lands in it.
    */
   const openItem = useCallback(
     async (projectId: string, isPublished: boolean): Promise<void> => {
-      // Read before the open as well as after it: a Simple-mode switch takes seconds, and a sync
-      // that ends meanwhile has just put its result in Home.
-      const wasOwnRequestPendingAtClick = pendingOwnRequestCountRef.current > 0;
+      // Read alongside the open rather than after it: the editor lifts its "Updating project view"
+      // overlay just before the open returns, and every round trip after that is time Home shows in
+      // front of the project. Never rejects, so an open that fails leaves nothing unhandled.
+      const isSimpleModePromise = isSimpleMode();
+      pendingOpenCountRef.current += 1;
       const didProjectOpen = await openHomeItem(projectId, isPublished);
-      // A resource opens beside the project, so Home stays open for the user to keep choosing.
-      if (!didProjectOpen || isPublished) return;
-      if (!(await isSimpleMode())) return;
-      if (!isMounted.current) return;
-      // Most results of a Get or Sync that Home started show only in Home, so Home stays open until
-      // it ends, and the user closes Home themselves.
-      if (wasOwnRequestPendingAtClick || pendingOwnRequestCountRef.current > 0) {
-        logger.info(
-          'Home stays open after opening a project: a Get or Sync it started was running at the click or still is',
-        );
-        return;
+      pendingOpenCountRef.current -= 1;
+      // A resource opens beside the project, so a resource alone leaves Home open for the user to
+      // keep choosing.
+      if (didProjectOpen && !isPublished) hasProjectOpenedRef.current = true;
+      if (!hasProjectOpenedRef.current) return;
+      const isSimple = await isSimpleModePromise;
+      // The last open to finish decides for all of them. Closing tears down this web view, and with
+      // it any open still waiting for its answer here, which would then neither record its project
+      // as recent nor tell the user it failed.
+      if (!isMounted.current || pendingOpenCountRef.current > 0) return;
+      hasProjectOpenedRef.current = false;
+      if (!isSimple) return;
+      // Home closes even while a Get or Sync it started is still running. The request goes on, but
+      // most of its failures show only in this Home's alert, so they go unseen; see
+      // `adr-home-closes-itself-after-opening-a-project`.
+      try {
+        // Last: closing tears down this web view, so nothing after it can be relied on to run.
+        const didClose = await papi.webViews.closeWebView(webViewId);
+        if (!didClose) logger.warn('Home could not find itself to close after opening a project');
+      } catch (e) {
+        logger.warn(`Home could not close after opening a project: ${getErrorMessage(e)}`);
       }
-      // Last: closing can tear down this web view before the call returns.
-      const closeResult = closeOwnDockTab(webViewId);
-      if (closeResult === 'tabNotFound')
-        logger.warn('Home could not find its tab to close after opening a project');
-      else if (closeResult === 'onlyTabInDock')
-        logger.info(
-          'Home stays open after opening a project: it is the only tab docked in its window',
-        );
     },
     [webViewId],
   );

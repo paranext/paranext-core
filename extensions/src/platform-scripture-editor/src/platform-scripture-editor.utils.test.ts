@@ -47,6 +47,7 @@ import {
   buildScriptureTextGridWebView,
   resolveGridProviderProjectId,
   updateRelatedChecksSidePanel,
+  updateRelatedFindAndChecksPanels,
   updateRelatedTextCollectionPanel,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
   type OpenEditorDispatch,
@@ -6665,6 +6666,60 @@ describe('updateRelatedFindPanel', () => {
 });
 
 // #endregion updateRelatedFindPanel
+
+describe('updateRelatedFindAndChecksPanels', () => {
+  it('re-points Checks only once Find has finished', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], EDITABLE_PROJECT);
+    let finishFind: () => void = () => {};
+    mockSendCommand.mockImplementation(async (command: string) => {
+      if (command === 'platformScripture.updateFindProject')
+        await new Promise<void>((resolve) => {
+          finishFind = resolve;
+        });
+    });
+
+    const update = updateRelatedFindAndChecksPanels(papi, 'proj-b', 'editor-2');
+    await vi.waitFor(() =>
+      expect(mockSendCommand).toHaveBeenCalledWith(
+        'platformScripture.updateFindProject',
+        'proj-b',
+        'editor-2',
+      ),
+    );
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'platformScripture.updateChecksSidePanelProject',
+      expect.anything(),
+      expect.anything(),
+    );
+
+    finishFind();
+    await update;
+
+    expect(mockSendCommand).toHaveBeenLastCalledWith(
+      'platformScripture.updateChecksSidePanelProject',
+      'proj-b',
+      'editor-2',
+    );
+  });
+
+  it('re-points Checks even when Find fails, and resolves', async () => {
+    const { papi, mockSendCommand, mockWarn } = createRelatedPanelsMockPapi([], EDITABLE_PROJECT);
+    mockSendCommand.mockImplementation(async (command: string) => {
+      if (command === 'platformScripture.updateFindProject') throw new Error('find is down');
+    });
+
+    await expect(
+      updateRelatedFindAndChecksPanels(papi, 'proj-b', 'editor-2'),
+    ).resolves.toBeUndefined();
+
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('find is down'));
+    expect(mockSendCommand).toHaveBeenLastCalledWith(
+      'platformScripture.updateChecksSidePanelProject',
+      'proj-b',
+      'editor-2',
+    );
+  });
+});
 
 // #region resolveGridProviderProjectId
 

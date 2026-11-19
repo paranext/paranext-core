@@ -55,8 +55,7 @@ import {
   syncOnProjectSwitch,
   syncOnSwitchToPower,
   toScriptureEditorInfos,
-  updateRelatedChecksSidePanel,
-  updateRelatedFindPanel,
+  updateRelatedFindAndChecksPanels,
   VIEW_TYPE_FOR_SET_VIEW_COMMAND,
 } from './platform-scripture-editor.utils';
 import { ReadOnlyViewNotifier } from './read-only-view-notifier.model';
@@ -449,8 +448,11 @@ async function open(
     // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find and Checks
     // wait until here because they are the panels that need the id of the editor this call just
     // created. No Simple-mode or project-kind checks here — each helper owns its own guards.
-    await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
-    await updateRelatedChecksSidePanel(papi, projectForWebView.projectId, openedWebViewId);
+    //
+    // Not awaited: the overlay has already lifted, and a caller acting on this command's answer
+    // (Home closes itself on it) would otherwise wait the second or so these take. Nothing reads
+    // Find or Checks from that answer, and neither helper throws.
+    updateRelatedFindAndChecksPanels(papi, projectForWebView.projectId, openedWebViewId);
 
     return openedWebViewId;
   }

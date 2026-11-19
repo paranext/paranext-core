@@ -4,7 +4,6 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentType } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { logger } from '@papi/frontend';
-import { closeOwnDockTab } from './close-own-dock-tab.util';
 import { isSimpleMode, openHomeItem } from './open-home-item';
 // Defines `globalThis.webViewComponent` as a side effect. Vitest hoists the `vi.mock` calls below
 // above these imports, so the web view loads with them.
@@ -12,17 +11,19 @@ import './home.web-view';
 
 /*
  * In Simple mode Home closes once a project opened from it has opened, since Simple shows one
- * project at a time. It stays open when nothing opened, for a resource, in Power mode, and while a
- * Get or Sync it started is still running: that request's result can show only in Home.
+ * project at a time, even while a Get or Sync it started is still running. It stays open when
+ * nothing opened, for a resource, and in Power mode.
  */
 
-const { mockSendCommand } = vi.hoisted(() => ({
+const { mockSendCommand, mockCloseWebView } = vi.hoisted(() => ({
   mockSendCommand: vi.fn(async (): Promise<unknown> => undefined),
+  mockCloseWebView: vi.fn(async (): Promise<boolean> => true),
 }));
 
 vi.mock('@papi/frontend', () => ({
   default: {
     commands: { sendCommand: mockSendCommand },
+    webViews: { closeWebView: mockCloseWebView },
     notifications: { send: vi.fn() },
     network: { getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())) },
   },
@@ -52,10 +53,6 @@ vi.mock('./open-home-item', () => ({
   isSimpleMode: vi.fn(async () => true),
 }));
 
-vi.mock('./close-own-dock-tab.util', () => ({
-  closeOwnDockTab: vi.fn(() => 'closed'),
-}));
-
 /* Stands in for Home: one button opens an item, the other starts a sync of project A. */
 vi.mock('./home.component', async (importOriginal) => {
   const original = await importOriginal<typeof import('./home.component')>();
@@ -73,6 +70,9 @@ vi.mock('./home.component', async (importOriginal) => {
       <div data-testid="home" data-remote-state={String(remoteProjectsState)}>
         <button type="button" onClick={() => onOpenProject?.('P1', false)}>
           open project
+        </button>
+        <button type="button" onClick={() => onOpenProject?.('P2', false)}>
+          open other project
         </button>
         <button type="button" onClick={() => onOpenProject?.('R1', true)}>
           open resource
@@ -143,7 +143,7 @@ describe('HomeWebView closes after a project opens', () => {
     syncRequest = deferred<undefined>();
     vi.mocked(openHomeItem).mockImplementation(async () => true);
     vi.mocked(isSimpleMode).mockImplementation(async () => true);
-    vi.mocked(closeOwnDockTab).mockImplementation(() => 'closed');
+    mockCloseWebView.mockImplementation(async () => true);
     mockSendCommand.mockImplementation(async (...args: unknown[]) => {
       const [commandName] = args;
       if (commandName === IS_AVAILABLE) return true;
@@ -161,7 +161,7 @@ describe('HomeWebView closes after a project opens', () => {
     await click('open project');
 
     expect(openHomeItem).toHaveBeenCalledWith('P1', false);
-    expect(closeOwnDockTab).toHaveBeenCalledWith('home-1');
+    expect(mockCloseWebView).toHaveBeenCalledWith('home-1');
   });
 
   it('stays open when the open failed', async () => {
@@ -171,7 +171,7 @@ describe('HomeWebView closes after a project opens', () => {
     await click('open project');
 
     expect(openHomeItem).toHaveBeenCalledWith('P1', false);
-    expect(closeOwnDockTab).not.toHaveBeenCalled();
+    expect(mockCloseWebView).not.toHaveBeenCalled();
   });
 
   it('stays open after opening a resource', async () => {
@@ -180,7 +180,7 @@ describe('HomeWebView closes after a project opens', () => {
     await click('open resource');
 
     expect(openHomeItem).toHaveBeenCalledWith('R1', true);
-    expect(closeOwnDockTab).not.toHaveBeenCalled();
+    expect(mockCloseWebView).not.toHaveBeenCalled();
   });
 
   it('stays open in Power mode', async () => {
@@ -190,63 +190,37 @@ describe('HomeWebView closes after a project opens', () => {
     await click('open project');
 
     expect(openHomeItem).toHaveBeenCalledWith('P1', false);
-    expect(closeOwnDockTab).not.toHaveBeenCalled();
+    expect(mockCloseWebView).not.toHaveBeenCalled();
   });
 
-  it('stays open while a Get or Sync Home started is still running', async () => {
-    await renderHome();
-    await click('sync');
-    expect(callsTo(REQUEST_SYNC)).toHaveLength(1);
-
-    await click('open project');
-    expect(openHomeItem).toHaveBeenCalledWith('P1', false);
-    expect(closeOwnDockTab).not.toHaveBeenCalled();
-
-    // The sync ending later does not close Home either: the user closes it.
-    await act(async () => {
-      syncRequest.resolve(undefined);
-    });
-    expect(closeOwnDockTab).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['succeeded', () => syncRequest.resolve(undefined)],
-    ['failed', () => syncRequest.reject(new Error('Sync failed'))],
-  ])('closes once a Home sync that %s has settled before the open', async (_, settle) => {
-    await renderHome();
-    await click('sync');
-    expect(callsTo(REQUEST_SYNC)).toHaveLength(1);
-    await act(async () => {
-      settle();
-    });
-
-    await click('open project');
-
-    expect(closeOwnDockTab).toHaveBeenCalledWith('home-1');
-  });
-
-  it('stays open when a Home sync that was running at the click ends during the open', async () => {
-    // A Simple-mode project switch takes seconds. A sync that ends meanwhile has just put its
-    // result in Home, which closing would take away.
+  it('reads the interface mode while the open is still running', async () => {
+    // Home shows in front of the project from the moment the editor's overlay lifts until it
+    // closes, so the mode is not left to a round trip after the open returns.
     const open = deferred<boolean>();
     vi.mocked(openHomeItem).mockImplementation(() => open.promise);
     await renderHome();
-    await click('sync');
-    expect(callsTo(REQUEST_SYNC)).toHaveLength(1);
+
     await click('open project');
 
-    await act(async () => {
-      syncRequest.reject(new Error('Sync failed'));
-    });
+    expect(isSimpleMode).toHaveBeenCalled();
+    expect(mockCloseWebView).not.toHaveBeenCalled();
     await act(async () => {
       open.resolve(true);
     });
-
-    expect(openHomeItem).toHaveBeenCalledWith('P1', false);
-    expect(closeOwnDockTab).not.toHaveBeenCalled();
+    expect(mockCloseWebView).toHaveBeenCalledWith('home-1');
   });
 
-  it('stays open when a Home sync starts during the open and is still running', async () => {
+  it('closes while a Get or Sync Home started before the open is still running', async () => {
+    await renderHome();
+    await click('sync');
+    expect(callsTo(REQUEST_SYNC)).toHaveLength(1);
+
+    await click('open project');
+
+    expect(mockCloseWebView).toHaveBeenCalledWith('home-1');
+  });
+
+  it('closes while a Get or Sync Home started during the open is still running', async () => {
     const open = deferred<boolean>();
     vi.mocked(openHomeItem).mockImplementation(() => open.promise);
     await renderHome();
@@ -258,8 +232,66 @@ describe('HomeWebView closes after a project opens', () => {
       open.resolve(true);
     });
 
-    expect(openHomeItem).toHaveBeenCalledWith('P1', false);
-    expect(closeOwnDockTab).not.toHaveBeenCalled();
+    expect(mockCloseWebView).toHaveBeenCalledWith('home-1');
+  });
+
+  describe('with two opens running at once', () => {
+    // Closing tears Home down, and an open still waiting for its answer in Home would then never
+    // record its project as recent or report that it failed.
+
+    /** Makes each open wait until the test settles it, keyed by the item's id. */
+    function holdOpens(...ids: string[]) {
+      const opens = new Map(ids.map((id) => [id, deferred<boolean>()]));
+      vi.mocked(openHomeItem).mockImplementation((id: string) => {
+        const open = opens.get(id);
+        if (!open) throw new Error(`No held open for ${id}`);
+        return open.promise;
+      });
+      return async (id: string, didProjectOpen: boolean) => {
+        await act(async () => {
+          opens.get(id)?.resolve(didProjectOpen);
+        });
+      };
+    }
+
+    it('closes only once the second project open has finished too', async () => {
+      const finishOpen = holdOpens('P1', 'P2');
+      await renderHome();
+      await click('open project');
+      await click('open other project');
+
+      await finishOpen('P1', true);
+      expect(mockCloseWebView).not.toHaveBeenCalled();
+
+      await finishOpen('P2', true);
+      expect(mockCloseWebView).toHaveBeenCalledTimes(1);
+      expect(mockCloseWebView).toHaveBeenCalledWith('home-1');
+    });
+
+    it('closes once a resource open finishes after a project opened', async () => {
+      const finishOpen = holdOpens('P1', 'R1');
+      await renderHome();
+      await click('open project');
+      await click('open resource');
+
+      await finishOpen('P1', true);
+      expect(mockCloseWebView).not.toHaveBeenCalled();
+
+      await finishOpen('R1', false);
+      expect(mockCloseWebView).toHaveBeenCalledWith('home-1');
+    });
+
+    it('stays open when neither open opened a project', async () => {
+      const finishOpen = holdOpens('P1', 'R1');
+      await renderHome();
+      await click('open project');
+      await click('open resource');
+
+      await finishOpen('P1', false);
+      await finishOpen('R1', false);
+
+      expect(mockCloseWebView).not.toHaveBeenCalled();
+    });
   });
 
   it('does nothing if Home unmounted during the open', async () => {
@@ -273,26 +305,29 @@ describe('HomeWebView closes after a project opens', () => {
       open.resolve(true);
     });
 
-    expect(closeOwnDockTab).not.toHaveBeenCalled();
+    expect(mockCloseWebView).not.toHaveBeenCalled();
   });
 
-  it('logs and stays open when its tab cannot be found', async () => {
-    vi.mocked(closeOwnDockTab).mockImplementation(() => 'tabNotFound');
+  it('logs when no window has Home open to close', async () => {
+    mockCloseWebView.mockImplementation(async () => false);
     await renderHome();
 
     await click('open project');
 
-    expect(closeOwnDockTab).toHaveBeenCalledWith('home-1');
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('tab'));
+    expect(mockCloseWebView).toHaveBeenCalledWith('home-1');
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('could not find itself'));
   });
 
-  it("logs and stays open when it is the dock's only tab", async () => {
-    vi.mocked(closeOwnDockTab).mockImplementation(() => 'onlyTabInDock');
+  it('logs, rather than rejecting, when the close fails', async () => {
+    mockCloseWebView.mockImplementation(async () => {
+      throw new Error('some windows were unreachable');
+    });
     await renderHome();
 
     await click('open project');
 
-    expect(closeOwnDockTab).toHaveBeenCalledWith('home-1');
-    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('only tab'));
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('some windows were unreachable'),
+    );
   });
 });
