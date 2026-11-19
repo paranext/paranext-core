@@ -201,6 +201,7 @@ import {
   dispatchContextMenuPick,
   getContextMenuShowOptions,
 } from './editor-context-menu-pick.util';
+import { PaneFootnoteEditorContextMenu } from './pane-footnote-editor-context-menu.component';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { usePauseEditing } from './use-pause-editing.hook';
@@ -4496,24 +4497,41 @@ function PlatformScriptureEditor({
    */
   const renderPaneFootnoteEditor = useCallback(
     () => (
-      <FootnoteEditor
-        inline
-        ref={paneNoteEditorRef}
-        classNameForEditor="scripture-font"
-        noteOps={editingNoteOps.current}
-        noteKey={editingNoteKey.current}
-        initialCaretPosition={paneEditingCaret}
-        onClose={closePaneFootnoteEditorFromInside}
-        onNoteEdit={onFootnoteEditorNoteEdit}
-        scrRef={scrRef}
-        editorOptions={paneFootnoteEditorOptions}
-        defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
-        localizedStrings={localizedStrings}
-        parentEditorRef={editorRef}
-        markerPalette={footnoteMarkerPalette}
-      />
+      <PaneFootnoteEditorContextMenu
+        webViewId={webViewId}
+        projectId={projectId}
+        viewOptions={viewOptions}
+        rowEditorRef={paneNoteEditorRef}
+        notifyActionBlocked={() => {
+          notifyEditActionBlocked(localizedStrings);
+        }}
+      >
+        {(isClaimingKeys) => (
+          <FootnoteEditor
+            inline
+            ref={paneNoteEditorRef}
+            classNameForEditor="scripture-font"
+            noteOps={editingNoteOps.current}
+            noteKey={editingNoteKey.current}
+            initialCaretPosition={paneEditingCaret}
+            onClose={closePaneFootnoteEditorFromInside}
+            onNoteEdit={onFootnoteEditorNoteEdit}
+            scrRef={scrRef}
+            editorOptions={paneFootnoteEditorOptions}
+            defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
+            localizedStrings={localizedStrings}
+            parentEditorRef={editorRef}
+            markerPalette={footnoteMarkerPalette}
+            hasBuiltInContextMenu={false}
+            isHostContextMenuClaimingKeys={isClaimingKeys}
+          />
+        )}
+      </PaneFootnoteEditorContextMenu>
     ),
     [
+      webViewId,
+      projectId,
+      viewOptions,
       paneEditingCaret,
       closePaneFootnoteEditorFromInside,
       onFootnoteEditorNoteEdit,
