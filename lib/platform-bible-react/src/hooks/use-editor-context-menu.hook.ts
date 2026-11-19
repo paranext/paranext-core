@@ -298,16 +298,24 @@ export function useEditorContextMenu(
     const doc = document;
     const win = window;
 
-    const handleContextMenu = (event: MouseEvent) => {
-      const { containerRef, isEnabled = true, hasNonTextSelection } = optionsRef.current;
-      if (!isEnabled) return;
+    /** The container when this event's target is somewhere the hook claims a right-click. */
+    const findClaimingContainer = (target: EventTarget | null): HTMLElement | undefined => {
+      const { containerRef, isEnabled = true } = optionsRef.current;
+      if (!isEnabled) return undefined;
       const container = containerRef.current;
-      const { target } = event;
       if (!container || !container.isConnected || !isNode(target) || !container.contains(target))
-        return;
+        return undefined;
       const targetElement = isElement(target) ? target : target.parentElement;
       const interactive = targetElement?.closest(INTERACTIVE_SELECTOR);
-      if (interactive && interactive !== container && container.contains(interactive)) return;
+      if (interactive && interactive !== container && container.contains(interactive))
+        return undefined;
+      return container;
+    };
+
+    const handleContextMenu = (event: MouseEvent) => {
+      const container = findClaimingContainer(event.target);
+      if (!container) return;
+      const { hasNonTextSelection } = optionsRef.current;
 
       event.preventDefault();
 
@@ -370,8 +378,9 @@ export function useEditorContextMenu(
     };
 
     const handlePointerDown = (event: PointerEvent) => {
-      // A right-click replaces the open menu with its own request, so it must not also dismiss.
-      if (event.button === 2) return;
+      // A right-click the hook will claim replaces the open menu with its own request, so it must
+      // not also dismiss. Any other pointerdown, a right-click elsewhere included, closes the menu.
+      if (event.button === 2 && findClaimingContainer(event.target)) return;
       if (openRequestsRef.current.size > 0) dropOpenRequests();
     };
 
