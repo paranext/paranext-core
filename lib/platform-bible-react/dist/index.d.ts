@@ -1417,9 +1417,8 @@ export interface FootnoteEditorHandle {
 	/**
 	 * Puts DOM focus back in the note text, on the caret the editor last held. When the editor has
 	 * lost its selection (a menu or toolbar took focus), the selection captured as focus left is put
-	 * back first, so focus does not land at the end of the document. When there is still no selection
-	 * to land on, or the editor is read-only, only the frame's window is focused and the selection is
-	 * left alone. Does nothing while the inner editor is not mounted.
+	 * back first, so focus does not land at the end of the document. With nothing to put back, the
+	 * caret goes to the end of the note. Does nothing while the inner editor is not mounted.
 	 */
 	focus: () => void;
 	/**
@@ -1430,34 +1429,37 @@ export interface FootnoteEditorHandle {
 	/**
 	 * Cuts the selected note text to the clipboard. Puts the selection captured when focus last left
 	 * the editor back first, if the editor has none now (a menu or toolbar took focus), then focuses
-	 * as {@link FootnoteEditorHandle.focus} does. Does nothing while the inner editor is not mounted.
-	 * Throws when the inner editor is read-only; the host handles that.
+	 * the note text, or only the frame when there is no selection to land on or the editor is
+	 * read-only. Does nothing while the inner editor is not mounted. Throws when the inner editor is
+	 * read-only; the host handles that.
 	 *
 	 * @experimental This method is unstable and may change shape or disappear without notice
 	 */
 	cut: () => void;
 	/**
 	 * Copies the selected note text to the clipboard. Puts the selection captured when focus last
-	 * left the editor back first, if the editor has none now, then focuses as
-	 * {@link FootnoteEditorHandle.focus} does. Does nothing while the inner editor is not mounted.
+	 * left the editor back first, if the editor has none now, then focuses the note text, or only the
+	 * frame when there is no selection to land on or the editor is read-only. Does nothing while the
+	 * inner editor is not mounted.
 	 *
 	 * @experimental This method is unstable and may change shape or disappear without notice
 	 */
 	copy: () => void;
 	/**
 	 * Pastes the clipboard's contents at the selection. Puts the selection captured when focus last
-	 * left the editor back first, if the editor has none now, then focuses as
-	 * {@link FootnoteEditorHandle.focus} does. Does nothing while the inner editor is not mounted.
-	 * Throws when the inner editor is read-only; the host handles that.
+	 * left the editor back first, if the editor has none now, then focuses the note text, or only the
+	 * frame when there is no selection to land on or the editor is read-only. Does nothing while the
+	 * inner editor is not mounted. Throws when the inner editor is read-only; the host handles that.
 	 *
 	 * @experimental This method is unstable and may change shape or disappear without notice
 	 */
 	paste: () => void;
 	/**
 	 * Pastes the clipboard's contents at the selection as plain text. Puts the selection captured
-	 * when focus last left the editor back first, if the editor has none now, then focuses as
-	 * {@link FootnoteEditorHandle.focus} does. Does nothing while the inner editor is not mounted.
-	 * Throws when the inner editor is read-only; the host handles that.
+	 * when focus last left the editor back first, if the editor has none now, then focuses the note
+	 * text, or only the frame when there is no selection to land on or the editor is read-only. Does
+	 * nothing while the inner editor is not mounted. Throws when the inner editor is read-only; the
+	 * host handles that.
 	 *
 	 * @experimental This method is unstable and may change shape or disappear without notice
 	 */

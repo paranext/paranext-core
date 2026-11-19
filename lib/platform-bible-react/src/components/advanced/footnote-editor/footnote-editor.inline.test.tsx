@@ -1447,17 +1447,12 @@ describe('FootnoteEditor handle focus', () => {
     expect(handleRef.current?.containsFocus()).toBe(true);
   });
 
-  it("puts focus back in the note text through the editor's own focus when it holds a selection", () => {
+  it("puts focus back in the note text through the editor's own focus", () => {
     const handleRef = createRef<FootnoteEditorHandle>();
     renderEditor({ inline: true, ref: handleRef });
     editorRefMock.focus.mockClear();
-    editorRefMock.getSelection.mockReturnValue({ start: { jsonPath: '$.content[0]', offset: 1 } });
 
-    try {
-      handleRef.current?.focus();
-    } finally {
-      editorRefMock.getSelection.mockReset();
-    }
+    handleRef.current?.focus();
 
     expect(editorRefMock.focus).toHaveBeenCalledOnce();
   });

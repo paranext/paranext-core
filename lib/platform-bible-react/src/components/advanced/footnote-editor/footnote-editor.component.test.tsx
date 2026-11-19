@@ -2339,6 +2339,34 @@ describe('FootnoteEditorHandle clipboard methods', () => {
     },
   );
 
+  it('focus puts the editor itself in focus when there is no selection and nothing to restore', () => {
+    // A click on the caller of the note already open asks to be put back in the editor; typing has
+    // to land somewhere, and the editor's own focus puts the caret at the end of the note.
+    const { handle, editorRef } = renderWithHandle();
+    modelFocusSelectingDocumentEnd(editorRef);
+    const frameFocus = vi.spyOn(window, 'focus').mockImplementation(() => {});
+
+    handle.focus();
+
+    expect(editorRef.setSelection).not.toHaveBeenCalled();
+    expect(editorRef.focus).toHaveBeenCalledTimes(1);
+    expect(frameFocus).not.toHaveBeenCalled();
+  });
+
+  it('focus puts a read-only editor itself in focus too', () => {
+    const handleRef = createRef<FootnoteEditorHandle>();
+    renderFootnoteEditor({ view, isReadonly: true }, undefined, {
+      inline: true,
+      extraProps: { ref: handleRef },
+    });
+    const editorRef = mockEditorRefHolder.current;
+    modelFocusSelectingDocumentEnd(editorRef);
+
+    handleRef.current?.focus();
+
+    expect(editorRef.focus).toHaveBeenCalledTimes(1);
+  });
+
   it('focuses only the frame for a read-only editor, which cannot take the caret', () => {
     const handleRef = createRef<FootnoteEditorHandle>();
     renderFootnoteEditor({ view, isReadonly: true }, undefined, {
