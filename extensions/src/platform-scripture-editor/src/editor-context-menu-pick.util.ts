@@ -109,7 +109,10 @@ export type ContextMenuCommandEffectsOptions = {
   webViewId: string;
   /** The project the tab shows, the source for Find; `undefined` while none is resolved. */
   projectId: string | undefined;
-  /** The tab's view options, which say how the project spells a no-break space for Find. */
+  /**
+   * The tab's view options, handed to the editor package's no-break-space respelling of Find's text
+   * because its signature takes them. Its result does not depend on them today.
+   */
   viewOptions: ViewOptions | undefined;
   /** Names the editor in a log line, for example `'editor'` or `'footnote editor'`. */
   editorName: string;
