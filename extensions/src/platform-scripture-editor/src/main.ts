@@ -64,13 +64,12 @@ import {
 } from './platform-scripture-editor.utils';
 import { ReadOnlyViewNotifier } from './read-only-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
+import { MODEL_TEXT_PANEL_WEBVIEW_TYPE } from './model-text-panel.const';
 import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
-  showBibleTextsTab,
-  showCommentariesTab,
-  showTextCollectionTab,
-} from './show-panel.util';
+} from './resource-text-panel.const';
+import { showBibleTextsTab, showCommentariesTab, showTextCollectionTab } from './show-panel.util';
 import {
   buildResourceTextPanelState,
   showResourceInReferencePanel,
@@ -80,7 +79,6 @@ import { updateStoredResourceSelection } from './resource-selection-store';
 
 logger.debug('Scripture Editor is importing!');
 
-const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 /** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
 
 // #region Editor Selection Tracking

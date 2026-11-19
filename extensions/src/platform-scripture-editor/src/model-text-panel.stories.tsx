@@ -70,6 +70,13 @@ const sampleUsj = usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
 
 const DATA_VERSION = '1.0.0';
 
+const STORY_CONTEXT_MENU = {
+  requestMenu: async () => undefined,
+  dismissMenu: () => {},
+  openFind: () => {},
+  sendCommand: () => {},
+};
+
 const seedResources: DblResourceData[] = [
   {
     dblEntryUid: 'uid-web',
@@ -264,6 +271,8 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         getResourceChapter={getResourceChapter}
         resourceCopyLimit={undefined}
         allowInvisibleCharacters={false}
+        // Storybook has no platform menu service: a right-click opens nothing
+        contextMenu={STORY_CONTEXT_MENU}
         copyrightNotice={config.copyrightNotice}
       />
       <Dialog

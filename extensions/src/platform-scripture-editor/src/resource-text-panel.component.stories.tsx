@@ -91,6 +91,13 @@ const meta: Meta<typeof ResourceTextPanel> = {
     onSelectResource: () => {},
     retryInstall: () => {},
     onShowResourcePicker: () => {},
+    // Storybook has no platform menu service: a right-click opens nothing
+    contextMenu: {
+      requestMenu: async () => undefined,
+      dismissMenu: () => {},
+      openFind: () => {},
+      sendCommand: () => {},
+    },
   },
 };
 export default meta;

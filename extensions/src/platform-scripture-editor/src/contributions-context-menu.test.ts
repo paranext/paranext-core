@@ -280,3 +280,90 @@ describe('context menu items look like their top-menu twins', () => {
     expect(contextItem(CUT)?.enabledWhen).toBe(`${topCut.enabledWhen} && ${HAS_SELECTION}`);
   });
 });
+
+/*
+ * The Bible Texts, Commentaries and Model text panels are read-only: their right-click menu is Copy
+ * and Find, and nothing else.
+ */
+const CAN_FIND = 'platformScriptureEditor.contextMenu.canFind';
+const PANEL_WEB_VIEW_TYPES = [
+  'platformScriptureEditor.bibleTexts',
+  'platformScriptureEditor.commentaries',
+  'platformScriptureEditor.modelText',
+];
+
+describe.each(PANEL_WEB_VIEW_TYPES)('%s context menu contribution', (webViewType) => {
+  const panelMenu: Menu = menusJson.webViewMenus[webViewType].contextMenu;
+
+  const evaluatePanel = (facts: Record<string, boolean>) => {
+    const evaluated: { groups: Record<string, { order: number }>; items: EvaluatedItem[] } =
+      evaluateMenu(panelMenu, (key: string) => facts[key], TEMPLATE_VARS);
+    return [...evaluated.items].sort(
+      (a, b) =>
+        evaluated.groups[a.group].order - evaluated.groups[b.group].order || a.order - b.order,
+    );
+  };
+
+  it('offers Copy then Find, with the editor menu icons and the same labels', () => {
+    const items = evaluatePanel({ [HAS_SELECTION]: true, [CAN_FIND]: true });
+    expect(commandsOf(items)).toEqual([COPY, FIND]);
+    expect(items[0]).toMatchObject({
+      label: '%webView_platformScriptureEditor_copy%',
+      iconNameBefore: 'clipboard-copy',
+    });
+    expect(items[1]).toMatchObject({
+      label: '%webView_platformScriptureEditor_openFind%',
+      iconNameBefore: 'search',
+    });
+    items.forEach((item) => expect(item.disabled).toBeFalsy());
+  });
+
+  it.each([
+    [true, false],
+    [false, true],
+    [undefined, true],
+  ])('with the selection key %s Copy is disabled: %s', (hasSelection, isCopyDisabled) => {
+    const facts: Record<string, boolean> = { [CAN_FIND]: true };
+    if (hasSelection !== undefined) facts[HAS_SELECTION] = hasSelection;
+
+    const items = evaluatePanel(facts);
+
+    expect(isDisabled(items, COPY)).toBe(isCopyDisabled);
+    // Find does not read the selection
+    expect(isDisabled(items, FIND)).toBe(false);
+  });
+
+  it.each([
+    [true, false],
+    [false, true],
+    [undefined, true],
+  ])('with the can-find key %s Find is disabled: %s', (canFind, isFindDisabled) => {
+    const facts: Record<string, boolean> = { [HAS_SELECTION]: true };
+    if (canFind !== undefined) facts[CAN_FIND] = canFind;
+
+    const items = evaluatePanel(facts);
+
+    expect(isDisabled(items, FIND)).toBe(isFindDisabled);
+    expect(isDisabled(items, COPY)).toBe(false);
+  });
+
+  it('declares both groups experimental at orders 3 and 4, and no item experimental', () => {
+    expect(Object.values(panelMenu.groups)).toEqual([
+      { order: 3, isExperimental: true },
+      { order: 4, isExperimental: true },
+    ]);
+    panelMenu.items.forEach((item) => expect(item).not.toHaveProperty('isExperimental'));
+  });
+
+  it('serves no top menu of its own and leaves the platform defaults out', () => {
+    expect(menusJson.webViewMenus[webViewType]).not.toHaveProperty('topMenu');
+    expect(menusJson.webViewMenus[webViewType]).not.toHaveProperty('includeDefaults');
+  });
+
+  it('parses every when-expression', () => {
+    panelMenu.items
+      .flatMap((item) => [item.when, item.enabledWhen])
+      .filter((value): value is string => typeof value === 'string')
+      .forEach((expression) => expect(() => parseWhenExpression(expression)).not.toThrow());
+  });
+});
