@@ -418,11 +418,13 @@ export function isDependencyPinsChange(
 
 /**
  * Whether a diff of a .NET project or build properties file changes a dependency: an added or
- * removed line naming a `PackageReference`, the `ParatextPackageVersion` or the `TargetFramework`.
+ * removed line naming a `PackageReference`, the `ParatextPackageVersion`, the `TargetFramework` or
+ * a `Version` (an attribute or child element of a reference written over several lines). Matching a
+ * `Version` that is not a dependency only recommends the full run once too often.
  */
 export function isDotnetDependencyChange(diffLines: string[]): boolean {
   return changedDiffLines(diffLines).some((line) =>
-    /PackageReference|ParatextPackageVersion|TargetFramework/.test(line),
+    /PackageReference|ParatextPackageVersion|TargetFramework|<Version>|\bVersion="/.test(line),
   );
 }
 

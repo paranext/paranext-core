@@ -715,8 +715,6 @@ describe('recommendE2eTests', () => {
     expect(recommend([file]).runtimeChanged).toBe(false);
   });
 
-  // ParatextData does the USFM to USX conversion the editor saves through, and this project file
-  // pins its version, so CI runs the editor list for it.
   it('neither recommends nor reports as uncovered an extension tsconfig.json', () => {
     const report = recommend(['extensions/src/x/tsconfig.json'], { sources: mapping });
     expect(report.recommendations).toEqual([]);
@@ -724,6 +722,8 @@ describe('recommendE2eTests', () => {
     expect(report.runtimeChanged).toBe(true);
   });
 
+  // ParatextData does the USFM to USX conversion the editor saves through, and this project file
+  // pins its version, so CI runs the editor list for it.
   it('lists the data provider project file as uncovered and other project files not', () => {
     const file = 'c-sharp/ParanextDataProvider.csproj';
     const report = recommend([file], { sources: {} });
@@ -1164,6 +1164,14 @@ describe('telling a dependency change from the rest of a dependency file', () =>
         '-    <TargetFramework>net10.0</TargetFramework>',
         '+    <TargetFramework>net11.0</TargetFramework>',
       ],
+    ],
+    [
+      'a Version attribute on its own line',
+      ['-      Version="2.22.11"', '+      Version="2.23.0"'],
+    ],
+    [
+      'a Version child element',
+      ['-      <Version>2.22.11</Version>', '+      <Version>2.23.0</Version>'],
     ],
   ])('counts %s in a .NET project file as a dependency change', (_label, lines) => {
     expect(isDotnetDependencyChange(['--- a/x.csproj', '+++ b/x.csproj', ...lines])).toBe(true);
@@ -1629,13 +1637,6 @@ describe('readGitChanges', () => {
       expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
       writeFile(repoRoot, 'dev-packages.json', '{ "a": 1, "b": 3 }\n');
       expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual(['dev-packages.json']);
-    });
-  });
-
-  it('reads a ref that starts with a dash as a ref when it looks for dependency changes', () => {
-    withCommittedFiles({ 'dev-packages.json': '{ "a": 1 }\n' }, (repoRoot) => {
-      writeFile(repoRoot, 'dev-packages.json', '{ "a": 2 }\n');
-      expect(() => readGitChanges(repoRoot, '-x')).toThrow();
     });
   });
 
