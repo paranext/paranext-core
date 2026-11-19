@@ -19,9 +19,13 @@ import {
 type HostProps = Partial<UseEditorContextMenuOptions> & {
   requestMenu: UseEditorContextMenuOptions['requestMenu'];
   onApi?: (api: ReturnType<typeof useEditorContextMenu>) => void;
+  /** Whether the container element is rendered at all (default true). */
+  showContainer?: boolean;
+  /** Changing it rebuilds the container element, as a remounting editor wrapper does. */
+  containerKey?: string;
 };
 
-function Host({ onApi, ...options }: HostProps) {
+function Host({ onApi, showContainer = true, containerKey = 'a', ...options }: HostProps) {
   // React's ref object type starts as null, which `undefined` cannot stand in for
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,12 +39,29 @@ function Host({ onApi, ...options }: HostProps) {
   return (
     <div>
       <p data-testid="outside">outside text</p>
-      <div ref={containerRef} data-testid="container">
-        <p data-testid="text">some editor text</p>
-        <button type="button" data-testid="button">
-          control
-        </button>
-      </div>
+      {showContainer && (
+        <div ref={containerRef} data-testid="container" key={containerKey}>
+          <p data-testid="text">some editor text</p>
+          <button type="button" data-testid="button">
+            control
+          </button>
+          <a href="#x" data-testid="a">
+            link
+          </a>
+          <input data-testid="input" />
+          <select data-testid="select">
+            <option>one</option>
+          </select>
+          <textarea data-testid="textarea" />
+          <div
+            role="combobox"
+            aria-expanded="false"
+            aria-controls="none"
+            aria-label="combobox"
+            data-testid="combobox"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -85,11 +106,13 @@ function rightClick(target: Element, clientX = 40, clientY = 50) {
 }
 
 /** Jsdom has no layout, so `Range` has no `getClientRects`; the stub is removed after each test. */
-function stubRangeClientRects(rects: object[]) {
+function stubRangeClientRects(rects: object[] | ((range: Range) => object[])) {
   Object.defineProperty(Range.prototype, 'getClientRects', {
     configurable: true,
     writable: true,
-    value: () => rects,
+    value(this: Range) {
+      return typeof rects === 'function' ? rects(this) : rects;
+    },
   });
 }
 
@@ -221,6 +244,8 @@ describe('useEditorContextMenu', () => {
       const { getByTestId } = render(<Host requestMenu={() => pending.promise} onPick={onPick} />);
       rightClick(getByTestId('text'), 7, 8);
 
+      // Registered after the hook's own continuation: runs first only if the pick is delayed.
+      pending.promise.then(() => order.push('later-then')).catch(() => {});
       pending.resolve('cmd');
       order.push('resolved');
       await flush();
@@ -228,7 +253,7 @@ describe('useEditorContextMenu', () => {
 
       expect(onPick).toHaveBeenCalledTimes(1);
       expect(onPick.mock.calls[0][1].position).toEqual({ x: 7, y: 8 });
-      expect(order).toEqual(['resolved', 'pick:cmd:7', 'after-flush']);
+      expect(order).toEqual(['resolved', 'pick:cmd:7', 'later-then', 'after-flush']);
     });
 
     it('does not call onPick when the menu closes without a pick', async () => {
@@ -466,24 +491,75 @@ describe('useEditorContextMenu', () => {
       return event;
     }
 
-    it('positions the menu at the last client rect of the selection range', () => {
-      const requestMenu = vi.fn(() => new Promise<string | undefined>(() => {}));
+    it('positions the menu at the caret: the focus end of the selection', () => {
+      const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
+        () => new Promise(() => {}),
+      );
       const { getByTestId } = render(<Host requestMenu={requestMenu} />);
-      selectNodeContents(getByTestId('text'));
-      const rects = [
-        { left: 10, top: 20, right: 30, bottom: 40, width: 20, height: 20 },
-        { left: 55, top: 60, right: 75, bottom: 80, width: 20, height: 20 },
-      ];
-      stubRangeClientRects(rects);
+      const textNode = getByTestId('text').firstChild;
+      if (!textNode) throw new Error('missing text node');
+      // A backward selection: anchor at 9, focus at 2. The caret is where the focus is.
+      window.getSelection()?.setBaseAndExtent(textNode, 9, textNode, 2);
+      stubRangeClientRects((range) =>
+        range.collapsed
+          ? [{ left: range.startOffset * 10, top: 1, right: 0, bottom: 80, width: 0, height: 19 }]
+          : [{ left: 999, top: 999, right: 999, bottom: 999, width: 0, height: 0 }],
+      );
 
       keyboardContextMenu(getByTestId('container'));
 
       expect(requestMenu).toHaveBeenCalledWith(
-        expect.objectContaining({
-          isKeyboardInvoked: true,
-          position: { x: 75, y: 80 },
-        }),
+        expect.objectContaining({ isKeyboardInvoked: true, position: { x: 20, y: 80 } }),
       );
+    });
+
+    it('ignores a selection outside the container and uses the container fallback', () => {
+      const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
+        () => new Promise(() => {}),
+      );
+      const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+      selectNodeContents(getByTestId('outside'));
+      stubRangeClientRects([{ left: 300, top: 300, right: 300, bottom: 300, width: 0, height: 0 }]);
+      vi.spyOn(getByTestId('container'), 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(50, 60, 200, 200),
+      );
+
+      keyboardContextMenu(getByTestId('container'));
+
+      expect(requestMenu.mock.calls[0][0].position).toEqual({ x: 58, y: 68 });
+    });
+
+    it('keeps a caret that is scrolled out of the frame inside the viewport', () => {
+      const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
+        () => new Promise(() => {}),
+      );
+      const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+      selectNodeContents(getByTestId('text'));
+      stubRangeClientRects([
+        { left: 99999, top: 0, right: 99999, bottom: 99999, width: 0, height: 0 },
+      ]);
+
+      keyboardContextMenu(getByTestId('container'));
+
+      const { x, y } = requestMenu.mock.calls[0][0].position;
+      expect(x).toBeLessThan(window.innerWidth);
+      expect(y).toBeLessThan(window.innerHeight);
+    });
+
+    it('clips the container fallback to the viewport on the far sides too', () => {
+      const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
+        () => new Promise(() => {}),
+      );
+      const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+      vi.spyOn(getByTestId('container'), 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(window.innerWidth + 500, window.innerHeight + 500, 300, 300),
+      );
+
+      keyboardContextMenu(getByTestId('container'));
+
+      const { x, y } = requestMenu.mock.calls[0][0].position;
+      expect(x).toBeLessThan(window.innerWidth);
+      expect(y).toBeLessThan(window.innerHeight);
     });
 
     it('uses the range bounding rect when a collapsed caret has no client rects', () => {
@@ -500,7 +576,7 @@ describe('useEditorContextMenu', () => {
 
       keyboardContextMenu(getByTestId('container'));
 
-      expect(requestMenu.mock.calls[0][0].position).toEqual({ x: 102, y: 218 });
+      expect(requestMenu.mock.calls[0][0].position).toEqual({ x: 100, y: 218 });
     });
 
     it('falls back to the container rect clipped to the viewport plus an inset', () => {
@@ -598,6 +674,346 @@ describe('useEditorContextMenu', () => {
     await flush();
 
     expect(onError).toHaveBeenCalledWith(failure);
+  });
+
+  describe('a container that appears or changes after mount', () => {
+    it('claims a right-click once a container that mounted late exists', () => {
+      const requestMenu = vi.fn(() => new Promise<string | undefined>(() => {}));
+      const { getByTestId, rerender } = render(
+        <Host requestMenu={requestMenu} showContainer={false} />,
+      );
+      const before = rightClick(getByTestId('outside'));
+      expect(before.defaultPrevented).toBe(false);
+
+      rerender(<Host requestMenu={requestMenu} showContainer />);
+      const after = rightClick(getByTestId('text'));
+
+      expect(after.defaultPrevented).toBe(true);
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+    });
+
+    it('claims a right-click in a container that was rebuilt, and in none that was removed', () => {
+      const requestMenu = vi.fn(() => new Promise<string | undefined>(() => {}));
+      const { getByTestId, rerender } = render(<Host requestMenu={requestMenu} containerKey="a" />);
+      const oldText = getByTestId('text');
+
+      rerender(<Host requestMenu={requestMenu} containerKey="b" />);
+      expect(oldText.isConnected).toBe(false);
+      const claimed = rightClick(getByTestId('text'));
+      expect(claimed.defaultPrevented).toBe(true);
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+
+      rerender(<Host requestMenu={requestMenu} showContainer={false} />);
+      const gone = rightClick(getByTestId('outside'));
+      expect(gone.defaultPrevented).toBe(false);
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+    });
+
+    it('claims a target whose realm differs from the frame', () => {
+      const requestMenu = vi.fn(() => new Promise<string | undefined>(() => {}));
+      const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+      const iframe = document.createElement('iframe');
+      document.body.appendChild(iframe);
+      const foreign = iframe.contentDocument?.createElement('span');
+      if (!foreign) throw new Error('jsdom iframe has no document');
+      getByTestId('container').appendChild(foreign);
+      // Precondition: the host realm's `Node` does not recognise this element.
+      expect(foreign instanceof Node).toBe(false);
+
+      const event = rightClick(foreign);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+      iframe.remove();
+    });
+  });
+
+  describe('target rule details', () => {
+    it.each(['button', 'a', 'input', 'select', 'textarea', 'combobox'])(
+      'does not claim a right-click on the interactive %s',
+      (testId) => {
+        const requestMenu = vi.fn(() => new Promise<string | undefined>(() => {}));
+        const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+
+        const event = rightClick(getByTestId(testId));
+
+        expect(event.defaultPrevented).toBe(false);
+        expect(requestMenu).not.toHaveBeenCalled();
+      },
+    );
+
+    it('claims text inside the container after the options changed by a rerender', () => {
+      const requestMenu = vi.fn(() => new Promise<string | undefined>(() => {}));
+      const { getByTestId, rerender } = render(<Host requestMenu={requestMenu} />);
+
+      rerender(<Host requestMenu={requestMenu} isEnabled={false} />);
+      const event = rightClick(getByTestId('text'));
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(requestMenu).not.toHaveBeenCalled();
+    });
+
+    it('does not report a selection whose focus is outside the container', () => {
+      const requestMenu = vi.fn(() => new Promise<string | undefined>(() => {}));
+      const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+      const inside = getByTestId('text').firstChild;
+      const outside = getByTestId('outside').firstChild;
+      if (!inside || !outside) throw new Error('missing text nodes');
+      window.getSelection()?.setBaseAndExtent(inside, 0, outside, 3);
+
+      rightClick(getByTestId('text'));
+
+      expect(requestMenu).toHaveBeenCalledWith(
+        expect.objectContaining({ hasSelection: false, selectedText: '' }),
+      );
+    });
+  });
+
+  describe('open requests', () => {
+    it('stays pending while a first request is open and a second is rejected by the debounce', async () => {
+      const first = deferred<string | undefined>();
+      const second = deferred<string | undefined>();
+      const queue = [first, second];
+      const dismissMenu = vi.fn();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => queue.shift()?.promise ?? Promise.resolve(undefined)}
+          dismissMenu={dismissMenu}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      rightClick(getByTestId('text'));
+      rightClick(getByTestId('text'));
+
+      second.reject(newPlatformError('debounced', RESOURCE_EXHAUSTED));
+      await flush();
+      expect(api.isPending()).toBe(true);
+      fireEvent.wheel(window);
+      expect(dismissMenu).toHaveBeenCalledTimes(1);
+
+      first.resolve(undefined);
+      await flush();
+      expect(api.isPending()).toBe(false);
+    });
+
+    it('does not pick after dismiss() was called while the request was open', async () => {
+      const pending = deferred<string | undefined>();
+      const onPick = vi.fn();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => pending.promise}
+          onPick={onPick}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      rightClick(getByTestId('text'));
+
+      act(() => api.dismiss());
+      pending.resolve('cmd');
+      await flush();
+
+      expect(onPick).not.toHaveBeenCalled();
+    });
+
+    it('does not pick after unmount', async () => {
+      const pending = deferred<string | undefined>();
+      const onPick = vi.fn();
+      const { getByTestId, unmount } = render(
+        <Host requestMenu={() => pending.promise} onPick={onPick} />,
+      );
+      rightClick(getByTestId('text'));
+
+      unmount();
+      pending.resolve('cmd');
+      await flush();
+
+      expect(onPick).not.toHaveBeenCalled();
+    });
+
+    it('picks with the latest onPick, not the one from the right-click', async () => {
+      const pending = deferred<string | undefined>();
+      const oldPick = vi.fn();
+      const newPick = vi.fn();
+      const { getByTestId, rerender } = render(
+        <Host requestMenu={() => pending.promise} onPick={oldPick} />,
+      );
+      rightClick(getByTestId('text'));
+
+      rerender(<Host requestMenu={() => pending.promise} onPick={newPick} />);
+      pending.resolve('cmd');
+      await flush();
+
+      expect(oldPick).not.toHaveBeenCalled();
+      expect(newPick).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not turn a throwing onError into an unhandled rejection', async () => {
+      const onError = vi.fn(() => {
+        throw new Error('handler failed');
+      });
+      const { getByTestId } = render(
+        <Host requestMenu={() => Promise.reject(new Error('boom'))} onError={onError} />,
+      );
+      rightClick(getByTestId('text'));
+
+      await flush();
+
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+
+    it('swallows an unexpected failure when there is no onError', async () => {
+      const requestMenu = vi.fn(() => Promise.reject(new Error('boom')));
+      const { getByTestId } = render(<Host requestMenu={requestMenu} />);
+      rightClick(getByTestId('text'));
+
+      await flush();
+
+      expect(requestMenu).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('the key claim is bounded', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function keydownOnBody(key: string) {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      act(() => {
+        document.body.dispatchEvent(event);
+      });
+      return event;
+    }
+
+    it('claims keys until two seconds after the right-click, while the request stays pending', () => {
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => new Promise<string | undefined>(() => {})}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      rightClick(getByTestId('text'));
+
+      act(() => {
+        vi.advanceTimersByTime(1900);
+      });
+      expect(keydownOnBody('a').defaultPrevented).toBe(true);
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(keydownOnBody('a').defaultPrevented).toBe(false);
+      expect(api.isPending()).toBe(true);
+    });
+
+    it('drops the open request on a pointerdown in the frame', async () => {
+      const pending = deferred<string | undefined>();
+      const dismissMenu = vi.fn();
+      const onPick = vi.fn();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => pending.promise}
+          dismissMenu={dismissMenu}
+          onPick={onPick}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      rightClick(getByTestId('text'));
+
+      fireEvent.pointerDown(getByTestId('outside'));
+
+      expect(dismissMenu).toHaveBeenCalledTimes(1);
+      expect(api.isPending()).toBe(false);
+      expect(keydownOnBody('a').defaultPrevented).toBe(false);
+      pending.resolve('cmd');
+      await flush();
+      expect(onPick).not.toHaveBeenCalled();
+    });
+
+    it('ignores a pointerdown while nothing is pending', () => {
+      const dismissMenu = vi.fn();
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => new Promise<string | undefined>(() => {})}
+          dismissMenu={dismissMenu}
+        />,
+      );
+
+      fireEvent.pointerDown(getByTestId('outside'));
+
+      expect(dismissMenu).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('wheel dismissal in the capture phase', () => {
+    it('still dismisses when something inside the editor stops the wheel event', () => {
+      const dismissMenu = vi.fn();
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => new Promise<string | undefined>(() => {})}
+          dismissMenu={dismissMenu}
+        />,
+      );
+      getByTestId('text').addEventListener('wheel', (event) => event.stopPropagation());
+      rightClick(getByTestId('text'));
+
+      fireEvent.wheel(getByTestId('text'));
+
+      expect(dismissMenu).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('bare modifier keys', () => {
+    it.each(['Shift', 'Control', 'Alt', 'AltGraph', 'Meta'])(
+      'does not claim a bare %s key while pending',
+      (key) => {
+        const { getByTestId } = render(
+          <Host requestMenu={() => new Promise<string | undefined>(() => {})} />,
+        );
+        rightClick(getByTestId('text'));
+        const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+
+        act(() => {
+          document.body.dispatchEvent(event);
+        });
+
+        expect(event.defaultPrevented).toBe(false);
+      },
+    );
+  });
+
+  it('does not call dismissMenu from dismiss() while idle', () => {
+    const dismissMenu = vi.fn();
+    let api!: ReturnType<typeof useEditorContextMenu>;
+    render(
+      <Host
+        requestMenu={() => new Promise<string | undefined>(() => {})}
+        dismissMenu={dismissMenu}
+        onApi={(value) => {
+          api = value;
+        }}
+      />,
+    );
+
+    act(() => api.dismiss());
+
+    expect(dismissMenu).not.toHaveBeenCalled();
   });
 
   it('dismiss() closes a pending menu through dismissMenu', () => {

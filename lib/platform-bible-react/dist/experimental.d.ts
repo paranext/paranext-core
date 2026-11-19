@@ -2142,7 +2142,9 @@ export type UseEditorContextMenuOptions = {
 	onPick: (command: string, request: EditorContextMenuRequest) => void;
 	/**
 	 * Receives any rejection of `requestMenu` or `dismissMenu` other than the expected ones (a newer
-	 * menu replaced this one, debounce, tab not visible).
+	 * menu replaced this one, debounce, tab not visible), and anything `onPick` throws. The hook
+	 * swallows an unexpected failure only when this is absent, and never lets a throwing `onError`
+	 * escape.
 	 *
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
@@ -2161,8 +2163,10 @@ export type UseEditorContextMenuResult = {
 	 */
 	dismiss: () => void;
 	/**
-	 * Whether a request is open: true from the right-click until the request settles. Hosts read it
-	 * to keep their own key handling away from a key the pending menu owns.
+	 * Whether a request is open: true from the right-click until the request settles (or the user
+	 * clicks back into the frame). Hosts read it to keep their own key handling away from a key the
+	 * pending menu owns. The hook's own key claim is shorter: it lapses two seconds after the
+	 * right-click even while this stays true.
 	 *
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
@@ -2173,13 +2177,24 @@ export type UseEditorContextMenuResult = {
  * open the platform context menu, and hands the picked command back. The library cannot reach PAPI,
  * so the host passes the two platform calls in.
  *
- * While a request is open the keyboard belongs to the menu: every key except bare modifiers is
- * claimed on the frame's window, and Escape also closes the menu. A `wheel` or `touchmove` closes
- * it too. Not a `scroll` listener: opening the menu blurs the editor, which can scroll the frame by
- * itself and would close the menu the moment it opens.
+ * The listeners sit on the frame's own document and window and resolve `containerRef.current` when
+ * an event arrives, so a container that mounts late or is rebuilt is still served. The container
+ * must be the editor's own element, never a wrapper that holds other editors.
  *
- * One instance per editor. The container must be mounted in the same commit as the hook, and
- * `requestMenu` must always settle: the menu owns the keyboard until it does.
+ * While a request is open the keyboard belongs to the menu: every key except bare modifiers is
+ * claimed on the frame's window, and Escape also closes the menu. The claim lasts until the request
+ * settles or two seconds have passed, whichever comes first. A `wheel`, `touchmove` or a
+ * `pointerdown` in the frame closes the menu too (a `pointerdown` also drops the request, so a late
+ * pick never reaches `onPick`). Not a `scroll` listener: opening the menu blurs the editor, which
+ * can scroll the frame by itself and would close the menu the moment it opens.
+ *
+ * A pick that resolves after `dismiss()`, after the pointer-down drop, or after unmount is ignored.
+ *
+ * The key claim is a capture-phase `keydown` listener on the window, registered when the hook
+ * mounts. It stops listeners registered after it, but not window-capture listeners registered
+ * earlier, which run first: those must gate on `isPending()` themselves.
+ *
+ * One instance per editor.
  *
  * @param options See {@link UseEditorContextMenuOptions}
  * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
