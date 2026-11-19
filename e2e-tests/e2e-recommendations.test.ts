@@ -19,6 +19,8 @@ import { editorPathsPattern, parseEditorPathEntries, readEditorPathEntries } fro
 import {
   isAppFile,
   isDependencyLockChange,
+  isDependencyPinsChange,
+  isDotnetDependencyChange,
   isDependencyPackageChange,
   isEntryPoint,
   isNonRuntime,
@@ -646,6 +648,9 @@ describe('recommendE2eTests', () => {
       'lib/eslint-plugin-paranext/vitest.config.ts',
       'extensions/vitest.config.ts',
       'lib/platform-bible-react/vitest.unit.setup.ts',
+      'lib/eslint-plugin-paranext/src/test.utils.ts',
+      'lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/editor-usx/x.resave.usx',
+      'lib/platform-bible-utils/src/scripture/footnote-util-test.usj.data.ts',
     ].forEach((file) => expect({ file, changed: runtime(file) }).toEqual({ file, changed: false }));
     expect(runtime('e2e-tests/e2e-recommendations.ts')).toBe(false);
     expect(recommend([]).runtimeChanged).toBe(false);
@@ -712,6 +717,13 @@ describe('recommendE2eTests', () => {
 
   // ParatextData does the USFM to USX conversion the editor saves through, and this project file
   // pins its version, so CI runs the editor list for it.
+  it('neither recommends nor reports as uncovered an extension tsconfig.json', () => {
+    const report = recommend(['extensions/src/x/tsconfig.json'], { sources: mapping });
+    expect(report.recommendations).toEqual([]);
+    expect(report.uncoveredFiles).toEqual([]);
+    expect(report.runtimeChanged).toBe(true);
+  });
+
   it('lists the data provider project file as uncovered and other project files not', () => {
     const file = 'c-sharp/ParanextDataProvider.csproj';
     const report = recommend([file], { sources: {} });
@@ -1065,6 +1077,7 @@ describe('telling a dependency change from the rest of a dependency file', () =>
     [['-  "name": "a"', '+  "name": "b"']],
     [['-  "version": "1.0.0"', '+  "version": "1.0.1"']],
     [['-  "name": "a"', '+  "name": "b"', '-  "version": "1.0.0"', '+  "version": "1.0.1"']],
+    [['+', '-  ', '+\t']],
   ])('does not count the lock file lines %j as a dependency change', (lines) => {
     expect(isDependencyLockChange([...header, ...lines])).toBe(false);
   });
@@ -1105,6 +1118,67 @@ describe('telling a dependency change from the rest of a dependency file', () =>
     ['a deleted file', undefined],
   ])('counts %s in a package file as a dependency change', (_label, after) => {
     expect(isDependencyPackageChange(base, after)).toBe(true);
+  });
+
+  it('ignores the key order of a dependency field, not a changed value', () => {
+    const ordered = manifest({ devDependencies: { eslint: '8.0.0', prettier: '3.0.0' } });
+    const reordered = manifest({ devDependencies: { prettier: '3.0.0', eslint: '8.0.0' } });
+    expect(isDependencyPackageChange(ordered, reordered)).toBe(false);
+    expect(
+      isDependencyPackageChange(
+        ordered,
+        manifest({ devDependencies: { prettier: '3.1.0', eslint: '8.0.0' } }),
+      ),
+    ).toBe(true);
+  });
+
+  it('compares dev-packages.json by its parsed content', () => {
+    const pins = '{ "a": { "x": 1, "y": 2 }, "b": [1, 2] }';
+    expect(isDependencyPinsChange(pins, `${pins}\n\n`)).toBe(false);
+    expect(isDependencyPinsChange(pins, '{"b":[1,2],"a":{"y":2,"x":1}}')).toBe(false);
+    expect(isDependencyPinsChange(pins, '{ "a": { "x": 1, "y": 3 }, "b": [1, 2] }')).toBe(true);
+    expect(isDependencyPinsChange(pins, '{ "a": { "x": 1, "y": 2 }, "b": [2, 1] }')).toBe(true);
+    expect(isDependencyPinsChange(pins, '{ not json')).toBe(true);
+    expect(isDependencyPinsChange(undefined, pins)).toBe(true);
+    expect(isDependencyPinsChange(pins, undefined)).toBe(true);
+  });
+
+  it.each([
+    [
+      'a PackageReference bump',
+      [
+        '-    <PackageReference Include="StreamJsonRpc" Version="2.22.11" />',
+        '+    <PackageReference Include="StreamJsonRpc" Version="2.23.0" />',
+      ],
+    ],
+    [
+      'a ParatextPackageVersion bump',
+      [
+        '-    <ParatextPackageVersion>9.5.0.24</ParatextPackageVersion>',
+        '+    <ParatextPackageVersion>9.6.0.1</ParatextPackageVersion>',
+      ],
+    ],
+    [
+      'a TargetFramework change',
+      [
+        '-    <TargetFramework>net10.0</TargetFramework>',
+        '+    <TargetFramework>net11.0</TargetFramework>',
+      ],
+    ],
+  ])('counts %s in a .NET project file as a dependency change', (_label, lines) => {
+    expect(isDotnetDependencyChange(['--- a/x.csproj', '+++ b/x.csproj', ...lines])).toBe(true);
+  });
+
+  it('does not count a comment or an unrelated property in a .NET project file', () => {
+    expect(
+      isDotnetDependencyChange([
+        '--- a/x.csproj',
+        '+++ b/x.csproj',
+        '+    <!-- a note -->',
+        '-    <Nullable>enable</Nullable>',
+        '+    <Nullable>disable</Nullable>',
+      ]),
+    ).toBe(false);
   });
 
   it('counts a package file that is missing or unparseable at the merge base', () => {
@@ -1460,6 +1534,108 @@ describe('readGitChanges', () => {
       expect(readGitChanges(repoRoot, base).changedFiles).not.toContain(
         'release/app/package-lock.json',
       );
+    });
+  });
+
+  /** Commits the files given, then runs `body` with the base SHA. */
+  function withCommittedFiles(
+    files: Record<string, string>,
+    body: (repoRoot: string, base: string) => void,
+  ) {
+    withTemporaryRepository((repoRoot) => {
+      Object.entries(files).forEach(([file, content]) => writeFile(repoRoot, file, content));
+      runGit(repoRoot, 'add', '-A');
+      runGit(repoRoot, 'commit', '--quiet', '-m', 'files');
+      body(repoRoot, runGit(repoRoot, 'rev-parse', 'HEAD'));
+    });
+  }
+
+  const project = (stream: string, extra = '') =>
+    `<Project>\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>${extra}\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include="StreamJsonRpc" Version="${stream}" />\n  </ItemGroup>\n</Project>\n`;
+
+  it('counts a .NET package version bump, not an unrelated project file edit', () => {
+    withCommittedFiles(
+      {
+        'c-sharp/ParanextDataProvider.csproj': project('2.22.11'),
+        'c-sharp/Directory.Build.props': project('2.22.11'),
+        'c-sharp-tests/c-sharp-tests.csproj': project('2.22.11'),
+        'c-sharp/Paranext.Analyzers.Tests/x.csproj': project('2.22.11'),
+        'c-sharp/Paranext.Analyzers/Paranext.Analyzers.csproj': project('2.22.11'),
+      },
+      (repoRoot, base) => {
+        writeFile(
+          repoRoot,
+          'c-sharp/ParanextDataProvider.csproj',
+          project('2.22.11', '\n    <!-- a note -->\n    <Nullable>enable</Nullable>'),
+        );
+        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
+
+        writeFile(repoRoot, 'c-sharp/ParanextDataProvider.csproj', project('2.23.0'));
+        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([
+          'c-sharp/ParanextDataProvider.csproj',
+        ]);
+
+        writeFile(repoRoot, 'c-sharp/ParanextDataProvider.csproj', project('2.22.11'));
+        writeFile(repoRoot, 'c-sharp/Directory.Build.props', project('2.23.0'));
+        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([
+          'c-sharp/Directory.Build.props',
+        ]);
+
+        writeFile(repoRoot, 'c-sharp/Directory.Build.props', project('2.22.11'));
+        writeFile(repoRoot, 'c-sharp-tests/c-sharp-tests.csproj', project('2.23.0'));
+        writeFile(repoRoot, 'c-sharp/Paranext.Analyzers.Tests/x.csproj', project('2.23.0'));
+        writeFile(
+          repoRoot,
+          'c-sharp/Paranext.Analyzers/Paranext.Analyzers.csproj',
+          project('2.23.0'),
+        );
+        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
+      },
+    );
+  });
+
+  it('counts any change to global.json and to a patch', () => {
+    withCommittedFiles(
+      {
+        'global.json': '{ "sdk": { "version": "10.0.100" } }\n',
+        'patches/a+1.0.0.patch': 'diff --git a/x b/x\n+one\n',
+      },
+      (repoRoot, base) => {
+        writeFile(repoRoot, 'global.json', '{ "sdk": { "version": "10.0.200" } }\n');
+        writeFile(repoRoot, 'patches/a+1.0.0.patch', 'diff --git a/x b/x\n+two\n');
+        expect(readGitChanges(repoRoot, base).dependencyChangedFiles.sort()).toEqual([
+          'global.json',
+          'patches/a+1.0.0.patch',
+        ]);
+      },
+    );
+  });
+
+  it('does not count a workspace package.json on its own', () => {
+    withCommittedFiles(
+      { 'lib/x/package.json': packageFile({ dependencies: { a: '1' } }) },
+      (repoRoot, base) => {
+        writeFile(repoRoot, 'lib/x/package.json', packageFile({ dependencies: { a: '2' } }));
+        const changes = readGitChanges(repoRoot, base);
+        expect(changes.changedFiles).toContain('lib/x/package.json');
+        expect(changes.dependencyChangedFiles).toEqual([]);
+      },
+    );
+  });
+
+  it('compares dev-packages.json by content, so a reformat is not a pin change', () => {
+    withCommittedFiles({ 'dev-packages.json': '{ "a": 1, "b": 2 }\n' }, (repoRoot, base) => {
+      writeFile(repoRoot, 'dev-packages.json', '{\n  "b": 2,\n  "a": 1\n}\n\n');
+      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
+      writeFile(repoRoot, 'dev-packages.json', '{ "a": 1, "b": 3 }\n');
+      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual(['dev-packages.json']);
+    });
+  });
+
+  it('reads a ref that starts with a dash as a ref when it looks for dependency changes', () => {
+    withCommittedFiles({ 'dev-packages.json': '{ "a": 1 }\n' }, (repoRoot) => {
+      writeFile(repoRoot, 'dev-packages.json', '{ "a": 2 }\n');
+      expect(() => readGitChanges(repoRoot, '-x')).toThrow();
     });
   });
 

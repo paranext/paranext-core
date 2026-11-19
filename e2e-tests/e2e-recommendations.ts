@@ -78,13 +78,14 @@ export interface E2eRecommendationReport {
   /**
    * Keys matched through `main`, sorted by key. A spec key (or a collapsed item) whose subset is
    * recommended too is folded into the subset, its matched files merged in: running the subset runs
-   * the spec.
+   * the spec. When `dependencyChangedFiles` is non-empty the list also carries the item `all` (the
+   * full isolated run) with a `reason`.
    */
   recommendations: E2eRecommendation[];
   /**
    * Keys matched only through `incidental`, sorted by key. A spec key whose subset is recommended
    * is left out (the subset's run covers it); one whose subset is listed here too is merged into
-   * it.
+   * it. Empty when the item `all` is recommended: the full run includes every key.
    */
   alsoExercised: { key: string; matchedFiles: string[] }[];
   /**
@@ -146,7 +147,10 @@ export interface RecommendInput {
   deletedFiles: string[];
   /**
    * The subset of `changedFiles` whose change alters a dependency ({@link readGitChanges} decides
-   * which): each recommends the full isolated run.
+   * which): a dependency field (npm or NuGet) or an engine or SDK pin (`volta`, `engines`,
+   * `global.json`), a lock file line other than a name or version, a pin in `dev-packages.json` or
+   * a patch. A package's own `version` bump, a script edit and reformatting do not. Any of them
+   * recommends the full isolated run.
    */
   dependencyChangedFiles: string[];
   /** Every file git tracks (and every untracked one), repository-relative, as written on disk. */
@@ -196,6 +200,9 @@ const NOT_APP_SHAPES = [
   String.raw`(^|\/)vitest\.[^/]*\.ts$`,
   String.raw`\.test-harness\.`,
   String.raw`(^|\/)(test-utils|__test-mocks__)\/`,
+  // Test helpers and test data named after what they serve (`test.utils.ts`, `*-test-data/`,
+  // `footnote-util-test.usj.data.ts`); only tests import them.
+  String.raw`(^|\/)test\.utils\.|(^|\/)[^/]*-test-data\/|-test\.[^/]*\.data\.`,
   // The component library's Storybook helpers and story pages, which only stories load.
   String.raw`^lib\/[^/]+\/src\/(storybook|stories)\/`,
   // The core Storybook's own pages and the components only they render.
@@ -238,9 +245,11 @@ const NOT_APP_SHAPES = [
  * metadata, lock files, .NET project files, image and font assets. A change to one is an app change
  * ({@link isAppFile}) yet never a recommendation or an uncovered file, because a key cannot name
  * what it tests there (a version or dependency bump changes no behaviour a spec can pin). A
- * dependency file's change recommends the full isolated run instead. A change to a manifest's main,
- * menus, settings or activation events goes unnoticed here: a release bumps every manifest's
- * version at once, so listing manifests would flag every release branch.
+ * dependency change ({@link isDependencyLockChange}, {@link isDependencyPackageChange},
+ * {@link isDependencyPinsChange}, {@link isDotnetDependencyChange}) recommends the full isolated run
+ * instead. A change to a manifest's main, menus, settings or activation events goes unnoticed here:
+ * a release bumps every manifest's version at once, so listing manifests would flag every release
+ * branch.
  */
 const SHIPPED_METADATA_SHAPES = [
   // Package and extension metadata, and the lock files. npm rewrites the root lock file's name in
@@ -313,14 +322,19 @@ const isE2eSpecSupport = (file: string) => {
 
 /**
  * The files that can carry a dependency change: the lock files, the root and the packaged app's
- * `package.json`, and the dev package pins. The `package.json` files of `lib/*` and of the
- * extensions are not listed: the root `package.json`'s `workspaces` (`lib/*`, `extensions`,
- * `extensions/src/*`) share the root `package-lock.json`, so a real dependency change in a
- * workspace changes that lock file too.
+ * `package.json`, the dev package pins, the .NET SDK pin, the patches and the .NET project files.
+ * The `package.json` files of `lib/*` and of the extensions are not listed: the root
+ * `package.json`'s `workspaces` (`lib/*`, `extensions`, `extensions/src/*`) share the root
+ * `package-lock.json`, so a real dependency change in a workspace changes that lock file too.
  */
 const LOCK_FILES = ['package-lock.json', 'release/app/package-lock.json'];
 const PACKAGE_FILES = ['package.json', 'release/app/package.json'];
 const DEV_PACKAGES_FILE = 'dev-packages.json';
+const DOTNET_SDK_PIN_FILE = 'global.json';
+const isPatchFile = (file: string) => file.startsWith('patches/') && file.endsWith('.patch');
+/** A .NET project or build properties file of the app (the test and analyzer projects excluded). */
+const isDotnetProjectFile = (file: string) =>
+  file.startsWith('c-sharp/') && /\.(csproj|props)$/.test(file) && isAppFile(file);
 
 /** The `package.json` fields that name a dependency or an engine the app is built and run with. */
 const PACKAGE_DEPENDENCY_FIELDS = [
@@ -338,20 +352,36 @@ const changedDiffLines = (diffLines: string[]) =>
   diffLines.filter((line) => /^[-+]/.test(line) && !/^(\+\+\+|---) /.test(line));
 
 const isNameOrVersionLine = (line: string) => /^[-+]\s*"(name|version)":/.test(line);
+const isBlankChange = (line: string) => line.slice(1).trim() === '';
 
 /**
- * Whether a diff of `package-lock.json` changes a dependency: a changed line other than a `"name"`
- * or `"version"` field. A real dependency change also changes a `"resolved"` or `"integrity"` line,
- * or adds or removes a block; a release bump changes only versions.
+ * Whether a diff of a lock file changes a dependency: a changed line other than a `"name"` or
+ * `"version"` field or a blank line. A real dependency change also changes a `"resolved"` or
+ * `"integrity"` line, or adds or removes a block; a release bump changes only versions.
  */
 export function isDependencyLockChange(diffLines: string[]): boolean {
-  return changedDiffLines(diffLines).some((line) => !isNameOrVersionLine(line));
+  return changedDiffLines(diffLines).some(
+    (line) => !isNameOrVersionLine(line) && !isBlankChange(line),
+  );
+}
+
+/** The JSON text of `value` with every object's keys sorted, so key order never matters. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value instanceof Object) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(Reflect.get(value, key))}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? '';
 }
 
 /**
  * Whether a `package.json` differs in a dependency field ({@link PACKAGE_DEPENDENCY_FIELDS}) between
- * its content `before` (at the merge base) and `after` (in the working tree). A file missing on
- * either side, or one that cannot be parsed, counts: that fails toward recommending the full run.
+ * its content `before` (at the merge base) and `after` (in the working tree), whatever the order of
+ * the keys. A file missing on either side, or one that cannot be parsed, counts: that fails toward
+ * recommending the full run.
  */
 export function isDependencyPackageChange(
   before: string | undefined,
@@ -361,12 +391,39 @@ export function isDependencyPackageChange(
   try {
     const previous: unknown = JSON.parse(before);
     const current: unknown = JSON.parse(after);
-    const field = (manifest: unknown, name: string): string =>
-      JSON.stringify(manifest instanceof Object ? Reflect.get(manifest, name) : undefined) ?? '';
+    const field = (manifest: unknown, name: string) =>
+      stableJson(manifest instanceof Object ? Reflect.get(manifest, name) : undefined);
     return PACKAGE_DEPENDENCY_FIELDS.some((name) => field(previous, name) !== field(current, name));
   } catch {
     return true;
   }
+}
+
+/**
+ * Whether `dev-packages.json` differs in content between `before` (at the merge base) and `after`
+ * (in the working tree): a reformat or a reordered key is not a pin change. A file missing on
+ * either side, or one that cannot be parsed, counts.
+ */
+export function isDependencyPinsChange(
+  before: string | undefined,
+  after: string | undefined,
+): boolean {
+  if (before === undefined || after === undefined) return true;
+  try {
+    return stableJson(JSON.parse(before)) !== stableJson(JSON.parse(after));
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Whether a diff of a .NET project or build properties file changes a dependency: an added or
+ * removed line naming a `PackageReference`, the `ParatextPackageVersion` or the `TargetFramework`.
+ */
+export function isDotnetDependencyChange(diffLines: string[]): boolean {
+  return changedDiffLines(diffLines).some((line) =>
+    /PackageReference|ParatextPackageVersion|TargetFramework/.test(line),
+  );
 }
 
 /** Menu contributions of the extensions and the core menu data. */
@@ -713,7 +770,7 @@ function onlyNameFieldChanged(diffLines: string[]): boolean {
 /** The content of `file` at `ref`, or undefined when the file does not exist there. */
 function contentAt(repoRoot: string, ref: string, file: string): string | undefined {
   try {
-    return execFileSync('git', ['show', `${ref}:${file}`], {
+    return execFileSync('git', ['show', '--end-of-options', `${ref}:${file}`], {
       cwd: repoRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -781,7 +838,14 @@ export function readGitChanges(
         contentAt(repoRoot, mergeBase, file),
         workingContent(repoRoot, file),
       );
-    return file === DEV_PACKAGES_FILE;
+    if (file === DEV_PACKAGES_FILE)
+      return isDependencyPinsChange(
+        contentAt(repoRoot, mergeBase, file),
+        workingContent(repoRoot, file),
+      );
+    if (isDotnetProjectFile(file))
+      return isDotnetDependencyChange(diffLinesOf(repoRoot, mergeBase, file));
+    return file === DOTNET_SDK_PIN_FILE || isPatchFile(file);
   });
   return {
     changedFiles: [

@@ -328,7 +328,7 @@ npx tsx "$(git rev-parse --show-toplevel)/e2e-tests/e2e-recommendations.ts" <MER
 
 It prints a JSON report with these fields:
 
-- `recommendations`: isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`. A dependency change adds the item `all`, the full isolated run, with a `reason`: a lock file (`package-lock.json`, `release/app/package-lock.json`) line other than a `"name"` or `"version"` field, a dependency, engine or `volta` field of the root or `release/app` `package.json` that differs from the merge base, or any change to `dev-packages.json`. A version bump, a script edit or a blank line does not; a dev tool's version bump does. When `all` is present, `alsoExercised` is empty, because the full run includes those keys.
+- `recommendations`: isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`. A dependency change adds the item `all`, the full isolated run, with a `reason`: a dependency field (`dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies`, `overrides`) or an engine or SDK pin (`engines`, `volta`, `global.json`) differs in the root or `release/app` `package.json`; a NuGet `PackageReference`, `ParatextPackageVersion` or `TargetFramework` line changes in a `.csproj` or `.props` file of the app; a lock file line other than a `"name"` or `"version"` field changes; a pin in `dev-packages.json` changes; or a patch under `patches/` changes. A bump of a package's own `version` (a release bump), a script edit and reformatting do not; a dependency's own version bump does, a dev tool's included. When `all` is present, `alsoExercised` is empty, because the full run includes those keys.
 - `alsoExercised`: keys whose specs only drive the changed files along the way, each with its `key` and `matchedFiles`.
 - `uncoveredFiles`: changed, existing runtime files under `src/`, `extensions/src/` and `c-sharp/` that no key lists; only files under those three roots are listed, so an extension's own webpack or PostCSS configuration under `extensions/src/` is listed when no key names it, while the top-level build configuration is not. Files that hold no code a key could list (tests, stories, docs, licenses, tool configuration, package, TypeScript and .NET project metadata, image assets; `NON_RUNTIME` in `e2e-tests/e2e-recommendations.ts`) are never listed. A `lib/` file is listed under no key unless some key names it.
 - `entryPointFiles`: changed menu, web view provider and command or request handler registration files.
@@ -359,7 +359,7 @@ Then ask:
 
 > "These isolated e2e tests cover files you changed: [list]. Did you run them? (ran and passed / ran and failed / not run, and why)"
 
-Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>: not run: <reason>". For a collapsed item, record one line for the item and name its `memberKeys` beside it.
+Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>: not run: <reason>". For a collapsed item, record one line for the item and name its `memberKeys` beside it. When `all` is present, record one line `all: ran, passed`, `all: ran, failed: <what>` or `all: not run: <reason>`, and the other items as "covered by all".
 
 **Also-exercised line** (no question) — applies whenever `alsoExercised` is non-empty, whether or not `recommendations` is: print one line naming those keys: "These also open the code you changed, if you want to run more: <keys>."
 

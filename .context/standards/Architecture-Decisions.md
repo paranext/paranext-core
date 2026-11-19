@@ -2947,15 +2947,19 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **A dependency change recommends the full isolated run.** When a dependency changes, the report
     adds the item `all` (`npm run test:e2e:isolated all`) and no also-exercised line, because a
     dependency can break any area, no subset stands in for it and the full run includes every key.
-    What counts as a dependency change: a lock file (`package-lock.json`,
-    `release/app/package-lock.json`) with a changed line other than a `"name"` or `"version"`
-    field (a real change also moves a `"resolved"` or `"integrity"` line, or adds or removes a
-    block); the root or `release/app` `package.json` when one of `dependencies`, `devDependencies`,
-    `peerDependencies`, `optionalDependencies`, `overrides`, `engines` or `volta` differs from the
-    merge base (a file missing or unparseable on either side counts); any change to
-    `dev-packages.json`. A release version bump, a script edit or a blank line does not. The
-    `package.json` files of the workspaces are not checked: they share the root lock file, which
-    changes with them. A lock file whose only change is the name npm rewrites in a git worktree is
+    What counts as a dependency change: a dependency field (npm or NuGet) or an engine or SDK pin;
+    a lock file (`package-lock.json`, `release/app/package-lock.json`) line other than a `"name"`
+    or `"version"` field or a blank line (a real change also moves a `"resolved"` or `"integrity"`
+    line, or adds or removes a block); the root or `release/app` `package.json` when one of
+    `dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies`, `overrides`,
+    `engines` or `volta` differs from the merge base, whatever the key order (a file missing or
+    unparseable on either side counts); a `PackageReference`, `ParatextPackageVersion` or
+    `TargetFramework` line in a `.csproj` or `.props` file of the app (test and analyzer projects
+    excluded); any change to `global.json` (the .NET SDK pin, as `volta` is for Node); a pin that
+    differs in `dev-packages.json` once parsed; and any change to a patch under `patches/`, which
+    changes dependency code the app loads. A release version bump, a script edit and reformatting do
+    not. The `package.json` files of the workspaces are not checked: they share the root lock file,
+    which changes with them. A lock file whose only change is the name npm rewrites in a git worktree is
     left out of the changed files. The alternative, mapping the files to the editor subset only,
     under-tests everything else; recommending the full run for any edit to the files would fire on
     every release bump. A dev tool's version bump (eslint, prettier) still recommends `all`,
