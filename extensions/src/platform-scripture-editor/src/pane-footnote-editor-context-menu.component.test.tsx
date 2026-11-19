@@ -229,6 +229,11 @@ describe('PaneFootnoteEditorContextMenu', () => {
       await flush();
 
       expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringMatching(
+          new RegExp(`footnote editor.*${WEB_VIEW_ID} was requested.*main editor: false`),
+        ),
+      );
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
         expect.stringMatching(new RegExp(`footnote editor.*${WEB_VIEW_ID}.*without a pick`)),
       );
     });

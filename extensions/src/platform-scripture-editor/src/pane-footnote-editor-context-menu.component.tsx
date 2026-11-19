@@ -9,8 +9,8 @@ import {
   createContextMenuCommandEffects,
   dispatchContextMenuPick,
   getContextMenuShowOptions,
-  logContextMenuOutcome,
 } from './editor-context-menu-pick.util';
+import { useContextMenuRequestLog } from './use-context-menu-request-log.hook';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
 
 /** The row editor's handle method behind each clipboard command the menu can pick. */
@@ -68,18 +68,22 @@ export function PaneFootnoteEditorContextMenu({
   // eslint-disable-next-line no-null/no-null
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  const trackRequest = useContextMenuRequestLog({
+    webViewId,
+    editorName: 'footnote editor',
+    isMainEditor: false,
+    logger,
+  });
   const { isClaimingKeys } = useEditorContextMenu({
     containerRef: wrapperRef,
     requestMenu: (request) =>
-      logContextMenuOutcome(
+      trackRequest(
+        request,
         papi.overlays.showContextMenu(
           SCRIPTURE_EDITOR_WEBVIEW_TYPE,
           webViewId,
           getContextMenuShowOptions(request, false),
         ),
-        webViewId,
-        'footnote editor',
-        logger,
       ),
     dismissMenu: () => papi.overlays.dismissContextMenu(webViewId),
     onPick: (command, request) =>

@@ -205,8 +205,8 @@ import {
   createContextMenuCommandEffects,
   dispatchContextMenuPick,
   getContextMenuShowOptions,
-  logContextMenuOutcome,
 } from './editor-context-menu-pick.util';
+import { useContextMenuRequestLog } from './use-context-menu-request-log.hook';
 import { PaneFootnoteEditorContextMenu } from './pane-footnote-editor-context-menu.component';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
@@ -5314,21 +5314,25 @@ function PlatformScriptureEditor({
   // wrapper, not `editorContainerRef`: that also holds the footnotes pane, its row editor and the
   // header alerts, none of which this menu serves. It is enabled in every state that shows the
   // text, read-only, Preview and resources included: the menu's own conditions decide its items.
+  const trackEditorContextMenuRequest = useContextMenuRequestLog({
+    webViewId,
+    editorName: 'editor',
+    isMainEditor: true,
+    logger,
+  });
   const { dismiss: dismissEditorContextMenu, isClaimingKeys: isEditorContextMenuClaimingKeys } =
     useEditorContextMenu({
       containerRef: mainEditorWrapperRef,
       isEnabled: isEditorTextShown,
       hasNonTextSelection: () => !!editorRef.current?.getSelectedParaMarker(),
       requestMenu: (request) =>
-        logContextMenuOutcome(
+        trackEditorContextMenuRequest(
+          request,
           papi.overlays.showContextMenu(
             SCRIPTURE_EDITOR_WEBVIEW_TYPE,
             webViewId,
             getContextMenuShowOptions(request, true),
           ),
-          webViewId,
-          'editor',
-          logger,
         ),
       dismissMenu: () => papi.overlays.dismissContextMenu(webViewId),
       onPick: (command, request) =>
