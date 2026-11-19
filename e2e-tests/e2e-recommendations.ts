@@ -144,6 +144,11 @@ export interface RecommendInput {
   filesChangingCommandRegistrations: string[];
   /** The subset of `changedFiles` that no longer exist. */
   deletedFiles: string[];
+  /**
+   * The subset of `changedFiles` whose change alters a dependency ({@link readGitChanges} decides
+   * which): each recommends the full isolated run.
+   */
+  dependencyChangedFiles: string[];
   /** Every file git tracks (and every untracked one), repository-relative, as written on disk. */
   trackedFiles: string[];
   /**
@@ -179,15 +184,20 @@ export const REGISTRATION_PATTERN =
  * Storybook stories and their support code, docs, type declarations, the unit-test runner's
  * configuration, the C# test projects, every dotfile and dot-directory below the top level (the
  * formatter, linter, editor and Git configuration, `.github/` workflows, `.vscode/` settings),
- * spelling and TypeScript configuration, licenses, documentation and watcher tooling at the top
- * level, the extension template's release scripts and the Roslyn analyzers. One alternative per
- * line, each with its reason.
+ * spelling configuration, licenses, documentation and watcher tooling at the top level, the
+ * extension template's release scripts and the Roslyn analyzers. One alternative per line, each
+ * with its reason.
  */
 const NOT_APP_SHAPES = [
   // Unit tests, their helpers and fixtures, Storybook stories and the data only stories use.
   String.raw`\.test\.|\.test-utils?\.|\.fixtures\.|\.stories\.|\.story-data\.`,
-  // The unit-test runner's configuration and setup files at the top level.
-  String.raw`^vitest\.(config|setup[^/]*)\.ts$`,
+  // Test-runner configuration and setup files (`vitest.config.ts`, `vitest.unit.setup.ts`), the
+  // component tests' harness, their helper directories and the extensions' test mocks.
+  String.raw`(^|\/)vitest\.[^/]*\.ts$`,
+  String.raw`\.test-harness\.`,
+  String.raw`(^|\/)(test-utils|__test-mocks__)\/`,
+  // The component library's Storybook helpers and story pages, which only stories load.
+  String.raw`^lib\/[^/]+\/src\/(storybook|stories)\/`,
   // The core Storybook's own pages and the components only they render.
   String.raw`^src\/stories\/`,
   // Documentation and licenses.
@@ -207,16 +217,16 @@ const NOT_APP_SHAPES = [
   String.raw`^c-sharp-tests\/`,
   // IDE settings of the .NET solution.
   String.raw`\.DotSettings$`,
-  // Documentation and dev-watcher tooling at the top level, run by hand.
+  // The Ruby documentation tooling's Gemfile and nodemon's watcher configuration, run by hand.
   String.raw`^(Gemfile(\.lock)?|nodemon\.json)$`,
   // Analyzer configuration. `.globalconfig` files have arbitrary names
   // (`ai-analyzers.globalconfig`), so only the suffix is matched.
   String.raw`\.globalconfig$`,
   // Roslyn analyzers run at build time; the app never loads them.
   String.raw`(^|\/)c-sharp\/Paranext\.Analyzers\/`,
-  // Per-extension spelling and TypeScript configuration (a template merge rewrites these in every
-  // extension). Runtime JSON such as `menus.json` is not here.
-  String.raw`(^|\/)(tsconfig[^/]*\.json|cspell\.json)$`,
+  // Spelling configuration (a template merge rewrites it in every extension). Runtime JSON such as
+  // `menus.json` is not here.
+  String.raw`(^|\/)cspell\.json$`,
   // The extension template's release scripts, run by hand or from its `.github/` workflows.
   // The other files under an extension's `lib/` can feed the build (`download-db.ts` fetches the
   // data the extension ships), so they stay runtime.
@@ -236,6 +246,8 @@ const SHIPPED_METADATA_SHAPES = [
   // Package and extension metadata, and the lock files. npm rewrites the root lock file's name in
   // every worktree; `readGitChanges` leaves a name-only change out.
   String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
+  // TypeScript configuration: it sets the build's emit target, JSX mode and path aliases.
+  String.raw`(^|\/)tsconfig[^/]*\.json$`,
   // The third-party notices' lock file.
   String.raw`^THIRD-PARTY-NOTICES\.lock\.json$`,
   // .NET build metadata: projects, shared build properties and the solution. The data provider's
@@ -300,15 +312,62 @@ const isE2eSpecSupport = (file: string) => {
 };
 
 /**
- * The files whose change can alter what any part of the app does: the root and the packaged app's
- * `package.json`, the lock file and the dev package pins.
+ * The files that can carry a dependency change: the lock files, the root and the packaged app's
+ * `package.json`, and the dev package pins. The `package.json` files of `lib/*` and of the
+ * extensions are not listed: the root `package.json`'s `workspaces` (`lib/*`, `extensions`,
+ * `extensions/src/*`) share the root `package-lock.json`, so a real dependency change in a
+ * workspace changes that lock file too.
  */
-const DEPENDENCY_FILES = [
-  'package.json',
-  'package-lock.json',
-  'release/app/package.json',
-  'dev-packages.json',
+const LOCK_FILES = ['package-lock.json', 'release/app/package-lock.json'];
+const PACKAGE_FILES = ['package.json', 'release/app/package.json'];
+const DEV_PACKAGES_FILE = 'dev-packages.json';
+
+/** The `package.json` fields that name a dependency or an engine the app is built and run with. */
+const PACKAGE_DEPENDENCY_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+  'overrides',
+  'engines',
+  'volta',
 ];
+
+/** The added and removed lines of a diff, without its file headers. */
+const changedDiffLines = (diffLines: string[]) =>
+  diffLines.filter((line) => /^[-+]/.test(line) && !/^(\+\+\+|---) /.test(line));
+
+const isNameOrVersionLine = (line: string) => /^[-+]\s*"(name|version)":/.test(line);
+
+/**
+ * Whether a diff of `package-lock.json` changes a dependency: a changed line other than a `"name"`
+ * or `"version"` field. A real dependency change also changes a `"resolved"` or `"integrity"` line,
+ * or adds or removes a block; a release bump changes only versions.
+ */
+export function isDependencyLockChange(diffLines: string[]): boolean {
+  return changedDiffLines(diffLines).some((line) => !isNameOrVersionLine(line));
+}
+
+/**
+ * Whether a `package.json` differs in a dependency field ({@link PACKAGE_DEPENDENCY_FIELDS}) between
+ * its content `before` (at the merge base) and `after` (in the working tree). A file missing on
+ * either side, or one that cannot be parsed, counts: that fails toward recommending the full run.
+ */
+export function isDependencyPackageChange(
+  before: string | undefined,
+  after: string | undefined,
+): boolean {
+  if (before === undefined || after === undefined) return true;
+  try {
+    const previous: unknown = JSON.parse(before);
+    const current: unknown = JSON.parse(after);
+    const field = (manifest: unknown, name: string): string =>
+      JSON.stringify(manifest instanceof Object ? Reflect.get(manifest, name) : undefined) ?? '';
+    return PACKAGE_DEPENDENCY_FIELDS.some((name) => field(previous, name) !== field(current, name));
+  } catch {
+    return true;
+  }
+}
 
 /** Menu contributions of the extensions and the core menu data. */
 const isMenuFile = (file: string) =>
@@ -524,15 +583,13 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     ci: ciStatus(key, input),
   }));
   const mapRecommendations = foldIntoSubsets(collapseSpecGroups(singles, input));
-  const changedDependencyFiles = input.changedFiles.filter((file) =>
-    DEPENDENCY_FILES.includes(file),
-  );
-  // A dependency change can break anything, so no subset stands in for the full run.
+  const changedDependencyFiles = input.dependencyChangedFiles;
+  // A dependency change can break any area, so no subset stands in for the full run.
   const fullRun: E2eRecommendation = {
     key: 'all',
     command: isolatedCommand('all'),
     matchedFiles: [...changedDependencyFiles].sort(),
-    reason: 'a dependency file changed',
+    reason: 'a dependency changed',
     ci: { kind: 'all' },
   };
   const recommendations =
@@ -559,7 +616,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
       return;
     mergedFiles.set(subset, [...(mergedFiles.get(subset) ?? []), ...entry.matchedFiles]);
   });
-  const alsoExercised = incidentalOnly
+  const exercised = incidentalOnly
     .filter((entry) => {
       const subset = subsetOfNestedKey(entry.key);
       return (
@@ -572,6 +629,8 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
         ...new Set([...entry.matchedFiles, ...(mergedFiles.get(entry.key) ?? [])]),
       ].sort(),
     }));
+  // The full run includes every key a change only drives along the way.
+  const alsoExercised = changedDependencyFiles.length > 0 ? [] : exercised;
 
   const allPrefixes = keys.flatMap((key) => [
     ...input.sources[key].main,
@@ -636,23 +695,42 @@ function listSpecFiles(directory: string): string[] {
   });
 }
 
+/** The diff lines of `file` against `mergeBase`, without context. */
+function diffLinesOf(repoRoot: string, mergeBase: string, file: string): string[] {
+  return git(repoRoot, 'diff', '--no-renames', '-U0', '--end-of-options', mergeBase, '--', file);
+}
+
 /**
- * Whether the only lines `file` changed against `mergeBase` are `"name"` fields: what `npm install`
- * rewrites in a git worktree, where the lock file takes the directory's name. Such a change alters
- * no dependency.
+ * Whether the only lines changed in `diffLines` are `"name"` fields: what `npm install` rewrites in
+ * a lock file in a git worktree, where it takes the directory's name. Such a change alters
+ * nothing.
  */
-function onlyNameFieldChanged(repoRoot: string, mergeBase: string, file: string): boolean {
-  const changedLines = git(
-    repoRoot,
-    'diff',
-    '--no-renames',
-    '-U0',
-    '--end-of-options',
-    mergeBase,
-    '--',
-    file,
-  ).filter((line) => /^[-+]/.test(line) && !/^(\+\+\+|---) /.test(line));
-  return changedLines.length > 0 && changedLines.every((line) => /^[-+]\s*"name":/.test(line));
+function onlyNameFieldChanged(diffLines: string[]): boolean {
+  const changed = changedDiffLines(diffLines);
+  return changed.length > 0 && changed.every((line) => /^[-+]\s*"name":/.test(line));
+}
+
+/** The content of `file` at `ref`, or undefined when the file does not exist there. */
+function contentAt(repoRoot: string, ref: string, file: string): string | undefined {
+  try {
+    return execFileSync('git', ['show', `${ref}:${file}`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+/** The content of `file` in the working tree, or undefined when it does not exist. */
+function workingContent(repoRoot: string, file: string): string | undefined {
+  try {
+    return fs.readFileSync(path.join(repoRoot, file), 'utf8');
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -664,7 +742,10 @@ function onlyNameFieldChanged(repoRoot: string, mergeBase: string, file: string)
 export function readGitChanges(
   repoRoot: string,
   mergeBase: string,
-): Pick<RecommendInput, 'changedFiles' | 'filesChangingCommandRegistrations' | 'deletedFiles'> {
+): Pick<
+  RecommendInput,
+  'changedFiles' | 'filesChangingCommandRegistrations' | 'deletedFiles' | 'dependencyChangedFiles'
+> {
   const untrackedFiles = git(repoRoot, 'ls-files', '--others', '--exclude-standard');
   const registrationRegExp = new RegExp(REGISTRATION_PATTERN);
   const untrackedRegistering = untrackedFiles
@@ -687,16 +768,32 @@ export function readGitChanges(
     '--end-of-options',
     mergeBase,
   );
+  const lockDiffs = new Map(
+    diffFiles
+      .filter((file) => LOCK_FILES.includes(file))
+      .map((file) => [file, diffLinesOf(repoRoot, mergeBase, file)]),
+  );
+  const dependencyChangedFiles = diffFiles.filter((file) => {
+    const lockDiff = lockDiffs.get(file);
+    if (lockDiff) return isDependencyLockChange(lockDiff);
+    if (PACKAGE_FILES.includes(file))
+      return isDependencyPackageChange(
+        contentAt(repoRoot, mergeBase, file),
+        workingContent(repoRoot, file),
+      );
+    return file === DEV_PACKAGES_FILE;
+  });
   return {
     changedFiles: [
       ...new Set([
-        ...diffFiles.filter(
-          (file) =>
-            file !== 'package-lock.json' || !onlyNameFieldChanged(repoRoot, mergeBase, file),
-        ),
+        ...diffFiles.filter((file) => {
+          const lockDiff = lockDiffs.get(file);
+          return !lockDiff || !onlyNameFieldChanged(lockDiff);
+        }),
         ...untrackedFiles,
       ]),
     ],
+    dependencyChangedFiles,
     deletedFiles: git(
       repoRoot,
       'diff',

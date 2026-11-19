@@ -18,6 +18,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { editorPathsPattern, parseEditorPathEntries, readEditorPathEntries } from './core-specs';
 import {
   isAppFile,
+  isDependencyLockChange,
+  isDependencyPackageChange,
   isEntryPoint,
   isNonRuntime,
   isPrefixKey,
@@ -143,6 +145,7 @@ function recommend(changedFiles: string[], overrides: Partial<RecommendInput> = 
     changedFiles,
     filesChangingCommandRegistrations: [],
     deletedFiles: [],
+    dependencyChangedFiles: [],
     trackedFiles: [],
     editorPaths: [],
     sources: FIXTURE_SOURCES,
@@ -631,6 +634,20 @@ describe('recommendE2eTests', () => {
     expect(runtime('.github/workflows/test.yml')).toBe(false);
     expect(runtime('.claude/commands/x.md')).toBe(false);
     expect(runtime('.husky/pre-commit')).toBe(false);
+    // The e2e suite's own files, wherever they sit under `e2e-tests/`.
+    expect(runtime('e2e-tests/core-specs.txt')).toBe(false);
+    // Test and story helpers and test-runner configuration outside the source roots.
+    [
+      'lib/platform-bible-react/src/test-utils/resize-observer.util.ts',
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.test-harness.tsx',
+      'lib/platform-bible-react/src/storybook/direction-toggle.component.tsx',
+      'lib/platform-bible-react/src/stories/basics/helper.tsx',
+      'extensions/__test-mocks__/@papi/backend.ts',
+      'lib/eslint-plugin-paranext/vitest.config.ts',
+      'extensions/vitest.config.ts',
+      'lib/platform-bible-react/vitest.unit.setup.ts',
+    ].forEach((file) => expect({ file, changed: runtime(file) }).toEqual({ file, changed: false }));
+    expect(runtime('e2e-tests/e2e-recommendations.ts')).toBe(false);
     expect(recommend([]).runtimeChanged).toBe(false);
   });
 
@@ -648,6 +665,9 @@ describe('recommendE2eTests', () => {
     'platform.bible-dev.desktop',
     'c-sharp/Paranext.Other/Other.csproj',
     'THIRD-PARTY-NOTICES.lock.json',
+    // The root configuration sets the emit target, JSX mode and path aliases of the build.
+    'tsconfig.json',
+    'lib/platform-bible-react/tsconfig.json',
   ])('counts %s as a change to the app', (file) => {
     expect(recommend([file]).runtimeChanged).toBe(true);
   });
@@ -702,32 +722,47 @@ describe('recommendE2eTests', () => {
     ).toEqual([]);
   });
 
-  it.each(['package.json', 'package-lock.json', 'release/app/package.json', 'dev-packages.json'])(
-    'recommends the full isolated run when %s changes',
-    (file) => {
-      const report = recommend([file]);
-      const all = report.recommendations.filter((recommendation) => recommendation.key === 'all');
-      expect(all).toHaveLength(1);
-      expect(all[0]).toMatchObject({
-        command: 'npm run test:e2e:isolated all',
-        matchedFiles: [file],
-        ci: { kind: 'all' },
-        reason: 'a dependency file changed',
-      });
-    },
-  );
+  it.each([
+    'package.json',
+    'package-lock.json',
+    'release/app/package.json',
+    'release/app/package-lock.json',
+    'dev-packages.json',
+  ])('recommends the full isolated run when %s changed a dependency', (file) => {
+    const report = recommend([file], { dependencyChangedFiles: [file] });
+    const all = report.recommendations.filter((recommendation) => recommendation.key === 'all');
+    expect(all).toHaveLength(1);
+    expect(all[0]).toMatchObject({
+      command: 'npm run test:e2e:isolated all',
+      matchedFiles: [file],
+      ci: { kind: 'all' },
+      reason: 'a dependency changed',
+    });
+  });
+
+  it('leaves out the also-exercised keys when the full run is recommended', () => {
+    const files = ['src/shared/services/x.ts', 'extensions/src/platform-scripture/a.ts'];
+    expect(recommend(files).alsoExercised).not.toEqual([]);
+    const report = recommend([...files, 'package.json'], {
+      dependencyChangedFiles: ['package.json'],
+    });
+    expect(recommendedKeys(report)).toContain('all');
+    expect(report.alsoExercised).toEqual([]);
+  });
 
   it('recommends the full run alongside the editor keys when dev-packages.json changes', () => {
-    const report = recommend(['dev-packages.json'], { sources: mapping });
+    const report = recommend(['dev-packages.json'], {
+      sources: mapping,
+      dependencyChangedFiles: ['dev-packages.json'],
+    });
     expect(recommendedKeys(report)).toEqual(expect.arrayContaining(['all', 'scripture-editor']));
   });
 
-  it.each(['extensions/src/hello-rock3/package.json', 'src/main/x.ts', 'README.md'])(
-    'recommends no full run for %s',
-    (file) => {
-      expect(recommendedKeys(recommend([file]))).not.toContain('all');
-    },
-  );
+  it('recommends no full run for a dependency file that changed no dependency', () => {
+    expect(
+      recommendedKeys(recommend(['package.json', 'package-lock.json', 'src/main/x.ts'])),
+    ).not.toContain('all');
+  });
 
   it('says whether the changed files make CI run the editor list', () => {
     const editorPaths = ['extensions/src/platform-scripture-editor/', 'dev-packages\\.json$'];
@@ -1022,6 +1057,62 @@ describe('recommendE2eTests', () => {
   });
 });
 
+describe('telling a dependency change from the rest of a dependency file', () => {
+  const header = ['--- a/package-lock.json', '+++ b/package-lock.json', '@@ -3 +3 @@'];
+
+  it.each([
+    [[]],
+    [['-  "name": "a"', '+  "name": "b"']],
+    [['-  "version": "1.0.0"', '+  "version": "1.0.1"']],
+    [['-  "name": "a"', '+  "name": "b"', '-  "version": "1.0.0"', '+  "version": "1.0.1"']],
+  ])('does not count the lock file lines %j as a dependency change', (lines) => {
+    expect(isDependencyLockChange([...header, ...lines])).toBe(false);
+  });
+
+  it.each([
+    [['-      "resolved": "https://x/a-1.tgz"', '+      "resolved": "https://x/a-2.tgz"']],
+    [['-      "integrity": "sha512-a"', '+      "integrity": "sha512-b"']],
+    [['+    "node_modules/new": {', '+      "version": "1.0.0"', '+    },']],
+    [['-  "version": "1.0.0"', '+  "version": "1.0.1"', '+      "integrity": "sha512-b"']],
+  ])('counts the lock file lines %j as a dependency change', (lines) => {
+    expect(isDependencyLockChange([...header, ...lines])).toBe(true);
+  });
+
+  const manifest = (fields: object) => JSON.stringify({ name: 'x', version: '1.0.0', ...fields });
+  const base = manifest({ scripts: { a: 'x' }, devDependencies: { eslint: '8.0.0' } });
+  const withDev = (fields: object) => manifest({ devDependencies: { eslint: '8.0.0' }, ...fields });
+
+  it.each([
+    ['a blank line', `${base}\n\n`],
+    ['a changed script', manifest({ scripts: { a: 'y' }, devDependencies: { eslint: '8.0.0' } })],
+    ['a release version bump', JSON.stringify({ ...JSON.parse(base), version: '1.1.0' })],
+  ])('does not count %s in a package file as a dependency change', (_label, after) => {
+    expect(isDependencyPackageChange(base, after)).toBe(false);
+  });
+
+  it.each([
+    [
+      'a devDependencies bump',
+      manifest({ scripts: { a: 'x' }, devDependencies: { eslint: '9.0.0' } }),
+    ],
+    ['a new dependency', withDev({ dependencies: { left: '1.0.0' } })],
+    ['an engines change', withDev({ engines: { node: '24' } })],
+    ['a volta change', withDev({ volta: { node: '24.0.0' } })],
+    ['an overrides change', withDev({ overrides: { a: '1' } })],
+    ['a peerDependencies change', withDev({ peerDependencies: { a: '1' } })],
+    ['an optionalDependencies change', withDev({ optionalDependencies: { a: '1' } })],
+    ['unparseable content', '{ not json'],
+    ['a deleted file', undefined],
+  ])('counts %s in a package file as a dependency change', (_label, after) => {
+    expect(isDependencyPackageChange(base, after)).toBe(true);
+  });
+
+  it('counts a package file that is missing or unparseable at the merge base', () => {
+    expect(isDependencyPackageChange(undefined, base)).toBe(true);
+    expect(isDependencyPackageChange('{ not json', base)).toBe(true);
+  });
+});
+
 describe('the editor list and the map', () => {
   // CI runs the editor list for every path `editor_paths` names; a runtime file among them that no
   // key lists would be recommended nothing, so the map must follow that list.
@@ -1034,16 +1125,24 @@ describe('the editor list and the map', () => {
     )
       .split('\n')
       .filter((file) => file !== '');
+    // The full run recommended for a dependency change is not a key from the map.
+    const reachesAKey = (file: string) =>
+      recommend([file], { sources: mapping, dependencyChangedFiles: [file] }).recommendations.some(
+        (recommendation) => recommendation.key !== 'all',
+      );
     const triggering = tracked.filter(
       (file) => pattern.test(file) && !isNonRuntime(file) && isAppFile(file),
     );
     expect(triggering).toContain('c-sharp/assets/usfm.sty');
-    // One path per line, so a failure lists every file the map leaves out.
+    // Control: a file only the full run covers does not reach a key.
     expect(
-      triggering
-        .filter((file) => recommend([file], { sources: mapping }).recommendations.length === 0)
-        .join('\n'),
-    ).toBe('');
+      recommend(['dev-packages.json'], {
+        sources: {},
+        dependencyChangedFiles: ['dev-packages.json'],
+      }).recommendations.map((recommendation) => recommendation.key),
+    ).toEqual(['all']);
+    // One path per line, so a failure lists every file the map leaves out.
+    expect(triggering.filter((file) => !reachesAKey(file)).join('\n')).toBe('');
   });
 });
 
@@ -1302,20 +1401,98 @@ describe('readGitChanges', () => {
     });
   });
 
-  it('leaves out a package-lock.json whose only change is the name field', () => {
+  const lockFile = (name: string, version: string, resolved = 'a-1.tgz') =>
+    `{\n  "name": "${name}",\n  "version": "${version}",\n  "packages": {\n    "": {\n      "name": "${name}",\n      "version": "${version}"\n    },\n    "node_modules/x": {\n      "version": "1.0.0",\n      "resolved": "${resolved}"\n    }\n  }\n}\n`;
+  const packageFile = (fields: object, trailing = '\n') =>
+    `${JSON.stringify({ name: 'x', version: '1.0.0', scripts: { a: 'x' }, ...fields }, undefined, 2)}${trailing}`;
+
+  /** Commits the dependency files, then runs `body` with the base SHA. */
+  function withDependencyFiles(body: (repoRoot: string, base: string) => void) {
     withTemporaryRepository((repoRoot) => {
-      const lock = (name: string, version: string) =>
-        `{\n  "name": "${name}",\n  "packages": {\n    "": {\n      "name": "${name}"\n    },\n    "node_modules/x": {\n      "version": "${version}"\n    }\n  }\n}\n`;
-      writeFile(repoRoot, 'package-lock.json', lock('base', '1.0.0'));
+      writeFile(repoRoot, 'package-lock.json', lockFile('base', '1.0.0'));
+      writeFile(repoRoot, 'package.json', packageFile({ devDependencies: { eslint: '8.0.0' } }));
+      writeFile(repoRoot, 'release/app/package.json', packageFile({ dependencies: { a: '1' } }));
+      writeFile(repoRoot, 'dev-packages.json', '{ "a": 1 }\n');
+      writeFile(repoRoot, 'release/app/package-lock.json', lockFile('app', '1.0.0'));
       runGit(repoRoot, 'add', '-A');
-      runGit(repoRoot, 'commit', '--quiet', '-m', 'lock');
-      const base = runGit(repoRoot, 'rev-parse', 'HEAD');
+      runGit(repoRoot, 'commit', '--quiet', '-m', 'dependency files');
+      body(repoRoot, runGit(repoRoot, 'rev-parse', 'HEAD'));
+    });
+  }
 
-      writeFile(repoRoot, 'package-lock.json', lock('worktree-directory', '1.0.0'));
-      expect(readGitChanges(repoRoot, base).changedFiles).not.toContain('package-lock.json');
+  it('leaves out a package-lock.json whose only change is the name field', () => {
+    withDependencyFiles((repoRoot, base) => {
+      writeFile(repoRoot, 'package-lock.json', lockFile('worktree-directory', '1.0.0'));
+      const changes = readGitChanges(repoRoot, base);
+      expect(changes.changedFiles).not.toContain('package-lock.json');
+      expect(changes.dependencyChangedFiles).toEqual([]);
+    });
+  });
 
-      writeFile(repoRoot, 'package-lock.json', lock('worktree-directory', '1.1.0'));
-      expect(readGitChanges(repoRoot, base).changedFiles).toContain('package-lock.json');
+  it('keeps a version-only change as a changed file but not as a dependency change', () => {
+    withDependencyFiles((repoRoot, base) => {
+      writeFile(repoRoot, 'package-lock.json', lockFile('base', '1.1.0'));
+      writeFile(
+        repoRoot,
+        'release/app/package.json',
+        packageFile({ dependencies: { a: '1' } }).replace('1.0.0', '1.1.0'),
+      );
+      const changes = readGitChanges(repoRoot, base);
+      expect(changes.changedFiles).toEqual(
+        expect.arrayContaining(['package-lock.json', 'release/app/package.json']),
+      );
+      expect(changes.dependencyChangedFiles).toEqual([]);
+    });
+  });
+
+  it('applies the lock file rule to the packaged app lock file too', () => {
+    withDependencyFiles((repoRoot, base) => {
+      writeFile(repoRoot, 'release/app/package-lock.json', lockFile('app', '1.1.0'));
+      let changes = readGitChanges(repoRoot, base);
+      expect(changes.changedFiles).toContain('release/app/package-lock.json');
+      expect(changes.dependencyChangedFiles).toEqual([]);
+
+      writeFile(repoRoot, 'release/app/package-lock.json', lockFile('app', '1.1.0', 'a-2.tgz'));
+      changes = readGitChanges(repoRoot, base);
+      expect(changes.dependencyChangedFiles).toEqual(['release/app/package-lock.json']);
+
+      writeFile(repoRoot, 'release/app/package-lock.json', lockFile('other', '1.0.0'));
+      expect(readGitChanges(repoRoot, base).changedFiles).not.toContain(
+        'release/app/package-lock.json',
+      );
+    });
+  });
+
+  it('counts a lock file whose resolved package changed', () => {
+    withDependencyFiles((repoRoot, base) => {
+      writeFile(repoRoot, 'package-lock.json', lockFile('base', '1.0.0', 'a-2.tgz'));
+      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual(['package-lock.json']);
+    });
+  });
+
+  it('counts a package.json only when a dependency field differs from the merge base', () => {
+    withDependencyFiles((repoRoot, base) => {
+      const dev = { devDependencies: { eslint: '8.0.0' } };
+      writeFile(repoRoot, 'package.json', packageFile(dev, '\n\n'));
+      expect(readGitChanges(repoRoot, base).changedFiles).toContain('package.json');
+      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
+
+      writeFile(repoRoot, 'package.json', packageFile({ ...dev, scripts: { a: 'changed' } }));
+      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
+
+      writeFile(repoRoot, 'package.json', packageFile({ devDependencies: { eslint: '9.0.0' } }));
+      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual(['package.json']);
+    });
+  });
+
+  it('counts any change to dev-packages.json and a package file deleted since the merge base', () => {
+    withDependencyFiles((repoRoot, base) => {
+      writeFile(repoRoot, 'dev-packages.json', '{ "a": 2 }\n');
+      fs.rmSync(path.join(repoRoot, 'release/app/package.json'));
+      expect(readGitChanges(repoRoot, base).dependencyChangedFiles.sort()).toEqual([
+        'dev-packages.json',
+        'release/app/package.json',
+      ]);
     });
   });
 

@@ -2924,12 +2924,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     new spec in the family is covered without a map edit. Spec keys of one subset that matched the
     same files still collapse into one path-filter command, only when that command runs exactly
     those specs.
-  - **What counts as app code.** `NON_RUNTIME` lists the shapes the app never loads (tests,
-    stories, docs, dotfiles, package and build metadata). A unit test runs it over every tracked
-    file under the source roots and fails on a file that is plainly not app code but still
-    classified as runtime; `LOADED_EXTENSIONS` in that test names the file types the app does load.
-    A file no key lists and `NON_RUNTIME` does not match is "uncovered", which is what triggers the
-    "does this need a new e2e test?" question.
+  - **What counts as app code.** Two lists of shapes in `e2e-recommendations.ts`:
+    `NOT_APP_SHAPES` for a file that is not an app change at all (tests and their helpers, stories,
+    docs, dotfiles, formatter, linter and spelling configuration, test-runner configuration), and
+    `SHIPPED_METADATA_SHAPES` for one that is an app change but holds nothing a key could list
+    (package and extension metadata, lock files, TypeScript configuration, .NET project files,
+    image assets). `NON_RUNTIME` is their union. A unit test runs it over every tracked file under
+    the source roots and fails on a file that is plainly not app code but still classified as
+    runtime; `LOADED_EXTENSIONS` in that test names the file types the app does load. A file no key
+    lists and `NON_RUNTIME` does not match is "uncovered", which is what triggers the "does this
+    need a new e2e test?" question.
   - **`runtimeChanged` is coarse.** A changed file counts as changing the app unless it is
     documentation, a unit test or its helpers, a story, tool or CI configuration (top-level
     dot-paths other than `.erb/`, formatter, linter and spelling configuration) or part of the e2e
@@ -2940,13 +2944,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     by mistake only widens when that judgment is consulted. Files under the source roots that hold
     no code a key could list (manifests, package files, .NET project files, image assets) still
     never become a recommendation or an uncovered file.
-  - **A dependency change recommends the full isolated run.** When the root `package.json`,
-    `package-lock.json`, `release/app/package.json` or `dev-packages.json` changes, the report adds
-    the item `all` (`npm run test:e2e:isolated all`), because a dependency can break any area and
-    no subset stands in for it. The alternative, mapping the files to the editor subset only,
-    under-tests everything else. A lock file whose only change is the
-    name npm rewrites in a git worktree is left out of the changed files, since it changes no
-    dependency.
+  - **A dependency change recommends the full isolated run.** When a dependency changes, the report
+    adds the item `all` (`npm run test:e2e:isolated all`) and no also-exercised line, because a
+    dependency can break any area, no subset stands in for it and the full run includes every key.
+    What counts as a dependency change: a lock file (`package-lock.json`,
+    `release/app/package-lock.json`) with a changed line other than a `"name"` or `"version"`
+    field (a real change also moves a `"resolved"` or `"integrity"` line, or adds or removes a
+    block); the root or `release/app` `package.json` when one of `dependencies`, `devDependencies`,
+    `peerDependencies`, `optionalDependencies`, `overrides`, `engines` or `volta` differs from the
+    merge base (a file missing or unparseable on either side counts); any change to
+    `dev-packages.json`. A release version bump, a script edit or a blank line does not. The
+    `package.json` files of the workspaces are not checked: they share the root lock file, which
+    changes with them. A lock file whose only change is the name npm rewrites in a git worktree is
+    left out of the changed files. The alternative, mapping the files to the editor subset only,
+    under-tests everything else; recommending the full run for any edit to the files would fire on
+    every release bump. A dev tool's version bump (eslint, prettier) still recommends `all`,
+    because telling dev-only packages apart would need a hand-kept list.
   - **An unreadable `editor_paths` is `'unknown'`, not false.** If the path list in `test.yml`
     cannot be parsed, `editorListRuns` is `'unknown'` and the report is still printed; answering
     false would claim the editor spec list does not run when nothing was checked.
@@ -2966,11 +2979,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   file for a reason unrelated to e2e, to protect a suggestion. Run the recommended specs
   automatically — rejected: the step is a reminder and never starts a run or blocks the review.
 - **Consequences:** A new group, or a new kind of non-app file, needs an edit to the map, to
-  `NON_RUNTIME` or to `LOADED_EXTENSIONS`, and the unit test says which. A map entry can be wrong
+  `NOT_APP_SHAPES` or `SHIPPED_METADATA_SHAPES` or to `LOADED_EXTENSIONS`, and the unit test says
+  which. A map entry can be wrong
   while every check passes (they prove an entry exists and names real paths, not that it is right),
   so reviewers of an area check its entries. Revisit if the review shows the "add a test?" question
   is noisy, or if specs gain declared sources that make a derived map possible.
-- **Source:** PT-5060
+- **Source:** PT-5060.
 
 ## adr-editor-annotation-exact-locations: An annotation holds exactly the bytes its range names, and removal reporting follows whatever holds it now
 

@@ -47,8 +47,9 @@ The test also fails when a tracked file under `src/`, `extensions/src/` or `c-sh
 never loads (a dotfile, a license, a story, a file type the app does not read) is still classified
 as runtime code. If the file is app code of a new type, add its extension to `LOADED_EXTENSIONS`
 in `e2e-recommendations.test.ts` (one file of a type the app does not load that still changes what
-it does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to `NON_RUNTIME` in
-`e2e-tests/e2e-recommendations.ts`. The test also fails when a runtime file that matches an
+it does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to
+`NOT_APP_SHAPES` in `e2e-tests/e2e-recommendations.ts` (a file that is not an app change at all)
+or to `SHIPPED_METADATA_SHAPES` (one that is an app change but holds nothing a key could list). The test also fails when a runtime file that matches an
 `editor_paths` entry in `test.yml` reaches no key through `main`: add it to the right key. A prefix that names a file that no longer exists does not fail
 the test: the recommender reports it as `stalePrefixes`, and `/review-paratext` warns about it, so
 moving or deleting a source file a prefix names means updating the prefix.

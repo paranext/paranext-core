@@ -53,8 +53,9 @@ missing, and when a tracked file under `src/`, `extensions/src/` or `c-sharp/` t
 loads (a dotfile, a license, a story, a file type the app does not read) is still classified as
 runtime code. If the file is app code of a new type, add its extension to `LOADED_EXTENSIONS` in
 `e2e-recommendations.test.ts` (one file of a type the app does not load that still changes what it
-does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to `NON_RUNTIME` in
-`e2e-recommendations.ts`. The test also fails when a runtime file that matches an `editor_paths`
+does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to
+`NOT_APP_SHAPES` in `e2e-recommendations.ts` (a file that is not an app change at all) or to
+`SHIPPED_METADATA_SHAPES` (one that is an app change but holds nothing a key could list). The test also fails when a runtime file that matches an `editor_paths`
 entry in `test.yml` reaches no key through `main`: add it to the right key. A prefix that names a file that no longer exists does not fail the test:
 `e2e-recommendations.ts` reports it as `stalePrefixes`, and `/review-paratext` shows it to the
 author as a warning, so moving or deleting a source file a prefix names means updating the prefix.
@@ -66,9 +67,12 @@ author as a warning, so moving or deleting a source file a prefix names means up
 `specsChanged` is true: the branch changes an e2e spec or its support code (any file under
 `tests/` or `fixtures/`, any `.ts` under `reporters/`, the global setup or teardown, a Playwright
 config, `scoped-cleanup.ts`, `parked-enhanced-resources.ts`, `run-isolated.mjs` or `run-e2e-wsl.sh`,
-except unit tests, Markdown files and `tests/isolated/subset-sources.json`). The recommender
-also recommends the full isolated run (`npm run test:e2e:isolated all`) when a dependency file
-(`package.json`, `package-lock.json`, `release/app/package.json` or `dev-packages.json`) changes.
+except unit tests, Markdown files and `tests/isolated/subset-sources.json`).
+
+The recommender also recommends the full isolated run (`npm run test:e2e:isolated all`) when a
+dependency changes: a lock file line other than a `"name"` or `"version"` field, a dependency,
+engine or `volta` field of the root or `release/app` `package.json`, or any change to
+`dev-packages.json`. A version bump, a script edit or a blank line does not.
 
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch
