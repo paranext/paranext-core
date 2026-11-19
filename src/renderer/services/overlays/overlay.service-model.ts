@@ -6,7 +6,7 @@
  * behalf.
  */
 
-import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+import { ContextKeyValue, LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
 import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 // Type-only, deliberately: this module is the overlay service's cross-process CONTRACT, and a
 // runtime value import from `platform-bible-react` here pulled the whole component library into
@@ -294,14 +294,34 @@ export interface IOverlayService {
    * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
    *   from within a WebView iframe.
    * @param options Optional context including the position for the menu
-   * @returns The command string that was executed, or `undefined` if dismissed
+   * @returns The command string that was picked (and run, unless `shouldRunCommand` is `false`), or
+   *   `undefined` if dismissed
    * @throws PlatformError with code ABORTED if replaced by another context menu from the same
    *   WebView
    */
   showContextMenu(
     webViewType: string,
     webViewId: string,
-    options?: { position?: { x: number; y: number } },
+    options?: {
+      position?: { x: number; y: number };
+      /**
+       * Whether the service runs the picked command. Defaults to `true`. With `false` the pick only
+       * resolves the promise, so the caller decides what to do with it. A caller that runs the
+       * command itself should note that an item whose command duplicates another visible item's
+       * command cannot be told apart by the resolved value.
+       *
+       * @experimental This option is unstable and may change or disappear without notice
+       */
+      shouldRunCommand?: boolean;
+      /**
+       * Context keys for this request only, evaluated by the menu's `when` and `enabledWhen`
+       * expressions as if they were shared context keys. A request key shadows a shared key of the
+       * same name and is never written to the shared context key service.
+       *
+       * @experimental This option is unstable and may change or disappear without notice
+       */
+      contextKeys?: Record<string, ContextKeyValue>;
+    },
   ): Promise<string | undefined>;
   /**
    * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
@@ -414,6 +434,16 @@ export interface IOverlayService {
    * @param webViewId The ID of the WebView whose command palette should be dismissed
    */
   dismissCommandPalette(webViewId: string): Promise<void>;
+  /**
+   * Dismisses the open context menu for the given WebView, resolving its `showContextMenu` promise
+   * with `undefined`; no command runs. No-op if no context menu is open for that WebView.
+   *
+   * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+   *
+   * @param webViewId The ID of the WebView whose context menu should be dismissed
+   * @experimental This method is unstable and may change or disappear without notice
+   */
+  dismissContextMenu(webViewId: string): Promise<void>;
 }
 
 // ── Internal Overlay Store Types ──

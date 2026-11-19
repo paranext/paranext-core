@@ -1,4 +1,9 @@
-import { EvaluatableMenu, WhenExpressionErrorHandler, evaluateMenu } from 'platform-bible-utils';
+import {
+  ContextKeyValue,
+  EvaluatableMenu,
+  WhenExpressionErrorHandler,
+  evaluateMenu,
+} from 'platform-bible-utils';
 import { contextKeysService } from '@shared/services/context-keys.service';
 
 /**
@@ -30,6 +35,10 @@ export type MenuEvaluationWithReads<T extends EvaluatableMenu> = {
  * @param menu The menu document to evaluate
  * @param templateVars Values for `{placeholder}` segments in expression property references
  * @param onError Called for each expression that fails to evaluate
+ * @param requestContextKeys Context keys supplied by the caller for this evaluation. A key present
+ *   here (own property) is answered from it and shadows a shared key of the same name; every other
+ *   key comes from the context keys service. Read keys are recorded either way. (Experimental: this
+ *   parameter is unstable and may change or disappear without notice)
  * @returns The evaluated menu and the set of keys it read
  * @experimental This function is unstable and may change or disappear without notice
  */
@@ -37,12 +46,16 @@ export function evaluateMenuRecordingReads<T extends EvaluatableMenu>(
   menu: T,
   templateVars: Record<string, string | undefined>,
   onError: WhenExpressionErrorHandler,
+  requestContextKeys?: Readonly<Record<string, ContextKeyValue>>,
 ): MenuEvaluationWithReads<T> {
   const readKeys = new Set<string>();
   const evaluatedMenu = evaluateMenu(
     menu,
     (key) => {
       readKeys.add(key);
+      if (requestContextKeys && Object.hasOwn(requestContextKeys, key)) {
+        return requestContextKeys[key];
+      }
       return contextKeysService.get(key);
     },
     templateVars,

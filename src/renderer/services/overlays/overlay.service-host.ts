@@ -40,6 +40,7 @@ import {
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
 import type {
+  ContextKeyValue,
   LanguageStrings,
   Localized,
   PlatformError,
@@ -557,14 +558,19 @@ function menuExpressionsUseTemplateVar(menu: Localized<SingleColumnMenu>, name: 
  *
  * @param webViewType The webViewType to look up in the menu data service
  * @param webViewId The webViewId that originated the request
- * @returns The command string that was executed, or undefined if dismissed
+ * @param options Position, whether to run the picked command, and per-request context keys
+ * @returns The picked command string, or undefined if dismissed
  * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
  *   debounce cooldown
  */
 async function showContextMenu(
   webViewType: string,
   webViewId: string,
-  options?: { position?: { x: number; y: number } },
+  options?: {
+    position?: { x: number; y: number };
+    shouldRunCommand?: boolean;
+    contextKeys?: Record<string, ContextKeyValue>;
+  },
 ): Promise<string | undefined> {
   if (!isWebViewVisible(webViewId)) {
     throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
@@ -609,6 +615,7 @@ async function showContextMenu(
     contextMenu,
     templateVars,
     onEvaluationError,
+    options?.contextKeys,
   );
   let { readKeys } = initialEvaluation;
   const items = convertContributionToContextMenuItems(initialEvaluation.evaluatedMenu);
@@ -665,7 +672,12 @@ async function showContextMenu(
     if (!readKeys.has(event.key)) return;
     try {
       if (!getOverlayById(overlayId)) return;
-      const next = evaluateMenuRecordingReads(contextMenu, templateVars, onEvaluationError);
+      const next = evaluateMenuRecordingReads(
+        contextMenu,
+        templateVars,
+        onEvaluationError,
+        options?.contextKeys,
+      );
       readKeys = next.readKeys;
       const nextItems = convertContributionToContextMenuItems(next.evaluatedMenu);
       if (nextItems.length === 0) {
@@ -685,7 +697,7 @@ async function showContextMenu(
     unsubscribe();
   }
 
-  if (selectedCommand) {
+  if (selectedCommand && options?.shouldRunCommand !== false) {
     try {
       // The command string comes from menu contributions at runtime so it can't be statically typed
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -1278,6 +1290,21 @@ async function dismissCommandPalette(webViewId: string): Promise<void> {
   resolveAndRemoveOverlay(entry.id, 'commandPalette', undefined);
 }
 
+/**
+ * Dismisses the open context menu for the given WebView, resolving its `showContextMenu` promise
+ * with `undefined` without running a command. No-op if no context menu is open for that WebView.
+ *
+ * @param webViewId The WebView whose context menu should be dismissed
+ */
+async function dismissContextMenu(webViewId: string): Promise<void> {
+  getOverlaysByWebView(webViewId)
+    .filter((overlay) => overlay.type === 'contextMenu')
+    .forEach((overlay) => {
+      markOverlayFocusReturnIfFocusInside(overlay.id);
+      resolveAndRemoveOverlay(overlay.id, 'contextMenu', undefined);
+    });
+}
+
 /** The overlay service instance exposed on papi */
 export const overlayService: IOverlayService = {
   showContextMenu,
@@ -1289,6 +1316,7 @@ export const overlayService: IOverlayService = {
   updateCommandPalette,
   commitCommandPaletteSelection,
   dismissCommandPalette,
+  dismissContextMenu,
 };
 
 // ── Event Listeners for Auto-Dismiss ──

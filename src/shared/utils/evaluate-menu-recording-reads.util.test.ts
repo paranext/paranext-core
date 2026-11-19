@@ -49,6 +49,26 @@ describe('evaluateMenuRecordingReads', () => {
     expect(readKeys).toEqual(new Set(['test.a']));
   });
 
+  it('lets a request key win over the service and still records the read', () => {
+    mockKeyValues.set('test.a', false);
+    const { evaluatedMenu, readKeys } = evaluateMenuRecordingReads(
+      menu,
+      { webViewId: 'wv1' },
+      () => {},
+      { 'test.a': true, 'test.b': true },
+    );
+    expect(readKeys).toEqual(new Set(['test.a', 'test.b', 'test.wv1.c']));
+    expect(evaluatedMenu.items.map((item) => item.label)).toEqual(['%a%', '%c%']);
+  });
+
+  it('falls through to the service for a key the request does not carry', () => {
+    mockKeyValues.set('test.a', true);
+    const { evaluatedMenu } = evaluateMenuRecordingReads(menu, { webViewId: 'wv1' }, () => {}, {
+      'test.b': false,
+    });
+    expect(evaluatedMenu.items.map((item) => item.label)).toEqual(['%c%']);
+  });
+
   it('returns the evaluated menu', () => {
     const { evaluatedMenu } = evaluateMenuRecordingReads(menu, { webViewId: 'wv1' }, () => {});
     expect(evaluatedMenu.items.map((item) => item.label)).toEqual(['%c%']);
