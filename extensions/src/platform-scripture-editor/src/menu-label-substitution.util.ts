@@ -64,7 +64,11 @@ export function substituteProjectNameInMenu<T extends Localized<MultiColumnMenu>
   return changed ? { ...menu, items } : menu;
 }
 
-/** The default web-view menu's "Project" column, which a resource tab relabels with its short name. */
+/**
+ * The default web-view menu's "Project" column, which a resource tab relabels with its short name.
+ * `platform.app` is the id of that column in `defaultWebViewTopMenu`
+ * (`src/extension-host/data/menu.data.json`).
+ */
 export const PROJECT_COLUMN_KEY = 'platform.app';
 
 /**

@@ -18,11 +18,11 @@
 import type { FocusSubject } from '@papi/core';
 import { logger } from '@papi/frontend';
 import {
+  deepEqual,
   isBlockMarker,
   isLocalizeKey,
   LanguageStrings,
   LocalizeKey,
-  serialize,
   usfmMarkers,
   type PaletteItem,
 } from 'platform-bible-utils';
@@ -863,7 +863,7 @@ export function getEditorFocusLocation(
  */
 export function hasNonCollapsedSelection(selection: SelectionRange | undefined): boolean {
   if (!selection?.end) return false;
-  return serialize(selection.end) !== serialize(selection.start);
+  return !deepEqual(selection.end, selection.start);
 }
 
 /**

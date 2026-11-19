@@ -695,31 +695,31 @@ describe('Scripture editor "Change footnote pane location" request', () => {
   });
 });
 
+const HAS_SELECTION_KEY = 'platformScriptureEditor.webView.editor-web-view-id.hasSelection';
+const selectionStart = { jsonPath: '$.content[2].content[1]', offset: 0 };
+const selectionRange = { start: selectionStart, end: { ...selectionStart, offset: 5 } };
+
+const chapterWithText = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN' },
+    { type: 'chapter', marker: 'c', number: '1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
+    },
+  ],
+};
+
+/** The values published for the hasSelection key, in order. */
+const publishedValues = () =>
+  mockContextKeysSet.mock.calls
+    .filter(([key]) => key === HAS_SELECTION_KEY)
+    .map(([, value]) => value);
+
 describe('Scripture editor hasSelection context key', () => {
-  const HAS_SELECTION_KEY = 'platformScriptureEditor.webView.editor-web-view-id.hasSelection';
-  const start = { jsonPath: '$.content[2].content[1]', offset: 0 };
-  const range = { start, end: { ...start, offset: 5 } };
-
-  const chapterWithText = {
-    type: 'USJ',
-    version: '3.1',
-    content: [
-      { type: 'book', marker: 'id', code: 'GEN' },
-      { type: 'chapter', marker: 'c', number: '1' },
-      {
-        type: 'para',
-        marker: 'p',
-        content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
-      },
-    ],
-  };
-
-  /** The values published for the key, in order. */
-  const publishedValues = () =>
-    mockContextKeysSet.mock.calls
-      .filter(([key]) => key === HAS_SELECTION_KEY)
-      .map(([, value]) => value);
-
   const EditorWebViewUnderTest = getEditorWebView();
   const webViewElement = (chapterNum = 1) => (
     <EditorWebViewUnderTest {...makeProps('', { isReadOnly: false }, 'GEN', chapterNum)} />
@@ -733,7 +733,7 @@ describe('Scripture editor hasSelection context key', () => {
     });
   };
 
-  it('publishes hasSelection true for a range and keeps it when the editor reports no selection on blur', async () => {
+  it('publishes hasSelection true for a selectionRange and keeps it when the editor reports no selection on blur', async () => {
     chapterUsjValue.current = chapterWithText;
     await act(async () => {
       render(webViewElement());
@@ -741,7 +741,7 @@ describe('Scripture editor hasSelection context key', () => {
     // Positive control: the key starts false.
     expect(publishedValues()).toEqual([false]);
 
-    await selectInEditor(range);
+    await selectInEditor(selectionRange);
     await selectInEditor(undefined);
 
     expect(publishedValues()).toEqual([false, true]);
@@ -753,9 +753,9 @@ describe('Scripture editor hasSelection context key', () => {
       render(webViewElement());
     });
 
-    await selectInEditor(range);
-    await selectInEditor({ start, end: { ...start, offset: 7 } });
-    await selectInEditor({ start });
+    await selectInEditor(selectionRange);
+    await selectInEditor({ start: selectionStart, end: { ...selectionStart, offset: 7 } });
+    await selectInEditor({ start: selectionStart });
 
     expect(publishedValues()).toEqual([false, true, false]);
   });
@@ -766,7 +766,7 @@ describe('Scripture editor hasSelection context key', () => {
     await act(async () => {
       result = render(webViewElement(1));
     });
-    await selectInEditor(range);
+    await selectInEditor(selectionRange);
     expect(publishedValues()).toEqual([false, true]);
 
     await act(async () => {
@@ -778,28 +778,6 @@ describe('Scripture editor hasSelection context key', () => {
 });
 
 describe('Scripture editor hasSelection context key across a view switch', () => {
-  const HAS_SELECTION_KEY = 'platformScriptureEditor.webView.editor-web-view-id.hasSelection';
-  const start = { jsonPath: '$.content[2].content[1]', offset: 0 };
-  const range = { start, end: { ...start, offset: 5 } };
-  const chapterWithText = {
-    type: 'USJ',
-    version: '3.1',
-    content: [
-      { type: 'book', marker: 'id', code: 'GEN' },
-      { type: 'chapter', marker: 'c', number: '1' },
-      {
-        type: 'para',
-        marker: 'p',
-        content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
-      },
-    ],
-  };
-
-  const publishedValues = () =>
-    mockContextKeysSet.mock.calls
-      .filter(([key]) => key === HAS_SELECTION_KEY)
-      .map(([, value]) => value);
-
   it('publishes hasSelection false after the Scripture view type changes', async () => {
     // Switching between Standard and Formatted view only takes effect in Power mode.
     appSettings.set('platform.interfaceMode', 'power');
@@ -815,7 +793,7 @@ describe('Scripture editor hasSelection context key across a view switch', () =>
     await act(async () => {
       const handler = captureSelectionHandler.mock.lastCall?.[0];
       expect(handler).toBeInstanceOf(Function);
-      if (typeof handler === 'function') await handler(range);
+      if (typeof handler === 'function') await handler(selectionRange);
     });
     expect(publishedValues().at(-1)).toBe(true);
 
@@ -915,7 +893,6 @@ describe('Scripture editor resource wiring', () => {
 
     await renderTab(makeProps('', { isReadOnly: true }));
 
-    expect(projectColumnLabel()).toBeDefined();
-    expect(projectColumnLabel()).not.toBe('engWEBUS');
+    expect(projectColumnLabel()).toBe('Project');
   });
 });

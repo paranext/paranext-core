@@ -21,6 +21,7 @@ import {
   finalizeProjectSwitch,
   formatEditorTitle,
   getEditorTitleEditability,
+  getEditorTabIconName,
   isProjectPublished,
   getTabTitleProjectName,
   generateParagraphMenuListItems,
@@ -6206,6 +6207,36 @@ describe('formatEditorTitle', () => {
     expect(title).toBe('engWEBUS');
   });
 
+  it('keeps the spacing inside a project name in a resource title', async () => {
+    const title = await formatEditorTitle(
+      undefined,
+      'project-1',
+      'resource',
+      async () => 'eng  WEB',
+      vi.fn().mockResolvedValue({
+        '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+        '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+        '%webView_platformScriptureEditor_title_format_2%': '{projectName} {editable}',
+      }),
+    );
+    expect(title).toBe('eng  WEB');
+  });
+
+  it('removes only the space beside {editable} when a translation puts it in the middle', async () => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      'resource',
+      async () => 'engWEBUS',
+      vi.fn().mockResolvedValue({
+        '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+        '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+        [TITLE_FORMAT_KEY]: '{projectName} {editable} extra',
+      }),
+    );
+    expect(title).toBe('engWEBUS extra');
+  });
+
   it.each([
     ['an editable resource', true, false, 'resource'],
     ['a read-only project', false, true, 'readOnly'],
@@ -6213,6 +6244,23 @@ describe('formatEditorTitle', () => {
     ['a read-only resource', true, true, 'resource'],
   ])('maps %s to its title editability', (_label, isResource, isReadOnly, expected) => {
     expect(getEditorTitleEditability(isResource, isReadOnly)).toBe(expected);
+  });
+});
+
+describe('getEditorTabIconName', () => {
+  it.each([undefined, 'book-open', 'file-text'])(
+    'shows the resource icon on a resource tab whatever was saved (%s)',
+    (savedIconName) => {
+      expect(getEditorTabIconName(true, savedIconName)).toBe('book-open');
+    },
+  );
+
+  it('keeps the saved icon name on a tab that is not a resource', () => {
+    expect(getEditorTabIconName(false, 'file-text')).toBe('file-text');
+  });
+
+  it('keeps an unset icon name unset on a tab that is not a resource', () => {
+    expect(getEditorTabIconName(false, undefined)).toBeUndefined();
   });
 });
 
