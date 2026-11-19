@@ -20,6 +20,8 @@ import {
   findEditorUsjNotes,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getEditorTitleEditability,
+  isProjectPublished,
   getTabTitleProjectName,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
@@ -6105,7 +6107,7 @@ describe('formatEditorTitle', () => {
     const title = await formatEditorTitle(
       TITLE_FORMAT_KEY,
       'project-1',
-      false,
+      'editable',
       mockGetProjectName,
       mockGetLocalizedStrings,
     );
@@ -6116,7 +6118,7 @@ describe('formatEditorTitle', () => {
     const title = await formatEditorTitle(
       TITLE_FORMAT_KEY,
       'project-1',
-      true,
+      'readOnly',
       mockGetProjectName,
       mockGetLocalizedStrings,
     );
@@ -6132,7 +6134,7 @@ describe('formatEditorTitle', () => {
     const title = await formatEditorTitle(
       undefined,
       'project-1',
-      false,
+      'editable',
       mockGetProjectName,
       getLocalizedStrings,
     );
@@ -6147,7 +6149,7 @@ describe('formatEditorTitle', () => {
     const title = await formatEditorTitle(
       TITLE_FORMAT_KEY,
       'project-1',
-      false,
+      'editable',
       vi.fn().mockResolvedValue(projectName),
       mockGetLocalizedStrings,
     );
@@ -6167,11 +6169,50 @@ describe('formatEditorTitle', () => {
     const title = await formatEditorTitle(
       undefined,
       'p1',
-      showsReadOnlyPreview(viewType, isPowerMode),
+      showsReadOnlyPreview(viewType, isPowerMode) ? 'readOnly' : 'editable',
       async () => 'Project',
       stub,
     );
     expect(title).toBe(expected);
+  });
+
+  it('shows a resource title as the short name alone', async () => {
+    const title = await formatEditorTitle(
+      undefined,
+      'project-1',
+      'resource',
+      async () => 'engWEBUS',
+      vi.fn().mockResolvedValue({
+        '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+        '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+        '%webView_platformScriptureEditor_title_format_2%': '{projectName} {editable}',
+      }),
+    );
+    expect(title).toBe('engWEBUS');
+  });
+
+  it('leaves no leading space when a translation puts {editable} first', async () => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      'resource',
+      async () => 'engWEBUS',
+      vi.fn().mockResolvedValue({
+        '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+        '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+        [TITLE_FORMAT_KEY]: '{editable} {projectName}',
+      }),
+    );
+    expect(title).toBe('engWEBUS');
+  });
+
+  it.each([
+    ['a resource', true, true, 'resource'],
+    ['a read-only project', false, true, 'readOnly'],
+    ['an editable project', false, false, 'editable'],
+    ['a read-only resource', true, true, 'resource'],
+  ])('maps %s to its title editability', (_label, isResource, isReadOnly, expected) => {
+    expect(getEditorTitleEditability(isResource, isReadOnly)).toBe(expected);
   });
 });
 
@@ -6612,6 +6653,41 @@ describe('getTabTitleProjectName', () => {
 
     expect(await getTabTitleProjectName(papi, 'project-1')).toBe('project-1');
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('provider unavailable'));
+  });
+});
+
+describe('isProjectPublished', () => {
+  function papiWithPublished(read: () => unknown) {
+    const mockWarn = vi.fn();
+    // Mocking just the part of the PAPI that we need for these tests
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const papi = {
+      projectDataProviders: {
+        get: vi.fn().mockResolvedValue({
+          getSetting: vi.fn(async (key: string) => (key === 'platform.isPublished' ? read() : 'x')),
+        }),
+      },
+      logger: { warn: mockWarn },
+    } as unknown as typeof PapiBackend;
+    return { papi, mockWarn };
+  }
+
+  it('is true when the project is published', async () => {
+    const { papi } = papiWithPublished(() => true);
+    expect(await isProjectPublished(papi, 'p1')).toBe(true);
+  });
+
+  it('is false and warns when reading the setting throws', async () => {
+    const { papi, mockWarn } = papiWithPublished(() => {
+      throw new Error('setting unavailable');
+    });
+    expect(await isProjectPublished(papi, 'p1')).toBe(false);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('setting unavailable'));
+  });
+
+  it('is false for a non-boolean value', async () => {
+    const { papi } = papiWithPublished(() => 'true');
+    expect(await isProjectPublished(papi, 'p1')).toBe(false);
   });
 });
 
