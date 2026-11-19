@@ -628,6 +628,64 @@ describe('useEditorContextMenu', () => {
     });
   });
 
+  describe('a keyboard-raised contextmenu over a container without a box', () => {
+    function keyboardContextMenuOn(target: Element) {
+      act(() => {
+        target.dispatchEvent(
+          new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 0 }),
+        );
+      });
+    }
+
+    function renderWithUnmeasurableCaret() {
+      const requestMenu = vi.fn<UseEditorContextMenuOptions['requestMenu']>(
+        () => new Promise(() => {}),
+      );
+      const utils = render(<Host requestMenu={requestMenu} />);
+      selectNodeContents(utils.getByTestId('text'));
+      stubRangeClientRects(() => {
+        throw new Error('IndexSizeError');
+      });
+      return { requestMenu, ...utils };
+    }
+
+    it('uses the first child that has a box when the container has none (display: contents)', () => {
+      const { requestMenu, getByTestId } = renderWithUnmeasurableCaret();
+      const container = getByTestId('container');
+      vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 0, 0));
+      vi.spyOn(getByTestId('text'), 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(50, 60, 200, 20),
+      );
+
+      keyboardContextMenuOn(container);
+
+      expect(requestMenu.mock.calls[0][0].position).toEqual({ x: 58, y: 68 });
+    });
+
+    it('skips children without a box and uses the container corner when none has one', () => {
+      const { requestMenu, getByTestId } = renderWithUnmeasurableCaret();
+      const container = getByTestId('container');
+      vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 0, 0));
+
+      keyboardContextMenuOn(container);
+
+      expect(requestMenu.mock.calls[0][0].position).toEqual({ x: 8, y: 8 });
+    });
+
+    it('prefers the container box when it has one (control)', () => {
+      const { requestMenu, getByTestId } = renderWithUnmeasurableCaret();
+      const container = getByTestId('container');
+      vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(new DOMRect(30, 40, 100, 100));
+      vi.spyOn(getByTestId('text'), 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(500, 600, 200, 20),
+      );
+
+      keyboardContextMenuOn(container);
+
+      expect(requestMenu.mock.calls[0][0].position).toEqual({ x: 38, y: 48 });
+    });
+  });
+
   it('dismisses a pending menu on unmount, and not when nothing is pending', () => {
     const dismissMenu = vi.fn();
     const idle = render(
@@ -1244,6 +1302,39 @@ describe('useEditorContextMenu', () => {
       act(() => getApi().dismiss());
 
       expect(getApi().isClaimingKeys()).toBe(false);
+    });
+
+    it('is false after Escape closes the menu, and the next key is left alone', () => {
+      const dismissMenu = vi.fn();
+      const pending = deferred<string | undefined>();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => pending.promise}
+          dismissMenu={dismissMenu}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      rightClick(getByTestId('text'));
+      const escape = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        document.body.dispatchEvent(escape);
+      });
+      expect(dismissMenu).toHaveBeenCalledTimes(1);
+
+      const next = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true });
+      act(() => {
+        document.body.dispatchEvent(next);
+      });
+
+      expect(api.isClaimingKeys()).toBe(false);
+      expect(next.defaultPrevented).toBe(false);
     });
 
     it('is false after unmount', () => {

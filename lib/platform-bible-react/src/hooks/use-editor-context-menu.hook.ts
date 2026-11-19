@@ -208,7 +208,14 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
     }
   }
 
-  const box = container.getBoundingClientRect();
+  let box = container.getBoundingClientRect();
+  // A `display: contents` container has no box of its own; its first child with one stands in.
+  if (box.width === 0 && box.height === 0) {
+    const sizedChild = Array.from(container.children)
+      .map((child) => child.getBoundingClientRect())
+      .find((childBox) => childBox.width > 0 || childBox.height > 0);
+    if (sizedChild) box = sizedChild;
+  }
   return place(Math.max(box.left, 0) + inset, Math.max(box.top, 0) + inset);
 }
 
@@ -240,7 +247,7 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
  * One instance per editor.
  *
  * @param options See {@link UseEditorContextMenuOptions}
- * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
+ * @returns `dismiss`, `isPending` and `isClaimingKeys`, see {@link UseEditorContextMenuResult}
  * @experimental This hook is unstable and may change shape or disappear without notice
  */
 export function useEditorContextMenu(
@@ -405,7 +412,11 @@ export function useEditorContextMenu(
       if (!isKeyClaimActiveRef.current || BARE_MODIFIER_KEYS.has(event.key)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (event.key === 'Escape') dismissOpenRequests();
+      if (event.key === 'Escape') {
+        dismissOpenRequests();
+        // The menu is closing, so it no longer owns the keyboard, even before its request settles.
+        endKeyClaim();
+      }
     };
 
     doc.addEventListener('contextmenu', handleContextMenu, true);

@@ -78,4 +78,43 @@ describe('FootnoteEditor inline markers menu', () => {
     expect(markerMenuSearchBox()).not.toBeNull();
     expect(screen.queryByText('xo')).not.toBeNull();
   });
+
+  describe('with a context menu the host owns', () => {
+    /** Sends the trigger key and returns the event, so the claim can be read off it. */
+    async function pressTrigger() {
+      const event = new KeyboardEvent('keydown', {
+        key: MARKER_MENU_TRIGGER,
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        document.dispatchEvent(event);
+      });
+      await settle();
+      return event;
+    }
+
+    it('claims and drops the trigger instead of opening the menu while the host menu claims the keyboard', async () => {
+      const { editorInput } = await renderPopoverAndWaitForInit(visibleView, {
+        extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => true },
+      });
+      editorInput.focus();
+
+      const event = await pressTrigger();
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(markerMenuSearchBox()).toBeNull();
+    });
+
+    it('opens the menu as usual once the host menu does not claim the keyboard (control)', async () => {
+      const { editorInput } = await renderPopoverAndWaitForInit(visibleView, {
+        extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => false },
+      });
+      editorInput.focus();
+
+      await pressTrigger();
+
+      expect(markerMenuSearchBox()).not.toBeNull();
+    });
+  });
 });

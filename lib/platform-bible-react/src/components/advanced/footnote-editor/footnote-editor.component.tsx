@@ -102,7 +102,12 @@ export interface FootnoteEditorHandle {
    * or the note is unchanged.
    */
   flushPendingEdits: () => void;
-  /** Puts DOM focus back in the note text, on the caret the editor last held. */
+  /**
+   * Puts DOM focus back in the note text, on the caret the editor last held. When the editor has
+   * lost its selection (a menu or toolbar took focus), the selection captured as focus left is put
+   * back first, so focus does not land at the end of the document. Does nothing while the inner
+   * editor is not mounted.
+   */
   focus: () => void;
   /**
    * Whether DOM focus is anywhere in this editor - its note text or its own controls. Reads the
@@ -110,34 +115,36 @@ export interface FootnoteEditorHandle {
    */
   containsFocus: () => boolean;
   /**
-   * Cuts the selected note text to the clipboard. Restores the selection captured when focus last
-   * left the editor first, if the editor has none now (a menu or toolbar took focus). Does nothing
-   * while the inner editor is not mounted. Throws when the inner editor is read-only; the host
-   * handles that.
+   * Cuts the selected note text to the clipboard. Puts the selection captured when focus last left
+   * the editor back first, if the editor has none now (a menu or toolbar took focus), then focuses
+   * the note text. Does nothing while the inner editor is not mounted. Throws when the inner editor
+   * is read-only; the host handles that.
    *
    * @experimental This method is unstable and may change shape or disappear without notice
    */
   cut: () => void;
   /**
-   * Copies the selected note text to the clipboard. Restores the selection captured when focus last
-   * left the editor first, if the editor has none now. Does nothing while the inner editor is not
-   * mounted.
+   * Copies the selected note text to the clipboard. Puts the selection captured when focus last
+   * left the editor back first, if the editor has none now, then focuses the note text. Does
+   * nothing while the inner editor is not mounted.
    *
    * @experimental This method is unstable and may change shape or disappear without notice
    */
   copy: () => void;
   /**
-   * Pastes the clipboard's contents at the selection. Restores the selection captured when focus
-   * last left the editor first, if the editor has none now. Does nothing while the inner editor is
-   * not mounted. Throws when the inner editor is read-only; the host handles that.
+   * Pastes the clipboard's contents at the selection. Puts the selection captured when focus last
+   * left the editor back first, if the editor has none now, then focuses the note text. Does
+   * nothing while the inner editor is not mounted. Throws when the inner editor is read-only; the
+   * host handles that.
    *
    * @experimental This method is unstable and may change shape or disappear without notice
    */
   paste: () => void;
   /**
-   * Pastes the clipboard's contents at the selection as plain text. Restores the selection captured
-   * when focus last left the editor first, if the editor has none now. Does nothing while the inner
-   * editor is not mounted. Throws when the inner editor is read-only; the host handles that.
+   * Pastes the clipboard's contents at the selection as plain text. Puts the selection captured
+   * when focus last left the editor back first, if the editor has none now, then focuses the note
+   * text. Does nothing while the inner editor is not mounted. Throws when the inner editor is
+   * read-only; the host handles that.
    *
    * @experimental This method is unstable and may change shape or disappear without notice
    */
@@ -752,8 +759,8 @@ export default function FootnoteEditor({
       // Drop any inherited context-menu extras (e.g. the main editor's "Insert footnote" /
       // "Insert cross-reference" / "Insert comment" items). Those items' onSelect closures are
       // bound to the OUTER main-document editorRef, so surfacing them inside this popover would
-      // let a right-click here silently mutate the main document. The popover keeps only the
-      // built-in Cut/Copy/Paste context-menu items.
+      // let a right-click here silently mutate the main document. While the built-in menu is
+      // shown it keeps only its Cut/Copy/Paste items.
       contextMenu: undefined,
       hasBuiltInContextMenu,
       markerMenuTrigger: defaultMarkerMenuTrigger,
@@ -1127,26 +1134,41 @@ export default function FootnoteEditor({
   }, [flushPendingApply]);
 
   /**
-   * Runs a clipboard method of the inner editor, after putting back the caret or selection focus
-   * last left it with when the editor has none now (a menu took focus and Lexical's blur handling
-   * dropped it). Unlike {@link restoreSelectionIfLost} it never falls back to selecting the note:
-   * with nothing captured, the clipboard action keeps the editor's own behavior. A selected
-   * paragraph marker counts as a live selection, as there.
+   * Focuses the inner editor, after putting back the caret or selection focus last left it with
+   * when the editor has none now (a menu took focus and Lexical's blur handling dropped it). Unlike
+   * {@link restoreSelectionIfLost} it never falls back to selecting the note: with nothing captured,
+   * focus keeps the editor's own behavior. A selected paragraph marker counts as a live selection,
+   * as there.
+   *
+   * @returns The inner editor, or `undefined` while it is not mounted
    */
-  const runClipboardMethod = useCallback((method: 'cut' | 'copy' | 'paste' | 'pastePlainText') => {
+  const focusAfterRestoringSelection = useCallback(() => {
     const editor = editorRef.current;
-    if (!editor) return;
+    if (!editor) return undefined;
     const lastFocusOutSelection = lastFocusOutSelectionRef.current;
+    // Restored BEFORE focusing: with no selection, focus puts the caret at the end of the document,
+    // and the editor would then report a selection and the restore would never run.
     if (lastFocusOutSelection && !editor.getSelection() && !editor.getSelectedParaMarker())
       editor.setSelection(lastFocusOutSelection);
-    editor[method]();
+    editor.focus();
+    return editor;
   }, []);
+
+  const runClipboardMethod = useCallback(
+    (method: 'cut' | 'copy' | 'paste' | 'pastePlainText') => {
+      // The clipboard read behind Paste needs the frame focused when it runs.
+      focusAfterRestoringSelection()?.[method]();
+    },
+    [focusAfterRestoringSelection],
+  );
 
   useImperativeHandle(
     ref,
     () => ({
       flushPendingEdits,
-      focus: () => editorRef.current?.focus(),
+      focus: () => {
+        focusAfterRestoringSelection();
+      },
       containsFocus: () => {
         const container = containerRef.current;
         return !!container && container.contains(container.ownerDocument.activeElement);
@@ -1156,7 +1178,7 @@ export default function FootnoteEditor({
       paste: () => runClipboardMethod('paste'),
       pastePlainText: () => runClipboardMethod('pastePlainText'),
     }),
-    [flushPendingEdits, runClipboardMethod],
+    [flushPendingEdits, focusAfterRestoringSelection, runClipboardMethod],
   );
 
   const closeAndSave = useCallback(() => {
@@ -1767,6 +1789,12 @@ export default function FootnoteEditor({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const editorInput = getEditorInput();
+      // The host's menu lives in another document and owns the keyboard: the trigger opens nothing
+      // under it and never leaks into the note.
+      if (isHostMenuClaimingKeys()) {
+        if (event.key === defaultMarkerMenuTrigger) event.preventDefault();
+        return;
+      }
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (
         !showMarkersMenu &&

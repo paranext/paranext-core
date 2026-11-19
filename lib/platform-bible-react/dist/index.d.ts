@@ -1414,7 +1414,12 @@ export interface FootnoteEditorHandle {
 	 * or the note is unchanged.
 	 */
 	flushPendingEdits: () => void;
-	/** Puts DOM focus back in the note text, on the caret the editor last held. */
+	/**
+	 * Puts DOM focus back in the note text, on the caret the editor last held. When the editor has
+	 * lost its selection (a menu or toolbar took focus), the selection captured as focus left is put
+	 * back first, so focus does not land at the end of the document. Does nothing while the inner
+	 * editor is not mounted.
+	 */
 	focus: () => void;
 	/**
 	 * Whether DOM focus is anywhere in this editor - its note text or its own controls. Reads the
@@ -1422,34 +1427,36 @@ export interface FootnoteEditorHandle {
 	 */
 	containsFocus: () => boolean;
 	/**
-	 * Cuts the selected note text to the clipboard. Restores the selection captured when focus last
-	 * left the editor first, if the editor has none now (a menu or toolbar took focus). Does nothing
-	 * while the inner editor is not mounted. Throws when the inner editor is read-only; the host
-	 * handles that.
+	 * Cuts the selected note text to the clipboard. Puts the selection captured when focus last left
+	 * the editor back first, if the editor has none now (a menu or toolbar took focus), then focuses
+	 * the note text. Does nothing while the inner editor is not mounted. Throws when the inner editor
+	 * is read-only; the host handles that.
 	 *
 	 * @experimental This method is unstable and may change shape or disappear without notice
 	 */
 	cut: () => void;
 	/**
-	 * Copies the selected note text to the clipboard. Restores the selection captured when focus last
-	 * left the editor first, if the editor has none now. Does nothing while the inner editor is not
-	 * mounted.
+	 * Copies the selected note text to the clipboard. Puts the selection captured when focus last
+	 * left the editor back first, if the editor has none now, then focuses the note text. Does
+	 * nothing while the inner editor is not mounted.
 	 *
 	 * @experimental This method is unstable and may change shape or disappear without notice
 	 */
 	copy: () => void;
 	/**
-	 * Pastes the clipboard's contents at the selection. Restores the selection captured when focus
-	 * last left the editor first, if the editor has none now. Does nothing while the inner editor is
-	 * not mounted. Throws when the inner editor is read-only; the host handles that.
+	 * Pastes the clipboard's contents at the selection. Puts the selection captured when focus last
+	 * left the editor back first, if the editor has none now, then focuses the note text. Does
+	 * nothing while the inner editor is not mounted. Throws when the inner editor is read-only; the
+	 * host handles that.
 	 *
 	 * @experimental This method is unstable and may change shape or disappear without notice
 	 */
 	paste: () => void;
 	/**
-	 * Pastes the clipboard's contents at the selection as plain text. Restores the selection captured
-	 * when focus last left the editor first, if the editor has none now. Does nothing while the inner
-	 * editor is not mounted. Throws when the inner editor is read-only; the host handles that.
+	 * Pastes the clipboard's contents at the selection as plain text. Puts the selection captured
+	 * when focus last left the editor back first, if the editor has none now, then focuses the note
+	 * text. Does nothing while the inner editor is not mounted. Throws when the inner editor is
+	 * read-only; the host handles that.
 	 *
 	 * @experimental This method is unstable and may change shape or disappear without notice
 	 */
