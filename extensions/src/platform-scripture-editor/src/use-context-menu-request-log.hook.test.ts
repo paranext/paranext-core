@@ -19,11 +19,11 @@ const MOUSE_REQUEST: EditorContextMenuRequest = {
 
 /** A menu request that settles when the test says so. */
 function openMenuRequest() {
-  let resolve!: (command: string | undefined) => void;
-  const promise = new Promise<string | undefined>((settle) => {
-    resolve = settle;
+  let settle!: (command: string | undefined) => void;
+  const promise = new Promise<string | undefined>((resolve) => {
+    settle = resolve;
   });
-  return { promise, resolve };
+  return { promise, resolve: settle };
 }
 
 describe('createContextMenuRequestLog', () => {
