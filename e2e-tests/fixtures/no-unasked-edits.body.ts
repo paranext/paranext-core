@@ -1556,7 +1556,7 @@ export async function runNoUnaskedEdits(
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
-    // `.first()`: a footnote popover renders an editor input of its own.
+    // `.first()`: a footnote row editor renders an editor input of its own.
     const editorInput = editorFrame.locator('.editor-input').first();
     const context: GestureContext = { mainPage, electronApp, editorInput };
 

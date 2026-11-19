@@ -4778,6 +4778,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `'popover'`, and a caller click reveals a hidden pane there too, not only in Power mode. The
   surface helper's input is a `usesPaneModel` flag (from `usesPaneNoteModel`) rather than the view
   type, and `resolveCallerHighlight` takes the same flag. Everything else above stands.
+- **Amended 2026-11-19 (PT-4916):** The `'popover'` surface was removed from the Scripture editor
+  because no view can reach it any more: every view the editor shows edits notes in the footnotes
+  pane. `resolveNoteEditingSurface` now returns `'pane'` or `'none'`, and
+  `decideNoteCallerClickAction` has no popover action. The `FootnoteEditor` library component keeps
+  its non-inline (Save/Cancel) mode for other hosts. The "popover keeps its Save/Cancel"
+  consequence above describes that library mode, not a surface the editor opens.
 
 ## adr-footnote-pane-editing-in-simple-mode: Simple mode edits footnotes in the footnotes pane, like Standard view
 
