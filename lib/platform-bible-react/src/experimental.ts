@@ -164,7 +164,11 @@ export {
   default as MenuItemIcon,
   type MenuItemIconProps,
 } from './components/advanced/menus/menu-icon.component';
-export { getLeadingIconSlot, type LeadingIconSlot } from './components/advanced/menus/menu.util';
+export {
+  getLeadingIconSlot,
+  type ItemWithLeadingIcon,
+  type LeadingIconSlot,
+} from './components/advanced/menus/menu.util';
 export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';
 export {
   LucideIcon,
