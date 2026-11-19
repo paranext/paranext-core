@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getEditorViewOptions } from './editor-view-options.util';
 import {
+  getEditorOpenFindArgs,
   getOpenFindTriggerArgs,
   resolveFindSelectionText,
   resolveMenuFindSelectionText,
@@ -101,5 +102,23 @@ describe('resolveMenuFindSelectionText', () => {
   it('still normalizes as every Find trigger does', () => {
     expect(resolveMenuFindSelectionText('grace\nand mercy', ' mercy ', allowing)).toBe('mercy');
     expect(resolveMenuFindSelectionText(undefined, undefined, allowing)).toBe('');
+  });
+});
+
+describe('getEditorOpenFindArgs', () => {
+  const STAND_IN = '\u001A';
+  const NBSP = '\u00A0';
+  const allowing = getEditorViewOptions('standard', true, true);
+
+  it('respells the displayed selection the project’s way, then normalizes it', () => {
+    expect(getEditorOpenFindArgs('wv-1', 'proj', `Mr.${STAND_IN}Abraham `, allowing)).toEqual({
+      webViewId: 'wv-1',
+      selectedText: `Mr.${NBSP}Abraham`,
+      sourceProjectId: 'proj',
+    });
+  });
+
+  it('is a no-op (undefined) when no project is resolved', () => {
+    expect(getEditorOpenFindArgs('wv-1', undefined, 'grace', allowing)).toBeUndefined();
   });
 });

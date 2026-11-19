@@ -32,17 +32,13 @@ import type {
 } from 'platform-scripture-editor';
 import type { MutableRefObject } from 'react';
 import type {
-  ContextMenuOptionConfig,
   DeltaOpInsertNoteEmbed,
   EditorRef,
   MarkerMenuItem as EditorMarkerMenuItem,
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
 import { type FootnoteEditorHandle, type MarkerMenuItem } from 'platform-bible-react';
-import {
-  isEditorContextMenuOpenFor,
-  markerMenuItemToPaletteItem,
-} from 'platform-bible-react/experimental';
+import { markerMenuItemToPaletteItem } from 'platform-bible-react/experimental';
 import type { FlushableDebouncer } from './flushable-debouncer.util';
 import {
   showsReadOnlyPreview,
@@ -651,150 +647,6 @@ export async function insertNoteAtCurrentSelectionCore(
 
   await commitSnapshot(localizedStrings[commitMessageKey], editDescription);
   insertMarker(marker);
-}
-
-/**
- * Which {@link NOTE_INSERT_CONFIG} kind each editor context-menu insert action inserts. One mapping
- * shared by the menu-item wiring and its tests, so a swap (e.g. the footnote action pointed at the
- * endnote kind) fails a test instead of only showing up as a user picking one menu item and getting
- * another note type.
- */
-export const CONTEXT_MENU_ACTION_TO_NOTE_KIND: Record<
-  keyof Pick<InsertContextMenuActions, 'insertFootnote' | 'insertCrossReference' | 'insertEndnote'>,
-  EditorMessageInsertTextualNoteAtSelection['method']
-> = {
-  insertFootnote: 'insertFootnoteAtSelection',
-  insertCrossReference: 'insertCrossReferenceAtSelection',
-  insertEndnote: 'insertEndnoteAtSelection',
-};
-
-const INSERT_FOOTNOTE_TITLE_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_insertFootnoteAtSelection%';
-const INSERT_CROSS_REFERENCE_TITLE_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%';
-const INSERT_ENDNOTE_TITLE_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_insertEndnoteAtSelection%';
-const INSERT_COMMENT_TITLE_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_insertCommentAtSelection%';
-
-/**
- * Localize keys used by {@link createInsertContextMenuItems}. Spread these into the editor web
- * view's localized-strings list so the values are loaded and passed into `localizedStrings` —
- * mirrors the established `CHARACTER_MARKER_MENU_STRING_KEYS` pattern
- * (`character-marker-menu.utils.ts`), which ties a menu builder to its own keys the same way
- * instead of letting the builder and the web view's key list repeat the same literals
- * independently.
- */
-export const INSERT_CONTEXT_MENU_STRING_KEYS = Object.freeze([
-  INSERT_COMMENT_TITLE_KEY,
-  INSERT_FOOTNOTE_TITLE_KEY,
-  INSERT_CROSS_REFERENCE_TITLE_KEY,
-  INSERT_ENDNOTE_TITLE_KEY,
-] as const);
-
-/** Callbacks the editor context menu's insert items dispatch to. */
-export interface InsertContextMenuActions {
-  insertFootnote: () => void;
-  insertCrossReference: () => void;
-  insertEndnote: () => void;
-  insertComment: () => void;
-}
-
-/**
- * Editor state that decides which insert items are selectable. `isReadOnly` is the editor's
- * effective read-only state, which already folds in a sync freeze; `isSyncBlocked` is passed
- * separately because comment insertion does not go through the editor and so is not covered by it.
- */
-export interface InsertContextMenuState {
-  isReadOnly: boolean;
-  canUserCreateComments: boolean;
-  isSyncBlocked: boolean;
-  /**
-   * Whether the project is a resource (`platform.isPublished`). A resource can never be edited or
-   * commented on, so it gets no insert items at all rather than disabled ones.
-   */
-  isResource: boolean;
-}
-
-/**
- * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu's
- * `platformScriptureEditor.insert` column (`contributions/menus.json`, every group in that column)
- * — same items, same order; pinned by the parity test in
- * `platform-scripture-editor.web-view.utils.test.ts`. A resource gets none of them, mirroring the
- * `when` that removes the same items from the top menu; the editor then shows only its built-in
- * clipboard entries.
- */
-export function createInsertContextMenuItems(
-  localizedStrings: LanguageStrings,
-  actions: InsertContextMenuActions,
-  state: InsertContextMenuState,
-): ContextMenuOptionConfig[] {
-  const { isReadOnly, canUserCreateComments, isSyncBlocked, isResource } = state;
-  if (isResource) return [];
-  return [
-    {
-      title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
-      onSelect: actions.insertComment,
-      // Disabled while sync-blocked too, so the menu reflects the frozen state.
-      isDisabled: !canUserCreateComments || isSyncBlocked,
-    },
-    {
-      title: localizedStrings[INSERT_FOOTNOTE_TITLE_KEY],
-      onSelect: actions.insertFootnote,
-      isDisabled: isReadOnly,
-    },
-    {
-      title: localizedStrings[INSERT_CROSS_REFERENCE_TITLE_KEY],
-      onSelect: actions.insertCrossReference,
-      isDisabled: isReadOnly,
-    },
-    {
-      title: localizedStrings[INSERT_ENDNOTE_TITLE_KEY],
-      onSelect: actions.insertEndnote,
-      isDisabled: isReadOnly,
-    },
-  ];
-}
-
-/**
- * Whether the given editor's own right-click context menu is open at all.
- *
- * Gates every key this web view acts on in the editor. While the menu is up it is the only keyboard
- * mode on screen, and nothing else opens underneath it or over it:
- *
- * - Both standard-view triggers: neither the `\\` marker palette nor the Enter paragraph palette may
- *   open, and neither key may reach the document behind the menu.
- * - The other views' `\\` inline markers menu, and the footnote, cross-reference and comment insert
- *   shortcuts. Each is swallowed rather than acted on: every one of them would open a popup (the
- *   markers menu, the footnote editor, the comment editor) over a menu that stays open.
- *
- * The menu has no idea the palettes exist and stays open across one. A palette session's own Escape
- * claims the key with `stopPropagation` on `window` — one capture step above the menu's `document`
- * listener — so THAT ESCAPE DISMISSES THE PALETTE, not the menu: the menu, never reached, survives
- * with its highlighted item still armed for the next Enter.
- *
- * Keyed on the menu being OPEN rather than on a highlighted item, because a menu holding nothing to
- * invoke still holds the keyboard. The two standard-view triggers then stand down differently,
- * because the menu wants one of the keys and not the other:
- *
- * - `\\` is CLAIMED by the caller. The editor keeps DOM focus while the menu is up, so an unclaimed
- *   `\\` falls through to Lexical and types a backslash into the document behind the menu. The menu
- *   has no use for the key either, so nothing acts on it at all.
- * - Enter is HANDED DOWN to the menu, which owns it outright while it is open — invoking its
- *   highlighted item when it has an enabled one and swallowing the press otherwise.
- *   `ContextMenuPlugin` claims Enter from a CAPTURE-phase listener on `document` while this web
- *   view's is on `window`; capture descends window → document, so a `stopPropagation()` here would
- *   end the press before the menu's listener ran at all.
- *
- * Scoped to ONE editor: `ContextMenuPlugin` mounts once per Lexical editor instance (the main
- * Standard-view editor and the footnote row editor each have their own), and every instance's
- * portal shares the same classes, so a document-wide check cannot tell whose menu is open. See
- * {@link isEditorContextMenuOpenFor} for the per-editor signal this reads.
- *
- * @param editorContainer The main editor's own container (or its `.editor-input` root).
- */
-export function isEditorContextMenuOpen(editorContainer: Element | null | undefined): boolean {
-  return isEditorContextMenuOpenFor(editorContainer);
 }
 
 /** The facts one editor web view publishes about itself; both key functions below map over this */

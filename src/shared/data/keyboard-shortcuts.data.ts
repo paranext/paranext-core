@@ -675,7 +675,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       linux: '— (no equivalent)',
     },
     locations: [
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
       'lib/platform-bible-react/src/hooks/use-editor-context-menu.hook.ts',
@@ -691,7 +691,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // check): any modifier chord with Enter — including Shift+Enter, which would otherwise insert
     // a soft line break with no USFM representation — opens the same menu.
     // Not claimed while the editor's right-click context menu is open: that menu owns Enter for as
-    // long as it is up (see `isEditorContextMenuOpen`).
+    // long as it is up (the main text reads the pending state of `useEditorContextMenu`).
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',

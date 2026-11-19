@@ -1,14 +1,15 @@
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 
 /**
- * The Project menu's Edit flyout commands that the editor web view runs itself, from the menu's
- * select handler: the clipboard is only reachable while the click still counts as user activation,
- * so these cannot be PAPI commands.
+ * The clipboard commands the editor web view runs itself, from the Project menu's Edit flyout and
+ * from the editor's context menu: the clipboard is only reachable while the click still counts as
+ * user activation (and, for Paste, while the frame is focused), so these cannot be PAPI commands.
  */
 export const EDIT_MENU_COMMANDS = [
   'platformScriptureEditor.cutSelection',
   'platformScriptureEditor.copySelection',
   'platformScriptureEditor.pasteAtSelection',
+  'platformScriptureEditor.pasteAsPlainTextAtSelection',
 ] as const;
 
 export type EditMenuCommand = (typeof EDIT_MENU_COMMANDS)[number];
@@ -23,7 +24,10 @@ export type EditMenuActionCommand =
   | 'platformScriptureEditor.redo';
 
 /** The parts of the editor the Edit flyout drives. */
-export type EditMenuTarget = Pick<EditorRef, 'undo' | 'redo' | 'cut' | 'copy' | 'paste'>;
+export type EditMenuTarget = Pick<
+  EditorRef,
+  'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'pastePlainText'
+>;
 
 export function isEditMenuCommand(command: string): command is EditMenuCommand {
   return EDIT_MENU_COMMANDS.some((editCommand) => editCommand === command);
@@ -61,6 +65,9 @@ export function runEditMenuAction(
       return true;
     case 'platformScriptureEditor.pasteAtSelection':
       editor.paste();
+      return true;
+    case 'platformScriptureEditor.pasteAsPlainTextAtSelection':
+      editor.pastePlainText();
       return true;
     default: {
       // Exhaustiveness guard: a command added to EditMenuActionCommand without a case above fails to

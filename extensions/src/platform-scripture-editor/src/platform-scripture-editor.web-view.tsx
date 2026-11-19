@@ -87,6 +87,7 @@ import {
   useMarkerPaletteCompositionClose,
   useMarkerPaletteFocusOutCapture,
   useMarkerPaletteSessionWriters,
+  useEditorContextMenu,
   type FootnoteEditorMarkerPalette,
 } from 'platform-bible-react/experimental';
 import {
@@ -195,7 +196,11 @@ import {
   SYNC_EDIT_BLOCKED_REGEX,
 } from './save-failure-report.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
-import { resolveMenuFindSelectionText } from './find-trigger.util';
+import { getEditorOpenFindArgs, resolveMenuFindSelectionText } from './find-trigger.util';
+import {
+  dispatchContextMenuPick,
+  getContextMenuShowOptions,
+} from './editor-context-menu-pick.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { usePauseEditing } from './use-pause-editing.hook';
@@ -265,18 +270,14 @@ import {
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import { MARKER_MENU_POPOVER_WIDTH_CLASSES } from './marker-menu-popover.const';
 import {
-  CONTEXT_MENU_ACTION_TO_NOTE_KIND,
-  createInsertContextMenuItems,
   deriveReadOnlyFlags,
   getEditorWebViewContextKeyNames,
   getEditorWebViewContextKeys,
   hasNonCollapsedSelection,
   flushRowEditsThenSave,
   forgetCaretSnapshotIfParaMarkerSelected,
-  isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
-  INSERT_CONTEXT_MENU_STRING_KEYS,
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
@@ -408,7 +409,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_error_selectionNotResolved%',
   ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
-  ...INSERT_CONTEXT_MENU_STRING_KEYS,
   '%webView_footnoteList_close%',
   '%webView_footnoteList_empty%',
   '%webView_footnoteList_header%',
@@ -484,8 +484,8 @@ function warnUnlessReplaced(paletteDescription: string, error: unknown): void {
 
 /**
  * Logs a failed note insert instead of leaving an unhandled promise. Every entry point to the note
- * inserts — the right-click menu, the Insert top menu and the keyboard shortcuts — reports a
- * failure through here, so how one surfaces is decided in one place.
+ * inserts — the Insert top menu and the keyboard shortcuts — reports a failure through here, so how
+ * one surfaces is decided in one place.
  *
  * None of those entry points has a caller to hand a rejection back to, and an insert can fail after
  * the entry point checked it was allowed: `EditorRef.insertMarker` throws when the editor is
@@ -500,21 +500,6 @@ function logInsertRejection(insert: Promise<void>, editDescription: string): Pro
   return insert.catch((error) => {
     logger.warn(`Error ${editDescription}: ${getErrorMessage(error)}`);
   });
-}
-
-/**
- * Adapts one of the async insert actions for the editor's right-click menu, whose `onSelect` is
- * synchronous and so has nowhere to return a rejection to. See {@link logInsertRejection}.
- *
- * @param editDescription Names the edit in the log line, e.g. `'inserting footnote'`.
- */
-function runInsertFromContextMenu(
-  insert: () => Promise<void>,
-  editDescription: string,
-): () => void {
-  return () => {
-    logInsertRejection(insert(), `${editDescription} from the editor context menu`);
-  };
 }
 
 /**
@@ -2107,50 +2092,26 @@ function PlatformScriptureEditor({
       styleInfo,
       markerSettleDelayMs,
       hasExternalUI: true,
-      contextMenu: createInsertContextMenuItems(
-        localizedStrings,
-        {
-          insertFootnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
-          ),
-          insertCrossReference: runInsertFromContextMenu(
-            () =>
-              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
-              .editDescription,
-          ),
-          insertEndnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
-          ),
-          insertComment: insertCommentAtCurrentSelection,
-        },
-        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked, isResource },
-      ),
+      // The platform's own context menu replaces the editor's built-in one.
+      hasBuiltInContextMenu: false,
     }),
     [
       isReadOnlyEffective,
       structureProtectionMode,
       handleHiddenContentDelete,
-      canUserCreateComments,
-      isSyncBlocked,
-      isResource,
       textDirectionEffective,
       nodeOptions,
       viewOptions,
       styleInfo,
       markerSettleDelayMs,
-      localizedStrings,
-      insertCommentAtCurrentSelection,
-      insertNoteAtCurrentSelection,
     ],
   );
 
   /**
    * Runs an Edit flyout action on this editor with its read-only notices, selection restore and
-   * refocus. Cut, Copy and Paste reach it from the menu's select handler (the clipboard needs the
-   * click's user activation); Undo and Redo reach it as PAPI-command messages.
+   * refocus. Cut, Copy and Paste reach it from the Project menu's select handler or the editor's
+   * context menu (the clipboard needs the click's user activation); Undo and Redo reach it as
+   * PAPI-command messages.
    */
   const runEditMenuCommand = useCallback(
     (command: EditMenuActionCommand) =>
@@ -2817,6 +2778,71 @@ function PlatformScriptureEditor({
 
   // #endregion Marker Palettes
 
+  // #region Context Menu
+
+  // The main text's right-click menu is the platform's own. The container is the editor's own
+  // wrapper, not `editorContainerRef`: that also holds the footnotes pane, its row editor and the
+  // header alerts, none of which this menu serves.
+  // A ref starts out as null for React to be able to set it as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const mainEditorWrapperRef = useRef<HTMLDivElement>(null);
+  const { dismiss: dismissEditorContextMenu, isPending: isEditorContextMenuPending } =
+    useEditorContextMenu({
+      containerRef: mainEditorWrapperRef,
+      hasNonTextSelection: () => !!editorRef.current?.getSelectedParaMarker(),
+      requestMenu: (request) =>
+        papi.overlays.showContextMenu(
+          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+          webViewId,
+          getContextMenuShowOptions(request, true),
+        ),
+      dismissMenu: () => papi.overlays.dismissContextMenu(webViewId),
+      onPick: (command, request) =>
+        dispatchContextMenuPick(command, request, {
+          runClipboardCommand: (clipboardCommand) => {
+            // The menu hands focus back to its tab asynchronously; the clipboard read behind Paste
+            // needs the frame focused when it runs, so focus the editor first.
+            editorRef.current?.focus();
+            runEditMenuCommand(clipboardCommand);
+          },
+          openFind: (selectedText) => {
+            const args = getEditorOpenFindArgs(webViewId, projectId, selectedText, viewOptions);
+            if (!args) return;
+            papi.commands
+              .sendCommand(
+                'platformScripture.openFind',
+                args.webViewId,
+                args.selectedText,
+                args.sourceProjectId,
+              )
+              .catch((e) =>
+                logger.warn(
+                  `Failed to open Find from the editor context menu: ${getErrorMessage(e)}`,
+                ),
+              );
+          },
+          sendCommand: (otherCommand) => {
+            papi.commands
+              // Assuming that the picked command is one of the registered command handlers in papi
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              .sendCommand(otherCommand as keyof CommandHandlers, webViewId)
+              .catch((e) =>
+                logger.warn(
+                  `Failed to run ${otherCommand} from the editor context menu: ${getErrorMessage(e)}`,
+                ),
+              );
+          },
+        }),
+      onError: (error) => logger.warn(`The editor context menu failed: ${getErrorMessage(error)}`),
+    });
+
+  // A menu left open across a chapter or view change would point at content that is gone.
+  useEffect(() => {
+    dismissEditorContextMenu();
+  }, [dismissEditorContextMenu, scrRef.book, scrRef.chapterNum, viewType]);
+
+  // #endregion Context Menu
+
   // #region Keydown Routing
 
   // Ctrl+F opens Find for this editor's own project. Uses the same hook as the read-only reference
@@ -2923,9 +2949,10 @@ function PlatformScriptureEditor({
 
         // Everything below runs only with no open session — the `if (session)` above returns.
         if (event.key === INLINE_MARKERS_MENU_TRIGGER) {
-          // The editor's own right-click menu is up: CLAIMED, not merely declined. See
-          // `isEditorContextMenuOpen` for why, and why Enter below stands down the other way.
-          if (isEditorContextMenuOpen(editorContainerRef.current)) {
+          // The platform context menu is pending: CLAIMED, not merely declined. The editor keeps
+          // DOM focus while the menu opens, so an unclaimed `\` would fall through to Lexical and
+          // type a backslash into the document behind the menu; the menu has no use for the key.
+          if (isEditorContextMenuPending()) {
             event.preventDefault();
             event.stopPropagation();
             return;
@@ -2949,9 +2976,10 @@ function PlatformScriptureEditor({
         // representation, so it serializes as a plain space: the same data problem as an unmarked
         // split.
         if (event.key === 'Enter') {
-          // The editor's own right-click menu is up: HANDED DOWN rather than claimed here, so the
-          // menu's own listener gets the press. See `isEditorContextMenuOpen`.
-          if (isEditorContextMenuOpen(editorContainerRef.current)) return;
+          // The platform context menu is pending: the press is the menu's, so no paragraph palette
+          // opens over it. Declined rather than claimed, so it still reaches the menu's own key
+          // handling.
+          if (isEditorContextMenuPending()) return;
           const ctx = editorRef.current?.getMarkerMenuContext();
           // Pass through untouched when there's no context, inside a note, or inside marker glyph
           // text — the library engine owns Enter in those cases (e.g. `\fp` inside a footnote).
@@ -2979,9 +3007,9 @@ function PlatformScriptureEditor({
           })
         ) {
           event.preventDefault();
-          // Swallowed while the editor's right-click menu is up rather than opening a second popup
-          // over it. See `isEditorContextMenuOpen`.
-          if (!isEditorContextMenuOpen(editorContainerRef.current)) showInlineMarkersMenu();
+          // Swallowed while the platform context menu is pending rather than opening a second
+          // popup over it.
+          if (!isEditorContextMenuPending()) showInlineMarkersMenu();
         } else if (showMarkersMenu && event.key === 'Escape') {
           event.preventDefault();
           setShowMarkersMenu(false);
@@ -2995,9 +3023,8 @@ function PlatformScriptureEditor({
         // bubble phase.
         event.preventDefault();
         event.stopPropagation();
-        // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.
-        // See `isEditorContextMenuOpen`.
-        if (!isEditorContextMenuOpen(editorContainerRef.current)) insertCommentAtCurrentSelection();
+        // Swallowed while the platform context menu is pending, like the Ctrl+T shortcuts below.
+        if (!isEditorContextMenuPending()) insertCommentAtCurrentSelection();
       } else {
         const chordMatch = matchEditorChord(event);
         if (
@@ -3030,10 +3057,9 @@ function PlatformScriptureEditor({
               );
           },
           insertNote: (method) => {
-            // Swallowed while the editor's right-click menu is up: the insert opens the footnote
-            // editor, which would land over a menu that is still open. See
-            // `isEditorContextMenuOpen`.
-            if (isEditorContextMenuOpen(editorContainerRef.current)) return;
+            // Swallowed while the platform context menu is pending: the insert opens the footnote
+            // editor, which would land over a menu that is still open.
+            if (isEditorContextMenuPending()) return;
             // insertNoteAtCurrentSelection is async and this handler is not, so surface a rejection
             // instead of dropping it as an unhandled promise: the user pressed a key and must not
             // be left with no marker and no explanation.
@@ -3068,6 +3094,7 @@ function PlatformScriptureEditor({
     openMarkerPaletteAtCaret,
     openMarkerPalette,
     dismissPaletteSessionIfOpen,
+    isEditorContextMenuPending,
   ]);
 
   // #endregion Keydown Routing
@@ -5593,7 +5620,9 @@ function PlatformScriptureEditor({
           The zoom area is inside `renderEditor()`, around the editor tree only. */}
       <InPortal node={editorPortalNode}>
         <PortalContents>
-          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderEditor()}</div>
+          <div ref={mainEditorWrapperRef} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+            {renderEditor()}
+          </div>
         </PortalContents>
       </InPortal>
       <div

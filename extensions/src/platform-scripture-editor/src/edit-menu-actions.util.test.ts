@@ -9,7 +9,14 @@ import {
 import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
 function makeEditor() {
-  return { undo: vi.fn(), redo: vi.fn(), cut: vi.fn(), copy: vi.fn(), paste: vi.fn() };
+  return {
+    undo: vi.fn(),
+    redo: vi.fn(),
+    cut: vi.fn(),
+    copy: vi.fn(),
+    paste: vi.fn(),
+    pastePlainText: vi.fn(),
+  };
 }
 
 describe('Edit menu actions', () => {
@@ -19,6 +26,7 @@ describe('Edit menu actions', () => {
       'platformScriptureEditor.cutSelection',
       'platformScriptureEditor.copySelection',
       'platformScriptureEditor.pasteAtSelection',
+      'platformScriptureEditor.pasteAsPlainTextAtSelection',
     ]);
     expect(isEditMenuCommand('platformScriptureEditor.undo')).toBe(false);
     expect(isEditMenuCommand('platformScriptureEditor.redo')).toBe(false);
@@ -31,6 +39,7 @@ describe('Edit menu actions', () => {
     ['platformScriptureEditor.cutSelection', 'cut'],
     ['platformScriptureEditor.copySelection', 'copy'],
     ['platformScriptureEditor.pasteAtSelection', 'paste'],
+    ['platformScriptureEditor.pasteAsPlainTextAtSelection', 'pastePlainText'],
   ] as const)('%s runs the editor’s %s', (command, method) => {
     const editor = makeEditor();
     expect(runEditMenuAction(command, editor, { isReadOnly: false })).toBe(true);
@@ -42,6 +51,7 @@ describe('Edit menu actions', () => {
     'platformScriptureEditor.redo',
     'platformScriptureEditor.cutSelection',
     'platformScriptureEditor.pasteAtSelection',
+    'platformScriptureEditor.pasteAsPlainTextAtSelection',
   ] as const)('%s changes nothing while the editor is read-only', (command) => {
     const editor = makeEditor();
     expect(runEditMenuAction(command, editor, { isReadOnly: true })).toBe(false);
