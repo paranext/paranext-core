@@ -62,15 +62,6 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     );
   };
 
-  describe('UnknownNode containers', () => {
-    // `text-indent` is inherited, and a block box applies it to its own first line. A box inside a
-    // `\q` paragraph (`text-indent: -10vw`) would otherwise draw its opening `\fig` glyph out past
-    // its left edge, and one inside an indented paragraph would leave a gap before the glyph.
-    it("does not inherit the paragraph's first-line indent", () => {
-      expect(scss).toMatch(rule(['.marker-editable .unknown-block'], 'text-indent: 0;'));
-    });
-  });
-
   describe('PT9 Standard-view marker glyph styling', () => {
     // Standard view renders marker glyphs as MarkerNode spans carrying marker-syntax classes
     // (opening/closing/selfClosing) — not `marker`, which MarkerNode dropped upstream in #359.
@@ -286,6 +277,12 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       expect(code).toMatch(
         /(?:^|\})\s*\.usfm,\s*\[data-footnotes-pane\]\s*\{\s*--usj-font-fallback:/,
       );
+    });
+    // `text-indent` is inherited, and a block box applies it to its own first line. A box inside a
+    // `\q` paragraph (`text-indent: -10vw`) would otherwise draw its opening `\fig` glyph out past
+    // its left edge, and one inside an indented paragraph would leave a gap before the glyph.
+    it("keeps the UnknownNode block box from inheriting its paragraph's first-line indent", () => {
+      expect(scss).toMatch(rule(['.marker-editable .unknown-block'], 'text-indent: 0;'));
     });
     describe('Simple-mode text sizes follow the project font size', () => {
       const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
