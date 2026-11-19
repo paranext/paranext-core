@@ -74,3 +74,37 @@ export function revealRequestForGrid(
 ): RevealRequest | undefined {
   return isViewVisible && isGridSettled ? revealRequest : undefined;
 }
+
+/** Distances, in CSS pixels, from each side of one box to the matching side of a box inside it. */
+export type BoxInsets = { top: number; right: number; bottom: number; left: number };
+
+/**
+ * Measures where a scroll port's client area (its box minus any scrollbars) sits inside a
+ * container, for drawing over the scrolling content without covering a scrollbar. The insets are
+ * from the container's padding edge, which is what an absolutely positioned overlay in it is placed
+ * against. A scrollbar can be on either side: right-to-left text puts the vertical one on the
+ * left.
+ *
+ * @param container The positioned element the overlay belongs to.
+ * @param scrollPort A scroll container inside `container`.
+ * @returns The insets, or `undefined` while `container` has no layout (in a hidden tab).
+ */
+export function getScrollPortClientInsets(
+  container: HTMLElement,
+  scrollPort: HTMLElement,
+): BoxInsets | undefined {
+  const containerRect = container.getBoundingClientRect();
+  if (containerRect.width === 0 && containerRect.height === 0) return undefined;
+  const scrollPortRect = scrollPort.getBoundingClientRect();
+
+  const paddingLeft = containerRect.left + container.clientLeft;
+  const paddingTop = containerRect.top + container.clientTop;
+  const clientLeft = scrollPortRect.left + scrollPort.clientLeft;
+  const clientTop = scrollPortRect.top + scrollPort.clientTop;
+  return {
+    top: clientTop - paddingTop,
+    right: paddingLeft + container.clientWidth - (clientLeft + scrollPort.clientWidth),
+    bottom: paddingTop + container.clientHeight - (clientTop + scrollPort.clientHeight),
+    left: clientLeft - paddingLeft,
+  };
+}

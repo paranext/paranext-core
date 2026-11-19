@@ -3972,8 +3972,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   for any one resource; a chapter column's scroll area sits inside the column's region, which is.
   The outline lasts until the user next interacts with the grid or its tab is hidden. A verse row's
   outline is a 2px ring, the row's focus indicator, since the row holds focus. A column's is a
-  thicker outline set in from its edge: focus is on its scroll area or the shared root instead, and
-  the outline outlives focus moving to Find, so it must not read as a second focus ring. Find adds
+  thicker outline set in from the edge of what it frames: focus is on its scroll area or the shared
+  root instead, and the outline outlives focus moving to Find, so it must not read as a second focus
+  ring. An aligned column's outline frames the whole column; a chapter column's frames the text
+  area below the header, inside the scrollbar, since an outline set in from the column's edge would
+  run down the middle of the scrollbar. CSS cannot know the scrollbar's width or side, so the column
+  measures its scroll area's client box (`useRevealOutlineInsets`). Find adds
   the grid to `FIND_SEARCHABLE_WEB_VIEW_TYPES` and to `DECLARING_WEB_VIEW_TYPES`, so it lists the
   resources the grid declares. "Go to result" targets one tab, in this order: an editor showing
   the project (driven through its controller), then any reference panel showing it, then the Text

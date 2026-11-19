@@ -2086,6 +2086,87 @@ describe('ScriptureTextGrid — reveal a resource', () => {
     },
   );
 
+  describe("the column outline and the column's scrollbar", () => {
+    /** Width of the column's scroll port that is not scrollbar; 256 when there is no scrollbar. */
+    let scrollPortClientWidth = 242;
+    let reportResize: (() => void) | undefined;
+
+    beforeEach(() => {
+      scrollPortClientWidth = 242;
+      reportResize = undefined;
+      // A 256 × 358 column at (100, 40): a 21px header above a full-width scroll port.
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function measure(
+        this: HTMLElement,
+      ) {
+        if (this.hasAttribute('data-text-collection-cell')) return new DOMRect(100, 40, 256, 358);
+        if (this.hasAttribute('data-cell-content')) return new DOMRect(100, 61, 256, 337);
+        return new DOMRect(0, 0, 0, 0);
+      });
+      vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function width(
+        this: Element,
+      ) {
+        if (this.hasAttribute('data-cell-content')) return scrollPortClientWidth;
+        return this.hasAttribute('data-text-collection-cell') ? 256 : 0;
+      });
+      vi.spyOn(Element.prototype, 'clientHeight', 'get').mockImplementation(function height(
+        this: Element,
+      ) {
+        if (this.hasAttribute('data-cell-content')) return 337;
+        return this.hasAttribute('data-text-collection-cell') ? 358 : 0;
+      });
+      vi.stubGlobal(
+        'ResizeObserver',
+        vi.fn((callback: () => void) => {
+          reportResize = callback;
+          return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+        }),
+      );
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    const insetsOf = (column: HTMLElement) =>
+      ['top', 'right', 'bottom', 'left'].map((side) =>
+        column.style.getPropertyValue(`--stg-reveal-inset-${side}`),
+      );
+
+    it('frames the scrolling text in the chapter view, inside the scrollbar and below the header', () => {
+      renderRevealed({ viewMode: 'chapter' });
+
+      const column = cellOf('P2');
+      expect(insetsOf(column)).toEqual(['21px', '14px', '0px', '0px']);
+      expect(column).toHaveClass(
+        'tw:after:top-[var(--stg-reveal-inset-top,0px)]',
+        'tw:after:right-[var(--stg-reveal-inset-right,0px)]',
+        'tw:after:bottom-[var(--stg-reveal-inset-bottom,0px)]',
+        'tw:after:left-[var(--stg-reveal-inset-left,0px)]',
+      );
+    });
+
+    it('follows the scrollbar when it appears or goes away while the column is outlined', () => {
+      renderRevealed({ viewMode: 'chapter' });
+      const column = cellOf('P2');
+      expect(insetsOf(column)).toEqual(['21px', '14px', '0px', '0px']);
+
+      scrollPortClientWidth = 256;
+      act(() => reportResize?.());
+
+      expect(insetsOf(column)).toEqual(['21px', '0px', '0px', '0px']);
+    });
+
+    it('frames the whole column in the aligned view, whose columns have no scrollbar of their own', () => {
+      renderRevealed({ viewMode: 'aligned' });
+
+      const column = cellOf('P2');
+      // Positive control: the column is outlined, so the missing insets are deliberate.
+      expect(column).toHaveAttribute('data-revealed', 'true');
+      expect(insetsOf(column)).toEqual(['', '', '', '']);
+    });
+  });
+
   it('clears the outline on the next pointerdown inside the grid in the chapter view', () => {
     renderRevealed({ viewMode: 'chapter' });
 

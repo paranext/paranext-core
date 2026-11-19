@@ -1,4 +1,4 @@
-import type { DragEvent, KeyboardEvent } from 'react';
+import { type DragEvent, type KeyboardEvent, useRef } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { DROP_TARGET_RING_CLASSES, REVEALED_COLUMN_OUTLINE_CLASSES } from './aligned-grid.styles';
 import type { GridResource } from './grid-resources.utils';
@@ -6,6 +6,7 @@ import { ResourceCell } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { resourceZoomAreaOf } from './resource-zoom-area.utils';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import { useRevealOutlineInsets } from './use-reveal-outline-insets.hook';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
 /**
@@ -75,9 +76,19 @@ export function ResourceColumn({
   const revealRing =
     isRevealed && !reorder?.isDropTarget ? ` ${REVEALED_COLUMN_OUTLINE_CLASSES}` : '';
   const zoomArea = resourceZoomAreaOf(resource.resourceId);
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const columnRef = useRef<HTMLDivElement>(null);
+  // In the chapter view the cell scrolls itself, so the outline is kept off its scrollbar. In the
+  // aligned view the grid root scrolls every column at once, and the outline frames the whole column.
+  const revealOutlineStyle = useRevealOutlineInsets(
+    columnRef,
+    !!revealRing && cellViewMode === 'chapter',
+  );
 
   return (
     <div
+      ref={columnRef}
       role="region"
       aria-label={resource.label}
       data-project-id={resource.projectId}
@@ -96,6 +107,7 @@ export function ResourceColumn({
       onDragOver={reorder?.onDragOver}
       onDrop={reorder?.onDrop}
       className={`${className}${dropTargetRing}${revealRing}`}
+      style={revealOutlineStyle}
     >
       <ResourceCell
         resourceRef={resource}

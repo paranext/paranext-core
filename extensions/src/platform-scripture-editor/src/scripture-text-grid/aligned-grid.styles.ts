@@ -40,12 +40,16 @@ export const REVEALED_ROW_RING_CLASSES =
  *
  * Focus is not on the column, so the outline must not read as a focus ring: it outlives focus
  * moving elsewhere (Find, the chrome), and the column's scroll area can show its own ring inside
- * it. So it is thicker than a focus ring and set in from the column's edge, leaving a gap between
- * it and a scroll area's focus ring. It is an outline rather than a ring, so forced colors keeps
- * it; there it takes the system `Highlight` color.
+ * it. So it is thicker than a focus ring and set in from the edge of what it frames, leaving a gap
+ * between it and a scroll area's focus ring. It is an outline rather than a ring, so forced colors
+ * keeps it; there it takes the system `Highlight` color.
+ *
+ * The overlay covers the whole column unless the `--stg-reveal-inset-*` properties place it: a
+ * chapter column sets them to its scroll port's client area (`useRevealOutlineInsets`), so the
+ * outline frames the text and stays off the scrollbar and the header.
  */
 export const REVEALED_COLUMN_OUTLINE_CLASSES =
-  'tw:relative tw:after:pointer-events-none tw:after:absolute tw:after:inset-0 tw:after:z-2 tw:after:outline-3 tw:after:-outline-offset-7 tw:after:outline-ring tw:forced-colors:after:outline-[color:Highlight]';
+  'tw:relative tw:after:pointer-events-none tw:after:absolute tw:after:top-[var(--stg-reveal-inset-top,0px)] tw:after:right-[var(--stg-reveal-inset-right,0px)] tw:after:bottom-[var(--stg-reveal-inset-bottom,0px)] tw:after:left-[var(--stg-reveal-inset-left,0px)] tw:after:z-2 tw:after:outline-3 tw:after:-outline-offset-7 tw:after:outline-ring tw:forced-colors:after:outline-[color:Highlight]';
 
 /**
  * Custom property carrying a column's zoom factor down to its verse blocks.
