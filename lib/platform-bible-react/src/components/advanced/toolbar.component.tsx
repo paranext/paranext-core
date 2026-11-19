@@ -184,8 +184,10 @@ export function Toolbar({
             >
               {appMenuIcon &&
                 (menuData ? (
-                  // Out of the tab order: the app menu's own trigger, right beside it, and Alt+P
-                  // already reach this menu from the keyboard
+                  // A secondary, pointer-only way into the app menu: the app menu's own trigger,
+                  // right beside it, and Alt+P are the accessible entry points. So it is
+                  // deliberately out of the tab order and has no tooltip, ARIA menu attributes
+                  // or label of its own.
                   <button
                     type="button"
                     tabIndex={-1}
