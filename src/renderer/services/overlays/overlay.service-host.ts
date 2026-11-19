@@ -552,6 +552,19 @@ function menuExpressionsUseTemplateVar(menu: Localized<SingleColumnMenu>, name: 
 
 // ── Core Service Methods ──
 
+/** Options of {@link showContextMenu} */
+type ShowContextMenuOptions = {
+  position?: { x: number; y: number };
+  shouldRunCommand?: boolean;
+  contextKeys?: Record<string, ContextKeyValue>;
+};
+
+/** A `showContextMenu` call that has not registered its overlay yet */
+type PendingContextMenuRequest = { cancel: () => void; isCancelled: () => boolean };
+
+/** The context menu requests of each web view that are still preparing their menu, by web view ID */
+const pendingContextMenuRequests = new Map<string, Set<PendingContextMenuRequest>>();
+
 /**
  * Shows a context menu from menu.json contributions registered for the given webViewType. Fetches
  * menu data, renders the menu, and runs the selected command unless `shouldRunCommand` is `false`.
@@ -566,11 +579,7 @@ function menuExpressionsUseTemplateVar(menu: Localized<SingleColumnMenu>, name: 
 async function showContextMenu(
   webViewType: string,
   webViewId: string,
-  options?: {
-    position?: { x: number; y: number };
-    shouldRunCommand?: boolean;
-    contextKeys?: Record<string, ContextKeyValue>;
-  },
+  options?: ShowContextMenuOptions,
 ): Promise<string | undefined> {
   if (!isWebViewVisible(webViewId)) {
     throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
@@ -580,11 +589,42 @@ async function showContextMenu(
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
+  // Registered for the whole call so `dismissContextMenu` can cancel it while it awaits data. An
+  // entry lives only as long as its call, so the map cannot outgrow the requests in flight.
+  let cancelled = false;
+  const request: PendingContextMenuRequest = {
+    cancel: () => {
+      cancelled = true;
+    },
+    isCancelled: () => cancelled,
+  };
+  let pendingForWebView = pendingContextMenuRequests.get(webViewId);
+  if (!pendingForWebView) {
+    pendingForWebView = new Set();
+    pendingContextMenuRequests.set(webViewId, pendingForWebView);
+  }
+  pendingForWebView.add(request);
+  try {
+    return await buildAndShowContextMenu(webViewType, webViewId, request, options);
+  } finally {
+    const remaining = pendingContextMenuRequests.get(webViewId);
+    remaining?.delete(request);
+    if (remaining?.size === 0) pendingContextMenuRequests.delete(webViewId);
+  }
+}
+
+/** Fetches the menu data, then registers the overlay unless the request was cancelled meanwhile. */
+async function buildAndShowContextMenu(
+  webViewType: string,
+  webViewId: string,
+  request: PendingContextMenuRequest,
+  options?: ShowContextMenuOptions,
+): Promise<string | undefined> {
   // Fetch menu contributions for this webViewType
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const { contextMenu } = await menuDataService.getWebViewMenu(webViewType as ReferencedItem);
 
-  if (!contextMenu) {
+  if (!contextMenu || request.isCancelled()) {
     return undefined;
   }
 
@@ -603,6 +643,8 @@ async function showContextMenu(
       );
     }
   }
+  if (request.isCancelled()) return undefined;
+
   const templateVars = createMenuTemplateVars({ webViewId, webViewType, projectId });
   // `when` hides an item and `enabledWhen` on a command item disables it. `checkedWhen`, and
   // `enabledWhen` on a submenu, are rejected at load. While the menu is open it re-evaluates
@@ -1297,6 +1339,7 @@ async function dismissCommandPalette(webViewId: string): Promise<void> {
  * @param webViewId The WebView whose context menu should be dismissed
  */
 async function dismissContextMenu(webViewId: string): Promise<void> {
+  pendingContextMenuRequests.get(webViewId)?.forEach((request) => request.cancel());
   getOverlaysByWebView(webViewId)
     .filter((overlay) => overlay.type === 'contextMenu')
     .forEach((overlay) => {
