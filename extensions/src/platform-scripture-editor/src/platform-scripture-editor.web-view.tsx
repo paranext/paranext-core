@@ -5234,6 +5234,12 @@ function PlatformScriptureEditor({
     !allowInvisibleCharactersSetting.isUnreadable &&
     !!usjForEditor &&
     usjForEditor !== defaultUsj;
+  // Simple mode only. This view REPLACES the editing surface (the subtree below is
+  // `display: none`, which takes it out of both the accessibility tree and the tab order), and the
+  // scaffold button is the only way back in — but `showButton` withholds it for read-only
+  // projects, for `chapterNum: 0` front matter, and transiently while versification loads. In
+  // Power mode, where typing directly into a blank chapter is the expected workflow, that would
+  // turn those cases into dead ends. A Power user sees the ordinary empty editor instead.
   const showEmptyChapterView = isBlankChapter && !isPowerMode;
   const isEditorTextShown = isEditorMounted && !showEmptyChapterView;
 
@@ -5434,13 +5440,6 @@ function PlatformScriptureEditor({
         </ContentZoomRoot>
       </TwoStepDeleteTooltipOverlay>
     );
-
-    // Simple mode only. This view REPLACES the editing surface (the subtree below is
-    // `display: none`, which takes it out of both the accessibility tree and the tab order), and the
-    // scaffold button is the only way back in — but `showButton` withholds it for read-only
-    // projects, for `chapterNum: 0` front matter, and transiently while versification loads. In
-    // Power mode, where typing directly into a blank chapter is the expected workflow, that would
-    // turn those cases into dead ends. A Power user sees the ordinary empty editor instead.
 
     return (
       <>
