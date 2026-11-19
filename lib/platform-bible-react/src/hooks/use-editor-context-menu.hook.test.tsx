@@ -1023,6 +1023,52 @@ describe('useEditorContextMenu', () => {
       expect(api.isPending()).toBe(false);
     });
 
+    it('drops the open request on the pointerdown of a right-click on an interactive control', () => {
+      const dismissMenu = vi.fn();
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const { getByTestId } = render(
+        <Host
+          requestMenu={() => new Promise<string | undefined>(() => {})}
+          dismissMenu={dismissMenu}
+          onApi={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      rightClick(getByTestId('text'));
+
+      rightButtonPointerDown(getByTestId('a'));
+
+      expect(dismissMenu).toHaveBeenCalledTimes(1);
+      expect(api.isPending()).toBe(false);
+    });
+
+    it('drops the open request on the pointerdown of a right-click once the hook is disabled', () => {
+      const dismissMenu = vi.fn();
+      const requestMenu = () => new Promise<string | undefined>(() => {});
+      let api!: ReturnType<typeof useEditorContextMenu>;
+      const onApi = (value: ReturnType<typeof useEditorContextMenu>) => {
+        api = value;
+      };
+      const { getByTestId, rerender } = render(
+        <Host requestMenu={requestMenu} dismissMenu={dismissMenu} onApi={onApi} />,
+      );
+      rightClick(getByTestId('text'));
+
+      rerender(
+        <Host
+          requestMenu={requestMenu}
+          dismissMenu={dismissMenu}
+          onApi={onApi}
+          isEnabled={false}
+        />,
+      );
+      rightButtonPointerDown(getByTestId('text'));
+
+      expect(dismissMenu).toHaveBeenCalledTimes(1);
+      expect(api.isPending()).toBe(false);
+    });
+
     it('ignores a pointerdown while nothing is pending', () => {
       const dismissMenu = vi.fn();
       const { getByTestId } = render(
