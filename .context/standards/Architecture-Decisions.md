@@ -2125,6 +2125,114 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
+
+## adr-create-element-guard-trusts-call-sites: The renderer's `createElement` guard identifies the caller by V8 call-site file name, built only from references captured before any web view runs
+
+- **Date:** 2026-11-16
+- **Status:** Accepted
+- **Context:** Web views run in same-origin iframes (`allow-same-origin`) and can reach the renderer
+  as `parent` / `window.top`, where the CSP's `script-src-elem 'unsafe-inline'` lets an injected
+  script run with full renderer privileges. The renderer therefore guards the creation of restricted
+  tags (`FORBIDDEN_HTML_TAGS`, `RESTRICTED_HTML_TAGS` in `web-view.service-shard.ts`). The old
+  guard read the TEXT of `Error().stack` and regex-matched it, so a function name containing a
+  newline, a `//# sourceURL=` label on `eval` code, or a hijacked `Error.prepareStackTrace` could
+  make an attacker's call look like a renderer frame; a poisoned `Array.prototype.includes` skipped
+  the tag lookup altogether, and the patch on the `document` instance was bypassed by
+  `Document.prototype.createElement.call` and by `createElementNS`.
+- **Decision:** `installCreateElementGuard` (in `renderer-create-element-guard.util.ts`, called from
+  `initialize` in `web-view.service-shard.ts`) patches `Document.prototype.createElement` and
+  `createElementNS` (non-writable, non-configurable) and decides from the real script URL of the
+  caller's V8 call site, via `isCreateElementCallerAllowed`: the renderer bundle (measured at install
+  from the installer's own call site) or a Usersnap widget chunk (`https` only, exact path shape).
+  `getFileName()` returns `null` for `eval` / `new Function` frames, so those are rejected.
+  - **Trust only what was captured before any web view ran.** A same-origin frame can rewrite any
+    shared global or prototype, and in production the guard module shares its realm with the window
+    it guards, so nothing on the call-time path may be looked up when a call is judged. The
+    installer captures `Error`, `captureStackTrace`, `Object` and its static methods, `String` and
+    its `toLowerCase` / `indexOf` / `slice`, `Reflect.apply` / `Reflect.deleteProperty` /
+    `Reflect.get`, the original `createElement` / `createElementNS` and the `CallSite` methods;
+    `isCreateElementCallerAllowed` uses `RegExp.prototype.exec` and `Reflect.apply` captured when
+    its module loads. Everything else on the path is an operator (`!!`, not `Boolean(...)`) or an
+    own property of a value the guard created or V8 handed it — no free globals, `.call` / `.apply`,
+    iterators or spread. The tag list is a null-prototype record. A non-string tag argument is
+    coerced once and the original receives the coerced string; a string primitive is passed through
+    unchanged. If `onRejected` returns instead of throwing, the guard throws its own error.
+  - **Own the stack-trace machinery.** The installer makes `Error.prepareStackTrace` a
+    non-configurable accessor whose getter returns the guard's formatter only during a guard
+    capture, and also locks `window.Error` (non-writable, non-configurable): under an embedder
+    prepare-stack-trace callback (Node's reads `globalThis.Error.prepareStackTrace`), swapping
+    `window.Error` let a frame call the guard's formatter with a harvested renderer-bundle call
+    site. V8 picks the `prepareStackTrace` realm from the holder passed to `captureStackTrace`, so
+    the holder is built with the window's captured `Object`. `Error.stackTraceLimit` is honored only
+    as a data property, so it is set to the capture depth (10 frames, V8's default: the decision
+    reads only the first, the rest are logged) and restored rather than locked; if an attacker
+    breaks it, the capture yields no frames and the call is rejected (fail closed).
+  - **The guard stays until same-origin web views go.** As of 2026-11-16, PT-2912 and PT-2896 are in
+    Triage; until a web view can no longer be same-origin with the renderer, this is the only guard
+    on restricted-tag `createElement` calls. What it buys today is narrow: it stops the direct route
+    of a web view calling `parent.document.createElement` (or the prototype method, or
+    `createElementNS`) for a restricted tag, which raises the bar against casual or accidental misuse
+    but not against a deliberate attacker (see probe (a) under Consequences). Its price is the
+    renderer-wide locks on `window.Error`, `Error.prepareStackTrace` and the `Document.prototype`
+    methods. No cheap fix closes the gap: dropping `'unsafe-inline'` breaks every `srcdoc` web view,
+    which inherits the renderer CSP; a nonce is readable by a same-origin web view; a `<meta>` CSP
+    cannot add hashes after load; and guarding insertion means patching React's hottest DOM paths and
+    still leaves gaps. The real fix is web views on their own origin (PT-2896 / PT-2912).
+- **Alternatives:** (1) A capability (a token the renderer's own code holds) instead of file names:
+  not workable, because Usersnap's remote chunks (loaded by `loadSpace` in `usersnap.service.ts`) and
+  webpack's chunk loader both call the global `document.createElement` themselves and cannot be
+  made to present one. (2) Keep matching stack text with tighter regexes: the text is attacker
+  influenced by construction. (3) Chase HTML-text insertion, element copying and cross-realm
+  creation in this change: rejected as not cheap side doors; see Consequences.
+- **Consequences:** The guard's claim is only "the caller cannot be faked", not "a web view cannot
+  add scripts, frames, forms or links to the app window". Known unguarded paths, tracked in
+  PT-5086: any renderer-bundle code reachable from a web view that calls a function the web view
+  supplies, or creates elements from data it supplies, is a trusted caller — for example
+  `parent.React.Children.map(['script'], parent.document.createElement.bind(parent.document))`,
+  `createRoot` on the app window, webpack's chunk-loading global if one is reachable, and possibly
+  the bundle file itself loaded into the web view's realm (the web view CSP allows
+  `script-src-elem 'self'`); none of these was verified live. Also unguarded: element copying
+  (`cloneNode`, `importNode`, `adoptNode`); customized built-in elements (a class extending
+  `parent.HTMLScriptElement`, defined with `{ extends: 'script' }` on `parent.customElements` and
+  constructed with `new`, is created in the app document without calling `createElement`; confirmed
+  in jsdom, not in Chromium); HTML-text insertion (`innerHTML`, `insertAdjacentHTML`,
+  `document.write`, `DOMParser`, `<template>`, and similar); and creating in the web view's own
+  document, or via its own `Document.prototype`, and adopting into the app window. Constraints for
+  maintainers: nothing in the renderer may reassign `window.Error` after startup; the installer
+  throws if `Error` or `Error.prepareStackTrace` is already locked, and refuses a second install, so
+  renderer unit tests that call `initialize()` repeatedly mock `installCreateElementGuard` (its real
+  behaviour is tested in `renderer-create-element-guard.install.test.ts` against separate jsdom
+  realms, and with the module evaluated inside the guarded realm as production runs it, attacked by
+  poisoning that realm's builtins). Either trusted caller may create any restricted tag; per-tag
+  rules were not asked for. Because the guard fails closed, a web view can stop the renderer itself
+  from creating any restricted tag for the rest of the session, by making `parent.Error`'s
+  `stackTraceLimit` read-only or an accessor: the guard's capture then finds no caller, so chunk
+  loading, new web view iframes and anchors are rejected too. That denial of service is accepted;
+  a hostile web view has other ways to break the window.
+  **Revisit** when PT-2912 / PT-2896 land: if web views stop being same-origin, delete the guard.
+  - **Live check (2026-11-16, dev build):** the `evil` web view's forgery attempts logged no
+    `<<BAD>>`. A webpack hot update created its script through
+    `__webpack_require__.l` in `renderer.dev.js` and was allowed, which confirms that the guard
+    measured the bundle that holds the chunk loader. In the production build, the guard and the
+    chunk loader are also both in `renderer.js`. A `script` created from DevTools-evaluated code
+    was rejected. Toolbar SVG icons rendered. The Usersnap path was not exercised, because this
+    build has no Usersnap keys. PT-5086 probes: (a) a script that the web view created in its own
+    document and appended to the app window RAN in the app window. So in practice the guard does not
+    stop script injection today: removing `'unsafe-inline'` from the renderer CSP (PT-2801) or
+    landing PT-2896 is the real fix; see PT-5086. (b) an iframe rendered through
+    the app window's `createRoot` was allowed by this guard (React in the renderer bundle is a
+    trusted caller), but the separate no-sandbox iframe check removed it, so it did not appear.
+  - **Packaged check (2026-11-18, unpacked Linux build with `app.asar`, `DEV_NOISY=true`):** the
+    guard installed and measured `app.asar/dist/renderer/renderer.js`; trusted iframes were allowed
+    with their full trail logged; with the `evil` tab active, its `script`, `iframe` and `a`
+    attempts were rejected from `evil.web-view.html` and no renderer `<<BAD>>` was logged. Probes
+    (a) and (b) behaved as in the dev build.
+  - **Usersnap check (2026-11-18, dev build with the Paratext 10 Studio Usersnap keys added
+    locally):** both feedback forms opened and took input; the widget's `form` and `a` were allowed
+    from `https://resources.usersnap.com/widget-assets/js/chunks/<digits>/<hash>.js` (no query
+    string), with no rejection and no `TypeError` from the `window.Error` lock.
+- **Source:** PT-4767 (epic PT-2091).
+
 ## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
 
 - **Date:** 2026-09-21
