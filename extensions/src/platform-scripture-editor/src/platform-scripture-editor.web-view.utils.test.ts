@@ -1112,15 +1112,17 @@ describe('getEditorFocusLocation', () => {
 });
 
 describe('getEditorWebViewContextKeys', () => {
-  it('names the five per-web-view keys from the web view id', () => {
+  it('names the six per-web-view keys from the web view id', () => {
     const keys = getEditorWebViewContextKeys('wv1', {
       isReadOnly: false,
       isPreview: false,
       isSyncBlocked: false,
       footnotesPaneVisible: false,
       hasSelection: false,
+      editTargetIsEditable: false,
     });
     expect(Object.keys(keys).sort()).toEqual([
+      'platformScriptureEditor.webView.wv1.editTargetIsEditable',
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
       'platformScriptureEditor.webView.wv1.hasSelection',
       'platformScriptureEditor.webView.wv1.isPreview',
@@ -1139,10 +1141,12 @@ describe('getEditorWebViewContextKeys', () => {
           isSyncBlocked: true,
           footnotesPaneVisible: true,
           hasSelection: true,
+          editTargetIsEditable: true,
         }),
       ),
     );
     expect([...names].sort()).toEqual([
+      'platformScriptureEditor.webView.wv1.editTargetIsEditable',
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
       'platformScriptureEditor.webView.wv1.hasSelection',
       'platformScriptureEditor.webView.wv1.isPreview',
@@ -1151,7 +1155,7 @@ describe('getEditorWebViewContextKeys', () => {
     ]);
   });
 
-  it('mirrors isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible and hasSelection', () => {
+  it('mirrors every fact', () => {
     expect(
       getEditorWebViewContextKeys('wv1', {
         isReadOnly: true,
@@ -1159,6 +1163,7 @@ describe('getEditorWebViewContextKeys', () => {
         isSyncBlocked: false,
         footnotesPaneVisible: true,
         hasSelection: true,
+        editTargetIsEditable: false,
       }),
     ).toEqual({
       'platformScriptureEditor.webView.wv1.isReadOnly': true,
@@ -1166,6 +1171,7 @@ describe('getEditorWebViewContextKeys', () => {
       'platformScriptureEditor.webView.wv1.isSyncBlocked': false,
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible': true,
       'platformScriptureEditor.webView.wv1.hasSelection': true,
+      'platformScriptureEditor.webView.wv1.editTargetIsEditable': false,
     });
   });
 });
@@ -1216,6 +1222,7 @@ describe('menus.json dynamic conditions', () => {
     'platformScriptureEditor.webView.wv.isSyncBlocked': false,
     'platformScriptureEditor.webView.wv.footnotesPaneVisible': true,
     'platformScriptureEditor.webView.wv.hasSelection': true,
+    'platformScriptureEditor.webView.wv.editTargetIsEditable': true,
   };
 
   const evaluate = (overrides: Record<string, boolean> = {}) => {
@@ -1513,6 +1520,46 @@ describe('menus.json dynamic conditions', () => {
       const disabled = isDisabledFn(evaluate(facts));
       EDIT_COMMANDS.forEach((command) => expect(disabled(command)).toBe(true));
     });
+  });
+
+  it('disables the top menu Cut and Paste, and nothing else, while the edit target is read-only', () => {
+    const disabled = isDisabledFn(
+      evaluate({ 'platformScriptureEditor.webView.wv.editTargetIsEditable': false }),
+    );
+    expect(disabled('platformScriptureEditor.cutSelection')).toBe(true);
+    expect(disabled('platformScriptureEditor.pasteAtSelection')).toBe(true);
+    expect(disabled('platformScriptureEditor.undo')).toBe(false);
+    expect(disabled('platformScriptureEditor.redo')).toBe(false);
+    expect(disabled('platformScriptureEditor.copySelection')).toBe(false);
+    INSERT_NOTE_COMMANDS.forEach((command) => expect(disabled(command)).toBe(false));
+  });
+
+  it('leaves Cut and Paste to the other facts while the edit target is editable', () => {
+    const editable = isDisabledFn(
+      evaluate({ 'platformScriptureEditor.webView.wv.editTargetIsEditable': true }),
+    );
+    expect(editable('platformScriptureEditor.cutSelection')).toBe(false);
+    expect(editable('platformScriptureEditor.pasteAtSelection')).toBe(false);
+    const blocked = isDisabledFn(
+      evaluate({
+        'platformScriptureEditor.webView.wv.editTargetIsEditable': true,
+        'platformScriptureEditor.webView.wv.isPreview': true,
+      }),
+    );
+    expect(blocked('platformScriptureEditor.cutSelection')).toBe(true);
+  });
+
+  it('leaves the resource Copy selection alone when editTargetIsEditable is false', () => {
+    const menu = evaluate({
+      'platform.project.p1.isResource': true,
+      'platform.project.p1.isEditable': false,
+      'platformScriptureEditor.webView.wv.editTargetIsEditable': false,
+    });
+    const copy = menu.items.filter(
+      (item: { command?: string }) => item.command === 'platformScriptureEditor.copySelection',
+    );
+    expect(copy).toHaveLength(1);
+    expect(copy[0].disabled).toBeFalsy();
   });
 
   it('leaves Copy enabled when the project cannot be edited', () => {

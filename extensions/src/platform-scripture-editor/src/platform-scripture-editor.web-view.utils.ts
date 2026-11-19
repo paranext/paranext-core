@@ -685,6 +685,7 @@ const EDITOR_WEB_VIEW_CONTEXT_FACTS = [
   'isSyncBlocked',
   'footnotesPaneVisible',
   'hasSelection',
+  'editTargetIsEditable',
 ] as const;
 
 function getEditorWebViewContextKeyPrefix(webViewId: string): string {

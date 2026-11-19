@@ -621,6 +621,10 @@ function FootnotesPane({
         label={zoomAreaLabel}
         className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li]:pe-7"
         onCopy={handleFootnotesCopy}
+        // Kept as a literal for the same reason as `data-footnotes-pane` above. Must match
+        // `FOOTNOTES_ROWS_ATTRIBUTE` in `editor-dom.util.ts`, which the web view's edit-target
+        // tracking queries for.
+        data-footnotes-rows=""
       >
         {footnotes.length === 0 && !isLoading && (
           <EmptyState
