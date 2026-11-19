@@ -151,6 +151,11 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
         const last = rects[rects.length - 1];
         return { x: last.right, y: last.bottom };
       }
+      // A collapsed caret often has no client rect list but does have a bounding rect.
+      const bounds = range.getBoundingClientRect?.();
+      if (bounds && (bounds.width > 0 || bounds.height > 0)) {
+        return { x: bounds.right, y: bounds.bottom };
+      }
     }
   }
   const box = container.getBoundingClientRect();
@@ -170,7 +175,8 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
  * it too. Not a `scroll` listener: opening the menu blurs the editor, which can scroll the frame by
  * itself and would close the menu the moment it opens.
  *
- * One instance per editor.
+ * One instance per editor. The container must be mounted in the same commit as the hook, and
+ * `requestMenu` must always settle: the menu owns the keyboard until it does.
  *
  * @param options See {@link UseEditorContextMenuOptions}
  * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
@@ -242,13 +248,21 @@ export function useEditorContextMenu(
       };
 
       const run = async () => {
+        let command: string | undefined;
         try {
-          const command = await requestMenu(request);
-          settle();
-          if (command !== undefined) onPick(command, request);
+          command = await requestMenu(request);
         } catch (error) {
           settle();
           reportError(error);
+          return;
+        }
+        settle();
+        if (command === undefined) return;
+        try {
+          onPick(command, request);
+        } catch (error) {
+          // A failing pick is the host's own bug, never one of the expected quiet rejections.
+          optionsRef.current.onError?.(error);
         }
       };
       // `run` handles its own failures; nothing escapes to await.

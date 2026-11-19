@@ -2178,7 +2178,8 @@ export type UseEditorContextMenuResult = {
  * it too. Not a `scroll` listener: opening the menu blurs the editor, which can scroll the frame by
  * itself and would close the menu the moment it opens.
  *
- * One instance per editor.
+ * One instance per editor. The container must be mounted in the same commit as the hook, and
+ * `requestMenu` must always settle: the menu owns the keyboard until it does.
  *
  * @param options See {@link UseEditorContextMenuOptions}
  * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
