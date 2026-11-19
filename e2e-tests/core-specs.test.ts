@@ -50,14 +50,17 @@ function editorPathsPattern(entries: string[]): RegExp {
   return new RegExp(`^(${entries.join('|')})`);
 }
 
+let trackedFilesCache: string[] | undefined;
+
 /** Every path git tracks, as the pull request's changed-files list would name it. */
 function trackedFiles(): string[] {
-  return execFileSync('git', ['-C', REPOSITORY_ROOT, 'ls-files'], {
+  trackedFilesCache ??= execFileSync('git', ['-C', REPOSITORY_ROOT, 'ls-files'], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   })
     .split('\n')
     .filter((line) => line !== '');
+  return trackedFilesCache;
 }
 
 // Renaming a list and updating only SPEC_LISTS would leave the workflow naming a file that no
@@ -109,6 +112,7 @@ describe('the editor list trigger in test.yml', () => {
     'extensions/src/platform-scripture/src/project-data-provider/platform-scripture-extender-pdpe.model.ts',
     'src/node/polyfills/dom-globals.polyfill.ts',
     'c-sharp/Projects/ParatextProjectDataProvider.cs',
+    'c-sharp/Projects/ChapterMarkerCorrection.cs',
     'c-sharp/ParanextDataProvider.csproj',
     'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
     'lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx',

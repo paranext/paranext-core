@@ -158,10 +158,11 @@ one of these.
   on the run ("E2E test passed only on its retry"): treat it as a defect, like any flaky test. On
   the nightly run it also fails the run (`--fail-on-flaky-tests`), since nobody opens a green nightly
   run and it blocks no pull request. Each failed attempt keeps, in the run's `playwright-results-…`
-  artifact, a failure screenshot (`failure.png`), Playwright's `trace.zip` (the test's steps and output, no DOM) and,
-  for specs on `fixtures/isolated.fixture.ts`, `electron-trace.zip`: a DOM trace of the app, lost
-  if the app had already died. The specs stop on their own before the job's time limit, so the
-  reports still upload; a warning says when they ran out of time. `e2e-core` reports without
+  artifact, a failure screenshot (`failure.png`), Playwright's `trace.zip` (the test's steps and
+  output, no DOM) and, for specs on `fixtures/isolated.fixture.ts`, `electron-trace.zip`: a DOM
+  trace of the app, lost if the app had already died or the run ran out of time during that test.
+  The specs stop on their own before the job's time limit, so the reports still upload; a warning
+  says when they ran out of time. `e2e-core` reports without
   blocking: a spec failure shows as a warning on the run, not as a red check (a setup failure or a
   job timeout may still show the job's check as failed).
 

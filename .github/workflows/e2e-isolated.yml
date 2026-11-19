@@ -195,14 +195,14 @@ jobs:
         if: ${{ failure() && inputs.report_only }}
         run: echo "::warning title=E2E isolated setup failed::A setup step failed before the specs could run; see this job's log."
 
-      # Playwright reports a run that `--global-timeout` ended as "Timed out waiting …" (in colour
-      # codes, so this matches a substring). Says so plainly, since the failures alone read like
-      # broken tests.
+      # Playwright reports a run that `--global-timeout` ended as "Timed out waiting <n>s for the
+      # <stage> to run" (in colour codes, so this matches inside the message). Says so plainly, since
+      # the failures alone read like broken tests. Re-check the wording when Playwright is upgraded.
       - name: Warn when the specs ran out of time
         if: ${{ !cancelled() && hashFiles('e2e-tests/e2e-results.json') != '' }}
         continue-on-error: true
         run: |
-          if jq -e '[.errors[]?.message // empty | select(test("Timed out waiting"))] | length > 0' \
+          if jq -e '[.errors[]?.message // empty | select(test("Timed out waiting [0-9.]+s for the .* to run"))] | length > 0' \
             e2e-tests/e2e-results.json > /dev/null; then
             echo "::warning title=E2E specs ran out of time::The specs reached the time the job's ${{ inputs.timeout_minutes }}-minute limit left them and were stopped; the tests not yet run are listed in the job log. See the ${{ inputs.artifact_name }} artifact."
           fi

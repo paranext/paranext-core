@@ -562,8 +562,9 @@ jobs:
           #   judge what counts as an unasked edit;
           # - the USFM<->USX<->USJ conversion path: the TypeScript USX<->USJ conversion in the
           #   platform-scripture project data provider, the DOM polyfill it runs on, the C# USFM<->USX
-          #   conversion in ParatextProjectDataProvider.cs, and the ParatextData version pin in the
-          #   C# project file (ParatextData does the USFM<->USX conversion);
+          #   conversion in ParatextProjectDataProvider.cs, the chapter-marker correction it applies
+          #   to USFM before writing it, and the ParatextData version pin in the C# project file
+          #   (ParatextData does the USFM<->USX conversion);
           # - a curated, non-exhaustive subset of the platform-bible-react parts the editor web view
           #   renders: the footnote editor, the marker menu and palette helpers, the editor keyboard
           #   shortcuts, and the demo editor stylesheets the extension imports by path. Other shared
@@ -584,6 +585,7 @@ jobs:
           editor_paths+=('extensions/src/platform-scripture/src/project-data-provider/')
           editor_paths+=('src/node/polyfills/dom-globals\.')
           editor_paths+=('c-sharp/Projects/ParatextProjectDataProvider\.cs$')
+          editor_paths+=('c-sharp/Projects/ChapterMarkerCorrection\.cs$')
           editor_paths+=('c-sharp/ParanextDataProvider\.csproj$')
           editor_paths+=('lib/platform-bible-react/src/components/advanced/footnote-editor/')
           editor_paths+=('lib/platform-bible-react/src/components/advanced/marker-menu\.')
