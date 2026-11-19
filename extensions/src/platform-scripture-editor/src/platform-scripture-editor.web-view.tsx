@@ -196,8 +196,9 @@ import {
   SYNC_EDIT_BLOCKED_REGEX,
 } from './save-failure-report.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
-import { getEditorOpenFindArgs, resolveMenuFindSelectionText } from './find-trigger.util';
+import { resolveMenuFindSelectionText } from './find-trigger.util';
 import {
+  createContextMenuCommandEffects,
   dispatchContextMenuPick,
   getContextMenuShowOptions,
 } from './editor-context-menu-pick.util';
@@ -2781,66 +2782,9 @@ function PlatformScriptureEditor({
 
   // #region Context Menu
 
-  // The main text's right-click menu is the platform's own. The container is the editor's own
-  // wrapper, not `editorContainerRef`: that also holds the footnotes pane, its row editor and the
-  // header alerts, none of which this menu serves.
-  // A ref starts out as null for React to be able to set it as an element ref
-  // eslint-disable-next-line no-null/no-null
-  const mainEditorWrapperRef = useRef<HTMLDivElement>(null);
-  const { dismiss: dismissEditorContextMenu, isPending: isEditorContextMenuPending } =
-    useEditorContextMenu({
-      containerRef: mainEditorWrapperRef,
-      hasNonTextSelection: () => !!editorRef.current?.getSelectedParaMarker(),
-      requestMenu: (request) =>
-        papi.overlays.showContextMenu(
-          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-          webViewId,
-          getContextMenuShowOptions(request, true),
-        ),
-      dismissMenu: () => papi.overlays.dismissContextMenu(webViewId),
-      onPick: (command, request) =>
-        dispatchContextMenuPick(command, request, {
-          runClipboardCommand: (clipboardCommand) => {
-            // The menu hands focus back to its tab asynchronously; the clipboard read behind Paste
-            // needs the frame focused when it runs, so focus the editor first.
-            editorRef.current?.focus();
-            runEditMenuCommand(clipboardCommand);
-          },
-          openFind: (selectedText) => {
-            const args = getEditorOpenFindArgs(webViewId, projectId, selectedText, viewOptions);
-            if (!args) return;
-            papi.commands
-              .sendCommand(
-                'platformScripture.openFind',
-                args.webViewId,
-                args.selectedText,
-                args.sourceProjectId,
-              )
-              .catch((e) =>
-                logger.warn(
-                  `Failed to open Find from the editor context menu: ${getErrorMessage(e)}`,
-                ),
-              );
-          },
-          sendCommand: (otherCommand) => {
-            papi.commands
-              // Assuming that the picked command is one of the registered command handlers in papi
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              .sendCommand(otherCommand as keyof CommandHandlers, webViewId)
-              .catch((e) =>
-                logger.warn(
-                  `Failed to run ${otherCommand} from the editor context menu: ${getErrorMessage(e)}`,
-                ),
-              );
-          },
-        }),
-      onError: (error) => logger.warn(`The editor context menu failed: ${getErrorMessage(error)}`),
-    });
-
-  // A menu left open across a chapter or view change would point at content that is gone.
-  useEffect(() => {
-    dismissEditorContextMenu();
-  }, [dismissEditorContextMenu, scrRef.book, scrRef.chapterNum, viewType]);
+  // Whether the platform context menu is claiming the keyboard right now. Set where the menu hook
+  // is called, below the state it depends on; the key listeners that follow read it at event time.
+  const isEditorContextMenuClaimingKeysRef = useRef<() => boolean>(() => false);
 
   // #endregion Context Menu
 
@@ -2950,10 +2894,11 @@ function PlatformScriptureEditor({
 
         // Everything below runs only with no open session — the `if (session)` above returns.
         if (event.key === INLINE_MARKERS_MENU_TRIGGER) {
-          // The platform context menu is pending: CLAIMED, not merely declined. The editor keeps
-          // DOM focus while the menu opens, so an unclaimed `\` would fall through to Lexical and
-          // type a backslash into the document behind the menu; the menu has no use for the key.
-          if (isEditorContextMenuPending()) {
+          // While the platform context menu claims the keyboard the key is CLAIMED, not merely
+          // declined: the editor keeps DOM focus while the menu opens, so an unclaimed `\` would
+          // fall through to Lexical and type a backslash into the document behind the menu, and the
+          // menu has no use for it. Once the claim lapses the key behaves as with no menu.
+          if (isEditorContextMenuClaimingKeysRef.current()) {
             event.preventDefault();
             event.stopPropagation();
             return;
@@ -2977,10 +2922,15 @@ function PlatformScriptureEditor({
         // representation, so it serializes as a plain space: the same data problem as an unmarked
         // split.
         if (event.key === 'Enter') {
-          // The platform context menu is pending: the press is the menu's, so no paragraph palette
-          // opens over it. Declined rather than claimed, so it still reaches the menu's own key
-          // handling.
-          if (isEditorContextMenuPending()) return;
+          // While the platform context menu claims the keyboard, Enter is CLAIMED too: the menu
+          // lives in the app window and never receives a press made in this frame, and an unclaimed
+          // Enter would let Lexical split the paragraph with no marker. Once the claim lapses the
+          // key opens the paragraph palette as with no menu.
+          if (isEditorContextMenuClaimingKeysRef.current()) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           const ctx = editorRef.current?.getMarkerMenuContext();
           // Pass through untouched when there's no context, inside a note, or inside marker glyph
           // text — the library engine owns Enter in those cases (e.g. `\fp` inside a footnote).
@@ -3008,9 +2958,9 @@ function PlatformScriptureEditor({
           })
         ) {
           event.preventDefault();
-          // Swallowed while the platform context menu is pending rather than opening a second
-          // popup over it.
-          if (!isEditorContextMenuPending()) showInlineMarkersMenu();
+          // Swallowed while the platform context menu claims the keyboard, so no popup opens over
+          // it; once the claim lapses the key opens the menu as with no menu.
+          if (!isEditorContextMenuClaimingKeysRef.current()) showInlineMarkersMenu();
         } else if (showMarkersMenu && event.key === 'Escape') {
           event.preventDefault();
           setShowMarkersMenu(false);
@@ -3024,8 +2974,9 @@ function PlatformScriptureEditor({
         // bubble phase.
         event.preventDefault();
         event.stopPropagation();
-        // Swallowed while the platform context menu is pending, like the Ctrl+T shortcuts below.
-        if (!isEditorContextMenuPending()) insertCommentAtCurrentSelection();
+        // Swallowed while the platform context menu claims the keyboard, like the Ctrl+T shortcuts
+        // below; once the claim lapses the chord inserts as with no menu.
+        if (!isEditorContextMenuClaimingKeysRef.current()) insertCommentAtCurrentSelection();
       } else {
         const chordMatch = matchEditorChord(event);
         if (
@@ -3058,9 +3009,9 @@ function PlatformScriptureEditor({
               );
           },
           insertNote: (method) => {
-            // Swallowed while the platform context menu is pending: the insert opens the footnote
-            // editor, which would land over a menu that is still open.
-            if (isEditorContextMenuPending()) return;
+            // Swallowed while the platform context menu claims the keyboard, so no footnote editor
+            // opens over it; once the claim lapses the chord inserts as with no menu.
+            if (isEditorContextMenuClaimingKeysRef.current()) return;
             // insertNoteAtCurrentSelection is async and this handler is not, so surface a rejection
             // instead of dropping it as an unhandled promise: the user pressed a key and must not
             // be left with no marker and no explanation.
@@ -3095,7 +3046,6 @@ function PlatformScriptureEditor({
     openMarkerPaletteAtCaret,
     openMarkerPalette,
     dismissPaletteSessionIfOpen,
-    isEditorContextMenuPending,
   ]);
 
   // #endregion Keydown Routing
@@ -5271,6 +5221,74 @@ function PlatformScriptureEditor({
     [getMenuFindSelectionText, runEditMenuCommand, webViewId],
   );
 
+  // #region Context Menu
+
+  // What the editor shows. `renderEditor` returns the editor tree only when `isEditorMounted`, and
+  // the Simple-mode empty-chapter view then hides it, so the text is on screen exactly when both
+  // hold. The context menu serves the text and nothing else in the wrapper (the no-project panel,
+  // spinners, book-not-available views, the unsupported-project and setting-unreadable messages).
+  const isEditorMounted =
+    !!projectId &&
+    bookExists &&
+    !usjFromPdpError?.openBlockedReasonKey &&
+    !allowInvisibleCharactersSetting.isUnreadable &&
+    !!usjForEditor &&
+    usjForEditor !== defaultUsj;
+  const showEmptyChapterView = isBlankChapter && !isPowerMode;
+  const isEditorTextShown = isEditorMounted && !showEmptyChapterView;
+
+  // The main text's right-click menu is the platform's own. The container is the editor's own
+  // wrapper, not `editorContainerRef`: that also holds the footnotes pane, its row editor and the
+  // header alerts, none of which this menu serves. It is enabled in every state that shows the
+  // text, read-only, Preview and resources included: the menu's own conditions decide its items.
+  // A ref starts out as null for React to be able to set it as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const mainEditorWrapperRef = useRef<HTMLDivElement>(null);
+  const { dismiss: dismissEditorContextMenu, isClaimingKeys: isEditorContextMenuClaimingKeys } =
+    useEditorContextMenu({
+      containerRef: mainEditorWrapperRef,
+      isEnabled: isEditorTextShown,
+      hasNonTextSelection: () => !!editorRef.current?.getSelectedParaMarker(),
+      requestMenu: (request) =>
+        papi.overlays.showContextMenu(
+          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+          webViewId,
+          getContextMenuShowOptions(request, true),
+        ),
+      dismissMenu: () => papi.overlays.dismissContextMenu(webViewId),
+      onPick: (command, request) =>
+        dispatchContextMenuPick(command, request, {
+          runClipboardCommand: (clipboardCommand) => {
+            // Put back a selection the menu's blur dropped BEFORE focusing: with no selection, the
+            // editor's focus() puts the caret at the end of the text, and the restore would then
+            // find a selection and leave it there.
+            restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
+            // The menu hands focus back to its tab asynchronously; the clipboard read behind Paste
+            // needs the frame focused when it runs, so focus the editor first.
+            editorRef.current?.focus();
+            runEditMenuCommand(clipboardCommand);
+          },
+          ...createContextMenuCommandEffects({
+            webViewId,
+            projectId,
+            viewOptions,
+            editorName: 'editor',
+            papi,
+            logger,
+          }),
+        }),
+      onError: (error) => logger.warn(`The editor context menu failed: ${getErrorMessage(error)}`),
+    });
+  isEditorContextMenuClaimingKeysRef.current = isEditorContextMenuClaimingKeys;
+
+  // A menu left open across a project, book, chapter or view change would point at content that is
+  // gone.
+  useEffect(() => {
+    dismissEditorContextMenu();
+  }, [dismissEditorContextMenu, projectId, scrRef.book, scrRef.chapterNum, viewType]);
+
+  // #endregion Context Menu
+
   function renderEditor() {
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw:hidden" />;
@@ -5423,7 +5441,6 @@ function PlatformScriptureEditor({
     // projects, for `chapterNum: 0` front matter, and transiently while versification loads. In
     // Power mode, where typing directly into a blank chapter is the expected workflow, that would
     // turn those cases into dead ends. A Power user sees the ordinary empty editor instead.
-    const showEmptyChapterView = isBlankChapter && !isPowerMode;
 
     return (
       <>
