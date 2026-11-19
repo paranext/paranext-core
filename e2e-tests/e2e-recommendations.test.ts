@@ -17,9 +17,9 @@ import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import { editorPathsPattern, parseEditorPathEntries, readEditorPathEntries } from './core-specs';
 import {
-  APP_ROOTS,
   isAppFile,
   isEntryPoint,
+  isNonRuntime,
   isPrefixKey,
   readEditorPaths,
   readGitChanges,
@@ -626,9 +626,30 @@ describe('recommendE2eTests', () => {
     expect(runtime('lib/platform-bible-react/src/components/x.stories.tsx')).toBe(false);
     expect(runtime('src/main/x.test.ts')).toBe(false);
     expect(runtime('README.md')).toBe(false);
+    expect(runtime('docs/x.md')).toBe(false);
     expect(runtime('e2e-tests/tests/isolated/docking/x.spec.ts')).toBe(false);
     expect(runtime('.github/workflows/test.yml')).toBe(false);
+    expect(runtime('.claude/commands/x.md')).toBe(false);
+    expect(runtime('.husky/pre-commit')).toBe(false);
     expect(recommend([]).runtimeChanged).toBe(false);
+  });
+
+  // Everything that is not documentation, a test, a story, tool or CI configuration or the e2e suite
+  // counts, so a new kind of file needs no entry anywhere.
+  it.each([
+    'package.json',
+    'package-lock.json',
+    'release/app/package.json',
+    'extensions/src/hello-rock3/manifest.json',
+    '.erb/scripts/reset-fresh-install.ts',
+    'tools/x.ts',
+    'refresh.sh',
+    'stop-processes.mjs',
+    'platform.bible-dev.desktop',
+    'c-sharp/Paranext.Other/Other.csproj',
+    'THIRD-PARTY-NOTICES.lock.json',
+  ])('counts %s as a change to the app', (file) => {
+    expect(recommend([file]).runtimeChanged).toBe(true);
   });
 
   it('counts a change to what builds or patches the app as runtime', () => {
@@ -642,8 +663,7 @@ describe('recommendE2eTests', () => {
     expect(runtime('assets/localization/en.json')).toBe(true);
     // The editor's marker stylesheets import these.
     expect(runtime('data/pt9-css/hbkeng.css')).toBe(true);
-    // The build and install scripts run these, and what they produce ships; the whole `.erb/` counts
-    // because every narrower line left out a file that feeds the build.
+    // The build and install scripts run these, and what they produce ships.
     expect(runtime('.erb/scripts/stage-dev-packages.ts')).toBe(true);
     expect(runtime('.erb/scripts/delete-source-maps.js')).toBe(true);
     expect(runtime('.erb/scripts/postinstall.ts')).toBe(true);
@@ -656,24 +676,13 @@ describe('recommendE2eTests', () => {
     expect(runtime('.claude/commands/review-paratext.md')).toBe(false);
   });
 
-  // Only the app's own roots count, so a new top-level tool or script never needs an exclusion.
-  it.each(['tools/some-tool.ts', 'refresh.sh', 'stop-processes.mjs', 'platform.bible-dev.desktop'])(
-    'does not count %s, outside the roots that build the app, as an app change',
-    (file) => {
-      expect(recommend([file]).runtimeChanged).toBe(false);
-    },
-  );
-
-  // Tool, test-runner and notice files at the top level, and the C# test projects, load into no
-  // part of the app.
+  // Test-runner and documentation-tooling files at the top level, and the C# test projects.
   it.each([
-    'package-lock.json',
     'c-sharp-tests/Checklists/ChecklistDataModelTests.cs',
     'c-sharp-tests/Foo/helper.cs',
     'vitest.config.ts',
     'vitest.setup.ts',
     'vitest.setup.node.ts',
-    'THIRD-PARTY-NOTICES.lock.json',
     'Gemfile',
     'Gemfile.lock',
     'nodemon.json',
@@ -683,13 +692,42 @@ describe('recommendE2eTests', () => {
 
   // ParatextData does the USFM to USX conversion the editor saves through, and this project file
   // pins its version, so CI runs the editor list for it.
-  it('treats the data provider project file as runtime and other project files as not', () => {
+  it('lists the data provider project file as uncovered and other project files not', () => {
     const file = 'c-sharp/ParanextDataProvider.csproj';
     const report = recommend([file], { sources: {} });
     expect(report.uncoveredFiles).toEqual([file]);
     expect(report.runtimeChanged).toBe(true);
-    expect(recommend(['c-sharp/Paranext.Other/Other.csproj']).runtimeChanged).toBe(false);
+    expect(
+      recommend(['c-sharp/Paranext.Other/Other.csproj'], { sources: {} }).uncoveredFiles,
+    ).toEqual([]);
   });
+
+  it.each(['package.json', 'package-lock.json', 'release/app/package.json', 'dev-packages.json'])(
+    'recommends the full isolated run when %s changes',
+    (file) => {
+      const report = recommend([file]);
+      const all = report.recommendations.filter((recommendation) => recommendation.key === 'all');
+      expect(all).toHaveLength(1);
+      expect(all[0]).toMatchObject({
+        command: 'npm run test:e2e:isolated all',
+        matchedFiles: [file],
+        ci: { kind: 'all' },
+        reason: 'a dependency file changed',
+      });
+    },
+  );
+
+  it('recommends the full run alongside the editor keys when dev-packages.json changes', () => {
+    const report = recommend(['dev-packages.json'], { sources: mapping });
+    expect(recommendedKeys(report)).toEqual(expect.arrayContaining(['all', 'scripture-editor']));
+  });
+
+  it.each(['extensions/src/hello-rock3/package.json', 'src/main/x.ts', 'README.md'])(
+    'recommends no full run for %s',
+    (file) => {
+      expect(recommendedKeys(recommend([file]))).not.toContain('all');
+    },
+  );
 
   it('says whether the changed files make CI run the editor list', () => {
     const editorPaths = ['extensions/src/platform-scripture-editor/', 'dev-packages\\.json$'];
@@ -957,12 +995,17 @@ describe('recommendE2eTests', () => {
     'e2e-tests/scoped-cleanup.ts',
     'e2e-tests/parked-enhanced-resources.ts',
     'e2e-tests/run-isolated.mjs',
+    'e2e-tests/run-e2e-wsl.sh',
+    'e2e-tests/tests/smoke/interface-scaling/main.cjs',
+    'e2e-tests/tests/smoke/interface-scaling/page.html',
+    'e2e-tests/fixtures/data/sample.json',
   ])('flags %s as a changed e2e spec or its support code', (file) => {
     expect(recommend([file]).specsChanged).toBe(true);
   });
 
   it.each([
     'e2e-tests/tests/isolated/README.md',
+    'e2e-tests/tests/smoke/README.md',
     'e2e-tests/tests/isolated/subset-sources.json',
     'e2e-tests/tests/isolated/docking/x.test.ts',
     'e2e-tests/e2e-recommendations.test.ts',
@@ -979,26 +1022,6 @@ describe('recommendE2eTests', () => {
   });
 });
 
-describe('APP_ROOTS', () => {
-  // A renamed build file or directory would silently stop counting as an app change.
-  it('lists only paths that name a tracked file', () => {
-    const tracked = execFileSync(
-      'git',
-      ['-C', REPOSITORY_ROOT, '-c', 'core.quotePath=false', 'ls-files'],
-      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
-    )
-      .split('\n')
-      .filter((file) => file !== '');
-    expect(APP_ROOTS.length).toBeGreaterThan(0);
-    expect(
-      APP_ROOTS.filter(
-        (root) =>
-          !tracked.some((file) => (root.endsWith('/') ? file.startsWith(root) : file === root)),
-      ),
-    ).toEqual([]);
-  });
-});
-
 describe('the editor list and the map', () => {
   // CI runs the editor list for every path `editor_paths` names; a runtime file among them that no
   // key lists would be recommended nothing, so the map must follow that list.
@@ -1011,7 +1034,9 @@ describe('the editor list and the map', () => {
     )
       .split('\n')
       .filter((file) => file !== '');
-    const triggering = tracked.filter((file) => pattern.test(file) && isAppFile(file));
+    const triggering = tracked.filter(
+      (file) => pattern.test(file) && !isNonRuntime(file) && isAppFile(file),
+    );
     expect(triggering).toContain('c-sharp/assets/usfm.sty');
     // One path per line, so a failure lists every file the map leaves out.
     expect(
@@ -1115,7 +1140,7 @@ describe('classifying the tracked source files', () => {
     /(^|\/)LICENSE$/,
     /\.mdx?$/,
     /\.(test|stories|story-data)\./,
-    /(^|\/)__(tests|mocks)__\//,
+    /(^|\/)__(tests|mocks|fixtures)__\//,
     /^src\/stories\//,
   ];
 
@@ -1274,6 +1299,23 @@ describe('readGitChanges', () => {
         'c-sharp/Projects/Service.cs',
         'src/renderer/components/docking/dock.tsx',
       ]);
+    });
+  });
+
+  it('leaves out a package-lock.json whose only change is the name field', () => {
+    withTemporaryRepository((repoRoot) => {
+      const lock = (name: string, version: string) =>
+        `{\n  "name": "${name}",\n  "packages": {\n    "": {\n      "name": "${name}"\n    },\n    "node_modules/x": {\n      "version": "${version}"\n    }\n  }\n}\n`;
+      writeFile(repoRoot, 'package-lock.json', lock('base', '1.0.0'));
+      runGit(repoRoot, 'add', '-A');
+      runGit(repoRoot, 'commit', '--quiet', '-m', 'lock');
+      const base = runGit(repoRoot, 'rev-parse', 'HEAD');
+
+      writeFile(repoRoot, 'package-lock.json', lock('worktree-directory', '1.0.0'));
+      expect(readGitChanges(repoRoot, base).changedFiles).not.toContain('package-lock.json');
+
+      writeFile(repoRoot, 'package-lock.json', lock('worktree-directory', '1.1.0'));
+      expect(readGitChanges(repoRoot, base).changedFiles).toContain('package-lock.json');
     });
   });
 

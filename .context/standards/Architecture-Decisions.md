@@ -2930,6 +2930,26 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     classified as runtime; `LOADED_EXTENSIONS` in that test names the file types the app does load.
     A file no key lists and `NON_RUNTIME` does not match is "uncovered", which is what triggers the
     "does this need a new e2e test?" question.
+  - **`runtimeChanged` is coarse.** A changed file counts as changing the app unless it is
+    documentation, a unit test or its helpers, a story, tool or CI configuration (top-level
+    dot-paths other than `.erb/`, formatter, linter and spelling configuration) or part of the e2e
+    suite itself; package metadata, lock files, manifests, build scripts, patches, assets and data
+    all count. The alternative, a hand-kept list of app folders, was rejected because every line had
+    counterexamples. Over-including costs little: the "does this need a new e2e test?" question
+    still needs an uncovered file, a new entry point or a judged behaviour change, so a file counted
+    by mistake only widens when that judgment is consulted. Files under the source roots that hold
+    no code a key could list (manifests, package files, .NET project files, image assets) still
+    never become a recommendation or an uncovered file.
+  - **A dependency change recommends the full isolated run.** When the root `package.json`,
+    `package-lock.json`, `release/app/package.json` or `dev-packages.json` changes, the report adds
+    the item `all` (`npm run test:e2e:isolated all`), because a dependency can break any area and
+    no subset stands in for it. The alternative, mapping the files to the editor subset only,
+    under-tests everything else. A lock file whose only change is the
+    name npm rewrites in a git worktree is left out of the changed files, since it changes no
+    dependency.
+  - **An unreadable `editor_paths` is `'unknown'`, not false.** If the path list in `test.yml`
+    cannot be parsed, `editorListRuns` is `'unknown'` and the report is still printed; answering
+    false would claim the editor spec list does not run when nothing was checked.
   - **The tool is run with `npx tsx`, not `--no-install`.** A worktree without `node_modules` would
     download `tsx` and still give a correct report, because the tool uses only Node built-ins.
   - **Key completeness blocks; prefix existence only warns.** A subset or spec with no key fails

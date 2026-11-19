@@ -38,6 +38,8 @@ export type SubsetSources = Record<string, { main: string[]; incidental: string[
 /** How CI treats a recommended key. */
 export type CiStatus =
   | { kind: 'spec'; coreList: 'always' | 'editor' | 'none' }
+  /** The full isolated run, which CI runs only nightly. */
+  | { kind: 'all' }
   | {
       kind: 'subset';
       /** Specs CI runs on every pull request. */
@@ -58,6 +60,8 @@ export interface E2eRecommendation {
   command: string;
   /** The changed files that matched, sorted. */
   matchedFiles: string[];
+  /** Why the key is recommended, when the changed files alone do not say. */
+  reason?: string;
   /** For a collapsed item, `kind: 'subset'` counts the member specs only, not the whole subset. */
   ci: CiStatus;
   /**
@@ -95,9 +99,13 @@ export interface E2eRecommendationReport {
   /** Changed files that add, change or remove a menu, web view or command registration, sorted. */
   entryPointFiles: string[];
   /**
-   * Whether any changed file changes the app: under one of `APP_ROOTS` (the source roots, `lib/`,
-   * build configuration, patches, pins and shipped assets) and not matched by `NON_RUNTIME`.
-   * Documentation, tests, stories, tools, scripts, CI workflows and e2e files alone do not count.
+   * Whether any changed file changes the app: every file except documentation, unit tests and their
+   * helpers and fixtures, stories, tool and CI configuration (top-level dot-paths other than
+   * `.erb/`, formatter, linter and spelling configuration) and the e2e suite itself. Package
+   * metadata, lock files, manifests, build scripts and configuration, patches, assets and data all
+   * count. The rule is coarse on purpose: the Add question of Step 3.5 still needs an uncovered
+   * file, a new entry point or a judged behaviour change, so counting a file too many only widens
+   * when that judgment is consulted.
    */
   runtimeChanged: boolean;
   /**
@@ -112,12 +120,14 @@ export interface E2eRecommendationReport {
    */
   editorListRuns: boolean | 'unknown';
   /**
-   * Whether an e2e spec or its support code changed: any `.ts` file under `e2e-tests/tests/`
-   * (specs, page objects, spec helpers), `e2e-tests/fixtures/` or `e2e-tests/reporters/`, plus
-   * `e2e-tests/global-setup.ts`, `e2e-tests/global-teardown.ts`, `e2e-tests/playwright*.config.ts`
-   * (the harness files the Playwright configuration loads), `e2e-tests/scoped-cleanup.ts`,
-   * `e2e-tests/parked-enhanced-resources.ts` and `e2e-tests/run-isolated.mjs`, except a unit test
-   * (`*.test.ts`). READMEs and mapping files do not count.
+   * Whether an e2e spec or its support code changed: any file under `e2e-tests/tests/` (specs, page
+   * objects, spec helpers, the pages and scripts the smoke specs load) or `e2e-tests/fixtures/`,
+   * any `.ts` file under `e2e-tests/reporters/`, plus `e2e-tests/global-setup.ts`,
+   * `e2e-tests/global-teardown.ts`, `e2e-tests/playwright*.config.ts` (the harness files the
+   * Playwright configuration loads), `e2e-tests/scoped-cleanup.ts`,
+   * `e2e-tests/parked-enhanced-resources.ts`, `e2e-tests/run-isolated.mjs` and
+   * `e2e-tests/run-e2e-wsl.sh`, except a unit test (`*.test.ts`), a Markdown file or the mapping
+   * file `tests/isolated/subset-sources.json`.
    */
   specsChanged: boolean;
 }
@@ -165,77 +175,93 @@ export const REGISTRATION_PATTERN =
   'registerCommand\\(|registerWebViewProvider\\(|RegisterRequestHandlerAsync\\(|registerRequestHandler\\(';
 
 /**
- * Paths that are not runtime code: tests, Storybook stories and their support code, docs, type
- * declarations, package and .NET build metadata (the data provider's own project file excepted: it
- * pins ParatextData, which does the conversion the editor saves through), the unit-test runner's
- * configuration, the C# test projects, notice and documentation-tooling files at the top level,
- * image and font assets (other files under `assets/`, such as style sheets and data, are runtime),
- * every dotfile and dot-directory below the top level (the formatter, linter, editor and Git
- * configuration, `.github/` workflows, `.vscode/` settings), spelling and TypeScript configuration,
- * licenses, the extension template's release scripts and the Roslyn analyzers. Build configuration
- * that shapes the bundle (an extension's `webpack.config.ts` and `webpack/`, the
- * `postcss.config.ts` and `tailwind.config.ts` files) is runtime: it counts through
- * `runtimeChanged`, though only files under `src/`, `extensions/src/` and `c-sharp/` can be listed
- * as uncovered. One alternative group per line, each with its reason. `e2e-recommendations.test.ts`
- * runs this over every tracked file under the source roots and fails on a file that is plainly not
- * app code but matches none of these.
+ * Shapes of files that are not app code and change nothing a user sees: tests and their helpers,
+ * Storybook stories and their support code, docs, type declarations, the unit-test runner's
+ * configuration, the C# test projects, every dotfile and dot-directory below the top level (the
+ * formatter, linter, editor and Git configuration, `.github/` workflows, `.vscode/` settings),
+ * spelling and TypeScript configuration, licenses, documentation and watcher tooling at the top
+ * level, the extension template's release scripts and the Roslyn analyzers. One alternative per
+ * line, each with its reason.
  */
-const NON_RUNTIME = new RegExp(
-  [
-    // Unit tests, their helpers and fixtures, Storybook stories and the data only stories use.
-    String.raw`\.test\.|\.test-utils?\.|\.fixtures\.|\.stories\.|\.story-data\.`,
-    // The unit-test runner's configuration and setup files at the top level.
-    String.raw`^vitest\.(config|setup[^/]*)\.ts$`,
-    // The core Storybook's own pages and the components only they render.
-    String.raw`^src\/stories\/`,
-    // Documentation and licenses.
-    String.raw`\.md$|\.mdx$|(^|\/)LICENSE$`,
-    // Type declarations only exist at compile time.
-    String.raw`\.d\.ts$`,
-    // Test and mock directories.
-    String.raw`(^|\/)(__tests__|__mocks__|__fixtures__)\/`,
-    // Any dotfile or dot-directory below the top level: formatter, linter, editor, Git and .NET
-    // tool configuration, CI workflows and IDE settings, none of which the app loads. A top-level
-    // one is not matched: `.erb/` holds the scripts and configuration that build the app, and
-    // `APP_ROOTS` decides which top-level paths count.
-    String.raw`\/\.[^/]`,
-    // Images and fonts; style sheets and data under assets/ stay runtime.
-    String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
-    // C# test projects (`Foo.Tests/`).
-    String.raw`(^|\/)[^/]*Tests\/`,
-    // The C# test project at the top level (`c-sharp-tests/`, lower case, so the line above misses it).
-    String.raw`^c-sharp-tests\/`,
-    // Package and extension metadata: a design decision, not an oversight (a version or
-    // dependency bump changes no behaviour an e2e spec can see). A release bumps every extension's
-    // `manifest.json` version at once, so counting it would ask the e2e question on every release
-    // branch; a change to a manifest's main, menus, settings or activation events is accepted as
-    // undetected here for that reason.
-    // The lock file only records resolved versions, and npm rewrites its name field in every
-    // worktree.
-    String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
-    // .NET build metadata: projects, shared build properties, the solution and IDE settings. The
-    // data provider's own project file is the exception: it pins ParatextData, which does the
-    // USFM to USX conversion the editor saves through, so a change to it changes what the editor
-    // writes.
-    String.raw`^(?!c-sharp\/ParanextDataProvider\.csproj$).*\.csproj$|\.props$|\.sln$|\.DotSettings$`,
-    // Third-party notice, documentation-tooling and dev-watcher files at the top level: generated
-    // or run at build time, never loaded by the app.
-    String.raw`^(THIRD-PARTY-NOTICES\.lock\.json|Gemfile(\.lock)?|nodemon\.json)$`,
-    // Analyzer configuration. `.globalconfig` files have arbitrary names
-    // (`ai-analyzers.globalconfig`), so only the suffix is matched.
-    String.raw`\.globalconfig$`,
-    // Roslyn analyzers run at build time; the app never loads them.
-    String.raw`(^|\/)c-sharp\/Paranext\.Analyzers\/`,
-    // Per-extension spelling and TypeScript configuration (a template merge rewrites these in every
-    // extension). Runtime JSON such as `menus.json` is not here.
-    String.raw`(^|\/)(tsconfig[^/]*\.json|cspell\.json)$`,
-    // The extension template's release scripts, run by hand or from its `.github/` workflows.
-    // The other files under an extension's `lib/` can feed the build (`download-db.ts` fetches the
-    // data the extension ships), so they stay runtime.
-    String.raw`^extensions\/src\/[^/]+\/lib\/(bump-versions|git\.util)\.ts$`,
-  ].join('|'),
+const NOT_APP_SHAPES = [
+  // Unit tests, their helpers and fixtures, Storybook stories and the data only stories use.
+  String.raw`\.test\.|\.test-utils?\.|\.fixtures\.|\.stories\.|\.story-data\.`,
+  // The unit-test runner's configuration and setup files at the top level.
+  String.raw`^vitest\.(config|setup[^/]*)\.ts$`,
+  // The core Storybook's own pages and the components only they render.
+  String.raw`^src\/stories\/`,
+  // Documentation and licenses.
+  String.raw`\.md$|\.mdx$|(^|\/)LICENSE$`,
+  // Type declarations only exist at compile time.
+  String.raw`\.d\.ts$`,
+  // Test, mock and fixture directories.
+  String.raw`(^|\/)(__tests__|__mocks__|__fixtures__)\/`,
+  // Any dotfile or dot-directory below the top level: formatter, linter, editor, Git and .NET
+  // tool configuration, CI workflows and IDE settings, none of which the app loads. A top-level
+  // one is not matched here: `.erb/` holds the scripts and configuration that build the app, and
+  // {@link NOT_AN_APP_CHANGE} excludes the other top-level dot-paths.
+  String.raw`\/\.[^/]`,
+  // C# test projects (`Foo.Tests/`).
+  String.raw`(^|\/)[^/]*Tests\/`,
+  // The C# test project at the top level (`c-sharp-tests/`, lower case, so the line above misses it).
+  String.raw`^c-sharp-tests\/`,
+  // IDE settings of the .NET solution.
+  String.raw`\.DotSettings$`,
+  // Documentation and dev-watcher tooling at the top level, run by hand.
+  String.raw`^(Gemfile(\.lock)?|nodemon\.json)$`,
+  // Analyzer configuration. `.globalconfig` files have arbitrary names
+  // (`ai-analyzers.globalconfig`), so only the suffix is matched.
+  String.raw`\.globalconfig$`,
+  // Roslyn analyzers run at build time; the app never loads them.
+  String.raw`(^|\/)c-sharp\/Paranext\.Analyzers\/`,
+  // Per-extension spelling and TypeScript configuration (a template merge rewrites these in every
+  // extension). Runtime JSON such as `menus.json` is not here.
+  String.raw`(^|\/)(tsconfig[^/]*\.json|cspell\.json)$`,
+  // The extension template's release scripts, run by hand or from its `.github/` workflows.
+  // The other files under an extension's `lib/` can feed the build (`download-db.ts` fetches the
+  // data the extension ships), so they stay runtime.
+  String.raw`^extensions\/src\/[^/]+\/lib\/(bump-versions|git\.util)\.ts$`,
+];
+
+/**
+ * Files that ship or build the app but hold no code a key could list: package and extension
+ * metadata, lock files, .NET project files, image and font assets. A change to one is an app change
+ * ({@link isAppFile}) yet never a recommendation or an uncovered file, because a key cannot name
+ * what it tests there (a version or dependency bump changes no behaviour a spec can pin). A
+ * dependency file's change recommends the full isolated run instead. A change to a manifest's main,
+ * menus, settings or activation events goes unnoticed here: a release bumps every manifest's
+ * version at once, so listing manifests would flag every release branch.
+ */
+const SHIPPED_METADATA_SHAPES = [
+  // Package and extension metadata, and the lock files. npm rewrites the root lock file's name in
+  // every worktree; `readGitChanges` leaves a name-only change out.
+  String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
+  // The third-party notices' lock file.
+  String.raw`^THIRD-PARTY-NOTICES\.lock\.json$`,
+  // .NET build metadata: projects, shared build properties and the solution. The data provider's
+  // own project file is the exception: it pins ParatextData, which does the USFM to USX conversion
+  // the editor saves through, so a change to it changes what the editor writes.
+  String.raw`^(?!c-sharp\/ParanextDataProvider\.csproj$).*\.csproj$|\.props$|\.sln$`,
+  // Images and fonts; style sheets and data under assets/ stay runtime.
+  String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
+];
+
+/**
+ * Paths that are not runtime code, so no key lists them and none is "uncovered":
+ * {@link NOT_APP_SHAPES} and {@link SHIPPED_METADATA_SHAPES}. `e2e-recommendations.test.ts` runs this
+ * over every tracked file under the source roots and fails on a file that is plainly not app code
+ * but matches none of these.
+ */
+const NON_RUNTIME = new RegExp([...NOT_APP_SHAPES, ...SHIPPED_METADATA_SHAPES].join('|'));
+
+/**
+ * Files whose change leaves the app as it was: {@link NOT_APP_SHAPES}, the e2e suite itself and the
+ * top-level dot-paths other than `.erb/` (CI workflows, agent and editor configuration).
+ */
+const NOT_AN_APP_CHANGE = new RegExp(
+  [...NOT_APP_SHAPES, String.raw`^e2e-tests\/`, String.raw`^\.(?!erb\/)`].join('|'),
 );
-const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
+export const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 
 /**
  * The `editor_paths` entries read through `read`, or undefined when `read` throws: a malformed line
@@ -253,53 +279,36 @@ export function readEditorPaths(read: () => string[]): string[] | undefined {
   }
 }
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
+/** Whether a changed file changes the app: every file except {@link NOT_AN_APP_CHANGE}. */
+export const isAppFile = (file: string) => !NOT_AN_APP_CHANGE.test(file);
+const isE2eSpecSupport = (file: string) => {
+  if (file.endsWith('.test.ts') || file.endsWith('.md')) return false;
+  if (file === `${ISOLATED_PREFIX}subset-sources.json`) return false;
+  if (file.startsWith('e2e-tests/tests/') || file.startsWith('e2e-tests/fixtures/')) return true;
+  return (
+    (file.startsWith('e2e-tests/reporters/') && file.endsWith('.ts')) ||
+    [
+      'e2e-tests/global-setup.ts',
+      'e2e-tests/global-teardown.ts',
+      'e2e-tests/scoped-cleanup.ts',
+      'e2e-tests/parked-enhanced-resources.ts',
+      'e2e-tests/run-isolated.mjs',
+      'e2e-tests/run-e2e-wsl.sh',
+    ].includes(file) ||
+    /^e2e-tests\/playwright[^/]*\.config\.ts$/.test(file)
+  );
+};
+
 /**
- * The repository paths that make up or build the app: its source roots and `lib/`, the build
- * configuration and scripts (`.erb/`, the top-level PostCSS, Tailwind and electron-builder files),
- * the dependency patches and pins, and the shipped assets. Anything else at the top level (tools,
- * test runners, docs, CI) never reaches a user. Listed rather than excluded, so that a new
- * top-level tool needs no entry here.
- *
- * `.erb/` counts as a whole: every narrower line inside it left out a file that feeds the build
- * (`delete-source-maps.js`, `check-node-env.js`, `electron-rebuild.js`, `postinstall.ts`,
- * `dev-packages.schema.json`). Counting a release script too costs one optional question; missing a
- * build change skips it on a real one.
+ * The files whose change can alter what any part of the app does: the root and the packaged app's
+ * `package.json`, the lock file and the dev package pins.
  */
-export const APP_ROOTS = [
-  'src/',
-  'extensions/',
-  'c-sharp/',
-  'lib/',
-  '.erb/',
-  'assets/',
-  // Paratext 9's marker stylesheets, which the editor's own stylesheets import.
-  'data/',
-  'patches/',
-  'release/app/',
+const DEPENDENCY_FILES = [
+  'package.json',
+  'package-lock.json',
+  'release/app/package.json',
   'dev-packages.json',
-  'electron-builder.json5',
-  'postcss.config.ts',
-  'tailwind.config.ts',
 ];
-
-/** Whether a runtime file (one {@link NON_RUNTIME} does not exclude) is part of the app. */
-const changesTheApp = (file: string) =>
-  APP_ROOTS.some((root) => (root.endsWith('/') ? file.startsWith(root) : file === root));
-
-/** Whether a changed file is part of the app: under `APP_ROOTS` and not {@link NON_RUNTIME}. */
-export const isAppFile = (file: string) => !isNonRuntime(file) && changesTheApp(file);
-const isE2eSpecSupport = (file: string) =>
-  file === 'e2e-tests/run-isolated.mjs' ||
-  (file.endsWith('.ts') &&
-    !file.endsWith('.test.ts') &&
-    (file.startsWith('e2e-tests/tests/') ||
-      file.startsWith('e2e-tests/fixtures/') ||
-      file.startsWith('e2e-tests/reporters/') ||
-      file === 'e2e-tests/global-setup.ts' ||
-      file === 'e2e-tests/global-teardown.ts' ||
-      file === 'e2e-tests/scoped-cleanup.ts' ||
-      file === 'e2e-tests/parked-enhanced-resources.ts' ||
-      /^e2e-tests\/playwright[^/]*\.config\.ts$/.test(file)));
 
 /** Menu contributions of the extensions and the core menu data. */
 const isMenuFile = (file: string) =>
@@ -473,6 +482,20 @@ function findStalePrefixes(sources: SubsetSources, trackedFiles: string[]): stri
     .sort();
 }
 
+/**
+ * Whether the changed files match an `editor_paths` entry; `'unknown'` when the entries could not
+ * be read. An empty entry list matches nothing (its pattern would match everything).
+ */
+function editorListRuns(
+  editorPaths: string[] | undefined,
+  changedFiles: string[],
+): boolean | 'unknown' {
+  if (editorPaths === undefined) return 'unknown';
+  if (editorPaths.length === 0) return false;
+  const pattern = editorPathsPattern(editorPaths);
+  return changedFiles.some((file) => pattern.test(file));
+}
+
 /** Matches the changed files to the isolated e2e keys that cover them. */
 export function recommendE2eTests(input: RecommendInput): E2eRecommendationReport {
   const keys = Object.keys(input.sources);
@@ -500,7 +523,24 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     matchedFiles: sorted(mainMatches.get(key)),
     ci: ciStatus(key, input),
   }));
-  const recommendations = foldIntoSubsets(collapseSpecGroups(singles, input));
+  const mapRecommendations = foldIntoSubsets(collapseSpecGroups(singles, input));
+  const changedDependencyFiles = input.changedFiles.filter((file) =>
+    DEPENDENCY_FILES.includes(file),
+  );
+  // A dependency change can break anything, so no subset stands in for the full run.
+  const fullRun: E2eRecommendation = {
+    key: 'all',
+    command: isolatedCommand('all'),
+    matchedFiles: [...changedDependencyFiles].sort(),
+    reason: 'a dependency file changed',
+    ci: { kind: 'all' },
+  };
+  const recommendations =
+    changedDependencyFiles.length > 0
+      ? [...mapRecommendations, fullRun].sort((a, b) =>
+          a.key < b.key ? -1 : Number(a.key > b.key),
+        )
+      : mapRecommendations;
   const recommendedSubsets = new Set(recommendations.map((recommendation) => recommendation.key));
 
   const incidentalOnly = [...incidentalMatches.keys()]
@@ -538,7 +578,6 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     ...input.sources[key].incidental,
   ]);
   const deleted = new Set(input.deletedFiles);
-  const editorPattern = input.editorPaths && editorPathsPattern(input.editorPaths);
   const uncoveredFiles = runtimeFiles
     .filter(isInSourceRoot)
     .filter((file) => !deleted.has(file))
@@ -567,11 +606,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
       input.sources,
       input.trackedFiles.filter((file) => !deleted.has(file)),
     ),
-    editorListRuns:
-      editorPattern === undefined
-        ? 'unknown'
-        : (input.editorPaths?.length ?? 0) > 0 &&
-          input.changedFiles.some((file) => editorPattern.test(file)),
+    editorListRuns: editorListRuns(input.editorPaths, input.changedFiles),
     specsChanged: input.changedFiles.some(isE2eSpecSupport),
   };
 }
@@ -602,6 +637,25 @@ function listSpecFiles(directory: string): string[] {
 }
 
 /**
+ * Whether the only lines `file` changed against `mergeBase` are `"name"` fields: what `npm install`
+ * rewrites in a git worktree, where the lock file takes the directory's name. Such a change alters
+ * no dependency.
+ */
+function onlyNameFieldChanged(repoRoot: string, mergeBase: string, file: string): boolean {
+  const changedLines = git(
+    repoRoot,
+    'diff',
+    '--no-renames',
+    '-U0',
+    '--end-of-options',
+    mergeBase,
+    '--',
+    file,
+  ).filter((line) => /^[-+]/.test(line) && !/^(\+\+\+|---) /.test(line));
+  return changedLines.length > 0 && changedLines.every((line) => /^[-+]\s*"name":/.test(line));
+}
+
+/**
  * The working tree's changes against `mergeBase`, read from the git repository at `repoRoot`.
  * `--no-renames` lists a rename's old and new path; untracked files never appear in `git diff`, so
  * they come from `git ls-files` and their content is tested for a registration directly.
@@ -625,10 +679,21 @@ export function readGitChanges(
         return false;
       }
     });
+  const diffFiles = git(
+    repoRoot,
+    'diff',
+    '--no-renames',
+    '--name-only',
+    '--end-of-options',
+    mergeBase,
+  );
   return {
     changedFiles: [
       ...new Set([
-        ...git(repoRoot, 'diff', '--no-renames', '--name-only', '--end-of-options', mergeBase),
+        ...diffFiles.filter(
+          (file) =>
+            file !== 'package-lock.json' || !onlyNameFieldChanged(repoRoot, mergeBase, file),
+        ),
         ...untrackedFiles,
       ]),
     ],

@@ -63,9 +63,12 @@ author as a warning, so moving or deleting a source file a prefix names means up
 `scripture-editor/no-unasked-edits-` covers it.
 
 `/review-paratext` stops asking whether a branch needs a new e2e test once the report's
-`specsChanged` is true: the branch changes an e2e spec or its support code (any `.ts` under
-`tests/`, `fixtures/` or `reporters/`, the global setup or teardown, a Playwright config,
-`scoped-cleanup.ts`, `parked-enhanced-resources.ts` or `run-isolated.mjs`, except unit tests).
+`specsChanged` is true: the branch changes an e2e spec or its support code (any file under
+`tests/` or `fixtures/`, any `.ts` under `reporters/`, the global setup or teardown, a Playwright
+config, `scoped-cleanup.ts`, `parked-enhanced-resources.ts`, `run-isolated.mjs` or `run-e2e-wsl.sh`,
+except unit tests, Markdown files and `tests/isolated/subset-sources.json`). The recommender
+also recommends the full isolated run (`npm run test:e2e:isolated all`) when a dependency file
+(`package.json`, `package-lock.json`, `release/app/package.json` or `dev-packages.json`) changes.
 
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch
