@@ -157,20 +157,24 @@ export const REGISTRATION_PATTERN =
 
 /**
  * Paths that are not runtime code: tests, Storybook stories and their support code, docs, type
- * declarations, package and .NET build metadata, image and font assets (other files under
- * `assets/`, such as style sheets and data, are runtime), every dotfile and dot-directory below the
- * top level (the formatter, linter, editor and Git configuration, `.github/` workflows, `.vscode/`
- * settings), spelling and TypeScript configuration, licenses, the extension template's release
- * scripts and the Roslyn analyzers. Build configuration that shapes the bundle
- * (`webpack.config.ts`, `webpack/`, `postcss.config.ts`, `tailwind.config.ts`) is runtime. One
- * alternative group per line, each with its reason. `e2e-recommendations.test.ts` runs this over
- * every tracked file under the source roots and fails on a file that is plainly not app code but
- * matches none of these.
+ * declarations, package and .NET build metadata (the data provider's own project file excepted: it
+ * pins ParatextData, which does the conversion the editor saves through), the unit-test runner's
+ * configuration, the C# test projects, notice and documentation-tooling files at the top level,
+ * image and font assets (other files under `assets/`, such as style sheets and data, are runtime),
+ * every dotfile and dot-directory below the top level (the formatter, linter, editor and Git
+ * configuration, `.github/` workflows, `.vscode/` settings), spelling and TypeScript configuration,
+ * licenses, the extension template's release scripts and the Roslyn analyzers. Build configuration
+ * that shapes the bundle (`webpack.config.ts`, `webpack/`, `postcss.config.ts`,
+ * `tailwind.config.ts`) is runtime. One alternative group per line, each with its reason.
+ * `e2e-recommendations.test.ts` runs this over every tracked file under the source roots and fails
+ * on a file that is plainly not app code but matches none of these.
  */
 const NON_RUNTIME = new RegExp(
   [
     // Unit tests, their helpers and fixtures, Storybook stories and the data only stories use.
     String.raw`\.test\.|\.test-utils?\.|\.fixtures\.|\.stories\.|\.story-data\.`,
+    // The unit-test runner's configuration and setup files at the top level.
+    String.raw`^vitest\.(config|setup[^/]*)\.ts$`,
     // The core Storybook's own pages and the components only they render.
     String.raw`^src\/stories\/`,
     // Documentation and licenses.
@@ -187,11 +191,21 @@ const NON_RUNTIME = new RegExp(
     String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
     // C# test projects (`Foo.Tests/`).
     String.raw`(^|\/)[^/]*Tests\/`,
+    // The C# test project at the top level (`c-sharp-tests/`, lower case, so the line above misses it).
+    String.raw`^c-sharp-tests\/`,
     // Package and extension metadata: a design decision, not an oversight (a version or
     // dependency bump changes no behaviour an e2e spec can see).
-    String.raw`(^|\/)package\.json$|(^|\/)manifest\.json$`,
-    // .NET build metadata: projects, shared build properties, the solution and IDE settings.
-    String.raw`\.csproj$|\.props$|\.sln$|\.DotSettings$`,
+    // The lock file only records resolved versions, and npm rewrites its name field in every
+    // worktree.
+    String.raw`(^|\/)package\.json$|(^|\/)package-lock\.json$|(^|\/)manifest\.json$`,
+    // .NET build metadata: projects, shared build properties, the solution and IDE settings. The
+    // data provider's own project file is the exception: it pins ParatextData, which does the
+    // USFM to USX conversion the editor saves through, so a change to it changes what the editor
+    // writes.
+    String.raw`^(?!c-sharp\/ParanextDataProvider\.csproj$).*\.csproj$|\.props$|\.sln$|\.DotSettings$`,
+    // Third-party notice, documentation-tooling and dev-watcher files at the top level: generated
+    // or run at build time, never loaded by the app.
+    String.raw`^(THIRD-PARTY-NOTICES\.lock\.json|Gemfile(\.lock)?|nodemon\.json)$`,
     // Analyzer configuration. `.globalconfig` files have arbitrary names
     // (`ai-analyzers.globalconfig`), so only the suffix is matched.
     String.raw`\.globalconfig$`,
@@ -207,8 +221,22 @@ const NON_RUNTIME = new RegExp(
   ].join('|'),
 );
 const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
+
+/**
+ * The `editor_paths` entries read through `read`, or none when `read` throws: a malformed line in
+ * `test.yml` then costs the report its `editorListRuns` answer instead of the whole report.
+ */
+export function readEditorPathsOrEmpty(read: () => string[]): string[] {
+  try {
+    return read();
+  } catch (error) {
+    process.stderr.write(
+      `e2e-recommendations: could not read editor_paths from test.yml, so editorListRuns is false: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    return [];
+  }
+}
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
-/** Library code is runtime but reached through the source roots that consume it. */
 /**
  * Whether a runtime file (one {@link NON_RUNTIME} does not exclude) changes the app: everything but
  * the e2e suite itself and the top-level dot-directories other than `.erb/` (CI workflows, agent
@@ -216,6 +244,9 @@ const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.starts
  */
 const changesTheApp = (file: string) =>
   !file.startsWith('e2e-tests/') && !/^\.(?!erb\/)/.test(file);
+
+/** Whether a changed file is runtime code that changes the app ({@link NON_RUNTIME}, then the rest). */
+export const isAppFile = (file: string) => !isNonRuntime(file) && changesTheApp(file);
 const isE2eSpecSupport = (file: string) =>
   file.endsWith('.ts') &&
   !file.endsWith('.test.ts') &&
@@ -426,18 +457,31 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     .filter((key) => !mainMatches.has(key))
     .sort()
     .map((key) => ({ key, matchedFiles: sorted(incidentalMatches.get(key)) }));
-  const exercisedSubsets = new Map(
-    incidentalOnly.filter((entry) => !entry.key.includes('/')).map((entry) => [entry.key, entry]),
+  // A spec key whose subset is recommended is covered by that run; one whose subset is only
+  // exercised joins the subset's entry. Everything else stands alone.
+  const exercisedSubsets = new Set(
+    incidentalOnly.filter((entry) => !entry.key.includes('/')).map((entry) => entry.key),
   );
-  const alsoExercised = incidentalOnly.filter((entry) => {
+  const mergedFiles = new Map<string, string[]>();
+  incidentalOnly.forEach((entry) => {
     const subset = subsetOfNestedKey(entry.key);
-    if (subset === undefined) return true;
-    if (recommendedSubsets.has(subset)) return false;
-    const target = exercisedSubsets.get(subset);
-    if (!target) return true;
-    target.matchedFiles = [...new Set([...target.matchedFiles, ...entry.matchedFiles])].sort();
-    return false;
+    if (subset === undefined || recommendedSubsets.has(subset) || !exercisedSubsets.has(subset))
+      return;
+    mergedFiles.set(subset, [...(mergedFiles.get(subset) ?? []), ...entry.matchedFiles]);
   });
+  const alsoExercised = incidentalOnly
+    .filter((entry) => {
+      const subset = subsetOfNestedKey(entry.key);
+      return (
+        subset === undefined || (!recommendedSubsets.has(subset) && !exercisedSubsets.has(subset))
+      );
+    })
+    .map((entry) => ({
+      key: entry.key,
+      matchedFiles: [
+        ...new Set([...entry.matchedFiles, ...(mergedFiles.get(entry.key) ?? [])]),
+      ].sort(),
+    }));
 
   const allPrefixes = keys.flatMap((key) => [
     ...input.sources[key].main,
@@ -467,7 +511,7 @@ export function recommendE2eTests(input: RecommendInput): E2eRecommendationRepor
     alsoExercised,
     uncoveredFiles,
     entryPointFiles,
-    runtimeChanged: runtimeFiles.some(changesTheApp),
+    runtimeChanged: input.changedFiles.some(isAppFile),
     // A deletion not yet staged is still in `git ls-files --cached`; the branch's diff says it is gone.
     stalePrefixes: findStalePrefixes(
       input.sources,
@@ -579,7 +623,7 @@ function runCli(mergeBase: string): void {
     ...readGitChanges(REPO_ROOT, mergeBase),
     sources,
     trackedFiles: git(REPO_ROOT, 'ls-files', '--cached', '--others', '--exclude-standard'),
-    editorPaths: readEditorPathEntries(REPO_ROOT),
+    editorPaths: readEditorPathsOrEmpty(() => readEditorPathEntries(REPO_ROOT)),
     coreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs.txt')),
     editorCoreSpecs: readSpecList(path.join(REPO_ROOT, 'e2e-tests/core-specs-editor.txt')),
     specFilesBySubset,
@@ -587,18 +631,40 @@ function runCli(mergeBase: string): void {
   process.stdout.write(`${JSON.stringify(report, undefined, 2)}\n`);
 }
 
-/** Whether this module is the program's entry point, also when started through a symbolic link. */
-function isEntryPoint(): boolean {
-  const entry = process.argv[1];
+/**
+ * Whether the program started at `entry` (`process.argv[1]`) is the module at `selfPath`, also when
+ * it was started through a symbolic link. `resolve` gives a path's real location. A path that
+ * cannot be resolved is some other program's (a test runner importing this module) unless it is
+ * named like this module, which could then be a failed start of this one: that throws, so the
+ * command line says so instead of printing nothing.
+ */
+export function isEntryPoint(
+  entry: string | undefined,
+  selfPath: string,
+  resolve: (file: string) => string = fs.realpathSync,
+): boolean {
   if (!entry) return false;
   try {
-    return fs.realpathSync(entry) === fs.realpathSync(fileURLToPath(import.meta.url));
-  } catch {
-    return false;
+    return resolve(entry) === resolve(selfPath);
+  } catch (error) {
+    if (path.basename(entry) !== path.basename(selfPath)) return false;
+    throw new Error(
+      `cannot tell whether ${entry} is this module: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
-if (isEntryPoint()) {
+let startedAsProgram = false;
+try {
+  startedAsProgram = isEntryPoint(process.argv[1], fileURLToPath(import.meta.url));
+} catch (error) {
+  process.stderr.write(
+    `e2e-recommendations: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exit(1);
+}
+
+if (startedAsProgram) {
   const mergeBase = process.argv[2];
   if (!mergeBase) {
     process.stderr.write('Usage: tsx e2e-tests/e2e-recommendations.ts <merge-base>\n');

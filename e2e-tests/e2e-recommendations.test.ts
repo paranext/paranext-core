@@ -15,7 +15,11 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
+import { editorPathsPattern, parseEditorPathEntries, readEditorPathEntries } from './core-specs';
 import {
+  isAppFile,
+  isEntryPoint,
+  readEditorPathsOrEmpty,
   readGitChanges,
   recommendE2eTests,
   RecommendInput,
@@ -571,6 +575,33 @@ describe('recommendE2eTests', () => {
     expect(runtime('.claude/commands/review-paratext.md')).toBe(false);
   });
 
+  // Tool, test-runner and notice files at the top level, and the C# test projects, load into no
+  // part of the app.
+  it.each([
+    'package-lock.json',
+    'c-sharp-tests/Checklists/ChecklistDataModelTests.cs',
+    'c-sharp-tests/Foo/helper.cs',
+    'vitest.config.ts',
+    'vitest.setup.ts',
+    'vitest.setup.node.ts',
+    'THIRD-PARTY-NOTICES.lock.json',
+    'Gemfile',
+    'Gemfile.lock',
+    'nodemon.json',
+  ])('does not count %s as a runtime change', (file) => {
+    expect(recommend([file]).runtimeChanged).toBe(false);
+  });
+
+  // ParatextData does the USFM to USX conversion the editor saves through, and this project file
+  // pins its version, so CI runs the editor list for it.
+  it('treats the data provider project file as runtime and other project files as not', () => {
+    const file = 'c-sharp/ParanextDataProvider.csproj';
+    const report = recommend([file], { sources: {} });
+    expect(report.uncoveredFiles).toEqual([file]);
+    expect(report.runtimeChanged).toBe(true);
+    expect(recommend(['c-sharp/Paranext.Other/Other.csproj']).runtimeChanged).toBe(false);
+  });
+
   it('says whether the changed files make CI run the editor list', () => {
     const editorPaths = ['extensions/src/platform-scripture-editor/', 'dev-packages\\.json$'];
     expect(recommend(['dev-packages.json'], { editorPaths }).editorListRuns).toBe(true);
@@ -622,7 +653,8 @@ describe('recommendE2eTests', () => {
     'extensions/src/hello-rock3/assets/offline.svg',
     'extensions/src/hello-rock3/package.json',
     'extensions/src/c-sharp-provider-test/manifest.json',
-    'c-sharp/ParanextDataProvider.csproj',
+    // No other tracked project exists at this depth, so this row stays synthetic.
+    'c-sharp/Paranext.Other/Other.csproj',
     'c-sharp/Directory.Build.props',
     // No tracked dot-directory sits at this depth under src/, so this row stays synthetic.
     'src/x/.config/settings.ts',
@@ -851,6 +883,82 @@ describe('recommendE2eTests', () => {
 
 // The rows above pin the shapes someone thought of; this sweep catches the ones nobody did, by
 // running the classifier over every tracked file under the source roots.
+describe('the editor list and the map', () => {
+  // CI runs the editor list for every path `editor_paths` names; a runtime file among them that no
+  // key lists would be recommended nothing, so the map must follow that list.
+  it('maps every runtime file that triggers the editor list to a key through main', () => {
+    const pattern = editorPathsPattern(readEditorPathEntries(REPOSITORY_ROOT));
+    const tracked = execFileSync(
+      'git',
+      ['-C', REPOSITORY_ROOT, '-c', 'core.quotePath=false', 'ls-files'],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    )
+      .split('\n')
+      .filter((file) => file !== '');
+    const triggering = tracked.filter((file) => pattern.test(file) && isAppFile(file));
+    expect(triggering).toContain('c-sharp/assets/usfm.sty');
+    // One path per line, so a failure lists every file the map leaves out.
+    expect(
+      triggering
+        .filter((file) => recommend([file], { sources: mapping }).recommendations.length === 0)
+        .join('\n'),
+    ).toBe('');
+  });
+});
+
+describe('reading the editor paths for the command line', () => {
+  it('returns the entries the reader gives', () => {
+    expect(readEditorPathsOrEmpty(() => ['a/'])).toEqual(['a/']);
+  });
+
+  it('warns on stderr and returns no entries when the workflow line is malformed', () => {
+    const written: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+    try {
+      expect(
+        readEditorPathsOrEmpty(() => parseEditorPathEntries('editor_paths+=("dev-packages")\n')),
+      ).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(written.join('')).toContain('e2e-recommendations: could not read editor_paths');
+  });
+});
+
+describe('deciding whether the module is the entry point', () => {
+  const self = '/repo/e2e-tests/e2e-recommendations.ts';
+  const identity = (file: string) => file;
+
+  it('is the entry point when the resolved argument is this module', () => {
+    expect(isEntryPoint(self, self, identity)).toBe(true);
+    expect(isEntryPoint('/tmp/link.ts', self, () => self)).toBe(true);
+  });
+
+  it('is not the entry point of another program or when there is no argument', () => {
+    expect(isEntryPoint('/usr/bin/vitest.mjs', self, identity)).toBe(false);
+    expect(isEntryPoint(undefined, self, identity)).toBe(false);
+  });
+
+  it('is not the entry point of another program whose path cannot be resolved', () => {
+    expect(
+      isEntryPoint('/gone/vitest.mjs', self, () => {
+        throw new Error('ENOENT');
+      }),
+    ).toBe(false);
+  });
+
+  it('refuses to guess when a path named like this module cannot be resolved', () => {
+    expect(() =>
+      isEntryPoint('/gone/e2e-recommendations.ts', self, () => {
+        throw new Error('ENOENT');
+      }),
+    ).toThrow(/cannot tell whether/);
+  });
+});
+
 describe('classifying the tracked source files', () => {
   // Extensions of the files the app loads or bundles from the source roots, taken from what is
   // tracked there: code, style sheets, markup, the data the .NET data provider reads, and images.
@@ -891,8 +999,12 @@ describe('classifying the tracked source files', () => {
       ? basename.slice(basename.lastIndexOf('.') + 1).toLowerCase()
       : '';
   };
+  // Files of a type the app does not load that still change what it does. The data provider's
+  // project file pins ParatextData, which does the USFM to USX conversion the editor saves through.
+  const APP_CODE_EXCEPTIONS = ['c-sharp/ParanextDataProvider.csproj'];
   const isPlainlyNotAppCode = (file: string) =>
-    !LOADED_EXTENSIONS.has(extensionOf(file)) || NOT_APP_CODE.some((shape) => shape.test(file));
+    !APP_CODE_EXCEPTIONS.includes(file) &&
+    (!LOADED_EXTENSIONS.has(extensionOf(file)) || NOT_APP_CODE.some((shape) => shape.test(file)));
 
   it('recognizes plain non-app files and passes app code', () => {
     expect(isPlainlyNotAppCode('extensions/src/hello-rock3/.github/CODEOWNERS')).toBe(true);
@@ -901,6 +1013,8 @@ describe('classifying the tracked source files', () => {
     expect(isPlainlyNotAppCode('src/stories/platform/ten-layout-shared.tsx')).toBe(true);
     expect(isPlainlyNotAppCode('src/renderer/context/papi-context/test.context.ts')).toBe(false);
     expect(isPlainlyNotAppCode('c-sharp/assets/usfm.sty')).toBe(false);
+    expect(isPlainlyNotAppCode('c-sharp/ParanextDataProvider.csproj')).toBe(false);
+    expect(isPlainlyNotAppCode('c-sharp/Paranext.Other/Other.csproj')).toBe(true);
   });
 
   it('treats every tracked file that is plainly not app code as non-runtime', () => {

@@ -52,8 +52,10 @@ A new subset directory or loose spec under `tests/isolated/` also needs an entry
 missing, and when a tracked file under `src/`, `extensions/src/` or `c-sharp/` that the app never
 loads (a dotfile, a license, a story, a file type the app does not read) is still classified as
 runtime code. If the file is app code of a new type, add its extension to `LOADED_EXTENSIONS` in
-`e2e-recommendations.test.ts`; otherwise add its shape to `NON_RUNTIME` in
-`e2e-recommendations.ts`. A prefix that names a file that no longer exists does not fail the test:
+`e2e-recommendations.test.ts` (one file of a type the app does not load that still changes what it
+does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to `NON_RUNTIME` in
+`e2e-recommendations.ts`. The test also fails when a runtime file that matches an `editor_paths`
+entry in `test.yml` reaches no key through `main`: add it to the right key. A prefix that names a file that no longer exists does not fail the test:
 `e2e-recommendations.ts` reports it as `stalePrefixes`, and `/review-paratext` shows it to the
 author as a warning, so moving or deleting a source file a prefix names means updating the prefix.
 `/review-paratext` uses the map to recommend which subsets to run. A new
