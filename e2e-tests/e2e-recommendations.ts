@@ -184,7 +184,8 @@ const NON_RUNTIME = new RegExp(
     String.raw`(^|\/)(__tests__|__mocks__)\/`,
     // Any dotfile or dot-directory below the top level: formatter, linter, editor, Git and .NET
     // tool configuration, CI workflows and IDE settings, none of which the app loads. A top-level
-    // one is not matched, because `.erb/` holds the webpack configuration that builds the app.
+    // one is not matched: `.erb/configs/` and some `.erb/scripts/` build the app, and `APP_ROOTS`
+    // decides which top-level paths count.
     String.raw`\/\.[^/]`,
     // Images and fonts; style sheets and data under assets/ stay runtime.
     String.raw`(^|\/)assets\/.*\.(png|jpe?g|gif|svg|ico|woff2?|ttf)$`,
@@ -249,6 +250,13 @@ const APP_ROOTS = [
   'c-sharp/',
   'lib/',
   '.erb/configs/',
+  // The build and install steps run these, and what they produce ships: the editor's staged dev
+  // packages, the notices and their build id, and the development build info.
+  '.erb/scripts/stage-dev-packages.ts',
+  '.erb/scripts/stage-dev-packages.util.ts',
+  '.erb/scripts/notices-build-id.ts',
+  '.erb/scripts/generate-dev-build-info.ts',
+  '.erb/scripts/third-party-notices/',
   'assets/',
   // Paratext 9's marker stylesheets, which the editor's own stylesheets import.
   'data/',

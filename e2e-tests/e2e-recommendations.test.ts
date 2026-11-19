@@ -577,6 +577,12 @@ describe('recommendE2eTests', () => {
     expect(runtime('assets/localization/en.json')).toBe(true);
     // The editor's marker stylesheets import these.
     expect(runtime('data/pt9-css/hbkeng.css')).toBe(true);
+    // The build and install scripts run these, and what they produce ships.
+    expect(runtime('.erb/scripts/stage-dev-packages.ts')).toBe(true);
+    expect(runtime('.erb/scripts/stage-dev-packages.util.ts')).toBe(true);
+    expect(runtime('.erb/scripts/notices-build-id.ts')).toBe(true);
+    expect(runtime('.erb/scripts/generate-dev-build-info.ts')).toBe(true);
+    expect(runtime('.erb/scripts/third-party-notices/notices.ts')).toBe(true);
     expect(runtime('.claude/commands/review-paratext.md')).toBe(false);
   });
 
