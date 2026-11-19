@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   classifySelectionAnchor,
   EditTarget,
@@ -35,6 +35,11 @@ export type EditTargetState = {
   isEditable: boolean;
   /** Whether the selection the user last made in the footnotes pane is inside the row editor */
   isSelectionInRowEditor: boolean;
+  /**
+   * Re-reads the browser selection for the footnotes pane, for when its nodes may have been
+   * replaced or removed (the pane stopped being rendered). The target itself stays where it is.
+   */
+  recheckSelection: () => void;
 };
 
 /**
@@ -62,6 +67,20 @@ export function useEditTarget({
     getRootsRef.current = getRoots;
   }, [getRoots]);
 
+  const setFootnotesSelectionIfChanged = useCallback((state: FootnotesSelectionState) => {
+    setFootnotesSelection((previous) =>
+      previous.hasSelection === state.hasSelection && previous.inRowEditor === state.inRowEditor
+        ? previous
+        : state,
+    );
+  }, []);
+
+  const recheckSelection = useCallback(() => {
+    setFootnotesSelectionIfChanged(
+      readFootnotesSelectionState(document.getSelection(), getRootsRef.current().footnotesRows),
+    );
+  }, [setFootnotesSelectionIfChanged]);
+
   useEffect(() => {
     const onSelectionMaybeChanged = () => {
       const roots = getRootsRef.current();
@@ -70,13 +89,7 @@ export function useEditTarget({
       if (!next) return;
       setTarget(next);
       if (next === 'footnotes')
-        setFootnotesSelection((previous) => {
-          const state = readFootnotesSelectionState(selection, roots.footnotesRows);
-          return previous.hasSelection === state.hasSelection &&
-            previous.inRowEditor === state.inRowEditor
-            ? previous
-            : state;
-        });
+        setFootnotesSelectionIfChanged(readFootnotesSelectionState(selection, roots.footnotesRows));
     };
     document.addEventListener('selectionchange', onSelectionMaybeChanged);
     document.addEventListener('focusin', onSelectionMaybeChanged);
@@ -84,15 +97,15 @@ export function useEditTarget({
       document.removeEventListener('selectionchange', onSelectionMaybeChanged);
       document.removeEventListener('focusin', onSelectionMaybeChanged);
     };
-  }, []);
+  }, [setFootnotesSelectionIfChanged]);
 
   // A row editor opening or closing replaces the nodes the selection was in, so what was last read
   // from the pane no longer holds. The target itself stays where it is.
+  // Hidden case: the target deliberately stays on the footnotes when the pane goes away, until the
+  // user selects in the main text; with nothing selected in the pane the keys read false then.
   useEffect(() => {
-    setFootnotesSelection(
-      readFootnotesSelectionState(document.getSelection(), getRootsRef.current().footnotesRows),
-    );
-  }, [isRowEditorOpen, recheckToken]);
+    recheckSelection();
+  }, [isRowEditorOpen, recheckToken, recheckSelection]);
 
   useEffect(() => {
     setTarget('main');
@@ -105,5 +118,6 @@ export function useEditTarget({
     hasSelection: isMain ? mainHasSelection : footnotesSelection.hasSelection,
     isEditable: isMain || (footnotesSelection.inRowEditor && isRowEditorOpen),
     isSelectionInRowEditor: footnotesSelection.inRowEditor,
+    recheckSelection,
   };
 }
