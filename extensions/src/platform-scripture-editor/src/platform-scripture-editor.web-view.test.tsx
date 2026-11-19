@@ -1784,6 +1784,24 @@ describe('Scripture editor right-click menu', () => {
         expect(clipboardCallsOn(main)).toEqual([]);
       });
 
+      it('returns to the main text when the pane is hidden with the target on the footnotes', async () => {
+        const { main, row, rerender } = await renderWithReadOnlyRow();
+        main.setLiveSelection(selectionRange);
+        await reportMainSelection(selectionRange);
+        await selectIn(row, { collapsed: true });
+        expect(lastPublished(HAS_SELECTION)).toBe(false);
+        expect(lastPublished(EDITABLE)).toBe(false);
+
+        await rerender({ state: { footnotesPaneVisible: false, viewType: 'standard' } });
+
+        expect(screen.queryAllByRole('option')).toHaveLength(0);
+        expect(lastPublished(HAS_SELECTION)).toBe(true);
+        expect(lastPublished(EDITABLE)).toBe(true);
+        await runTopMenu(COPY);
+        expect(main.calls).toContain('copy');
+        expect(execCommand).not.toHaveBeenCalled();
+      });
+
       it('goes back to the main text after the chapter changes', async () => {
         const { main, row, rerender } = await renderWithReadOnlyRow();
         main.setLiveSelection(selectionRange);

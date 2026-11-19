@@ -180,6 +180,30 @@ describe('useEditTarget', () => {
     expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: false });
   });
 
+  it('falls back to the main text when the footnote rows are gone, and stays put while they are rendered', () => {
+    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
+      initialProps: { ...baseOptions, mainHasSelection: true, recheckToken: 'a' },
+    });
+    select(readOnlyText);
+    expect(result.current.target).toBe('footnotes');
+
+    // Control: the rows are still there and the selection is nowhere; the target stays.
+    act(() => {
+      document.getSelection()?.removeAllRanges();
+    });
+    rerender({ ...baseOptions, mainHasSelection: true, recheckToken: 'b' });
+    expect(result.current.target).toBe('footnotes');
+
+    // The rows root is absent: no selectionchange will fire in the main text, so it falls back at once.
+    rerender({
+      ...baseOptions,
+      mainHasSelection: true,
+      recheckToken: 'c',
+      getRoots: () => ({ mainEditorRoot: main, footnotesRows: undefined }),
+    });
+    expect(result.current).toMatchObject({ target: 'main', hasSelection: true, isEditable: true });
+  });
+
   it("does not move the target when only the main editor's own selection changes", () => {
     const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
       initialProps: baseOptions,
