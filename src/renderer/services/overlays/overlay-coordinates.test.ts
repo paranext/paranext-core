@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import {
   translateCoordinates,
-  getWebViewIframe,
   clampToViewport,
   isWebViewVisible,
   isPositionInViewport,
@@ -21,37 +20,6 @@ beforeAll(() => {
 });
 
 describe('overlay-coordinates', () => {
-  describe('getWebViewIframe', () => {
-    let mockIframe: HTMLIFrameElement;
-
-    beforeEach(() => {
-      mockIframe = document.createElement('iframe');
-      mockIframe.setAttribute('data-web-view-id', 'test-webview-1');
-      document.body.appendChild(mockIframe);
-    });
-
-    afterEach(() => {
-      document.body.removeChild(mockIframe);
-    });
-
-    it('should find an iframe by data-web-view-id', () => {
-      const result = getWebViewIframe('test-webview-1');
-      expect(result).toBe(mockIframe);
-    });
-
-    it('should return null for a non-existent webViewId', () => {
-      const result = getWebViewIframe('non-existent');
-      expect(result).toBeNull();
-    });
-
-    it('should return null without throwing when webViewId contains CSS selector characters', () => {
-      // Without CSS.escape, characters like " or ] would break the attribute selector
-      // and cause querySelector to throw a DOMException
-      expect(() => getWebViewIframe('malicious"]iframe')).not.toThrow();
-      expect(getWebViewIframe('malicious"]iframe')).toBeNull();
-    });
-  });
-
   describe('translateCoordinates', () => {
     let mockIframe: HTMLIFrameElement;
 

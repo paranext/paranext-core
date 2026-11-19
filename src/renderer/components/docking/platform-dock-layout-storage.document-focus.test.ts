@@ -112,6 +112,69 @@ describe('taking document focus when a web view is docked', () => {
     }
   });
 
+  describe('with an element the tab last had focused', () => {
+    let element: HTMLButtonElement;
+    let observerCallbacks: (() => void)[];
+    let disconnect: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      element = document.createElement('button');
+      document.body.appendChild(element);
+      vi.spyOn(element, 'focus');
+      // Only `id`, a non-null `title` and the remembered element are read on this path.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      when(localMockDockLayout.find(anything())).thenReturn({
+        id: TAB_ID,
+        title: TAB_ID,
+        lastFocusedElement: element,
+      } as unknown as TabData);
+      observerCallbacks = [];
+      disconnect = vi.fn();
+      // jsdom has no IntersectionObserver; this one records its callback for the test to fire.
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          constructor(callback: () => void) {
+            observerCallbacks.push(callback);
+          }
+
+          observe = vi.fn();
+
+          disconnect = disconnect;
+        },
+      );
+    });
+
+    afterEach(() => {
+      element.remove();
+      vi.unstubAllGlobals();
+    });
+
+    it('focuses the frame, then waits for a hidden frame to show before focusing the element', () => {
+      // A tab that was not the active one is still `display: none` when the focus request lands.
+      iframe.checkVisibility = () => false;
+
+      focusTab(instance(localMockDockLayout), TAB_ID);
+
+      expect(focusSpy).toHaveBeenCalled();
+      expect(element.focus).not.toHaveBeenCalled();
+      expect(observerCallbacks).toHaveLength(1);
+      observerCallbacks[0]();
+      expect(element.focus).toHaveBeenCalledTimes(1);
+      expect(disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('focuses the element at once when the frame is already shown (control)', () => {
+      iframe.checkVisibility = () => true;
+
+      focusTab(instance(localMockDockLayout), TAB_ID);
+
+      expect(focusSpy).toHaveBeenCalled();
+      expect(element.focus).toHaveBeenCalledTimes(1);
+      expect(observerCallbacks).toHaveLength(0);
+    });
+  });
+
   it('leaves document focus alone when the window is still waiting for its first activation', () => {
     focusTab(instance(localMockDockLayout), TAB_ID, true);
 

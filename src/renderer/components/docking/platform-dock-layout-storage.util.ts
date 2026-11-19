@@ -30,6 +30,7 @@ import { getErrorMessage } from 'platform-bible-utils';
 import { readDirection } from 'platform-bible-react/experimental';
 
 import { DIALOGS } from '@renderer/components/dialogs';
+import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import {
   TAB_TYPE_SETTINGS_TAB,
   loadSettingsTab,
@@ -1726,9 +1727,8 @@ function setDocumentFocusToTab(dockLayout: DockLayout, tabId: string) {
   let didFocusWebView = false;
 
   // Select the WebView iframe if one exists. Must do this then select the last focused element
-  // inside it if available. Asks for the iframe by tag: the tab's header carries the same
-  // `data-web-view-id` and comes first in the document.
-  const webViewIframe = document.querySelector(`iframe[data-web-view-id='${tabId}']`);
+  // inside it if available
+  const webViewIframe = getWebViewIframe(tabId);
   if (webViewIframe instanceof HTMLIFrameElement) {
     if (!webViewIframe.contentWindow) {
       webViewIframe.focus();
