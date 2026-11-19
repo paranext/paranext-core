@@ -1312,7 +1312,7 @@ function PlatformScriptureEditor({
       footnotesRows: document.querySelector(`[${FOOTNOTES_ROWS_ATTRIBUTE}]`),
     }),
     isRowEditorOpen: paneEditingIndex !== undefined,
-    recheckToken: `${footnotesPaneVisible}|${paneEditingIndex}`,
+    recheckToken: `${paneEditingIndex}`,
     resetToken: `${projectId}|${scrRef.book}|${scrRef.chapterNum}|${viewType}`,
     mainHasSelection,
   });
@@ -3436,6 +3436,12 @@ function PlatformScriptureEditor({
   // `noteCallerOnClick` routing, so a caller click can never be routed to a pane that is not really
   // there. Deriving it once keeps the render gate and the click routing from drifting apart.
   const footnotesPaneRendered = footnotesPaneVisible && !!usjFromPdp;
+
+  // The pane's nodes go away when it stops rendering, taking the footnote selection with them.
+  const { recheckSelection: recheckEditTargetSelection } = editTarget;
+  useEffect(() => {
+    recheckEditTargetSelection();
+  }, [footnotesPaneRendered, recheckEditTargetSelection]);
   useEffect(() => {
     footnotesPaneRenderedRef.current = footnotesPaneRendered;
   }, [footnotesPaneRendered]);

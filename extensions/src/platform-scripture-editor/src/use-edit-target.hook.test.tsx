@@ -149,6 +149,37 @@ describe('useEditTarget', () => {
     expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: false });
   });
 
+  it('keeps a footnote selection that is still in the pane across a recheck, and tells a row switch from it', () => {
+    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
+      initialProps: { ...baseOptions, recheckToken: '0' },
+    });
+    select(rowEditorText);
+    expect(result.current.isSelectionInRowEditor).toBe(true);
+
+    rerender({ ...baseOptions, recheckToken: '0b' });
+    expect(result.current).toMatchObject({ hasSelection: true, isSelectionInRowEditor: true });
+
+    // The user's selection moves to a read-only row while another row opens.
+    select(readOnlyText);
+    rerender({ ...baseOptions, recheckToken: '1' });
+    expect(result.current).toMatchObject({ hasSelection: true, isSelectionInRowEditor: false });
+  });
+
+  it('re-reads on demand through recheckSelection', () => {
+    const { result } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
+      initialProps: baseOptions,
+    });
+    select(readOnlyText);
+    act(() => {
+      document.getSelection()?.removeAllRanges();
+    });
+    expect(result.current.hasSelection).toBe(true);
+
+    act(() => result.current.recheckSelection());
+
+    expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: false });
+  });
+
   it("does not move the target when only the main editor's own selection changes", () => {
     const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
       initialProps: baseOptions,
