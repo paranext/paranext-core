@@ -173,7 +173,7 @@ normalized upper-case form (`normalizeProjectId` from platform-bible-utils), the
 under (`ProjectMetadata.Id` is upper case), so producers must build keys from that form. Keys are
 plain facts (`isEditable`, `isSyncing`), never answers to "should this item show"; the expression
 combines them. The Scripture editor's per-tab keys (`isReadOnly`, `isPreview`, `isSyncBlocked`,
-`footnotesPaneVisible`, `hasSelection`, `editTargetIsEditable`) are examples: `isReadOnly` is the tab's read-only state,
+`footnotesPaneVisible`, `hasSelection`) are examples: `isReadOnly` is the tab's read-only state,
 which is fixed when the tab opens, so an item that edits text reads it next to the live project key
 `platform.project.{projectId}.isEditable` and stays disabled in a tab that cannot edit (see PT-4786
 for the snapshot).

@@ -1,12 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
-import {
-  classifySelectionAnchor,
-  readFootnotesSelectionState,
-  runFootnotesEditMenuCommand,
-  type FootnotesEditMenuContext,
-} from './edit-target.util';
-import { EDIT_MENU_COMMANDS } from './edit-menu-actions.util';
+import { describe, expect, it } from 'vitest';
+import { classifySelectionAnchor, hasFootnotesRowsSelection } from './edit-target.util';
 
 function buildDom() {
   document.body.innerHTML = `
@@ -55,139 +49,43 @@ describe('classifySelectionAnchor', () => {
   });
 });
 
-describe('readFootnotesSelectionState', () => {
-  it('reports a range in the rows, and whether it is in the row editor', () => {
+describe('hasFootnotesRowsSelection', () => {
+  it('is true for a range in the rows, read-only row or row editor', () => {
     const { byId, roots } = buildDom();
     expect(
-      readFootnotesSelectionState(
+      hasFootnotesRowsSelection(
         { anchorNode: byId('readOnlyRow').firstChild, isCollapsed: false },
         roots.footnotesRows,
       ),
-    ).toEqual({ hasSelection: true, inRowEditor: false });
+    ).toBe(true);
     expect(
-      readFootnotesSelectionState(
+      hasFootnotesRowsSelection(
         { anchorNode: byId('rowEditorText').firstChild, isCollapsed: false },
         roots.footnotesRows,
       ),
-    ).toEqual({ hasSelection: true, inRowEditor: true });
+    ).toBe(true);
   });
 
-  it('reports a caret as no selection, and anything outside the rows as nothing', () => {
+  it('is false for a caret, a range outside the rows, no selection, or no rows', () => {
     const { byId, roots } = buildDom();
     expect(
-      readFootnotesSelectionState(
-        { anchorNode: byId('rowEditorText').firstChild, isCollapsed: true },
+      hasFootnotesRowsSelection(
+        { anchorNode: byId('readOnlyRow').firstChild, isCollapsed: true },
         roots.footnotesRows,
       ),
-    ).toEqual({ hasSelection: false, inRowEditor: true });
+    ).toBe(false);
     expect(
-      readFootnotesSelectionState(
+      hasFootnotesRowsSelection(
         { anchorNode: byId('mainText').firstChild, isCollapsed: false },
         roots.footnotesRows,
       ),
-    ).toEqual({ hasSelection: false, inRowEditor: false });
-    expect(readFootnotesSelectionState(undefined, roots.footnotesRows)).toEqual({
-      hasSelection: false,
-      inRowEditor: false,
-    });
-  });
-});
-
-describe('runFootnotesEditMenuCommand', () => {
-  const [CUT, COPY, PASTE, PASTE_PLAIN] = EDIT_MENU_COMMANDS;
-
-  const makeContext = (overrides: Partial<FootnotesEditMenuContext> = {}) => {
-    const rowEditor = {
-      cut: vi.fn(),
-      copy: vi.fn(),
-      paste: vi.fn(),
-      pastePlainText: vi.fn(),
-    };
-    const context: FootnotesEditMenuContext = {
-      rowEditor,
-      isSelectionInRowEditor: true,
-      hasRowsSelection: false,
-      copyBrowserSelection: vi.fn(),
-      notifyActionBlocked: vi.fn(),
-      onActionError: vi.fn(),
-      ...overrides,
-    };
-    return { rowEditor, context };
-  };
-
-  it.each([
-    [CUT, 'cut'],
-    [COPY, 'copy'],
-    [PASTE, 'paste'],
-    [PASTE_PLAIN, 'pastePlainText'],
-  ] as const)(
-    'sends %s to the row editor handle when the selection is in it',
-    (command, method) => {
-      const { rowEditor, context } = makeContext();
-
-      expect(runFootnotesEditMenuCommand(command, context)).toBe(true);
-
-      expect(rowEditor[method]).toHaveBeenCalledOnce();
-      expect(context.notifyActionBlocked).not.toHaveBeenCalled();
-    },
-  );
-
-  it('copies a read-only row selection through the browser, so the pane applies the copy limit', () => {
-    const { context } = makeContext({ rowEditor: undefined, hasRowsSelection: true });
-
-    expect(runFootnotesEditMenuCommand(COPY, context)).toBe(true);
-
-    expect(context.copyBrowserSelection).toHaveBeenCalledOnce();
-  });
-
-  it('copies a read-only row selection through the browser when the row editor holds no selection', () => {
-    const { rowEditor, context } = makeContext({
-      isSelectionInRowEditor: false,
-      hasRowsSelection: true,
-    });
-
-    runFootnotesEditMenuCommand(COPY, context);
-
-    expect(context.copyBrowserSelection).toHaveBeenCalledOnce();
-    expect(rowEditor.copy).not.toHaveBeenCalled();
-  });
-
-  it('does nothing, silently, for Copy with nothing selected', () => {
-    const { context } = makeContext({ rowEditor: undefined });
-
-    expect(runFootnotesEditMenuCommand(COPY, context)).toBe(false);
-
-    expect(context.copyBrowserSelection).not.toHaveBeenCalled();
-    expect(context.notifyActionBlocked).not.toHaveBeenCalled();
-  });
-
-  it.each([CUT, PASTE, PASTE_PLAIN])(
-    'does nothing but show the blocked notice for %s on a read-only row',
-    (command) => {
-      const { rowEditor, context } = makeContext({
-        rowEditor: undefined,
-        isSelectionInRowEditor: false,
-        hasRowsSelection: true,
-      });
-
-      expect(runFootnotesEditMenuCommand(command, context)).toBe(false);
-
-      expect(context.notifyActionBlocked).toHaveBeenCalledOnce();
-      expect(context.copyBrowserSelection).not.toHaveBeenCalled();
-      expect(rowEditor.cut).not.toHaveBeenCalled();
-    },
-  );
-
-  it('reports a failing handle and shows the blocked notice', () => {
-    const error = new Error('clipboard denied');
-    const { rowEditor, context } = makeContext();
-    rowEditor.paste.mockImplementation(() => {
-      throw error;
-    });
-
-    expect(runFootnotesEditMenuCommand(PASTE, context)).toBe(false);
-
-    expect(context.onActionError).toHaveBeenCalledWith(error);
-    expect(context.notifyActionBlocked).toHaveBeenCalledOnce();
+    ).toBe(false);
+    expect(hasFootnotesRowsSelection(undefined, roots.footnotesRows)).toBe(false);
+    expect(
+      hasFootnotesRowsSelection(
+        { anchorNode: byId('readOnlyRow').firstChild, isCollapsed: false },
+        undefined,
+      ),
+    ).toBe(false);
   });
 });

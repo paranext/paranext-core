@@ -267,23 +267,16 @@ describe('context menu items look like their top-menu twins', () => {
     });
   });
 
-  it('gives the clipboard items the editable condition of their top-menu twins, less the edit-target fact', () => {
+  it('gives the clipboard items exactly the editable condition of their top-menu twins', () => {
     const [topCut] = twinsOf(CUT);
     const [topPaste] = twinsOf(PASTE);
     const contextItem = (command: string) =>
       contextMenu.items.find((item) => item.command === command);
-    // The top menu acts on whichever editor the user last worked in, so its Cut and Paste also read
-    // `editTargetIsEditable`. A context-menu item is per-click: it always acts on the editor that
-    // was clicked, so it does not read that fact.
-    const EDIT_TARGET_IS_EDITABLE =
-      ' && platformScriptureEditor.webView.{webViewId}.editTargetIsEditable';
     expect(twinsOf(CUT)).toHaveLength(1);
     expect(twinsOf(PASTE)).toHaveLength(1);
     expect(topCut.enabledWhen).toBe(topPaste.enabledWhen);
-    expect(topPaste.enabledWhen.endsWith(EDIT_TARGET_IS_EDITABLE)).toBe(true);
-    const contextBase = topPaste.enabledWhen.slice(0, -EDIT_TARGET_IS_EDITABLE.length);
-    expect(contextItem(PASTE)?.enabledWhen).toBe(contextBase);
-    expect(contextItem(PASTE_PLAIN)?.enabledWhen).toBe(contextBase);
-    expect(contextItem(CUT)?.enabledWhen).toBe(`${contextBase} && ${HAS_SELECTION}`);
+    expect(contextItem(PASTE)?.enabledWhen).toBe(topPaste.enabledWhen);
+    expect(contextItem(PASTE_PLAIN)?.enabledWhen).toBe(topPaste.enabledWhen);
+    expect(contextItem(CUT)?.enabledWhen).toBe(`${topCut.enabledWhen} && ${HAS_SELECTION}`);
   });
 });

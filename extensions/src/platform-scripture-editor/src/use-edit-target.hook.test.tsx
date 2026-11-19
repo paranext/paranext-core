@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEditTarget, type UseEditTargetOptions } from './use-edit-target.hook';
 
 function find(selector: string): HTMLElement {
@@ -45,11 +45,15 @@ describe('useEditTarget', () => {
   });
 
   const baseOptions: UseEditTargetOptions = {
-    getRoots: () => ({ mainEditorRoot: main, footnotesRows: rows }),
-    isRowEditorOpen: true,
+    getMainEditorRoot: () => main,
+    getFootnotesRows: () => rows,
+    recheckToken: 'rendered',
     resetToken: 'GEN|1',
     mainHasSelection: false,
   };
+
+  const render = (initialProps: UseEditTargetOptions = baseOptions) =>
+    renderHook((props: UseEditTargetOptions) => useEditTarget(props), { initialProps });
 
   const select = (node: Node, { collapsed = false } = {}) => {
     const range = document.createRange();
@@ -63,25 +67,17 @@ describe('useEditTarget', () => {
     });
   };
 
-  it('starts on the main text, editable, following the main selection', () => {
-    const { result } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: { ...baseOptions, mainHasSelection: true },
-    });
+  it('starts on the main text, following the main selection', () => {
+    const { result } = render({ ...baseOptions, mainHasSelection: true });
 
-    expect(result.current).toMatchObject({ target: 'main', hasSelection: true, isEditable: true });
+    expect(result.current).toEqual({ target: 'main', hasSelection: true });
   });
 
-  it('follows a selection into a read-only row, stays there when the selection goes elsewhere, and returns on a main selection', () => {
-    const { result } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: { ...baseOptions, isRowEditorOpen: false, mainHasSelection: true },
-    });
+  it('follows a selection into the pane, stays there when the selection goes elsewhere, and returns on a main selection', () => {
+    const { result } = render({ ...baseOptions, mainHasSelection: true });
 
     select(readOnlyText);
-    expect(result.current).toMatchObject({
-      target: 'footnotes',
-      hasSelection: true,
-      isEditable: false,
-    });
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: true });
 
     // Nowhere: the toolbar, then no selection at all.
     select(toolbarButton);
@@ -90,164 +86,106 @@ describe('useEditTarget', () => {
       document.getSelection()?.removeAllRanges();
       document.dispatchEvent(new Event('selectionchange'));
     });
-    expect(result.current.target).toBe('footnotes');
-    expect(result.current.hasSelection).toBe(true);
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: true });
 
     select(mainText);
-    expect(result.current).toMatchObject({ target: 'main', hasSelection: true, isEditable: true });
+    expect(result.current).toEqual({ target: 'main', hasSelection: true });
   });
 
-  it('is editable only while the footnote selection is inside the open row editor', () => {
-    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: baseOptions,
-    });
+  it('counts a selection inside the row editor as a footnote selection', () => {
+    const { result } = render();
 
     select(rowEditorText);
-    expect(result.current).toMatchObject({ target: 'footnotes', isEditable: true });
-    expect(result.current.isSelectionInRowEditor).toBe(true);
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: true });
 
-    select(readOnlyText);
-    expect(result.current).toMatchObject({ target: 'footnotes', isEditable: false });
-
-    select(rowEditorText);
-    rerender({ ...baseOptions, isRowEditorOpen: false });
-    expect(result.current.isEditable).toBe(false);
-  });
-
-  it('reports no selection once the row editor closes, with the target still on the footnotes', () => {
-    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: baseOptions,
-    });
-    select(rowEditorText);
-    expect(result.current.hasSelection).toBe(true);
-
-    // The row editor's nodes are replaced: the selection is no longer in the rows.
-    act(() => {
-      document.getSelection()?.removeAllRanges();
-    });
-    rerender({ ...baseOptions, isRowEditorOpen: false });
-
-    expect(result.current).toMatchObject({
-      target: 'footnotes',
-      hasSelection: false,
-      isEditable: false,
-    });
-  });
-
-  it('re-reads the selection when the pane hides or another row opens, keeping the target', () => {
-    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: { ...baseOptions, recheckToken: 'true|0' },
-    });
-    select(readOnlyText);
-    expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: true });
-
-    act(() => {
-      document.getSelection()?.removeAllRanges();
-    });
-    rerender({ ...baseOptions, recheckToken: 'false|undefined' });
-
-    expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: false });
-  });
-
-  it('keeps a footnote selection that is still in the pane across a recheck, and tells a row switch from it', () => {
-    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: { ...baseOptions, recheckToken: '0' },
-    });
-    select(rowEditorText);
-    expect(result.current.isSelectionInRowEditor).toBe(true);
-
-    rerender({ ...baseOptions, recheckToken: '0b' });
-    expect(result.current).toMatchObject({ hasSelection: true, isSelectionInRowEditor: true });
-
-    // The user's selection moves to a read-only row while another row opens.
-    select(readOnlyText);
-    rerender({ ...baseOptions, recheckToken: '1' });
-    expect(result.current).toMatchObject({ hasSelection: true, isSelectionInRowEditor: false });
-  });
-
-  it('re-reads on demand through recheckSelection', () => {
-    const { result } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: baseOptions,
-    });
-    select(readOnlyText);
-    act(() => {
-      document.getSelection()?.removeAllRanges();
-    });
-    expect(result.current.hasSelection).toBe(true);
-
-    act(() => result.current.recheckSelection());
-
-    expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: false });
-  });
-
-  it('falls back to the main text when the footnote rows are gone, and stays put while they are rendered', () => {
-    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: { ...baseOptions, mainHasSelection: true, recheckToken: 'a' },
-    });
-    select(readOnlyText);
-    expect(result.current.target).toBe('footnotes');
-
-    // Control: the rows are still there and the selection is nowhere; the target stays.
-    act(() => {
-      document.getSelection()?.removeAllRanges();
-    });
-    rerender({ ...baseOptions, mainHasSelection: true, recheckToken: 'b' });
-    expect(result.current.target).toBe('footnotes');
-
-    // The rows root is absent: no selectionchange will fire in the main text, so it falls back at once.
-    rerender({
-      ...baseOptions,
-      mainHasSelection: true,
-      recheckToken: 'c',
-      getRoots: () => ({ mainEditorRoot: main, footnotesRows: undefined }),
-    });
-    expect(result.current).toMatchObject({ target: 'main', hasSelection: true, isEditable: true });
+    select(rowEditorText, { collapsed: true });
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: false });
   });
 
   it("does not move the target when only the main editor's own selection changes", () => {
-    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: baseOptions,
-    });
+    const { result, rerender } = render();
     select(readOnlyText, { collapsed: true });
-    expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: false });
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: false });
 
     rerender({ ...baseOptions, mainHasSelection: true });
 
-    expect(result.current).toMatchObject({ target: 'footnotes', hasSelection: false });
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: false });
   });
 
   it('returns to the main text when the reset token changes', () => {
-    const { result, rerender } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: baseOptions,
-    });
+    const { result, rerender } = render();
     select(readOnlyText);
     expect(result.current.target).toBe('footnotes');
 
     rerender({ ...baseOptions, resetToken: 'GEN|2' });
 
-    expect(result.current).toMatchObject({ target: 'main', hasSelection: false, isEditable: true });
+    expect(result.current).toEqual({ target: 'main', hasSelection: false });
+  });
+
+  it('falls back to the main text when the footnote rows are gone, and stays put while they are rendered', () => {
+    const { result, rerender } = render({ ...baseOptions, mainHasSelection: true });
+    select(readOnlyText);
+    expect(result.current.target).toBe('footnotes');
+
+    // Control: the rows are still rendered and the selection is nowhere; the target stays.
+    act(() => {
+      document.getSelection()?.removeAllRanges();
+    });
+    rerender({ ...baseOptions, mainHasSelection: true, recheckToken: 'rendered, other row' });
+    expect(result.current.target).toBe('footnotes');
+
+    // The rows root is absent: no selection change fires in the main text, so it falls back at once.
+    rerender({
+      ...baseOptions,
+      mainHasSelection: true,
+      getFootnotesRows: () => undefined,
+      recheckToken: 'not rendered',
+    });
+    expect(result.current).toEqual({ target: 'main', hasSelection: true });
+  });
+
+  it('re-reads the footnote selection when the recheck token changes, keeping the target', () => {
+    const { result, rerender } = render();
+    select(readOnlyText);
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: true });
+
+    act(() => {
+      document.getSelection()?.removeAllRanges();
+    });
+    expect(result.current.hasSelection).toBe(true);
+    rerender({ ...baseOptions, recheckToken: 'another row' });
+
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: false });
   });
 
   it('classifies on focusin as well as selectionchange', () => {
-    const { result } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: baseOptions,
-    });
-    const selection = document.getSelection();
+    const { result } = render();
     const range = document.createRange();
     range.selectNodeContents(readOnlyText);
-    selection?.addRange(range);
+    document.getSelection()?.addRange(range);
 
     act(() => {
-      document.getElementById('readOnly')?.dispatchEvent(new Event('focusin', { bubbles: true }));
+      find('#readOnly').dispatchEvent(new Event('focusin', { bubbles: true }));
     });
 
     expect(result.current.target).toBe('footnotes');
   });
 
+  it('looks the footnote rows up only for a selection outside the main text', () => {
+    const getFootnotesRows = vi.fn(() => rows);
+    render({ ...baseOptions, getFootnotesRows });
+    // Mounting rechecks once; what follows is the per-selection cost.
+    getFootnotesRows.mockClear();
+
+    select(mainText);
+    expect(getFootnotesRows).not.toHaveBeenCalled();
+
+    select(readOnlyText);
+    expect(getFootnotesRows).toHaveBeenCalled();
+  });
+
   it('stops listening on unmount', () => {
-    const { result, unmount } = renderHook((props: UseEditTargetOptions) => useEditTarget(props), {
-      initialProps: baseOptions,
-    });
+    const { result, unmount } = render();
     unmount();
     select(readOnlyText);
     expect(result.current.target).toBe('main');
