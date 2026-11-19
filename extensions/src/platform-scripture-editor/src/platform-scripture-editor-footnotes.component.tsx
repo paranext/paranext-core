@@ -704,8 +704,9 @@ export function FootnotesLayout({
     footnotesPanePositionRef.current = footnotesPanePosition;
   }, [footnotesPanePosition]);
 
-  // listen to messages from the web view controller. A hidden pane moves too: the editor web view
-  // opens the pane on the same request, so the move is visible as soon as the pane renders.
+  // listen to messages from the web view controller. Switches position even while the pane is
+  // closed: the editor web view opens the pane on the same request, so it opens in the new
+  // position.
   useEffect(() => {
     const webViewMessageListener = ({
       data: editorMessage,
