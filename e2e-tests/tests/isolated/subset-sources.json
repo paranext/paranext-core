@@ -39,7 +39,6 @@
     "main": [
       "lib/platform-bible-react/src/components/advanced/content-zoom-root.component.tsx",
       "lib/platform-bible-react/src/context/content-zoom-text.context.tsx",
-      "src/main/services/web-view.service-router.ts",
       "src/renderer/hooks/use-is-content-zoomable.hook.ts",
       "src/renderer/services/web-view-content-zoom.bootstrap-script.ts",
       "src/renderer/services/web-view-content-zoom.chrome-keys.ts",
@@ -53,14 +52,14 @@
       "src/extension-host/services/settings.service-host.ts",
       "src/renderer/components/docking/",
       "src/shared/services/settings.service.ts",
-      "lib/platform-bible-react/src/components/advanced/comment-list/"
+      "lib/platform-bible-react/src/components/advanced/comment-list/",
+      "src/main/services/web-view.service-router.ts"
     ]
   },
   "content-zoom-restart": {
     "main": [
       "lib/platform-bible-react/src/components/advanced/content-zoom-root.component.tsx",
       "lib/platform-bible-react/src/context/content-zoom-text.context.tsx",
-      "src/main/services/web-view.service-router.ts",
       "src/renderer/hooks/use-is-content-zoomable.hook.ts",
       "src/renderer/services/web-view-content-zoom.bootstrap-script.ts",
       "src/renderer/services/web-view-content-zoom.chrome-keys.ts",
@@ -73,14 +72,14 @@
       "src/extension-host/data/core-settings-info.data.ts",
       "src/extension-host/services/settings.service-host.ts",
       "src/shared/services/settings.service.ts",
-      "lib/platform-bible-react/src/components/advanced/comment-list/"
+      "lib/platform-bible-react/src/components/advanced/comment-list/",
+      "src/main/services/web-view.service-router.ts"
     ]
   },
   "content-zoom-tools": {
     "main": [
       "lib/platform-bible-react/src/components/advanced/content-zoom-root.component.tsx",
       "lib/platform-bible-react/src/context/content-zoom-text.context.tsx",
-      "src/main/services/web-view.service-router.ts",
       "src/renderer/hooks/use-is-content-zoomable.hook.ts",
       "src/renderer/services/web-view-content-zoom.bootstrap-script.ts",
       "src/renderer/services/web-view-content-zoom.chrome-keys.ts",
@@ -98,11 +97,16 @@
       "src/extension-host/data/core-settings-info.data.ts",
       "src/extension-host/services/settings.service-host.ts",
       "src/renderer/components/docking/tab-menu.util.ts",
-      "src/shared/services/settings.service.ts"
+      "src/shared/services/settings.service.ts",
+      "src/main/services/web-view.service-router.ts"
     ]
   },
   "docking": {
-    "main": ["src/renderer/components/docking/", "src/renderer/components/tab-panel.component.tsx"],
+    "main": [
+      "src/renderer/components/docking/",
+      "src/renderer/components/tab-panel.component.tsx",
+      "patches/rc-dock+3.3.2.patch"
+    ],
     "incidental": []
   },
   "dynamic-menus": {
@@ -223,12 +227,13 @@
       "src/main/window-entry-disposition.util.ts",
       "src/main/window-activation.util.ts",
       "src/shared/data/window-layout-persistence.model.ts",
-      "src/shared/services/window.service.ts"
+      "src/shared/services/window.service.ts",
+      "src/main/services/web-view.service-router.ts",
+      "src/main/services/notification.service-router.ts"
     ],
     "incidental": [
       "src/renderer/components/docking/",
       "src/main/services/theme.service-host.ts",
-      "src/main/services/notification.service-router.ts",
       "src/main/services/dialog.service-router.ts",
       "src/main/services/scroll-group.service-host.ts",
       "src/renderer/services/dialog.service-shard.ts",
@@ -279,7 +284,6 @@
       "src/shared/models/content-zoom.model.ts",
       "src/renderer/services/web-view-content-zoom.bootstrap-script.ts",
       "src/renderer/services/web-view-content-zoom.chrome-keys.ts",
-      "src/main/services/web-view.service-router.ts",
       "src/renderer/hooks/use-is-content-zoomable.hook.ts",
       "lib/platform-bible-react/src/components/advanced/content-zoom-root.component.tsx",
       "lib/platform-bible-react/src/context/content-zoom-text.context.tsx",
@@ -292,7 +296,8 @@
       "extensions/src/platform-scripture-editor/src/",
       "lib/platform-bible-react/src/components/shadcn-ui/dropdown-menu.tsx",
       "lib/platform-bible-react/src/components/shadcn-ui/popover.tsx",
-      "lib/platform-bible-react/src/components/shadcn-ui/command.tsx"
+      "lib/platform-bible-react/src/components/shadcn-ui/command.tsx",
+      "src/main/services/web-view.service-router.ts"
     ]
   },
   "onboarding-tour.spec.ts": {
@@ -328,7 +333,6 @@
       "src/shared/models/content-zoom.model.ts",
       "src/renderer/services/web-view-content-zoom.bootstrap-script.ts",
       "src/renderer/services/web-view-content-zoom.chrome-keys.ts",
-      "src/main/services/web-view.service-router.ts",
       "src/renderer/hooks/use-is-content-zoomable.hook.ts",
       "lib/platform-bible-react/src/components/advanced/content-zoom-root.component.tsx",
       "lib/platform-bible-react/src/context/content-zoom-text.context.tsx"
@@ -338,7 +342,8 @@
       "src/shared/services/settings.service.ts",
       "src/extension-host/services/settings.service-host.ts",
       "extensions/src/platform-scripture-editor/src/",
-      "extensions/src/platform-scripture/src/resource-reference-list.utils.ts"
+      "extensions/src/platform-scripture/src/resource-reference-list.utils.ts",
+      "src/main/services/web-view.service-router.ts"
     ]
   },
   "scripture-editor": {
@@ -358,7 +363,10 @@
       "lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts",
       "lib/platform-bible-react/src/components/advanced/footnote-editor/",
       "lib/platform-bible-react/src/components/advanced/footnotes/",
-      "src/renderer/services/overlays/overlay-palette-filter.util.ts"
+      "src/renderer/services/overlays/overlay-palette-filter.util.ts",
+      "lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx",
+      "lib/platform-bible-react/src/components/demo/scripture-editor/",
+      "dev-packages.json"
     ],
     "incidental": [
       "src/renderer/services/web-view-content-zoom.service.ts",
@@ -378,6 +386,18 @@
       "src/main/services/book-chapter-control.service-router.ts",
       "lib/platform-bible-react/src/components/shadcn-ui/popover.tsx",
       "src/renderer/components/overlays/overlay-command-palette.component.tsx"
+    ]
+  },
+  "scripture-editor/chapter-marker-formatted-caret.spec.ts": {
+    "main": [
+      "extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts",
+      "c-sharp/Projects/ChapterMarkerCorrection.cs"
+    ],
+    "incidental": [
+      "lib/platform-bible-react/src/components/advanced/book-chapter-control/",
+      "src/renderer/services/book-chapter-control.registry.ts",
+      "src/renderer/services/book-chapter-control.service-shard.ts",
+      "src/main/services/book-chapter-control.service-router.ts"
     ]
   },
   "scripture-editor/chapter-marker-repair.spec.ts": {

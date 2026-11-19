@@ -201,6 +201,60 @@ describe('recommendE2eTests', () => {
     expect(recommendedKeys(report).filter(isZoomKey)).toEqual([]);
   });
 
+  // The router registers the command that moves a web view to a new window, so a change to it is
+  // about multi-window; the zoom groups only drive it.
+  it('recommends multi-window, not the zoom subsets, for the web view service router', () => {
+    const report = recommend(['src/main/services/web-view.service-router.ts'], {
+      sources: mapping,
+    });
+    expect(recommendedKeys(report)).toContain('multi-window');
+    expect(recommendedKeys(report).filter(isZoomKey)).toEqual([]);
+    expect(report.alsoExercised.map((entry) => entry.key).filter(isZoomKey)).toEqual([
+      'content-zoom-live-sharing',
+      'content-zoom-restart',
+      'content-zoom-tools',
+      'notes-content-zoom',
+      'resources-content-zoom',
+      'settings-zoom-stepper',
+    ]);
+  });
+
+  it('recommends multi-window for the notification service router in the real mapping', () => {
+    const report = recommend(['src/main/services/notification.service-router.ts'], {
+      sources: mapping,
+    });
+    expect(recommendedKeys(report)).toContain('multi-window');
+  });
+
+  // The members of a collapsed item count as recommended, so a spec key is looked up in both.
+  it('recommends the formatted-caret spec when the chapter-marker repair changes', () => {
+    const report = recommend(
+      ['extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts'],
+      { sources: mapping },
+    );
+    const covered = report.recommendations.flatMap((recommendation) => [
+      recommendation.key,
+      ...(recommendation.memberKeys ?? []),
+    ]);
+    expect(covered).toContain('scripture-editor/chapter-marker-formatted-caret.spec.ts');
+  });
+
+  // Files that change how the editor or a docking surface behaves although no spec names them.
+  it.each([
+    [
+      'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+      'scripture-editor',
+    ],
+    [
+      'lib/platform-bible-react/src/components/demo/scripture-editor/editor.css',
+      'scripture-editor',
+    ],
+    ['dev-packages.json', 'scripture-editor'],
+    ['patches/rc-dock+3.3.2.patch', 'docking'],
+  ])('recommends %s → %s in the real mapping', (file, expectedKey) => {
+    expect(recommendedKeys(recommend([file], { sources: mapping }))).toContain(expectedKey);
+  });
+
   // A spec's test ids live in the component that renders them, often in `lib/`; the entry must list
   // that file or a change to the component recommends nothing.
   it.each([
