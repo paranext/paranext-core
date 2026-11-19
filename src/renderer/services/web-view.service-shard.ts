@@ -157,6 +157,14 @@ import {
   transformLegacyColorVars,
 } from './web-views/web-view-legacy-color-vars.util';
 
+/**
+ * The `Symbol.for` names of the contexts platform-bible-react shares between its copies, so each
+ * web view's frame can be given the main window's contexts before the web view's own copy loads
+ */
+const SHARED_CONTEXT_GLOBAL_KEY_NAMES = SHARED_CONTEXT_NAMES.map(
+  (name) => getSharedContextKey(name).description,
+);
+
 // These web view lifecycle emitters are created at module load as buffered emitters so they're
 // usable immediately. Sync paths like `onLayoutChange` and `updateWebViewDefinitionSync` can run
 // before the websocket finishes connecting; buffered emits are queued and flushed once each event
@@ -166,14 +174,6 @@ import {
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewBufferedEmitter}. This remains for
  *   now to support anyone listening to this event over websocket
  */
-/**
- * The `Symbol.for` names of the contexts platform-bible-react shares between its copies, so each
- * web view's frame can be given the main window's contexts before the web view's own copy loads
- */
-const SHARED_CONTEXT_GLOBAL_KEY_NAMES = SHARED_CONTEXT_NAMES.map(
-  (name) => getSharedContextKey(name).description,
-);
-
 const onDidAddWebViewBufferedEmitter = createBufferedNetworkEventEmitter(
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   {

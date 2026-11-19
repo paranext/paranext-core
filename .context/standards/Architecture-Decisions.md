@@ -10218,14 +10218,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Date:** 2026-11-18
 - **Status:** Accepted
 - **Context:** Every keyboard shortcut shown in the app (menus, context menus, the menu bar, button
-  tooltips) renders through `ShortcutKeys` in `platform-bible-react`. UX asked for a tooltip on the
-  keycaps that reads the shortcut out ("Press Control and +"). As a prop, the localized template
+  tooltips) renders through `ShortcutKeys` in `platform-bible-react`. A tooltip on the keycaps that
+  reads the shortcut out ("Press Control and +") was requested. As a prop, the localized template
   would have to be threaded through `TabToolbar`, `TabDropdownMenu`, `PlatformMenubar` and every
   context menu, and every web view that renders one would have to fetch it; a menu that forgot
   would silently have no tooltip. Keycaps also appear inside other tooltips (Undo/Redo,
   Back/Forward), where a tooltip of their own cannot open.
 - **Decision:** `ShortcutKeys` always offers the tooltip. It reads the localized template, and the
-  interface language to join the keys in, from `ShortcutKeysLocalizedStringsProvider`, which the
+  language to join the keys in, from `ShortcutKeysLocalizedStringsProvider`, which the
   platform puts at the root of the main window (`src/renderer/index.tsx`) and of every web view (the
   mount call in `web-view.service-shard.ts`), through `ShortcutKeysLocalizationRoot`.
   `TooltipContent` marks its content with `InTooltipContext`, and `ShortcutKeys` adds no tooltip
@@ -10247,14 +10247,20 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   component still takes a localized string, never a key, and never composes the caller's text, but
   the host supplies it once through context rather than each caller through a prop. The template
   holds its own grammar (`Press {keys}`); the component fills `{keys}` with
-  `formatReplacementStringToArray`, joining the key names with `Intl.ListFormat` in the interface
-  language and without a serial comma. Key names are English for now, as the hints themselves are
+  `formatReplacementStringToArray`, joining the key names with `Intl.ListFormat` without a serial
+  comma, in the language `%shortcutKeys_tooltip_language%` names. That string is localized beside
+  the template, so a locale that has not translated the template falls back to English for both,
+  and the "and" never comes from a different language than the rest of the sentence. The readout is
+  worked out only while the tooltip is open. An open tooltip is the topmost Radix layer and would
+  swallow a menu's Escape, so `ShortcutKeys` closes it on any keydown before the menu sees the key.
+  The root costs each web view one localized-strings subscription. Key names are English for now, as the hints themselves are
   (`TODO(PT-4629)`). The value a shared context holds is read by copies built from different
   versions of the library, so its shape must stay readable by older and newer copies; an extension
   built against a version without these slots shows no keycap tooltip. `platform-bible-react` used
   outside the app, such as in Storybook, shows no keycap tooltip unless it adds the provider. The web
   view half is mounted from generated script text, so `shortcut-keys-localization-root-wiring.test.ts`
-  pins its wiring the way the error boundary's wiring test does.
+  pins its wiring the way the error boundary's wiring test does, and `web-view.service-shard.test.ts`
+  runs the generated bridge under `vm`.
 
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 

@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 import '@testing-library/jest-dom';
-import React, { ReactNode } from 'react';
+import { createContext, ReactNode } from 'react';
 import {
   Tooltip,
   TooltipContent,
@@ -9,12 +10,24 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
+import {
   ShortcutKeysLocalizedStrings,
   ShortcutKeysLocalizedStringsProvider,
 } from '@/context/shortcut-keys-strings.context';
 import { getSharedContextKey } from '@/context/shared-context.util';
 import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
-import { getShortcutKeyNames, getShortcutKeycaps, ShortcutKeys } from './shortcut-keys.component';
+import {
+  getInlineEndSide,
+  getShortcutKeyNames,
+  getShortcutKeycaps,
+  ShortcutKeys,
+} from './shortcut-keys.component';
 
 describe('getShortcutKeycaps', () => {
   it('splits a macOS combo into its modifier and key, with no separator', () => {
@@ -142,6 +155,19 @@ describe('getShortcutKeyNames', () => {
   });
 });
 
+describe('getInlineEndSide', () => {
+  afterEach(() => localStorage.removeItem('layoutDirection'));
+
+  // The tooltip's requested side; jsdom has no layout room, so the placed side is not testable
+  it.each([
+    ['rtl', 'left'],
+    ['ltr', 'right'],
+  ])('puts the tooltip at the inline end of a %s layout: %s', (direction, side) => {
+    localStorage.setItem('layoutDirection', direction);
+    expect(getInlineEndSide()).toBe(side);
+  });
+});
+
 describe('ShortcutKeys tooltip', () => {
   // The tooltip's popper measures itself with ResizeObserver, which jsdom lacks
   beforeAll(() => {
@@ -193,20 +219,51 @@ describe('ShortcutKeys tooltip', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Presione Control, Shift y N');
   });
 
-  it('reads strings that another copy of this library provides through the shared context', async () => {
-    // Another copy (an extension's bundled one, or the platform's) finds the context in this slot.
-    // `globalThis` has no symbol index signature, so reading the slot needs the assertion
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const SharedContext = (globalThis as unknown as Record<symbol, React.Context<unknown>>)[
-      getSharedContextKey('shortcutKeysLocalization')
-    ];
-    render(
-      <SharedContext.Provider value={{ localizedStrings, locale: 'en' }}>
-        <ShortcutKeys hint="Ctrl++" />
-      </SharedContext.Provider>,
+  it.each([
+    // The last separator follows the last key on its own: Spanish writes "e" before an "i" sound
+    ['Ctrl+Shift+I', 'Presione Control, Shift e I'],
+    ['Ctrl+I', 'Presione Control e I'],
+  ])('keeps the form the language gives the last key in %s', async (hint, expected) => {
+    renderWithStrings(
+      <ShortcutKeys hint={hint} />,
+      { '%shortcutKeys_tooltip%': 'Presione {keys}' },
+      'es',
     );
     await hoverKeycaps();
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Press Control and +');
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(expected);
+  });
+
+  it('falls back to the runtime locale for a malformed language tag instead of failing', async () => {
+    renderWithStrings(<ShortcutKeys hint="Ctrl++" />, localizedStrings, 'en_US');
+    await hoverKeycaps();
+    // The template still renders; only the language of the "and" may differ
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/^Press Control .*\+$/);
+  });
+
+  it('reads strings from the context another copy of this library put in the shared slot', async () => {
+    // What a web view's frame holds once the platform copied the main window's slot into it: a
+    // context this module instance did not create
+    const key = getSharedContextKey('shortcutKeysLocalization');
+    // `globalThis` has no symbol index signature; the test reads and resets the one slot it touches
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const registry = globalThis as unknown as Record<symbol, unknown>;
+    const original = registry[key];
+    const OtherCopysContext = createContext<unknown>({ localizedStrings: {} });
+    registry[key] = OtherCopysContext;
+    vi.resetModules();
+    try {
+      const { ShortcutKeys: ShortcutKeysFromThisCopy } = await import('./shortcut-keys.component');
+      render(
+        <OtherCopysContext.Provider value={{ localizedStrings, locale: 'en' }}>
+          <ShortcutKeysFromThisCopy hint="Ctrl++" />
+        </OtherCopysContext.Provider>,
+      );
+      await hoverKeycaps();
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Press Control and +');
+    } finally {
+      registry[key] = original;
+      vi.resetModules();
+    }
   });
 
   it('shows each key name in the tooltip as a keycap', async () => {
@@ -217,6 +274,62 @@ describe('ShortcutKeys tooltip', () => {
       'Control',
       '+',
     ]);
+  });
+
+  describe('in a menu', () => {
+    function renderMenu() {
+      renderWithStrings(
+        <DropdownMenu>
+          <DropdownMenuTrigger>Project</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem>
+              Zoom in
+              <DropdownMenuShortcut>
+                <ShortcutKeys hint="Ctrl++" />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              Zoom out
+              <DropdownMenuShortcut>
+                <ShortcutKeys hint="Ctrl+-" />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>,
+      );
+    }
+
+    async function openMenuAndHoverFirstKeycaps() {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      await user.click(screen.getByRole('button', { name: 'Project' }));
+      await screen.findByRole('menu');
+      const trigger = document.querySelector('[role="menu"] [data-slot="tooltip-trigger"]');
+      if (!trigger) throw new Error('No keycap tooltip trigger in the menu');
+      await user.hover(trigger);
+      // Positive control: the keycap tooltip is open, so it is the topmost layer
+      await screen.findByRole('tooltip');
+      return user;
+    }
+
+    it('closes the menu with one Escape while the pointer rests on its keycaps', async () => {
+      renderMenu();
+      const user = await openMenuAndHoverFirstKeycaps();
+
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('closes the keycap tooltip when a key moves through the menu', async () => {
+      renderMenu();
+      const user = await openMenuAndHoverFirstKeycaps();
+
+      await user.keyboard('{ArrowDown}');
+
+      // Positive control: the key reached the menu, which is still open
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
   });
 
   it('adds no tooltip of its own inside another tooltip', async () => {

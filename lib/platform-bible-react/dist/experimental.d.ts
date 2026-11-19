@@ -2017,7 +2017,7 @@ export type ShortcutKeysLocalizedStringsProviderProps = React$1.PropsWithChildre
 export declare function ShortcutKeysLocalizedStringsProvider({ localizedStrings, locale, children, }: ShortcutKeysLocalizedStringsProviderProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Names of the contexts {@link getSharedContext} keeps, each stored on `globalThis` under
- * `Symbol.for(`platform-bible-react.context.<name>`)`.
+ * `Symbol.for('platform-bible-react.context.<name>')`.
  *
  * An extension's web view bundles its own copy of `platform-bible-react`, while the platform
  * renders the providers for these contexts from its own copy. A plain `createContext` would give
@@ -2026,7 +2026,9 @@ export declare function ShortcutKeysLocalizedStringsProvider({ localizedStrings,
  * view's frame before the web view's code runs, so every copy finds the same context.
  *
  * The value each context holds is shared between copies built from different versions of this
- * library, so a change to its shape must stay readable by older and newer copies.
+ * library, so a change to its shape must stay readable by older and newer copies;
+ * `shared-context.util.test.ts` pins the names and shapes so such a change shows in review. Only
+ * this library and Platform.Bible write these slots; an extension must not.
  *
  * @experimental This export is unstable and may change or disappear without notice
  */
@@ -2037,8 +2039,11 @@ export declare const SHARED_CONTEXT_NAMES: readonly [
 /** One of {@link SHARED_CONTEXT_NAMES} */
 export type SharedContextName = (typeof SHARED_CONTEXT_NAMES)[number];
 /**
- * Gets the key a shared context is stored under on `globalThis`.
+ * Gets the `globalThis` key a shared context is stored under. Platform.Bible uses it to copy the
+ * slots into each web view's frame; extensions do not need it.
  *
+ * @param name The shared context's name
+ * @returns The `Symbol.for` key of its slot
  * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function getSharedContextKey(name: SharedContextName): symbol;

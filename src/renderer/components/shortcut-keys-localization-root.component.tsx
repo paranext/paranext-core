@@ -1,5 +1,4 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { usePrimaryInterfaceLanguage } from '@renderer/hooks/use-primary-interface-language.hook';
 import { LocalizeKey } from 'platform-bible-utils';
 import {
   SHORTCUT_KEYS_STRING_KEYS,
@@ -7,7 +6,17 @@ import {
 } from 'platform-bible-react/experimental';
 import { PropsWithChildren } from 'react';
 
-const SHORTCUT_KEYS_LOCALIZE_KEYS: LocalizeKey[] = [...SHORTCUT_KEYS_STRING_KEYS];
+/**
+ * Names the language the tooltip template resolved in. A locale that has not translated the
+ * template falls back to the English template and, with it, to `en` here, so the key names are
+ * joined with the template's own "and" rather than the interface language's.
+ */
+const TOOLTIP_LANGUAGE_KEY: LocalizeKey = '%shortcutKeys_tooltip_language%';
+
+const SHORTCUT_KEYS_LOCALIZE_KEYS: LocalizeKey[] = [
+  ...SHORTCUT_KEYS_STRING_KEYS,
+  TOOLTIP_LANGUAGE_KEY,
+];
 
 /**
  * Localizes the strings every `ShortcutKeys` inside uses for its tooltip. It wraps the main
@@ -16,9 +25,10 @@ const SHORTCUT_KEYS_LOCALIZE_KEYS: LocalizeKey[] = [...SHORTCUT_KEYS_STRING_KEYS
  */
 export function ShortcutKeysLocalizationRoot({ children }: PropsWithChildren) {
   const [localizedStrings] = useLocalizedStrings(SHORTCUT_KEYS_LOCALIZE_KEYS);
-  // The keys are joined into a list ("… and N") in the interface language the strings are in,
-  // which can differ from the operating system's
-  const locale = usePrimaryInterfaceLanguage();
+  const tooltipLanguage = localizedStrings[TOOLTIP_LANGUAGE_KEY];
+  // While the strings load, the value is the key itself, which is no language tag
+  const locale =
+    tooltipLanguage && tooltipLanguage !== TOOLTIP_LANGUAGE_KEY ? tooltipLanguage : undefined;
   return (
     <ShortcutKeysLocalizedStringsProvider localizedStrings={localizedStrings} locale={locale}>
       {children}

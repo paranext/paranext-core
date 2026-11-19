@@ -7,8 +7,9 @@ import { describe, expect, it } from 'vitest';
  * the main window's root and every web view's root. The web view half is mounted from inside the
  * iframe's generated script, which TypeScript, ESLint and the test runner all see as opaque text,
  * so losing a link there would silently drop the tooltip from every web view. Like the error
- * boundary's wiring test, this pins that the pieces exist and name one identifier; only launching
- * the app shows that the generated script runs.
+ * boundary's wiring test, this pins that the pieces exist and name one identifier. The bridge that
+ * copies the shared contexts into each frame is run under `vm` in
+ * `web-view.service-shard.test.ts`.
  */
 
 const RENDERER_DIR = path.resolve(__dirname, '..');
@@ -34,22 +35,6 @@ describe('shortcut keys localization root wiring', () => {
     expect(globalThisModel).toContain(`globalThis.${ROOT_NAME} =`);
     expect(globalThisModel).toMatch(new RegExp(`var ${ROOT_NAME}:`));
     expect(serviceShard).toContain(`window.${ROOT_NAME} = window.parent.${ROOT_NAME};`);
-  });
-
-  it("copies the library's shared contexts into each web view frame before the web view loads", () => {
-    // An extension's web view bundles its own copy of platform-bible-react; without these slots
-    // its ShortcutKeys would read a context the root never provides
-    const serviceShard = readRendererFile('services/web-view.service-shard.ts');
-    const importsBlock = serviceShard.slice(
-      serviceShard.indexOf('// Set up WebView imports'),
-      serviceShard.indexOf('var require = window.parent.webViewRequire;'),
-    );
-
-    expect(serviceShard).toMatch(
-      /SHARED_CONTEXT_NAMES\.map\(\s*\(name\) => getSharedContextKey\(name\)/,
-    );
-    expect(importsBlock).toContain('JSON.stringify(SHARED_CONTEXT_GLOBAL_KEY_NAMES)}.forEach(');
-    expect(importsBlock).toContain('window[key] = window.parent[key];');
   });
 
   it('wraps the web view component in the root at the mount site', () => {

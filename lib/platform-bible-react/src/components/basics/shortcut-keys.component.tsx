@@ -1,5 +1,6 @@
 import { formatReplacementStringToArray, includes, slice, split } from 'platform-bible-utils';
-import { Fragment, ReactNode } from 'react';
+import { Fragment, ReactNode, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Kbd, KbdGroup } from '@/components/shadcn-ui/kbd';
 import {
   Tooltip,
@@ -128,32 +129,58 @@ export function getShortcutKeyNames(hint: string): string[] {
 }
 
 /**
+ * Makes the list format for `locale`, or for the runtime's own locale if `locale` is not a valid
+ * language tag, so a misconfigured provider costs the language of the "and", not the menu.
+ */
+function getListFormat(locale: string | undefined): Intl.ListFormat {
+  const options: Intl.ListFormatOptions = { style: 'long', type: 'conjunction' };
+  try {
+    return new Intl.ListFormat(locale, options);
+  } catch {
+    return new Intl.ListFormat(undefined, options);
+  }
+}
+
+/**
  * Joins key names as a list in `locale`, like `Intl.ListFormat` but with no serial comma: `Control,
  * Shift and N` rather than `Control, Shift, and N`. The separator before the last key is the one
- * the locale puts between exactly two items, which never has a serial comma; the others are the
- * list's own.
+ * the locale puts between the last two keys on their own, which never has a serial comma but keeps
+ * any form that depends on the last key (Spanish `e I`, not `y I`); the others are the list's own.
  */
 function getKeyListParts(
   keyNames: string[],
   locale: string | undefined,
 ): { type: 'element' | 'literal'; value: string }[] {
-  const listFormat = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
+  const listFormat = getListFormat(locale);
   const parts = listFormat.formatToParts(keyNames);
   if (keyNames.length < 3) return parts;
-  const pairSeparator = listFormat
-    .formatToParts(['first', 'second'])
-    .find((part) => part.type === 'literal');
-  const lastSeparatorIndex = parts.findLastIndex((part) => part.type === 'literal');
-  if (!pairSeparator || lastSeparatorIndex < 0) return parts;
+  const lastPairParts = listFormat.formatToParts(keyNames.slice(-2));
+  const pairSeparator = lastPairParts[lastPairParts.findLastIndex(isElement) - 1];
+  const lastSeparatorIndex = parts.findLastIndex(isElement) - 1;
+  if (pairSeparator?.type !== 'literal' || parts[lastSeparatorIndex]?.type !== 'literal')
+    return parts;
   return parts.map((part, index) => (index === lastSeparatorIndex ? pairSeparator : part));
 }
 
+function isElement(part: { type: string }): boolean {
+  return part.type === 'element';
+}
+
 /**
- * Builds the tooltip that reads a shortcut out, e.g. "Press [Control] and [+]": the localized
- * template with `{keys}` replaced by each key's full name as a keycap, joined as a list in the
- * template's own language, `locale`.
+ * Reads a shortcut out, e.g. "Press [Control] and [+]": the localized template with `{keys}`
+ * replaced by each key's full name as a keycap, joined as a list in the template's own language,
+ * `locale`. Rendered inside the tooltip's content, so it is worked out only while the tooltip is
+ * open, not for every shortcut in every menu.
  */
-function getTooltipContent(template: string, hint: string, locale: string | undefined): ReactNode {
+function ShortcutReadout({
+  template,
+  hint,
+  locale,
+}: {
+  template: string;
+  hint: string;
+  locale: string | undefined;
+}) {
   const keys = getKeyListParts(getShortcutKeyNames(hint), locale).map((part, index) =>
     // A key name can repeat, so it is not a safe key; the parts never reorder, so position is.
     // eslint-disable-next-line react/no-array-index-key
@@ -164,6 +191,14 @@ function getTooltipContent(template: string, hint: string, locale: string | unde
     // eslint-disable-next-line react/no-array-index-key
     <Fragment key={index}>{part}</Fragment>
   ));
+}
+
+/**
+ * The side of the keycaps at the inline end of the layout, where the tooltip goes: right in a
+ * left-to-right layout, left in a right-to-left one.
+ */
+export function getInlineEndSide(): 'left' | 'right' {
+  return readDirection() === 'rtl' ? 'left' : 'right';
 }
 
 /**
@@ -232,27 +267,39 @@ export function ShortcutKeys({ hint }: ShortcutKeysProps) {
       </KbdGroup>
     );
 
-  const tooltipTemplate = localizedStrings['%shortcutKeys_tooltip%'];
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  // The open tooltip is the topmost Radix layer, and Radix lets only the topmost layer answer
+  // Escape, so a menu holding these keycaps would ignore its first Escape. Close the tooltip on any
+  // key before anything else sees the key: `window` capture runs ahead of the menu's own listeners
+  // on `document`, and `flushSync` takes the tooltip's layer off the stack before they run. Any key,
+  // not only Escape, since an arrow key moves the menu away from the item the tooltip describes.
+  useEffect(() => {
+    if (!isTooltipOpen) return undefined;
+    const closeTooltip = () => flushSync(() => setIsTooltipOpen(false));
+    window.addEventListener('keydown', closeTooltip, { capture: true });
+    return () => window.removeEventListener('keydown', closeTooltip, { capture: true });
+  }, [isTooltipOpen]);
+
+  const tooltipTemplate = localizedStrings?.['%shortcutKeys_tooltip%'];
   // A template without `{keys}` is no template: while the strings load, the value is the key itself
   if (isInTooltip || !tooltipTemplate || !includes(tooltipTemplate, '{keys}')) return keys;
   return (
     // Its own provider, so the keycaps get a tooltip in any menu, whether or not one is above them
     <TooltipProvider>
-      <Tooltip>
+      <Tooltip open={isTooltipOpen} onOpenChange={setIsTooltipOpen}>
         {/* A wrapper rather than `asChild` on the keycaps: the trigger would replace their `data-slot`,
           and `Kbd` ignores the pointer, so the hover has to land on something around it */}
         <TooltipTrigger asChild>
           <span className="tw:inline-flex">{keys}</span>
         </TooltipTrigger>
         {/* Beside the keycaps at the inline end, past the menu's edge, so the tooltip covers
-          neither the menu items above or below nor, in a right-to-left menu, the item's label. The
-          shared tooltip nudges its arrow flush against the content only for top and bottom
-          tooltips; without the same nudge here the side arrow's tip pokes into the keycaps */}
-        <TooltipContent
-          side={readDirection() === 'rtl' ? 'left' : 'right'}
-          arrowClassName="tw:translate-y-[calc(-50%-1px)]"
-        >
-          {getTooltipContent(tooltipTemplate, hint, locale)}
+          neither the menu items above or below nor, in a right-to-left menu, the item's label.
+          Where there is no room on that side (near the window's edge, or in a narrow web view)
+          Radix flips it to the other side, which beats clipping it. The shared tooltip nudges its
+          arrow flush against the content only for top and bottom tooltips; without the same nudge
+          here the side arrow's tip pokes into the keycaps */}
+        <TooltipContent side={getInlineEndSide()} arrowClassName="tw:translate-y-[calc(-50%-1px)]">
+          <ShortcutReadout template={tooltipTemplate} hint={hint} locale={locale} />
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
