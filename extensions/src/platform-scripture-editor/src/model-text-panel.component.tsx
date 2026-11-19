@@ -76,6 +76,10 @@ import type {
 } from './model-text-panel.const';
 import { MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS } from './model-text-panel.const';
 import { getInstallFailureMessageKey } from './install-failure-message.utils';
+import {
+  useReadOnlyPanelContextMenu,
+  type ReadOnlyPanelContextMenuCallbacks,
+} from './use-read-only-panel-context-menu.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -183,6 +187,11 @@ export type ModelTextPanelProps = {
   /** Logger forwarded to the editor (the webview supplies the PAPI logger; stories may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
   /**
+   * The platform calls behind the panel's right-click menu. The web view supplies them because
+   * opening the menu needs PAPI; the panel's own part (Copy on its editor) stays here.
+   */
+  contextMenu: ReadOnlyPanelContextMenuCallbacks;
+  /**
    * The model text's copyright notice, shown below the header. The web view supplies it because
    * reading the notice needs PAPI.
    */
@@ -213,6 +222,7 @@ export function ModelTextPanel({
   resourceCopyLimit,
   allowInvisibleCharacters,
   logger,
+  contextMenu,
   copyrightNotice,
 }: ModelTextPanelProps) {
   // --- Resolve the configured model text against the DBL resource list ---
@@ -454,6 +464,8 @@ export function ModelTextPanel({
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
+      // The platform's context menu replaces the editor's own
+      hasBuiltInContextMenu: false,
       // Opt-in: omit `nodes` entirely when there are no extra markers (no behavior change), matching
       // resource-text-panel.
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
@@ -507,6 +519,36 @@ export function ModelTextPanel({
     const timeout = setTimeout(() => setListBeforeWrittenPick(undefined), WRITTEN_PICK_MAX_WAIT_MS);
     return () => clearTimeout(timeout);
   }, [listBeforeWrittenPick, effectiveModelTexts]);
+
+  // Whether a message, a spinner or a pick in progress takes the content area, so the editor is
+  // hidden. `renderContent` reads the same value for its `display: none`, so what hides the editor
+  // and what stops it claiming a right-click cannot disagree.
+  const isEditorHidden =
+    isPickInProgress ||
+    isBookMissing ||
+    isBlankChapter ||
+    isTextUnavailable ||
+    !isAnswerCurrent ||
+    isUsjLoading ||
+    usj === undefined;
+
+  // The right-click menu is claimed only inside the element that directly wraps the editor, and only
+  // while the editor is what the panel shows.
+  // A ref starts out as null for React to be able to set it as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const { dismiss: dismissContextMenu } = useReadOnlyPanelContextMenu({
+    containerRef: editorContainerRef,
+    isEnabled: !isEditorHidden,
+    editorRef,
+    callbacks: contextMenu,
+    logger,
+  });
+  // A menu left open across a change of model text, book or chapter would point at text that is
+  // gone.
+  useEffect(() => {
+    dismissContextMenu();
+  }, [dismissContextMenu, resourceProjectId, scrRef.book, scrRef.chapterNum]);
 
   // Read when a pick lands rather than when the picker opened, since the list can change while the
   // user is choosing.
@@ -856,8 +898,9 @@ export function ModelTextPanel({
           to read and this panel is read-only, so there is nothing in the editor to reach.
         */}
         <div
+          ref={editorContainerRef}
           data-testid={MODEL_TEXT_EDITOR_CONTAINER_TEST_ID}
-          className={message || isWaiting ? 'tw:hidden' : 'tw:flex-1 tw:overflow-auto'}
+          className={isEditorHidden ? 'tw:hidden' : 'tw:flex-1 tw:overflow-auto'}
           dir={options.textDirection}
         >
           {/* The zoom marker sits INSIDE the scroll box, never on it or above it:

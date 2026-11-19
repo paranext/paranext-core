@@ -578,6 +578,108 @@
           }
         ]
       }
+    },
+    "platformScriptureEditor.bibleTexts": {
+      "contextMenu": {
+        "groups": {
+          "platformScriptureEditor.contextClipboard": {
+            "order": 3,
+            "isExperimental": true
+          },
+          "platformScriptureEditor.contextFind": {
+            "order": 4,
+            "isExperimental": true
+          }
+        },
+        "items": [
+          {
+            "label": "%webView_platformScriptureEditor_copy%",
+            "localizeNotes": "Bible texts panel right-click menu > Copy (the selected text); disabled while nothing is selected",
+            "iconNameBefore": "clipboard-copy",
+            "group": "platformScriptureEditor.contextClipboard",
+            "order": 1,
+            "command": "platformScriptureEditor.copySelection",
+            "enabledWhen": "platformScriptureEditor.contextMenu.hasSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_openFind%",
+            "localizeNotes": "Bible texts panel right-click menu > Find (opens the Find tool, starting from the selected text); disabled while no project to search has resolved",
+            "iconNameBefore": "search",
+            "group": "platformScriptureEditor.contextFind",
+            "order": 1,
+            "command": "platformScripture.openFind",
+            "enabledWhen": "platformScriptureEditor.contextMenu.canFind"
+          }
+        ]
+      }
+    },
+    "platformScriptureEditor.commentaries": {
+      "contextMenu": {
+        "groups": {
+          "platformScriptureEditor.contextClipboard": {
+            "order": 3,
+            "isExperimental": true
+          },
+          "platformScriptureEditor.contextFind": {
+            "order": 4,
+            "isExperimental": true
+          }
+        },
+        "items": [
+          {
+            "label": "%webView_platformScriptureEditor_copy%",
+            "localizeNotes": "Commentaries panel right-click menu > Copy (the selected text); disabled while nothing is selected",
+            "iconNameBefore": "clipboard-copy",
+            "group": "platformScriptureEditor.contextClipboard",
+            "order": 1,
+            "command": "platformScriptureEditor.copySelection",
+            "enabledWhen": "platformScriptureEditor.contextMenu.hasSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_openFind%",
+            "localizeNotes": "Commentaries panel right-click menu > Find (opens the Find tool, starting from the selected text); disabled while no project to search has resolved",
+            "iconNameBefore": "search",
+            "group": "platformScriptureEditor.contextFind",
+            "order": 1,
+            "command": "platformScripture.openFind",
+            "enabledWhen": "platformScriptureEditor.contextMenu.canFind"
+          }
+        ]
+      }
+    },
+    "platformScriptureEditor.modelText": {
+      "contextMenu": {
+        "groups": {
+          "platformScriptureEditor.contextClipboard": {
+            "order": 3,
+            "isExperimental": true
+          },
+          "platformScriptureEditor.contextFind": {
+            "order": 4,
+            "isExperimental": true
+          }
+        },
+        "items": [
+          {
+            "label": "%webView_platformScriptureEditor_copy%",
+            "localizeNotes": "Model text panel right-click menu > Copy (the selected text); disabled while nothing is selected",
+            "iconNameBefore": "clipboard-copy",
+            "group": "platformScriptureEditor.contextClipboard",
+            "order": 1,
+            "command": "platformScriptureEditor.copySelection",
+            "enabledWhen": "platformScriptureEditor.contextMenu.hasSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_openFind%",
+            "localizeNotes": "Model text panel right-click menu > Find (opens the Find tool, starting from the selected text); disabled while no project to search has resolved",
+            "iconNameBefore": "search",
+            "group": "platformScriptureEditor.contextFind",
+            "order": 1,
+            "command": "platformScripture.openFind",
+            "enabledWhen": "platformScriptureEditor.contextMenu.canFind"
+          }
+        ]
+      }
     }
   }
 }

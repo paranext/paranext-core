@@ -83,3 +83,6 @@ export const MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS: InstallFailureMessageKeys<Mo
     failedOffline: '%webView_modelTextPanel_installFailedOffline%',
     installedButUnavailable: '%webView_modelTextPanel_installedButUnavailable%',
   };
+
+/** The web view type of the Model text panel. */
+export const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';

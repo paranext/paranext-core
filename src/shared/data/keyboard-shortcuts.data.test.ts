@@ -23,7 +23,12 @@ const EXPECTED_MENU_HINTS: Record<
 > = {
   'platformScripture.openFind': {
     hints: { darwin: '⌃F', win32: 'Ctrl+F', linux: 'Ctrl+F' },
+    // Ctrl+F works in the Bible Texts, Commentaries and Model text panels too (`useOpenFindShortcut`
+    // is mounted in both of their web views), so their right-click menus show it.
     menus: [
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.bibleTexts.contextMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.commentaries.contextMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.modelText.contextMenu',
       'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.contextMenu',
       'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
     ],
