@@ -162,9 +162,9 @@ one of these.
   output, no DOM) and, for specs on `fixtures/isolated.fixture.ts`, `electron-trace.zip`: a DOM
   trace of the app, lost if the app had already died or the run ran out of time during that test.
   The specs stop on their own before the job's time limit, so the reports still upload; a warning
-  says when they ran out of time. `e2e-core` reports without
-  blocking: a spec failure shows as a warning on the run, not as a red check (a setup failure or a
-  job timeout may still show the job's check as failed).
+  says when they ran out of time. `e2e-core` reports without blocking: a spec failure shows as a
+  warning on the run, not as a red check (a setup failure or a job timeout may still show the
+  job's check as failed).
 
 ## Window size and DevTools
 

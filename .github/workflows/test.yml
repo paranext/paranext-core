@@ -563,8 +563,9 @@ jobs:
           # - the USFM<->USX<->USJ conversion path: the TypeScript USX<->USJ conversion in the
           #   platform-scripture project data provider, the DOM polyfill it runs on, the C# USFM<->USX
           #   conversion in ParatextProjectDataProvider.cs, the chapter-marker correction it applies
-          #   to USFM before writing it, and the ParatextData version pin in the C# project file
-          #   (ParatextData does the USFM<->USX conversion);
+          #   to USFM before writing it, the ParatextData version pin in the C# project file
+          #   (ParatextData does the USFM<->USX conversion), and the default USFM stylesheets it
+          #   parses project text with;
           # - a curated, non-exhaustive subset of the platform-bible-react parts the editor web view
           #   renders: the footnote editor, the marker menu and palette helpers, the editor keyboard
           #   shortcuts, and the demo editor stylesheets the extension imports by path. Other shared
@@ -587,6 +588,8 @@ jobs:
           editor_paths+=('c-sharp/Projects/ParatextProjectDataProvider\.cs$')
           editor_paths+=('c-sharp/Projects/ChapterMarkerCorrection\.cs$')
           editor_paths+=('c-sharp/ParanextDataProvider\.csproj$')
+          editor_paths+=('c-sharp/assets/usfm\.sty$')
+          editor_paths+=('c-sharp/assets/usfm_sb\.sty$')
           editor_paths+=('lib/platform-bible-react/src/components/advanced/footnote-editor/')
           editor_paths+=('lib/platform-bible-react/src/components/advanced/marker-menu\.')
           editor_paths+=('lib/platform-bible-react/src/components/advanced/(use-)?marker-palette-')
@@ -598,8 +601,8 @@ jobs:
           else
             # If the lookup fails, run both lists: failing here would skip the whole e2e-core job.
             # A renamed file's old path counts too, so moving a file out of a listed path still runs
-            # the editor list.
-            if changed_files=$(gh api "repos/${{ github.repository }}/pulls/$PULL_REQUEST_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)'); then
+            # the editor list. `timeout` turns a hung lookup into a failed one, which runs both lists.
+            if changed_files=$(timeout 2m gh api "repos/${{ github.repository }}/pulls/$PULL_REQUEST_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)'); then
               if printf '%s\n' "$changed_files" | grep -q -E "$editor_pattern"; then
                 spec_lists="$spec_lists e2e-tests/core-specs-editor.txt"
               fi

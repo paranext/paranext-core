@@ -24,17 +24,35 @@ export interface ElectronTracePlan {
  * Electron records the app's context itself, and this decides when, mirroring the rules of
  * `TestTracing._shouldCaptureTrace` and `_shouldAbandonTrace` in
  * `playwright/lib/worker/testTracing.js` so that the option means the same here as it does for a
- * browser test.
+ * browser test. Re-check those rules when Playwright is upgraded; a new trace mode fails
+ * `typecheck:e2e` at the `switch` below.
  */
 export function electronTracePlan(trace: TraceOption, retry: number): ElectronTracePlan {
   const options = typeof trace === 'string' ? { mode: trace } : trace;
   const mode = options.mode === 'retry-with-trace' ? 'on-first-retry' : options.mode;
-  const record =
-    mode === 'on' ||
-    mode === 'retain-on-failure' ||
-    (mode === 'on-first-retry' && retry === 1) ||
-    (mode === 'on-all-retries' && retry > 0) ||
-    (mode === 'retain-on-first-failure' && retry === 0);
+  let record: boolean;
+  switch (mode) {
+    case 'off':
+      record = false;
+      break;
+    case 'on':
+    case 'retain-on-failure':
+      record = true;
+      break;
+    case 'on-first-retry':
+      record = retry === 1;
+      break;
+    case 'on-all-retries':
+      record = retry > 0;
+      break;
+    case 'retain-on-first-failure':
+      record = retry === 0;
+      break;
+    default: {
+      const unknownMode: never = mode;
+      throw new Error(`Unknown Playwright trace mode: ${String(unknownMode)}`);
+    }
+  }
   return {
     record,
     snapshots: typeof trace === 'string' ? true : (trace.snapshots ?? true),

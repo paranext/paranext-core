@@ -9,9 +9,9 @@ name: E2E isolated specs
 #
 # A job that reaches its time limit is cancelled, and a cancelled job skips every step after the
 # one that was running: the warnings and the artifact upload, exactly on the run that most needs
-# them. So no step is left to run into that limit. Every setup step has its own 20-minute timeout
-# (recent runs take about two minutes per step), and the specs get only the time the setup left
-# over, minus a few minutes for the steps after them (see "Run the specs").
+# them. So no step is left to run into that limit. Every setup step has its own 20-minute timeout,
+# far longer than a healthy step takes, so a hang fails that step instead; and the specs get only
+# the time the setup left over, minus a few minutes for the steps after them (see "Run the specs").
 # The setup steps mirror the build job's setup in test.yml: keep the two in step, except that this
 # file reads package.json with `jq` and pins third-party actions to a commit. A pinned commit never
 # updates by itself. TODO(PT-5030): do the same in test.yml, and let Dependabot propose pin updates.
@@ -137,8 +137,8 @@ jobs:
       # a DOM trace of the app (`electron-trace.zip`); every test also gets Playwright's own
       # `trace.zip`, which has the test's steps and output but no DOM.
       # `--global-timeout` ends the run with its reports written while the job still has time to
-      # upload them: the job's limit, minus what the setup took, minus 3 minutes for the steps after
-      # this one.
+      # upload them: the job's limit, minus what the setup took, minus `reserve_seconds` for the
+      # steps after this one.
       - name: Run the specs
         id: specs
         continue-on-error: ${{ inputs.report_only }}
@@ -149,9 +149,11 @@ jobs:
           TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
           E2E_JSON_REPORT: ${{ github.workspace }}/e2e-tests/e2e-results.json
         run: |
-          remaining_seconds=$(( TIMEOUT_MINUTES * 60 - ($(date +%s) - JOB_START) - 180 ))
-          if [ "$remaining_seconds" -lt 300 ]; then
-            echo "::error title=No time left for the specs::The setup left ${remaining_seconds}s of the job's ${TIMEOUT_MINUTES}-minute limit for the specs; at least 300s are needed."
+          reserve_seconds=180
+          minimum_seconds=300
+          remaining_seconds=$(( TIMEOUT_MINUTES * 60 - ($(date +%s) - JOB_START) - reserve_seconds ))
+          if [ "$remaining_seconds" -lt "$minimum_seconds" ]; then
+            echo "::error title=No time left for the specs::The setup left ${remaining_seconds}s of the job's ${TIMEOUT_MINUTES}-minute limit for the specs; at least ${minimum_seconds}s are needed."
             exit 1
           fi
           selection=(all)
@@ -185,9 +187,13 @@ jobs:
           xvfb-run --auto-servernum -s '-screen 0 1920x1080x24' \
             npm run test:e2e:isolated -- "${selection[@]}" "${playwright_args[@]}"
 
+      # Inputs reach the shell through `env`, never through `${{ }}` in the script text, so a value
+      # is never parsed as shell.
       - name: Warn on a failure that does not block
         if: ${{ steps.specs.outcome == 'failure' }}
-        run: echo "::warning title=E2E isolated specs failed (not blocking)::Isolated end-to-end specs failed, or ran out of time, but did not fail the build. See the ${{ inputs.artifact_name }} artifact."
+        env:
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        run: echo "::warning title=E2E isolated specs failed (not blocking)::Isolated end-to-end specs failed, or ran out of time, but did not fail the build. See the $ARTIFACT_NAME artifact."
 
       # Otherwise a broken build in a report-only run, whose workflow run stays green, would show
       # only in the job log.
@@ -196,15 +202,19 @@ jobs:
         run: echo "::warning title=E2E isolated setup failed::A setup step failed before the specs could run; see this job's log."
 
       # Playwright reports a run that `--global-timeout` ended as "Timed out waiting <n>s for the
-      # <stage> to run" (in colour codes, so this matches inside the message). Says so plainly, since
-      # the failures alone read like broken tests. Re-check the wording when Playwright is upgraded.
+      # <stage> to run" (in colour codes, so this matches inside the message). The warning says so
+      # plainly, since the failures alone read like broken tests. Re-check the wording when
+      # Playwright is upgraded.
       - name: Warn when the specs ran out of time
         if: ${{ !cancelled() && hashFiles('e2e-tests/e2e-results.json') != '' }}
         continue-on-error: true
+        env:
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
         run: |
           if jq -e '[.errors[]?.message // empty | select(test("Timed out waiting [0-9.]+s for the .* to run"))] | length > 0' \
             e2e-tests/e2e-results.json > /dev/null; then
-            echo "::warning title=E2E specs ran out of time::The specs reached the time the job's ${{ inputs.timeout_minutes }}-minute limit left them and were stopped; the tests not yet run are listed in the job log. See the ${{ inputs.artifact_name }} artifact."
+            echo "::warning title=E2E specs ran out of time::The specs reached the time the job's ${TIMEOUT_MINUTES}-minute limit left them and were stopped; the tests not yet run are listed in the job log. See the $ARTIFACT_NAME artifact."
           fi
 
       # A test that passed only on its retry is a defect to look at, not a pass to forget. Only a
@@ -212,6 +222,8 @@ jobs:
       - name: Warn about tests that passed only on their retry
         if: ${{ !cancelled() && hashFiles('e2e-tests/e2e-results.json') != '' }}
         continue-on-error: true
+        env:
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
         run: |
           if ! flaky_tests=$(jq -r '.. | objects | select(has("tests") and has("file") and has("title"))
             | . as $spec | .tests[] | select(.status == "flaky") | "\($spec.file): \($spec.title)"' \
@@ -221,7 +233,7 @@ jobs:
           fi
           while IFS= read -r flaky_test; do
             [ -n "$flaky_test" ] || continue
-            echo "::warning title=E2E test passed only on its retry::$flaky_test (the failed attempt's traces and screenshot are in the ${{ inputs.artifact_name }} artifact)"
+            echo "::warning title=E2E test passed only on its retry::$flaky_test (the failed attempt's traces and screenshot are in the $ARTIFACT_NAME artifact)"
           done <<< "$flaky_tests"
 
       - name: Upload Playwright test results

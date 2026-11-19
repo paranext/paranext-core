@@ -33,16 +33,24 @@ function readSpecList(listName: string): string[] {
  * `core-specs-editor.txt` too. Each is POSIX ERE (for `grep -E`), whose syntax these entries share
  * with JavaScript.
  */
-function readEditorPathEntries(): string[] {
-  const workflow = fs.readFileSync(
-    path.join(REPOSITORY_ROOT, '.github', 'workflows', 'test.yml'),
-    'utf8',
-  );
-  const entries = [...workflow.matchAll(/^\s*editor_paths\+=\('([^']+)'\)\s*$/gm)].map(
-    (match) => match[1],
-  );
+function parseEditorPathEntries(workflow: string): string[] {
+  const lines = workflow.split('\n').filter((line) => line.includes('editor_paths+='));
+  // Bash accepts other forms (double quotes, a trailing comment) that this parse would skip, and a
+  // skipped entry would silently escape the checks below.
+  const unreadable = lines.filter((line) => !/^\s*editor_paths\+=\('[^']+'\)\s*$/.test(line));
+  if (unreadable.length > 0)
+    throw new Error(
+      `Write each editor_paths entry as editor_paths+=('<ERE>') on a line of its own: ${unreadable
+        .map((line) => line.trim())
+        .join(' | ')}`,
+    );
+  const entries = lines.map((line) => /'([^']+)'/.exec(line)?.[1] ?? '');
   if (entries.length === 0) throw new Error("test.yml has no editor_paths+=('…') lines");
   return entries;
+}
+
+function readWorkflow(): string {
+  return fs.readFileSync(path.join(REPOSITORY_ROOT, '.github', 'workflows', 'test.yml'), 'utf8');
 }
 
 /** The pattern the workflow builds from the entries: `^(` + the entries joined with `|` + `)`. */
@@ -50,9 +58,15 @@ function editorPathsPattern(entries: string[]): RegExp {
   return new RegExp(`^(${entries.join('|')})`);
 }
 
+/** The line in test.yml that builds the pattern {@link editorPathsPattern} mirrors. */
+const EDITOR_PATTERN_LINE = `editor_pattern="^($(IFS='|'; echo "\${editor_paths[*]}"))"`;
+
 let trackedFilesCache: string[] | undefined;
 
-/** Every path git tracks, as the pull request's changed-files list would name it. */
+/**
+ * Every path git tracks, as the pull request's changed-files list would name it. Needs a git
+ * checkout, which CI and every development setup have.
+ */
 function trackedFiles(): string[] {
   trackedFilesCache ??= execFileSync('git', ['-C', REPOSITORY_ROOT, 'ls-files'], {
     encoding: 'utf8',
@@ -66,17 +80,29 @@ function trackedFiles(): string[] {
 // Renaming a list and updating only SPEC_LISTS would leave the workflow naming a file that no
 // longer exists (or never naming the new one), so the two sets must stay equal.
 it('names exactly the SPEC_LISTS files in test.yml', () => {
-  const workflow = fs.readFileSync(
-    path.join(REPOSITORY_ROOT, '.github', 'workflows', 'test.yml'),
-    'utf8',
-  );
+  const workflow = readWorkflow();
   const named = new Set(workflow.match(/e2e-tests\/core-specs[A-Za-z0-9_-]*\.txt/g) ?? []);
   expect([...named].sort()).toEqual(SPEC_LISTS.map((list) => `e2e-tests/${list}`).sort());
 });
 
 describe('the editor list trigger in test.yml', () => {
-  const entries = readEditorPathEntries();
+  const workflow = readWorkflow();
+  const entries = parseEditorPathEntries(workflow);
   const editorPaths = editorPathsPattern(entries);
+
+  // The checks below test the pattern as built here; this keeps the workflow's build the same.
+  it('builds the pattern in test.yml the way these checks do', () => {
+    expect(workflow.split('\n').map((line) => line.trim())).toContain(EDITOR_PATTERN_LINE);
+  });
+
+  it.each([
+    `editor_paths+=("dev-packages\\.json$")`,
+    `editor_paths+=('dev-packages\\.json$') # the pin`,
+  ])('refuses an entry it cannot read, such as %s', (line) => {
+    expect(() => parseEditorPathEntries(`editor_paths+=('src/')\n${line}\n`)).toThrow(
+      /on a line of its own/,
+    );
+  });
 
   // An entry that matches no file silently stops triggering the editor list — after a rename, for
   // instance — and the job only reports, so nothing else would notice. Each entry names one thing,
@@ -116,6 +142,8 @@ describe('the editor list trigger in test.yml', () => {
     'c-sharp/Projects/ParatextProjectDataProvider.cs',
     'c-sharp/Projects/ChapterMarkerCorrection.cs',
     'c-sharp/ParanextDataProvider.csproj',
+    'c-sharp/assets/usfm.sty',
+    'c-sharp/assets/usfm_sb.sty',
     'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
     'lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx',
     'lib/platform-bible-react/src/components/advanced/marker-palette-keys.util.ts',

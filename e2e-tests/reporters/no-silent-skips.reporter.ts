@@ -77,6 +77,12 @@ export interface LostTestsSplit<T> {
   lost: T[];
   /** Tests with no results because the run itself stopped before reaching them. */
   notRunBecauseStoppedEarly: T[];
+  /**
+   * In a `--global-timeout` run only: tests with a completed `'skipped'` result. One of them is the
+   * test the timeout cut off; any other was lost earlier in the run (a dead worker, a failed
+   * `beforeAll`). The reporter cannot tell which is which, so it lists them for a reader to check.
+   */
+  cutOffOrLostBeforeTimeout: T[];
 }
 
 /**
@@ -105,9 +111,10 @@ export interface LostTestsSplit<T> {
  * `'skipped'` result behind, which is what makes the split precise: a no-results test during a
  * stopped-early run is exactly what stopping early looks like, not a silent loss.
  *
- * A `--global-timeout` stop (`'timedout'`) is the exception to that split: the test still running
- * when the time ran out is given a completed `'skipped'` result too, so every lost test in such a
- * run is the timeout's doing. The run's own `'timedout'` status already fails it.
+ * A `--global-timeout` stop (`'timedout'`) blurs that split: the test still running when the time
+ * ran out is given a completed `'skipped'` result too, the same shape as a test lost earlier. Such
+ * tests go to `cutOffOrLostBeforeTimeout` instead of `lost`, since counting them as lost would fail
+ * the run for the timeout itself; the run's own `'timedout'` status fails it either way.
  */
 export function findLostTests<T extends TestOutcomeLike>(
   tests: T[],
@@ -115,16 +122,18 @@ export function findLostTests<T extends TestOutcomeLike>(
   stoppedEarly = false,
 ): LostTestsSplit<T> {
   if (runStatus === 'passed' && !tests.some((test) => test.results.length > 0))
-    return { lost: [], notRunBecauseStoppedEarly: [] };
+    return { lost: [], notRunBecauseStoppedEarly: [], cutOffOrLostBeforeTimeout: [] };
 
   const allLost = tests.filter(wasLost);
-  if (!stoppedEarly) return { lost: allLost, notRunBecauseStoppedEarly: [] };
-  if (runStatus === 'timedout') return { lost: [], notRunBecauseStoppedEarly: allLost };
+  if (!stoppedEarly)
+    return { lost: allLost, notRunBecauseStoppedEarly: [], cutOffOrLostBeforeTimeout: [] };
 
-  return {
-    lost: allLost.filter((test) => test.results.length > 0),
-    notRunBecauseStoppedEarly: allLost.filter((test) => test.results.length === 0),
-  };
+  const withResults = allLost.filter((test) => test.results.length > 0);
+  const notRunBecauseStoppedEarly = allLost.filter((test) => test.results.length === 0);
+  if (runStatus === 'timedout')
+    return { lost: [], notRunBecauseStoppedEarly, cutOffOrLostBeforeTimeout: withResults };
+
+  return { lost: withResults, notRunBecauseStoppedEarly, cutOffOrLostBeforeTimeout: [] };
 }
 
 /**
@@ -200,7 +209,7 @@ class NoSilentSkipsReporter implements Reporter {
 
     const allTests = this.rootSuite.allTests();
     const stoppedEarly = runStoppedEarly(result.status, this.sawMaxFailuresStop);
-    const { lost, notRunBecauseStoppedEarly } = findLostTests(
+    const { lost, notRunBecauseStoppedEarly, cutOffOrLostBeforeTimeout } = findLostTests(
       allTests,
       result.status,
       stoppedEarly,
@@ -211,8 +220,19 @@ class NoSilentSkipsReporter implements Reporter {
       // it (or through the run's own `interrupted` or `timedout` status), so this does not also
       // fail the run.
       console.log(
-        `\n${notRunBecauseStoppedEarly.length} test(s) did not run, or did not finish, because ` +
-          `the run stopped early:\n${notRunBecauseStoppedEarly.map(describeTest).join('\n')}\n`,
+        `\n${notRunBecauseStoppedEarly.length} test(s) did not run because the run stopped ` +
+          `early:\n${notRunBecauseStoppedEarly.map(describeTest).join('\n')}\n`,
+      );
+    }
+
+    if (cutOffOrLostBeforeTimeout.length > 0) {
+      // The run's `timedout` status already fails it, so this list only tells the two cases apart
+      // for a reader.
+      console.error(
+        `\n${cutOffOrLostBeforeTimeout.length} test(s) did not finish before the run's time ` +
+          `limit:\n${cutOffOrLostBeforeTimeout.map(describeTest).join('\n')}\n\n` +
+          `One of them is the test the time limit cut off. Any other was lost earlier in the run — ` +
+          `its worker died or a beforeAll threw — so look at the first failing test in its file.\n`,
       );
     }
 
