@@ -1753,12 +1753,10 @@ describe('Scripture editor right-click menu', () => {
       );
     });
 
-    describe('top-menu Edit commands follow the editor last worked in', () => {
+    describe('top-menu Copy follows a selection in the footnotes pane', () => {
       const CUT = 'platformScriptureEditor.cutSelection';
       const PASTE = 'platformScriptureEditor.pasteAtSelection';
-      const PASTE_PLAIN = 'platformScriptureEditor.pasteAsPlainTextAtSelection';
       const HAS_SELECTION = `platformScriptureEditor.webView.${WEB_VIEW_ID}.hasSelection`;
-      const EDITABLE = `platformScriptureEditor.webView.${WEB_VIEW_ID}.editTargetIsEditable`;
 
       /** What reached the main editor's clipboard methods (its focus calls are not the concern). */
       const clipboardCallsOn = (editor: { calls: string[] }) =>
@@ -1864,31 +1862,32 @@ describe('Scripture editor right-click menu', () => {
         await runTopMenu(PASTE);
 
         expect(main.calls).toEqual(expect.arrayContaining(['cut', 'copy', 'paste']));
-        expect(lastPublished(EDITABLE)).toBe(true);
-        expect(mockNotifyEditActionBlocked).not.toHaveBeenCalled();
+        expect(execCommand).not.toHaveBeenCalled();
       });
 
-      it('reads a selection in a read-only row: Copy goes through the pane, Cut and Paste are blocked, the main text is never touched', async () => {
+      it('copies a selection in a read-only row through the browser and never touches the main editor', async () => {
         const { main, row } = await renderWithReadOnlyRow();
         main.setLiveSelection(selectionRange);
 
         await selectIn(row);
-
         expect(lastPublished(HAS_SELECTION)).toBe(true);
-        expect(lastPublished(EDITABLE)).toBe(false);
-
         await runTopMenu(COPY);
+
         expect(execCommand).toHaveBeenCalledExactlyOnceWith('copy');
+        expect(clipboardCallsOn(main)).toEqual([]);
         expect(mockNotifyEditActionBlocked).not.toHaveBeenCalled();
+      });
+
+      it('leaves Cut and Paste on the main text whatever the target is', async () => {
+        const { main, row } = await renderWithReadOnlyRow();
+        main.setLiveSelection(selectionRange);
+        await selectIn(row);
 
         await runTopMenu(CUT);
         await runTopMenu(PASTE);
-        await runTopMenu(PASTE_PLAIN);
-        expect(mockNotifyEditActionBlocked).toHaveBeenCalledTimes(3);
-        // The main editor holds a live selection and every one of its methods is a recorder, so a
-        // fallback to the main text would show up here.
-        expect(clipboardCallsOn(main)).toEqual([]);
-        expect(execCommand).toHaveBeenCalledOnce();
+
+        expect(clipboardCallsOn(main)).toEqual(['cut', 'paste']);
+        expect(execCommand).not.toHaveBeenCalled();
       });
 
       it('publishes the target selection: the main text range stops counting once the user is in a footnote', async () => {
@@ -1903,8 +1902,9 @@ describe('Scripture editor right-click menu', () => {
         expect(lastPublished(HAS_SELECTION)).toBe(true);
       });
 
-      it('does nothing for Copy, and shows no notice, when the read-only row has only a caret', async () => {
+      it('does nothing for Copy, and shows no notice, when the footnotes hold only a caret', async () => {
         const { main, row } = await renderWithReadOnlyRow();
+        main.setLiveSelection(selectionRange);
 
         await selectIn(row, { collapsed: true });
         await runTopMenu(COPY);
@@ -1914,31 +1914,70 @@ describe('Scripture editor right-click menu', () => {
         expect(clipboardCallsOn(main)).toEqual([]);
       });
 
-      it('sends Cut, Copy and Paste to the open row editor, never to the main text', async () => {
+      it('copies text selected inside the open row editor through the browser, not through either editor', async () => {
         const { rowCalls, main, rowInput } = await openRowEditorRecording();
         main.setLiveSelection(selectionRange);
 
         await selectIn(rowInput);
-
-        expect(lastPublished(EDITABLE)).toBe(true);
         expect(lastPublished(HAS_SELECTION)).toBe(true);
-        await runTopMenu(CUT);
         await runTopMenu(COPY);
-        await runTopMenu(PASTE);
-        await runTopMenu(PASTE_PLAIN);
 
-        expect(rowCalls.filter((name) => name !== 'focus')).toEqual([
-          'cut',
-          'copy',
-          'paste',
-          'pastePlainText',
-        ]);
+        expect(execCommand).toHaveBeenCalledExactlyOnceWith('copy');
+        expect(rowCalls.filter((name) => name !== 'focus')).toEqual([]);
         expect(clipboardCallsOn(main)).toEqual([]);
       });
 
-      it('keeps the target when the selection moves somewhere that is neither editor', async () => {
-        const { rowCalls, rowInput } = await openRowEditorRecording();
-        await selectIn(rowInput);
+      it('copies a selection in a read-only row while another row is being edited, with the selection still in the rows', async () => {
+        const rowCalls = stubRowEditor();
+        const main = stubEditor();
+        openedMainEditor = main;
+        chapterUsjValue.current = {
+          ...chapterWithText,
+          content: [
+            ...chapterWithText.content.slice(0, 2),
+            {
+              type: 'para',
+              marker: 'p',
+              content: [
+                { type: 'verse', marker: 'v', number: '1' },
+                'a~b',
+                { type: 'note', marker: 'f', caller: '+', content: ['A footnote text'] },
+                { type: 'note', marker: 'f', caller: '-', content: ['Second footnote text'] },
+              ],
+            },
+          ],
+        };
+        appSettings.set('platform.interfaceMode', 'power');
+        await renderEditor({ state: { footnotesPaneVisible: true, viewType: 'standard' } });
+        await clickNoteCaller();
+        // The first note is in the row editor; the second stays a read-only row.
+        expect(screen.getAllByTestId('editor-input')).toHaveLength(2);
+        const otherRow = screen
+          .getAllByRole('option')
+          .find((option) => option.textContent?.includes('Second footnote text'));
+        if (!otherRow) throw new Error('The second footnote has no read-only row');
+        const rows = document.querySelector('[data-footnotes-rows]');
+        let selectionWasInRows: boolean | undefined;
+        execCommand.mockImplementation(() => {
+          const anchor = document.getSelection()?.anchorNode;
+          selectionWasInRows = !!anchor && !!rows?.contains(anchor);
+          return true;
+        });
+        main.setLiveSelection(selectionRange);
+
+        await selectIn(otherRow);
+        await runTopMenu(COPY);
+
+        expect(execCommand).toHaveBeenCalledExactlyOnceWith('copy');
+        expect(selectionWasInRows).toBe(true);
+        expect(rowCalls.filter((name) => name !== 'focus')).toEqual([]);
+        expect(clipboardCallsOn(main)).toEqual([]);
+      });
+
+      it('keeps the target when the selection moves somewhere that is neither editor: Copy then does nothing rather than copying from the main text', async () => {
+        const { main, row } = await renderWithReadOnlyRow();
+        main.setLiveSelection(selectionRange);
+        await selectIn(row);
 
         const outside = document.createElement('button');
         outside.textContent = 'toolbar';
@@ -1946,38 +1985,37 @@ describe('Scripture editor right-click menu', () => {
         await selectIn(outside);
         outside.remove();
 
-        expect(lastPublished(EDITABLE)).toBe(true);
         expect(lastPublished(HAS_SELECTION)).toBe(true);
         await runTopMenu(COPY);
-        expect(rowCalls).toContain('copy');
+        expect(execCommand).not.toHaveBeenCalled();
+        expect(clipboardCallsOn(main)).toEqual([]);
       });
 
       it('moves the target back to the main text when the user selects there', async () => {
-        const { rowCalls, main, mainInput, rowInput } = await openRowEditorRecording();
-        await selectIn(rowInput);
+        const { main, row } = await renderWithReadOnlyRow();
+        const mainInput = screen.getAllByTestId('editor-input')[0];
+        await selectIn(row);
         await selectIn(mainInput);
 
         await runTopMenu(COPY);
 
         expect(main.calls).toContain('copy');
-        expect(rowCalls).not.toContain('copy');
-        expect(lastPublished(EDITABLE)).toBe(true);
+        expect(execCommand).not.toHaveBeenCalled();
       });
 
       it('is not moved by the main editor reporting a selection while the user is in a footnote', async () => {
-        const { rowCalls, main, rowInput } = await openRowEditorRecording();
+        const { main, row } = await renderWithReadOnlyRow();
         // A caret in the row: the footnote selection is not a range.
-        await selectIn(rowInput, { collapsed: true });
+        await selectIn(row, { collapsed: true });
         expect(lastPublished(HAS_SELECTION)).toBe(false);
 
         await reportMainSelection(selectionRange);
 
         // The report is the main text's own business: it neither sets the key nor moves the target.
         expect(lastPublished(HAS_SELECTION)).toBe(false);
-        expect(lastPublished(EDITABLE)).toBe(true);
         await runTopMenu(COPY);
-        expect(rowCalls).toContain('copy');
         expect(clipboardCallsOn(main)).toEqual([]);
+        expect(execCommand).not.toHaveBeenCalled();
       });
 
       it('returns to the main text when the pane is hidden with the target on the footnotes', async () => {
@@ -1986,13 +2024,11 @@ describe('Scripture editor right-click menu', () => {
         await reportMainSelection(selectionRange);
         await selectIn(row, { collapsed: true });
         expect(lastPublished(HAS_SELECTION)).toBe(false);
-        expect(lastPublished(EDITABLE)).toBe(false);
 
         await rerender({ state: { footnotesPaneVisible: false, viewType: 'standard' } });
 
         expect(screen.queryAllByRole('option')).toHaveLength(0);
         expect(lastPublished(HAS_SELECTION)).toBe(true);
-        expect(lastPublished(EDITABLE)).toBe(true);
         await runTopMenu(COPY);
         expect(main.calls).toContain('copy');
         expect(execCommand).not.toHaveBeenCalled();
@@ -2002,11 +2038,10 @@ describe('Scripture editor right-click menu', () => {
         const { main, row, rerender } = await renderWithReadOnlyRow();
         main.setLiveSelection(selectionRange);
         await selectIn(row);
-        expect(lastPublished(EDITABLE)).toBe(false);
+        expect(execCommand).not.toHaveBeenCalled();
 
         await rerender({ chapterNum: 2 });
 
-        expect(lastPublished(EDITABLE)).toBe(true);
         await runTopMenu(COPY);
         expect(main.calls).toContain('copy');
         expect(execCommand).not.toHaveBeenCalled();

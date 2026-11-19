@@ -193,7 +193,7 @@
             "order": 3,
             "command": "platformScriptureEditor.cutSelection",
             "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked && platformScriptureEditor.webView.{webViewId}.editTargetIsEditable"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_copy%",
@@ -210,7 +210,7 @@
             "order": 5,
             "command": "platformScriptureEditor.pasteAtSelection",
             "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked && platformScriptureEditor.webView.{webViewId}.editTargetIsEditable"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_openFind%",
