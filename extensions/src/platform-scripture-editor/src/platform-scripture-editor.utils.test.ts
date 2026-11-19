@@ -6207,7 +6207,7 @@ describe('formatEditorTitle', () => {
   });
 
   it.each([
-    ['a resource', true, true, 'resource'],
+    ['an editable resource', true, false, 'resource'],
     ['a read-only project', false, true, 'readOnly'],
     ['an editable project', false, false, 'editable'],
     ['a read-only resource', true, true, 'resource'],

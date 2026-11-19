@@ -1211,12 +1211,13 @@ function PlatformScriptureEditor({
 
   // Whether the editor's own selection is a range. Only a selection the editor reports changes it:
   // an `undefined` report is a blur (opening a menu blurs the editor, whose selection stays and is
-  // what Copy copies), so it leaves the value alone. A chapter change clears it.
+  // what Copy copies), so it leaves the value alone. A chapter change or a Scripture view switch
+  // replaces the editor's content and drops its selection without reporting one, so each clears it.
   const [hasSelection, setHasSelection] = useState(false);
 
   useEffect(() => {
     setHasSelection(false);
-  }, [scrRef.book, scrRef.chapterNum]);
+  }, [scrRef.book, scrRef.chapterNum, viewType]);
 
   // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
   // them when this web view closes. Hidden case: a hidden tab keeps publishing and its menu keeps
