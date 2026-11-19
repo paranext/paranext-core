@@ -73,6 +73,7 @@ import {
   measureBox,
   useLivePopoverAnchor,
 } from '@/hooks/use-live-popover-anchor.hook';
+import { runKeepingBrowserSelection } from '@/utils/browser-selection.util';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
@@ -1170,9 +1171,13 @@ export default function FootnoteEditor({
     (method: 'cut' | 'copy' | 'paste' | 'pastePlainText') => {
       const editor = restoreLostSelection();
       if (!editor) return;
+      const ownerDocument = editorParentRef.current?.ownerDocument;
       if (!isReadonly && (editor.getSelection() || editor.getSelectedParaMarker())) editor.focus();
-      else (editorParentRef.current?.ownerDocument.defaultView ?? window).focus();
-      editor[method]();
+      else (ownerDocument?.defaultView ?? window).focus();
+      // The editor's copy leaves the browser selection on a hidden element at the end of the note;
+      // put it back before the editor takes that as its selection.
+      if (method === 'copy') runKeepingBrowserSelection(() => editor.copy(), ownerDocument);
+      else editor[method]();
     },
     [isReadonly, restoreLostSelection],
   );

@@ -2214,6 +2214,25 @@ export type UseEditorContextMenuResult = {
  */
 export declare function useEditorContextMenu(options: UseEditorContextMenuOptions): UseEditorContextMenuResult;
 /**
+ * Runs `action`, then puts the browser selection back where it was if `action` moved it.
+ *
+ * The Scripture editor's copy (with no clipboard event to write to) selects a hidden element it
+ * appends at the end of the document, copies that way, and removes the element, which leaves the
+ * browser selection at the end of the document. The `selectionchange` that follows makes a
+ * read-only editor take that as its own selection, and anything that follows the caret (the
+ * scroll-group reference) moves there. Putting the selection back in the same turn means that event
+ * finds the user's selection again.
+ *
+ * A selection whose nodes the action removed is not put back: the browser ignores a selection on
+ * nodes outside the document. Nothing is kept when there is no browser selection to begin with,
+ * for example while a paragraph marker is the editor's selection.
+ *
+ * @param action What to run
+ * @param doc The document whose selection to keep; without one, `action` just runs
+ * @experimental This function is unstable and may change shape or disappear without notice
+ */
+export declare function runKeepingBrowserSelection(action: () => void, doc?: Document | undefined): void;
+/**
  * Names (lucide kebab-case) of the icons `LucideIcon` can render
  *
  * @experimental This export is unstable and may change shape or disappear without notice

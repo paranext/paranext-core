@@ -2339,6 +2339,35 @@ describe('FootnoteEditorHandle clipboard methods', () => {
     },
   );
 
+  it('copy leaves the browser selection where it was when the editor copy moved it', () => {
+    // The editor's copy selects a hidden element it appends at the end of the note.
+    const { handle, editorRef } = renderWithHandle();
+    vi.mocked(editorRef.getSelection).mockReturnValue(USER_LIVE_SELECTION);
+    const paragraph = document.createElement('p');
+    paragraph.textContent = 'grace and truth';
+    document.body.appendChild(paragraph);
+    const text = paragraph.firstChild;
+    if (!text) throw new Error('missing text node');
+    window.getSelection()?.setBaseAndExtent(text, 0, text, 5);
+    vi.mocked(editorRef.copy).mockImplementation(() => {
+      const hidden = document.createElement('span');
+      hidden.textContent = '#';
+      document.body.appendChild(hidden);
+      window.getSelection()?.selectAllChildren(hidden);
+      hidden.remove();
+    });
+
+    try {
+      handle.copy();
+
+      expect(editorRef.copy).toHaveBeenCalledTimes(1);
+      expect(window.getSelection()?.toString()).toBe('grace');
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      paragraph.remove();
+    }
+  });
+
   it('focus puts the editor itself in focus when there is no selection and nothing to restore', () => {
     // A click on the caller of the note already open asks to be put back in the editor; typing has
     // to land somewhere, and the editor's own focus puts the caret at the end of the note.
