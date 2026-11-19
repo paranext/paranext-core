@@ -940,7 +940,7 @@ export function scrollToAnnotation(getRanges: AnnotationRangesSource): HTMLEleme
  *
  * @param noteElement The note's element in the Scripture editor (`EditorRef.getElementByKey` of the
  *   note's key) - resolved by key rather than by a document query, since every mounted editor (the
- *   footnotes pane's row editor, the note popover's) renders note elements of its own
+ *   footnotes pane's row editor) renders note elements of its own
  */
 export function scrollToNoteCaller(noteElement: HTMLElement): void {
   scrollElementIntoScrollContainer(noteElement);

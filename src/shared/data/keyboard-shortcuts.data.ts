@@ -410,7 +410,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the marker typed in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Space commits what was TYPED, not the highlighted entry — the same in the `\` menu and the
     // Enter-triggered paragraph menu, both of which the forwarding table drives now that every
     // marker palette focuses its LIST rather than an input of its own. At a collapsed caret it
@@ -428,7 +428,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the highlighted entry in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Enter and Tab are one commit gesture, matching the editor package's own menus, and the same
     // in both menus — including the Enter-triggered paragraph menu, which the forwarding table
     // drives throughout now that it focuses its list instead of an input, so an Enter-Enter cannot
@@ -669,7 +669,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // IS the editor root — the same check that keeps a right-click on empty editor space from
     // opening the menu. Opening it by keyboard would need the editor package to special-case a
     // keyboard-invoked `contextmenu` event.
-    context: 'Scripture editor web view (main text and the footnote editor popover)',
+    context: 'Scripture editor web view (main text and the footnotes pane’s row editor)',
     keys: {
       macOS: '— (no equivalent)',
       windows: '— (no equivalent)',
@@ -822,7 +822,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'footnote-markers-menu',
     purpose:
-      'Open the inline markers menu in the footnote editor. Does nothing while the popover’s own right-click menu is open',
+      'Open the inline markers menu in the footnote editor. Does nothing while the footnote editor’s own right-click menu is open',
     category: 'Editing',
     context: 'Footnote editor',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },

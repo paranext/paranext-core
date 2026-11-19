@@ -440,9 +440,9 @@ describe('resolveEditingSessionActivity', () => {
     expect(atBound).toEqual({ isActive: false, isNoteSessionStale: true });
   });
 
-  it('a popover edit or save refreshes the clock, so a live long edit is never reaped', () => {
-    // Session opened long ago, but the user interacted with the popover recently. The web view
-    // stamps the refresh timestamp on every edit inside the popover (FootnoteEditor's onNoteEdit)
+  it('a row editor edit or apply refreshes the clock, so a live long edit is never reaped', () => {
+    // Session opened long ago, but the user interacted with the row editor recently. The web view
+    // stamps the refresh timestamp on every edit inside the row editor (FootnoteEditor's onNoteEdit)
     // and on every save that reaches the parent editor, and that refresh timestamp (not the open
     // timestamp) is what the caller passes in — any refresh younger than the bound keeps the
     // session active.
@@ -568,8 +568,8 @@ describe('resolveEditingSessionActivity', () => {
     });
 
     // The update a quiet pane session lets through ends the session itself, so there is nothing
-    // for the popover's staleness reaper to clean up.
-    it('is never reported stale, whatever the popover clock says', () => {
+    // for the staleness reaper to clean up.
+    it('is never reported stale, whatever the session clock says', () => {
       const activity = resolveEditingSessionActivity({
         ...paneSessionInput,
         noteSessionRefreshedAtMs: NOW - STALE_NOTE_EDITING_SESSION_MS - 1,
