@@ -1396,14 +1396,22 @@ describe('menus.json dynamic conditions', () => {
 
   /**
    * Whether a command's item is disabled. Undo and Redo are served as one item per interface mode
-   * (with and without an icon), so every copy must agree.
+   * (with and without an icon), so every copy must agree; every other command has exactly one
+   * item.
    */
+  const COMMANDS_WITH_PER_MODE_VARIANTS = [
+    'platformScriptureEditor.undo',
+    'platformScriptureEditor.redo',
+  ];
   const isDisabledFn = (menu: { items: { command?: string; disabled?: boolean }[] }) => {
     return (command: string) => {
       const matches = menu.items.filter((item) => item.command === command);
-      expect(matches.length).toBeGreaterThan(0);
-      const disabledStates = new Set(matches.map((item) => item.disabled === true));
-      expect(disabledStates.size).toBe(1);
+      if (COMMANDS_WITH_PER_MODE_VARIANTS.includes(command)) {
+        expect(matches).toHaveLength(2);
+        expect(new Set(matches.map((item) => item.disabled === true)).size).toBe(1);
+      } else {
+        expect(matches).toHaveLength(1);
+      }
       return matches[0].disabled === true;
     };
   };
@@ -1424,6 +1432,20 @@ describe('menus.json dynamic conditions', () => {
     'legacyCommentManager.openCommentList',
     'legacyCommentManager.showCommentListPanel',
   ];
+
+  it.each(COMMANDS_WITH_PER_MODE_VARIANTS)(
+    'declares the same when and enabledWhen on both per-mode items of %s',
+    (command) => {
+      const variants = topMenu.items.filter(
+        (item: { command?: string }) => item.command === command,
+      );
+      expect(variants).toHaveLength(2);
+      expect(variants[0].when).toEqual(expect.any(String));
+      expect(variants[0].enabledWhen).toEqual(expect.any(String));
+      expect(variants[1].when).toBe(variants[0].when);
+      expect(variants[1].enabledWhen).toBe(variants[0].enabledWhen);
+    },
+  );
 
   it('evaluates the Insert items disabled for a read-only project and enabled for an editable one', () => {
     const enabled = isDisabledFn(evaluate());

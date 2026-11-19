@@ -353,7 +353,7 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(served.length).toBeGreaterThan(0);
     // Every served item is covered by the table, so a new item cannot ship without an icon decision
     expect(served.map(({ key }) => key).sort()).toEqual(expectedIcons.map(([key]) => key).sort());
-    // A command with two served items (Copy, Find, Manage books) must show each expected icon once
+    // A command with two served items (Copy, Find, Manage books, Undo, Redo) must show each expected icon once
     const servedIcons = (key: string) =>
       served.filter((item) => item.key === key).map(({ icon }) => icon);
     const expectedByKey = (key: string) =>
