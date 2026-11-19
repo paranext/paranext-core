@@ -1,5 +1,10 @@
+import type { ViewOptions } from '@eten-tech-foundation/platform-editor';
+import type papi from '@papi/frontend';
+import type { CommandHandlers } from 'papi-shared-types';
 import type { EditorContextMenuRequest } from 'platform-bible-react/experimental';
+import { getErrorMessage } from 'platform-bible-utils';
 import { EditMenuActionCommand, isEditMenuCommand } from './edit-menu-actions.util';
+import { getEditorOpenFindArgs } from './find-trigger.util';
 
 /** What a picked context-menu command does to the editor that was clicked. */
 export type ContextMenuPickEffects = {
@@ -61,6 +66,66 @@ export function getContextMenuShowOptions(
     contextKeys: {
       [CONTEXT_MENU_HAS_SELECTION_KEY]: request.hasSelection,
       [CONTEXT_MENU_IS_MAIN_EDITOR_KEY]: isMainEditor,
+    },
+  };
+}
+
+/** What {@link createContextMenuCommandEffects} needs from the editor that owns the menu. */
+export type ContextMenuCommandEffectsOptions = {
+  /** The web view's id, which Find and every other picked command are sent for. */
+  webViewId: string;
+  /** The project the tab shows, the source for Find; `undefined` while none is resolved. */
+  projectId: string | undefined;
+  /** The tab's view options, which say how the project spells a no-break space for Find. */
+  viewOptions: ViewOptions | undefined;
+  /** Names the editor in a log line, for example `'editor'` or `'footnote editor'`. */
+  editorName: string;
+  /** Sends commands. */
+  papi: Pick<typeof papi, 'commands'>;
+  /** Receives the failure of a command that could not be sent. */
+  logger: { warn: (message: string) => void };
+};
+
+/**
+ * The effects of {@link ContextMenuPickEffects} that do not depend on which editor was clicked:
+ * Find, with the arguments Ctrl+F builds, and every other command, sent with the web view id. A
+ * failure to send either is logged, never thrown.
+ */
+export function createContextMenuCommandEffects({
+  webViewId,
+  projectId,
+  viewOptions,
+  editorName,
+  papi: papiService,
+  logger,
+}: ContextMenuCommandEffectsOptions): Pick<ContextMenuPickEffects, 'openFind' | 'sendCommand'> {
+  return {
+    openFind: (selectedText) => {
+      const args = getEditorOpenFindArgs(webViewId, projectId, selectedText, viewOptions);
+      if (!args) return;
+      papiService.commands
+        .sendCommand(
+          'platformScripture.openFind',
+          args.webViewId,
+          args.selectedText,
+          args.sourceProjectId,
+        )
+        .catch((e) =>
+          logger.warn(
+            `Failed to open Find from the ${editorName} context menu: ${getErrorMessage(e)}`,
+          ),
+        );
+    },
+    sendCommand: (command) => {
+      papiService.commands
+        // Assuming that the picked command is one of the registered command handlers in papi
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        .sendCommand(command as keyof CommandHandlers, webViewId)
+        .catch((e) =>
+          logger.warn(
+            `Failed to run ${command} from the ${editorName} context menu: ${getErrorMessage(e)}`,
+          ),
+        );
     },
   };
 }

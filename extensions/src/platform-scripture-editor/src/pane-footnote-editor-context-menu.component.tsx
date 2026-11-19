@@ -1,16 +1,15 @@
 import type { ViewOptions } from '@eten-tech-foundation/platform-editor';
 import papi, { logger } from '@papi/frontend';
-import type { CommandHandlers } from 'papi-shared-types';
 import type { FootnoteEditorHandle } from 'platform-bible-react';
 import { useEditorContextMenu } from 'platform-bible-react/experimental';
 import { getErrorMessage } from 'platform-bible-utils';
 import { ReactNode, RefObject, useRef } from 'react';
 import type { EditMenuActionCommand } from './edit-menu-actions.util';
 import {
+  createContextMenuCommandEffects,
   dispatchContextMenuPick,
   getContextMenuShowOptions,
 } from './editor-context-menu-pick.util';
-import { getEditorOpenFindArgs } from './find-trigger.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
 
 /** The row editor's handle method behind each clipboard command the menu can pick. */
@@ -97,33 +96,14 @@ export function PaneFootnoteEditorContextMenu({
           // The menu hands focus back to its tab as it closes; return it to the note's text.
           requestAnimationFrame(() => rowEditorRef.current?.focus());
         },
-        openFind: (selectedText) => {
-          const args = getEditorOpenFindArgs(webViewId, projectId, selectedText, viewOptions);
-          if (!args) return;
-          papi.commands
-            .sendCommand(
-              'platformScripture.openFind',
-              args.webViewId,
-              args.selectedText,
-              args.sourceProjectId,
-            )
-            .catch((e) =>
-              logger.warn(
-                `Failed to open Find from the footnote editor context menu: ${getErrorMessage(e)}`,
-              ),
-            );
-        },
-        sendCommand: (otherCommand) => {
-          papi.commands
-            // Assuming that the picked command is one of the registered command handlers in papi
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            .sendCommand(otherCommand as keyof CommandHandlers, webViewId)
-            .catch((e) =>
-              logger.warn(
-                `Failed to run ${otherCommand} from the footnote editor context menu: ${getErrorMessage(e)}`,
-              ),
-            );
-        },
+        ...createContextMenuCommandEffects({
+          webViewId,
+          projectId,
+          viewOptions,
+          editorName: 'footnote editor',
+          papi,
+          logger,
+        }),
       }),
     onError: (error) =>
       logger.warn(`The footnote editor context menu failed: ${getErrorMessage(error)}`),
