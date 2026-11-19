@@ -40,8 +40,8 @@ export function readWorkflow(repositoryRoot: string = REPOSITORY_ROOT): string {
 /**
  * The entries of `editor_paths` in `.github/workflows/test.yml`'s `e2e-core-selection` job, one per
  * `editor_paths+=('…')` line: the paths whose change makes the pull-request job run
- * `core-specs-editor.txt` too. Each is POSIX ERE (for `grep -E`), whose syntax these entries share
- * with JavaScript.
+ * `core-specs-editor.txt` too. Each is a POSIX extended regular expression (for `grep -E`), whose
+ * syntax these entries share with JavaScript.
  */
 export function parseEditorPathEntries(workflow: string): string[] {
   const lines = workflow.split('\n').filter((line) => line.includes('editor_paths+='));
@@ -50,7 +50,7 @@ export function parseEditorPathEntries(workflow: string): string[] {
   const unreadable = lines.filter((line) => !/^\s*editor_paths\+=\('[^']+'\)\s*$/.test(line));
   if (unreadable.length > 0)
     throw new Error(
-      `Write each editor_paths entry as editor_paths+=('<ERE>') on a line of its own: ${unreadable
+      `Write each editor_paths entry as editor_paths+=('<extended regular expression>') on a line of its own: ${unreadable
         .map((line) => line.trim())
         .join(' | ')}`,
     );

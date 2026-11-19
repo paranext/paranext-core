@@ -640,8 +640,6 @@ describe('recommendE2eTests', () => {
     'release/app/package-lock.json',
     'dev-packages.json',
     'global.json',
-    '.config/dotnet-tools.json',
-    'c-sharp/.config/dotnet-tools.json',
     'c-sharp/ParanextDataProvider.csproj',
     'c-sharp/Directory.Build.props',
     'patches/rc-dock+3.3.2.patch',
@@ -659,6 +657,9 @@ describe('recommendE2eTests', () => {
     'c-sharp/Projects/ParatextProjectDataProvider.cs',
     'c-sharp-tests/c-sharp-tests.csproj',
     'e2e-tests/core-specs.txt',
+    // These pin only developer tools (the C# formatter, the NuGet license tool).
+    '.config/dotnet-tools.json',
+    'c-sharp/.config/dotnet-tools.json',
   ])('does not list %s as a dependency file', (file) => {
     expect(recommend([file]).dependencyFiles).toEqual([]);
   });
@@ -1030,6 +1031,27 @@ describe('reading the editor paths for the command line', () => {
     }
     expect(written.join('')).toContain('e2e-recommendations: could not read editor_paths');
   });
+
+  it('keeps a plain bracket class such as [.], which both engines read alike', () => {
+    expect(readEditorPaths(() => ['usfm[.]sty$'])).toEqual(['usfm[.]sty$']);
+  });
+
+  it.each(['lib/x[[:digit:]]/', 'lib/x[[=a=]]/', 'lib/x[[.a.]]/'])(
+    'warns and returns undefined for %s, a POSIX bracket form a JavaScript RegExp misreads',
+    (entry) => {
+      const written: string[] = [];
+      const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+        written.push(String(chunk));
+        return true;
+      });
+      try {
+        expect(readEditorPaths(() => ['src/a/', entry])).toBeUndefined();
+      } finally {
+        spy.mockRestore();
+      }
+      expect(written.join('')).toContain('e2e-recommendations: could not read editor_paths');
+    },
+  );
 });
 
 describe('deciding whether the module is the entry point', () => {

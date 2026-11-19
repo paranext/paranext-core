@@ -97,9 +97,9 @@ export interface E2eRecommendationReport {
   /**
    * Changed files that can carry a dependency change, sorted: the root `package.json`,
    * `package-lock.json`, `release/app/package.json`, `release/app/package-lock.json`,
-   * `dev-packages.json`, `global.json`, the two `.config/dotnet-tools.json` files, any `.csproj` or
-   * `.props` file under `c-sharp/` and anything under `patches/`. A hint: whether a dependency
-   * actually changed is read from their diffs in the end-to-end tests step of `/review-paratext`.
+   * `dev-packages.json`, `global.json`, any `.csproj` or `.props` file under `c-sharp/` and
+   * anything under `patches/`. A hint: whether a dependency actually changed is read from their
+   * diffs in the end-to-end tests step of `/review-paratext`.
    */
   dependencyFiles: string[];
   /**
@@ -141,8 +141,8 @@ export interface RecommendInput {
   /** Every file git tracks (and every untracked one), repository-relative, as written on disk. */
   trackedFiles: string[];
   /**
-   * The `editor_paths` entries of `.github/workflows/test.yml`, each a POSIX ERE; undefined when
-   * they could not be read.
+   * The `editor_paths` entries of `.github/workflows/test.yml`, each a POSIX extended regular
+   * expression; undefined when they could not be read.
    */
   editorPaths: string[] | undefined;
   sources: SubsetSources;
@@ -229,14 +229,18 @@ const NON_RUNTIME = new RegExp(
 export const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 
 /**
- * The `editor_paths` entries read through `read`, or undefined when `read` throws or the entries do
- * not form a JavaScript regular expression (an entry `grep -E` accepts can still be rejected here):
- * a malformed line in `test.yml` then costs the report its `editorListRuns` answer (`'unknown'`)
- * instead of the whole report.
+ * The `editor_paths` entries read through `read`, or undefined when `read` throws or the entries
+ * cannot be read the way CI's `grep -E` reads them: when they do not form a JavaScript regular
+ * expression, or when one uses a POSIX bracket form (`[:class:]`, `[=x=]`, `[.x.]`) that a
+ * JavaScript RegExp compiles but matches differently. A malformed line in `test.yml` then costs the
+ * report its `editorListRuns` answer (`'unknown'`) instead of the whole report.
  */
 export function readEditorPaths(read: () => string[]): string[] | undefined {
   try {
     const entries = read();
+    const posixBracket = entries.find((entry) => /\[([:=.])[^\]]*\1\]/.test(entry));
+    if (posixBracket !== undefined)
+      throw new Error(`${posixBracket} uses a POSIX bracket form a JavaScript RegExp misreads`);
     editorPathsPattern(entries);
     return entries;
   } catch (error) {
@@ -268,9 +272,10 @@ const isE2eSpecSupport = (file: string) => {
 
 /**
  * Whether `file` can carry a dependency change: the root `package.json`, `package-lock.json`,
- * `release/app/package.json`, `release/app/package-lock.json`, `dev-packages.json`, `global.json`
- * and the `.config/dotnet-tools.json` files, a `.csproj` or `.props` file under `c-sharp/`, or
- * anything under `patches/`. A path test only: the diff decides whether a dependency changed.
+ * `release/app/package.json`, `release/app/package-lock.json`, `dev-packages.json` and
+ * `global.json`, a `.csproj` or `.props` file under `c-sharp/`, or anything under `patches/`. The
+ * `.config/dotnet-tools.json` files are not listed: they pin only developer tools. A path test
+ * only: the diff decides whether a dependency changed.
  */
 const isDependencyFile = (file: string) =>
   [
@@ -280,9 +285,6 @@ const isDependencyFile = (file: string) =>
     'release/app/package-lock.json',
     'dev-packages.json',
     'global.json',
-    // The .NET tool pins (the C# formatter, the NuGet license tool).
-    '.config/dotnet-tools.json',
-    'c-sharp/.config/dotnet-tools.json',
   ].includes(file) ||
   (file.startsWith('c-sharp/') && /\.(csproj|props)$/.test(file)) ||
   file.startsWith('patches/');

@@ -84,11 +84,11 @@ except unit tests, Markdown files and `tests/isolated/subset-sources.json`).
 
 The report also lists, as `dependencyFiles`, the changed files that can carry a dependency change
 (the root `package.json` and `package-lock.json`, `release/app/`'s two files, `dev-packages.json`,
-`global.json`, the `.config/dotnet-tools.json` tool pins, `.csproj` and `.props` files under
-`c-sharp/`, anything under `patches/`; a
+`global.json`, `.csproj` and `.props` files under `c-sharp/`, anything under `patches/`; a
 workspace's dependency changes show in the root lock file). It is a hint: `/review-paratext` reads
-their diffs and judges whether a dependency, an engine or SDK pin or a patch really changed, and
-then recommends the full isolated run (`npm run test:e2e:isolated all`).
+their diffs, counts a lock file's changed `resolved` and `integrity` lines rather than reading it,
+and judges whether a dependency, an engine or SDK pin or a patch really changed; if so it
+recommends the full isolated run (`npm run test:e2e:isolated all`).
 
 ## What NOT to do
 
