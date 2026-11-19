@@ -5,6 +5,7 @@ import {
   CommandLineArgs,
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
+import { isLockedFileError } from '@node/utils/locked-file.util';
 import { logger } from '@shared/services/logger.service';
 import {
   AsyncVariable,
@@ -440,13 +441,23 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
   extensionHostWatcher = chokidarWatch(nodemonWatchPaths, {
     ignoreInitial: true,
     awaitWriteFinish: true,
-  }).on('all', async (eventType) => {
-    logger.info(
-      `Chokidar watch detected change type ${eventType}. Debouncing restarting extension host`,
-    );
-    await restartExtensionHostInternalDevDebounced();
-    logger.info(`Chokidar watch finished restarting extension host`);
-  });
+  })
+    .on('all', async (eventType) => {
+      logger.info(
+        `Chokidar watch detected change type ${eventType}. Debouncing restarting extension host`,
+      );
+      await restartExtensionHostInternalDevDebounced();
+      logger.info(`Chokidar watch finished restarting extension host`);
+    })
+    // Without a listener, a watcher error (such as EBUSY on Windows while another process holds a
+    // file as it is written) becomes an unhandled rejection in the main process
+    .on('error', (error) => {
+      if (isLockedFileError(error))
+        logger.warn(
+          `Extension host path ${error.path} was held by another process as it was added, so changes made to it in place (or inside it, if it is a folder) will not restart the extension host until the app restarts`,
+        );
+      else logger.warn(`Chokidar watch of extension host files failed: ${error}`);
+    });
 }
 
 /** Service that runs the extension-host process from the main file */
