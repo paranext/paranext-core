@@ -14,6 +14,11 @@ export type UseEditTargetOptions = {
   getRoots: () => EditTargetRoots;
   /** Whether the footnotes pane has a row editor open */
   isRowEditorOpen: boolean;
+  /**
+   * Changes whenever the nodes the footnote selection sits in may have been replaced or removed
+   * (another row opened, the pane hidden); the hook then re-reads the browser selection.
+   */
+  recheckToken?: string;
   /** Changes whenever the content under the target is replaced; the target returns to `'main'` */
   resetToken: string;
   /** Whether the main editor's own selection is a range */
@@ -44,6 +49,7 @@ export type EditTargetState = {
 export function useEditTarget({
   getRoots,
   isRowEditorOpen,
+  recheckToken,
   resetToken,
   mainHasSelection,
 }: UseEditTargetOptions): EditTargetState {
@@ -86,7 +92,7 @@ export function useEditTarget({
     setFootnotesSelection(
       readFootnotesSelectionState(document.getSelection(), getRootsRef.current().footnotesRows),
     );
-  }, [isRowEditorOpen]);
+  }, [isRowEditorOpen, recheckToken]);
 
   useEffect(() => {
     setTarget('main');

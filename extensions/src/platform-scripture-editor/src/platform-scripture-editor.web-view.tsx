@@ -1309,6 +1309,7 @@ function PlatformScriptureEditor({
       footnotesRows: document.querySelector(`[${FOOTNOTES_ROWS_ATTRIBUTE}]`),
     }),
     isRowEditorOpen: paneEditingIndex !== undefined,
+    recheckToken: `${footnotesPaneVisible}|${paneEditingIndex}`,
     resetToken: `${projectId}|${scrRef.book}|${scrRef.chapterNum}|${viewType}`,
     mainHasSelection,
   });
