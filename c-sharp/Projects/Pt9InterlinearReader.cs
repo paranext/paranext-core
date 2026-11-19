@@ -395,20 +395,32 @@ internal static class Pt9InterlinearReader
     /// element is read. The file is foreign when it is well-formed up to that element and the
     /// element is not <c>InterlinearData</c>.
     ///
-    /// Two kinds of file are not foreign: one that is malformed before or at its root, and one
-    /// whose root is <c>InterlinearData</c>. Both stay in the scan. If either is corrupt, the
-    /// payload parse reports it; the scan does not hide it.
+    /// Three kinds of file are not foreign: one that is malformed before or at its root, one whose
+    /// root is <c>InterlinearData</c>, and one that cannot be opened or read. All stay in the
+    /// scan. If such a file is corrupt or unreadable, the read that opens it reports that; the
+    /// scan does not hide it.
+    ///
+    /// An unreadable file must not fail the scan itself. A selected read scans every book before
+    /// narrowing to its selection, so a failure here would let a book outside the selection block
+    /// the books inside it. A concurrent Paratext save can cause such a failure: it replaces a
+    /// file by two renames, so an open can fail briefly.
     /// </summary>
     private static bool IsForeignPt9BookFile(ProjectFileManager fileManager, string relativePath)
     {
-        using var reader = OpenPt9File(fileManager, relativePath);
         try
         {
+            using var reader = fileManager.OpenFileForByteRead(relativePath);
             using var xmlReader = CreatePt9RootElementReader(reader.BaseStream);
             return xmlReader.MoveToContent() == XmlNodeType.Element
                 && xmlReader.Name != "InterlinearData";
         }
-        catch (Exception e) when (e is XmlException or InvalidOperationException)
+        catch (Exception e)
+            when (e
+                    is XmlException
+                        or InvalidOperationException
+                        or IOException
+                        or UnauthorizedAccessException
+            )
         {
             return false;
         }

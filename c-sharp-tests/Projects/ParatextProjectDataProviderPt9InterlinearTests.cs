@@ -1050,6 +1050,30 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
 
     [Test]
     [Description(
+        "A book file that cannot be opened fails only the reads that select it. A read selecting "
+            + "another book still succeeds."
+    )]
+    public void GetPt9InterlinearData_UnreadableUnselectedBook_DoesNotBlockTheSelectedBook()
+    {
+        const string readablePath = "Interlinear_en/Interlinear_en_JAS.xml";
+        const string unreadablePath = "Interlinear_es/Interlinear_es_MAT.xml";
+        WriteProjectFile(readablePath, InterlinearEnJasXml);
+        WriteProjectFile(unreadablePath, InterlinearEsMatXml);
+        _scrText.MakeFileUnreadable(unreadablePath);
+
+        // Positive control: the file really is unreadable to a read that selects it.
+        var exception = Assert.Throws<InvalidDataException>(
+            () => _provider.GetPt9InterlinearData(new Pt9InterlinearDataSelector([unreadablePath]))
+        );
+        Assert.That(exception!.Message, Does.Contain(unreadablePath));
+
+        var data = _provider.GetPt9InterlinearData(new Pt9InterlinearDataSelector([readablePath]));
+
+        Assert.That(data.Books.Select(book => book.FilePath), Is.EqualTo(new[] { readablePath }));
+    }
+
+    [Test]
+    [Description(
         "A book file that is malformed at its root is not mistaken for a foreign file: it still "
             + "fails the read with the typed error naming its path."
     )]
