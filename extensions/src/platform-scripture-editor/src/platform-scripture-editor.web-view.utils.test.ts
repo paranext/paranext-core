@@ -1394,10 +1394,16 @@ describe('menus.json dynamic conditions', () => {
     return evaluateMenu(topMenu, (key: string) => facts[key], TEMPLATE_VARS);
   };
 
+  /**
+   * Whether a command's item is disabled. Undo and Redo are served as one item per interface mode
+   * (with and without an icon), so every copy must agree.
+   */
   const isDisabledFn = (menu: { items: { command?: string; disabled?: boolean }[] }) => {
     return (command: string) => {
       const matches = menu.items.filter((item) => item.command === command);
-      expect(matches).toHaveLength(1);
+      expect(matches.length).toBeGreaterThan(0);
+      const disabledStates = new Set(matches.map((item) => item.disabled === true));
+      expect(disabledStates.size).toBe(1);
       return matches[0].disabled === true;
     };
   };
@@ -1494,7 +1500,15 @@ describe('menus.json dynamic conditions', () => {
       'platform.project.p1.isResource': true,
       'platform.project.p1.isEditable': false,
     };
-    type EvaluatedItem = { id?: string; command?: string; group: string; order: number };
+    type EvaluatedItem = {
+      id?: string;
+      command?: string;
+      group: string;
+      order: number;
+      label?: string;
+      iconNameBefore?: string;
+      disabled?: boolean;
+    };
     type EvaluatedMenu = {
       columns: Record<string, unknown>;
       groups: Record<string, { column?: string; order: number }>;
@@ -1563,6 +1577,60 @@ describe('menus.json dynamic conditions', () => {
         expect(editSectionCommands(menu)).toEqual([]);
         expect(countOf(menu, 'platformScriptureEditor.copySelection')).toBe(1);
       });
+    });
+
+    it('labels the resource Copy "Copy selection", with an icon, disabled until text is selected', () => {
+      const resourceCopy = (hasSelection: boolean) => {
+        const menu = evaluateInMode('power', {
+          ...RESOURCE_FACTS,
+          'platformScriptureEditor.webView.wv.hasSelection': hasSelection,
+        });
+        const copies = menu.items.filter(
+          (item) => item.command === 'platformScriptureEditor.copySelection',
+        );
+        expect(copies).toHaveLength(1);
+        return copies[0];
+      };
+      expect(resourceCopy(true)).toMatchObject({
+        label: '%webView_platformScriptureEditor_copySelection%',
+        iconNameBefore: 'clipboard-copy',
+      });
+      expect(resourceCopy(true).disabled).toBeFalsy();
+      expect(resourceCopy(false).disabled).toBe(true);
+    });
+
+    it.each([
+      [
+        'a resource',
+        { 'platform.project.p1.isResource': true, 'platform.project.p1.isEditable': false },
+        '%webView_platformScriptureEditor_showBooks%',
+      ],
+      ['an editable project', {}, '%manageBooks_openMenuItem%'],
+      [
+        'a read-only project',
+        { 'platform.project.p1.isEditable': false },
+        '%manageBooks_openMenuItem%',
+      ],
+    ])('offers exactly one books item for %s, labelled %s', (_name, overrides, label) => {
+      const menu = evaluateInMode('power', overrides);
+      const books = menu.items.filter(
+        (item) => item.command === 'platformScripture.openManageBooks',
+      );
+      expect(books).toHaveLength(1);
+      expect(books[0]).toMatchObject({ label, iconNameBefore: 'book-copy' });
+    });
+
+    it('gives Undo and Redo an icon in Power only', () => {
+      const iconsIn = (mode: 'simple' | 'power') =>
+        evaluateInMode(mode, {}).items.filter(
+          (item) =>
+            item.command === 'platformScriptureEditor.undo' ||
+            item.command === 'platformScriptureEditor.redo',
+        );
+      expect(iconsIn('power').map((item) => item.iconNameBefore)).toEqual(['undo-2', 'redo-2']);
+      const simple = iconsIn('simple');
+      expect(simple).toHaveLength(2);
+      simple.forEach((item) => expect(item.iconNameBefore).toBeUndefined());
     });
 
     it('declares the Edit section group as experimental and no item as experimental', () => {
