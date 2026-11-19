@@ -282,6 +282,7 @@ const NON_RUNTIME = new RegExp([...NOT_APP_SHAPES, ...SHIPPED_METADATA_SHAPES].j
 const NOT_AN_APP_CHANGE = new RegExp(
   [...NOT_APP_SHAPES, String.raw`^e2e-tests\/`, String.raw`^\.(?!erb\/)`].join('|'),
 );
+
 export const isNonRuntime = (file: string) => NON_RUNTIME.test(file);
 
 /**
@@ -299,6 +300,7 @@ export function readEditorPaths(read: () => string[]): string[] | undefined {
     return undefined;
   }
 }
+
 const isInSourceRoot = (file: string) => SOURCE_ROOTS.some((root) => file.startsWith(root));
 /** Whether a changed file changes the app: every file except {@link NOT_AN_APP_CHANGE}. */
 export const isAppFile = (file: string) => !NOT_AN_APP_CHANGE.test(file);
@@ -320,11 +322,12 @@ const isE2eSpecSupport = (file: string) => {
   );
 };
 
+// The files that can carry a dependency change: the lock files, the root and the packaged app's
+// `package.json`, the dev package pins, the .NET SDK pin, the patches and the .NET project files.
+
 /**
- * The files that can carry a dependency change: the lock files, the root and the packaged app's
- * `package.json`, the dev package pins, the .NET SDK pin, the patches and the .NET project files.
- * The `package.json` files of `lib/*` and of the extensions are not listed: the root
- * `package.json`'s `workspaces` (`lib/*`, `extensions`, `extensions/src/*`) share the root
+ * The lock files. The `package.json` files of `lib/*` and of the extensions are not checked: the
+ * root `package.json`'s `workspaces` (`lib/*`, `extensions`, `extensions/src/*`) share the root
  * `package-lock.json`, so a real dependency change in a workspace changes that lock file too.
  */
 const LOCK_FILES = ['package-lock.json', 'release/app/package-lock.json'];
@@ -417,14 +420,42 @@ export function isDependencyPinsChange(
 }
 
 /**
- * Whether a diff of a .NET project or build properties file changes a dependency: an added or
- * removed line naming a `PackageReference`, the `ParatextPackageVersion`, the `TargetFramework` or
- * a `Version` (an attribute or child element of a reference written over several lines). Matching a
- * `Version` that is not a dependency only recommends the full run once too often.
+ * The dependency items of .NET project or build properties `xml`, normalized: every
+ * `PackageReference` and `PackageVersion` element (attributes and child elements, over any number
+ * of lines and with either kind of quote) and the values of `TargetFramework`, `TargetFrameworks`
+ * and `ParatextPackageVersion`. Comments are ignored, and so is everything else (a project's own
+ * `VersionPrefix`, `AssemblyVersion`, `Nullable`, `Compile Include`).
  */
-export function isDotnetDependencyChange(diffLines: string[]): boolean {
-  return changedDiffLines(diffLines).some((line) =>
-    /PackageReference|ParatextPackageVersion|TargetFramework|<Version>|\bVersion="/.test(line),
+function dotnetDependencyItems(xml: string): string[] {
+  const text = xml.replace(/<!--[\s\S]*?-->/g, '');
+  const normalize = (value: string) =>
+    value
+      .replace(/'/g, '"')
+      .replace(/\s*=\s*/g, '=')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const references = [
+    ...text.matchAll(/<(PackageReference|PackageVersion)\b([^>]*?)(\/>|>([\s\S]*?)<\/\1\s*>)/g),
+  ].map((match) => normalize(`${match[1]} ${match[2]} ${match[4] ?? ''}`));
+  const values = [
+    ...text.matchAll(/<(TargetFrameworks?|ParatextPackageVersion)\b[^>]*>([\s\S]*?)<\/\1\s*>/g),
+  ].map((match) => normalize(`${match[1]}=${match[2]}`));
+  return [...references, ...values].sort();
+}
+
+/**
+ * Whether the .NET project or build properties file differs in its dependency items
+ * ({@link dotnetDependencyItems}) between its content `before` (at the merge base) and `after` (in
+ * the working tree): a package reference, package version, target framework or ParatextData version
+ * changes. A file missing on one side is compared as empty, so a new project file counts only when
+ * it names a dependency.
+ */
+export function isDotnetDependencyChange(
+  before: string | undefined,
+  after: string | undefined,
+): boolean {
+  return (
+    dotnetDependencyItems(before ?? '').join('\n') !== dotnetDependencyItems(after ?? '').join('\n')
   );
 }
 
@@ -769,25 +800,40 @@ function onlyNameFieldChanged(diffLines: string[]): boolean {
   return changed.length > 0 && changed.every((line) => /^[-+]\s*"name":/.test(line));
 }
 
-/** The content of `file` at `ref`, or undefined when the file does not exist there. */
+/** Says on stderr that `file` could not be read; a missing file is not reported. */
+function warnUnreadable(file: string, detail: string) {
+  process.stderr.write(`e2e-recommendations: could not read ${file}: ${detail}\n`);
+}
+
+/**
+ * The content of `file` at `ref`, or undefined when the file does not exist there or cannot be read
+ * (the latter is reported on stderr).
+ */
 function contentAt(repoRoot: string, ref: string, file: string): string | undefined {
   try {
     return execFileSync('git', ['show', '--end-of-options', `${ref}:${file}`], {
       cwd: repoRoot,
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       maxBuffer: 64 * 1024 * 1024,
     });
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    if (!/does not exist in|exists on disk, but not in/.test(detail)) warnUnreadable(file, detail);
     return undefined;
   }
 }
 
-/** The content of `file` in the working tree, or undefined when it does not exist. */
+/**
+ * The content of `file` in the working tree, or undefined when it does not exist or cannot be read
+ * (the latter is reported on stderr).
+ */
 function workingContent(repoRoot: string, file: string): string | undefined {
   try {
     return fs.readFileSync(path.join(repoRoot, file), 'utf8');
-  } catch {
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
+      warnUnreadable(file, error instanceof Error ? error.message : String(error));
     return undefined;
   }
 }
@@ -832,9 +878,12 @@ export function readGitChanges(
       .filter((file) => LOCK_FILES.includes(file))
       .map((file) => [file, diffLinesOf(repoRoot, mergeBase, file)]),
   );
-  const dependencyChangedFiles = diffFiles.filter((file) => {
-    const lockDiff = lockDiffs.get(file);
-    if (lockDiff) return isDependencyLockChange(lockDiff);
+  const dependencyChangedFiles = [...new Set([...diffFiles, ...untrackedFiles])].filter((file) => {
+    if (LOCK_FILES.includes(file)) {
+      const lockDiff = lockDiffs.get(file);
+      // A lock file git does not diff is new: missing at the merge base counts.
+      return lockDiff === undefined || isDependencyLockChange(lockDiff);
+    }
     if (PACKAGE_FILES.includes(file))
       return isDependencyPackageChange(
         contentAt(repoRoot, mergeBase, file),
@@ -846,7 +895,10 @@ export function readGitChanges(
         workingContent(repoRoot, file),
       );
     if (isDotnetProjectFile(file))
-      return isDotnetDependencyChange(diffLinesOf(repoRoot, mergeBase, file));
+      return isDotnetDependencyChange(
+        contentAt(repoRoot, mergeBase, file),
+        workingContent(repoRoot, file),
+      );
     return file === DOTNET_SDK_PIN_FILE || isPatchFile(file);
   });
   return {

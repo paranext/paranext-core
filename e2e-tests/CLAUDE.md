@@ -55,12 +55,16 @@ runtime code. If the file is app code of a new type, add its extension to `LOADE
 `e2e-recommendations.test.ts` (one file of a type the app does not load that still changes what it
 does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to
 `NOT_APP_SHAPES` in `e2e-recommendations.ts` (a file that is not an app change at all) or to
-`SHIPPED_METADATA_SHAPES` (one that is an app change but holds nothing a key could list). The test
-also fails when a runtime file that matches an `editor_paths` entry in `test.yml` reaches no key
-through `main`: add it to the right key. A prefix that names a file that no longer exists does not
-fail the test: `e2e-recommendations.ts` reports it as `stalePrefixes`, and `/review-paratext`
-shows it to the author as a warning, so moving or deleting a source file a prefix names means
-updating the prefix.
+`SHIPPED_METADATA_SHAPES` (one that is an app change but holds nothing a key could list).
+
+The test also fails when a runtime file that matches an `editor_paths` entry in `test.yml`
+reaches no key through `main`: add it to the right key.
+
+A prefix that names a file that no longer exists does not fail the test:
+`e2e-recommendations.ts` reports it as `stalePrefixes`, and `/review-paratext` shows it to the
+author as a warning, so moving or deleting a source file a prefix names means updating the
+prefix.
+
 `/review-paratext` uses the map to recommend which subsets to run. A new
 `scripture-editor/no-unasked-edits-*.spec.ts` needs no key of its own: the prefix key
 `scripture-editor/no-unasked-edits-` covers it.
@@ -72,11 +76,12 @@ config, `scoped-cleanup.ts`, `parked-enhanced-resources.ts`, `run-isolated.mjs` 
 except unit tests, Markdown files and `tests/isolated/subset-sources.json`).
 
 The recommender also recommends the full isolated run (`npm run test:e2e:isolated all`) when a
-dependency changes: a dependency field (npm or NuGet) or an engine or SDK pin (`volta`, `engines`,
-`global.json`), a lock file line other than a `"name"` or `"version"` field, a pin in
-`dev-packages.json` or a patch under `patches/`. A bump of a package's own `version` (a release
-bump), a script edit and reformatting do not; a dependency's own version bump does, a dev tool's
-included.
+dependency changes: a dependency or engine field of the root or `release/app` `package.json`, a
+package reference, package version, target framework or ParatextData version in an app project
+file (a project's own version does not), `global.json` (the .NET SDK pin), a lock file line other
+than a `"name"` or `"version"` field, a pin in `dev-packages.json` or a patch under `patches/`. A
+bump of a package's own `version` (a release bump), a script edit and reformatting do not; a
+dependency's own version bump does, a dev tool's included.
 
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch

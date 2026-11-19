@@ -1143,50 +1143,140 @@ describe('telling a dependency change from the rest of a dependency file', () =>
     expect(isDependencyPinsChange(pins, undefined)).toBe(true);
   });
 
+  const project = (body: string) =>
+    `<Project>\n  <PropertyGroup>\n${body}\n  </PropertyGroup>\n</Project>\n`;
+  const withReference = (reference: string) =>
+    `<Project>\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <VersionPrefix>0.1.0</VersionPrefix>\n  </PropertyGroup>\n  <ItemGroup>\n${reference}\n  </ItemGroup>\n</Project>\n`;
+  const baseReference = '    <PackageReference Include="StreamJsonRpc" Version="2.22.11" />';
+  const dotnetBase = withReference(baseReference);
+
   it.each([
     [
-      'a PackageReference bump',
-      [
-        '-    <PackageReference Include="StreamJsonRpc" Version="2.22.11" />',
-        '+    <PackageReference Include="StreamJsonRpc" Version="2.23.0" />',
-      ],
+      'a PackageReference version bump',
+      withReference('    <PackageReference Include="StreamJsonRpc" Version="2.23.0" />'),
     ],
     [
-      'a ParatextPackageVersion bump',
-      [
-        '-    <ParatextPackageVersion>9.5.0.24</ParatextPackageVersion>',
-        '+    <ParatextPackageVersion>9.6.0.1</ParatextPackageVersion>',
-      ],
+      'a PackageReference swapped on its own line',
+      withReference('    <PackageReference\n      Include="Other"\n      Version="2.22.11" />'),
     ],
     [
-      'a TargetFramework change',
-      [
-        '-    <TargetFramework>net10.0</TargetFramework>',
-        '+    <TargetFramework>net11.0</TargetFramework>',
-      ],
+      'a VersionOverride',
+      withReference(
+        '    <PackageReference Include="StreamJsonRpc" Version="2.22.11" VersionOverride="1.0.0" />',
+      ),
     ],
     [
-      'a Version attribute on its own line',
-      ['-      Version="2.22.11"', '+      Version="2.23.0"'],
+      'a single-quoted version',
+      withReference("    <PackageReference Include='StreamJsonRpc' Version='2.23.0' />"),
     ],
     [
       'a Version child element',
-      ['-      <Version>2.22.11</Version>', '+      <Version>2.23.0</Version>'],
+      withReference(
+        '    <PackageReference Include="StreamJsonRpc">\n      <Version>2.23.0</Version>\n    </PackageReference>',
+      ),
     ],
-  ])('counts %s in a .NET project file as a dependency change', (_label, lines) => {
-    expect(isDotnetDependencyChange(['--- a/x.csproj', '+++ b/x.csproj', ...lines])).toBe(true);
+    [
+      'a new PackageReference',
+      withReference(`${baseReference}\n    <PackageReference Include="New" Version="1.0.0" />`),
+    ],
+    [
+      'a central PackageVersion',
+      withReference('    <PackageVersion Include="StreamJsonRpc" Version="2.23.0" />'),
+    ],
+    ['a removed reference', withReference('')],
+    ['a TargetFramework change', dotnetBase.replace('net10.0', 'net11.0')],
+    [
+      'a TargetFrameworks change',
+      dotnetBase.replace(
+        '<TargetFramework>net10.0</TargetFramework>',
+        '<TargetFrameworks>net10.0;net9.0</TargetFrameworks>',
+      ),
+    ],
+    [
+      'a ParatextPackageVersion change',
+      project('    <ParatextPackageVersion>9.5.0.24</ParatextPackageVersion>'),
+    ],
+  ])('counts %s in a .NET project file as a dependency change', (label, after) => {
+    const befores: Record<string, string> = {
+      'a ParatextPackageVersion change': project(
+        '    <ParatextPackageVersion>9.6.0.1</ParatextPackageVersion>',
+      ),
+      'a central PackageVersion': withReference(
+        '    <PackageVersion Include="StreamJsonRpc" Version="2.22.11" />',
+      ),
+    };
+    const before = befores[label] ?? dotnetBase;
+    expect(isDotnetDependencyChange(before, after)).toBe(true);
   });
 
-  it('does not count a comment or an unrelated property in a .NET project file', () => {
+  it.each([
+    ["the project's own VersionPrefix", dotnetBase.replace('0.1.0', '0.2.0')],
+    [
+      'an AssemblyVersion',
+      dotnetBase.replace(
+        '</PropertyGroup>',
+        '  <AssemblyVersion>1.2.3.4</AssemblyVersion>\n  </PropertyGroup>',
+      ),
+    ],
+    [
+      'an InformationalVersion',
+      dotnetBase.replace(
+        '</PropertyGroup>',
+        '  <InformationalVersion>1.2.3-x</InformationalVersion>\n  </PropertyGroup>',
+      ),
+    ],
+    [
+      'a Nullable property',
+      dotnetBase.replace('</PropertyGroup>', '  <Nullable>enable</Nullable>\n  </PropertyGroup>'),
+    ],
+    [
+      'a Compile Include',
+      dotnetBase.replace('</ItemGroup>', '  <Compile Include="x.cs" />\n  </ItemGroup>'),
+    ],
+    [
+      'a comment',
+      dotnetBase.replace(
+        '<ItemGroup>',
+        '<!-- <PackageReference Include="Old" Version="1.0.0" /> -->\n  <ItemGroup>',
+      ),
+    ],
+    [
+      'a reformat of the reference',
+      withReference(
+        '    <PackageReference\n        Include="StreamJsonRpc"\n        Version="2.22.11"\n    />',
+      ),
+    ],
+  ])('does not count %s in a .NET project file', (_label, after) => {
+    expect(isDotnetDependencyChange(dotnetBase, after)).toBe(false);
+  });
+
+  it('compares quote style, child elements and target framework lists by value', () => {
+    const child = (version: string) =>
+      withReference(
+        `    <PackageReference Include="StreamJsonRpc">\n      <Version>${version}</Version>\n    </PackageReference>`,
+      );
+    expect(isDotnetDependencyChange(child('2.22.11'), child('2.22.11'))).toBe(false);
+    expect(isDotnetDependencyChange(child('2.22.11'), child('2.23.0'))).toBe(true);
     expect(
-      isDotnetDependencyChange([
-        '--- a/x.csproj',
-        '+++ b/x.csproj',
-        '+    <!-- a note -->',
-        '-    <Nullable>enable</Nullable>',
-        '+    <Nullable>disable</Nullable>',
-      ]),
+      isDotnetDependencyChange(
+        dotnetBase,
+        withReference("    <PackageReference Include='StreamJsonRpc' Version='2.22.11' />"),
+      ),
     ).toBe(false);
+    const frameworks = (list: string) =>
+      project(`    <TargetFrameworks>${list}</TargetFrameworks>`);
+    expect(
+      isDotnetDependencyChange(frameworks('net10.0;net9.0'), frameworks('net10.0;net9.0')),
+    ).toBe(false);
+    expect(
+      isDotnetDependencyChange(frameworks('net10.0;net9.0'), frameworks('net10.0;net8.0')),
+    ).toBe(true);
+  });
+
+  it('compares a new or deleted .NET project file with an empty one', () => {
+    expect(isDotnetDependencyChange(undefined, dotnetBase)).toBe(true);
+    expect(isDotnetDependencyChange(dotnetBase, undefined)).toBe(true);
+    expect(isDotnetDependencyChange(undefined, '<Project />')).toBe(false);
   });
 
   it('counts a package file that is missing or unparseable at the merge base', () => {
@@ -1600,6 +1690,64 @@ describe('readGitChanges', () => {
         expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
       },
     );
+  });
+
+  it('counts a new untracked patch, global.json, pins file and project file', () => {
+    withCommittedFiles({ 'README.md': 'x\n' }, (repoRoot, base) => {
+      writeFile(repoRoot, 'patches/new+1.0.0.patch', 'diff --git a/x b/x\n+one\n');
+      writeFile(repoRoot, 'global.json', '{ "sdk": { "version": "10.0.100" } }\n');
+      writeFile(repoRoot, 'dev-packages.json', '{ "a": 1 }\n');
+      writeFile(repoRoot, 'c-sharp/New.csproj', project('2.23.0'));
+      writeFile(repoRoot, 'c-sharp-tests/New.csproj', project('2.23.0'));
+      writeFile(repoRoot, 'patches/README.md', 'notes\n');
+      writeFile(repoRoot, 'c-sharp/Plain.csproj', '<Project />\n');
+      writeFile(repoRoot, 'package-lock.json', '{}\n');
+      writeFile(repoRoot, 'release/app/package-lock.json', '{}\n');
+      expect(readGitChanges(repoRoot, base).dependencyChangedFiles.sort()).toEqual([
+        'c-sharp/New.csproj',
+        'dev-packages.json',
+        'global.json',
+        'package-lock.json',
+        'patches/new+1.0.0.patch',
+        'release/app/package-lock.json',
+      ]);
+    });
+  });
+
+  it('does not count a non-patch file under patches/', () => {
+    withCommittedFiles({ 'patches/README.md': 'a\n' }, (repoRoot, base) => {
+      writeFile(repoRoot, 'patches/README.md', 'b\n');
+      expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([]);
+    });
+  });
+
+  it('says on stderr when it cannot read a dependency file, but not when the file is missing', () => {
+    withCommittedFiles({ 'dev-packages.json': '{ "a": 1 }\n' }, (repoRoot, base) => {
+      const written: string[] = [];
+      const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+        written.push(String(chunk));
+        return true;
+      });
+      try {
+        // A directory where the file is expected cannot be read as a file.
+        fs.rmSync(path.join(repoRoot, 'dev-packages.json'));
+        fs.mkdirSync(path.join(repoRoot, 'dev-packages.json'));
+        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([
+          'dev-packages.json',
+        ]);
+        expect(written.join('')).toContain('e2e-recommendations: could not read dev-packages.json');
+
+        // A file that does not exist in the working tree is just missing.
+        written.length = 0;
+        fs.rmdirSync(path.join(repoRoot, 'dev-packages.json'));
+        expect(readGitChanges(repoRoot, base).dependencyChangedFiles).toEqual([
+          'dev-packages.json',
+        ]);
+        expect(written.join('')).toBe('');
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   it('counts any change to global.json and to a patch', () => {

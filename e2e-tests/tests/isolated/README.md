@@ -57,9 +57,8 @@ about it, so moving or deleting a source file a prefix names means updating the 
 
 A file named by a spec key or prefix key inside a subset (such as
 `scripture-editor/chapter-marker-repair.spec.ts` or `scripture-editor/no-unasked-edits-`) is
-recommended for that key only: listing the
-same file in the subset's own `main` has no effect, so leave it out there. When the subset is
-recommended too, the key is folded into it.
+recommended for that key only: listing the same file in the subset's own `main` has no effect, so
+leave it out there. When the subset is recommended too, the key is folded into it.
 
 ## Spec files directly under `tests/isolated/`
 
