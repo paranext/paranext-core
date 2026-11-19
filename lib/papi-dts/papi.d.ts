@@ -15971,19 +15971,25 @@ declare module 'renderer/services/overlays/overlay-validation' {
    */
   export function validateCommandPaletteRequest(request: CommandPaletteRequest): void;
 }
+declare module 'renderer/components/web-view-iframe.util' {
+  /**
+   * Finds a WebView's iframe element by its `data-web-view-id` attribute. Only an `iframe` counts:
+   * other elements carry the same attribute (a WebView tab's header does, for tests to find it) and
+   * can come first in the document.
+   *
+   * @param webViewId The webViewId to search for
+   * @returns The iframe element, or null if not found
+   */
+  export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
+}
 declare module 'renderer/services/overlays/overlay-coordinates' {
   /**
    * Coordinate translation utilities for the overlay service. Translates iframe-relative coordinates
    * to document-relative coordinates, clamps positions to the viewport, and checks WebView
    * visibility.
    */
-  /**
-   * Finds a WebView iframe element by its data-web-view-id attribute.
-   *
-   * @param webViewId The webViewId to search for
-   * @returns The iframe element, or null if not found
-   */
-  export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
+  import { getWebViewIframe } from 'renderer/components/web-view-iframe.util';
+  export { getWebViewIframe };
   /**
    * Translates iframe-relative coordinates to document-relative coordinates using
    * getBoundingClientRect of the WebView iframe. The platform never scales the iframe element itself
