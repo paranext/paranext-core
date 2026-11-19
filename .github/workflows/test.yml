@@ -389,15 +389,15 @@ jobs:
       # Starts the packaged app built above in noisy dev mode, which loads the `evil` test
       # extension, and fails if any of its extension sandbox probes escapes. The packaged extension
       # host runs as a webpack bundle rather than through tsx like the smoke tests' dev app, so this
-      # is the only automated check of the sandbox in a packaged build. Runs on every platform, since
-      # packaged-only bugs have shown up on one platform and not another; the script finds this
-      # platform's executable under release/build. Only Linux needs a virtual display.
-      # Non-blocking on macOS, matching the E2E step: the app starts unreliably on the smaller macOS
-      # runners. A failure there still shows in the step's log.
-      # No timeout-minutes: the script bounds itself (about 4 minutes at most), and step caps in the
-      # snap-building workflows are pinned to one shared value by electron-builder-snap-config.test.ts.
+      # is the only automated check of the sandbox in a packaged build. Runs on every platform,
+      # since packaged-only bugs have shown up on one platform and not another; the script finds
+      # this platform's executable under release/build. Only Linux needs a virtual display. Blocking
+      # on every platform, macOS included: unlike the E2E step, it has not been flaky there. No
+      # timeout-minutes: the script bounds itself (about 4 minutes at most), and step caps in the
+      # snap-building workflows are pinned to one shared value by
+      # electron-builder-snap-config.test.ts.
       - name: check packaged extension sandbox
-        continue-on-error: ${{ matrix.os == env.OS_MACOS }}
+        id: packaged-sandbox
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
@@ -408,10 +408,11 @@ jobs:
 
       # Reads `meta/snap.yaml` out of the snap the packaging step above built; see
       # .erb/scripts/assert-generated-snap-metadata.ts for why that is checked separately from the
-      # config. Linux-only because that is the leg that builds a snap.
+      # config. Linux-only because that is the leg that builds a snap. Runs whenever packaging
+      # succeeded, even if the sandbox check above failed, so one failure does not hide the other.
       - name: check generated snap metadata
         id: snap-metadata
-        if: ${{ runner.os == 'Linux' }}
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.packaging.outcome == 'success' }}
         run: npm run assert:snap-metadata
 
       # Best-effort housekeeping, one step for every leg so the failure policy cannot drift between
@@ -515,16 +516,16 @@ jobs:
             echo "Renamed $file to $newName"
           done
 
-      # `!cancelled()` means this uploads snaps from a failed packaging step or metadata check as well
-      # as passing ones, so the name states which it is: `app-linux-test` passed,
-      # `app-linux-test-failed-check` did not. Download the plain name when you want a working snap, the suffixed one when you
-      # want to unsquash the build that failed.
+      # `!cancelled()` means this uploads snaps from a failed packaging step, sandbox check or
+      # metadata check as well as passing ones, so the name states which it is: `app-linux-test`
+      # passed, `app-linux-test-failed-check` did not. Download the plain name when you want a
+      # working snap, the suffixed one when you want to unsquash the build that failed.
       - name: Upload Linux artifacts
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}${{ (steps.packaging.outcome == 'failure' || steps.snap-metadata.outcome == 'failure') && '-failed-check' || '' }}
+          name: ${{ matrix.artifact_name }}${{ (steps.packaging.outcome == 'failure' || steps.packaged-sandbox.outcome == 'failure' || steps.snap-metadata.outcome == 'failure') && '-failed-check' || '' }}
           retention-days: 14
           path: |
             ./release/build/*.snap

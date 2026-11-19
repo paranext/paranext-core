@@ -48,8 +48,9 @@ function loadProtected(): unknown {
 
 function loadUnprotected(): unknown {
   const nodeRequire = Module.prototype.require;
-  // `Object.assign` only gives the replacement the `NodeJS.Require` type. `Module.prototype.require`
-  // has no own members to copy: `cache` and `resolve` live on each module's own `require`
+  // `Object.assign` only gives the replacement the `NodeJS.Require` type.
+  // `Module.prototype.require` has no own members to copy: `cache` and `resolve` live on each
+  // module's own `require`
   Module.prototype.require = Object.assign(function filteredRequire(
     this: Module,
     moduleName: string,

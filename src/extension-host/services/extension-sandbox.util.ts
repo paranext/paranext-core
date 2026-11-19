@@ -107,8 +107,9 @@ export function blockProcessModuleAccess(): void {
     configurable: true,
   });
   // The host's standard input is the null device (`/dev/null`, `NUL` on Windows), so Node makes
-  // `process.stdin` a file stream, which carries the whole `fs` module. The original is a getter that creates that stream on first read;
-  // nothing in the host reads it, so replacing it here means the file stream is never created.
+  // `process.stdin` a file stream, which carries the whole `fs` module. The original is a getter
+  // that creates that stream on first read; nothing in the host reads it, so replacing it here
+  // means the file stream is never created.
   Object.defineProperty(process, 'stdin', {
     value: Readable.from([]),
     writable: true,
@@ -146,9 +147,9 @@ function createCodeGenerationRefuser(name: string, functionPrototype: object): (
  * `constructor`.
  */
 export function blockCodeGenerationFromStrings(): void {
-  // Node.js loads its built-in `fetch` implementation (undici) on first use, and some of its modules
-  // read the global `Function` as they load (Node.js 24's `lib/web/webidl` does). Without this,
-  // `fetch`, `Headers`, `Request`, `Response`, `FormData`, `WebSocket`, `MessageEvent` and
+  // Node.js loads its built-in `fetch` implementation (undici) on first use, and some of its
+  // modules read the global `Function` as they load (Node.js 24's `lib/web/webidl` does). Without
+  // this, `fetch`, `Headers`, `Request`, `Response`, `FormData`, `WebSocket`, `MessageEvent` and
   // `CloseEvent` all throw `ReferenceError: Function is not defined` on first use. Constructing a
   // `Headers` loads undici while `Function` still exists, without touching the network.
   new Headers().has('accept');

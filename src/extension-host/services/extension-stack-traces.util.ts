@@ -23,6 +23,12 @@ const extensionSourceMaps = new Map<
 /** A V8 call site, as `Error.prepareStackTrace` receives it */
 type CallSite = Parameters<NonNullable<typeof Error.prepareStackTrace>>[1][number];
 
+/** How long a deactivated extension's map is kept, so errors from its late async callbacks map */
+const DEACTIVATED_SOURCE_MAP_RETENTION_MS = 60_000;
+
+/** Pending removals of deactivated extensions' maps, keyed by path */
+const pendingSourceMapRemovals = new Map<string, ReturnType<typeof setTimeout>>();
+
 let isInstalled = false;
 
 /**
@@ -33,6 +39,9 @@ let isInstalled = false;
  * @param source The file's contents
  */
 export function rememberExtensionSourceMap(filePath: string, source: string): void {
+  // Loaded again before its old map was dropped: keep the fresh one
+  clearTimeout(pendingSourceMapRemovals.get(filePath));
+  pendingSourceMapRemovals.delete(filePath);
   if (!isInstalled) return;
   // Only the end of the file can hold the map comment; searching from the last mention keeps this
   // fast on large bundles
@@ -40,6 +49,39 @@ export function rememberExtensionSourceMap(filePath: string, source: string): vo
   const match = INLINE_SOURCE_MAP.exec(`//# ${tail}`);
   if (match) extensionSourceMaps.set(filePath, { encodedMap: match[1] });
   else extensionSourceMaps.delete(filePath);
+}
+
+/**
+ * Drops the map recorded for a deactivated extension's file after a delay, rather than right away,
+ * so errors from its async callbacks that run after deactivation still map. Loading the file again
+ * before then cancels the removal.
+ *
+ * @param filePath Path the file was loaded from
+ * @param delayMs How long to keep the map
+ */
+export function forgetExtensionSourceMapLater(
+  filePath: string,
+  delayMs = DEACTIVATED_SOURCE_MAP_RETENTION_MS,
+): void {
+  if (!extensionSourceMaps.has(filePath)) return;
+  clearTimeout(pendingSourceMapRemovals.get(filePath));
+  const timer = setTimeout(() => {
+    pendingSourceMapRemovals.delete(filePath);
+    extensionSourceMaps.delete(filePath);
+  }, delayMs);
+  // A pending removal must not keep the process alive
+  timer.unref?.();
+  pendingSourceMapRemovals.set(filePath, timer);
+}
+
+/**
+ * Whether a map is recorded for an extension file
+ *
+ * @param filePath Path the file was loaded from
+ * @returns True if stack frames from that file are mapped through a recorded map
+ */
+export function hasExtensionSourceMap(filePath: string): boolean {
+  return extensionSourceMaps.has(filePath);
 }
 
 function getExtensionSourceMap(filePath: string): SourceMap | undefined {

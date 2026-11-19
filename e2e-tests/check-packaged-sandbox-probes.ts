@@ -80,10 +80,14 @@ function findPackagedExecutable(): string | undefined {
   return fs.existsSync(executable) ? executable : undefined;
 }
 
-/** Whether something already accepts connections on the app's WebSocket port */
+/**
+ * Whether something already accepts connections on the app's WebSocket port. Connects to
+ * `localhost`, as the app's server listens and its clients connect, so Node tries both `::1` and
+ * `127.0.0.1`.
+ */
 function isPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const socket = net.connect({ port, host: '127.0.0.1' });
+    const socket = net.connect({ port, host: 'localhost' });
     socket.once('connect', () => {
       socket.destroy();
       resolve(true);
@@ -200,14 +204,24 @@ async function main(): Promise<number> {
       problems = [`The app exited before the check finished (${exitDescription})`, ...problems];
   } catch (e) {
     problems = [`The check failed: ${e instanceof Error ? e.message : String(e)}`];
+    // A failed read usually means the app died; say so first
+    if (exitDescription !== undefined)
+      problems.unshift(`The app exited before the check finished (${exitDescription})`);
   } finally {
-    if (exitDescription === undefined && app.pid !== undefined) {
+    if (app.pid !== undefined) {
+      // Always, even after the app exited: its extension host, data provider and helpers can
+      // outlive it in its process group and keep the output pipes open, so the script never ends
       killProcessTree(app.pid, 'SIGTERM');
       if (!(await waitForExit(GRACEFUL_EXIT_MS))) {
         killProcessTree(app.pid, 'SIGKILL');
         await waitForExit(5_000);
       }
+      // The app's exit says nothing about the rest of its group; finish off anything left in it.
+      // (On Windows, taskkill already forced the whole tree.)
+      if (process.platform !== 'win32') killProcessTree(app.pid, 'SIGKILL');
     }
+    app.stdout?.destroy();
+    app.stderr?.destroy();
     removeUserDataDirBestEffort(userDataDir);
   }
 

@@ -16,7 +16,6 @@ import {
 import { Uri } from '@shared/data/file-system.model';
 import { markStartup } from '@shared/utils/startup-timing.util';
 import { getModuleSimilarApiMessage } from '@shared/utils/util';
-import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import * as platformBibleUtils from 'platform-bible-utils';
 import * as crypto from 'crypto';
@@ -38,6 +37,7 @@ import {
   NOT_ALLOWED_IN_EXTENSIONS,
 } from '@extension-host/services/extension-sandbox.util';
 import { isLockedFileError, retryWhileFileLocked } from '@node/utils/locked-file.util';
+import { forgetExtensionSourceMapLater } from '@extension-host/services/extension-stack-traces.util';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import * as papiCore from '@shared/services/papi-core.service';
 import { executionTokenService } from '@node/services/execution-token.service';
@@ -1407,17 +1407,6 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
       ? extensions.filter((extension) => activeExtensions.get(extension.name) === undefined)
       : extensions;
 
-  // Shim out require so extensions can use it only as prescribed. Extension entry files get
-  // `requireForExtension` from the sandbox loader and never reach Node's module loader, so this shim
-  // is a backstop in case extension code ever obtains a real `require`. It also applies to host
-  // modules loaded after activation starts, which then get this shim's refusal.
-  // WARNING: This code should not be edited without serious review. For more information,
-  // see https://github.com/paranext/paranext/wiki/Module-import-restrictions
-  //
-  // Assert the specific type.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  Module.prototype.require = requireForExtension as typeof Module.prototype.require;
-
   // Remove ways to execute arbitrary code https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/script-src#unsafe_eval_expressions
   // and the `process` members that hand out Node modules, native code or host handles without
   // `require`. The loader extensions are activated with comes only from this call.
@@ -1511,6 +1500,10 @@ async function deactivateExtension(extension: ActiveExtension): Promise<boolean 
     );
   }
   if (extensionKey) uriHandlersByExtensionKey.delete(extensionKey);
+
+  forgetExtensionSourceMapLater(
+    getPathFromUri(joinUriPaths(extension.info.dirUri, extension.info.main)),
+  );
 
   return isUnsubscribed;
 }

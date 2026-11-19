@@ -10,7 +10,7 @@ import {
  * Pins the module specifiers an extension may `require` at runtime.
  *
  * The extension `require` the host hands each extension file (`requireForExtension` in
- * `extension.service.ts`, also installed as the `Module.prototype.require` shim) is where the
+ * `extension.service.ts`) is where the
  * Extension Interface is defined in practice, and `LICENSE-EXCEPTION.md` grants an additional
  * permission under section 7 of the AGPL to works that reach Platform.Bible only through that
  * interface. The list is therefore the boundary of a published, irrevocable license grant as well
