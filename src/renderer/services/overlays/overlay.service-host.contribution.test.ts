@@ -604,27 +604,37 @@ describe('showContextMenu contribution integration', () => {
       expect(sendCommand).toHaveBeenCalledWith('ext.cmd');
     });
 
-    it('enables an item from a request key and never asks the shared service for it', async () => {
-      const menu = singleItemMenu({ enabledWhen: 'ext.req.hasSelection' });
+    const requestKeyMenu = singleItemMenu({ enabledWhen: 'ext.req.hasSelection' });
 
-      const enabled = await openMenu(menu, { contextKeys: { 'ext.req.hasSelection': true } });
-      expect(enabled.overlay.items[0]).not.toHaveProperty('disabled');
+    it('enables an item when the request key is true, without asking the shared service', async () => {
+      const { promise, overlay } = await openMenu(requestKeyMenu, {
+        contextKeys: { 'ext.req.hasSelection': true },
+      });
+
+      expect(overlay.items[0]).not.toHaveProperty('disabled');
       expect(contextKeysService.get).not.toHaveBeenCalledWith('ext.req.hasSelection');
-      enabled.overlay.resolve(undefined);
-      await enabled.promise;
+      overlay.resolve(undefined);
+      await promise;
+    });
 
-      resetDebounceState();
-      const disabled = await openMenu(menu, { contextKeys: { 'ext.req.hasSelection': false } });
-      expect(disabled.overlay.items[0]).toMatchObject({ disabled: true });
-      disabled.overlay.resolve(undefined);
-      await disabled.promise;
+    it('disables an item when the request key is false', async () => {
+      const { promise, overlay } = await openMenu(requestKeyMenu, {
+        contextKeys: { 'ext.req.hasSelection': false },
+      });
 
-      resetDebounceState();
-      const absent = await openMenu(menu);
-      expect(absent.overlay.items[0]).toMatchObject({ disabled: true });
+      expect(overlay.items[0]).toMatchObject({ disabled: true });
+      expect(contextKeysService.get).not.toHaveBeenCalledWith('ext.req.hasSelection');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('disables an item when the request key is absent, asking the shared service', async () => {
+      const { promise, overlay } = await openMenu(requestKeyMenu);
+
+      expect(overlay.items[0]).toMatchObject({ disabled: true });
       expect(contextKeysService.get).toHaveBeenCalledWith('ext.req.hasSelection');
-      absent.overlay.resolve(undefined);
-      await absent.promise;
+      overlay.resolve(undefined);
+      await promise;
     });
 
     it('hides an item whose when reads a false request key', async () => {

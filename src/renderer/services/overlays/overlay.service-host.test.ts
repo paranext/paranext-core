@@ -2566,6 +2566,31 @@ describe('overlay.service-host', () => {
       });
     });
 
+    describe("when the opener's own dismiss closes a context menu", () => {
+      it('returns focus after dismissContextMenu with focus inside the menu', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent(getOverlays()[0].id);
+
+        await overlayService.dismissContextMenu('test-webview');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('does not return focus after dismissContextMenu with focus outside the menu', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusFrame();
+
+        await overlayService.dismissContextMenu('test-webview');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+    });
+
     describe('when the app loses focus', () => {
       it('returns focus on a parent window blur with the app deactivated and focus inside', async () => {
         const { dismissed } = await openContextMenuPastGrace();

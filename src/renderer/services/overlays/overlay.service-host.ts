@@ -554,7 +554,7 @@ function menuExpressionsUseTemplateVar(menu: Localized<SingleColumnMenu>, name: 
 
 /**
  * Shows a context menu from menu.json contributions registered for the given webViewType. Fetches
- * menu data, renders the menu, and auto-executes the selected command.
+ * menu data, renders the menu, and runs the selected command unless `shouldRunCommand` is `false`.
  *
  * @param webViewType The webViewType to look up in the menu data service
  * @param webViewId The webViewId that originated the request
