@@ -11372,8 +11372,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     Focusing the iframe blurs the top window synchronously, and the blur dismissal would settle the
     same menu again, so `showTabMenu` counts only the first settle. As of 2026-11-18, a review probe
     in the Electron app found the frame focused and its user activation active after the pick, and
-    `execCommand('copy')` and `navigator.clipboard.writeText` succeeded; Paste
-    (`navigator.clipboard.readText`) has not been probed.
+    `execCommand('copy')` and `navigator.clipboard.writeText` succeeded. As of 2026-11-19, Paste
+    from the scripture editor's Edit submenu was confirmed working in the Electron app by hand.
   - The overlay shows the menu as it was when it opened: an `enabledWhen` or `checkedWhen` change
     while it is open appears the next time it opens, unlike the in-frame menu (an exception to
     `adr-menus-gate-declaratively-with-context-keys` D3). Handlers keep their own guards.
