@@ -88,7 +88,9 @@ export type UseEditorContextMenuOptions = {
   onPick: (command: string, request: EditorContextMenuRequest) => void;
   /**
    * Receives any rejection of `requestMenu` or `dismissMenu` other than the expected ones (a newer
-   * menu replaced this one, debounce, tab not visible).
+   * menu replaced this one, debounce, tab not visible), and anything `onPick` throws. The hook
+   * swallows an unexpected failure only when this is absent, and never lets a throwing `onError`
+   * escape.
    *
    * @experimental This property is unstable and may change shape or disappear without notice
    */
@@ -108,8 +110,10 @@ export type UseEditorContextMenuResult = {
    */
   dismiss: () => void;
   /**
-   * Whether a request is open: true from the right-click until the request settles. Hosts read it
-   * to keep their own key handling away from a key the pending menu owns.
+   * Whether a request is open: true from the right-click until the request settles (or the user
+   * clicks back into the frame). Hosts read it to keep their own key handling away from a key the
+   * pending menu owns. The hook's own key claim is shorter: it lapses two seconds after the
+   * right-click even while this stays true.
    *
    * @experimental This property is unstable and may change shape or disappear without notice
    */
@@ -123,11 +127,32 @@ const QUIET_ERROR_CODES: ReadonlySet<string> = new Set([
   RESOURCE_EXHAUSTED,
   FAILED_PRECONDITION,
 ]);
-/** Distance in pixels from the visible container's corner at which a keyboard-raised menu opens. */
+/** Distance in pixels from the frame's edge or the container's corner for a keyboard-raised menu. */
 const KEYBOARD_FALLBACK_INSET = 8;
+/**
+ * How long after a right-click the hook claims the keyboard. The claim covers the gap before the
+ * menu takes focus, but the menu-data request behind it can stall on a busy extension host, and an
+ * unbounded claim would leave the editor ignoring every key with no menu on screen. Once the menu
+ * is up it holds focus in the app window, so a lapsed claim loses nothing.
+ */
+const KEY_CLAIM_MS = 2000;
 
 function isQuietError(error: unknown): boolean {
   return isPlatformError(error) && error.code !== undefined && QUIET_ERROR_CODES.has(error.code);
+}
+
+// Duck-typed rather than `instanceof`: a target from another realm (an iframe) fails the check
+// against this realm's `Node` and `Element`.
+function isNode(value: unknown): value is Node {
+  return typeof value === 'object' && !!value && 'nodeType' in value;
+}
+
+function isElement(node: Node): node is Element {
+  return node.nodeType === 1;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
 /** The browser selection when it is non-collapsed and lies inside the container. */
@@ -140,29 +165,37 @@ function getSelectionInside(container: HTMLElement): Selection | undefined {
   return selection;
 }
 
-/** Where a keyboard-raised menu opens: at the caret, else in the visible part of the container. */
+/**
+ * Where a keyboard-raised menu opens: at the caret (the selection's focus, which is the right end
+ * for a backward selection and in right-to-left text), else in the visible part of the container.
+ * Always inside the frame's viewport.
+ */
 function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
-  const selection = container.ownerDocument.getSelection();
-  if (selection && selection.rangeCount > 0) {
-    const range = selection.getRangeAt(0);
-    if (container.contains(range.commonAncestorContainer)) {
-      const rects = range.getClientRects();
-      if (rects.length > 0) {
-        const last = rects[rects.length - 1];
-        return { x: last.right, y: last.bottom };
-      }
-      // A collapsed caret often has no client rect list but does have a bounding rect.
-      const bounds = range.getBoundingClientRect?.();
-      if (bounds && (bounds.width > 0 || bounds.height > 0)) {
-        return { x: bounds.right, y: bounds.bottom };
-      }
+  const inset = KEYBOARD_FALLBACK_INSET;
+  const place = (x: number, y: number) => ({
+    x: clamp(x, inset, window.innerWidth - inset),
+    y: clamp(y, inset, window.innerHeight - inset),
+  });
+
+  const doc = container.ownerDocument;
+  const selection = doc.getSelection();
+  const { focusNode } = selection ?? {};
+  if (selection && focusNode && selection.rangeCount > 0 && container.contains(focusNode)) {
+    const caret = doc.createRange();
+    caret.setStart(focusNode, selection.focusOffset);
+    caret.collapse(true);
+    const rects = caret.getClientRects();
+    if (rects.length > 0) {
+      const last = rects[rects.length - 1];
+      return place(last.left, last.bottom);
     }
+    // A collapsed caret often has no client rect list but does have a bounding rect.
+    const bounds = caret.getBoundingClientRect?.();
+    if (bounds && (bounds.width > 0 || bounds.height > 0)) return place(bounds.left, bounds.bottom);
   }
+
   const box = container.getBoundingClientRect();
-  return {
-    x: Math.max(box.left, 0) + KEYBOARD_FALLBACK_INSET,
-    y: Math.max(box.top, 0) + KEYBOARD_FALLBACK_INSET,
-  };
+  return place(Math.max(box.left, 0) + inset, Math.max(box.top, 0) + inset);
 }
 
 /**
@@ -170,13 +203,24 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
  * open the platform context menu, and hands the picked command back. The library cannot reach PAPI,
  * so the host passes the two platform calls in.
  *
- * While a request is open the keyboard belongs to the menu: every key except bare modifiers is
- * claimed on the frame's window, and Escape also closes the menu. A `wheel` or `touchmove` closes
- * it too. Not a `scroll` listener: opening the menu blurs the editor, which can scroll the frame by
- * itself and would close the menu the moment it opens.
+ * The listeners sit on the frame's own document and window and resolve `containerRef.current` when
+ * an event arrives, so a container that mounts late or is rebuilt is still served. The container
+ * must be the editor's own element, never a wrapper that holds other editors.
  *
- * One instance per editor. The container must be mounted in the same commit as the hook, and
- * `requestMenu` must always settle: the menu owns the keyboard until it does.
+ * While a request is open the keyboard belongs to the menu: every key except bare modifiers is
+ * claimed on the frame's window, and Escape also closes the menu. The claim lasts until the request
+ * settles or two seconds have passed, whichever comes first. A `wheel`, `touchmove` or a
+ * `pointerdown` in the frame closes the menu too (a `pointerdown` also drops the request, so a late
+ * pick never reaches `onPick`). Not a `scroll` listener: opening the menu blurs the editor, which
+ * can scroll the frame by itself and would close the menu the moment it opens.
+ *
+ * A pick that resolves after `dismiss()`, after the pointer-down drop, or after unmount is ignored.
+ *
+ * The key claim is a capture-phase `keydown` listener on the window, registered when the hook
+ * mounts. It stops listeners registered after it, but not window-capture listeners registered
+ * earlier, which run first: those must gate on `isPending()` themselves.
+ *
+ * One instance per editor.
  *
  * @param options See {@link UseEditorContextMenuOptions}
  * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
@@ -185,19 +229,35 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
 export function useEditorContextMenu(
   options: UseEditorContextMenuOptions,
 ): UseEditorContextMenuResult {
-  // Listeners are attached once and read the latest options, so a host can pass inline closures.
+  // Everything reads the latest options at the time it is used, so a host can pass inline closures.
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  const isPendingRef = useRef(false);
-  /** Identifies the newest request, so an older one settling cannot clear a newer one's state. */
-  const latestRequestIdRef = useRef(0);
+  /** Ids of the requests whose `requestMenu` promise has not settled and was not dropped. */
+  const openRequestsRef = useRef(new Set<number>());
+  /** Ids of requests that were dismissed or dropped: their pick must not reach `onPick`. */
+  const dismissedRequestsRef = useRef(new Set<number>());
+  const nextRequestIdRef = useRef(0);
+  const isUnmountedRef = useRef(false);
+  const isKeyClaimActiveRef = useRef(false);
+  const keyClaimTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const reportError = useCallback((error: unknown) => {
-    if (!isQuietError(error)) optionsRef.current.onError?.(error);
+    if (isQuietError(error)) return;
+    try {
+      optionsRef.current.onError?.(error);
+    } catch {
+      // A failing error handler must not turn into an unhandled rejection.
+    }
   }, []);
 
-  const dismissMenu = useCallback(() => {
+  const endKeyClaim = useCallback(() => {
+    isKeyClaimActiveRef.current = false;
+    clearTimeout(keyClaimTimerRef.current);
+    keyClaimTimerRef.current = undefined;
+  }, []);
+
+  const callDismissMenu = useCallback(() => {
     try {
       Promise.resolve(optionsRef.current.dismissMenu()).catch(reportError);
     } catch (error) {
@@ -205,24 +265,41 @@ export function useEditorContextMenu(
     }
   }, [reportError]);
 
+  /** Closes the menu; a pick for any request open right now will be ignored. */
+  const dismissOpenRequests = useCallback(() => {
+    openRequestsRef.current.forEach((id) => dismissedRequestsRef.current.add(id));
+    callDismissMenu();
+  }, [callDismissMenu]);
+
+  /** Closes the menu and forgets the open requests, as when the user clicks back into the frame. */
+  const dropOpenRequests = useCallback(() => {
+    dismissOpenRequests();
+    openRequestsRef.current.clear();
+    endKeyClaim();
+  }, [dismissOpenRequests, endKeyClaim]);
+
   const dismiss = useCallback(() => {
-    if (isPendingRef.current) dismissMenu();
-  }, [dismissMenu]);
+    if (openRequestsRef.current.size > 0) dismissOpenRequests();
+  }, [dismissOpenRequests]);
 
-  const isPending = useCallback(() => isPendingRef.current, []);
+  const isPending = useCallback(() => openRequestsRef.current.size > 0, []);
 
-  const { containerRef } = options;
   useEffect(() => {
-    const container = containerRef.current;
-    const win = container?.ownerDocument.defaultView;
-    if (!container || !win) return undefined;
+    isUnmountedRef.current = false;
+    const openRequests = openRequestsRef.current;
+    // The hook runs in the web view's own frame, so these globals are the frame's document and
+    // window. The container is resolved per event: it may not exist yet, or be rebuilt later.
+    const doc = document;
+    const win = window;
 
     const handleContextMenu = (event: MouseEvent) => {
-      const { isEnabled = true, hasNonTextSelection, requestMenu, onPick } = optionsRef.current;
+      const { containerRef, isEnabled = true, hasNonTextSelection } = optionsRef.current;
       if (!isEnabled) return;
+      const container = containerRef.current;
       const { target } = event;
-      if (!(target instanceof Node) || !container.contains(target)) return;
-      const targetElement = target instanceof Element ? target : target.parentElement;
+      if (!container || !container.isConnected || !isNode(target) || !container.contains(target))
+        return;
+      const targetElement = isElement(target) ? target : target.parentElement;
       const interactive = targetElement?.closest(INTERACTIVE_SELECTOR);
       if (interactive && interactive !== container && container.contains(interactive)) return;
 
@@ -230,6 +307,7 @@ export function useEditorContextMenu(
 
       // Read from the browser now: the editor learns of a selection change only after the event.
       const selection = getSelectionInside(container);
+      // First version of the keyboard check: a mouse-raised event has button 2.
       const isKeyboardInvoked = event.button !== 2;
       const request: EditorContextMenuRequest = {
         position: isKeyboardInvoked
@@ -240,67 +318,81 @@ export function useEditorContextMenu(
         isKeyboardInvoked,
       };
 
-      latestRequestIdRef.current += 1;
-      const requestId = latestRequestIdRef.current;
-      isPendingRef.current = true;
+      nextRequestIdRef.current += 1;
+      const requestId = nextRequestIdRef.current;
+      openRequestsRef.current.add(requestId);
+      isKeyClaimActiveRef.current = true;
+      clearTimeout(keyClaimTimerRef.current);
+      keyClaimTimerRef.current = setTimeout(() => {
+        isKeyClaimActiveRef.current = false;
+      }, KEY_CLAIM_MS);
+
       const settle = () => {
-        if (latestRequestIdRef.current === requestId) isPendingRef.current = false;
+        openRequestsRef.current.delete(requestId);
+        if (openRequestsRef.current.size === 0) endKeyClaim();
+        return dismissedRequestsRef.current.delete(requestId) || isUnmountedRef.current;
       };
 
       const run = async () => {
         let command: string | undefined;
         try {
-          command = await requestMenu(request);
+          command = await optionsRef.current.requestMenu(request);
         } catch (error) {
           settle();
           reportError(error);
           return;
         }
-        settle();
-        if (command === undefined) return;
+        const isIgnored = settle();
+        if (command === undefined || isIgnored) return;
         try {
-          onPick(command, request);
+          optionsRef.current.onPick(command, request);
         } catch (error) {
           // A failing pick is the host's own bug, never one of the expected quiet rejections.
-          optionsRef.current.onError?.(error);
+          try {
+            optionsRef.current.onError?.(error);
+          } catch {
+            // A failing error handler must not turn into an unhandled rejection.
+          }
         }
       };
-      // `run` handles its own failures; nothing escapes to await.
+      // `run` handles every failure itself; nothing escapes to await.
       run();
     };
 
     const handleUserScroll = () => {
-      if (isPendingRef.current) dismissMenu();
+      if (openRequestsRef.current.size > 0) dismissOpenRequests();
+    };
+
+    const handlePointerDown = () => {
+      if (openRequestsRef.current.size > 0) dropOpenRequests();
     };
 
     // Hidden-tab case: intentionally not handled. A hidden tab receives no right-click, and
     // `showContextMenu` refuses a tab that is not visible, so no request can be pending there.
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!isPendingRef.current || BARE_MODIFIER_KEYS.has(event.key)) return;
+      if (!isKeyClaimActiveRef.current || BARE_MODIFIER_KEYS.has(event.key)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (event.key === 'Escape') dismissMenu();
+      if (event.key === 'Escape') dismissOpenRequests();
     };
 
-    container.addEventListener('contextmenu', handleContextMenu, true);
-    win.addEventListener('wheel', handleUserScroll, { passive: true });
-    win.addEventListener('touchmove', handleUserScroll, { passive: true });
+    doc.addEventListener('contextmenu', handleContextMenu, true);
+    win.addEventListener('wheel', handleUserScroll, { capture: true, passive: true });
+    win.addEventListener('touchmove', handleUserScroll, { capture: true, passive: true });
+    win.addEventListener('pointerdown', handlePointerDown, true);
     win.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      container.removeEventListener('contextmenu', handleContextMenu, true);
-      win.removeEventListener('wheel', handleUserScroll);
-      win.removeEventListener('touchmove', handleUserScroll);
+      doc.removeEventListener('contextmenu', handleContextMenu, true);
+      win.removeEventListener('wheel', handleUserScroll, true);
+      win.removeEventListener('touchmove', handleUserScroll, true);
+      win.removeEventListener('pointerdown', handlePointerDown, true);
       win.removeEventListener('keydown', handleKeyDown, true);
+      // A menu still open when the editor goes away must not outlive it, nor pick into it.
+      isUnmountedRef.current = true;
+      if (openRequests.size > 0) dismissOpenRequests();
+      endKeyClaim();
     };
-  }, [containerRef, dismissMenu, reportError]);
-
-  // A menu still open when the editor goes away must not outlive it.
-  useEffect(
-    () => () => {
-      if (isPendingRef.current) dismissMenu();
-    },
-    [dismissMenu],
-  );
+  }, [dismissOpenRequests, dropOpenRequests, endKeyClaim, reportError]);
 
   return { dismiss, isPending };
 }
