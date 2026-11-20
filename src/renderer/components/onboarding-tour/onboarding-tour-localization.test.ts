@@ -55,12 +55,11 @@ describe('onboarding tour profile stop', () => {
     );
   });
 
-  // A language that has translated the retired description but not its replacement keeps showing
-  // its own translation instead of falling back to English.
-  it('falls back to the retired description where the new one is not translated', () => {
-    expect(metadata['%onboardingTour_step_profile_description_2%']?.fallbackKey).toBe(
-      '%onboardingTour_step_profile_description%',
-    );
+  // The retired description sends the user to a Profile button that is now the User menu, and does
+  // not mention the Simple / Power switch, so its translation is not acceptable for the new text. A
+  // language that has not translated the new description shows English instead.
+  it('does not fall back to the retired description', () => {
+    expect(metadata['%onboardingTour_step_profile_description_2%']?.fallbackKey).toBeUndefined();
   });
 });
 

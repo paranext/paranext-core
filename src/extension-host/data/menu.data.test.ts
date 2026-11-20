@@ -55,37 +55,26 @@ describe('Help menu community support label', () => {
   });
 });
 
-describe('The retired FAQs key redirects to the new one', () => {
+describe('The retired FAQs key keeps its shipped value', () => {
   /**
    * Localized string values are immutable once shipped, so the relabel adds a key rather than
-   * editing this one, and routes the retired key at the new one.
-   *
-   * The retired key's own values have to be gone for that redirect to do anything:
-   * `getLocalizedString` returns `initialLanguageData[localizeKey]` and only consults `fallbackKey`
-   * when that misses, so a retired key that keeps its value resolves to the old label forever and
-   * the redirect is inert. Removing the values is what makes a consumer still holding the old key
-   * render "Community support".
+   * editing this one. The retired key keeps the English value it shipped with in v0.5.0 and is
+   * marked deprecated. It has no `fallbackKey` to the new key: a redirect from an old key to a new
+   * one can fire only where the old key has no value, and there it would hand "Community support"
+   * to a consumer still asking for "FAQs" (Localization-Guide.md, "`fallbackKey` Points From New to
+   * Old, Never From Old to New").
    */
-  test.each([
-    ['en', en],
-    ['es', es],
-  ])('%s no longer carries the retired key, so the redirect is reachable', (_, locale) => {
-    expect(locale[RETIRED_FAQS_KEY]).toBeUndefined();
+  test('keeps its shipped English value', () => {
+    expect(en[RETIRED_FAQS_KEY]).toBe('FAQs');
   });
 
-  test('is redirected at the new key', () => {
-    expect(metadata[RETIRED_FAQS_KEY]?.fallbackKey).toBe(COMMUNITY_SUPPORT_KEY);
+  test('does not redirect to the new key', () => {
+    expect(metadata[RETIRED_FAQS_KEY]?.fallbackKey).toBeUndefined();
   });
 
   // `deprecatedStringsByKey` warns on use of a deprecated key, but only when it carries this.
   test('is marked deprecated so its remaining consumers are logged', () => {
     expect(metadata[RETIRED_FAQS_KEY]?.deprecationInfo).toBeDefined();
-  });
-
-  test('redirects at a key that actually resolves in both shipped locales', () => {
-    const { fallbackKey } = metadata[RETIRED_FAQS_KEY] ?? {};
-    expect(fallbackKey && en[fallbackKey]).toBeTruthy();
-    expect(fallbackKey && es[fallbackKey]).toBeTruthy();
   });
 });
 

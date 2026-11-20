@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { localizedStringsDocumentCombiner } from '@extension-host/services/contribution.service';
 import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages.service';
 import { testingLocalizationService } from '@extension-host/services/localization.service-host';
 import { logger } from '@shared/services/logger.service';
@@ -67,6 +68,9 @@ const MOCK_FILES: { [uri: string]: string } = {
     },
     "%fallbackTierLookup_new%": {
       "fallbackKey": "%fallbackTierLookup_old%"
+    },
+    "%coreKey_fallsBackToExtensionKey%": {
+      "fallbackKey": "%testExtension_oldKey%"
     }
   }`,
 };
@@ -182,6 +186,26 @@ test('resolves a key that has no value in any language through its fallbackKey i
     locales: ['fr'],
   });
   expect(response).toEqual('Target in English');
+});
+
+test('resolves a platform key through a fallbackKey that names a key only an extension contributes', async () => {
+  // The platform metadata and every extension's strings are combined into one document before any
+  // lookup, so a platform key can borrow translations from an extension's key.
+  localizedStringsDocumentCombiner.addOrUpdateContribution('testExtension', {
+    localizedStrings: {
+      en: { '%testExtension_oldKey%': 'Old extension text' },
+      fr: { '%testExtension_oldKey%': "Ancien texte de l'extension" },
+    },
+  });
+  try {
+    const response = await localizationDataProviderEngine.getLocalizedString({
+      localizeKey: '%coreKey_fallsBackToExtensionKey%',
+      locales: ['fr'],
+    });
+    expect(response).toEqual("Ancien texte de l'extension");
+  } finally {
+    localizedStringsDocumentCombiner.deleteContribution('testExtension');
+  }
 });
 
 test('Key returned with localizeKey that does not exist', async () => {

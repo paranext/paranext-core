@@ -58,9 +58,7 @@ export function CopyConflictPrompt({
                 ? // Lists the conflicting book names like the import-conflict prompt
                   // does, so the user sees exactly which books would be overwritten.
                   // Proper _one/_other pluralization (matching the import
-                  // filesMatched pair) instead of "book(s)"; the old count-only
-                  // %manageBooks_copy_confirmBody% is redirected via metadata
-                  // fallbackKey since its placeholder arity changed. The list join is
+                  // filesMatched pair) instead of "book(s)". The list join is
                   // locale-aware via Intl.ListFormat.
                   (() => {
                     const bookList = new Intl.ListFormat(undefined, {

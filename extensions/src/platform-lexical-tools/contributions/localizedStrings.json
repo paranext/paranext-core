@@ -12,7 +12,7 @@
     "%platformLexicalTools_mainMenu_openHebGrkDictionary%": {
       "fallbackKey": "%platformLexicalTools_mainMenu_openDictionary%"
     },
-    "%platformLexicalTools_dictionary_title_SDBHSDBG%": {
+    "%platformLexicalTools_dictionary_title_sdbhSdbg%": {
       "fallbackKey": "%platformLexicalTools_dictionary_title%"
     }
   },

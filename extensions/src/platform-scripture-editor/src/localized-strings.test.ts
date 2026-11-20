@@ -193,11 +193,10 @@ describe.each(['%webView_platformScriptureEditor_error_syncEditBlocked_2%'])(
   },
 );
 
-// Same guard for the book-not-available zero-state. This one matters more than most: the string family
-// it replaced (`%webView_platformScriptureEditor_error_bookNotFoundProject%`) already shipped with a
-// Spanish value, so an en-only replacement would have been a REGRESSION for Spanish users rather than
-// merely a gap — English title, description, button and tooltips where they previously had a
-// localized sentence.
+// Same guard for the book-not-available zero-state. The string it replaced
+// (`%webView_platformScriptureEditor_error_bookNotFoundProject%`) had a Spanish value, so an en-only
+// replacement would show Spanish users English title, description, button and tooltips where they
+// had a localized sentence.
 describe.each([...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS])(
   'book-not-available view label %s',
   (key) => {
@@ -227,15 +226,11 @@ describe.each(['en', 'es'])('book-not-available description placeholder in %s', 
   });
 });
 
-// The retired key keeps no value of its own — it told users to "use Paratext 9 to create the book",
-// exactly the workflow this view replaces, so leaving that sentence in the file would keep shipping
-// obsolete advice. But dropping the key outright would leave any consumer still holding it resolving
-// to a raw `%…%` token, so `metadata.fallbackKey` redirects it onto the new Simple-mode sentence:
-// the redirect resolves the OLD key to the NEW key's value (`localization.service-host.ts`
-// `findLocalizationForFallbackLanguageAndOrKey`), which is the direction the Localization Guide's
-// replacement checklist prescribes. `simpleMessage` is the target because it is the only replacement
-// that is a self-contained sentence in both locales — `description` carries a `{buttonLabel}`
-// placeholder a legacy consumer would have no value to fill.
+// The retired key keeps no value of its own: it told users to "use Paratext 9 to create the book",
+// exactly the workflow this view replaces. It has no metadata entry either: a `fallbackKey` on it
+// pointing at the new sentence would run the wrong way. It only fires where the retired key has no
+// value, which hands the new meaning to anyone still using the old key for its old meaning (see "If
+// a String Needs Replacement" in .context/standards/Localization-Guide.md).
 describe('retired book-not-found-in-project string', () => {
   const retiredKey = '%webView_platformScriptureEditor_error_bookNotFoundProject%';
 
@@ -243,10 +238,8 @@ describe('retired book-not-found-in-project string', () => {
     expect(localizedStrings[locale][retiredKey]).toBeUndefined();
   });
 
-  it('redirects to the new Simple-mode message so old consumers still get a sentence', () => {
-    expect(metadata?.[retiredKey]?.fallbackKey).toBe(
-      '%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%',
-    );
+  it('has no metadata entry redirecting it to a newer key', () => {
+    expect(metadata?.[retiredKey]).toBeUndefined();
   });
 });
 
