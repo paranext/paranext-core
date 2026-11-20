@@ -78,7 +78,7 @@ run").
   machine-wide OS clipboard — see "State that leaks between runs" in `e2e-tests/CLAUDE.md`
 - `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
 - `settings-zoom-stepper/` (one Electron per test) — the Settings layout and its zoom steppers
-- `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
+- `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths, and for the application logo opening and closing the app menu. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
 - `web-view-lifecycle/` (one Electron per test) — tests for a web view's React root when its iframe gets a new document: a reload, or a tab move within the window, unmounts the root of the document it replaces, and neither that nor the tab's close logs a crash or React's unmount-during-render warning. A reload runs the web view's own `pagehide` and `unload` listeners before that unmount
 
 ## Running on Windows

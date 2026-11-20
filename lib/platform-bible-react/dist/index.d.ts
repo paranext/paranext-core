@@ -2629,6 +2629,16 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	 * https://www.electronjs.org/docs/latest/tutorial/custom-title-bar#create-a-custom-title-bar
 	 */
 	shouldUseAsAppDragArea?: boolean;
+	/**
+	 * Application icon put at the very start of the toolbar (left side in ltr, right side in rtl).
+	 * Clicking it opens the app menu (the menu headed by the product name), as the application icon
+	 * does in Paratext 9; clicking it again closes the menu. Its accessible name comes from the icon
+	 * itself, e.g. an `img`'s `alt`. Without `menuData` there is no menu to open, so it renders as a
+	 * plain icon.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	appMenuIcon?: React$1.ReactNode;
 	/** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
 	appMenuAreaChildren?: React$1.ReactNode;
 	/** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
@@ -2661,7 +2671,7 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * @param {ToolbarProps} props - The props for the component.
  */
-export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuIcon, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarCompoundLabelProps = {
 	/** The field that identifies the item — a book abbreviation, project short name, marker code. */
 	primary: React$1.ReactNode;
