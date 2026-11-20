@@ -500,7 +500,10 @@ declare module 'platform-scripture-editor' {
     redo(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
-    /** Toggle the visibility of the footnotes pane in the editor */
+    /**
+     * Move the footnotes pane between the bottom and beside the text, opening it if it is hidden.
+     * Resolves to the location the pane moves to
+     */
     changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'>;
     /**
      * Add or update decorations in the editor. New decoration definitions with the same id
@@ -1010,8 +1013,8 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
 
     /**
-     * Changes the location of the footnotes pane (if visible) for the given the WebView ID,
-     * toggling between showing it at the bottom or side-by-side.
+     * Moves the footnotes pane between the bottom and beside the text for the given WebView ID,
+     * opening it if it is hidden.
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
