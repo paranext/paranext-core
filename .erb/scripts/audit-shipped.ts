@@ -84,21 +84,27 @@ function main(): number {
   // npm audit exits non-zero whenever it finds anything, so only its output is meaningful.
   // `shell: true` lets `npm` resolve to `npm.cmd` on Windows. The command is one fixed string,
   // because Node deprecates passing an argument list alongside `shell: true` (DEP0190).
-  const run = spawnSync('npm audit --json --package-lock-only', {
-    cwd: REPO,
-    shell: true,
-    encoding: 'utf8',
-    maxBuffer: 256 * 1024 * 1024,
-  });
+  // The `--include` flags override an `omit` set by NODE_ENV=production or an .npmrc. Without them,
+  // Electron and the other shipped devDependencies drop out of the report, and it reads as clean.
+  const run = spawnSync(
+    'npm audit --json --package-lock-only --include=dev --include=optional --include=peer',
+    { cwd: REPO, shell: true, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
+  );
   let audit: unknown;
   try {
     audit = JSON.parse(run.stdout);
   } catch {
     throw new Error(`could not parse npm audit output: ${run.error?.message ?? run.stderr}`);
   }
-  // When the audit request itself fails, npm reports `{ "error": ... }` instead of results.
-  if (isObject(audit) && 'error' in audit)
-    throw new Error(`npm audit failed: ${JSON.stringify(audit.error)}`);
+  // When the audit request itself fails, npm reports `{ "error": ... }` instead of results, and
+  // puts the readable reason in a top-level `message`.
+  if (isObject(audit) && 'error' in audit) {
+    const reason =
+      'message' in audit && typeof audit.message === 'string'
+        ? audit.message
+        : JSON.stringify(audit.error);
+    throw new Error(`npm audit failed: ${reason}`);
+  }
 
   const found = findShippedAdvisories(audit, packageLock, shipped);
   found.forEach((advisories, key) => {
@@ -111,7 +117,10 @@ function main(): number {
   if (!found.size) console.log('No shipped npm package version has a known advisory.');
   console.log(
     '\nAlso run `dotnet list c-sharp/ParanextDataProvider.csproj package --vulnerable ' +
-      '--include-transitive`. Not covered: code inlined in the editor dist, and the extension zips.',
+      '--include-transitive`.\nNot covered: the scripture-editors packages ' +
+      '(@eten-tech-foundation/platform-editor and scripture-utilities), which are linked, so npm ' +
+      'audit skips them and the code they bundle; and the extension zips paratext-10-studio adds ' +
+      '(the Checking Assistant, Marketplace and Send/Receive). Audit those in their own repositories.',
   );
   return found.size ? 1 : 0;
 }

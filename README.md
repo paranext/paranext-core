@@ -488,7 +488,7 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 
 2. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
 
-3. On the branch you want to release from, run `npm run audit:shipped` and the `dotnet list` command it prints. Together they report the npm and NuGet packages the installers ship that have published security advisories. Update each one, or make sure it is tracked, before you publish.
+3. On the branch you want to release from, run `npm run audit:shipped` and the `dotnet list` command it prints. Together they report the npm and NuGet packages the installers ship that have published security advisories. The exceptions are the ones the script lists as not covered: the linked scripture-editors packages, and the extension zips `paratext-10-studio` adds. Audit those in their own repositories. Before you publish, update each reported package or confirm it has a Jira ticket. The script keeps reporting an advisory, and exits with 1, until it is fixed.
 
 4. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from. This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
 
