@@ -47,7 +47,145 @@ var ut=Object.defineProperty;var ht=(n,t,e)=>t in n?ut(n,t,{enumerable:!0,config
         font-display: swap;
         src: url('./sb-common-assets/nunito-sans-bold-italic.woff2') format('woff2');
       }
-    /*
+    /**
+ * Preview iframe: theme backgrounds are scoped so Docs prose (title, description) is not the same
+ * flat canvas as the story. Canvas tab fills #storybook-root; Docs uses --muted for the page;
+ * embedded previews (.sbdocs-preview) match the Story canvas including the zoom toolbar.
+ * Theme classes live on \`html\` (theme-decorator.ts). Variables: src/index.css
+ */
+
+html {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  /* Avoid painting the whole iframe — only the Storybook roots below */
+  background-color: transparent;
+}
+
+/* Story / Canvas tab */
+#storybook-root:not([hidden]) {
+  box-sizing: border-box;
+  min-height: 100vh;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Docs tab: MDX page (headings, description, args tables) — distinct from embedded preview */
+#storybook-docs:not([hidden]) {
+  box-sizing: border-box;
+  min-height: 100vh;
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+/* Loading states */
+.sb-preparing-story,
+.sb-preparing-docs {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/*
+ * Docs: embedded story + zoom toolbar — full theme surface (matches Canvas).
+ * Storybook’s block chrome uses its own theme background; !important aligns with our tokens.
+ */
+.sbdocs.sbdocs-preview {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.docs-story {
+  background-color: var(--background);
+}
+/**
+ * Storybook-only theme palettes. This file is imported in preview.ts and is NOT shipped in the
+ * library dist. Add CSS classes here that are only needed for the Storybook preview (e.g. theme
+ * switcher options that are not part of the production app).
+ */
+
+/**
+ * Stock Shadcn Neutral (HSL) — Storybook-only preview. Not applied in the running app.
+ * Converted from OKLCH in https://ui.shadcn.com/docs/theming (neutral "Default Theme CSS").
+ * Pair with \`.dark\` on the same element for dark mode: \`.dark.theme-shadcn-neutral\`.
+ *
+ * Intentional format mismatch: this file uses \`hsl(...)\` while \`index.css\` uses \`oklch(...)\`.
+ * Both are complete CSS color values consumed via bare \`var(--token)\`. Do NOT re-wrap them in
+ * \`hsl(var(--token))\` — re-wrapping a complete CSS color value produces invalid CSS.
+ */
+.theme-shadcn-neutral {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(0 0% 3.9%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(0 0% 3.9%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(0 0% 3.9%);
+  --primary: hsl(0 0% 9.1%);
+  --primary-foreground: hsl(0 0% 98%);
+  --secondary: hsl(0 0% 96.1%);
+  --secondary-foreground: hsl(0 0% 9.1%);
+  --muted: hsl(0 0% 96.1%);
+  --muted-foreground: hsl(0 0% 45.2%);
+  --accent: hsl(0 0% 96.1%);
+  --accent-foreground: hsl(0 0% 9.1%);
+  --destructive: hsl(351.7 100% 40.5%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(0 0% 89.8%);
+  --input: hsl(0 0% 89.8%);
+  --ring: hsl(0 0% 63%);
+
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(0 0% 3.9%);
+  --sidebar-primary: hsl(0 0% 9.1%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(0 0% 96.1%);
+  --sidebar-accent-foreground: hsl(0 0% 9.1%);
+  --sidebar-border: hsl(0 0% 89.8%);
+  --sidebar-ring: hsl(0 0% 63%);
+
+  --radius: 0.625rem;
+}
+
+/**
+ * These tokens use alpha-in-HSL syntax (e.g. \`hsl(0 0% 100% / 0.1)\` on --border, --input,
+ * --sidebar-border) to match the stock Shadcn Neutral docs preset. Tailwind opacity modifiers
+ * (e.g. \`border-border/50\`) would produce invalid \`hsl(... / 0.1 / 0.5)\` under this theme.
+ * Project-wide, tailwind.config.ts does not enable alpha modifiers on \`border\`/\`input\`, so the
+ * trap is latent; documented here to discourage future misuse.
+ */
+.dark.theme-shadcn-neutral {
+  --background: hsl(0 0% 3.9%);
+  --foreground: hsl(0 0% 98%);
+  --card: hsl(0 0% 9.1%);
+  --card-foreground: hsl(0 0% 98%);
+  --popover: hsl(0 0% 9.1%);
+  --popover-foreground: hsl(0 0% 98%);
+  --primary: hsl(0 0% 89.8%);
+  --primary-foreground: hsl(0 0% 9.1%);
+  --secondary: hsl(0 0% 14.9%);
+  --secondary-foreground: hsl(0 0% 98%);
+  --muted: hsl(0 0% 14.9%);
+  --muted-foreground: hsl(0 0% 63%);
+  --accent: hsl(0 0% 14.9%);
+  --accent-foreground: hsl(0 0% 98%);
+  --destructive: hsl(358.8 100% 69.8%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(0 0% 100% / 0.1);
+  --input: hsl(0 0% 100% / 0.15);
+  --ring: hsl(0 0% 45.2%);
+
+  --sidebar: hsl(0 0% 9.1%);
+  --sidebar-foreground: hsl(0 0% 98%);
+  --sidebar-primary: hsl(225.3 84.1% 49%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(0 0% 14.9%);
+  --sidebar-accent-foreground: hsl(0 0% 98%);
+  --sidebar-border: hsl(0 0% 100% / 0.1);
+  --sidebar-ring: hsl(0 0% 45.2%);
+}
+/*
  * Charis SIL for Storybook: the same faces the application declares, for every story that renders
  * Scripture text.
  *
@@ -460,144 +598,6 @@ var ut=Object.defineProperty;var ht=(n,t,e)=>t in n?ut(n,t,{enumerable:!0,config
 }
 
 /* #endregion installed-only faces for what the downloads above leave out — from fonts.css */
-/**
- * Preview iframe: theme backgrounds are scoped so Docs prose (title, description) is not the same
- * flat canvas as the story. Canvas tab fills #storybook-root; Docs uses --muted for the page;
- * embedded previews (.sbdocs-preview) match the Story canvas including the zoom toolbar.
- * Theme classes live on \`html\` (theme-decorator.ts). Variables: src/index.css
- */
-
-html {
-  min-height: 100%;
-}
-
-body {
-  margin: 0;
-  min-height: 100%;
-  /* Avoid painting the whole iframe — only the Storybook roots below */
-  background-color: transparent;
-}
-
-/* Story / Canvas tab */
-#storybook-root:not([hidden]) {
-  box-sizing: border-box;
-  min-height: 100vh;
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-/* Docs tab: MDX page (headings, description, args tables) — distinct from embedded preview */
-#storybook-docs:not([hidden]) {
-  box-sizing: border-box;
-  min-height: 100vh;
-  background-color: var(--muted);
-  color: var(--foreground);
-}
-
-/* Loading states */
-.sb-preparing-story,
-.sb-preparing-docs {
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-/*
- * Docs: embedded story + zoom toolbar — full theme surface (matches Canvas).
- * Storybook’s block chrome uses its own theme background; !important aligns with our tokens.
- */
-.sbdocs.sbdocs-preview {
-  background-color: var(--background) !important;
-  color: var(--foreground) !important;
-}
-
-.docs-story {
-  background-color: var(--background);
-}
-/**
- * Storybook-only theme palettes. This file is imported in preview.ts and is NOT shipped in the
- * library dist. Add CSS classes here that are only needed for the Storybook preview (e.g. theme
- * switcher options that are not part of the production app).
- */
-
-/**
- * Stock Shadcn Neutral (HSL) — Storybook-only preview. Not applied in the running app.
- * Converted from OKLCH in https://ui.shadcn.com/docs/theming (neutral "Default Theme CSS").
- * Pair with \`.dark\` on the same element for dark mode: \`.dark.theme-shadcn-neutral\`.
- *
- * Intentional format mismatch: this file uses \`hsl(...)\` while \`index.css\` uses \`oklch(...)\`.
- * Both are complete CSS color values consumed via bare \`var(--token)\`. Do NOT re-wrap them in
- * \`hsl(var(--token))\` — re-wrapping a complete CSS color value produces invalid CSS.
- */
-.theme-shadcn-neutral {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(0 0% 3.9%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(0 0% 3.9%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(0 0% 3.9%);
-  --primary: hsl(0 0% 9.1%);
-  --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(0 0% 96.1%);
-  --secondary-foreground: hsl(0 0% 9.1%);
-  --muted: hsl(0 0% 96.1%);
-  --muted-foreground: hsl(0 0% 45.2%);
-  --accent: hsl(0 0% 96.1%);
-  --accent-foreground: hsl(0 0% 9.1%);
-  --destructive: hsl(351.7 100% 40.5%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 89.8%);
-  --input: hsl(0 0% 89.8%);
-  --ring: hsl(0 0% 63%);
-
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(0 0% 3.9%);
-  --sidebar-primary: hsl(0 0% 9.1%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(0 0% 96.1%);
-  --sidebar-accent-foreground: hsl(0 0% 9.1%);
-  --sidebar-border: hsl(0 0% 89.8%);
-  --sidebar-ring: hsl(0 0% 63%);
-
-  --radius: 0.625rem;
-}
-
-/**
- * These tokens use alpha-in-HSL syntax (e.g. \`hsl(0 0% 100% / 0.1)\` on --border, --input,
- * --sidebar-border) to match the stock Shadcn Neutral docs preset. Tailwind opacity modifiers
- * (e.g. \`border-border/50\`) would produce invalid \`hsl(... / 0.1 / 0.5)\` under this theme.
- * Project-wide, tailwind.config.ts does not enable alpha modifiers on \`border\`/\`input\`, so the
- * trap is latent; documented here to discourage future misuse.
- */
-.dark.theme-shadcn-neutral {
-  --background: hsl(0 0% 3.9%);
-  --foreground: hsl(0 0% 98%);
-  --card: hsl(0 0% 9.1%);
-  --card-foreground: hsl(0 0% 98%);
-  --popover: hsl(0 0% 9.1%);
-  --popover-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 89.8%);
-  --primary-foreground: hsl(0 0% 9.1%);
-  --secondary: hsl(0 0% 14.9%);
-  --secondary-foreground: hsl(0 0% 98%);
-  --muted: hsl(0 0% 14.9%);
-  --muted-foreground: hsl(0 0% 63%);
-  --accent: hsl(0 0% 14.9%);
-  --accent-foreground: hsl(0 0% 98%);
-  --destructive: hsl(358.8 100% 69.8%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 100% / 0.1);
-  --input: hsl(0 0% 100% / 0.15);
-  --ring: hsl(0 0% 45.2%);
-
-  --sidebar: hsl(0 0% 9.1%);
-  --sidebar-foreground: hsl(0 0% 98%);
-  --sidebar-primary: hsl(225.3 84.1% 49%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(0 0% 14.9%);
-  --sidebar-accent-foreground: hsl(0 0% 98%);
-  --sidebar-border: hsl(0 0% 100% / 0.1);
-  --sidebar-ring: hsl(0 0% 45.2%);
-}
 /* Based on scripture-editors' packages/platform/src/usj-nodes.css:
    https://github.com/paranext/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
    (synced from the \`standard-view\` branch at commit
