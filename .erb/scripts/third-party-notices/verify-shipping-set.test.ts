@@ -469,12 +469,11 @@ describe('--verify-shipping-set with an itemized external extension checkout', (
 });
 
 describe('the platform-only union both sides of the check apply', () => {
-  // The failure this closes, seen on the macOS CI leg: `fsevents` is a macOS-only optional
-  // dependency of `chokidar`, which the `main` and `extension-host` bundles reach. npm installs it
-  // only on macOS, so the Linux-generated lock did not record it, and macOS derived a set that had
-  // it - `added: fsevents@2.3.3`, on every macOS run, with no way for a Linux regeneration to
-  // resolve it. The document now lists it from `package-lock.json`, which means BOTH sides of the
-  // comparison have to union the same way.
+  // For example, `fsevents` is a macOS-only optional dependency. If the `main` or `extension-host`
+  // bundle reaches it, npm installs it only on macOS, so the Linux-generated lock has no record of
+  // it and macOS derives a set that does - `added: fsevents@2.3.3` on every macOS run, with no way
+  // for a Linux regeneration to resolve it. The document lists it from `package-lock.json`, so BOTH
+  // sides of the comparison have to union the same way.
   const policy = { platformOnlyPackages: ['fsevents'] };
   const npm = (name: string, version: string, extra: object = {}) => ({
     ecosystem: 'npm',

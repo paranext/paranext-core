@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "d243ea62bd5ff71dc2d6163950a6941484dfcc361fba38a8d32cd4dfd388da86",
+  "documentSha256": "795f9d2711302732f5d6b87b4a52820095015291e5cf3c604ba104b5de9f9ba8",
   "packages": [
     {
       "ecosystem": "npm",
@@ -746,15 +746,6 @@
     },
     {
       "ecosystem": "npm",
-      "name": "@remix-run/router",
-      "version": "1.23.3",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE.md",
-      "textSha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49"
-    },
-    {
-      "ecosystem": "npm",
       "name": "@sillsdev/scripture",
       "version": "2.1.0",
       "spdxId": "MIT",
@@ -845,15 +836,6 @@
     },
     {
       "ecosystem": "npm",
-      "name": "anymatch",
-      "version": "3.1.2",
-      "spdxId": "ISC",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "5a3b0007c4203f10fe11b3fe8747253eb994f135e10b73e1f88ada941af09c6e"
-    },
-    {
-      "ecosystem": "npm",
       "name": "aria-hidden",
       "version": "1.2.4",
       "spdxId": "MIT",
@@ -872,30 +854,12 @@
     },
     {
       "ecosystem": "npm",
-      "name": "binary-extensions",
-      "version": "2.2.0",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "license",
-      "textSha256": "85fe65eefab89e2a683232b96e6f689279821a0bd3b351e9ab6a6ebd19dea567"
-    },
-    {
-      "ecosystem": "npm",
       "name": "bowser",
       "version": "2.14.1",
       "spdxId": "MIT",
       "confidence": 0,
       "matchedFile": "LICENSE",
       "textSha256": "dfde54fedc270c2a305d9a9f993d93f706d34624455a2fd2d2a05ca34d8ae8c3"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "braces",
-      "version": "3.0.3",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "35bdd8a44339719441900fb50fbefc5e2dca1ca662cbaed7a687de842c8b70f2"
     },
     {
       "ecosystem": "npm",
@@ -918,11 +882,11 @@
     {
       "ecosystem": "npm",
       "name": "chokidar",
-      "version": "3.6.0",
+      "version": "4.0.3",
       "spdxId": "MIT",
       "confidence": 100,
       "matchedFile": "LICENSE",
-      "textSha256": "db9ba183d4cbfbaf6c27db2effddbb84b46340c33ed32a066bc0b144a3ea1298"
+      "textSha256": "bdfd5e0edb6089e6586c8f15e6a86fab83ffbeeda3b3b7b33734ccb8c5906965"
     },
     {
       "ecosystem": "npm",
@@ -1035,7 +999,7 @@
     {
       "ecosystem": "npm",
       "name": "dompurify",
-      "version": "3.4.12",
+      "version": "3.4.18",
       "spdxId": "Apache-2.0",
       "confidence": 100,
       "matchedFile": "LICENSE",
@@ -1125,27 +1089,11 @@
     {
       "ecosystem": "npm",
       "name": "fast-uri",
-      "version": "3.1.4",
+      "version": "3.1.9",
       "spdxId": "BSD-3-Clause",
       "confidence": 0,
       "matchedFile": "LICENSE",
       "textSha256": "b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "fill-range",
-      "version": "7.1.1",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "35bdd8a44339719441900fb50fbefc5e2dca1ca662cbaed7a687de842c8b70f2"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "fsevents",
-      "version": "2.3.3",
-      "spdxId": "MIT",
-      "confidence": 0
     },
     {
       "ecosystem": "npm",
@@ -1155,15 +1103,6 @@
       "confidence": 100,
       "matchedFile": "LICENSE",
       "textSha256": "acf3b087b348d2f2e731b9d4131af185aad694c1204ce14a46909483fd42da05"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "glob-parent",
-      "version": "5.1.2",
-      "spdxId": "ISC",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "2c46f1325bd3822a33c1e2c1e49c18d13127ac00f9c8b3b79196c7a126f73cd9"
     },
     {
       "ecosystem": "npm",
@@ -1207,42 +1146,6 @@
       "confidence": 100,
       "matchedFile": "LICENSE",
       "textSha256": "5ffe28e7ade7d8f10d85d5337a73fd793dac5c462fb9a28fbf8c5046c7fbca3b"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "is-binary-path",
-      "version": "2.1.0",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "license",
-      "textSha256": "85fe65eefab89e2a683232b96e6f689279821a0bd3b351e9ab6a6ebd19dea567"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "is-extglob",
-      "version": "2.1.1",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "73b5283588baa142c5baaef5f56d3e8fdea7a30b214e8c5737e87640f882453a"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "is-glob",
-      "version": "4.0.3",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "4cd903859549d4b20b571041f96dfae1136ed079c476126268f9d7cc1b611150"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "is-number",
-      "version": "7.0.0",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "35bdd8a44339719441900fb50fbefc5e2dca1ca662cbaed7a687de842c8b70f2"
     },
     {
       "ecosystem": "npm",
@@ -1424,30 +1327,12 @@
     },
     {
       "ecosystem": "npm",
-      "name": "normalize-path",
-      "version": "3.0.0",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "e70ff771504ba41f2be55de812a017ff46433d7a250c862e38fc419159e44500"
-    },
-    {
-      "ecosystem": "npm",
       "name": "pako",
       "version": "1.0.11",
       "spdxId": "(MIT AND Zlib)",
       "confidence": 100,
       "matchedFile": "LICENSE",
       "textSha256": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "picomatch",
-      "version": "2.3.2",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "d0cd141b0c322fded5dfad1d4645bb2fedfc05b7321fe1009469638190d59ef9"
     },
     {
       "ecosystem": "npm",
@@ -1672,24 +1557,6 @@
     },
     {
       "ecosystem": "npm",
-      "name": "react-router",
-      "version": "6.30.4",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE.md",
-      "textSha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "react-router-dom",
-      "version": "6.30.4",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE.md",
-      "textSha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49"
-    },
-    {
-      "ecosystem": "npm",
       "name": "react-style-singleton",
       "version": "2.2.3",
       "spdxId": "MIT",
@@ -1709,7 +1576,7 @@
     {
       "ecosystem": "npm",
       "name": "readdirp",
-      "version": "3.6.0",
+      "version": "4.1.2",
       "spdxId": "MIT",
       "confidence": 100,
       "matchedFile": "LICENSE",
@@ -1849,15 +1716,6 @@
       "confidence": 100,
       "matchedFile": "LICENSE",
       "textSha256": "121a69225b973bf4fc1e2dad96399f7eb987b489c587cc5319d961309b292d1e"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "to-regex-range",
-      "version": "5.0.1",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "e7d1fee7347ffddccc5fd03327ffdb50f8c112be0d5016d62388a92c4ae6e7a9"
     },
     {
       "ecosystem": "npm",

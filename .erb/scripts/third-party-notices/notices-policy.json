@@ -89,7 +89,7 @@
     }
   },
   "platformOnlyPackagesNote": "npm honours a package's os/cpu constraints, so a platform-restricted optional dependency is absent from the tree on every other platform - and this artifact is generated on Linux. List here every package that IS redistributed in another platform's installer and that no Linux run can observe; they are described from package-lock.json (collectPlatformOnlyPackages in shipping-set.ts). The npm counterpart of the NuGet half's four-RID union. Forgetting one is not silent: it fails that platform's leg of CI with \"added: <name>\".",
-  "platformOnlyPackages": ["fsevents"],
+  "platformOnlyPackages": [],
   "unbundledDependenciesNote": "Each entry names a package a first-party package.json declares - under \"dependencies\" or \"devDependencies\", since this repository bundles from the latter by convention - that reaches no bundle, with the reason. Two reasons are admissible and an entry has to say which it is: nothing this repository distributes contains the package at all, or the package DOES ship but is disclosed in prose rather than as a row (Electron, whose own notices ship inside the packaged app as the authoritative text - see adr-disclosure-outside-package-graphs). missingDirectDependencies and missingImportedPackages (shipping-set.ts) both read this list, the way missingDirectReferences does for the NuGet closure and the project file's PackageReference entries. The npm half's other guards measure SIZE and cannot see an omission: when a package's modules are never recorded the artifact simply lacks a row, so no removal appears in a PR diff and there is nothing to sign off on. A file: range is a workspace link to first-party code and is discounted without an entry; everything else that is declared but not bundled has to be recorded here.",
   "unbundledDependencies": {
     "@typescript-eslint/utils": {
@@ -303,7 +303,6 @@
     "npm:@radix-ui/react-use-previous": "Copyright (c) 2022 WorkOS",
     "npm:@radix-ui/react-use-size": "Copyright (c) 2022 WorkOS",
     "npm:@xmldom/xmldom": "Copyright 2019 - present Christopher J. Brody and other contributors, as listed in: https://github.com/xmldom/xmldom/graphs/contributors; Copyright 2012 - 2017 @jindw <jindw@xidea.org> and other contributors, as listed in: https://github.com/jindw/xmldom/graphs/contributors",
-    "npm:fsevents": "Copyright (C) 2010-2020 by Philipp Dunkel, Ben Noordhuis, Elan Shankar, Paul Miller",
     "npm:imurmurhash": "Copyright (c) 2013 Gary Court, Jens Taylor",
     "npm:isarray": "Copyright (c) 2013 Julian Gruber <julian@juliangruber.com>",
     "npm:react-remove-scroll-bar": "Copyright (c) 2025 Anton Korzunov <thekashey@gmail.com>"

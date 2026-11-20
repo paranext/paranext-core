@@ -1664,7 +1664,6 @@ describe('notices-policy.json', () => {
       'npm:@radix-ui/react-compose-refs',
       'npm:@radix-ui/react-use-size',
       'npm:@xmldom/xmldom',
-      'npm:fsevents',
       'npm:imurmurhash',
       'npm:isarray',
       'npm:react-remove-scroll-bar',

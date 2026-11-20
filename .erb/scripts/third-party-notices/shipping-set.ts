@@ -2269,11 +2269,10 @@ export function collectShippedPackages({
  * The packages npm installs only on ANOTHER platform, described from `package-lock.json`.
  *
  * Npm honours a package's `os`/`cpu` constraints, so a platform-restricted optional dependency is
- * absent from the tree everywhere else - and this artifact is generated on Linux. The macOS
- * installer redistributes `fsevents`, which `chokidar` pulls into the `main` and `extension-host`
- * bundles there and which npm never installs on Linux or Windows: nothing a Linux run can observe
- * reaches it, so without this the document is complete for the Linux artifact and short for the
- * macOS one, and the per-platform check fails on macOS with an `added:` nothing can resolve.
+ * absent from the tree everywhere else - and this artifact is generated on Linux. When a bundle
+ * reaches one, such as the macOS-only `fsevents`, that platform's installer redistributes a package
+ * no Linux run can observe. Without this the document is short for that platform, and its check
+ * fails there with an `added:` nothing can resolve.
  *
  * This is the npm counterpart of the NuGet half's four-RID union
  * (`adr-notices-derived-from-what-ships`) and of its `alwaysList` overrides: describe what every
