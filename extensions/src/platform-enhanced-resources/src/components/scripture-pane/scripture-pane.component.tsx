@@ -26,6 +26,7 @@ import {
   useStylesheet,
 } from 'platform-bible-react';
 import {
+  focusEditorKeepingSelection,
   runKeepingBrowserSelection,
   useEditorContextMenu,
 } from 'platform-bible-react/experimental';
@@ -1195,10 +1196,12 @@ export function EnhancedScripturePane({
   // Copy focuses the frame without touching the editor's selection (a read-only editor's own
   // `focus()` would put a caret at the end of the text), then runs the editor's copy with the
   // browser selection kept, since that copy would otherwise leave it on a hidden element at the end.
+  // The menu hands focus back to its tab as it closes, so the frame is focused again on the next
+  // animation frame to keep keyboard shortcuts such as Ctrl+C working.
   //
   // Hidden-tab case: intentionally not handled. A hidden tab receives no right-click, so no request
   // can start there.
-  useEditorContextMenu({
+  const { dismiss: dismissContextMenu } = useEditorContextMenu({
     containerRef: editorContainerRef,
     isEnabled: !errorMessage && !isLoading && !!usj,
     requestMenu: (request) =>
@@ -1210,8 +1213,10 @@ export function EnhancedScripturePane({
     dismissMenu: () => papi.overlays.dismissContextMenu(globalThis.webViewId),
     onPick: (command) => {
       if (command === COPY_SELECTION_COMMAND) {
-        window.focus();
+        // The pane's editor is read-only, so only the frame is ever focused
+        focusEditorKeepingSelection(editorRef.current, false);
         runKeepingBrowserSelection(() => editorRef.current?.copy());
+        requestAnimationFrame(() => focusEditorKeepingSelection(editorRef.current, false));
         return;
       }
       papi.commands
@@ -1228,6 +1233,12 @@ export function EnhancedScripturePane({
     onError: (error) =>
       logger.warn(`EnhancedScripturePane: the context menu failed: ${getErrorMessage(error)}`),
   });
+  // A menu left open across a change of book or chapter would point at text that is gone.
+  const shownBook = scrRef?.book;
+  const shownChapter = scrRef?.chapterNum;
+  useEffect(() => {
+    dismissContextMenu();
+  }, [dismissContextMenu, shownBook, shownChapter]);
 
   if (errorMessage) {
     return (
