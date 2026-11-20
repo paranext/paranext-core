@@ -485,6 +485,7 @@
           {
             "label": "%webView_platformScriptureEditor_cut%",
             "localizeNotes": "Scripture editor right-click menu > Cut (the selected text)",
+            "iconNameBefore": "scissors",
             "group": "platformScriptureEditor.contextClipboard",
             "order": 1,
             "command": "platformScriptureEditor.cutSelection",
@@ -493,28 +494,19 @@
           },
           {
             "label": "%webView_platformScriptureEditor_copy%",
-            "localizeNotes": "Scripture editor right-click menu > Copy (the selected text). Not shown on a resource, which has its own Copy",
+            "localizeNotes": "Scripture editor right-click menu > Copy (the selected text), on projects and resources; disabled while nothing is selected",
+            "iconNameBefore": "clipboard-copy",
             "group": "platformScriptureEditor.contextClipboard",
             "order": 2,
             "command": "platformScriptureEditor.copySelection",
-            "when": "!platform.project.{projectId}.isResource",
-            "enabledWhen": "platformScriptureEditor.contextMenu.hasSelection"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_copy%",
-            "localizeNotes": "Scripture editor right-click menu > Copy (the selected text), resources only; disabled while nothing is selected",
-            "iconNameBefore": "clipboard-copy",
-            "group": "platformScriptureEditor.contextClipboard",
-            "order": 3,
-            "command": "platformScriptureEditor.copySelection",
-            "when": "platform.project.{projectId}.isResource",
             "enabledWhen": "platformScriptureEditor.contextMenu.hasSelection"
           },
           {
             "label": "%webView_platformScriptureEditor_paste%",
             "localizeNotes": "Scripture editor right-click menu > Paste",
+            "iconNameBefore": "clipboard-paste",
             "group": "platformScriptureEditor.contextClipboard",
-            "order": 4,
+            "order": 3,
             "command": "platformScriptureEditor.pasteAtSelection",
             "when": "!platform.project.{projectId}.isResource",
             "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
@@ -522,8 +514,9 @@
           {
             "label": "%webView_platformScriptureEditor_pasteAsPlainText%",
             "localizeNotes": "Scripture editor right-click menu > Paste as plain text (pastes the clipboard text without its formatting)",
+            "iconNameBefore": "clipboard-type",
             "group": "platformScriptureEditor.contextClipboard",
-            "order": 5,
+            "order": 4,
             "command": "platformScriptureEditor.pasteAsPlainTextAtSelection",
             "when": "!platform.project.{projectId}.isResource",
             "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
