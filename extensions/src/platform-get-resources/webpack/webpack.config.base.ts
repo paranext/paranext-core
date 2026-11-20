@@ -82,6 +82,13 @@ const configBase: webpack.Configuration = {
                 tsx: true,
                 decorators: true,
               },
+              // Target a modern ES version so SWC emits native `class extends <builtin>` instead of
+              // downleveling it through the `_wrapNativeSuper` helper, which references the global
+              // `Function` constructor. Platform.Bible deletes `globalThis.Function` (and `eval`)
+              // before activating extensions, so that helper throws "Function is not defined" at
+              // load time (e.g. for `class MissingApiKeyError extends Error`). Both runtimes — the
+              // Node extension host and the Chromium WebView — fully support ES2022.
+              target: 'es2022',
             },
           },
         },
@@ -100,7 +107,18 @@ const configBase: webpack.Configuration = {
           // Processes style transformations in PostCSS - after scss so PostCSS runs on just css
           'postcss-loader',
           // Compiles Sass to CSS
-          'sass-loader',
+          {
+            loader: 'sass-loader',
+            options: {
+              sassOptions: {
+                // Stay expanded even in production. sass-loader would otherwise compress, which
+                // strips the space in `@import 'tailwindcss' prefix(tw);` — @tailwindcss/postcss
+                // then never registers the `tw` variant and every `@apply tw:*` fails the build.
+                // Nothing is lost: Tailwind's PostCSS plugin optimizes production output itself.
+                style: 'expanded',
+              },
+            },
+          },
         ],
       },
       /**
