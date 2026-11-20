@@ -3348,10 +3348,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     states the contract.
   - The top menu's Copy / "Copy selection" follows an edit target: it copies the footnotes pane's
     selection while the pane is where the user last selected, and the shared per-tab key
-    `platformScriptureEditor.webView.{webViewId}.hasSelection` follows the same target. Cut and
-    Paste deliberately still act on the main text with a footnote row open: sending them to the row
-    editor needs the footnote session to survive the Edit flyout, and a decision on what Undo and
-    Redo do there. No ticket exists for this yet.
+    `platformScriptureEditor.webView.{webViewId}.hasSelection` follows the same target. The top
+    menu's Cut and Paste act on the main text, as before. Sending them to an open footnote row is
+    not part of this decision, because it would require changing when a footnote row session ends:
+    moving the pointer into the Edit flyout ends the session.
   - The built-in menu stays in the editor package while any host still uses it: the Storybook
     stories, a `FootnoteEditor` mounted with the default `hasBuiltInContextMenu: true`, and the Text
     Collection grid cells, which mount it but open their own menu in the capture phase. Removing
@@ -4884,7 +4884,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pane. `resolveNoteEditingSurface` now returns `'pane'` or `'none'`, and
   `decideNoteCallerClickAction` has no popover action. The `FootnoteEditor` library component keeps
   its non-inline (Save/Cancel) mode for other hosts. The "popover keeps its Save/Cancel"
-  consequence above describes that library mode, not a surface the editor opens.
+  consequence above describes that library mode, not a surface the editor opens. While the
+  interface mode is still loading the editor is read-only and has no editing surface, so a caller
+  click selects nothing to edit and an inserted note opens no editor until the mode has loaded.
 
 ## adr-footnote-pane-editing-in-simple-mode: Simple mode edits footnotes in the footnotes pane, like Standard view
 
