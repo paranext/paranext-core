@@ -2677,13 +2677,14 @@ describe('overlay.service-host', () => {
         vi.mocked(windowService.setFocus).mockImplementation(async () => {
           panelFirstChild.focus();
           duringSetFocus();
+          return true;
         });
         vi.mocked(logger.debug).mockClear();
         setAppFocused(true);
       });
 
       afterEach(() => {
-        vi.mocked(windowService.setFocus).mockImplementation(() => Promise.resolve());
+        vi.mocked(windowService.setFocus).mockImplementation(() => Promise.resolve(true));
         vi.mocked(isWebViewVisible).mockReturnValue(true);
       });
 
