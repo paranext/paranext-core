@@ -81,10 +81,15 @@ const test = isolatedTest.extend<{ contextMenuLog: void }>({
       electronApp.process().stderr?.off('data', onData);
       if (testInfo.status === testInfo.expectedStatus) return;
       const lines = chunks.join('').split('\n');
-      // The log writes each entry's timestamp on the line before its text.
-      const relevant = lines.flatMap((line, index) =>
-        /context menu|debounce/i.test(line) ? [lines[index - 1] ?? '', line] : [],
-      );
+      // The log writes each entry's timestamp on the line before its text; a Set keeps a line
+      // shared by two neighbouring entries from being written twice.
+      const kept = new Set<number>();
+      lines.forEach((line, index) => {
+        if (!/context menu/i.test(line)) return;
+        if (index > 0) kept.add(index - 1);
+        kept.add(index);
+      });
+      const relevant = [...kept].sort((a, b) => a - b).map((index) => lines[index]);
       // Written to a file beside the failure screenshot, so it can be read without the report.
       const logPath = testInfo.outputPath('context-menu-log.txt');
       fs.writeFileSync(logPath, relevant.join('\n'));
