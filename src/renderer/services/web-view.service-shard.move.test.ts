@@ -86,10 +86,14 @@ vi.mock('@renderer/services/usersnap.service', () => ({
  */
 const EMPTY_LAYOUT = { dockbox: { mode: 'horizontal', children: [] } } as unknown as LayoutInfo;
 
-/** Narrow view of the published shard covering only the two move methods under test */
+/**
+ * Narrow view of the published shard covering the two move methods under test, and `closeWebView`,
+ * which closes a tab the same way the move's close half does
+ */
 type MoveShard = {
   captureAndCloseWebView(webViewId: WebViewId): Promise<SavedWebViewDefinition | undefined>;
   adoptWebView(savedWebViewDefinition: SavedWebViewDefinition): Promise<WebViewId | undefined>;
+  closeWebView(webViewId: WebViewId): Promise<boolean>;
 };
 
 /**
@@ -221,6 +225,58 @@ describe('captureAndCloseWebView', () => {
     await shard.captureAndCloseWebView('abc-w2');
 
     expect(removedTabIds).toEqual(['abc-w2']);
+  });
+});
+
+describe('closeWebView', () => {
+  test('closes the tab of a web view this window holds, and answers true', async () => {
+    const { shard, removedTabIds } = await shardOverDockLayout(EXISTING_DEFINITION);
+
+    await expect(shard.closeWebView('abc-w2')).resolves.toBe(true);
+
+    expect(removedTabIds).toEqual(['abc-w2']);
+  });
+
+  test('answers false, and closes nothing, for a web view this window does not hold', async () => {
+    const { shard, removedTabIds } = await shardOverDockLayout(EXISTING_DEFINITION);
+
+    await expect(shard.closeWebView('missing-id')).resolves.toBe(false);
+
+    expect(removedTabIds).toEqual([]);
+  });
+
+  test('refuses, and closes nothing, for a tab the user cannot close', async () => {
+    // Simple mode's fixed layout is made of such tabs; the user has no way to bring one back
+    const { shard, removedTabIds } = await shardOverDockLayout({
+      ...EXISTING_DEFINITION,
+      isClosable: false,
+    });
+
+    await expect(shard.closeWebView('abc-w2')).rejects.toThrow(/isClosable: false/);
+
+    expect(removedTabIds).toEqual([]);
+  });
+
+  test('closes a tab that is explicitly closable', async () => {
+    const { shard, removedTabIds } = await shardOverDockLayout({
+      ...EXISTING_DEFINITION,
+      isClosable: true,
+    });
+
+    await expect(shard.closeWebView('abc-w2')).resolves.toBe(true);
+
+    expect(removedTabIds).toEqual(['abc-w2']);
+  });
+
+  test('refuses a web view id that is not a string', async () => {
+    const { shard, removedTabIds } = await shardOverDockLayout(EXISTING_DEFINITION);
+
+    // The wire has no types; a caller can send whatever it likes
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await expect(shard.closeWebView(42 as unknown as string)).rejects.toThrow(
+      /closeWebView needs a web view id/,
+    );
+    expect(removedTabIds).toEqual([]);
   });
 });
 

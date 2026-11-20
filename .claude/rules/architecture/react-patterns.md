@@ -37,11 +37,13 @@ Terse decisions (choice → what to avoid → one-line why). Add only the net-ne
   - Avoid: class components; HOCs for state management.
   - Why: modern React, simpler testing, cleaner code.
 
-### Web view self-close (stopgap)
+### Web view self-close
 
-- **A web view closes itself with a DOM walk** (PAPI has no self-close method yet): from `window.top.document`, find the iframe whose `contentWindow === window`, walk up to the enclosing `.dock-panel`, then click `.dock-tab-active .dock-tab-close-btn`.
-  - Avoid: re-deriving this each time; relying on it long-term once a PAPI self-close ships.
-  - Why: documented stopgap until `papi.webViews.closeSelf()` exists on `@papi/frontend`. Web views are same-origin iframes, so `top.document` walking works; it is fragile against rc-dock DOM changes, so it is recorded here so agents don't re-invent it.
+- **A web view closes itself with `papi.webViews.closeWebView`**, passing its own id (`WebViewProps.id`), as the last thing it does. Consumer: Home (`extensions/src/platform-get-resources/src/home.web-view.tsx`).
+  - Avoid:
+    - clicking the tab's close button in `window.top.document` — it breaks silently with rc-dock's markup, and extensions should not reach into the host page.
+    - code after the call — the close can tear down the caller's iframe before the promise settles.
+  - Why: the router closes it in whichever window holds it, the same way the user's close does, so `onDidCloseWebView` fires. See `adr-home-closes-itself-after-opening-a-project`.
 
 ### Single-instance web views
 

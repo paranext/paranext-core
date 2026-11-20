@@ -150,6 +150,7 @@ function windowShard(
     // Typed the way the real method is — it answers with nothing when the open did not happen
     openWebView: vi.fn<() => Promise<string | undefined>>(async () => 'opened'),
     reloadWebView: vi.fn(async () => 'reloaded'),
+    closeWebView: vi.fn(async () => true),
     openSettingsTab: vi.fn(async () => undefined),
     // A window with nothing docked in it since its last emptiness report, which is what a window
     // created to receive routed content is until the content arrives
@@ -395,6 +396,50 @@ describe('web view service router', () => {
     await router.reloadWebView('someType', 'unknown-view');
 
     expect(focused.reloadWebView).toHaveBeenCalled();
+  });
+
+  describe('closeWebView', () => {
+    test('closes the web view in the window that owns it, not the focused one', async () => {
+      const focused = windowShard([]);
+      const owner = windowShard(['owned-view']);
+      withWindows({ 1: focused, 2: owner });
+      const router = await getRouter();
+
+      await expect(router.closeWebView('owned-view')).resolves.toBe(true);
+
+      expect(owner.closeWebView).toHaveBeenCalledWith('owned-view');
+      expect(focused.closeWebView).not.toHaveBeenCalled();
+    });
+
+    test('answers false, and closes nothing, when every window answered and none has it', async () => {
+      // No fallback to the focused window, as a reload has: closing there would close a web view
+      // the caller never named
+      const focused = windowShard(['other-view']);
+      withWindows({ 1: focused, 2: windowShard([]) });
+      const router = await getRouter();
+
+      await expect(router.closeWebView('missing-view')).resolves.toBe(false);
+
+      expect(focused.closeWebView).not.toHaveBeenCalled();
+    });
+
+    test('refuses rather than answering false while a window that may hold it could not be asked', async () => {
+      const crashed = windowShard(['owned-view']);
+      withWindows({ 1: windowShard([]), 2: crashed }, { unreachableWindowIds: ['2'] });
+      const router = await getRouter();
+
+      await expect(router.closeWebView('owned-view')).rejects.toThrow('unreachable');
+      expect(crashed.closeWebView).not.toHaveBeenCalled();
+    });
+
+    test('closes it when one window claims it, even though another could not be asked', async () => {
+      const owner = windowShard(['owned-view']);
+      withWindows({ 1: owner, 2: windowShard([]) }, { unreachableWindowIds: ['2'] });
+      const router = await getRouter();
+
+      await expect(router.closeWebView('owned-view')).resolves.toBe(true);
+      expect(owner.closeWebView).toHaveBeenCalledWith('owned-view');
+    });
   });
 
   test('opens an existing web view in its owning window when given an existingId', async () => {

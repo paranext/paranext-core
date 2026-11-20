@@ -770,6 +770,17 @@ async function reloadWebView(
   return webViewShard.reloadWebView(webViewType, webViewId, options);
 }
 
+async function closeWebView(webViewId: WebViewId): Promise<boolean> {
+  const matcher: OwnerMatcher = { kind: 'id', webViewId };
+  const { owner, hadUnreachableWindows } = await findOwner(matcher, 'close');
+  if (owner) return owner.shard.closeWebView(webViewId);
+  // Unlike a reload, a close has no window to fall back to: closing names one web view, and a window
+  // that could not be asked may be the one holding it.
+  if (hadUnreachableWindows)
+    throw new Error(`Could not close ${describeMatcher(matcher)}: some windows were unreachable.`);
+  return false;
+}
+
 async function getOpenWebViewDefinition(
   webViewId: string,
 ): Promise<SavedWebViewDefinition | undefined> {
@@ -1072,6 +1083,7 @@ const webViewServiceRouter: WebViewServiceType = {
   getWebView,
   openWebView,
   reloadWebView,
+  closeWebView,
   getSavedWebViewDefinition,
   getOpenWebViewDefinition,
   getAllOpenWebViewDefinitions,

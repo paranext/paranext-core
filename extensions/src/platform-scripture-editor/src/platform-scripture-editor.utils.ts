@@ -3039,6 +3039,25 @@ export async function updateRelatedChecksSidePanel(
   }
 }
 
+/**
+ * Re-points Find and then Checks at `projectId`: {@link updateRelatedFindPanel}, and once it has
+ * finished, {@link updateRelatedChecksSidePanel}. For a caller that need not wait for either.
+ *
+ * Never throws, since neither of them does.
+ *
+ * @param papi The instance of papi both helpers use
+ * @param projectId The id of the project both panels should follow from now on
+ * @param editorWebViewId Id of the editor web view the switch produced
+ */
+export async function updateRelatedFindAndChecksPanels(
+  papi: typeof PapiBackend,
+  projectId: string,
+  editorWebViewId: string | undefined,
+): Promise<void> {
+  await updateRelatedFindPanel(papi, projectId, editorWebViewId);
+  await updateRelatedChecksSidePanel(papi, projectId, editorWebViewId);
+}
+
 // #endregion Text Connection Panels
 
 // #region Chapter Scaffold Helpers
