@@ -3,9 +3,8 @@ import { useEffect, useMemo } from 'react';
 import { logContextMenuOutcome } from './editor-context-menu-pick.util';
 
 /**
- * How long a context-menu request may stay open before the log says so. The same two seconds the
- * menu hook claims the keyboard for: a request still open by then is either a menu the user is
- * still looking at or one that never appeared.
+ * How long a context-menu request may stay open before the log says so: a request still open by
+ * then is either a menu the user is still looking at or one that never appeared.
  */
 export const CONTEXT_MENU_STALL_LOG_MS = 2000;
 

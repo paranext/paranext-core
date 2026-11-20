@@ -63,7 +63,6 @@ function setup(viewOptions?: ViewOptions) {
   // The wrapper reads the handle through the ref, as the web view's row editor ref is filled.
   const rowEditorRef: RefObject<FootnoteEditorHandle | null> = { current: handle };
   const notifyActionBlocked = vi.fn();
-  const claimingKeys: (() => boolean)[] = [];
   const utils = render(
     <div>
       <header data-testid="pane-header">
@@ -79,17 +78,12 @@ function setup(viewOptions?: ViewOptions) {
         rowEditorRef={rowEditorRef}
         notifyActionBlocked={notifyActionBlocked}
       >
-        {(isClaimingKeys) => {
-          claimingKeys.push(isClaimingKeys);
-          return (
-            <div data-testid="row-editor">
-              <p data-testid="note-text">note text</p>
-              <button type="button" data-testid="note-type-button">
-                type
-              </button>
-            </div>
-          );
-        }}
+        <div data-testid="row-editor">
+          <p data-testid="note-text">note text</p>
+          <button type="button" data-testid="note-type-button">
+            type
+          </button>
+        </div>
       </PaneFootnoteEditorContextMenu>
       <p data-testid="read-only-row">another note</p>
     </div>,
@@ -121,7 +115,6 @@ function setup(viewOptions?: ViewOptions) {
     notifyActionBlocked,
     rightClick,
     flush,
-    isClaimingKeys: () => claimingKeys[claimingKeys.length - 1](),
   };
 }
 
@@ -236,21 +229,6 @@ describe('PaneFootnoteEditorContextMenu', () => {
       expect(mockLoggerDebug).toHaveBeenCalledWith(
         expect.stringMatching(new RegExp(`footnote editor.*${WEB_VIEW_ID}.*without a pick`)),
       );
-    });
-  });
-
-  describe('key claim signal', () => {
-    it('reports the keyboard claimed while the menu is open and released once it settles', async () => {
-      const settle = openRequest();
-      const { getByTestId, rightClick, isClaimingKeys, flush } = setup();
-      expect(isClaimingKeys()).toBe(false);
-
-      rightClick(getByTestId('note-text'));
-      expect(isClaimingKeys()).toBe(true);
-
-      settle(undefined);
-      await flush();
-      expect(isClaimingKeys()).toBe(false);
     });
   });
 
