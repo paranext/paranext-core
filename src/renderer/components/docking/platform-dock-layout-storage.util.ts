@@ -1725,12 +1725,11 @@ function setDocumentFocusToTab(dockLayout: DockLayout, tabId: string) {
 
   let didFocusWebView = false;
 
-  // Select the WebView iframe if one exists. Must do this then select the last focused element
-  // inside it if available
-  // A WebView's tab header carries the same `data-web-view-id` and comes before the iframe in the
-  // document, so while the header is rendered this selects the header, not the iframe: the tab is
-  // then focused through `lastFocusedElement` or the panel's first child, and its frame does not
-  // take keyboard focus here.
+  // Select the first element carrying the WebView's id; when that is its iframe, focus the iframe,
+  // then the last focused element inside it if available. A WebView's tab header carries the same
+  // `data-web-view-id` and comes before the iframe in the document, so while the header is rendered
+  // this selects the header, not the iframe: the tab is then focused through `lastFocusedElement`
+  // or the panel's first child, and its frame does not take keyboard focus here.
   const webViewIframe = document.querySelector(`[data-web-view-id='${tabId}']`);
   if (webViewIframe instanceof HTMLIFrameElement) {
     if (!webViewIframe.contentWindow) {

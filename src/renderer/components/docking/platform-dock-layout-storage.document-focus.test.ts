@@ -89,6 +89,29 @@ describe('taking document focus when a web view is docked', () => {
     expect(focusSpy).toHaveBeenCalled();
   });
 
+  it("focuses the tab's panel, not its frame, while the tab header carries the same web view id", () => {
+    // The header comes first in the document. Surfaces such as the onboarding tour keep keyboard
+    // focus while a web view tab opens behind them because the tab does not take it into its frame.
+    const header = document.createElement('div');
+    header.setAttribute('data-web-view-id', TAB_ID);
+    document.body.prepend(header);
+    const panel = document.createElement('div');
+    panel.setAttribute('data-tab-id', TAB_ID);
+    const panelFirstChild = document.createElement('div');
+    panelFirstChild.tabIndex = -1;
+    panel.appendChild(panelFirstChild);
+    document.body.appendChild(panel);
+    try {
+      focusTab(instance(localMockDockLayout), TAB_ID);
+
+      expect(focusSpy).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(panelFirstChild);
+    } finally {
+      header.remove();
+      panel.remove();
+    }
+  });
+
   it('leaves document focus alone when the window is still waiting for its first activation', () => {
     focusTab(instance(localMockDockLayout), TAB_ID, true);
 
