@@ -254,16 +254,6 @@ export interface FootnoteEditorProps {
    * @experimental This property is unstable and may change shape or disappear without notice
    */
   hasBuiltInContextMenu?: boolean;
-  /**
-   * Whether a context menu the host owns is claiming the keyboard for this editor. The menu lives
-   * outside this document and cannot receive keys, so while this returns `true` the editor claims
-   * the marker trigger and Enter and drops them, so neither opens a palette nor splits a paragraph
-   * under the menu. Once it returns `false` the editor behaves as if no menu were open, so a host
-   * passes the signal that lapses with the menu's own key claim, not one that outlives it.
-   *
-   * @experimental This property is unstable and may change shape or disappear without notice
-   */
-  isHostContextMenuClaimingKeys?: () => boolean;
 }
 
 /**
@@ -471,7 +461,6 @@ export default function FootnoteEditor({
   markerPalette,
   onNoteEdit,
   hasBuiltInContextMenu = true,
-  isHostContextMenuClaimingKeys,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
   /* eslint-disable no-null/no-null */
@@ -792,11 +781,9 @@ export default function FootnoteEditor({
   // Read at event time by the keydown guards, so a host passing a new closure does not re-register
   // their document listeners.
   const hasBuiltInContextMenuRef = useRef(hasBuiltInContextMenu);
-  const isHostContextMenuClaimingKeysRef = useRef(isHostContextMenuClaimingKeys);
   useEffect(() => {
     hasBuiltInContextMenuRef.current = hasBuiltInContextMenu;
-    isHostContextMenuClaimingKeysRef.current = isHostContextMenuClaimingKeys;
-  }, [hasBuiltInContextMenu, isHostContextMenuClaimingKeys]);
+  }, [hasBuiltInContextMenu]);
 
   /**
    * Whether the editor package's own right-click menu is open over this editor (read from the mark
@@ -804,12 +791,6 @@ export default function FootnoteEditor({
    */
   const isBuiltInContextMenuOpen = useCallback(
     () => hasBuiltInContextMenuRef.current && isEditorContextMenuOpenFor(editorParentRef.current),
-    [],
-  );
-
-  /** Whether the host's own context menu is claiming the keyboard for this editor. */
-  const isHostMenuClaimingKeys = useCallback(
-    () => !!isHostContextMenuClaimingKeysRef.current?.(),
     [],
   );
 
@@ -1684,21 +1665,10 @@ export default function FootnoteEditor({
           return;
         }
 
-        // The host's own menu lives in another document and cannot receive a key, so it must not
-        // reach the guards below or the editor: claim and drop `\` (never opens a palette under
-        // the menu, never leaks into the note) and Enter (never splits a paragraph under it).
-        if (isHostMenuClaimingKeys()) {
-          if (event.key === defaultMarkerMenuTrigger || event.key === 'Enter') {
-            event.preventDefault();
-            event.stopPropagation();
-          }
-          return;
-        }
-
         // This editor's own built-in right-click menu is up: let its own keydown listener handle
         // every key instead of the guards below, which otherwise resolve against the
         // caret/selection — collapsing a selection the menu's own Enter (e.g. Cut) is about to act
-        // on. Still claim and drop `\`, as for a host menu above, so the literal backslash never
+        // on. Still claim and drop `\`, so the literal backslash never
         // leaks into the note once the menu closes. See `isEditorContextMenuOpenFor`. Scoped to
         // THIS editor's root — another editor's open menu must never trip this gate.
         if (isBuiltInContextMenuOpen()) {
@@ -1787,8 +1757,7 @@ export default function FootnoteEditor({
     const isEditorFocusedWithoutMenu = () => {
       const editorInput = getEditorInput();
       if (!editorInput || document.activeElement !== editorInput) return false;
-      // The built-in right-click menu takes Enter to run its highlighted item. A host menu
-      // cannot take it, so it does not stand this claim down.
+      // The built-in right-click menu takes Enter to run its highlighted item.
       return !isBuiltInContextMenuOpen();
     };
     const swallowEnter = (event: KeyboardEvent) => {
@@ -1806,12 +1775,6 @@ export default function FootnoteEditor({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const editorInput = getEditorInput();
-      // The host's menu lives in another document and owns the keyboard: the trigger opens nothing
-      // under it and never leaks into the note.
-      if (isHostMenuClaimingKeys()) {
-        if (event.key === defaultMarkerMenuTrigger) event.preventDefault();
-        return;
-      }
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (
         !showMarkersMenu &&
@@ -1846,7 +1809,6 @@ export default function FootnoteEditor({
     openMarkerPaletteAtCaret,
     isDomCaretInsideNote,
     isBuiltInContextMenuOpen,
-    isHostMenuClaimingKeys,
   ]);
 
   // The inline surface renders no Cancel/Close control - its edits apply live - so Escape is its

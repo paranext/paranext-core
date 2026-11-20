@@ -111,28 +111,15 @@ export type UseEditorContextMenuResult = {
    */
   dismiss: () => void;
   /**
-   * Whether a request is open: true from the right-click until the request settles (or the user
-   * clicks back into the frame). It stays true when the request stalls, long after the menu stopped
-   * owning the keyboard, so a host gates its own key handling on {@link isClaimingKeys}, not on
-   * this.
+   * Whether a request is open: true from the right-click until the request settles, is dismissed or
+   * dropped (the user clicks back into the frame), or the hook unmounts.
    *
    * @experimental This property is unstable and may change shape or disappear without notice
    */
   isPending: () => boolean;
-  /**
-   * Whether the hook is claiming the keyboard for its menu right now: true from the right-click
-   * until the request settles or two seconds have passed, whichever comes first, and false after
-   * `dismiss`, a dropped request or unmount. Hosts read it to keep their own key handling away from
-   * a key the menu owns; once it is false the editor must behave as if no menu were pending. Keys
-   * typed while the claim is active are dropped, not replayed once it ends.
-   *
-   * @experimental This property is unstable and may change shape or disappear without notice
-   */
-  isClaimingKeys: () => boolean;
 };
 
 const INTERACTIVE_SELECTOR = 'button, a, input, select, textarea, [role="combobox"]';
-const BARE_MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'AltGraph', 'Meta']);
 const QUIET_ERROR_CODES: ReadonlySet<string> = new Set([
   ABORTED,
   RESOURCE_EXHAUSTED,
@@ -140,13 +127,6 @@ const QUIET_ERROR_CODES: ReadonlySet<string> = new Set([
 ]);
 /** Distance in pixels from the frame's edge or the container's corner for a keyboard-raised menu. */
 const KEYBOARD_FALLBACK_INSET = 8;
-/**
- * How long after a right-click the hook claims the keyboard. The claim covers the gap before the
- * menu takes focus, but the menu-data request behind it can stall on a busy extension host, and an
- * unbounded claim would leave the editor ignoring every key with no menu on screen. Once the menu
- * is up it holds focus in the app window, so a lapsed claim loses nothing.
- */
-const KEY_CLAIM_MS = 2000;
 
 function isQuietError(error: unknown): boolean {
   return isPlatformError(error) && error.code !== undefined && QUIET_ERROR_CODES.has(error.code);
@@ -247,25 +227,17 @@ function getKeyboardPosition(container: HTMLElement): { x: number; y: number } {
  * must be the editor's own element, never a wrapper that holds other editors, and must live in the
  * document the hook runs in.
  *
- * While a request is open the keyboard belongs to the menu: every key except bare modifiers is
- * claimed on the frame's window, and Escape also closes the menu. The claim lasts until the request
- * settles or two seconds have passed, whichever comes first. A `wheel`, `touchmove` or a
- * `pointerdown` in the frame closes the menu too (a `pointerdown` also drops the request, so a late
- * pick never reaches `onPick`, except the right-click the hook itself claims). Not a `scroll`
- * listener: opening the menu blurs the editor, which can scroll the frame by itself and would close
- * the menu the moment it opens.
+ * A `wheel`, `touchmove` or a `pointerdown` in the frame closes the open menu (a `pointerdown` also
+ * drops the request, so a late pick never reaches `onPick`, except the right-click the hook itself
+ * claims). Not a `scroll` listener: opening the menu blurs the editor, which can scroll the frame
+ * by itself and would close the menu the moment it opens.
  *
  * A pick that resolves after `dismiss()`, after the pointer-down drop, or after unmount is ignored.
- *
- * The key claim is a capture-phase `keydown` listener on the window, registered when the hook
- * mounts. It stops listeners registered after it, but not window-capture listeners registered
- * earlier, which run first: those must gate on `isClaimingKeys()` themselves. Not on `isPending()`:
- * that stays true for a stalled request after the claim has lapsed.
  *
  * One instance per editor.
  *
  * @param options See {@link UseEditorContextMenuOptions}
- * @returns `dismiss`, `isPending` and `isClaimingKeys`, see {@link UseEditorContextMenuResult}
+ * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
  * @experimental This hook is unstable and may change shape or disappear without notice
  */
 export function useEditorContextMenu(
@@ -281,8 +253,6 @@ export function useEditorContextMenu(
   const dismissedRequestsRef = useRef(new Set<number>());
   const nextRequestIdRef = useRef(0);
   const isUnmountedRef = useRef(false);
-  const isKeyClaimActiveRef = useRef(false);
-  const keyClaimTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const reportError = useCallback((error: unknown) => {
     if (isQuietError(error)) return;
@@ -291,12 +261,6 @@ export function useEditorContextMenu(
     } catch {
       // A failing error handler must not turn into an unhandled rejection.
     }
-  }, []);
-
-  const endKeyClaim = useCallback(() => {
-    isKeyClaimActiveRef.current = false;
-    clearTimeout(keyClaimTimerRef.current);
-    keyClaimTimerRef.current = undefined;
   }, []);
 
   const callDismissMenu = useCallback(() => {
@@ -317,17 +281,13 @@ export function useEditorContextMenu(
   const dropOpenRequests = useCallback(() => {
     dismissOpenRequests();
     openRequestsRef.current.clear();
-    endKeyClaim();
-  }, [dismissOpenRequests, endKeyClaim]);
+  }, [dismissOpenRequests]);
 
   const dismiss = useCallback(() => {
     if (openRequestsRef.current.size > 0) dismissOpenRequests();
-    // The menu is closing, so it no longer owns the keyboard, even before its request settles.
-    endKeyClaim();
-  }, [dismissOpenRequests, endKeyClaim]);
+  }, [dismissOpenRequests]);
 
   const isPending = useCallback(() => openRequestsRef.current.size > 0, []);
-  const isClaimingKeys = useCallback(() => isKeyClaimActiveRef.current, []);
 
   useEffect(() => {
     isUnmountedRef.current = false;
@@ -373,15 +333,9 @@ export function useEditorContextMenu(
       nextRequestIdRef.current += 1;
       const requestId = nextRequestIdRef.current;
       openRequestsRef.current.add(requestId);
-      isKeyClaimActiveRef.current = true;
-      clearTimeout(keyClaimTimerRef.current);
-      keyClaimTimerRef.current = setTimeout(() => {
-        isKeyClaimActiveRef.current = false;
-      }, KEY_CLAIM_MS);
 
       const settle = () => {
         openRequestsRef.current.delete(requestId);
-        if (openRequestsRef.current.size === 0) endKeyClaim();
         return dismissedRequestsRef.current.delete(requestId) || isUnmountedRef.current;
       };
 
@@ -427,36 +381,22 @@ export function useEditorContextMenu(
 
     // Hidden-tab case: intentionally not handled. A hidden tab receives no right-click, and
     // `showContextMenu` refuses a tab that is not visible, so no request can be pending there.
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!isKeyClaimActiveRef.current || BARE_MODIFIER_KEYS.has(event.key)) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (event.key === 'Escape') {
-        dismissOpenRequests();
-        // The menu is closing, so it no longer owns the keyboard, even before its request settles.
-        endKeyClaim();
-      }
-    };
-
     doc.addEventListener('contextmenu', handleContextMenu, true);
     win.addEventListener('wheel', handleUserScroll, { capture: true, passive: true });
     win.addEventListener('touchmove', handleUserScroll, { capture: true, passive: true });
     win.addEventListener('pointerdown', handlePointerDown, true);
-    win.addEventListener('keydown', handleKeyDown, true);
     return () => {
       doc.removeEventListener('contextmenu', handleContextMenu, true);
       win.removeEventListener('wheel', handleUserScroll, true);
       win.removeEventListener('touchmove', handleUserScroll, true);
       win.removeEventListener('pointerdown', handlePointerDown, true);
-      win.removeEventListener('keydown', handleKeyDown, true);
       // A menu still open when the editor goes away must not outlive it, nor pick into it.
       isUnmountedRef.current = true;
       if (openRequests.size > 0) dismissOpenRequests();
-      endKeyClaim();
     };
-  }, [dismissOpenRequests, dropOpenRequests, endKeyClaim, reportError]);
+  }, [dismissOpenRequests, dropOpenRequests, reportError]);
 
-  return { dismiss, isPending, isClaimingKeys };
+  return { dismiss, isPending };
 }
 
 export default useEditorContextMenu;
