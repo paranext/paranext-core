@@ -44,7 +44,7 @@ const {
  * because this script's build chain builds an Electron DLL they have no use for - and that skips
  * the very check that says whether the editor they are about to build against is the one this
  * repo's lockfile describes. Without a way to run the check alone, eight repositories build against
- * whatever the pinned branch happened to hold at that moment, with nothing to notice the drift.
+ * an editor nobody checked against this repo's lockfile, with nothing to notice the difference.
  */
 const isCheckOnly = process.argv.includes('--check');
 
@@ -243,7 +243,7 @@ function postinstall(): void {
     console.error(
       `\nThe staged dev packages do not match this repo's package-lock.json:\n\n  ${problems.join(
         '\n  ',
-      )}\n\nThe staged packages come from the branch dev-packages.json pins, which moves independently\nof this repo's commits, so a checkout of this repo can be older than what it stages. Building\nagainst this tree builds against dependencies this repo never resolved.\n\nIn this repo: run \`npm install\` and commit the package-lock.json change.\nConsuming this repo: use a paranext-core commit whose lockfile was refreshed against the\ncurrent pinned revision.\n`,
+      )}\n\nThe staged packages come from the revision dev-packages.json pins. They stop matching the\nlockfile when that pin is moved without refreshing the lockfile, or when it names a branch,\nwhich moves independently of this repo's commits. Building against this tree builds against\ndependencies this repo never resolved.\n\nIn this repo: run \`npm install\` and commit the package-lock.json change.\nConsuming this repo: use a paranext-core commit whose lockfile was refreshed against the\nrevision it pins.\n`,
     );
     process.exitCode = 1;
     return;
