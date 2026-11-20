@@ -9,7 +9,7 @@ import {
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { cn } from '@/utils/shadcn-ui/utils';
-import { Check, ChevronsUpDown, Star } from 'lucide-react';
+import { ChevronsUpDown, Star } from 'lucide-react';
 import { ReactNode, RefObject, useCallback, useMemo, useRef, useState } from 'react';
 import { type VariantProps } from 'class-variance-authority';
 import { useHasContentBelow } from '@/hooks/use-has-content-below.hook';
@@ -276,16 +276,8 @@ export function MultiSelectComboBox({
                         key={option.label}
                         value={option.label}
                         onSelect={handleSelect}
-                        className="tw:flex tw:items-center tw:gap-2"
+                        data-checked={selected.includes(option.value)}
                       >
-                        <div className="w-4">
-                          <Check
-                            className={cn(
-                              'tw:h-4 tw:w-4',
-                              selected.includes(option.value) ? 'tw:opacity-100' : 'tw:opacity-0',
-                            )}
-                          />
-                        </div>
                         {option.starred && <Star className="tw:h-4 tw:w-4" />}
                         <div className="tw:flex-grow">{option.label}</div>
                         {option.secondaryLabel && (
