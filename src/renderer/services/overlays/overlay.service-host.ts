@@ -106,21 +106,25 @@ const DEBOUNCE_COOLDOWN_MS = 50;
  */
 const OVERLAY_CREATION_GRACE_MS = 300;
 
-/** Timestamp of the most recent overlay creation */
-let lastOverlayCreatedAt = 0;
+/**
+ * Monotonic timestamp (`performance.now()`) of the most recent overlay creation. Elapsed time in
+ * this service is measured on the monotonic clock because the wall clock can step backwards (an NTP
+ * correction, a manual change), which makes a `Date.now()` difference negative.
+ */
+let lastOverlayCreatedAt = -Infinity;
 
 /** ID of the most recently created overlay, paired with {@link lastOverlayCreatedAt} */
 let lastOverlayCreatedId: string | undefined;
 
 /** Records an overlay creation for the auto-dismiss listeners' grace period */
 function noteOverlayCreated(overlayId: string): void {
-  lastOverlayCreatedAt = Date.now();
+  lastOverlayCreatedAt = performance.now();
   lastOverlayCreatedId = overlayId;
 }
 
 /** Whether an overlay was created too recently for an auto-dismiss listener to act on it */
 function isWithinOverlayCreationGrace(): boolean {
-  return Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS;
+  return performance.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS;
 }
 
 /**
@@ -138,7 +142,7 @@ function isWithinOverlayCreationGrace(): boolean {
 const OVERLAY_CONTENT_SELECTOR =
   '[data-overlay-host], [data-overlay-popover], [data-overlay-command-palette], [data-radix-popper-content-wrapper]';
 
-/** Tracks the last invocation time per overlay type per webViewId */
+/** Tracks the last invocation time (monotonic, `performance.now()`) per overlay type per webViewId */
 const lastInvocationTime = new Map<string, number>();
 
 /**
@@ -147,7 +151,7 @@ const lastInvocationTime = new Map<string, number>();
  */
 function debounceCheck(overlayType: string, webViewId: string): boolean {
   const key = `${webViewId}:${overlayType}`;
-  const now = Date.now();
+  const now = performance.now();
   const lastTime = lastInvocationTime.get(key);
 
   if (lastTime !== undefined && now - lastTime < DEBOUNCE_COOLDOWN_MS) {
@@ -1459,7 +1463,7 @@ function handleAppWindowInput(event: AppWindowInputEvent): void {
   setTimeout(() => {
     const recentParentPointerDown =
       lastParentPointerDown &&
-      Date.now() - lastParentPointerDown.time < PARENT_POINTER_DOWN_CORRELATION_MS
+      performance.now() - lastParentPointerDown.time < PARENT_POINTER_DOWN_CORRELATION_MS
         ? lastParentPointerDown
         : undefined;
     // Consume-once: this record correlates ONE app-window signal with ONE parent pointerdown.
@@ -1519,7 +1523,7 @@ function registerAutoDismissListeners(): void {
       // make the app-window mouse-down that follows look like a click on overlay content.
       if (isWindowBlurPress(e)) return;
       lastParentPointerDown = {
-        time: Date.now(),
+        time: performance.now(),
         insideOverlay: e.target instanceof Element && !!e.target.closest(OVERLAY_CONTENT_SELECTOR),
       };
     },
