@@ -82,6 +82,7 @@ This is a Webpack project configured to build Platform.Bible extensions. The gen
   - `.github/assets/release-body.md` combined with a generated changelog becomes the body of [releases published using GitHub Actions](#publishing)
 - `dist/` is a generated folder containing the built extension files
 - `release/` is a generated folder containing zips of the built extension files
+- `.notices/` is a generated folder containing the module lists and build stamp that paranext-core's third-party notices generator reads
 
 > See the [Extension Anatomy wiki page](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy) for more information about the various files that comprise extensions and their relationships to each other.
 
@@ -357,9 +358,9 @@ This project is equipped with [Tailwind CSS](https://tailwindcss.com/) configure
 
 Adding this import to your WebView's styles enables Tailwind CSS in the WebView. Alternatively, you can directly use `./src/tailwind.css` as your WebView's style file if you do not need any additional CSS. Important Tailwind configuration notes:
 
-- This project's Tailwind's configuration is set up with the prefix `tw-`, so all Tailwind classes must have `tw-` at the beginning (e.g. `tw-bg-purple-500`).
+- This project's Tailwind's configuration is set up with the prefix `tw:`, so all Tailwind classes must have `tw:` at the beginning (e.g. `tw:bg-purple-500`).
 - [Tailwind's preflight](https://tailwindcss.com/docs/preflight) is enabled by default, meaning some default HTML tag styles are significantly modified. You can [disable it](https://tailwindcss.com/docs/preflight#disabling-preflight) or [restrict its scope](https://www.npmjs.com/package/tailwindcss-scoped-preflight) if desired. However, the preferred approach is generally to use [`@tailwindcss/typography`](https://github.com/tailwindlabs/tailwindcss-typography), included in this project's Tailwind configuration by default, when displaying flowing content.
-- You can apply theme colors using Tailwind classes corresponding to the CSS property and theme color variable name like `tw-bg-primary`.
+- You can apply theme colors using Tailwind classes corresponding to the CSS property and theme color variable name like `tw:bg-primary`.
 
 Please see the wiki's [Tailwind CSS in WebViews](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#webview-component) page for more information about using Tailwind in your WebView.
 

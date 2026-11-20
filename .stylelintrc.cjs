@@ -4,7 +4,7 @@ module.exports = {
   extends: [
     'stylelint-config-recommended',
     'stylelint-config-sass-guidelines',
-    'stylelint-config-tailwindcss/scss',
+    '@dreamsicle.io/stylelint-config-tailwindcss',
   ],
   overrides: [
     {
@@ -29,7 +29,18 @@ module.exports = {
     'scss/at-rule-no-unknown': [
       true,
       {
-        ignoreAtRules: ['tailwind', 'apply', 'layer', 'screen', 'variants'],
+        ignoreAtRules: [
+          'tailwind',
+          'apply',
+          'layer',
+          'screen',
+          'variants',
+          'config',
+          'theme',
+          'plugin',
+          'source',
+          'custom-variant',
+        ],
       },
     ],
     'selector-max-compound-selectors': 4,

@@ -28,6 +28,12 @@ export const webViewTempDir = 'temp-build';
 export const outputFolder = 'dist';
 
 /**
+ * Folder the build writes its module manifests to, for paranext-core's third-party notices
+ * generator, which reads them from there. The build id stamp sits in the folder above it.
+ */
+export const noticesManifestFolder = path.join('.notices', 'modules');
+
+/**
  * The module format of library we want webpack to use for externals and create for our extensions
  *
  * @see webpack.Configuration['externalsType'] for info about external import format
