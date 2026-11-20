@@ -6,7 +6,7 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import type { ScriptureEditorViewType } from 'platform-scripture-editor';
 import { describe, expect, it } from 'vitest';
-import { getEditorViewOptions } from './editor-view-options.util';
+import { getEditorViewOptions, getModelTextViewOptions } from './editor-view-options.util';
 
 // 'markers' is a legacy saved value: the Markers view is no longer offered, and a tab that saved it
 // displays as Standard view in Power. While `platform.interfaceMode` loads, the saved value is
@@ -45,4 +45,29 @@ describe('getEditorViewOptions', () => {
       ...on,
     });
   });
+});
+
+describe('getModelTextViewOptions', () => {
+  it('shows paragraph markers in the gutter, with no active-text outline', () => {
+    expect(getModelTextViewOptions(true)).toEqual({
+      ...getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE),
+      hasActiveTextFocusBox: false,
+      allowInvisibleCharacters: true,
+    });
+    // What the panel needs, whatever the library's preset holds besides.
+    expect(getModelTextViewOptions(true)).toMatchObject({
+      hasGutterParaMarkers: true,
+      markerMode: 'hidden',
+      hasActiveTextFocusBox: false,
+    });
+  });
+
+  it.each([true, false])(
+    "carries the project's allowInvisibleCharacters (%s) into the view",
+    (allowInvisibleCharacters) => {
+      expect(getModelTextViewOptions(allowInvisibleCharacters).allowInvisibleCharacters).toBe(
+        allowInvisibleCharacters,
+      );
+    },
+  );
 });

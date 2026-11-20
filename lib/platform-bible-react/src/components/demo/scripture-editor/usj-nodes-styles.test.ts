@@ -342,10 +342,10 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     // upstream commits, and nothing structural keeps their rule sets in agreement — with each
     // suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation, the
     // ::after outline) can land in one copy and silently miss the other. The shipping suite
-    // carries the same three pins, so a fix landing in one copy fails the other's suite until it
-    // is forwarded. The gutter indent-compensation block is covered structurally instead: the
-    // extension's usj-nodes-scss-coverage.test.ts derives it from each copy's base rules and
-    // compares the two copies' results, so no pin is needed for it here.
+    // carries a twin of each pin the copies share, so a fix landing in one copy fails the other's
+    // suite until it is forwarded. The gutter indent-compensation block is covered structurally
+    // instead: the extension's usj-nodes-scss-coverage.test.ts derives it from each copy's base
+    // rules and compares the two copies' results, so no pin is needed for it here.
     it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
       expect(css).toMatch(
         rule(
@@ -360,6 +360,14 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     it('renders the active-text outline via ::after, never ::before (book-code collision)', () => {
       expect(css).toMatch(/\.psc-active-focus \.psc-active-text::after\s*\{/);
       expect(declarations).not.toMatch(/\.psc-active-focus \.psc-active-text::before/);
+    });
+    it('keeps the gutter chapter and verse number styles out of the Model Text panel', () => {
+      const gate = '.psc-gutter-markers:where(:not(.model-text-root *))';
+      expect(declarations).toContain(`${gate} .usfm_v,`);
+      expect(declarations).toContain(`${gate} span.verse {`);
+      expect(declarations).toContain(`${gate} .usfm_c {`);
+      expect(declarations).toContain(`${gate} .usfm_c::after {`);
+      expect(declarations).not.toMatch(/\.psc-gutter-markers (\.usfm_[cv]|span\.verse)\b/);
     });
     describe('empty-verse caret', () => {
       // The caret rules only show in layout, so what is pinned is that each load-bearing

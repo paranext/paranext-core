@@ -9,7 +9,7 @@ import { BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS } from 'platform-bible-react
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList, ResourceReferenceList } from 'platform-scripture';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
-import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
+import { MODEL_TEXT_PANEL_STRING_KEYS, MODEL_TEXT_ROOT_CLASS_NAME } from './model-text-panel.const';
 import {
   MODEL_TEXT_EDITOR_CONTAINER_TEST_ID,
   ModelTextPanel,
@@ -43,9 +43,15 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
     }, []);
     return <div data-testid="editorial" />;
   }),
-  // A recognizable stand-in for the editor's default view options, so a test can see that the
-  // panel's `view` starts from them.
+  // Recognizable stand-ins for the editor's view presets, so a test can see which one the panel's
+  // `view` starts from and what it changes.
   getDefaultViewOptions: () => ({ viewOptionsFor: 'default' }),
+  PARAGRAPH_STRUCTURE_VIEW_MODE: 'paragraph-structure',
+  getViewOptions: (mode: string) => ({
+    viewOptionsFor: mode,
+    hasGutterParaMarkers: true,
+    hasActiveTextFocusBox: true,
+  }),
 }));
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
@@ -1069,7 +1075,7 @@ describe('ModelTextPanel', () => {
   });
 
   it.each([true, false])(
-    "gives the editor the project's allowInvisibleCharacters (%s) in its view options",
+    "gives the read-only editor the gutter-marker view, without the active-text outline, and the project's allowInvisibleCharacters (%s)",
     async (allowInvisibleCharacters) => {
       renderPanel({
         modelTextsState: readyState(configuredModelText('uid-web')),
@@ -1081,12 +1087,31 @@ describe('ModelTextPanel', () => {
       await waitFor(() =>
         expect(capturedEditorOptions).toHaveBeenLastCalledWith(
           expect.objectContaining({
-            view: { viewOptionsFor: 'default', allowInvisibleCharacters },
+            isReadonly: true,
+            view: {
+              viewOptionsFor: 'paragraph-structure',
+              hasGutterParaMarkers: true,
+              hasActiveTextFocusBox: false,
+              allowInvisibleCharacters,
+            },
           }),
         ),
       );
     },
   );
+
+  // `_usj-nodes.scss` keys the resource-panel chapter and verse number style on this class; the
+  // real-editor test shows what it changes.
+  it('mounts the editor inside the Model Text root class', async () => {
+    renderPanel({
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter: vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' })),
+    });
+
+    const editor = await screen.findByTestId('editorial');
+    expect(editor.closest(`.${MODEL_TEXT_ROOT_CLASS_NAME}`)).not.toBeNull();
+  });
 
   it('blocks copying from the render that changes chapter until the new chapter has loaded', async () => {
     let resolveChapter2: (value: {
