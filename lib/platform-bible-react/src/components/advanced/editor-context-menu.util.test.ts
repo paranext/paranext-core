@@ -40,7 +40,7 @@ describe('isEditorContextMenuOpenFor', () => {
     const container = document.createElement('div');
     const ownRoot = makeEditorRoot(false);
     container.appendChild(ownRoot);
-    // A second, unrelated editor (e.g. the footnote popover, or a second web view) with its menu
+    // A second, unrelated editor (e.g. the footnote editor, or a second web view) with its menu
     // open must never trip this container's gate — the signal has to be read from INSIDE the
     // given container, not from the document as a whole.
     makeEditorRoot(true);

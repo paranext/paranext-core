@@ -7,7 +7,7 @@ export interface UseMarkerPaletteCompositionCloseOptions {
   /** Closes the open palette. */
   dismiss: () => void;
   /**
-   * Where to listen. The main editor's web view listens on its `window`; the footnote popover
+   * Where to listen. The main editor's web view listens on its `window`; the footnote editor
    * listens on its `document`. Defaults to `document`, which is the narrower of the two.
    */
   target?: Window | Document;

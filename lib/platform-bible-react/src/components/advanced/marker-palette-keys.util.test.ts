@@ -149,7 +149,7 @@ describe('routeMarkerPaletteKey', () => {
 describe('routeMarkerPaletteKey — the change guard on TYPED commits', () => {
   // The spine asks the guard before a HIGHLIGHTED commit, which comes back through the overlay.
   // Typed commits never go near the spine — they apply straight from the router — so each one is
-  // covered here. A consumer with no live close (the footnote popover) has nothing else standing
+  // covered here. A consumer with no live close (the footnote editor) has nothing else standing
   // between a changed document and a commit at a stale caret.
   const typedCommitKeys: readonly {
     key: string;

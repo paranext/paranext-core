@@ -1334,7 +1334,8 @@ async function dismissCommandPalette(webViewId: string): Promise<void> {
 
 /**
  * Dismisses the open context menu for the given WebView, resolving its `showContextMenu` promise
- * with `undefined` without running a command. No-op if no context menu is open for that WebView.
+ * with `undefined` without running a command. It also cancels a context menu of that WebView that
+ * is still being prepared, so that menu never opens. No-op if the WebView has neither.
  *
  * @param webViewId The WebView whose context menu should be dismissed
  */

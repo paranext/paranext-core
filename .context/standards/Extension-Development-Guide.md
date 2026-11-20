@@ -468,7 +468,7 @@ That is the whole opt-in. The platform then scales the marked elements on Ctrl/â
 
 **Pop-ups stay at interface scale.** Menus, popovers, dropdowns and tooltips from
 `platform-bible-react`, the pop-ups requested through `papi.overlays` (`showCommandPalette`,
-`showPopover`, `showContextMenu`) and the Scripture editor's own right-click menu never take content
+`showPopover`, `showContextMenu`, which the Scripture editors' right-click menus use) never take content
 zoom, even when they open from zoomed text: content zoom makes project text readable, it does not
 resize controls. Only their position follows the zoomed content. A pop-up you anchor to a position
 in the text should read that position live â€” `useLivePopoverAnchor` from `platform-bible-react`
@@ -635,3 +635,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.9   | 2026-10-27 | Add "Tab Icons" under WebViews: tabs name a lucide icon with `iconName` instead of shipping theme variants. |
 | 1.1.10  | 2026-11-16 | Add "Per-Project Tab Titles" under WebViews: build them with `getLocalizedProjectTitle` and `useLocalizedProjectTitle`. |
 | 1.1.11  | 2026-11-17 | `'panel'` layouts: `'before-tab'` and `'after-tab'` open in the target's own tab group. |
+| 1.1.12  | 2026-11-19 | "Pop-ups stay at interface scale": the Scripture editors' right-click menus are now the context menu requested through `papi.overlays`. |
