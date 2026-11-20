@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { CSSProperties, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import {
   Tooltip,
@@ -9,6 +9,13 @@ import {
 import { useTruncationTooltip } from '@/hooks/use-truncation-tooltip.hook';
 import { getLastInteractionModality } from '@/utils/focus.util';
 import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
+
+/**
+ * What counts as the control the label sits in. Hover and keyboard focus are both read from it.
+ * `tabindex="-1"` is left out: it marks a container focused from code, not a control a user
+ * reaches, and taking one as the host would spread hover over the whole container.
+ */
+const HOST_SELECTOR = 'button, [role="combobox"], [tabindex]:not([tabindex="-1"])';
 
 export type ToolbarCompoundLabelProps = {
   /** The field that identifies the item — a book abbreviation, project short name, marker code. */
@@ -51,6 +58,10 @@ export type ToolbarCompoundLabelProps = {
  * absorb ~all of it, so it clips to nothing before the primary gives up a character — and the
  * primary keeps an ellipsis of its own rather than being cut mid-glyph by the trigger's
  * `overflow-hidden`. Only the abbreviation and dropped steps need the caller to say so.
+ *
+ * Hover and keyboard focus are read from the control the label sits in (the nearest `button`,
+ * `combobox` or focusable ancestor), and the tooltip opens clear of that whole control rather than
+ * of the text alone.
  */
 export function ToolbarCompoundLabel({
   primary,
@@ -94,13 +105,96 @@ export function ToolbarCompoundLabel({
     null,
   );
 
+  // Where the tooltip points: the box of the control the label sits in, measured when it opens. See
+  // the anchor element in the JSX for why the label does not point at itself.
+  const [anchorBox, setAnchorBox] = useState<CSSProperties>();
+
   const isSecondaryRendered = showSecondary && secondary !== undefined;
   const isShowingPartialLabel = isPartial ?? (secondary !== undefined && !showSecondary);
 
   useInteractionModality();
 
+  // The control the label sits in, or the label itself when it stands alone.
+  const getHost = useCallback(
+    () => rootRef.current?.closest<HTMLElement>(HOST_SELECTOR) ?? rootRef.current ?? undefined,
+    [],
+  );
+
+  // Its padding box rather than its border box, so the anchor never reaches past the edge of a host
+  // that clips (the toolbar triggers are `overflow-hidden`) and makes it scrollable.
+  const placeAnchor = useCallback(() => {
+    const root = rootRef.current;
+    const host = getHost();
+    if (!root || !host) return;
+    const rootRect = root.getBoundingClientRect();
+    const hostRect = host.getBoundingClientRect();
+    setAnchorBox({
+      left: hostRect.left + host.clientLeft - rootRect.left,
+      top: hostRect.top + host.clientTop - rootRect.top,
+      width: host.clientWidth,
+      height: host.clientHeight,
+    });
+  }, [getHost]);
+
+  const handlePointerEnter = useCallback(() => {
+    placeAnchor();
+    if (isShowingPartialLabel) setIsIncompleteHovered(true);
+    onPrimaryClipPointerEnter();
+    if (isSecondaryRendered) onSecondaryClipPointerEnter();
+  }, [
+    placeAnchor,
+    isShowingPartialLabel,
+    isSecondaryRendered,
+    onPrimaryClipPointerEnter,
+    onSecondaryClipPointerEnter,
+  ]);
+
+  // The one close path: leaving or pressing the control, blur, Escape and an outside press all end
+  // here. The press case is not redundant: these labels sit
+  // inside popover and select triggers, and without it the tooltip stays open on top of the popover
+  // the click just opened, because the pointer never "leaves".
+  const closeTooltip = useCallback(() => {
+    setIsIncompleteHovered(false);
+    setIsFocusRevealed(false);
+    onPrimaryClipPointerLeave();
+    onSecondaryClipPointerLeave();
+  }, [onPrimaryClipPointerLeave, onSecondaryClipPointerLeave]);
+
+  // Hover belongs to the whole control, not just the text: the label is narrower and shorter than
+  // the button around it, and a tooltip that comes and goes as the pointer crosses the text's edge
+  // inside one button reads as flicker.
   useEffect(() => {
-    const focusable = rootRef.current?.closest('button, [role="combobox"], [tabindex]');
+    const host = getHost();
+    if (!host) return undefined;
+
+    // `pointerover`/`pointerout` rather than `pointerenter`/`pointerleave`: the enter pair is not
+    // dispatched to ancestors by every environment (user-event sends it to the target only), so
+    // the host would miss entries made over its children. Moves between the host's own children
+    // are filtered out by `relatedTarget`, read without assuming the event's class: an environment
+    // without a `PointerEvent` constructor (jsdom, for one) delivers these as plain events.
+    const isFromOutsideHost = (event: Event) => {
+      const relatedTarget = 'relatedTarget' in event ? event.relatedTarget : undefined;
+      return !(relatedTarget instanceof Node && host.contains(relatedTarget));
+    };
+    const handleOver = (event: Event) => {
+      if (isFromOutsideHost(event)) handlePointerEnter();
+    };
+    const handleOut = (event: Event) => {
+      if (isFromOutsideHost(event)) closeTooltip();
+    };
+
+    host.addEventListener('pointerover', handleOver);
+    host.addEventListener('pointerout', handleOut);
+    host.addEventListener('pointerdown', closeTooltip);
+    return () => {
+      host.removeEventListener('pointerover', handleOver);
+      host.removeEventListener('pointerout', handleOut);
+      host.removeEventListener('pointerdown', closeTooltip);
+    };
+  }, [getHost, handlePointerEnter, closeTooltip]);
+
+  useEffect(() => {
+    const focusable = rootRef.current?.closest(HOST_SELECTOR);
     if (!focusable) return undefined;
 
     const isClipped = (element: HTMLSpanElement | null) =>
@@ -112,8 +206,14 @@ export function ToolbarCompoundLabel({
       if (getLastInteractionModality() === 'pointer') return;
       // Same two sources as hover: a label that is short by construction, or one CSS has clipped.
       // Anything that already reads in full needs no tooltip on focus either.
-      if (isShowingPartialLabel || isClipped(primaryRef.current) || isClipped(secondaryRef.current))
+      if (
+        isShowingPartialLabel ||
+        isClipped(primaryRef.current) ||
+        isClipped(secondaryRef.current)
+      ) {
+        placeAnchor();
         setIsFocusRevealed(true);
+      }
     };
     const hide = () => setIsFocusRevealed(false);
 
@@ -123,28 +223,7 @@ export function ToolbarCompoundLabel({
       focusable.removeEventListener('focus', reveal);
       focusable.removeEventListener('blur', hide);
     };
-  }, [isShowingPartialLabel, primaryRef, secondaryRef]);
-
-  const handlePointerEnter = useCallback(() => {
-    if (isShowingPartialLabel) setIsIncompleteHovered(true);
-    onPrimaryClipPointerEnter();
-    if (isSecondaryRendered) onSecondaryClipPointerEnter();
-  }, [
-    isShowingPartialLabel,
-    isSecondaryRendered,
-    onPrimaryClipPointerEnter,
-    onSecondaryClipPointerEnter,
-  ]);
-
-  // Wired to both pointer-leave and pointer-down. The press case is not redundant: these labels sit
-  // inside popover and select triggers, and without it the tooltip stays open on top of the popover
-  // the click just opened, because the pointer never "leaves".
-  const closeTooltip = useCallback(() => {
-    setIsIncompleteHovered(false);
-    setIsFocusRevealed(false);
-    onPrimaryClipPointerLeave();
-    onSecondaryClipPointerLeave();
-  }, [onPrimaryClipPointerLeave, onSecondaryClipPointerLeave]);
+  }, [isShowingPartialLabel, primaryRef, secondaryRef, placeAnchor]);
 
   // The open state is latched at event time, so a label that grows back to its full form while the
   // tooltip is up would otherwise keep showing a tooltip that now just repeats what is on screen.
@@ -176,48 +255,57 @@ export function ToolbarCompoundLabel({
     // Nested TooltipProviders are harmless in Radix, so carrying our own means this works in any
     // host, including toolbars that never set one up.
     <TooltipProvider>
-      {/* `onOpenChange` is what makes this dismissable. A controlled Radix tooltip routes every
-          close it decides on — Escape, an outside pointer press — through this callback, so
-          without it the tooltip's own dismiss handler is a no-op AND its dismissable layer still
-          calls `preventDefault()` on that Escape, swallowing the keypress from whatever popover
-          sits underneath. Only closes are honoured; opening stays ours to decide. */}
+      {/* No `onOpenChange`: Radix's own close requests are not honoured. Besides Escape and an
+          outside press, Radix closes a tooltip whenever any tooltip broadcasts its "another tooltip
+          opened" event — and an uncontrolled tooltip around this control (`DisabledActionTooltip`
+          wrapping a toolbar trigger, for one) broadcasts on every hover, on a zero-delay timer, so
+          this one would close the moment it appeared. Escape and outside presses are handled on
+          the content below; leaving, pressing and blurring the control are handled above. */}
       <Tooltip
         open={
           isPrimaryClipHovered || isSecondaryClipHovered || isIncompleteHovered || isFocusRevealed
         }
-        onOpenChange={(isOpen) => {
-          if (!isOpen) closeTooltip();
-        }}
       >
-        <TooltipTrigger asChild>
-          <span
-            ref={rootRef}
-            onPointerEnter={handlePointerEnter}
-            onPointerLeave={closeTooltip}
-            onPointerDown={closeTooltip}
-            // Centred, not baseline-aligned. A field whose content is an `inline-block` with
-            // `overflow: hidden` takes its bottom margin edge as its baseline rather than its text
-            // baseline, so baseline alignment hangs that field off the wrong edge and it sits
-            // visibly high next to its neighbour. How far off depends on the font's metrics, so it
-            // shows on some platforms and not others. Both fields here are the same size, so
-            // centring costs nothing.
-            className={cn('tw:flex tw:min-w-0 tw:items-center', className)}
-          >
-            {first}
-            {/* Only between two rendered fields — never leading or trailing, which is what a
-                naive "is there a second slot" check produces once one field is dropped. */}
-            {first && second && (
-              <span key="separator" className="tw:shrink-0 tw:whitespace-pre">
-                {separator}
-              </span>
-            )}
-            {second}
-          </span>
-        </TooltipTrigger>
+        <span
+          ref={rootRef}
+          // Centred, not baseline-aligned. A field whose content is an `inline-block` with
+          // `overflow: hidden` takes its bottom margin edge as its baseline rather than its text
+          // baseline, so baseline alignment hangs that field off the wrong edge and it sits visibly
+          // high next to its neighbour. How far off depends on the font's metrics, so it shows on
+          // some platforms and not others. Both fields here are the same size, so centring costs
+          // nothing. `relative` positions the anchor below.
+          className={cn('tw:relative tw:flex tw:min-w-0 tw:items-center', className)}
+        >
+          {/* The tooltip's anchor: an invisible box laid over the whole control, so the tooltip
+              opens clear of the control rather than of the text, never on top of the control where
+              it would sit under the pointer. It takes no pointer events: hover is read from the
+              control itself. */}
+          <TooltipTrigger asChild>
+            <span aria-hidden className="tw:pointer-events-none tw:absolute" style={anchorBox} />
+          </TooltipTrigger>
+          {first}
+          {/* Only between two rendered fields — never leading or trailing, which is what a naive
+              "is there a second slot" check produces once one field is dropped. */}
+          {first && second && (
+            <span key="separator" className="tw:shrink-0 tw:whitespace-pre">
+              {separator}
+            </span>
+          )}
+          {second}
+        </span>
         {/* `dir="auto"` because the tooltip is the joined form as one text node: at the narrowest
             step it is the only place the secondary field is readable at all, and a separator
             between two scripts otherwise lands on the visually wrong side. */}
-        <TooltipContent dir="auto">{fullText}</TooltipContent>
+        {/* Closing here also keeps the Escape from being swallowed for nothing: the content's
+            dismissable layer default-prevents the Escape it handles, so whatever popover sits
+            underneath never sees it, and the tooltip has to actually close in return. */}
+        <TooltipContent
+          dir="auto"
+          onEscapeKeyDown={closeTooltip}
+          onPointerDownOutside={closeTooltip}
+        >
+          {fullText}
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

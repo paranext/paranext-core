@@ -12234,6 +12234,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
 
+## adr-tooltips-we-open-ignore-radix-closes: A tooltip our own handlers open also closes only through our own handlers
+
+- **Date:** 2026-11-20
+- **Status:** Accepted
+- **Context:** Several labels drive a controlled Radix tooltip from their own pointer and focus
+  handlers, because the tooltip should open only when the label is clipped or abbreviated:
+  `ToolbarCompoundLabel` (the BCV control, the Simple project selector, the paragraph-style
+  trigger) and the model text panel header (`useTruncationTooltip`). They passed Radix's close
+  requests through `onOpenChange`, so that Escape and an outside press would dismiss them. Radix
+  1.2.8 also closes every open tooltip when any tooltip broadcasts its `tooltip.open` event, and a
+  tooltip trigger broadcasts on hover from a zero-delay timer whose setter still reads a controlled
+  tooltip as closed. So these tooltips opened and closed again within a few milliseconds of the
+  pointer arriving. The broadcast can come from the label's own trigger or from any uncontrolled
+  tooltip around it: `DisabledActionTooltip` wraps the paragraph-style trigger and broadcasts on
+  every hover even while it has nothing to show.
+- **Decision:** Such a tooltip passes no `onOpenChange`. It closes on its own pointer leave, press
+  and blur, and handles Escape and an outside press on `TooltipContent` (`onEscapeKeyDown`,
+  `onPointerDownOutside`). Radix's close requests, the broadcast included, reach nothing.
+- **Alternatives:** **Keep Radix's own hover handling out of the trigger** — a `pointer-events-none`
+  anchor as the trigger, or an `onPointerMove` that default-prevents so Radix skips its handler.
+  This shipped first and was rejected: it silences only the label's own trigger, so a broadcast
+  from an ancestor tooltip still closes it, and every new consumer has to remember it.
+  **Close the ancestor tooltip's broadcast at its source** (make `DisabledActionTooltip` render no
+  tooltip while enabled) — rejected as the fix: it repairs one source, and any other tooltip that
+  wraps or neighbours a toolbar control is another. **Filter `onOpenChange` by cause** — not
+  possible: Radix reports every close as the same `false`.
+- **Consequences:** Every source of the broadcast is harmless to these tooltips. They no longer
+  close when an ancestor scrolls or when another tooltip opens, so their own leave, press and blur
+  handling must stay complete; the tests pin each. `ToolbarCompoundLabel` keeps its
+  `pointer-events-none` anchor, but only to position the tooltip against the whole control. A new
+  controlled tooltip that opens from its own handlers should follow the same shape. Escape is still
+  default-prevented by the content's dismissable layer, as for every Radix layer, so the tooltip
+  must close in return rather than swallow the key.
+- **Source:** paranext-core PR #3043.
+
 ## adr-tour-offered-in-both-modes: Offer the orientation tour in both interface modes, letting the anchor filter decide what each mode sees
 
 - **Date:** 2026-09-02
