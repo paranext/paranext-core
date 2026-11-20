@@ -505,9 +505,9 @@ export interface NoteInsertConfig {
 /**
  * ONE table for every textual-note kind, keyed by the same method union the editor message and the
  * command handlers use — the marker, the version-history commit message, and the log description
- * all move together for a given kind instead of being repeated at each of the four call sites that
- * need it (the context-menu wrappers, the top-menu message listener, the Ctrl+T/Ctrl+Shift+T
- * shortcut, and each hook's dependency array).
+ * all move together for a given kind instead of being repeated at each call site that needs it (the
+ * message listener the top menu and the right-click menu reach, the Ctrl+T/Ctrl+Shift+T shortcut,
+ * and each hook's dependency array).
  */
 export const NOTE_INSERT_CONFIG: Record<
   EditorMessageInsertTextualNoteAtSelection['method'],

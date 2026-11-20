@@ -760,11 +760,10 @@ export default function FootnoteEditor({
   const options = useMemo<EditorOptions>(
     () => ({
       ...editorOptions,
-      // Drop any inherited context-menu extras (e.g. the main editor's "Insert footnote" /
-      // "Insert cross-reference" / "Insert comment" items). Those items' onSelect closures are
-      // bound to the OUTER main-document editorRef, so surfacing them inside this popover would
-      // let a right-click here silently mutate the main document. While the built-in menu is
-      // shown it keeps only its Cut/Copy/Paste items.
+      // Drop any context-menu extras the host's editor options carry (for example Insert footnote
+      // or Insert comment items). Their onSelect closures are bound to the host's own editor, so
+      // surfacing them inside this editor would let a right-click here silently change the host's
+      // document. While the built-in menu is shown it keeps only its Cut/Copy/Paste items.
       contextMenu: undefined,
       hasBuiltInContextMenu,
       markerMenuTrigger: defaultMarkerMenuTrigger,
@@ -1699,13 +1698,12 @@ export default function FootnoteEditor({
           return;
         }
 
-        // This popover's own right-click menu is up: let its own keydown listener handle every
-        // key instead of the guards below, which otherwise resolve against the caret/selection —
-        // collapsing a selection the menu's own Enter (e.g. Cut) is about to act on. Still claim
-        // and drop `\`, mirroring the main editor's swallow-while-menu-open behavior, so the
-        // literal backslash never leaks into the note once the menu closes. See
-        // `isEditorContextMenuOpenFor`. Scoped to THIS popover's root — a second editor's open
-        // menu (e.g. the main Standard-view editor) must never trip this gate.
+        // This editor's own built-in right-click menu is up: let its own keydown listener handle
+        // every key instead of the guards below, which otherwise resolve against the
+        // caret/selection — collapsing a selection the menu's own Enter (e.g. Cut) is about to act
+        // on. Still claim and drop `\`, as for a host menu above, so the literal backslash never
+        // leaks into the note once the menu closes. See `isEditorContextMenuOpenFor`. Scoped to
+        // THIS editor's root — another editor's open menu must never trip this gate.
         if (isBuiltInContextMenuOpen()) {
           if (event.key === defaultMarkerMenuTrigger) {
             event.preventDefault();
@@ -1792,7 +1790,7 @@ export default function FootnoteEditor({
     const isEditorFocusedWithoutMenu = () => {
       const editorInput = getEditorInput();
       if (!editorInput || document.activeElement !== editorInput) return false;
-      // The popover's own right-click menu takes Enter to run its highlighted item. A host menu
+      // The built-in right-click menu takes Enter to run its highlighted item. A host menu
       // cannot take it, so it does not stand this claim down.
       return !isBuiltInContextMenuOpen();
     };

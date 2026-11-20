@@ -4835,10 +4835,9 @@ export type LivePopoverAnchor = {
  *
  * Hidden case: handled by holding the last usable rect. A popover that survives Escape and an
  * outside click can be open while its pane is hidden, and a hidden pane has no layout, so a source
- * measures nothing there. The anchor keeps the last rect it
- * had rather than collapsing to the pane's corner, and the next frame after the tab is shown
- * measures again and catches up. Sources report "no measurement" by returning `undefined`; see
- * {@link measureBox}.
+ * measures nothing there. The anchor keeps the last rect it had rather than collapsing to the
+ * pane's corner, and the next frame after the tab is shown measures again and catches up. Sources
+ * report "no measurement" by returning `undefined`; see {@link measureBox}.
  *
  * @example
  *
