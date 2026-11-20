@@ -15835,6 +15835,17 @@ declare module 'extension-host/extension-types/extension.interface' {
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
 }
+declare module 'renderer/components/web-view-iframe.util' {
+  /**
+   * Finds a WebView's iframe element by its `data-web-view-id` attribute. Only an `iframe` counts:
+   * other elements carry the same attribute (a WebView tab's header does, for tests to find it) and
+   * can come first in the document.
+   *
+   * @param webViewId The webViewId to search for
+   * @returns The iframe element, or null if not found
+   */
+  export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
+}
 declare module 'renderer/services/overlays/overlay-palette-filter.util' {
   /**
    * Renderer-side palette filtering for the overlay service — the IMPLEMENTATION half that
@@ -15981,17 +15992,6 @@ declare module 'renderer/services/overlays/overlay-validation' {
    * @throws PlatformError with code INVALID_ARGUMENT if validation fails
    */
   export function validateCommandPaletteRequest(request: CommandPaletteRequest): void;
-}
-declare module 'renderer/components/web-view-iframe.util' {
-  /**
-   * Finds a WebView's iframe element by its `data-web-view-id` attribute. Only an `iframe` counts:
-   * other elements carry the same attribute (a WebView tab's header does, for tests to find it) and
-   * can come first in the document.
-   *
-   * @param webViewId The webViewId to search for
-   * @returns The iframe element, or null if not found
-   */
-  export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
 }
 declare module 'renderer/services/overlays/overlay-coordinates' {
   /**
