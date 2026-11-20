@@ -5,7 +5,7 @@
  * `marker-palette-keydown.util.ts` is the one table that decides what each key MEANS, and
  * `marker-palette-session.util.ts` is the one spine that opens a session and settles its show
  * promise. Between them sat a third thing both consumers wrote for themselves — the web view
- * (`platform-scripture-editor.web-view.tsx`) and the footnote popover
+ * (`platform-scripture-editor.web-view.tsx`) and the footnote editor
  * (`footnote-editor.component.tsx`) — which is prone to drifting apart. This is that third thing,
  * written once.
  *

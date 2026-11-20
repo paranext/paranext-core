@@ -3,12 +3,12 @@
  * editor rather than to the document as a whole.
  *
  * The menu itself renders through a `ReactDOM.createPortal` to `document.body`, and every
- * `ContextMenuPlugin` instance on the page — the main Standard-view editor and the footnote-editor
- * popover each mount their own — shares the same portal classes
- * (`.typeahead-popover.auto-embed-menu`), so a bare `document.querySelector` for that class cannot
- * tell whose menu is open. The editor package instead marks the FOCUSED editor's own root with
- * `aria-controls="editor-context-menu"` for exactly as long as its menu stays open (removed again
- * on close), which is the one signal that is genuinely per-editor.
+ * `ContextMenuPlugin` instance on the page — each editor that shows the built-in menu mounts its
+ * own — shares the same portal classes (`.typeahead-popover.auto-embed-menu`), so a bare
+ * `document.querySelector` for that class cannot tell whose menu is open. The editor package
+ * instead marks the FOCUSED editor's own root with `aria-controls="editor-context-menu"` for
+ * exactly as long as its menu stays open (removed again on close), which is the one signal that is
+ * genuinely per-editor.
  */
 
 /**

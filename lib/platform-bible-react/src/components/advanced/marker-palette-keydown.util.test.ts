@@ -532,7 +532,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('Space on a note marker this list does NOT offer closes and inserts NOTHING', () => {
-    // The Enter palette (paragraph source) and the footnote popover (note-INTERNAL markers) both
+    // The Enter palette (paragraph source) and the footnote editor (note-INTERNAL markers) both
     // reach this: the user typed a real note marker, and this palette has no entry for it.
     // Committing would apply whatever is HIGHLIGHTED — never what they typed, since the marker
     // they typed is by definition absent from the list — and materializing would land the raw
@@ -552,7 +552,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('Space on a note marker not offered INSIDE A NOTE also inserts nothing', () => {
-    // The footnote popover offers note-internal markers, so `\f` there would otherwise write a
+    // The footnote editor offers note-internal markers, so `\f` there would otherwise write a
     // NESTED `\f ` literal.
     const noteInternalItems = [{ marker: 'fr' }, { marker: 'ft' }, { marker: 'fk' }];
     const driver = makeDriver();

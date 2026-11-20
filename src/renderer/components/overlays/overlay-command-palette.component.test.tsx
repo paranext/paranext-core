@@ -1353,7 +1353,7 @@ describe('OverlayCommandPalettePresentational', () => {
   describe('mouse commits must not steal focus (mousedown default-prevented)', () => {
     // Pressing the mouse button on a palette item is what transfers focus to the renderer
     // document — BEFORE the click commit round-trips to the requesting editor. For the editor
-    // (main web view or footnote popover) that blur can null Lexical's live selection, and the
+    // (main web view or footnote editor) that blur can null Lexical's live selection, and the
     // marker apply then lands at the document tail instead of the caret. The classic
     // toolbar-button discipline: preventDefault on mousedown so a click commits without the
     // palette ever taking focus. The click must still select (selection fires on click, not

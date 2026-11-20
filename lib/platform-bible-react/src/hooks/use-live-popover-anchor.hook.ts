@@ -59,12 +59,11 @@ export type LivePopoverAnchor = {
  * is open) re-reads the rect on scroll of the text's scroll container, on resize, and when the text
  * reflows under a zoom change, so the popover stays beside its caller or selection.
  *
- * Hidden case: handled by holding the last usable rect. A popover can be open while its pane is
- * hidden — the Scripture editor's footnote popover survives Escape and an outside click — and a
- * hidden pane has no layout, so a source measures nothing there. The anchor keeps the last rect it
- * had rather than collapsing to the pane's corner, and the next frame after the tab is shown
- * measures again and catches up. Sources report "no measurement" by returning `undefined`; see
- * {@link measureBox}.
+ * Hidden case: handled by holding the last usable rect. A popover that survives Escape and an
+ * outside click can be open while its pane is hidden, and a hidden pane has no layout, so a source
+ * measures nothing there. The anchor keeps the last rect it had rather than collapsing to the
+ * pane's corner, and the next frame after the tab is shown measures again and catches up. Sources
+ * report "no measurement" by returning `undefined`; see {@link measureBox}.
  *
  * @example
  *

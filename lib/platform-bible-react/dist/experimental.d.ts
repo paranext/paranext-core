@@ -1461,7 +1461,7 @@ export interface MarkerPaletteOpenSession<TItem extends {
 }
 /**
  * The per-consumer half of a marker-palette session — everything the shared spine cannot own
- * because it differs between the web view and the footnote popover, plus the consumer-owned session
+ * because it differs between the web view and the footnote editor, plus the consumer-owned session
  * bookkeeping the spine drives through narrow callbacks.
  */
 export interface RunMarkerPaletteSessionOptions<TItem extends {
@@ -1587,7 +1587,7 @@ export declare function stripMarkerNestingPrefix(markerText: string): string;
  * {@link MarkerPaletteSessionState.isNoteMarker}, so its Space branch can apply PT9's note rule. The
  * table cannot answer this from its own `items`: a note marker a palette does not offer is missing
  * from that list precisely in the cases the rule exists for — the Enter palette, whose source is
- * paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote popover,
+ * paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote editor,
  * which offers note-INTERNAL markers. The stylesheet knows `f` is a note either way.
  *
  * Normalization matches the visible list's: case-folded, with the `+` nesting prefix stripped from
@@ -1677,7 +1677,7 @@ export interface UseMarkerPaletteCompositionCloseOptions {
 	/** Closes the open palette. */
 	dismiss: () => void;
 	/**
-	 * Where to listen. The main editor's web view listens on its `window`; the footnote popover
+	 * Where to listen. The main editor's web view listens on its `window`; the footnote editor
 	 * listens on its `document`. Defaults to `document`, which is the narrower of the two.
 	 */
 	target?: Window | Document;
@@ -1764,7 +1764,7 @@ export interface UseMarkerPaletteFocusOutCaptureOptions {
 	/** Whether a marker-palette session is open right now. Read at event time, never captured. */
 	isSessionOpen: () => boolean;
 	/**
-	 * Where to listen. The main editor's web view listens on its `window`; the footnote popover
+	 * Where to listen. The main editor's web view listens on its `window`; the footnote editor
 	 * listens on its `document`. Defaults to `document`, the narrower of the two.
 	 */
 	target?: Window | Document;
@@ -1798,8 +1798,8 @@ export declare function useMarkerPaletteFocusOutCapture({ containerRef, editorRe
  * editor rather than to the document as a whole.
  *
  * The menu itself renders through a `ReactDOM.createPortal` to `document.body`, and every
- * `ContextMenuPlugin` instance on the page — the main Standard-view editor and the footnote-editor
- * popover each mount their own — shares the same portal classes
+ * `ContextMenuPlugin` instance on the page — each editor that shows the built-in menu mounts its
+ * own — shares the same portal classes
  * (`.typeahead-popover.auto-embed-menu`), so a bare `document.querySelector` for that class cannot
  * tell whose menu is open. The editor package instead marks the FOCUSED editor's own root with
  * `aria-controls="editor-context-menu"` for exactly as long as its menu stays open (removed again

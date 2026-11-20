@@ -59,7 +59,7 @@ export function stripMarkerNestingPrefix(markerText: string): string {
  * {@link MarkerPaletteSessionState.isNoteMarker}, so its Space branch can apply PT9's note rule. The
  * table cannot answer this from its own `items`: a note marker a palette does not offer is missing
  * from that list precisely in the cases the rule exists for — the Enter palette, whose source is
- * paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote popover,
+ * paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote editor,
  * which offers note-INTERNAL markers. The stylesheet knows `f` is a note either way.
  *
  * Normalization matches the visible list's: case-folded, with the `+` nesting prefix stripped from

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
- * The popover mounts the library's `ContextMenuPlugin` unconditionally (like the main Standard-view
- * editor), and its own `\` handler must claim and drop the trigger while THAT menu is open — the
- * same swallow-while-menu-open behavior the main editor applies to itself. Without that check,
- * right-clicking the note and then pressing `\` would open the marker palette underneath the
- * still-open menu.
+ * A `FootnoteEditor` that shows the editor package's own right-click menu (`hasBuiltInContextMenu`,
+ * on by default) mounts the library's `ContextMenuPlugin`, and its own `\` handler must claim and
+ * drop the trigger while THAT menu is open. Without that check, right-clicking the note and then
+ * pressing `\` would open the marker palette underneath the still-open menu. The second block pins
+ * the same gate for a menu the host owns, read through `isHostContextMenuClaimingKeys`.
  *
  * Mounts the REAL `Editorial` (like footnote-editor.enter-guard.test.tsx and
  * footnote-editor.palette-commit.test.tsx, with which it shares footnote-editor.test-harness) so
