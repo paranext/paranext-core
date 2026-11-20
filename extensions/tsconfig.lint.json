@@ -1,7 +1,0 @@
-{
-  "extends": "./tsconfig",
-  "compilerOptions": {
-    "allowJs": true
-  },
-  "include": [".eslintrc.cjs", "*.cjs", "*.ts", "*.js", "__test-mocks__", "lib", "src", "webpack"]
-}

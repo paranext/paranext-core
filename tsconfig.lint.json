@@ -3,17 +3,5 @@
   "compilerOptions": {
     "allowJs": true
   },
-  "include": [
-    ".eslintrc.js",
-    ".eslintrc.ai.js",
-    "*.ts",
-    ".erb/configs",
-    ".erb/mocks",
-    ".erb/scripts",
-    ".storybook/*.ts",
-    ".storybook/mocks/*.ts",
-    "src",
-    "assets",
-    "e2e-tests"
-  ]
+  "include": [".eslintrc.js", "*.ts", "*.js", "lib", "src", "webpack"]
 }

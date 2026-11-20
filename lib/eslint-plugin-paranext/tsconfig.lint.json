@@ -1,5 +1,0 @@
-{
-  "extends": "./tsconfig",
-  "include": [".eslintrc.cjs", "*.ts", "src"],
-  "exclude": ["node_modules", "dist"]
-}

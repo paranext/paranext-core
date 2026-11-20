@@ -1,3 +1,5 @@
+// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.eslintrc.cjs
+
 module.exports = {
   extends: [
     // https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
@@ -8,8 +10,6 @@ module.exports = {
     // https://github.com/import-js/eslint-plugin-import?tab=readme-ov-file#typescript
     'plugin:import/recommended',
     'plugin:import/typescript',
-    // https://github.com/storybookjs/eslint-plugin-storybook/blob/main/lib/configs/recommended.ts
-    'plugin:storybook/recommended',
     // Make sure this is last so it gets the chance to override other configs.
     // See https://github.com/prettier/eslint-config-prettier and https://github.com/prettier/eslint-plugin-prettier
     'plugin:prettier/recommended',
@@ -20,7 +20,8 @@ module.exports = {
   },
 
   rules: {
-    // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.eslintrc.cjs and https://github.com/paranext/paranext-extension-template/blob/main/.eslintrc.js
+    // Some rules in this following shared region are not applied since they are overridden in subsequent regions
+    // #region shared with https://github.com/paranext/paranext-core/blob/main/.eslintrc.js
 
     // #region ERB rules
 
@@ -133,11 +134,9 @@ module.exports = {
 
     // #endregion
 
-    // #region rules related to our custom ESLint plugin (paranext) - not yet available in other repos
+    // #region Overrides to rules from paranext-core
 
-    // Disable directives (eslint-disable, prettier-ignore, stylelint-disable) require an
-    // explanatory comment on the immediately preceding line
-    'paranext/require-disable-comment': 'error',
+    'import/no-unresolved': ['error', { ignore: ['@papi'] }],
 
     // #endregion
   },
@@ -148,7 +147,7 @@ module.exports = {
     {
       files: ['*.ts', '*.tsx'],
       rules: {
-        // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.eslintrc.cjs and https://github.com/paranext/paranext-extension-template/blob/main/.eslintrc.js
+        // #region shared with https://github.com/paranext/paranext-core/blob/main/.eslintrc.js
 
         // These are already handled by TypeScript
         'no-dupe-class-members': 'off',
@@ -157,65 +156,30 @@ module.exports = {
       },
     },
     {
-      files: ['*.stories.ts', '*.stories.tsx'],
+      // Allow this file to have overrides to rules from paranext-core
+      files: ['.eslintrc.*js'],
       rules: {
-        // Stories use console.log for Storybook action logging
+        'no-dupe-keys': 'off',
+      },
+    },
+    {
+      files: ['*.js'],
+      rules: {
+        strict: 'off',
+      },
+    },
+    {
+      files: ['./lib/*', './webpack/*'],
+      rules: {
+        // These files are scripts not running in Platform.Bible, so they can't use the logger
         'no-console': 'off',
-        '@typescript-eslint/naming-convention': [
-          'error',
-          {
-            selector: 'variableLike',
-            format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
-            leadingUnderscore: 'allow',
-          },
-          {
-            selector: 'enumMember',
-            format: ['PascalCase'],
-          },
-          {
-            selector: 'function',
-            format: ['camelCase', 'PascalCase'],
-          },
-          {
-            selector: 'typeLike',
-            format: ['PascalCase'],
-          },
-          /* Allow META (Storybook) variables to break the rule */
-          {
-            selector: 'variable',
-            format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
-            filter: {
-              regex: '^meta$',
-              match: false,
-            },
-          },
-        ],
       },
     },
     {
-      // Playwright e2e test fixtures use a `use()` callback that is Playwright's fixture API,
-      // not a React hook. react-hooks/rules-of-hooks v5 incorrectly flags these calls.
-      files: ['e2e-tests/**/*.ts', 'e2e-tests/**/*.tsx'],
+      files: ['*.d.ts'],
       rules: {
-        'react-hooks/rules-of-hooks': 'off',
-      },
-    },
-    {
-      // Vitest test rules and globals (replaces eslint-plugin-jest that was previously bundled in erb)
-      files: ['*.test.ts', '*.test.tsx', '*.spec.ts', '*.spec.tsx'],
-      extends: ['plugin:vitest/legacy-recommended'],
-      env: {
-        'vitest/env': true,
-      },
-      rules: {
-        // Rules from jest/recommended not included in vitest/legacy-recommended
-        'vitest/no-alias-methods': 'error',
-        'vitest/no-conditional-expect': 'error',
-        'vitest/no-disabled-tests': 'warn',
-        'vitest/no-focused-tests': 'error',
-        'vitest/no-interpolation-in-snapshots': 'error',
-        'vitest/no-standalone-expect': 'error',
-        'vitest/no-test-prefixes': 'error',
+        // Allow .d.ts files to self import so they can refer to their types in `papi-shared-types`
+        'import/no-self-import': 'off',
       },
     },
   ],
@@ -226,21 +190,17 @@ module.exports = {
     project: './tsconfig.lint.json',
     tsconfigRootDir: __dirname,
   },
-  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null', 'paranext'],
+  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null'],
   settings: {
     'import/resolver': {
-      // See https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-575727774 for line below
-      node: {
-        extensions: ['.js', '.jsx', '.ts', '.tsx'],
-        moduleDirectory: ['node_modules', 'src/'],
+      typescript: {
+        alwaysTryTypes: true,
       },
-      webpack: {
-        config: require.resolve('./.erb/configs/webpack.config.eslint.ts'),
-      },
-      typescript: {},
     },
     'import/parsers': {
       '@typescript-eslint/parser': ['.ts', '.tsx'],
     },
   },
 };
+
+// #endregion

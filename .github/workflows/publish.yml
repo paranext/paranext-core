@@ -1,13 +1,6 @@
 name: Publish
 run-name: Publish release v${{ github.event.inputs.version }} on ${{ github.head_ref || github.ref_name }}
 
-# Make sure these match with the matrix.os values below
-env:
-  OS_WINDOWS: windows-latest
-  OS_MACOS: macos-latest
-  # The Ubuntu version must align with the "core" version in electron-builder.json5
-  OS_LINUX: ubuntu-22.04
-
 on:
   workflow_dispatch:
     inputs:
@@ -20,11 +13,6 @@ on:
       bumpRef:
         description: 'Git ref to create the new `bump-versions-<version>` branch from. If empty, will use the current branch.'
         required: false
-      uploadReleaseAssets:
-        description: 'Upload the release assets to the configured S3 bucket.'
-        type: boolean
-        required: false
-        default: false
       debug_enabled:
         type: boolean
         description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
@@ -33,188 +21,92 @@ on:
 
 jobs:
   publish:
-    name: Release on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
+    name: Release on ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        working-directory: ./extension-repo
 
     permissions:
       contents: write
 
     strategy:
       matrix:
-        # Make sure these match with the env values above
-        os: [windows-latest, macos-latest, ubuntu-22.04]
-        dotnet_version: [8.0.x]
+        os: [ubuntu-latest]
 
     steps:
       - name: Output Workflow Dispatch Inputs
+        working-directory: ./
         run: echo "${{ toJSON(github.event.inputs) }}"
-
-      - name: Install MacPorts
-        if: ${{ matrix.os == env.OS_MACOS }}
-        uses: paranext/setup-macports@v0.2.0
-
-      - name: Update MacPorts ports tree
-        if: ${{ matrix.os == env.OS_MACOS }}
-        # Not using `-v` for verbose because it is very slow and does not add much value
-        run: |
-          sudo port sync
-
-      - name: Install loader tools on macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
-        run: |
-          sudo port -v install ld64
-
-      - name: Install icu4c on macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
-        run: |
-          sudo port -v install icu @78.3_1 +universal
-
-      - name: Fixup loader paths for icu4c
-        if: ${{ matrix.os == env.OS_MACOS }}
-        # LIB_DEPENDENCIES are of the form "<ICU lib short name> <dependency as ICU lib short name>"
-        # For example, libicuuc (shortened to "uc") depends on libicudata (shortened to "data")
-        # Dependencies can be seen by running "dyld_info -dependents /path/to/something.dylib"
-        run: |
-          ICU_VERSION=78
-          LIB_DEPENDENCIES="
-          i18n data
-          i18n uc
-          io data
-          io i18n
-          io uc
-          uc data
-          "
-          LIB_DEPENDENCIES=$(echo "$LIB_DEPENDENCIES" | sed '/^$/d')
-          while IFS= read -r line; do
-            set -- $line
-            sudo install_name_tool -change "/opt/local/lib/libicu$2.$ICU_VERSION.dylib" "@loader_path/libicu$2.$ICU_VERSION.dylib" "/opt/local/lib/libicu$1.$ICU_VERSION.dylib"
-          done <<< "$LIB_DEPENDENCIES"
-
-      - name: Install snap tools on Linux
-        if: ${{ matrix.os == env.OS_LINUX }}
-        run: |
-          sudo apt update
-          sudo apt install -y snapd
-          # Pin snapcraft to the 8.x track. snapcraft 9 (now latest/stable) removed the
-          # deprecated `snap` command alias, which electron-builder 26.x still invokes,
-          # breaking the snap build. Remove this pin once we move to electron-builder >= 27
-          # (which calls `snapcraft pack`). See electron-builder issue #8880 / PR #9517.
-          sudo snap install snapcraft --classic --channel=8.x/stable
-          sudo snap install lxd
-          sudo snap refresh lxd
-          sudo lxd init --auto
-          # Add the current user to the lxd group
-          getent group lxd | grep -qwF "$USER" || sudo usermod -aG lxd "$USER"
-          newgrp lxd
-          # Force the socket to be usable by the current user
-          sudo chmod 666 /var/snap/lxd/common/lxd/unix.socket
-          # https://github.com/canonical/action-build/blob/master/src/tools.ts#L54
-          sudo iptables -P FORWARD ACCEPT
 
       - name: Checkout git repo
         uses: actions/checkout@v4
-
-      - name: Install .NET
-        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet_version }}
+          path: extension-repo
+
+      - name: Checkout paranext-core repo to use its sub-packages
+        uses: actions/checkout@v4
+        with:
+          path: paranext-core
+          repository: paranext/paranext-core
 
       - name: Read package.json
         id: package_json
         uses: zoexx/github-action-json-file-properties@1.0.6
         with:
-          file_path: 'package.json'
-
-      - name: Read release/app/package.json
-        id: release_package_json
-        uses: zoexx/github-action-json-file-properties@1.0.6
-        with:
-          file_path: 'release/app/package.json'
+          file_path: 'extension-repo/package.json'
 
       - name: Verify version (skips if versions match)
-        if: '${{ inputs.version != steps.release_package_json.outputs.version }}'
+        if: '${{ inputs.version != steps.package_json.outputs.version }}'
         run: |
-          echo "Version mismatch! Expected ${{ inputs.version }} but found ${{ steps.release_package_json.outputs.version }}"
+          echo "Version mismatch! Expected ${{ inputs.version }} but found ${{ steps.package_json.outputs.version }}"
           exit 1
-
-      - name: Install Volta and toolchain
-        uses: volta-cli/action@v4
 
       - name: Install Node and NPM
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
+          cache-dependency-path: |
+            extension-repo/package-lock.json
+            paranext-core/package-lock.json
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
 
-      - name: Install packages and build
+      # Our editor `file:` dependency points into core's gitignored `dev-packages/staging/`, which
+      # only core's `preinstall` creates — and the core install below runs `--ignore-scripts`. npm
+      # links a missing `file:` target silently, so skipping this leaves a broken symlink.
+      - name: Stage paranext-core's dev packages
+        working-directory: paranext-core
+        run: npm run stage-dev-packages
+
+      - name: Install packages
         run: |
           npm ci
-          npm run build
 
-      - name: Prepare release - Windows
-        if: ${{ matrix.os == env.OS_WINDOWS }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install core packages
+        working-directory: paranext-core
         run: |
-          npx electron-builder --publish never --win
-          mkdir release\\staged
-          move release\\build\\*Setup*.exe release\\staged
+          npm ci --ignore-scripts
 
-      - name: Code signing - Windows
-        if: ${{ matrix.os == env.OS_WINDOWS }}
-        # See https://github.com/cognitedata/code-sign-action/blob/main/README.md for descriptions
-        env:
-          CERTIFICATE_HOST: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST }}
-          CERTIFICATE_HOST_API_KEY: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST_API_KEY }}
-          CERTIFICATE_SHA1_HASH: ${{ secrets.WIN_CERTIFICATE_SHA1_HASH }}
-          CLIENT_CERTIFICATE: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT }}
-          CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT_PASSWORD }}
-          KEYPAIR_ALIAS: ${{ secrets.WIN_CODE_SIGNING_KEYPAIR_ALIAS }}
-        uses: cognitedata/code-sign-action/@v3
-        with:
-          path-to-binary: 'release\\staged'
+      # The staged packages come from the branch dev-packages.json pins, which moves independently
+      # of core's commits, so the tree just installed can describe a different editor than core's
+      # lockfile does. Core's postinstall makes this check; `--ignore-scripts` above skips it.
+      - name: Verify core's staged dev packages match its lockfile
+        working-directory: paranext-core
+        run: npm run verify:dev-packages
 
-      - name: Prepare release - macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
-        env:
-          # The APPLE_* values are used for auto updates signing
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # This is used for uploading release assets to github
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package for distribution
         run: |
-          npx electron-builder --publish never --mac
-          mkdir release/staged
-          mv release/build/*.dmg release/staged
-
-      - name: Prepare release and publish to the snap store - Linux
-        if: ${{ matrix.os == env.OS_LINUX }}
-        env:
-          # no hardlinks so dependencies are copied
-          USE_HARD_LINKS: false
-          # This is used by electron-builder to prepare the release
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # This is required to upload automatically to the snap store
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.LINUX_SNAP_STORE_CREDENTIALS }}
-        run: |
-          npx electron-builder --publish never --linux
-          snapcraft upload --release=edge ./release/build/*.snap
-          mkdir release/staged
-          mv release/build/*.snap release/staged
+          npm run package
 
       - name: Publish draft release
         uses: ncipollo/release-action@v1
         with:
-          # Need to allow updates in order to upload artifacts from each OS
-          allowUpdates: true
           artifactErrorsFailBuild: true
           artifacts: |
-            release/staged/*
-          bodyFile: .github/assets/release-body.md
+            extension-repo/release/*
+          bodyFile: extension-repo/.github/assets/release-body.md
           # make the new release a draft instead of automatically publishing
           draft: true
           generateReleaseNotes: true
@@ -231,33 +123,17 @@ jobs:
           # only update if the release is still a draft
           updateOnlyUnreleased: true
 
-      - name: Upload release assets to S3
-        id: upload_s3
-        if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
-        uses: shallwefootball/upload-s3-action@v1.3.3
-        with:
-          aws_key_id: ${{ secrets.AWS_S3_RELEASE_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.AWS_S3_RELEASE_SECRET_ACCESS_KEY}}
-          aws_bucket: ${{ vars.AWS_S3_RELEASE_BUCKET_NAME }}
-          source_dir: release/staged
-          # runner.os is Windows or macOS
-          destination_dir: ${{ vars.AWS_S3_RELEASE_DIRECTORY }}/${{ inputs.version}}/${{ runner.os }}
-
-      - name: Print S3 upload result
-        if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
-        run: |
-          echo "S3 upload object_key: ${{ steps.upload_s3.outputs.object_key }}; object_locations: ${{ steps.upload_s3.outputs.object_locations }}"
-
       - name: Checkout bump ref
-        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
+        if: ${{ inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
         uses: actions/checkout@v4
         with:
           clean: false
+          path: extension-repo
           ref: ${{ inputs.bumpRef }}
 
       - name: Bump repo versions
-        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
-        uses: ./.github/actions/bump-versions-action
+        if: ${{ inputs.newVersionAfterPublishing != '' }}
+        uses: ./extension-repo/.github/actions/bump-versions-action
         with:
           newVersion: ${{ inputs.newVersionAfterPublishing }}
 

@@ -1,8 +1,0 @@
-{
-  "entryPoints": ["papi.d.ts"],
-  "tsconfig": "tsconfig.docs.json",
-  "out": "docs",
-  "readme": "README.md",
-  "logLevel": "Verbose",
-  "sort": ["kind", "alphabetical"]
-}

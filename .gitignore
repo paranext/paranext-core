@@ -1,94 +1,36 @@
+# #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.gitignore
+
 # Logs
 logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Runtime data
-pids
-*.pid
-*.seed
-
-# Coverage directory used by tools like istanbul
-coverage
+node_modules
+dist
+release
+dist-ssr
+*.local
 
 # formatting and linting
 .eslintcache
-.eslintConfig.json
 
-# Cache files
-*.lscache
-
-# Dependency directory
-# https://www.npmjs.org/doc/misc/npm-faq.html#should-i-check-my-node_modules-folder-into-git
-node_modules
-
-# OSX
-.DS_Store
-
-release/app/buildInfo.json
-release/app/dist
-release/build
-release/staged
-.erb/dll
-storybook-static
-
+# Editor directories and files
 .idea
-npm-debug.log.*
-*.css.d.ts
-*.sass.d.ts
-*.scss.d.ts
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# Extra VS Code workspaces
-*.code-workspace
+# Temporary intermediate build files
+temp-build
 
-# Extra Visual Studio files
-launchSettings.json
+# Module lists and the build stamp, read by paranext-core's third-party notices generator
+.notices
 
-# Test development user appdata files
-dev-appdata/
-c-sharp/**/*.BAK
-
-# yalc
-.yalc
-yalc.lock
-
-# Local dev packages checked out for linking during CI or local development
-dev-packages/
-
-# Playwright E2E tests
-e2e-tests/playwright-report/
-e2e-tests/test-results/
-e2e-tests/.dev-server.pid
-
-# claude
-.claude
-.claude.backup/
-.context
-c-sharp/CLAUDE.md
-CLAUDE.md
-CLAUDE.md.backup
-
-docs/superpowers/
-.superpowers/
-.review
-
-# cursor
-.cursor/
-
-# Secrets & credentials
-.env
-.env.*
-.env.local
-.env.*.local
-secrets/
-*.pem
-*.key
-*.pfx
-*.p12
-credentials.json
-service-account.json
-
-# Brainstorming session artifacts (visual companion)
-.superpowers/
-
-# Phase 3 UI evidence proofs (canonical location is ai-prompts/.context/features/{feature}/proofs/)
-/proofs/
+# #endregion

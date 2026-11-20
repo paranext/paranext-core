@@ -1,10 +1,11 @@
-// PostCSS configuration for Storybook (not used by the Electron app build)
-import type { Config } from 'postcss-load-config';
+// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/postcss.config.js and https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/postcss.config.js
 
-const config: Config = {
+const config = {
   plugins: {
     '@tailwindcss/postcss': {},
   },
 };
 
 export default config;
+
+// #endregion
