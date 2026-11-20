@@ -181,11 +181,18 @@ combines them. The Scripture editor's per-tab keys (`isReadOnly`, `isPreview`, `
 `footnotesPaneVisible`, `hasSelection`) are examples: `isReadOnly` is the tab's read-only state,
 which is fixed when the tab opens, so an item that edits text reads it next to the live project key
 `platform.project.{projectId}.isEditable` and stays disabled in a tab that cannot edit (see PT-4786
-for the snapshot). Request-scoped keys (experimental) follow the same rule: they describe one
-right-click and exist only for that one menu. The Scripture editor's context menus read
-`platformScriptureEditor.contextMenu.hasSelection`, `platformScriptureEditor.contextMenu.isMainEditor`
-and `platformScriptureEditor.contextMenu.canFind`; the Enhanced Resources Scripture pane's reads
-`platformEnhancedResources.contextMenu.hasSelection`. See "Web View Context Menus" below.
+for the snapshot).
+
+Request-scoped keys (experimental) are plain facts too, but about one right-click only. They are
+never published, so the producer rule below does not apply to them. The Scripture editor's context
+menus read `platformScriptureEditor.contextMenu.hasSelection`,
+`platformScriptureEditor.contextMenu.isMainEditor` and `platformScriptureEditor.contextMenu.canFind`;
+the Enhanced Resources Scripture pane's reads `platformEnhancedResources.contextMenu.hasSelection`.
+The short name `hasSelection` is used twice on purpose: the shared per-tab key
+`platformScriptureEditor.webView.{webViewId}.hasSelection` drives the top menu, and the request key
+`platformScriptureEditor.contextMenu.hasSelection` drives the right-click menu. See "Web View
+Context Menus" below.
+
 Each key has exactly **one producer process**: a TypeScript process refuses (logs, does not throw)
 a write to a key another process wrote first; the .NET store does not check, so a C# write to
 another process's key takes it over. A key released after its writer disconnected is claimable by
@@ -209,23 +216,76 @@ columns and gate items into them — see `adr-menu-per-mode-layout-via-mode-gate
 ### Web View Context Menus
 
 A web view's right-click menu is the `contextMenu` of its type under `webViewMenus` in
-`menus.json`. The web view shows it with
-`papi.overlays.showContextMenu(webViewType, webViewId, options)`. Give its groups `order` 3 or
-higher: the platform's two default groups take orders 1 and 2.
+`menus.json`. The web view shows it by calling
+`papi.overlays.showContextMenu(webViewType, webViewId, options)`. Everything in this section is
+`@experimental` and may change without notice.
 
-Everything in this list is `@experimental` and may change without notice:
+**Adding an item to another extension's context menu.** The groups of the Scripture editor's and
+Enhanced Resources' context menus are not extensible, so add a group of your own under that web
+view type's `contextMenu`, and put your items in it:
 
-- **`shouldRunCommand: false`.** By default the platform runs the picked command, with no
-  arguments. With `false` it runs nothing: the promise resolves with the picked command and the web
-  view runs it. Use it for actions that must run in the web view's own frame, such as clipboard
-  actions: Cut, Copy and Paste need the right-click's user activation and the frame's focus, which
-  a PAPI round trip loses.
-- **`contextKeys`.** Keys for this request only, for facts about the one right-click (is text
-  selected in the editor that was clicked?). They are consulted first when the menu's `when` and
-  `enabledWhen` are evaluated, for that menu only, and are never written to the shared context key
-  service. Name them under your own prefix (`<extension>.contextMenu.*`) and never after a shared
-  key: a request key shadows a shared key of the same name. Shared keys the expressions read still
-  re-evaluate while the menu is open; a request key does not change.
+- Name the group with your own extension's prefix (`myExtension.contextTools`); the menu combiner
+  rejects a group named after another extension.
+- Give it an `order` no other group in that menu uses. The platform's two default groups take 1
+  and 2, and the five menus listed under "What another extension's item receives" use 3 to 5. A
+  duplicate order rejects your whole `menus.json` contribution.
+- Put `"isExperimental": true` on the group, never on an item: an item carrying it rejects the
+  whole `menus.json`.
+
+**Showing your own context menu.** `showContextMenu` resolves with the picked command, or with
+`undefined` when the user dismissed the menu or the menu has no visible item. Its `options`:
+
+- **`position`**: where the menu opens, in coordinates relative to the web view's own frame (for
+  example a mouse event's `clientX` / `clientY`).
+- **`shouldRunCommand`**: `true` by default, which means the platform runs the picked command with
+  no arguments. With `false` it runs nothing and the web view runs the pick itself. Use `false` for
+  actions that must run in the web view's own frame, such as clipboard actions. Cut and Copy need
+  the right-click's user activation, which a PAPI round trip loses. Paste reads the clipboard, which
+  needs the web view's frame to hold focus, so the web view focuses its editor itself before it
+  pastes.
+- **`contextKeys`**: keys for this request only, for facts about the one right-click (is text
+  selected in the editor that was clicked?). Each value is a `string`, `number` or `boolean`
+  (`ContextKeyValue`). They are consulted first when the menu's `when` and `enabledWhen` are
+  evaluated, for that menu only, and are never written to the shared context key service. Name them
+  under your own prefix (`<extension>.contextMenu.*`) and never after a shared key: a request key
+  shadows a shared key of the same name. Shared keys the expressions read still re-evaluate while
+  the menu is open; a request key does not change.
+
+The call rejects with a `PlatformError` in three normal cases; treat each as "no menu" and do not
+report it: `ABORTED` (a newer context menu from the same web view replaced this one),
+`RESOURCE_EXHAUSTED` (the request came within 50 ms of the previous one from that web view) and
+`FAILED_PRECONDITION` (the tab is not visible). Report any other error.
+
+```typescript
+// `papi` and `logger` from '@papi/frontend'; the rest from 'platform-bible-utils'
+const QUIET_CODES: string[] = [ABORTED, RESOURCE_EXHAUSTED, FAILED_PRECONDITION];
+
+element.addEventListener('contextmenu', async (event) => {
+  event.preventDefault();
+  try {
+    const command = await papi.overlays.showContextMenu('myExtension.myView', globalThis.webViewId, {
+      position: { x: event.clientX, y: event.clientY },
+      shouldRunCommand: false,
+      contextKeys: { 'myExtension.contextMenu.hasSelection': !document.getSelection()?.isCollapsed },
+    });
+    if (command === 'myExtension.copySelection') document.execCommand('copy'); // in this frame
+    else if (command) await papi.commands.sendCommand(command, globalThis.webViewId);
+  } catch (error) {
+    if (!isPlatformError(error) || !QUIET_CODES.includes(error.code))
+      logger.warn(`Context menu failed: ${getErrorMessage(error)}`);
+  }
+});
+```
+
+For an editor-like surface, use `useEditorContextMenu` from `platform-bible-react/experimental`
+instead of writing this yourself. It claims the right-click (and Shift+F10 / the Menu key) inside
+the editor's element, reads the browser's selection at that moment, claims the keyboard until the
+menu request finishes or two seconds have passed, closes the menu on a scroll in the frame or on
+unmount, ignores the three normal rejections, and calls back with the pick. The web view passes in the two platform calls
+(`showContextMenu` and `dismissContextMenu`). The app's Scripture editors use it.
+
+**More of the context-menu surface:**
+
 - **`dismissContextMenu(webViewId)`** closes the web view's open context menu (its
   `showContextMenu` promise resolves `undefined`) and cancels one still being prepared, so it never
   opens. Use it when the web view knows the menu is stale: a scroll inside the frame never reaches
@@ -235,13 +295,14 @@ Everything in this list is `@experimental` and may change without notice:
 - **Two visible items with the same command cannot be told apart.** Items are identified by their
   command. Variants hidden by `when` or by interface mode are fine.
 
-**What another extension's item receives.** For `platformScriptureEditor.react`,
-`platformScriptureEditor.bibleTexts`, `platformScriptureEditor.commentaries`,
-`platformScriptureEditor.modelText` and `platformEnhancedResources.enhancedResource`, the web view
-shows its menu with `shouldRunCommand: false`. When the user picks an item contributed by another
-extension, the web view sends it as `(command, webViewId)`, so the command learns which tab was
-clicked. For every other web view type the platform runs the picked command with no arguments. A
-command contributed to both kinds of menu must also work with no arguments.
+**What another extension's item receives.** Two kinds of context menu exist. In the menus of
+`platformScriptureEditor.react`, `platformScriptureEditor.bibleTexts`,
+`platformScriptureEditor.commentaries`, `platformScriptureEditor.modelText` and
+`platformEnhancedResources.enhancedResource`, the web view runs the pick itself
+(`shouldRunCommand: false`) and sends another extension's command as `(command, webViewId)`, so the
+command learns which tab was clicked. In the menu of every other web view type the platform runs the
+command with no arguments. So a command you put in both kinds of menu must work both with and
+without the web view id.
 
 See `adr-editor-context-menus-use-the-platform-menu` in
 [Architecture-Decisions.md](Architecture-Decisions.md).
@@ -484,4 +545,4 @@ If you get `TS2345` errors about commands not being assignable:
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
 | 1.0.0   | 2026-03-04 | Initial version |
-| 1.1.0   | 2026-11-19 | Add "Web View Context Menus": `shouldRunCommand: false`, request-scoped `contextKeys`, `dismissContextMenu`, icons, and what another extension's item receives (all experimental). |
+| 1.1.0   | 2026-11-19 | Add "Web View Context Menus": adding an item to another extension's context menu, showing your own (`position`, `shouldRunCommand: false`, request-scoped `contextKeys`, the result and the normal rejections, an example, `useEditorContextMenu`), `dismissContextMenu`, icons, and what another extension's item receives (all experimental). |

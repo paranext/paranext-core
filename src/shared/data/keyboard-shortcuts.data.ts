@@ -652,7 +652,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-editor-context-menu',
     purpose:
-      'Open the right-click menu for Scripture text at the caret. A project’s main text offers Cut, Copy, Paste, Paste as plain text, Find and the Insert items; a resource’s main text, Copy and Find; the footnote row editor, the clipboard items and Find; the Bible Texts, Commentaries and Model text panels, Copy, and Find where the panel has it; the Enhanced Resources Scripture pane, Copy. From the right-click until the menu opens (at most two seconds), keys do nothing in the editor and Escape cancels the menu; once open, the menu holds the keyboard until it closes',
+      'Open the right-click menu for Scripture text at the caret. Until the menu request finishes or two seconds have passed, keys do nothing in the editor and Escape cancels the menu. Once open, the menu holds the keyboard until it closes',
     category: 'Menus',
     // Not a shortcut the app registers: the browser raises `contextmenu`, and
     // `useEditorContextMenu` claims it and opens the platform context menu at the caret. The other
@@ -660,7 +660,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // handlers. macOS has no Menu key and no Shift+F10 equivalent; a Ctrl+click there is a mouse
     // gesture, handled like a right-click.
     context:
-      'Scripture text: the Scripture editor’s main text and its footnotes pane’s row editor, the Bible Texts, Commentaries and Model text panels, and the Enhanced Resources Scripture pane',
+      'Scripture text. A project’s main text: Cut, Copy, Paste, Paste as plain text, Find and the Insert items. A resource’s main text: Copy and Find. The footnotes pane’s row editor: the clipboard items and Find. The Bible Texts, Commentaries and Model text panels: Copy, and Find where the panel has it. The Enhanced Resources Scripture pane: Copy',
     keys: { macOS: '— (no equivalent)', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
     locations: [
       'lib/platform-bible-react/src/hooks/use-editor-context-menu.hook.ts',
