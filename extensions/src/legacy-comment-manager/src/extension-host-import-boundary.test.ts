@@ -7,12 +7,13 @@ import { describe, expect, it } from 'vitest';
  * enforced there by crashing.
  *
  * `main.ts` is this extension's entry point (`manifest.json` → `"main"`), so everything it reaches
- * is loaded in the extension host. The host replaces `Module.prototype.require` with a shim that
- * allows a short list of modules and throws "Requiring other than papi is not allowed in
- * extensions!" for anything else (`src/extension-host/services/extension.service.ts`). Webpack
- * bundles most dependencies, so most bare imports never reach the shim — but the modules in
+ * is loaded in the extension host. The host loads it with its own extension `require` (and
+ * replaces `Module.prototype.require` with the same function as a shim), which allows a short list
+ * of modules and throws "Requiring other than papi is not allowed in extensions!" for anything else
+ * (`requireForExtension` in `src/extension-host/services/extension.service.ts`). Webpack bundles
+ * most dependencies, so most bare imports never reach that `require` — but the modules in
  * `extensions/webpack/webpack.config.base.ts` → `externals` stay as `require` calls, and `react`,
- * `react-dom` and `@papi/frontend` are externals the shim does NOT allow.
+ * `react-dom` and `@papi/frontend` are externals it does NOT allow.
  *
  * That is the whole failure mode: value-importing a UI module (a `lucide-react` icon, a
  * `platform-bible-react` component) into a host-reachable file bundles a module that calls
