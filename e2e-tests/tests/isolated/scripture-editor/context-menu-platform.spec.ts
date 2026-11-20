@@ -515,9 +515,11 @@ test.describe('platform right-click menu in Scripture editors', () => {
 
     // The isolated project root holds no resource: `platform.project.<id>.isResource` is true only
     // for an installed DBL resource (`ScrText.IsResourceProject`), which cannot be built from the
-    // bundled sample. The resource-only menu (exactly Copy and Find, "Copy selection" in the top
-    // menu) is therefore checked here on a read-only project, whose editor is read-only in the same
-    // way, and the resource-only shape is left to the test.fixme below.
+    // bundled sample. Nor can a test fake one: the .NET process publishes that key and owns it, so
+    // a set from any other process is held and never applied. The read-only paths a resource takes
+    // (Copy keeping the selection and the reference, the top menu's Copy from a footnote row) are
+    // checked here on a read-only project; the resource-only item set (exactly Copy and Find) is
+    // pinned by `contributions-context-menu.test.ts` in the extension.
     test('main text and footnote rows: Copy keeps the selection and the reference, and the keyboard returns', async ({
       mainPage,
       electronApp,
@@ -615,15 +617,6 @@ test.describe('platform right-click menu in Scripture editors', () => {
         await expectClipboard(readClipboard, 'Elohim');
       });
     });
-
-    test.fixme(
-      'a resource: exactly Copy and Find, and the top menu\'s "Copy selection" follows a footnote row selection',
-      // No resource can be installed into the isolated project root (see the comment above the
-      // read-only test). Needs: right-click on a resource's text shows exactly Copy (disabled
-      // without a selection) and Find; with a selection in a read-only footnote row, the top menu's
-      // "Copy selection" is enabled and copies it.
-      async () => {},
-    );
   });
 
   test.describe('the Bible Texts panel', () => {
@@ -739,12 +732,6 @@ test.describe('platform right-click menu in Scripture editors', () => {
       });
     });
   });
-
-  // The Enhanced Resources Scripture pane needs a Marble resource, which no isolated launch has:
-  // its specs live in the local-only `tests/enhanced-resources/` tree. Needs: a right-click in the
-  // pane's text shows the platform menu with Copy, and a right-click on an annotated word shows it
-  // too, with no page error.
-  test.fixme('Enhanced Resources Scripture pane: the platform menu shows Copy', async () => {});
 });
 
 /**
