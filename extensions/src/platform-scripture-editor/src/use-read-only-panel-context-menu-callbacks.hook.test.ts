@@ -21,7 +21,7 @@ const PROJECT_ID = 'project-1';
 const REQUEST: EditorContextMenuRequest = {
   position: { x: 12, y: 34 },
   hasSelection: true,
-  selectedText: '  grace and peace ',
+  selectedText: '  grace\u00A0and peace ',
   isKeyboardInvoked: false,
 };
 
