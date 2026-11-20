@@ -19,7 +19,8 @@ import {
   PopoverRequest,
 } from './overlay.service-model';
 import { getOverlays, getOverlayById, clearAllOverlays, subscribe } from './overlay-store';
-import { getWebViewIframe, isWebViewVisible } from './overlay-coordinates';
+import { isWebViewVisible } from './overlay-coordinates';
+import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import { markOverlayFocusReturnIfFocusInside } from './overlay-focus-return.util';
 import { WINDOW_BLUR_PRESS_MARKER } from './window-blur-press.util';
 
@@ -53,6 +54,9 @@ vi.mock('./overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_, pos) => pos),
   clampToViewport: vi.fn((pos) => pos),
   isWebViewVisible: vi.fn(() => true),
+}));
+
+vi.mock('@renderer/components/web-view-iframe.util', () => ({
   getWebViewIframe: vi.fn(() => undefined),
 }));
 
