@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { evaluateMenu, parseWhenExpression } from 'platform-bible-utils';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 
 type MenuItem = {
   label: string;
@@ -117,12 +118,12 @@ describe('platform-scripture-editor context menu contribution', () => {
     expect(commandsOf(items)).toEqual([CUT, COPY, PASTE, PASTE_PLAIN, FIND]);
   });
 
-  it('shows exactly one Copy, the project one without an icon, when the resource fact is unset', () => {
+  it('shows exactly one Copy, with the clipboard-copy icon, when the resource fact is unset', () => {
     const copies = evaluate({}, ['platform.project.p1.isResource']).filter(
       (item) => item.command === COPY,
     );
     expect(copies).toHaveLength(1);
-    expect(copies[0].iconNameBefore).toBeUndefined();
+    expect(copies[0].iconNameBefore).toBe('clipboard-copy');
   });
 
   it('shows every item in a project main editor with a selection, in order, all enabled', () => {
@@ -152,9 +153,28 @@ describe('platform-scripture-editor context menu contribution', () => {
     expect(isDisabled(evaluate({ ...resourceFacts, [HAS_SELECTION]: false }), COPY)).toBe(true);
   });
 
-  it('offers the project Copy without an icon', () => {
-    const copy = evaluate().find((item) => item.command === COPY);
-    expect(copy?.iconNameBefore).toBeUndefined();
+  it('offers the same single Copy, with its icon, on a project and on a resource', () => {
+    const projectCopy = evaluate().find((item) => item.command === COPY);
+    const resourceCopy = evaluate({ 'platform.project.p1.isResource': true }).find(
+      (item) => item.command === COPY,
+    );
+    expect(projectCopy).toMatchObject({ iconNameBefore: 'clipboard-copy' });
+    expect(resourceCopy).toEqual(projectCopy);
+    expect(contextMenu.items.filter((item) => item.command === COPY)).toHaveLength(1);
+  });
+
+  it('gives every clipboard item an icon from the curated list', () => {
+    const clipboardItems = contextMenu.items.filter(
+      (item) => item.group === 'platformScriptureEditor.contextClipboard',
+    );
+    expect(clipboardItems.map((item) => item.command)).toEqual([CUT, COPY, PASTE, PASTE_PLAIN]);
+    expect(clipboardItems.map((item) => item.iconNameBefore)).toEqual([
+      'scissors',
+      'clipboard-copy',
+      'clipboard-paste',
+      'clipboard-type',
+    ]);
+    clipboardItems.forEach((item) => expect(LUCIDE_ICON_NAMES).toContain(item.iconNameBefore));
   });
 
   it('shows no Insert item outside the main editor, such as in a footnote row editor', () => {
@@ -207,8 +227,10 @@ describe('platform-scripture-editor context menu contribution', () => {
  * Context-menu items without a top-menu twin of the same command, label key and icon. Every other
  * context item must match a top-menu item with the same command.
  *
- * - The resource Copy is labelled "Copy", as the request words it; the top menu's resource Copy says
- *   "Copy selection". It keeps the twin's icon.
+ * - Copy is labelled "Copy", as the request words it; the top menu's resource Copy says "Copy
+ *   selection". It keeps the twin's icon.
+ * - The right-click menu's Cut and Paste have an icon where their top-menu twins have none: every
+ *   clipboard item in the right-click menu carries an icon.
  * - Paste as plain text is new and has no top-menu item.
  * - Find has three top-menu twins that differ by interface mode (Power's Edit flyout, Power's
  *   resource Edit section, Simple's Tools and resources); the context menu shows one Find in both
@@ -216,9 +238,13 @@ describe('platform-scripture-editor context menu contribution', () => {
  */
 const RESOURCE_COPY_LABEL = '%webView_platformScriptureEditor_copy%';
 const TWIN_EXCEPTIONS: Record<string, string> = {
+  [`${CUT}|scissors|%webView_platformScriptureEditor_cut%`]:
+    'every clipboard item in the right-click menu carries an icon; the top-menu Cut has none',
   [`${COPY}|clipboard-copy|${RESOURCE_COPY_LABEL}`]:
-    'resource Copy is labelled "Copy", not "Copy selection"',
-  [`${PASTE_PLAIN}||%webView_platformScriptureEditor_pasteAsPlainText%`]:
+    'Copy is labelled "Copy", not "Copy selection"',
+  [`${PASTE}|clipboard-paste|%webView_platformScriptureEditor_paste%`]:
+    'every clipboard item in the right-click menu carries an icon; the top-menu Paste has none',
+  [`${PASTE_PLAIN}|clipboard-type|%webView_platformScriptureEditor_pasteAsPlainText%`]:
     'new command, no top-menu twin',
 };
 
@@ -248,7 +274,7 @@ describe('context menu items look like their top-menu twins', () => {
     expect(twinsOf(PASTE_PLAIN)).toHaveLength(0);
   });
 
-  it('labels the resource Copy "Copy" where its twin says "Copy selection", with the same icon', () => {
+  it('labels the Copy "Copy" where the resource twin says "Copy selection", with the same icon', () => {
     const contextCopy = contextMenu.items.find(
       (item) => item.command === COPY && item.iconNameBefore === 'clipboard-copy',
     );

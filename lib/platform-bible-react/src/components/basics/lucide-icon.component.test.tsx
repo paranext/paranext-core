@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { ClipboardCopy, Redo2, Undo2 } from 'lucide-react';
+import { ClipboardCopy, ClipboardPaste, ClipboardType, Redo2, Scissors, Undo2 } from 'lucide-react';
 import '@testing-library/jest-dom';
 import { isLucideIconName, LUCIDE_ICON_NAMES, LucideIcon } from './lucide-icon.component';
 import { LUCIDE_ICONS_BY_NAME } from './lucide-icons.util';
@@ -39,6 +39,17 @@ describe('LucideIcon', () => {
     expect(isLucideIconName('clipboard-copy')).toBe(true);
     expect(isLucideIconName('undo-2')).toBe(true);
     expect(isLucideIconName('redo-2')).toBe(true);
+  });
+
+  it('maps the cut and paste names to their lucide icons', () => {
+    expect(LUCIDE_ICONS_BY_NAME).toMatchObject({
+      scissors: Scissors,
+      'clipboard-paste': ClipboardPaste,
+      'clipboard-type': ClipboardType,
+    });
+    expect(isLucideIconName('scissors')).toBe(true);
+    expect(isLucideIconName('clipboard-paste')).toBe(true);
+    expect(isLucideIconName('clipboard-type')).toBe(true);
   });
 
   it('the svg strokes with currentColor', () => {
