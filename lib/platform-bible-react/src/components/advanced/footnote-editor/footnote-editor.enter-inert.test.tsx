@@ -261,34 +261,27 @@ describe('FootnoteEditor Enter over a non-editable-marker host does nothing', ()
     });
   });
 
-  // Enter is claimed here whatever the host menu does, so these cases guard against the claim
-  // standing down for a host menu (which cannot take Enter), not against the prop being absent. The
-  // Standard-view Enter cases in footnote-editor.context-menu-gate.test.tsx pin the prop itself.
-  describe.each(nonEditableViews)('%s with a menu the host owns', (_name, view) => {
-    it.each([true, false])(
-      'claims Enter so it never reaches the editor, with the host menu claiming the keyboard: %s',
-      async (isClaiming) => {
-        const { editorInput, lexical } = await renderPopoverAndWaitForInit(view, {
-          extraProps: {
-            hasBuiltInContextMenu: false,
-            isHostContextMenuClaimingKeys: () => isClaiming,
-          },
-        });
-        await placeCaretAtFtEnd(lexical, editorInput);
-        const textBefore = noteText(lexical);
-        const childCountBefore = rootChildCount(lexical);
-        const editorSawEnter = vi.fn();
-        editorInput.addEventListener('keydown', editorSawEnter);
+  // A host that serves the right-click itself turns the built-in menu off; Enter stays claimed
+  // here, since the built-in menu is the only thing that ever takes it.
+  describe.each(nonEditableViews)('%s with the built-in menu turned off', (_name, view) => {
+    it('claims Enter so it never reaches the editor', async () => {
+      const { editorInput, lexical } = await renderPopoverAndWaitForInit(view, {
+        extraProps: { hasBuiltInContextMenu: false },
+      });
+      await placeCaretAtFtEnd(lexical, editorInput);
+      const textBefore = noteText(lexical);
+      const childCountBefore = rootChildCount(lexical);
+      const editorSawEnter = vi.fn();
+      editorInput.addEventListener('keydown', editorSawEnter);
 
-        const enter = await pressEnter(editorInput);
-        editorInput.removeEventListener('keydown', editorSawEnter);
+      const enter = await pressEnter(editorInput);
+      editorInput.removeEventListener('keydown', editorSawEnter);
 
-        expect(enter.defaultPrevented).toBe(true);
-        expect(editorSawEnter).not.toHaveBeenCalled();
-        expect(rootChildCount(lexical)).toBe(childCountBefore);
-        expect(noteText(lexical)).toBe(textBefore);
-      },
-    );
+      expect(enter.defaultPrevented).toBe(true);
+      expect(editorSawEnter).not.toHaveBeenCalled();
+      expect(rootChildCount(lexical)).toBe(childCountBefore);
+      expect(noteText(lexical)).toBe(textBefore);
+    });
   });
 
   it('Standard view keeps its `\\fp` break on Enter', async () => {

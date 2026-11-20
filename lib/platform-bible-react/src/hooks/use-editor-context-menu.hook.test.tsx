@@ -395,21 +395,16 @@ describe('useEditorContextMenu', () => {
     });
   });
 
-  describe('the keyboard belongs to the pending menu', () => {
-    function keydown(key: string, init: KeyboardEventInit = {}) {
-      const event = new KeyboardEvent('keydown', {
-        key,
-        bubbles: true,
-        cancelable: true,
-        ...init,
-      });
+  describe('keys typed while a request is open', () => {
+    function keydown(key: string) {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
       act(() => {
         document.body.dispatchEvent(event);
       });
       return event;
     }
 
-    it('claims every key but bare modifiers before a later window listener sees it', () => {
+    it('leaves every key to the editor: not prevented, and seen by a later window listener', () => {
       const dismissMenu = vi.fn();
       const later = vi.fn();
       const { getByTestId } = render(
@@ -418,58 +413,20 @@ describe('useEditorContextMenu', () => {
           dismissMenu={dismissMenu}
         />,
       );
-      // Registered after the hook's own listener, on the same window, capture phase.
+      // Registered after the hook's own listeners, on the same window, capture phase.
       window.addEventListener('keydown', later, true);
       rightClick(getByTestId('text'));
 
       const a = keydown('a');
       const enter = keydown('Enter');
-      const shift = keydown('Shift');
-
-      expect(a.defaultPrevented).toBe(true);
-      expect(enter.defaultPrevented).toBe(true);
-      expect(shift.defaultPrevented).toBe(false);
-      expect(
-        later.mock.calls.map(([event]) => (event instanceof KeyboardEvent ? event.key : '')),
-      ).toEqual(['Shift']);
-      expect(dismissMenu).not.toHaveBeenCalled();
-
-      window.removeEventListener('keydown', later, true);
-    });
-
-    it('also dismisses the menu on Escape', () => {
-      const dismissMenu = vi.fn();
-      const { getByTestId } = render(
-        <Host
-          requestMenu={() => new Promise<string | undefined>(() => {})}
-          dismissMenu={dismissMenu}
-        />,
-      );
-      rightClick(getByTestId('text'));
-
-      const escape = keydown('Escape');
-
-      expect(escape.defaultPrevented).toBe(true);
-      expect(dismissMenu).toHaveBeenCalledTimes(1);
-    });
-
-    it('leaves keys alone while nothing is pending', () => {
-      const later = vi.fn();
-      const dismissMenu = vi.fn();
-      render(
-        <Host
-          requestMenu={() => new Promise<string | undefined>(() => {})}
-          dismissMenu={dismissMenu}
-        />,
-      );
-      window.addEventListener('keydown', later, true);
-
-      const a = keydown('a');
       const escape = keydown('Escape');
 
       expect(a.defaultPrevented).toBe(false);
+      expect(enter.defaultPrevented).toBe(false);
       expect(escape.defaultPrevented).toBe(false);
-      expect(later).toHaveBeenCalledTimes(2);
+      expect(
+        later.mock.calls.map(([event]) => (event instanceof KeyboardEvent ? event.key : '')),
+      ).toEqual(['a', 'Enter', 'Escape']);
       expect(dismissMenu).not.toHaveBeenCalled();
 
       window.removeEventListener('keydown', later, true);
@@ -1003,77 +960,7 @@ describe('useEditorContextMenu', () => {
     });
   });
 
-  describe('the key claim is bounded', () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    function keydownOnBody(key: string) {
-      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
-      act(() => {
-        document.body.dispatchEvent(event);
-      });
-      return event;
-    }
-
-    it('claims keys until two seconds after the right-click, while the request stays pending', () => {
-      let api!: ReturnType<typeof useEditorContextMenu>;
-      const { getByTestId } = render(
-        <Host
-          requestMenu={() => new Promise<string | undefined>(() => {})}
-          onApi={(value) => {
-            api = value;
-          }}
-        />,
-      );
-      rightClick(getByTestId('text'));
-
-      act(() => {
-        vi.advanceTimersByTime(1900);
-      });
-      expect(keydownOnBody('a').defaultPrevented).toBe(true);
-
-      act(() => {
-        vi.advanceTimersByTime(200);
-      });
-      expect(keydownOnBody('a').defaultPrevented).toBe(false);
-      expect(api.isPending()).toBe(true);
-    });
-
-    it('ends the claim when the request settles, well before two seconds', async () => {
-      const pending = deferred<string | undefined>();
-      const { getByTestId } = render(<Host requestMenu={() => pending.promise} />);
-      rightClick(getByTestId('text'));
-
-      act(() => {
-        vi.advanceTimersByTime(500);
-      });
-      pending.resolve(undefined);
-      await flush();
-
-      expect(keydownOnBody('a').defaultPrevented).toBe(false);
-    });
-
-    it('keeps the claim while a second request is still open after the first settles', async () => {
-      const first = deferred<string | undefined>();
-      const second = deferred<string | undefined>();
-      const queue = [first, second];
-      const { getByTestId } = render(
-        <Host requestMenu={() => queue.shift()?.promise ?? Promise.resolve(undefined)} />,
-      );
-      rightClick(getByTestId('text'));
-      rightClick(getByTestId('text'));
-
-      first.reject(newPlatformError('replaced', ABORTED));
-      await flush();
-
-      expect(keydownOnBody('a').defaultPrevented).toBe(true);
-    });
-
+  describe('dropping the request on a pointerdown', () => {
     it('drops the open request on a pointerdown in the frame', async () => {
       const pending = deferred<string | undefined>();
       const dismissMenu = vi.fn();
@@ -1095,7 +982,6 @@ describe('useEditorContextMenu', () => {
 
       expect(dismissMenu).toHaveBeenCalledTimes(1);
       expect(api.isPending()).toBe(false);
-      expect(keydownOnBody('a').defaultPrevented).toBe(false);
       pending.resolve('cmd');
       await flush();
       expect(onPick).not.toHaveBeenCalled();
@@ -1369,25 +1255,6 @@ describe('useEditorContextMenu', () => {
     });
   });
 
-  describe('bare modifier keys', () => {
-    it.each(['Shift', 'Control', 'Alt', 'AltGraph', 'Meta'])(
-      'does not claim a bare %s key while pending',
-      (key) => {
-        const { getByTestId } = render(
-          <Host requestMenu={() => new Promise<string | undefined>(() => {})} />,
-        );
-        rightClick(getByTestId('text'));
-        const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
-
-        act(() => {
-          document.body.dispatchEvent(event);
-        });
-
-        expect(event.defaultPrevented).toBe(false);
-      },
-    );
-  });
-
   it('does not call dismissMenu from dismiss() while idle', () => {
     const dismissMenu = vi.fn();
     let api!: ReturnType<typeof useEditorContextMenu>;
@@ -1404,127 +1271,6 @@ describe('useEditorContextMenu', () => {
     act(() => api.dismiss());
 
     expect(dismissMenu).not.toHaveBeenCalled();
-  });
-
-  describe('isClaimingKeys', () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    function renderPending() {
-      const pending = deferred<string | undefined>();
-      let api!: ReturnType<typeof useEditorContextMenu>;
-      const utils = render(
-        <Host
-          requestMenu={() => pending.promise}
-          onApi={(value) => {
-            api = value;
-          }}
-        />,
-      );
-      return { pending, getApi: () => api, ...utils };
-    }
-
-    it('is false before any right-click and true right after one', () => {
-      const { getApi, getByTestId } = renderPending();
-      expect(getApi().isClaimingKeys()).toBe(false);
-
-      rightClick(getByTestId('text'));
-
-      expect(getApi().isClaimingKeys()).toBe(true);
-    });
-
-    it('is false once the request settles', async () => {
-      const { pending, getApi, getByTestId } = renderPending();
-      rightClick(getByTestId('text'));
-      expect(getApi().isClaimingKeys()).toBe(true);
-
-      pending.resolve(undefined);
-      await flush();
-
-      expect(getApi().isClaimingKeys()).toBe(false);
-    });
-
-    it('is false after two seconds while the request is still pending', () => {
-      const { getApi, getByTestId } = renderPending();
-      rightClick(getByTestId('text'));
-
-      act(() => {
-        vi.advanceTimersByTime(1900);
-      });
-      expect(getApi().isClaimingKeys()).toBe(true);
-      act(() => {
-        vi.advanceTimersByTime(200);
-      });
-
-      expect(getApi().isClaimingKeys()).toBe(false);
-      expect(getApi().isPending()).toBe(true);
-    });
-
-    it('is false after a pointerdown drops the request', () => {
-      const { getApi, getByTestId } = renderPending();
-      rightClick(getByTestId('text'));
-
-      fireEvent.pointerDown(getByTestId('outside'));
-
-      expect(getApi().isClaimingKeys()).toBe(false);
-    });
-
-    it('is false after dismiss()', () => {
-      const { getApi, getByTestId } = renderPending();
-      rightClick(getByTestId('text'));
-
-      act(() => getApi().dismiss());
-
-      expect(getApi().isClaimingKeys()).toBe(false);
-    });
-
-    it('is false after Escape closes the menu, and the next key is left alone', () => {
-      const dismissMenu = vi.fn();
-      const pending = deferred<string | undefined>();
-      let api!: ReturnType<typeof useEditorContextMenu>;
-      const { getByTestId } = render(
-        <Host
-          requestMenu={() => pending.promise}
-          dismissMenu={dismissMenu}
-          onApi={(value) => {
-            api = value;
-          }}
-        />,
-      );
-      rightClick(getByTestId('text'));
-      const escape = new KeyboardEvent('keydown', {
-        key: 'Escape',
-        bubbles: true,
-        cancelable: true,
-      });
-      act(() => {
-        document.body.dispatchEvent(escape);
-      });
-      expect(dismissMenu).toHaveBeenCalledTimes(1);
-
-      const next = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true });
-      act(() => {
-        document.body.dispatchEvent(next);
-      });
-
-      expect(api.isClaimingKeys()).toBe(false);
-      expect(next.defaultPrevented).toBe(false);
-    });
-
-    it('is false after unmount', () => {
-      const { getApi, getByTestId, unmount } = renderPending();
-      rightClick(getByTestId('text'));
-      const { isClaimingKeys } = getApi();
-
-      unmount();
-
-      expect(isClaimingKeys()).toBe(false);
-    });
   });
 
   it('dismiss() closes a pending menu through dismissMenu', () => {

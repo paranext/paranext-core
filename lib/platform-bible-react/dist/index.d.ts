@@ -1563,16 +1563,6 @@ export interface FootnoteEditorProps {
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	hasBuiltInContextMenu?: boolean;
-	/**
-	 * Whether a context menu the host owns is claiming the keyboard for this editor. The menu lives
-	 * outside this document and cannot receive keys, so while this returns `true` the editor claims
-	 * the marker trigger and Enter and drops them, so neither opens a palette nor splits a paragraph
-	 * under the menu. Once it returns `false` the editor behaves as if no menu were open, so a host
-	 * passes the signal that lapses with the menu's own key claim, not one that outlives it.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	isHostContextMenuClaimingKeys?: () => boolean;
 }
 interface FootnoteEditorMarkerPalette extends PaletteDriver {
 	/**
@@ -1608,7 +1598,7 @@ export declare const INLINE_APPLY_DEBOUNCE_MS = 300;
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, ref, initialCaretPosition, markerPalette, onNoteEdit, hasBuiltInContextMenu, isHostContextMenuClaimingKeys, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, ref, initialCaretPosition, markerPalette, onNoteEdit, hasBuiltInContextMenu, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the MarkerMenu component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily

@@ -79,8 +79,8 @@ describe('FootnoteEditor inline markers menu', () => {
     expect(screen.queryByText('xo')).not.toBeNull();
   });
 
-  describe('with a context menu the host owns', () => {
-    /** Sends the trigger key and returns the event, so the claim can be read off it. */
+  describe('with the built-in context menu turned off', () => {
+    /** Sends the trigger key and returns the event. */
     async function pressTrigger() {
       const event = new KeyboardEvent('keydown', {
         key: MARKER_MENU_TRIGGER,
@@ -94,21 +94,9 @@ describe('FootnoteEditor inline markers menu', () => {
       return event;
     }
 
-    it('claims and drops the trigger instead of opening the menu while the host menu claims the keyboard', async () => {
+    it('opens the menu on the trigger', async () => {
       const { editorInput } = await renderPopoverAndWaitForInit(visibleView, {
-        extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => true },
-      });
-      editorInput.focus();
-
-      const event = await pressTrigger();
-
-      expect(event.defaultPrevented).toBe(true);
-      expect(markerMenuSearchBox()).toBeNull();
-    });
-
-    it('opens the menu as usual once the host menu does not claim the keyboard (control)', async () => {
-      const { editorInput } = await renderPopoverAndWaitForInit(visibleView, {
-        extraProps: { hasBuiltInContextMenu: false, isHostContextMenuClaimingKeys: () => false },
+        extraProps: { hasBuiltInContextMenu: false },
       });
       editorInput.focus();
 

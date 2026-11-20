@@ -2163,24 +2163,12 @@ export type UseEditorContextMenuResult = {
 	 */
 	dismiss: () => void;
 	/**
-	 * Whether a request is open: true from the right-click until the request settles (or the user
-	 * clicks back into the frame). It stays true when the request stalls, long after the menu stopped
-	 * owning the keyboard, so a host gates its own key handling on {@link isClaimingKeys}, not on
-	 * this.
+	 * Whether a request is open: true from the right-click until the request settles, is dismissed or
+	 * dropped (the user clicks back into the frame), or the hook unmounts.
 	 *
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	isPending: () => boolean;
-	/**
-	 * Whether the hook is claiming the keyboard for its menu right now: true from the right-click
-	 * until the request settles or two seconds have passed, whichever comes first, and false after
-	 * `dismiss`, a dropped request or unmount. Hosts read it to keep their own key handling away from
-	 * a key the menu owns; once it is false the editor must behave as if no menu were pending. Keys
-	 * typed while the claim is active are dropped, not replayed once it ends.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	isClaimingKeys: () => boolean;
 };
 /**
  * Claims the right-click inside one editor, samples what the menu needs to know, asks the host to
@@ -2192,25 +2180,17 @@ export type UseEditorContextMenuResult = {
  * must be the editor's own element, never a wrapper that holds other editors, and must live in the
  * document the hook runs in.
  *
- * While a request is open the keyboard belongs to the menu: every key except bare modifiers is
- * claimed on the frame's window, and Escape also closes the menu. The claim lasts until the request
- * settles or two seconds have passed, whichever comes first. A `wheel`, `touchmove` or a
- * `pointerdown` in the frame closes the menu too (a `pointerdown` also drops the request, so a late
- * pick never reaches `onPick`, except the right-click the hook itself claims). Not a `scroll`
- * listener: opening the menu blurs the editor, which can scroll the frame by itself and would close
- * the menu the moment it opens.
+ * A `wheel`, `touchmove` or a `pointerdown` in the frame closes the open menu (a `pointerdown` also
+ * drops the request, so a late pick never reaches `onPick`, except the right-click the hook itself
+ * claims). Not a `scroll` listener: opening the menu blurs the editor, which can scroll the frame
+ * by itself and would close the menu the moment it opens.
  *
  * A pick that resolves after `dismiss()`, after the pointer-down drop, or after unmount is ignored.
- *
- * The key claim is a capture-phase `keydown` listener on the window, registered when the hook
- * mounts. It stops listeners registered after it, but not window-capture listeners registered
- * earlier, which run first: those must gate on `isClaimingKeys()` themselves. Not on `isPending()`:
- * that stays true for a stalled request after the claim has lapsed.
  *
  * One instance per editor.
  *
  * @param options See {@link UseEditorContextMenuOptions}
- * @returns `dismiss`, `isPending` and `isClaimingKeys`, see {@link UseEditorContextMenuResult}
+ * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
  * @experimental This hook is unstable and may change shape or disappear without notice
  */
 export declare function useEditorContextMenu(options: UseEditorContextMenuOptions): UseEditorContextMenuResult;
