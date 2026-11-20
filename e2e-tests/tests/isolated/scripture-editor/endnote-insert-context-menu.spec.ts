@@ -186,9 +186,9 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       expect(await readHighlightedContextMenuLabel(menu)).toBeUndefined();
 
       // `q` starts no item's label, so the menu's type-to-select has nothing to highlight, and
-      // Enter then has nothing to run. Neither may reach the text behind the menu: an unclaimed
-      // Enter would split the paragraph, an unclaimed letter would be typed into it, and Enter in
-      // Standard view would open the command palette.
+      // Enter then has nothing to run. Neither may reach the text behind the menu, which holds the
+      // keyboard in the app window: Enter would split the paragraph, a letter would be typed into
+      // it, and Enter in Standard view would open the command palette.
       const checkNoStrayPalette = await watchForStrayCommandPalette();
       await mainPage.keyboard.press('q');
       await mainPage.keyboard.press('Enter');

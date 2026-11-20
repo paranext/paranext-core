@@ -3143,14 +3143,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     the menu (the built-in menu ignored both); opening the menu takes keyboard focus out of the tab,
     so in Standard view a half-typed marker settles then, as it does when the top menu opens; Escape
     closes the menu and nothing else, and an open footnote row session stays open.
-  - The key claim: from the right-click until the menu request finishes (the `showContextMenu`
-    promise resolves or rejects) or two seconds have passed, whichever comes first, the hook claims
-    every key in the frame except bare modifiers, and Escape cancels the menu. A window key listener
-    registered before the hook's runs first and must read `isClaimingKeys()` itself: the web view's
-    capture-phase `handleStandardViewTriggers` (the `\` and Enter triggers). The web view's other
-    key gates and `FootnoteEditor`'s (`isHostContextMenuClaimingKeys`) read it too, as a second line
-    of defence. Never gate on `isPending()`, which stays true for a stalled request. See "While the
-    right-click menu is opening, no palette opens" in `Standard-View-Invariants.md`.
+  - Keys typed between a right-click and the menu taking focus reach the editor as usual: the gap
+    is tens of milliseconds, and a hold on the keyboard would drop the user's typing whenever a
+    menu is slow. Once the menu is open it has the keyboard in the app window.
   - After a pick, a read-only editor is never focused through the editor's own `focus()`: with no
     selection it selects the end of the document, which moves the caret and the reference the
     caret drives. `focusEditorKeepingSelection` focuses the frame's window instead, and
