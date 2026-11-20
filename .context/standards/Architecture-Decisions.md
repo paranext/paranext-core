@@ -3156,10 +3156,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     caret drives. `focusEditorKeepingSelection` focuses the frame's window instead, and
     `runKeepingBrowserSelection` keeps the browser selection where the user left it around the
     editor's own copy.
-  - `setDocumentFocusToTab` focuses the tab's web view iframe (`iframe[data-web-view-id]`). Its
-    selector matched the tab header first, which also carries `data-web-view-id`, so focus never
-    reached the web view and Ctrl+C after a menu closed copied nothing. The fix applies app-wide,
-    wherever a tab is focused.
+  - When a context menu closes and returns focus to the web view that asked for it (a pick, or a
+    close while focus was inside the menu), the overlay service also focuses that web view's frame
+    once `setFocus` has finished, so Ctrl+C copies from text that never had a focused element (the
+    read-only panels). Focusing a tab does not do this itself: `setDocumentFocusToTab` selects the
+    first element carrying `data-web-view-id`, which is the tab header, and is unchanged, because
+    surfaces such as the onboarding tour rely on a tab that opens behind them not taking focus into
+    its frame. The frame focus is skipped when the app window lost focus or something else took
+    focus meanwhile; popovers, command palettes and dialogs do not do it.
   - Items another extension contributes to the context menus of the five web view types above
     receive `(command, webViewId)`. Every other web view type keeps the platform's default: the
     picked command runs with no arguments. `Entry-Point-Guide.md` ("Web View Context Menus")
