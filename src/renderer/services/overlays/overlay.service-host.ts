@@ -265,7 +265,10 @@ function resolveFocusTarget(
  *
  * Does nothing unless the frame exists and is visible, the app window still has focus, and focus is
  * still where returning it left it (the page body, the tab's own panel, or this frame), so whatever
- * the user focused while focus was being returned keeps it. Never throws.
+ * the user focused while focus was being returned keeps it. A click on an unfocusable part of the
+ * page in that moment also leaves focus on the body, which cannot be told apart from where
+ * returning focus leaves a tab whose panel is not focusable, so the frame is focused then too.
+ * Never throws.
  */
 function focusReturnedWebViewFrame(webViewId: string): void {
   try {
@@ -291,22 +294,31 @@ function focusReturnedWebViewFrame(webViewId: string): void {
   }
 }
 
+/** How an overlay that returns focus to its opener follows that up */
+type FocusReturnOptions = {
+  /**
+   * Also focus the requesting web view's frame once focus is back (see
+   * {@link focusReturnedWebViewFrame}). Context menus only.
+   */
+  focusRequesterFrame?: boolean;
+};
+
 /**
  * Settles an overlay's focus record when it closes, returning focus to the opener when asked to.
  * Called synchronously from the one place each overlay type settles. Whether to return focus never
  * depends on where focus currently is, apart from the containment check in
- * {@link settleTransientOverlayFocus}, so a click elsewhere can never pull focus back. A context
- * menu also focuses the requesting web view's frame once focus is back; that step reads the active
- * element only to avoid overriding a focus move made meanwhile.
+ * {@link settleTransientOverlayFocus}, so a click elsewhere can never pull focus back. Focusing the
+ * requester's frame afterwards reads the active element only to avoid overriding a focus move made
+ * meanwhile.
  *
  * @param overlayId The overlay that is closing
  * @param shouldReturnFocus Whether this close hands focus back to the opener
- * @param isContextMenu Whether the overlay is a context menu, which also focuses the frame
+ * @param options How returning focus is followed up
  */
 function settleFocus(
   overlayId: string,
   shouldReturnFocus: boolean,
-  isContextMenu: boolean = false,
+  options: FocusReturnOptions = {},
 ): void {
   const record = focusRecords.get(overlayId);
   focusRecords.delete(overlayId);
@@ -317,7 +329,8 @@ function settleFocus(
   windowService
     .setFocus(target)
     .then(() => {
-      if (isContextMenu && target.focusType === 'webView') focusReturnedWebViewFrame(target.id);
+      if (options.focusRequesterFrame && target.focusType === 'webView')
+        focusReturnedWebViewFrame(target.id);
       return undefined;
     })
     .catch(() => {
@@ -331,18 +344,18 @@ function settleFocus(
  * focus was inside the overlay's own content at that moment. A click elsewhere, a pane or tab
  * switch, a replacement, a timeout and a scroll never return focus.
  *
- * @param isContextMenu Whether the overlay is a context menu; see {@link settleFocus}
+ * @param options How returning focus is followed up; see {@link settleFocus}
  */
 function settleTransientOverlayFocus(
   overlayId: string,
   wasPicked: boolean,
-  isContextMenu: boolean = false,
+  options: FocusReturnOptions = {},
 ): void {
   const isMarked = takeOverlayFocusReturnMark(overlayId);
   settleFocus(
     overlayId,
     wasPicked || (isMarked && isFocusInsideOverlayContent(overlayId)),
-    isContextMenu,
+    options,
   );
 }
 
@@ -752,11 +765,11 @@ async function buildAndShowContextMenu(
       localizeKeys,
       position: clampedPosition,
       resolve: (result) => {
-        settleTransientOverlayFocus(overlayId, result !== undefined, true);
+        settleTransientOverlayFocus(overlayId, result !== undefined, { focusRequesterFrame: true });
         resolve(result);
       },
       reject: (reason?: unknown) => {
-        settleTransientOverlayFocus(overlayId, false, true);
+        settleTransientOverlayFocus(overlayId, false, { focusRequesterFrame: true });
         reject(reason);
       },
     });
