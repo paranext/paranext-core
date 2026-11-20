@@ -156,28 +156,40 @@ consequences worth knowing here:
   line instead of retagging it. In a book with no chapters that list also offers `\c`, which the
   host must not filter out: it is the only way to start chapter 1 in Standard view.
 
-**The editor's right-click menu outranks both palettes, and the hand-off rests on listener order
-across the two repos.** While `ContextMenuPlugin`'s menu is open it is the only keyboard mode on
-screen: the `\` trigger is claimed and does nothing, the Enter trigger stands down so the menu gets
-the press, and the insert shortcuts are swallowed. `isEditorContextMenuOpen` in
-`platform-scripture-editor.web-view.utils.ts` is the gate, and it depends on two facts owned by the
-editor package:
+**While the right-click menu is opening, no palette opens.** The editor's right-click menu is the
+platform's context menu, opened by `useEditorContextMenu` (`lib/platform-bible-react`). It opens in
+the app window, not in the tab's frame, so it never receives a key pressed in the frame; once it is
+open it holds focus there and no key reaches the editor at all. The gap is between the right-click
+and the menu taking focus: one round trip for the menu data, longer on a busy extension host. For
+that gap the hook claims the keyboard:
 
-- **The menu claims its keys from a capture-phase listener on the iframe's `document`, and this web
-  view claims its own from one on `window`.** Capture runs window → document, so the web view always
-  sees a key first, and handing Enter down means returning *without* `stopPropagation` — a
-  `stopPropagation` there ends the press before the menu's listener runs. Were the menu's listener
-  ever moved onto `window` too, the two would run in registration order, and neither side could
-  count on seeing a key first.
-- **The menu is found by the FOCUSED editor's `aria-controls="editor-context-menu"` attribute**,
-  which the editor package sets on that editor's own root for exactly as long as its menu stays
-  open (`isEditorContextMenuOpenFor` in `editor-context-menu.util.ts` reads it). Only
-  scripture-editors#14 sets it — an earlier `platform-editor` build never marks the root, so every
-  gate keyed on `isEditorContextMenuOpen` silently evaluates "menu closed" against it, all at once:
-  the `\` trigger, the Enter hand-down, and the insert-shortcut swallow all fall through together,
-  with no local signal that anything broke. `footnote-editor.context-menu-gate.test.tsx` and
-  `editor-context-menu-merge-order-contract.test.tsx` both mount the real editor rather than a mock,
-  so they exercise the actual attribute instead of assuming its shape.
+- **`isClaimingKeys()` is true from the right-click until the request settles or two seconds have
+  passed, whichever comes first**, and false after `dismiss()`, a mouse-down in the frame, or
+  unmount. While it is true, the hook's capture-phase `keydown` listener on the frame's window
+  claims every key except bare modifiers, and Escape also cancels the menu. The two seconds bound a
+  stalled menu-data request: an unbounded claim would leave the editor's keyboard dead with no menu
+  on screen. Once the claim lapses, the editor behaves exactly as with no menu.
+- **A key handler that runs before the hook's listener reads the claim itself.** That listener
+  stops only listeners registered after it. In `platform-scripture-editor.web-view.tsx`,
+  `isEditorContextMenuClaimingKeysRef` holds the main text's claim: the `\` trigger and Enter are
+  claimed and dropped (an unclaimed `\` would type a backslash behind the menu, an unclaimed Enter
+  would split the paragraph with no marker), and the inline markers menu, the insert-comment chord
+  and the note chords do nothing. `FootnoteEditor` gets the row editor's claim through its
+  `isHostContextMenuClaimingKeys` prop and claims and drops `\` and Enter the same way.
+- **Gate on `isClaimingKeys()`, never on `isPending()`.** `isPending()` stays true for as long as a
+  stalled request is open, so a gate on it would keep blocking keys, or let Enter fall through to a
+  plain paragraph split, in an editor that visibly has no menu.
+- **Tests that pin it:** `use-editor-context-menu.hook.test.tsx` (the claim, its two-second bound,
+  Escape); "the keys the editor acts on" in `platform-scripture-editor.web-view.test.tsx` (Enter,
+  `\` and Ctrl+T in the main text, during the claim and after it lapses);
+  `editor-context-menu-gates.contract.test.ts` (the inline markers menu and the insert-comment
+  chord, which a mounted test cannot observe); `footnote-editor.context-menu-gate.test.tsx` (`\`
+  and Enter in the footnote editor).
+
+A `FootnoteEditor` that shows the editor package's own right-click menu (`hasBuiltInContextMenu`,
+on by default; the app turns it off) gates on that menu instead: `isEditorContextMenuOpenFor`
+(`editor-context-menu.util.ts`) reads the `aria-controls` mark the menu puts on the editor's root
+while it is open.
 
 Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.

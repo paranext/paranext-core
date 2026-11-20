@@ -3083,6 +3083,93 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   carve-out described under "Don't rewrite history" above. Git history keeps the text.
 - **What covers this ground instead:** `adr-pop-ups-stay-at-interface-scale`.
 
+## adr-editor-context-menus-use-the-platform-menu: Scripture editors show the platform's context menu, through one shared hook, and run the pick themselves
+
+- **Date:** 2026-11-19
+- **Status:** Accepted
+- **Context:** Every Scripture editor in the app showed the editor package's built-in right-click
+  menu (`ContextMenuPlugin` in `@eten-tech-foundation/platform-editor`). That menu is English only,
+  is not a shadcn component like the rest of the app's menus, and cannot disable an item by
+  selection: Copy was always enabled, and a resource showed Cut and Paste greyed out instead of
+  leaving them off. Jira had long planned to replace it with a platform menu (PT-2609; PT-2384 and
+  PT-4769 describe its defects), and PT-5092 asked for a resource menu without Paste and for Copy
+  disabled without a selection. The platform already had a web view context menu: the `contextMenu`
+  of a web view type in `menus.json`, shown by `papi.overlays.showContextMenu`.
+- **Decision:** The Scripture editors show the platform's context menu: the main Scripture text,
+  the footnotes pane's row editor, the Bible Texts, Commentaries and Model text panels
+  (`platformScriptureEditor.react`, `.bibleTexts`, `.commentaries`, `.modelText`) and the Enhanced
+  Resources Scripture pane (`platformEnhancedResources.enhancedResource`).
+  - One shared hook, `useEditorContextMenu` (`lib/platform-bible-react`, experimental), serves
+    every editor: it claims the `contextmenu` event inside the editor's own element, mouse or
+    keyboard (Shift+F10, the Menu key), reads the browser's selection at that moment, asks the
+    host to open the menu, and hands back the pick. The library cannot reach PAPI, so each host
+    passes the two platform calls in.
+  - The menu returns the pick and the web view runs it (`showContextMenu`'s `shouldRunCommand:
+    false`). Cut, Copy and Paste then run in the tab's frame, with the right-click's user
+    activation; Find gets the same arguments Ctrl+F builds; any other item is sent as
+    `(command, webViewId)`.
+  - Facts about one right-click travel with the request (`contextKeys`), never through the shared
+    context key service: `platformScriptureEditor.contextMenu.hasSelection`, `.isMainEditor` and
+    `.canFind`, and `platformEnhancedResources.contextMenu.hasSelection`.
+  - The editor package gets a dedicated off switch, `hasBuiltInContextMenu` (default `true`,
+    paranext/scripture-editors#58), which every one of these editors sets to `false`;
+    `FootnoteEditor` takes the same prop.
+  - The service gains `dismissContextMenu(webViewId)` (a scroll inside the frame never reaches the
+    app window, so the tab closes a stale menu itself), icons on context-menu items, and no
+    separator above the first item.
+- **Alternatives:**
+  - **Switch the built-in menu off whenever `hasExternalUI` is set.** Rejected: Enhanced Resources,
+    the footnote editor, the Storybook stories and the editor package's own demo pass
+    `hasExternalUI: true` and rely on the built-in menu; they would lose their menu with nothing in
+    its place.
+  - **Let the platform run the picked command, with the web view id as its first argument.**
+    Rejected: the clipboard actions are not PAPI commands and must run in the tab's own frame, and
+    an existing consumer's command already takes a project id as its first argument.
+  - **Publish per-click facts as shared context keys.** Rejected: the main text and the footnote
+    row editor share one web view id, so a shared key cannot describe the editor that was clicked.
+  - **Retry a request the service rejected as a duplicate (its debounce).** Built and taken back:
+    the rejected request was the twin of one whose menu was already open, and a retry replaces that
+    open menu. A request that opens nothing is logged at debug level instead.
+- **Consequences:**
+  - Behaviour changes users see: a right-click on empty editor space or on a chapter number opens
+    the menu (the built-in menu ignored both); opening the menu takes keyboard focus out of the tab,
+    so in Standard view a half-typed marker settles then, as it does when the top menu opens; Escape
+    closes the menu and nothing else, and an open footnote row session stays open.
+  - The key claim: from the right-click until the request settles or two seconds have passed,
+    whichever comes first, the hook claims every key in the frame except bare modifiers, and Escape
+    cancels the menu. Key handlers that run before the hook's listener read `isClaimingKeys()`
+    themselves (the web view's `\`, Enter, inline markers menu, insert-comment and note chords;
+    `FootnoteEditor`'s `isHostContextMenuClaimingKeys` for `\` and Enter), never `isPending()`,
+    which stays true for a stalled request. See "While the right-click menu is opening, no palette
+    opens" in `Standard-View-Invariants.md`.
+  - After a pick, a read-only editor is never focused through the editor's own `focus()`: with no
+    selection it selects the end of the document, which moves the caret and the reference the
+    caret drives. `focusEditorKeepingSelection` focuses the frame's window instead, and
+    `runKeepingBrowserSelection` keeps the browser selection where the user left it around the
+    editor's own copy.
+  - `setDocumentFocusToTab` focuses the tab's web view iframe (`iframe[data-web-view-id]`). Its
+    selector matched the tab header first, which also carries `data-web-view-id`, so focus never
+    reached the web view and Ctrl+C after a menu closed copied nothing. The fix applies app-wide, wherever a
+    tab is focused.
+  - Items another extension contributes to the context menus of the five web view types above
+    receive `(command, webViewId)`. Every other web view type keeps the platform's default: the
+    picked command runs with no arguments. `Entry-Point-Guide.md` ("Web View Context Menus")
+    states the contract.
+  - The top menu's Copy / "Copy selection" follows an edit target: it copies the footnotes pane's
+    selection while the pane is where the user last selected, and `hasSelection` follows the same
+    target. Cut and Paste deliberately still act on the main text with a footnote row open: sending
+    them to the row editor needs the footnote session to survive the Edit flyout, and a decision on
+    what Undo and Redo do there.
+  - The built-in menu stays in the editor package while any host still uses it: the Storybook
+    stories, a `FootnoteEditor` mounted with the default `hasBuiltInContextMenu: true`, and the Text
+    Collection grid cells, which mount it but open their own menu in the capture phase. Removing
+    `ContextMenuPlugin`, `EditorOptions.contextMenu` and the off switch is a later, breaking
+    scripture-editors change.
+  - Two visible items with the same command in one context menu cannot be told apart by the pick;
+    variants hidden by `when` or interface mode are fine.
+- **Source:** PT-2609; PT-5092 items 4 and 5; PT-2384 and PT-4769 (built-in menu defects); editor
+  package option paranext/scripture-editors#58.
+
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
 - **Formerly:** ADR-0012
@@ -6082,6 +6169,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   test that reads the extension's source file — it caught a changed string but not a hint on the
   wrong item, and made restating look like the pattern to follow. Consequence: a chord shared this
   way is a `platform-bible-utils` export, so changing it rebuilds that package's `dist`.
+- **Amended 2026-11-19:** the app's Scripture editors no longer show the editor package's own
+  right-click menu; they show the platform context menu, which the menu data service serves, so its
+  items carry hints like any other served menu. See `adr-editor-context-menus-use-the-platform-menu`.
 
 ## adr-menus-always-available-gate-at-submission: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
 
@@ -6219,6 +6309,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **D6:** C# `SharedStore.Set` skips a publish whose JSON equals the stored value, and TS
     `setFromRemote` does not emit an equal remote value. There is still no ownership check in C#;
     keeping one producer per key is the producer's job.
+- **Amended 2026-11-19:** an overlay context menu can also read keys that belong to one request:
+  `showContextMenu`'s `contextKeys` option (experimental) carries facts about a single right-click,
+  consulted first by that menu's expressions and never written to the shared store. They are for
+  facts a shared key cannot hold, such as which of two editors in one tab was clicked. See
+  `adr-editor-context-menus-use-the-platform-menu`.
 - **Source:** PT-4805 / PT-4732; prototype spec attached to PT-4805.
 
 ## adr-mode-switch-sends-one-send-receive-for-all-closing-windows: A mode switch starts ONE send/receive covering every window it closes, not one per window
@@ -8346,6 +8441,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - `paranext/scripture-editors#17` (the `contextMenuContainer` option) is no longer needed; it was
     closed unmerged on 2026-09-23.
   - Live anchoring stays, because anchors captured once go stale on scroll even at 100 %.
+  - **Added 2026-11-19:** the app's Scripture editors now show the platform context menu requested
+    through `papi.overlays` instead of the editor library's own right-click menu, so that menu
+    stays at interface scale as a platform overlay. See
+    `adr-editor-context-menus-use-the-platform-menu`.
 - **Source:** UX feedback 2026-09-22; reverses PT-4712 and PT-4713; epic PT-4575.
 
 ## adr-power-mode-internet-use-prompt: Power-mode startup asks once for an internet choice instead of changing the saved default
@@ -12183,6 +12282,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `markOverlayFocusReturnIfFocusInside` (`overlay-focus-return.util.ts`) before the overlay is
   resolved. Rejected alternative: deferring the decision one task and guessing from the active
   element, which could not tell a click elsewhere from Escape.
+- **Amended 2026-11-19:** the app's Scripture editors no longer show the editor package's
+  `ContextMenuPlugin` menu named under "Not wired" above; their right-click menu is the overlay
+  service's context menu, so it follows that service's own blur and focus-restore rules. A scroll
+  inside the tab's frame never reaches the app window, so the tab closes that menu itself with
+  `dismissContextMenu`. See `adr-editor-context-menus-use-the-platform-menu`.
 - **Source:** PT-2989 (PR #2963); related PT-2205, PT-4627; prototype PR #2887.
 
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
