@@ -326,10 +326,10 @@ export function useEditorPdpSync({
 
   // A Send/Receive replaces the chapter on disk with its merge. Forget the last edit in this view
   // as soon as it starts, so the merge is applied during the block or after it. Two exceptions push
-  // the pre-merge text over the merge once writes are accepted again: a footnote row editor session still open
-  // (`isEditingSessionActive`), and a merge delivered after the user has typed again. The block
-  // outlasts the write gate by the store's `HIDE_GRACE_MS` to make the second unlikely, but nothing
-  // here rules it out. Called before the sync effect so a block and a delivery in the same render
+  // the pre-merge text over the merge once writes are accepted again: a footnote row editor session
+  // still open (`isEditingSessionActive`), and a merge delivered after the user has typed again.
+  // The block outlasts the write gate by the store's `HIDE_GRACE_MS` to make the second unlikely,
+  // but nothing here rules it out. Called before the sync effect so a block and a delivery in the same render
   // are handled in that order.
   useForgetEditsWhen(isSyncBlocked, lastLocalEditTimestamp);
   // Leaving for another web view ends the claim for good, rather than only while focus is away:
@@ -485,13 +485,14 @@ export function useEditorPdpSync({
       // back. A parked caret must never defer external writes indefinitely: a Send/Receive merge
       // or another app's concurrent write has to land — not be overwritten by the focused editor's
       // pre-merge content — however long ago the user last typed, and the window is what bounds
-      // the deferral. An active editing SESSION (marker palette, footnote
-      // row editor — `isEditingSessionActive`) still defers regardless of the window: the
-      // pane's session claims only on the Scripture editor's terms (see above), and
-      // replacing the main editor mid-session regenerates every Lexical key and kills the session.
-      // The predicate bounds only the footnote note session web-view-side (a wedged note session
-      // stops deferring once stale). A marker-palette session has no bound: while one stays open,
-      // every differing same-document update is deferred and the editor's content pushed over it,
+      // the deferral. An open marker-palette session (`isEditingSessionActive`) still defers
+      // regardless of the window, because replacing the main editor mid-session regenerates every
+      // Lexical key and kills the session. A footnote row session does not: it defers only on the
+      // Scripture editor's terms above (focus in the pane, an edit within the window), and is
+      // never reported stale; once that claim lapses, the update replaces the document and ends
+      // the session. A note session with no row editor behind it is bounded web-view-side (a
+      // wedged one stops deferring once stale). A marker-palette session has no bound: while one
+      // stays open, every differing same-document update is deferred and the editor's content pushed over it,
       // including a genuine external merge — a known gap documented on
       // `resolveEditingSessionActivity`.
       //

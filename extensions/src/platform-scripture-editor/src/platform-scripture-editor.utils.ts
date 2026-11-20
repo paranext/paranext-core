@@ -682,8 +682,9 @@ export type NoteCallerClickDecision = {
    * - `ignore-read-only` — the click has no editing surface and the view does not use the pane note
    *   model, so the caller is inert: the pane's navigation model belongs to pane-model views
    *   alone.
-   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (a pane-model
-   *   view).
+   *
+   *   - - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (a pane-model
+   *               view).
    * - `navigate-only` — the text is read-only in a pane-model view, so there is no editing surface;
    *   the click still navigates (reveals/scrolls the pane) without opening an editor.
    */
@@ -711,8 +712,9 @@ export type NoteCallerClickDecision = {
  * editor. In every case:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
- * - A read-only text outside a pane-model view does nothing either: the pane's navigate-to-note model
- *   belongs to pane-model views, and every other view keeps the caller inert.
+ * - A click with no editing surface outside a pane-model view does nothing either, whether the text
+ *   is read-only or still waiting on the interface mode: the pane's navigate-to-note model belongs
+ *   to pane-model views, and every other view keeps the caller inert.
  * - A pane-editor session has no one-at-a-time limit: its row stays open across clicks.
  *
  * Alongside whichever action is chosen, the pane highlights the clicked note when it is rendered,
