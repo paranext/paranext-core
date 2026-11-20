@@ -163,19 +163,25 @@ open it holds focus there and no key reaches the editor at all. The gap is betwe
 and the menu taking focus: one round trip for the menu data, longer on a busy extension host. For
 that gap the hook claims the keyboard:
 
-- **`isClaimingKeys()` is true from the right-click until the request settles or two seconds have
-  passed, whichever comes first**, and false after `dismiss()`, a mouse-down in the frame, or
-  unmount. While it is true, the hook's capture-phase `keydown` listener on the frame's window
-  claims every key except bare modifiers, and Escape also cancels the menu. The two seconds bound a
+- **`isClaimingKeys()` is true from the right-click until the menu request finishes or two seconds
+  have passed, whichever comes first.** The request finishes when the `showContextMenu` promise
+  resolves (a pick, or the menu closed without one) or rejects. The claim also ends on `dismiss()`,
+  a mouse-down in the frame, or unmount. While it is true, the hook's capture-phase `keydown`
+  listener on the frame's window claims every key except bare modifiers, and Escape also cancels
+  the menu. The two seconds bound a
   stalled menu-data request: an unbounded claim would leave the editor's keyboard dead with no menu
   on screen. Once the claim lapses, the editor behaves exactly as with no menu.
-- **A key handler that runs before the hook's listener reads the claim itself.** That listener
-  stops only listeners registered after it. In `platform-scripture-editor.web-view.tsx`,
-  `isEditorContextMenuClaimingKeysRef` holds the main text's claim: the `\` trigger and Enter are
-  claimed and dropped (an unclaimed `\` would type a backslash behind the menu, an unclaimed Enter
-  would split the paragraph with no marker), and the inline markers menu, the insert-comment chord
-  and the note chords do nothing. `FootnoteEditor` gets the row editor's claim through its
-  `isHostContextMenuClaimingKeys` prop and claims and drops `\` and Enter the same way.
+- **A window key listener registered before the hook's runs first, so it must check the claim
+  itself.** The hook's listener calls `stopImmediatePropagation()`: it stops every listener that
+  runs after it, and none that ran before it. The one such listener is the web view's capture-phase
+  `handleStandardViewTriggers` (`platform-scripture-editor.web-view.tsx`), whose effect can register
+  before or after the hook's. It reads `isEditorContextMenuClaimingKeysRef` and claims and drops
+  the `\` trigger and Enter (an unclaimed `\` would type a backslash behind the menu, an unclaimed
+  Enter would split the paragraph with no marker). The other gates run after the hook's listener
+  and are a second line of defence: in the same file, the bubble-phase `handleKeyDown` (the inline
+  markers menu, the insert-comment chord, the note chords), and `FootnoteEditor`'s document
+  listeners, which read the row editor's claim through its `isHostContextMenuClaimingKeys` prop and
+  claim and drop `\` and Enter.
 - **Gate on `isClaimingKeys()`, never on `isPending()`.** `isPending()` stays true for as long as a
   stalled request is open, so a gate on it would keep blocking keys, or let Enter fall through to a
   plain paragraph split, in an editor that visibly has no menu.

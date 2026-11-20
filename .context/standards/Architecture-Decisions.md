@@ -3118,6 +3118,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     app window, so the tab closes a stale menu itself), icons on context-menu items, and no
     separator above the first item.
 - **Alternatives:**
+  - **Localize and extend the built-in menu in the editor package.** Rejected: the platform menu
+    already has the app's shadcn look, localized labels, items declared in `menus.json` that other
+    extensions can add to, and items enabled or hidden by context keys. The built-in menu would need
+    each of those rebuilt inside the editor package, and its items would be a second copy of the top
+    menu's, kept in code.
+  - **Put the Insert items in the platform's default `platform.insert` group.** Rejected: that group
+    sorts first, and the clipboard items belong on top, where users of the built-in menu expect
+    them. The editors use their own groups, orders 3 to 5.
   - **Switch the built-in menu off whenever `hasExternalUI` is set.** Rejected: Enhanced Resources,
     the footnote editor, the Storybook stories and the editor package's own demo pass
     `hasExternalUI: true` and rely on the built-in menu; they would lose their menu with nothing in
@@ -3135,12 +3143,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     the menu (the built-in menu ignored both); opening the menu takes keyboard focus out of the tab,
     so in Standard view a half-typed marker settles then, as it does when the top menu opens; Escape
     closes the menu and nothing else, and an open footnote row session stays open.
-  - The key claim: from the right-click until the request settles or two seconds have passed,
-    whichever comes first, the hook claims every key in the frame except bare modifiers, and Escape
-    cancels the menu. Key handlers that run before the hook's listener read `isClaimingKeys()`
-    themselves (the web view's `\`, Enter, inline markers menu, insert-comment and note chords;
-    `FootnoteEditor`'s `isHostContextMenuClaimingKeys` for `\` and Enter), never `isPending()`,
-    which stays true for a stalled request. See "While the right-click menu is opening, no palette
+  - The key claim: from the right-click until the menu request finishes (the `showContextMenu`
+    promise resolves or rejects) or two seconds have passed, whichever comes first, the hook claims
+    every key in the frame except bare modifiers, and Escape cancels the menu. A window key listener
+    registered before the hook's runs first and must read `isClaimingKeys()` itself: the web view's
+    capture-phase `handleStandardViewTriggers` (the `\` and Enter triggers). The web view's other key
+    gates and `FootnoteEditor`'s (`isHostContextMenuClaimingKeys`) read it too, as a second line of
+    defence. Never gate on `isPending()`, which stays true for a stalled request. See "While the right-click menu is opening, no palette
     opens" in `Standard-View-Invariants.md`.
   - After a pick, a read-only editor is never focused through the editor's own `focus()`: with no
     selection it selects the end of the document, which moves the caret and the reference the
@@ -3149,17 +3158,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     editor's own copy.
   - `setDocumentFocusToTab` focuses the tab's web view iframe (`iframe[data-web-view-id]`). Its
     selector matched the tab header first, which also carries `data-web-view-id`, so focus never
-    reached the web view and Ctrl+C after a menu closed copied nothing. The fix applies app-wide, wherever a
-    tab is focused.
+    reached the web view and Ctrl+C after a menu closed copied nothing. The fix applies app-wide,
+    wherever a tab is focused.
   - Items another extension contributes to the context menus of the five web view types above
     receive `(command, webViewId)`. Every other web view type keeps the platform's default: the
     picked command runs with no arguments. `Entry-Point-Guide.md` ("Web View Context Menus")
     states the contract.
   - The top menu's Copy / "Copy selection" follows an edit target: it copies the footnotes pane's
-    selection while the pane is where the user last selected, and `hasSelection` follows the same
-    target. Cut and Paste deliberately still act on the main text with a footnote row open: sending
-    them to the row editor needs the footnote session to survive the Edit flyout, and a decision on
-    what Undo and Redo do there.
+    selection while the pane is where the user last selected, and the shared per-tab key
+    `platformScriptureEditor.webView.{webViewId}.hasSelection` follows the same target. Cut and
+    Paste deliberately still act on the main text with a footnote row open: sending them to the row
+    editor needs the footnote session to survive the Edit flyout, and a decision on what Undo and
+    Redo do there. No ticket exists for this yet.
   - The built-in menu stays in the editor package while any host still uses it: the Storybook
     stories, a `FootnoteEditor` mounted with the default `hasBuiltInContextMenu: true`, and the Text
     Collection grid cells, which mount it but open their own menu in the capture phase. Removing
@@ -3167,8 +3177,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     scripture-editors change.
   - Two visible items with the same command in one context menu cannot be told apart by the pick;
     variants hidden by `when` or interface mode are fine.
-- **Source:** PT-2609; PT-5092 items 4 and 5; PT-2384 and PT-4769 (built-in menu defects); editor
-  package option paranext/scripture-editors#58.
+  - `hasBuiltInContextMenu` comes from the editor package (paranext/scripture-editors#58), so the
+    app needs an editor build that has it.
+  - The footnote pop-up, which no view in the Scripture editor could open any more, was removed with
+    this work; the app edits every note in the footnotes pane's row editor.
+- **Source:** PT-2609; PT-5092 items 4 and 5; PT-2384 and PT-4769 (built-in menu defects); PT-4916
+  (the unreachable footnote pop-up); editor package option paranext/scripture-editors#58.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
