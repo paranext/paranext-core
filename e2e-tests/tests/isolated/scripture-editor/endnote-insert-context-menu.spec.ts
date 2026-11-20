@@ -73,6 +73,9 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     /** The endnotes that landed where an endnote belongs — inside a body paragraph. */
     const endnotesInVerseParas = mainEditor.locator('p.usfm_p span.note.usfm_fe');
     const menu = platformContextMenu(mainPage);
+    /** Every `\fe` in the saved chapter, whatever its caller: the same set `endnotes` counts. */
+    const savedEndnoteCount = async () =>
+      ((await getSampleProjectChapterUsfm(JONAH_1)) ?? '').match(/\\fe\s/g)?.length ?? 0;
 
     /**
      * A body paragraph that holds a verse and no note yet. Inserting into one takes it out of this
@@ -243,12 +246,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     });
 
     await test.step('the endnotes survive a save and chapter-navigation round trip', async () => {
-      await expect
-        .poll(
-          async () => ((await getSampleProjectChapterUsfm(JONAH_1)) ?? '').split('\\fe + ').length,
-          { timeout: 20_000 },
-        )
-        .toBe(endnotesExpected + 1);
+      await expect.poll(savedEndnoteCount, { timeout: 20_000 }).toBe(endnotesExpected);
       // Navigating away forces a fresh read of the chapter on the way back, which is what makes
       // this falsifiable: re-counting in place asserts something already true before the echo.
       // Positive control first — Jonah 2:1's own text, which is nowhere in chapter 1 — so the count
@@ -285,12 +283,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
 
     await test.step('the chapter is put back as it was', async () => {
       // Waits for the top-menu insert's own save first, so it cannot land after the rewrite.
-      await expect
-        .poll(
-          async () => ((await getSampleProjectChapterUsfm(JONAH_1)) ?? '').split('\\fe + ').length,
-          { timeout: 20_000 },
-        )
-        .toBe(endnotesExpected + 2);
+      await expect.poll(savedEndnoteCount, { timeout: 20_000 }).toBe(endnotesExpected + 1);
       // Off the chapter first: an editor that edited the chapter moments ago holds back an
       // incoming change to it and writes its own copy back over it.
       await navigateToolbarBcv(mainPage, 'Jonah 2:1');

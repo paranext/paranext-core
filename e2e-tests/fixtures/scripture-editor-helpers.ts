@@ -779,7 +779,8 @@ export async function readContextMenuLabels(menu: Locator): Promise<string[]> {
 export async function contextMenuItem(menu: Locator, label: string): Promise<Locator> {
   const labels = await readContextMenuLabels(menu);
   const index = labels.indexOf(label);
-  if (index < 0) throw new Error(`The context menu has no "${label}" item; it has ${labels}`);
+  if (index < 0)
+    throw new Error(`The context menu has no "${label}" item; it has ${JSON.stringify(labels)}`);
   return menu.getByRole('menuitem').nth(index);
 }
 
