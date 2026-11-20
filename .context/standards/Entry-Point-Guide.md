@@ -281,10 +281,9 @@ element.addEventListener('contextmenu', async (event) => {
 
 For an editor-like surface, use `useEditorContextMenu` from `platform-bible-react/experimental`
 instead of writing this yourself. It claims the right-click (and Shift+F10 / the Menu key) inside
-the editor's element, reads the browser's selection at that moment, claims the keyboard until the
-menu request finishes or two seconds have passed, closes the menu on a scroll in the frame or on
-unmount, ignores the three normal rejections, and calls back with the pick. The web view passes in the two platform calls
-(`showContextMenu` and `dismissContextMenu`). The app's Scripture editors use it.
+the editor's element, reads the browser's selection at that moment, closes the menu on a scroll in the
+frame or on unmount, ignores the three normal rejections, and calls back with the pick. The web
+view passes in the two platform calls (`showContextMenu` and `dismissContextMenu`). The app's Scripture editors use it.
 
 **More of the context-menu surface:**
 

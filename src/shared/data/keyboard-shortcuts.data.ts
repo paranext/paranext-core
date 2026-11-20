@@ -652,12 +652,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-editor-context-menu',
     purpose:
-      'Open the right-click menu for Scripture text at the caret. Until the menu request finishes or two seconds have passed, keys do nothing in the editor and Escape cancels the menu. Once open, the menu holds the keyboard until it closes',
+      'Open the right-click menu for Scripture text at the caret. While the menu is open it holds the keyboard in the app window until it closes',
     category: 'Menus',
     // Not a shortcut the app registers: the browser raises `contextmenu`, and
     // `useEditorContextMenu` claims it and opens the platform context menu at the caret. The other
-    // locations mount that hook, or read its key claim (`isClaimingKeys`) in their own key
-    // handlers. macOS has no Menu key and no Shift+F10 equivalent; a Ctrl+click there is a mouse
+    // locations mount that hook. macOS has no Menu key and no Shift+F10 equivalent; a Ctrl+click there is a mouse
     // gesture, handled like a right-click.
     context:
       'Scripture text. A project’s main text: Cut, Copy, Paste, Paste as plain text, Find and the Insert items. A resource’s main text: Copy and Find. The footnotes pane’s row editor: the clipboard items and Find. The Bible Texts, Commentaries and Model text panels: Copy, and Find where the panel has it. The Enhanced Resources Scripture pane: Copy',
@@ -682,9 +681,6 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // Enter is claimed in EVERY modifier state, matching PT9's KeyPressEditHandler (no modifier
     // check): any modifier chord with Enter — including Shift+Enter, which would otherwise insert
     // a soft line break with no USFM representation — opens the same menu.
-    // While a right-click menu claims the keyboard (`isClaimingKeys` of `useEditorContextMenu`),
-    // Enter is claimed and dropped instead: the menu opens in the app window and never receives a
-    // press made in this frame.
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
@@ -814,11 +810,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'footnote-markers-menu',
     purpose:
-      'Open the inline markers menu in the footnote editor. Does nothing while a right-click menu over it is opening or open',
+      'Open the inline markers menu in the footnote editor. Does nothing while a right-click menu over it is open',
     category: 'Editing',
-    // Two gates: the editor package's own right-click menu, when the footnote editor shows it
-    // (`hasBuiltInContextMenu`, on by default), and the host's platform menu while it claims the
-    // keyboard (`isHostContextMenuClaimingKeys`).
+    // The gate is the editor package's own right-click menu, when the footnote editor shows it
+    // (`hasBuiltInContextMenu`, on by default). A host's platform menu has the keyboard in the app
+    // window while it is open, so no key reaches this frame.
     context: 'Footnote editor',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
@@ -856,7 +852,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // The pane's row editor applies its edits live, so there is nothing to discard - Escape is its
     // explicit dismissal, and it hands focus back to the note's row.
     context:
-      'Footnotes pane, in the note row editor or on its own controls (while a right-click menu is opening or open, Escape closes only that menu)',
+      'Footnotes pane, in the note row editor or on its own controls (while a right-click menu is open, Escape closes only that menu)',
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',

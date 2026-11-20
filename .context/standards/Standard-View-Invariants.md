@@ -156,41 +156,15 @@ consequences worth knowing here:
   line instead of retagging it. In a book with no chapters that list also offers `\c`, which the
   host must not filter out: it is the only way to start chapter 1 in Standard view.
 
-**While the right-click menu is opening, no palette opens.** The editor's right-click menu is the
-platform's context menu, opened by `useEditorContextMenu` (`lib/platform-bible-react`). It opens in
-the app window, not in the tab's frame, so it never receives a key pressed in the frame; once it is
-open it holds focus there and no key reaches the editor at all. The gap is between the right-click
-and the menu taking focus: one round trip for the menu data, longer on a busy extension host. For
-that gap the hook claims the keyboard:
-
-- **`isClaimingKeys()` is true from the right-click until the menu request finishes or two seconds
-  have passed, whichever comes first.** The request finishes when the `showContextMenu` promise
-  resolves (a pick, or the menu closed without one) or rejects. The claim also ends on `dismiss()`,
-  a mouse-down in the frame, or unmount. While it is true, the hook's capture-phase `keydown`
-  listener on the frame's window claims every key except bare modifiers, and Escape also cancels
-  the menu. The two seconds bound a
-  stalled menu-data request: an unbounded claim would leave the editor's keyboard dead with no menu
-  on screen. Once the claim lapses, the editor behaves exactly as with no menu.
-- **A window key listener registered before the hook's runs first, so it must check the claim
-  itself.** The hook's listener calls `stopImmediatePropagation()`: it stops every listener that
-  runs after it, and none that ran before it. The one such listener is the web view's capture-phase
-  `handleStandardViewTriggers` (`platform-scripture-editor.web-view.tsx`), whose effect can register
-  before or after the hook's. It reads `isEditorContextMenuClaimingKeysRef` and claims and drops
-  the `\` trigger and Enter (an unclaimed `\` would type a backslash behind the menu, an unclaimed
-  Enter would split the paragraph with no marker). The other gates run after the hook's listener
-  and are a second line of defence: in the same file, the bubble-phase `handleKeyDown` (the inline
-  markers menu, the insert-comment chord, the note chords), and `FootnoteEditor`'s document
-  listeners, which read the row editor's claim through its `isHostContextMenuClaimingKeys` prop and
-  claim and drop `\` and Enter.
-- **Gate on `isClaimingKeys()`, never on `isPending()`.** `isPending()` stays true for as long as a
-  stalled request is open, so a gate on it would keep blocking keys, or let Enter fall through to a
-  plain paragraph split, in an editor that visibly has no menu.
-- **Tests that pin it:** `use-editor-context-menu.hook.test.tsx` (the claim, its two-second bound,
-  Escape); "the keys the editor acts on" in `platform-scripture-editor.web-view.test.tsx` (Enter,
-  `\` and Ctrl+T in the main text, during the claim and after it lapses);
-  `editor-context-menu-gates.contract.test.ts` (the inline markers menu and the insert-comment
-  chord, which a mounted test cannot observe); `footnote-editor.context-menu-gate.test.tsx` (`\`
-  and Enter in the footnote editor).
+**Keys typed between the right-click and the menu taking focus reach the editor.** The editor's
+right-click menu is the platform's context menu, opened by `useEditorContextMenu`
+(`lib/platform-bible-react`). It opens in the app window, not in the tab's frame; once it is open it
+holds focus there and no key reaches the editor. The gap before that is one round trip for the menu
+data, tens of milliseconds, and nothing holds the keyboard in it: a key typed then is an ordinary
+key, so the `\` and Enter palettes, the inline markers menu and the editor chords run as with no
+menu. A hold would drop typing whenever a menu is slow. Tests that pin it:
+`use-editor-context-menu.hook.test.tsx` ("keys typed while a request is open") and "the keys the
+editor acts on" in `platform-scripture-editor.web-view.test.tsx`.
 
 A `FootnoteEditor` that shows the editor package's own right-click menu (`hasBuiltInContextMenu`,
 on by default; the app turns it off) gates on that menu instead: `isEditorContextMenuOpenFor`
