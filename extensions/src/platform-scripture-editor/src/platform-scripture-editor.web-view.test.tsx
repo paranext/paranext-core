@@ -2034,6 +2034,25 @@ describe('Scripture editor right-click menu', () => {
         expect(execCommand).not.toHaveBeenCalled();
       });
 
+      it('returns to the main text when the pane stops rendering while its toggle stays on', async () => {
+        const { row, rerender } = await renderWithReadOnlyRow();
+        await reportMainSelection(selectionRange);
+        await selectIn(row, { collapsed: true });
+        expect(lastPublished(HAS_SELECTION)).toBe(false);
+
+        // The chapter subscription delivers no text, so the pane is not rendered although it is
+        // still switched on. Same project, book and chapter, so nothing resets the target: only the
+        // recheck on the pane's rendered state can return it to the main text, whose selection is
+        // a range.
+        // The data provider's "no value" for this data type
+        // eslint-disable-next-line no-null/no-null
+        chapterUsjValue.current = null;
+        await rerender({ state: { footnotesPaneVisible: true, viewType: 'standard' } });
+
+        expect(screen.queryAllByRole('option')).toHaveLength(0);
+        expect(lastPublished(HAS_SELECTION)).toBe(true);
+      });
+
       it('goes back to the main text after the chapter changes', async () => {
         const { main, row, rerender } = await renderWithReadOnlyRow();
         main.setLiveSelection(selectionRange);
