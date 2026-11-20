@@ -1,6 +1,6 @@
 /**
  * Overlay service host - renderer-only service that manages overlay lifecycle. Handles context
- * menus, modal dialogs, and popovers rendered outside iframe boundaries.
+ * menus, tab menus, modal dialogs, and popovers rendered outside iframe boundaries.
  *
  * Includes:
  *
@@ -42,6 +42,8 @@ import {
 import type {
   LanguageStrings,
   Localized,
+  MenuItemContainingCommand,
+  MultiColumnMenu,
   PlatformError,
   SingleColumnMenu,
 } from 'platform-bible-utils';
@@ -57,6 +59,7 @@ import {
   OverlayEntry,
   PopoverContent,
   PopoverRequest,
+  TabMenuOverlayOptions,
 } from './overlay.service-model';
 import { filterPaletteItems, getPaletteFilterMode } from './overlay-palette-filter.util';
 import { convertContributionToContextMenuItems } from './overlay-menu-converter';
@@ -64,6 +67,7 @@ import {
   validateCommandPaletteRequest,
   validateContextMenuItems,
   validatePopoverRequest,
+  validateTabMenu,
 } from './overlay-validation';
 import {
   addOverlay,
@@ -130,9 +134,9 @@ function isWithinOverlayCreationGrace(): boolean {
  * an overlay rather than clicking away from it.
  *
  * The scroll listener deliberately keeps its own, narrower selector: it asks whether the scroll
- * happened inside content that is itself scrollable (a popover or a command palette list), not
- * whether the event touched an overlay, and widening it to the host container would change which
- * scrolls dismiss a context menu.
+ * happened inside content that is itself scrollable (a popover, a command palette list or a tab
+ * menu), not whether the event touched an overlay, and widening it to the host container would
+ * change which scrolls dismiss a context menu.
  */
 const OVERLAY_CONTENT_SELECTOR =
   '[data-overlay-host], [data-overlay-popover], [data-overlay-command-palette], [data-radix-popper-content-wrapper]';
@@ -495,8 +499,9 @@ function dismissAll(...types: OverlayEntry['type'][]): void {
 }
 
 /**
- * Dismiss the overlays that clicking away or pressing Escape closes: context menus, command
- * palettes, and popovers. Modal dialogs are exempt — they are dismissed by their own shell.
+ * Dismiss the overlays that clicking away or pressing Escape closes: context menus, tab menus,
+ * command palettes, and popovers. Modal dialogs are exempt — they are dismissed by their own
+ * shell.
  *
  * A popover that opted out with `dismissOnClickOutside: false` survives a click away but not
  * Escape, matching the popover component's own Escape handler, which dismisses regardless of that
@@ -522,7 +527,11 @@ function dismissTransientOverlays(
   };
   getOverlays().forEach((overlay) => {
     if (onlyIds && !onlyIds.has(overlay.id)) return;
-    if (overlay.type === 'contextMenu' || overlay.type === 'commandPalette') {
+    if (
+      overlay.type === 'contextMenu' ||
+      overlay.type === 'tabMenu' ||
+      overlay.type === 'commandPalette'
+    ) {
       dismiss(overlay);
       return;
     }
@@ -696,6 +705,80 @@ async function showContextMenu(
   }
 
   return selectedCommand;
+}
+
+/**
+ * Shows a WebView's tab menu over the whole window and settles with the item the user picked. See
+ * {@link IOverlayService.showTabMenu}.
+ *
+ * @param menu The localized menu to show
+ * @param webViewId The webViewId that originated the request
+ * @param options Where the menu's trigger is, relative to the WebView's iframe, and whether the
+ *   keyboard opened it
+ * @returns The picked item, or undefined if dismissed
+ */
+async function showTabMenu(
+  menu: Localized<MultiColumnMenu>,
+  webViewId: string,
+  options: TabMenuOverlayOptions,
+): Promise<Localized<MenuItemContainingCommand> | undefined> {
+  if (!isWebViewVisible(webViewId)) {
+    throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
+  }
+
+  if (!debounceCheck('tabMenu', webViewId)) {
+    throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
+  }
+
+  validateTabMenu(menu, options?.anchor);
+
+  getOverlaysByWebView(webViewId)
+    .filter((o) => o.type === 'tabMenu')
+    .forEach((existing) => {
+      rejectAndRemoveOverlay(
+        existing.id,
+        newPlatformError('Overlay was replaced by a new request', ABORTED),
+      );
+    });
+
+  const overlayId = newGuid();
+  saveFocus(overlayId, webViewId);
+
+  const { width, height } = options.anchor;
+  const { x, y } = translateCoordinates(webViewId, options.anchor);
+
+  announceLocalizedToScreenReader('%overlay_aria_tabMenuOpened%');
+  noteOverlayCreated(overlayId);
+
+  // Focusing the web view below blurs this window synchronously, and the blur dismissal settles every
+  // open tab menu, this one included, while the store still holds it. Only the first settle counts.
+  let isSettled = false;
+  return new Promise((resolve, reject) => {
+    addOverlay({
+      type: 'tabMenu',
+      id: overlayId,
+      webViewId,
+      menu,
+      anchor: { x, y, width, height },
+      focusFirstItem: options.focusFirstItem ?? false,
+      resolve: (item) => {
+        if (isSettled) return;
+        isSettled = true;
+        // The WebView runs the picked item as soon as this settles, and some items act on its own
+        // document (the clipboard needs that document focused), so focus goes back synchronously
+        // here rather than waiting for the window service below
+        if (item) getWebViewIframe(webViewId)?.focus();
+        settleTransientOverlayFocus(overlayId, item !== undefined);
+        resolve(item);
+      },
+      reject: (reason?: unknown) => {
+        if (isSettled) return;
+        isSettled = true;
+        settleTransientOverlayFocus(overlayId, false);
+        reject(reason);
+      },
+    });
+  });
 }
 
 /**
@@ -1281,6 +1364,7 @@ async function dismissCommandPalette(webViewId: string): Promise<void> {
 /** The overlay service instance exposed on papi */
 export const overlayService: IOverlayService = {
   showContextMenu,
+  showTabMenu,
   showPopover,
   updatePopover,
   dismissPopover,
@@ -1416,14 +1500,17 @@ function registerAutoDismissListeners(): void {
   window.addEventListener(
     'scroll',
     (e) => {
-      // Don't dismiss overlays when scrolling inside overlay content (e.g., popover with overflow)
+      // Don't dismiss overlays when scrolling inside overlay content (e.g., popover with overflow,
+      // or a tab menu taller than the window)
       if (
         e.target instanceof Element &&
-        e.target.closest('[data-overlay-popover], [data-overlay-command-palette]')
+        e.target.closest(
+          '[data-overlay-popover], [data-overlay-command-palette], [data-overlay-tab-menu]',
+        )
       )
         return;
 
-      dismissAll('contextMenu', 'popover');
+      dismissAll('contextMenu', 'tabMenu', 'popover');
     },
     { capture: true },
   );
@@ -1484,7 +1571,7 @@ function registerAutoDismissListeners(): void {
       const active = document.activeElement;
       if (active?.closest(OVERLAY_CONTENT_SELECTOR)) return;
 
-      dismissAll('contextMenu', 'commandPalette', 'popover');
+      dismissAll('contextMenu', 'tabMenu', 'commandPalette', 'popover');
     })
     .catch((err) => logger.warn(`Failed to subscribe to window focus changes: ${err}`));
 }

@@ -13101,9 +13101,20 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * so this service provides a way for them to request overlays that the renderer hosts on their
    * behalf.
    */
-  import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+  import {
+    Localized,
+    LocalizeKey,
+    MenuItemContainingCommand,
+    MultiColumnMenu,
+    PaletteItem,
+    PlatformError,
+  } from 'platform-bible-utils';
   import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
-  import type { PaletteFilterMode } from 'platform-bible-react/experimental';
+  import type {
+    PaletteFilterMode,
+    TabMenuOverlayOptions,
+    TabMenuTriggerRect,
+  } from 'platform-bible-react/experimental';
   import type { ReactElement } from 'react';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   /**
@@ -13353,9 +13364,14 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    */
   export type { PaletteFilterMode };
   /**
+   * Re-exported from `platform-bible-react`, whose tab menu trigger builds these options, so what the
+   * trigger sends and what {@link IOverlayService.showTabMenu} accepts cannot drift apart.
+   */
+  export type { TabMenuOverlayOptions, TabMenuTriggerRect };
+  /**
    *
-   * Service for showing overlays (context menus, popovers, command palettes) that render outside
-   * iframe boundaries in the renderer's top-level document. Renderer-only service.
+   * Service for showing overlays (context menus, tab menus, popovers, command palettes) that render
+   * outside iframe boundaries in the renderer's top-level document. Renderer-only service.
    *
    * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
    * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -13363,9 +13379,9 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * renderer's React tree. Each method returns a promise that resolves when the user interacts with
    * the overlay or it is dismissed.
    *
-   * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
-   * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
-   * one and rejects its promise with a PlatformError with code ABORTED.
+   * Only one overlay of each type (context menu, tab menu, popover, command palette) can be active
+   * per WebView at a time. Requesting a new overlay of the same type from the same WebView replaces
+   * the previous one and rejects its promise with a PlatformError with code ABORTED.
    */
   export interface IOverlayService {
     /**
@@ -13394,6 +13410,43 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         };
       },
     ): Promise<string | undefined>;
+    /**
+     * Shows one of a WebView's tab toolbar menus over the whole window, so a narrow tab cannot cut it
+     * or its submenus off. Laid out as the tab menu is in the WebView.
+     *
+     * Unlike {@link showContextMenu}, this runs no command: it settles with the item the user picked
+     * and the WebView runs it, so a handler that acts inside the WebView (one that needs the click's
+     * user activation, for the clipboard) still can. Focus is back in the WebView by the time it
+     * settles with a pick.
+     *
+     * In a WebView, pass `TabToolbar` or `TabFloatingMenu` an `openMenuInOverlay` of `(menu, options)
+     * => papi.overlays.showTabMenu(menu, webViewId, options)` rather than calling it yourself.
+     *
+     * The menu shows the data it was opened with: changes to the menu while it is open (an item's
+     * enabled or checked state, for example) appear the next time it opens.
+     *
+     * The menu is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+     * at.
+     *
+     * @param menu The localized menu to show, as the WebView would show it
+     * @param webViewId The ID of the WebView requesting the menu. Pass `globalThis.webViewId` from
+     *   within a WebView iframe.
+     * @param options Where the menu's trigger is (`anchor`, in pixels relative to the WebView's
+     *   iframe; the menu opens below it, aligned with its start edge), and whether it was opened from
+     *   the keyboard (`focusFirstItem`, so the menu opens with its first item focused).
+     * @returns The item the user picked, or `undefined` if the menu closed without a pick
+     * @throws PlatformError with code FAILED_PRECONDITION if the requesting WebView is not visible
+     * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+     *   debounce cooldown
+     * @throws PlatformError with code INVALID_ARGUMENT if the menu is empty or too large
+     * @throws PlatformError with code ABORTED if replaced by another tab menu from the same WebView
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    showTabMenu(
+      menu: Localized<MultiColumnMenu>,
+      webViewId: string,
+      options: TabMenuOverlayOptions,
+    ): Promise<Localized<MenuItemContainingCommand> | undefined>;
     /**
      * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
      * return immediately with an overlay ID rather than waiting for dismissal. Use
@@ -13517,6 +13570,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * Discriminated union on `type`:
    *
    * - `'contextMenu'` — An active context menu with translated position and menu items.
+   * - `'tabMenu'` — An active tab menu with its menu data and the translated trigger rectangle.
    * - `'modalDialog'` — An active modal dialog with its type-specific options.
    * - `'popover'` — An active popover with mutable `content` (updatable via `updatePopover`).
    * - `'commandPalette'` — An active command palette with searchable/filterable items.
@@ -13547,6 +13601,23 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         };
         /** Settles the caller's promise with the selected command string, or `undefined` if dismissed */
         resolve: (result: string | undefined) => void;
+        /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+        reject: (error: PlatformError) => void;
+      }
+    | {
+        type: 'tabMenu';
+        /** Unique overlay identifier generated by the service */
+        id: string;
+        /** The WebView that requested this overlay. Used to enforce one-per-type-per-WebView. */
+        webViewId: string;
+        /** The localized menu to render */
+        menu: Localized<MultiColumnMenu>;
+        /** The trigger's rectangle in the document (translated from iframe coordinates) */
+        anchor: TabMenuTriggerRect;
+        /** Whether the menu opens with its first item focused, because the keyboard opened it */
+        focusFirstItem: boolean;
+        /** Settles the caller's promise with the picked item, or `undefined` if dismissed */
+        resolve: (item: Localized<MenuItemContainingCommand> | undefined) => void;
         /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
         reject: (error: PlatformError) => void;
       }
@@ -13635,6 +13706,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    */
   export type OverlayResolveType = {
     contextMenu: string | undefined;
+    tabMenu: Localized<MenuItemContainingCommand> | undefined;
     modalDialog: unknown;
     popover: string | undefined;
     commandPalette: string | undefined;
@@ -14304,6 +14376,8 @@ declare module '@papi/core' {
     PopoverAction,
     PopoverContent,
     PopoverRequest,
+    TabMenuOverlayOptions,
+    TabMenuTriggerRect,
   } from 'renderer/services/overlays/overlay.service-model';
   export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
   export type {
@@ -15885,6 +15959,11 @@ declare module 'renderer/services/overlays/overlay-menu-converter' {
   ): OverlayContextMenuItem[];
 }
 declare module 'renderer/services/overlays/overlay-validation' {
+  /**
+   * Validation functions for overlay service requests. Validates context menu items count, nesting
+   * depth, and label lengths.
+   */
+  import { type Localized, type MultiColumnMenu } from 'platform-bible-utils';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   import {
     CommandPaletteRequest,
@@ -15897,6 +15976,17 @@ declare module 'renderer/services/overlays/overlay-validation' {
    * @throws PlatformError with code INVALID_ARGUMENT if validation fails
    */
   export function validateContextMenuItems(items: OverlayContextMenuItem[]): void;
+  /**
+   * Validates a tab menu and the anchor it opens at: the menu's shape (columns, groups and items as
+   * the tab menu reads them), its item count and label lengths, that no submenu contains itself, and
+   * that the anchor is a rectangle of finite numbers. The menu comes from a WebView but renders in
+   * the window, so anything here that would throw while rendering must be refused up front.
+   *
+   * @param menu The tab menu to validate
+   * @param anchor The rectangle of the menu's trigger
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validateTabMenu(menu: Localized<MultiColumnMenu>, anchor: unknown): void;
   /**
    * Recursively validates menu items at a given depth.
    *
@@ -16412,8 +16502,8 @@ declare module '@papi/frontend' {
     window: IWindowService;
     /**
      *
-     * Service for showing overlays (context menus, popovers, command palettes) that render outside
-     * iframe boundaries in the renderer's top-level document. Renderer-only service.
+     * Service for showing overlays (context menus, tab menus, popovers, command palettes) that render
+     * outside iframe boundaries in the renderer's top-level document. Renderer-only service.
      *
      * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
      * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -16421,9 +16511,9 @@ declare module '@papi/frontend' {
      * renderer's React tree. Each method returns a promise that resolves when the user interacts with
      * the overlay or it is dismissed.
      *
-     * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
-     * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
-     * one and rejects its promise with a PlatformError with code ABORTED.
+     * Only one overlay of each type (context menu, tab menu, popover, command palette) can be active
+     * per WebView at a time. Requesting a new overlay of the same type from the same WebView replaces
+     * the previous one and rejects its promise with a PlatformError with code ABORTED.
      */
     overlays: IOverlayService;
   };
@@ -16616,8 +16706,8 @@ declare module '@papi/frontend' {
   export const window: IWindowService;
   /**
    *
-   * Service for showing overlays (context menus, popovers, command palettes) that render outside
-   * iframe boundaries in the renderer's top-level document. Renderer-only service.
+   * Service for showing overlays (context menus, tab menus, popovers, command palettes) that render
+   * outside iframe boundaries in the renderer's top-level document. Renderer-only service.
    *
    * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
    * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -16625,9 +16715,9 @@ declare module '@papi/frontend' {
    * renderer's React tree. Each method returns a promise that resolves when the user interacts with
    * the overlay or it is dismissed.
    *
-   * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
-   * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
-   * one and rejects its promise with a PlatformError with code ABORTED.
+   * Only one overlay of each type (context menu, tab menu, popover, command palette) can be active
+   * per WebView at a time. Requesting a new overlay of the same type from the same WebView replaces
+   * the previous one and rejects its promise with a PlatformError with code ABORTED.
    */
   export const overlays: IOverlayService;
   export type Papi = typeof papi;

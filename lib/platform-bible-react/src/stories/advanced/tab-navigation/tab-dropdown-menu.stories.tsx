@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import React, { useState } from 'react';
-import TabDropdownMenu from '@/components/advanced/menus/tab-dropdown-menu.component';
+import TabDropdownMenu, {
+  AnchoredTabMenu,
+  OpenTabMenuInOverlay,
+  TabMenuOverlayOptions,
+} from '@/components/advanced/menus/tab-dropdown-menu.component';
 import type { Localized, MultiColumnMenu, MenuItemContainingCommand } from 'platform-bible-utils';
 import { Settings, Home, FileText } from 'lucide-react';
 
@@ -606,6 +610,83 @@ export const DynamicItemStates: Story = {
       description: {
         story:
           'Runtime-computed disabled and checked states in a tab dropdown menu. Disabled items are dimmed and unclickable; checkbox items show a checkmark when checked.',
+      },
+    },
+  },
+};
+
+/** A tab menu request the story's stand-in overlay is showing */
+type OverlayRequest = {
+  menu: Localized<MultiColumnMenu>;
+  options: TabMenuOverlayOptions;
+  settle: (item: Localized<MenuItemContainingCommand> | undefined) => void;
+};
+
+/**
+ * A narrow tab whose menu opens through `openMenuInOverlay`. In Platform.Bible the overlay service
+ * draws the menu in the window, outside the web view; here the story draws it with
+ * `AnchoredTabMenu` at the rectangle the trigger reports, which is what the overlay service
+ * renders.
+ */
+function OverlayDemo() {
+  const [request, setRequest] = useState<OverlayRequest>();
+  const [lastCommand, setLastCommand] = useState('');
+
+  const openMenuInOverlay: OpenTabMenuInOverlay = (menu, options) =>
+    new Promise((resolve) => {
+      setRequest({
+        menu,
+        options,
+        settle: (item) => {
+          setRequest(undefined);
+          resolve(item);
+        },
+      });
+    });
+
+  return (
+    <div className="tw:space-y-4">
+      <div className="tw:w-40 tw:overflow-hidden tw:rounded tw:border">
+        <div className="tw:flex tw:items-center tw:border-b tw:p-1">
+          <TabDropdownMenu
+            menuData={createSampleMenuData()}
+            onSelectMenuItem={(item) => setLastCommand(item.command)}
+            tabLabel="Project"
+            showSectionHeadings
+            openMenuInOverlay={openMenuInOverlay}
+          />
+          <span className="tw:truncate tw:px-2 tw:text-sm">A narrow tab</span>
+        </div>
+        <p className="tw:p-2 tw:text-xs tw:text-muted-foreground">
+          The menu is wider than this tab and is not clipped by it.
+        </p>
+      </div>
+      {request && (
+        <AnchoredTabMenu
+          menuData={request.menu}
+          anchor={request.options.anchor}
+          focusFirstItem={request.options.focusFirstItem}
+          // The handler's type names the unlocalized item; the menu data here is localized
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          onSelectMenuItem={(item) => request.settle(item as Localized<MenuItemContainingCommand>)}
+          onClose={() => request.settle(undefined)}
+          showSectionHeadings
+        />
+      )}
+      <div className="tw:text-sm">
+        <strong>Last Command:</strong> {lastCommand || 'None'}
+      </div>
+    </div>
+  );
+}
+
+export const OpenedInOverlay: Story = {
+  render: () => <OverlayDemo />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'With `openMenuInOverlay`, the trigger hands the menu and its own rectangle to an overlay instead of opening the menu in its own document, and runs the item the overlay hands back. The overlay draws `AnchoredTabMenu`, with the same sections, headings and submenus. Opened from the keyboard (Enter, Space or ArrowDown), the menu opens with its first item focused.',
       },
     },
   },

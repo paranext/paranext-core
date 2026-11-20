@@ -7,6 +7,7 @@ import { OverlayCommandPalette } from '@renderer/components/overlays/overlay-com
 import { OverlayContextMenu } from '@renderer/components/overlays/overlay-context-menu.component';
 import { OverlayModalDialog } from '@renderer/components/overlays/overlay-modal-dialog.component';
 import { OverlayPopover } from '@renderer/components/overlays/overlay-popover.component';
+import { OverlayTabMenu } from '@renderer/components/overlays/overlay-tab-menu.component';
 import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
 import { getOverlays, subscribe } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
@@ -43,6 +44,9 @@ export function OverlayHost() {
       {overlays.map((overlay) => {
         if (overlay.type === 'contextMenu') {
           return <OverlayContextMenu key={overlay.id} overlay={overlay} />;
+        }
+        if (overlay.type === 'tabMenu') {
+          return <OverlayTabMenu key={overlay.id} overlay={overlay} />;
         }
         if (overlay.type === 'modalDialog') {
           return <OverlayModalDialog key={overlay.id} overlay={overlay} />;

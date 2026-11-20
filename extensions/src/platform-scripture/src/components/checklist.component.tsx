@@ -320,6 +320,7 @@ export function ChecklistTool({
   matchCountLabel,
   onRetry,
   projectMenuData,
+  openProjectMenuInOverlay,
   onSelectProjectMenuItem,
   onEditLinkClick,
   onGotoLinkClick,
@@ -726,6 +727,7 @@ export function ChecklistTool({
           // present even when no view-info menu renders, so pass a no-op.
           onSelectViewInfoMenuItem={() => undefined}
           projectMenuData={projectMenuData}
+          openMenuInOverlay={openProjectMenuInOverlay}
           startAreaChildren={renderToolbarStart()}
           endAreaChildren={renderToolbarEnd()}
         />

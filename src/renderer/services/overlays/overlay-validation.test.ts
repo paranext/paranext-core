@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { isPlatformError, INVALID_ARGUMENT } from 'platform-bible-utils';
+import {
+  isPlatformError,
+  INVALID_ARGUMENT,
+  Localized,
+  MenuItemContainingCommand,
+  MenuItemContainingSubmenu,
+  MultiColumnMenu,
+} from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 import { CommandPaletteRequest, PopoverRequest } from './overlay.service-model';
 import {
@@ -7,6 +14,7 @@ import {
   validateContextMenuItems,
   validateMenuItems,
   validatePopoverRequest,
+  validateTabMenu,
 } from './overlay-validation';
 
 /* eslint vitest/expect-expect: ["error", { assertFunctionNames: ["expect", "expectValidationError"] }] */
@@ -148,6 +156,128 @@ describe('overlay-validation', () => {
       ];
       // At depth 2, submenus should be rejected (max 2 levels)
       expectValidationError(() => validateMenuItems(items, 2));
+    });
+  });
+
+  describe('validateTabMenu', () => {
+    const ANCHOR = { x: 4, y: 2, width: 32, height: 28 };
+    const tabMenuWith = (
+      items: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>[],
+      groups: Localized<MultiColumnMenu>['groups'] = {
+        'ext.group': { column: 'ext.column', order: 1 },
+      },
+    ): Localized<MultiColumnMenu> => ({
+      columns: { 'ext.column': { label: 'Column', order: 1 } },
+      groups,
+      items,
+    });
+    const itemLabeled = (label: string, order = 1): Localized<MenuItemContainingCommand> => ({
+      label,
+      localizeNotes: '',
+      group: 'ext.group',
+      order,
+      command: 'ext.command',
+    });
+    const submenu = (id: string, group: string): Localized<MenuItemContainingSubmenu> => ({
+      id,
+      label: id,
+      localizeNotes: '',
+      group,
+      order: 1,
+    });
+
+    it('accepts a menu with items, including nested submenus', () => {
+      expect(() => validateTabMenu(tabMenuWith([itemLabeled('Copy')]), ANCHOR)).not.toThrow();
+      const nested = tabMenuWith(
+        [submenu('ext.outer', 'ext.group'), submenu('ext.inner', 'ext.outerGroup')],
+        {
+          'ext.group': { column: 'ext.column', order: 1 },
+          'ext.outerGroup': { menuItem: 'ext.outer', order: 1 },
+          'ext.innerGroup': { menuItem: 'ext.inner', order: 1 },
+        },
+      );
+      expect(() => validateTabMenu(nested, ANCHOR)).not.toThrow();
+    });
+
+    it('rejects a menu with no items', () => {
+      expectValidationError(() => validateTabMenu(tabMenuWith([]), ANCHOR), 'Menu has no items');
+    });
+
+    it('rejects a menu with more than 200 items', () => {
+      const items = Array.from({ length: 201 }, (_, index) => itemLabeled('Item', index));
+      expect(() => validateTabMenu(tabMenuWith(items.slice(0, 200)), ANCHOR)).not.toThrow();
+      expectValidationError(
+        () => validateTabMenu(tabMenuWith(items), ANCHOR),
+        'Too many menu items (max 200)',
+      );
+    });
+
+    it('rejects an item label longer than 500 characters', () => {
+      expect(() =>
+        validateTabMenu(tabMenuWith([itemLabeled('a'.repeat(500))]), ANCHOR),
+      ).not.toThrow();
+      expectValidationError(() =>
+        validateTabMenu(tabMenuWith([itemLabeled('a'.repeat(501))]), ANCHOR),
+      );
+    });
+
+    it('rejects a menu missing its columns or groups, or with an item that has no group', () => {
+      const menu = tabMenuWith([itemLabeled('Copy')]);
+      // Each case deliberately breaks the type, as data arriving from a web view might
+      /* eslint-disable no-type-assertion/no-type-assertion */
+      expectValidationError(
+        () => validateTabMenu({ ...menu, columns: undefined } as unknown as typeof menu, ANCHOR),
+        'Menu has no columns',
+      );
+      expectValidationError(
+        () => validateTabMenu({ ...menu, groups: undefined } as unknown as typeof menu, ANCHOR),
+        'Menu groups must be objects',
+      );
+      expectValidationError(
+        () =>
+          validateTabMenu(
+            {
+              ...menu,
+              items: [{ ...itemLabeled('Copy'), group: undefined }],
+            } as unknown as typeof menu,
+            ANCHOR,
+          ),
+        'Every menu item needs a group',
+      );
+      /* eslint-enable no-type-assertion/no-type-assertion */
+    });
+
+    it('rejects a submenu that contains itself, directly or through another submenu', () => {
+      const direct = tabMenuWith([submenu('ext.loop', 'ext.loopGroup')], {
+        'ext.loopGroup': { menuItem: 'ext.loop', order: 1 },
+      });
+      expectValidationError(
+        () => validateTabMenu(direct, ANCHOR),
+        'Submenu ext.loop contains itself',
+      );
+      const indirect = tabMenuWith(
+        [submenu('ext.a', 'ext.bGroup'), submenu('ext.b', 'ext.aGroup')],
+        {
+          'ext.aGroup': { menuItem: 'ext.a', order: 1 },
+          'ext.bGroup': { menuItem: 'ext.b', order: 1 },
+        },
+      );
+      expectValidationError(() => validateTabMenu(indirect, ANCHOR));
+    });
+
+    it('rejects an anchor that is not a rectangle of finite numbers', () => {
+      const menu = tabMenuWith([itemLabeled('Copy')]);
+      [
+        undefined,
+        { x: 4, y: 2 },
+        { ...ANCHOR, width: Number.NaN },
+        { ...ANCHOR, y: Infinity },
+      ].forEach((anchor) =>
+        expectValidationError(
+          () => validateTabMenu(menu, anchor),
+          'Anchor must have finite x, y, width and height',
+        ),
+      );
     });
   });
 

@@ -2,6 +2,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuContentProps,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -10,6 +11,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
+  DropdownMenuSubContentProps,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
@@ -20,8 +22,16 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { MenuIcon } from 'lucide-react';
-import { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
-import { Fragment, ReactNode, useId, useMemo, useRef } from 'react';
+import {
+  ABORTED,
+  FAILED_PRECONDITION,
+  isPlatformError,
+  Localized,
+  MenuItemContainingCommand,
+  MultiColumnMenu,
+  RESOURCE_EXHAUSTED,
+} from 'platform-bible-utils';
+import { Fragment, ReactNode, useCallback, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import {
@@ -31,6 +41,7 @@ import {
   showFocusRing,
 } from '@/utils/focus.util';
 import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   buildMenuTree,
@@ -44,6 +55,26 @@ import {
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
+
+/**
+ * Props a tab menu passes to the content of each of its submenus
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type TabMenuSubmenuContentProps = Omit<DropdownMenuSubContentProps, 'children'> & {
+  /** Any `data-*` attribute, for whoever needs to recognize the submenu's content */
+  [dataAttribute: `data-${string}`]: string | undefined;
+};
+
+/**
+ * Whether an error from opening a tab menu in the overlay is one of the overlay service's expected
+ * refusals: a hidden tab, a repeat inside its cooldown, or a menu that another request replaced
+ */
+const isExpectedOverlayRefusal = (error: unknown) =>
+  isPlatformError(error) &&
+  (error.code === FAILED_PRECONDITION ||
+    error.code === RESOURCE_EXHAUSTED ||
+    error.code === ABORTED);
 
 const createDropdownSeparator = (groupKey: string) => (
   <DropdownMenuSeparator key={`separator-${groupKey}`} />
@@ -65,11 +96,13 @@ const withoutCheckedState = (item: MenuItemNodeSource) => ({ ...item, checked: u
  *   sorted
  * @param leadingSlot The leading icon slot of the list these items render in. A submenu works out
  *   its own from its items.
+ * @param submenuContentProps Props for the content of every submenu, at any depth
  */
 const getGroupContent = (
   groups: MenuGroupNode[],
   onSelectMenuItem: SelectMenuItemHandler,
   leadingSlot: LeadingIconSlot,
+  submenuContentProps?: TabMenuSubmenuContentProps,
 ): GroupContent<ReactNode>[] =>
   groups.map(({ groupKey, items }) => ({
     groupKey,
@@ -162,7 +195,7 @@ const getGroupContent = (
           )}
 
           <DropdownMenuPortal>
-            <DropdownMenuSubContent>
+            <DropdownMenuSubContent {...submenuContentProps}>
               {joinGroupsWithSeparators(
                 getGroupContent(
                   subGroups,
@@ -172,6 +205,7 @@ const getGroupContent = (
                       group.items.map(({ item: subItem }) => withoutCheckedState(subItem)),
                     ),
                   ),
+                  submenuContentProps,
                 ),
                 createDropdownSeparator,
               )}
@@ -182,13 +216,226 @@ const getGroupContent = (
     }),
   }));
 
-export type TabDropdownMenuProps = {
+export type TabDropdownMenuItemsProps = {
   /** The handler to use for menu commands */
   onSelectMenuItem: SelectMenuItemHandler;
 
-  /** The menu data to show on the dropdown menu */
+  /** The menu data to show */
   menuData: Localized<MultiColumnMenu>;
 
+  /**
+   * Whether to head each section with its column label. Only takes effect when two or more sections
+   * have items, since a lone section has nothing to be told apart from.
+   */
+  showSectionHeadings?: boolean;
+
+  /**
+   * Props for the content of every submenu. Submenus render in their own portal, outside the menu's
+   * content, so anything that must recognize all of the menu's surfaces needs them here as well.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  submenuContentProps?: TabMenuSubmenuContentProps;
+};
+
+/**
+ * The body of a tab menu, for rendering inside a `DropdownMenuContent`; laid out as
+ * {@link TabDropdownMenu} describes. Shared by `TabDropdownMenu` and {@link AnchoredTabMenu} so the
+ * two cannot drift.
+ */
+export function TabDropdownMenuItems({
+  onSelectMenuItem,
+  menuData,
+  showSectionHeadings = false,
+  submenuContentProps,
+}: TabDropdownMenuItemsProps) {
+  const headingIdPrefix = useId();
+  const menuTree = useMemo(() => buildMenuTree(menuData), [menuData]);
+  const sections = getMenuSectionsWithItems(menuData);
+  const showHeadings = showSectionHeadings && sections.length > 1;
+  const groupsByColumn = new Map(
+    menuTree.columns.map(({ columnKey, groups }) => [columnKey, groups]),
+  );
+  const groupsOfSection = (columnKey: string) => groupsByColumn.get(columnKey) ?? [];
+  // Every section shares one content, so one slot keeps all their labels aligned
+  const leadingSlot = getLeadingIconSlot(
+    sections.flatMap(({ columnKey }) =>
+      groupsOfSection(columnKey).flatMap((group) =>
+        group.items.map(({ item }) => withoutCheckedState(item)),
+      ),
+    ),
+  );
+
+  return sections.map(({ columnKey, label, isHeaderHidden }, index) => {
+    const headingId = `${headingIdPrefix}-${columnKey}`;
+    return (
+      <Fragment key={columnKey}>
+        <DropdownMenuGroup aria-labelledby={showHeadings ? headingId : undefined}>
+          {showHeadings && (
+            // A section shown without its heading keeps it for assistive technology only
+            <DropdownMenuLabel id={headingId} className={isHeaderHidden ? 'tw:sr-only' : undefined}>
+              {label}
+            </DropdownMenuLabel>
+          )}
+          <TooltipProvider>
+            {getGroupContent(
+              groupsOfSection(columnKey),
+              onSelectMenuItem,
+              leadingSlot,
+              submenuContentProps,
+            ).flatMap((group) => group.items)}
+          </TooltipProvider>
+        </DropdownMenuGroup>
+
+        {index < sections.length - 1 && <DropdownMenuSeparator />}
+      </Fragment>
+    );
+  });
+}
+
+/**
+ * Where a tab menu's trigger sits, in pixels relative to the viewport of the document it is in
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type TabMenuTriggerRect = { x: number; y: number; width: number; height: number };
+
+/**
+ * How a tab menu asks to be opened outside its own document. See {@link OpenTabMenuInOverlay}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type TabMenuOverlayOptions = {
+  /** The trigger's rectangle; the menu opens below it, aligned with its start edge */
+  anchor: TabMenuTriggerRect;
+  /** Whether the menu was opened from the keyboard, so it opens with its first item focused */
+  focusFirstItem?: boolean;
+};
+
+/**
+ * Props for {@link AnchoredTabMenu}
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type AnchoredTabMenuProps = TabDropdownMenuItemsProps & {
+  /** The rectangle of the trigger the menu belongs to; the menu opens below it, aligned to its start */
+  anchor: TabMenuTriggerRect;
+
+  /**
+   * Called whenever the menu closes, including right after a pick (after `onSelectMenuItem`).
+   * Ignore it if the pick was already handled.
+   */
+  onClose: () => void;
+
+  /**
+   * Whether the menu opens with its first item focused, as a dropdown opened from the keyboard
+   * does. Otherwise the menu itself takes focus, as after a click.
+   */
+  focusFirstItem?: boolean;
+
+  /**
+   * Props for the menu's content. Its `onCloseAutoFocus` defaults to keeping focus where it is,
+   * since the menu has no real trigger to return focus to.
+   */
+  contentProps?: Omit<DropdownMenuContentProps, 'children'> & {
+    /** Any `data-*` attribute, for whoever needs to recognize the menu's content */
+    [dataAttribute: `data-${string}`]: string | undefined;
+  };
+};
+
+/**
+ * A tab menu that is open from the moment it renders, below a trigger rectangle given in this
+ * document's coordinates rather than below a trigger element. It shows the items as
+ * {@link TabDropdownMenu} does. The overlay service uses it to draw a web view's tab menu over the
+ * whole window, below the rectangle of the trigger inside the web view.
+ *
+ * @experimental This component is unstable and may change or disappear without notice
+ */
+export function AnchoredTabMenu({
+  anchor,
+  onClose,
+  focusFirstItem = false,
+  contentProps,
+  ...itemsProps
+}: AnchoredTabMenuProps) {
+  // Radix moves to the first item only after a keydown in its own document, and the key that
+  // opened this menu may have been pressed in another one (a web view's frame). Wait one frame,
+  // until the portal has mounted the content and Radix has focused the menu panel.
+  const focusFirstItemOnMount = useCallback(
+    (content: HTMLDivElement | null) => {
+      if (!content || !focusFirstItem) return;
+      requestAnimationFrame(() =>
+        content
+          .querySelector<HTMLElement>('[role^="menuitem"]:not([data-disabled])')
+          ?.focus({ preventScroll: true }),
+      );
+    },
+    [focusFirstItem],
+  );
+
+  return (
+    <DropdownMenu
+      open
+      modal={false}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        {/* Stands in for the real trigger, so the menu lines up with it */}
+        <button
+          type="button"
+          style={{
+            position: 'fixed',
+            left: anchor.x,
+            top: anchor.y,
+            width: anchor.width,
+            height: anchor.height,
+            padding: 0,
+            margin: 0,
+            border: 'none',
+            opacity: 0,
+            pointerEvents: 'none',
+          }}
+          aria-hidden
+          tabIndex={-1}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        ref={focusFirstItemOnMount}
+        align="start"
+        side="bottom"
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        {...contentProps}
+      >
+        <TabDropdownMenuItems {...itemsProps} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * Opens a tab menu outside the document its trigger is in, and settles with the item the user
+ * picked, or `undefined` when the menu closed without a pick. The options pass straight through to
+ * `papi.overlays.showTabMenu`.
+ *
+ * In a web view, pass `(menu, options) => papi.overlays.showTabMenu(menu, webViewId, options)`: the
+ * window then draws the menu over every tab, so a narrow tab cannot cut it or its submenus off.
+ *
+ * A rejection is treated as no pick. The trigger expects the overlay service's refusals (a hidden
+ * tab, a repeat inside its cooldown, a menu replaced by another) and reports any other error.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type OpenTabMenuInOverlay = (
+  menuData: Localized<MultiColumnMenu>,
+  options: TabMenuOverlayOptions,
+) => Promise<Localized<MenuItemContainingCommand> | undefined>;
+
+export type TabDropdownMenuProps = Omit<
+  TabDropdownMenuItemsProps,
+  'showSectionHeadings' | 'submenuContentProps'
+> & {
   /** Defines a string value that labels the current element */
   tabLabel: string;
 
@@ -208,7 +455,17 @@ export type TabDropdownMenuProps = {
    */
   showSectionHeadings?: boolean;
 
-  /** Style variant for the app menubar component. */
+  /**
+   * Opens the menu outside this document instead of in it. When set, the trigger hands the menu
+   * data and its own position to this function and passes the item it settles with to
+   * `onSelectMenuItem`; the menu is not rendered here at all. The overlay always heads the sections
+   * with their column labels, whatever `showSectionHeadings` says, and ignores `variant`.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  openMenuInOverlay?: OpenTabMenuInOverlay;
+
+  /** Style variant for the app menubar component. Not applied with `openMenuInOverlay`. */
   variant?: 'default' | 'muted';
 
   buttonVariant?: 'default' | 'ghost' | 'outline' | 'secondary';
@@ -223,7 +480,8 @@ export type TabDropdownMenuProps = {
  * distinguished, while the groups of a submenu are divided by a line. Items show their tooltip on
  * hover and their `shortcut`, if any, at the end of the row. With `showSectionHeadings`, each
  * section is headed by its column label, except a column that sets `isHeaderHidden`, whose label
- * names the section for screen readers only.
+ * names the section for screen readers only. With `openMenuInOverlay`, the menu opens outside this
+ * document instead (in a web view, over the whole window).
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -234,27 +492,11 @@ export default function TabDropdownMenu({
   icon,
   className,
   showSectionHeadings = false,
+  openMenuInOverlay,
   variant,
   buttonVariant = 'ghost',
   id,
 }: TabDropdownMenuProps) {
-  const headingIdPrefix = useId();
-  const menuTree = useMemo(() => buildMenuTree(menuData), [menuData]);
-  const sections = getMenuSectionsWithItems(menuData);
-  const showHeadings = showSectionHeadings && sections.length > 1;
-  const groupsByColumn = new Map(
-    menuTree.columns.map(({ columnKey, groups }) => [columnKey, groups]),
-  );
-  const groupsOfSection = (columnKey: string) => groupsByColumn.get(columnKey) ?? [];
-  // Every section shares one content, so one slot keeps all their labels aligned
-  const leadingSlot = getLeadingIconSlot(
-    sections.flatMap(({ columnKey }) =>
-      groupsOfSection(columnKey).flatMap((group) =>
-        group.items.map(({ item }) => withoutCheckedState(item)),
-      ),
-    ),
-  );
-
   // Radix restores focus to the trigger on every close, and the tab order depends on that. The focus
   // ring does not belong there after a pointer close, though — it would sit on a button the pointer
   // has long left. Mark the trigger so CSS hides the ring, and clear the mark on the next keydown so
@@ -267,6 +509,73 @@ export default function TabDropdownMenu({
   // eslint-disable-next-line no-null/no-null
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const restoreFocusRing = () => showFocusRing(triggerRef.current ?? undefined);
+  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
+  // Whether the overlay was open when the pointer went down on the trigger. Pressing the trigger
+  // dismisses the overlay (focus moves into this frame) before the click arrives, so the click must
+  // not open it again: like a dropdown trigger, a click on an open menu's trigger closes it.
+  const wasOverlayOpenAtPointerDownRef = useRef(false);
+
+  if (openMenuInOverlay) {
+    const openOverlay = async (isFromKeyboard: boolean) => {
+      const trigger = triggerRef.current;
+      if (!trigger || isOverlayOpen) return;
+      const { x, y, width, height } = trigger.getBoundingClientRect();
+      setIsOverlayOpen(true);
+      let pickedItem: Localized<MenuItemContainingCommand> | undefined;
+      try {
+        pickedItem = await openMenuInOverlay(menuData, {
+          anchor: { x, y, width, height },
+          focusFirstItem: isFromKeyboard,
+        });
+      } catch (error) {
+        // The overlay refuses a request it cannot show (a hidden tab, a repeat inside its
+        // cooldown) and drops a menu that another request replaced; either way nothing was picked
+        if (!isExpectedOverlayRefusal(error))
+          console.error('TabDropdownMenu: could not open the menu in the overlay', error);
+      } finally {
+        setIsOverlayOpen(false);
+      }
+      // Only a pick is known to have come from the pointer: an Escape pressed in the overlay never
+      // reaches this frame's modality tracking, and a keyboard user should keep the ring
+      if (pickedItem && getLastInteractionModality() === 'pointer') hideFocusRing(trigger);
+      // Run in the same task the pick settles in: some handlers need the pick's user activation.
+      // The handler's type names the unlocalized item, as for a pick from the in-document menu.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      if (pickedItem) onSelectMenuItem(pickedItem as MenuItemContainingCommand);
+    };
+    return (
+      <Button
+        ref={triggerRef}
+        id={id}
+        aria-label={tabLabel}
+        aria-haspopup="menu"
+        aria-expanded={isOverlayOpen}
+        variant={buttonVariant}
+        size="icon"
+        className={cn(QUIET_FOCUS_RING_SUPPRESSION, className)}
+        onPointerDown={() => {
+          wasOverlayOpenAtPointerDownRef.current = isOverlayOpen;
+        }}
+        onClick={(event) => {
+          // A click that Enter or Space produced carries no click count, and no pointer-down
+          const isFromKeyboard = event.detail === 0;
+          if (!isFromKeyboard && wasOverlayOpenAtPointerDownRef.current) return;
+          openOverlay(isFromKeyboard);
+        }}
+        onKeyDown={(event) => {
+          restoreFocusRing();
+          // Like a dropdown trigger, ArrowDown opens the menu too
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            openOverlay(true);
+          }
+        }}
+        onBlur={restoreFocusRing}
+      >
+        {icon ?? <MenuIcon />}
+      </Button>
+    );
+  }
 
   return (
     <DropdownMenu variant={variant}>
@@ -293,33 +602,11 @@ export default function TabDropdownMenu({
             hideFocusRing(triggerRef.current ?? undefined);
         }}
       >
-        {sections.map(({ columnKey, label, isHeaderHidden }, index) => {
-          const headingId = `${headingIdPrefix}-${columnKey}`;
-          return (
-            <Fragment key={columnKey}>
-              <DropdownMenuGroup aria-labelledby={showHeadings ? headingId : undefined}>
-                {showHeadings && (
-                  // A section shown without its heading keeps it for assistive technology only
-                  <DropdownMenuLabel
-                    id={headingId}
-                    className={isHeaderHidden ? 'tw:sr-only' : undefined}
-                  >
-                    {label}
-                  </DropdownMenuLabel>
-                )}
-                <TooltipProvider>
-                  {getGroupContent(
-                    groupsOfSection(columnKey),
-                    onSelectMenuItem,
-                    leadingSlot,
-                  ).flatMap((group) => group.items)}
-                </TooltipProvider>
-              </DropdownMenuGroup>
-
-              {index < sections.length - 1 && <DropdownMenuSeparator />}
-            </Fragment>
-          );
-        })}
+        <TabDropdownMenuItems
+          menuData={menuData}
+          onSelectMenuItem={onSelectMenuItem}
+          showSectionHeadings={showSectionHeadings}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );
