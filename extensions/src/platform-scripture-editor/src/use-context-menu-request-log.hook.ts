@@ -40,9 +40,9 @@ export type ContextMenuRequestLog = {
 
 /**
  * Logs each context-menu request an editor makes at debug level: when it is made, when it is still
- * still open two seconds later (the menu is still showing or never appeared), and how it settled
- * (see {@link logContextMenuOutcome}). A right-click that showed no menu can then be told apart in
- * the log: never requested, requested and still open with no menu showing, rejected, or dismissed.
+ * open two seconds later (the menu is still showing or never appeared), and how it settled (see
+ * {@link logContextMenuOutcome}). A right-click that showed no menu can then be told apart in the
+ * log: never requested, requested and still open with no menu showing, rejected, or dismissed.
  */
 export function createContextMenuRequestLog({
   webViewId,
