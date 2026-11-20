@@ -51,7 +51,8 @@ export type DictionaryProps = {
   /**
    * Retrieve the entries for the current scope and Scripture reference. This is a callback (not a
    * prop) because the read depends on values (`scope`, `scrRef`) resolved inside this component.
-   * Implementations should resolve a {@link PlatformError} into the `error` field.
+   * Implementations should resolve a {@link PlatformError} into the `error` field. The reference's
+   * verse is only meaningful in verse scope; otherwise it is 0.
    */
   getEntries: (
     scope: DictionaryScope,
@@ -117,11 +118,9 @@ export function Dictionary({
   const [entriesById, setEntriesById] = useState<LexicalEntriesById | undefined>(undefined);
   const [entriesError, setEntriesError] = useState<string | undefined>(undefined);
 
-  // `getEntries`'s selector always reads book+chapterNum but only reads verseNum in `'verse'` scope
-  // (see dictionary.web-view.tsx), so verseNum is frozen to a sentinel (0) outside that scope —
-  // mirroring legacy-comment-manager's comment-list.web-view.tsx — rather than depending on the
-  // whole `scrRef` object, which also changes on every in-chapter verse move and would otherwise
-  // needlessly reload the list (and reset the selected entry) on every one of those.
+  // The list depends on `scopeReference` rather than the whole `scrRef` object, which changes on
+  // every verse move and would otherwise reload the list (and reset the selected entry) on each one
+  // in chapter scope. `getEntries` reads the verse only in verse scope (see dictionary.web-view.tsx).
   //
   // Hidden pane: this reacts to scrRef the same whether or not the tab is visible (rc-dock keeps a
   // hidden pane's iframe mounted and running). That is deliberate, not deferred — the reaction is
@@ -129,9 +128,10 @@ export function Dictionary({
   // the right result the moment the tab is activated. The accepted cost is one query per actual
   // scope/book/chapter change for a tab nobody can currently see; per
   // .claude/rules/cross-view-sync-hidden-views.md this is a documented decision, not an oversight.
-  const scopeVerseNum = scope === 'verse' ? scrRef.verseNum : 0;
+  const scopeReference = useScopeReference(scrRef, scope);
 
   useEffect(() => {
+    if (!scopeReference) return undefined;
     let isActive = true;
     setEntriesById(undefined);
     setEntriesError(undefined);
@@ -143,7 +143,7 @@ export function Dictionary({
       if (pendingSelectionRef.current === pendingSelection) pendingSelectionRef.current = undefined;
     };
     const load = async () => {
-      const result = await getEntries(scope, scrRef);
+      const result = await getEntries(scope, scopeReference);
       if (!isActive) return;
       if (result.error) {
         setEntriesError(result.error);
@@ -154,7 +154,7 @@ export function Dictionary({
 
       // Keep the entry the reader was looking at open, if it is listed here too
       endPendingSelection();
-      if (pendingSelection && isReferenceInScope(pendingSelection.scrRef, scrRef, scope)) {
+      if (pendingSelection && isReferenceInScope(pendingSelection.scrRef, scopeReference, scope)) {
         setSelectedEntry(
           Object.values(result.entriesById)
             .flat()
@@ -170,15 +170,10 @@ export function Dictionary({
     return () => {
       isActive = false;
     };
-    // `scrRef` itself is intentionally not a dependency — see the comment above `scopeVerseNum`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getEntries, scope, scrRef.book, scrRef.chapterNum, scopeVerseNum]);
+  }, [getEntries, scope, scopeReference]);
 
   // `undefined` means "not yet fetched" so we can show the loading state, matching the original.
   const isLoadingEntriesById = !entriesError && entriesById === undefined;
-
-  // Only what decides the scope, so a verse move within the chapter does not re-read every gloss
-  const scopeReference = useScopeReference(scrRef, scope);
 
   // Return all defined entries filtered by searchQuery
   const entriesFiltered = useMemo(() => {
@@ -231,14 +226,18 @@ export function Dictionary({
   const fullDisplayedEntry =
     displayedEntry && fullEntry && isSameEntry(fullEntry, displayedEntry) ? fullEntry : undefined;
 
+  // The entry whose full data is read. A list reload hides the entry for a moment and then lists it
+  // again as a new object, so this changes only when a different entry is displayed, and each entry
+  // is read once.
+  const [entryToReadInFull, setEntryToReadInFull] = useState<Entry | undefined>(undefined);
+  if (displayedEntry && !(entryToReadInFull && isSameEntry(entryToReadInFull, displayedEntry)))
+    setEntryToReadInFull(displayedEntry);
+
   useEffect(() => {
-    if (!displayedEntry) {
-      setFullEntry(undefined);
-      return undefined;
-    }
+    if (!entryToReadInFull) return undefined;
     let isActive = true;
     const load = async () => {
-      const entry = await getFullEntry(displayedEntry);
+      const entry = await getFullEntry(entryToReadInFull);
       if (isActive) setFullEntry(entry);
     };
     load().catch(() => {
@@ -247,7 +246,7 @@ export function Dictionary({
     return () => {
       isActive = false;
     };
-  }, [getFullEntry, displayedEntry]);
+  }, [getFullEntry, entryToReadInFull]);
 
   // An entry opened from a definition link. It is kept apart from `selectedEntry` because it is
   // often outside the current scope, and `selectedEntry` is cleared when it leaves the list.
@@ -261,9 +260,11 @@ export function Dictionary({
     if (linkedEntry) dictionaryEntryRef.current?.scrollTo({ top: 0 });
   }, [linkedEntry]);
 
-  // Whether the shown entry's occurrences are those in the chapter or all of them. It is kept here,
-  // where a list reload does not reset it, but each entry the reader opens starts on the chapter.
+  // Whether the shown entry's occurrences are those in the chapter or all of them, and which of its
+  // senses is selected. They are kept here, where a list reload does not reset them, but each entry
+  // the reader opens starts on the chapter with no sense chosen.
   const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
+  const [selectedSenseId, setSelectedSenseId] = useState<string | undefined>(undefined);
   const shownEntry = linkedEntry ?? displayedEntry;
   const shownEntryKey = shownEntry && `${shownEntry.lexicalReferenceTextId}-${shownEntry.id}`;
   // While the list reloads no entry is shown, so the last entry shown is what tells a new one apart.
@@ -272,6 +273,7 @@ export function Dictionary({
   if (shownEntryKey && shownEntryKey !== lastShownEntryKey) {
     setLastShownEntryKey(shownEntryKey);
     setOccurrenceView('chapter');
+    setSelectedSenseId(undefined);
   }
 
   const handleEntryLinkClick = useCallback(
@@ -321,6 +323,8 @@ export function Dictionary({
           onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
           occurrenceView={occurrenceView}
           onOccurrenceViewChange={setOccurrenceView}
+          selectedSenseId={selectedSenseId}
+          onSelectedSenseIdChange={setSelectedSenseId}
           handleBackToListButton={() => setLinkedEntry(undefined)}
           onSelectOccurrence={(scrRefOfOccurrence) => {
             setLinkedEntry(undefined);
@@ -414,6 +418,8 @@ export function Dictionary({
             onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
             occurrenceView={occurrenceView}
             onOccurrenceViewChange={setOccurrenceView}
+            selectedSenseId={selectedSenseId}
+            onSelectedSenseIdChange={setSelectedSenseId}
             onSelectOccurrence={(scrRefOfOccurrence) =>
               selectOccurrenceKeepingEntry(entriesFiltered[0], scrRefOfOccurrence)
             }
@@ -441,6 +447,8 @@ export function Dictionary({
           onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
           occurrenceView={occurrenceView}
           onOccurrenceViewChange={setOccurrenceView}
+          selectedSenseId={selectedSenseId}
+          onSelectedSenseIdChange={setSelectedSenseId}
           onEntryLinkClick={handleEntryLinkClick}
         />
       )}

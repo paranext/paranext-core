@@ -7,7 +7,7 @@ import {
   useListbox,
   type ListboxOption,
 } from 'platform-bible-react';
-import { RefObject, useCallback, useRef } from 'react';
+import { Dispatch, RefObject, SetStateAction, useCallback, useRef } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { LanguageStrings } from 'platform-bible-utils';
 import { DictionaryEntryDisplay } from './dictionary-entry-display.component';
@@ -54,6 +54,10 @@ type DictionaryListProps = {
   occurrenceView: DictionaryOccurrenceView;
   /** Called when the reader switches between the chapter's occurrences and all of them */
   onOccurrenceViewChange: (occurrenceView: DictionaryOccurrenceView) => void;
+  /** The ID of the selected entry's selected sense, if any */
+  selectedSenseId: string | undefined;
+  /** Sets the selected sense; like a state setter, it takes the new ID or a function of it */
+  onSelectedSenseIdChange: Dispatch<SetStateAction<string | undefined>>;
   /** Callback function to open an entry linked from a definition */
   onEntryLinkClick?: EntryLinkClickHandler;
 };
@@ -83,6 +87,8 @@ export function DictionaryList({
   onAreLessRelevantSensesHiddenChange,
   occurrenceView,
   onOccurrenceViewChange,
+  selectedSenseId,
+  onSelectedSenseIdChange,
   onEntryLinkClick,
 }: DictionaryListProps) {
   const isWideScreen = useIsWideScreen();
@@ -171,6 +177,8 @@ export function DictionaryList({
               onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
               occurrenceView={occurrenceView}
               onOccurrenceViewChange={onOccurrenceViewChange}
+              selectedSenseId={selectedSenseId}
+              onSelectedSenseIdChange={onSelectedSenseIdChange}
               handleBackToListButton={handleOptionSelect}
               onSelectOccurrence={onSelectOccurrence}
               onClickScrollToTop={scrollToTop}
@@ -201,6 +209,8 @@ export function DictionaryList({
                   onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
                   occurrenceView={occurrenceView}
                   onOccurrenceViewChange={onOccurrenceViewChange}
+                  selectedSenseId={selectedSenseId}
+                  onSelectedSenseIdChange={onSelectedSenseIdChange}
                   handleBackToListButton={() => onEntrySelected(undefined)}
                   onSelectOccurrence={onSelectOccurrence}
                   onClickScrollToTop={scrollToTop}

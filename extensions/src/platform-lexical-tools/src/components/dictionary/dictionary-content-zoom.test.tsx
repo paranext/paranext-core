@@ -66,6 +66,8 @@ describe('dictionary content zoom', () => {
         onAreLessRelevantSensesHiddenChange={vi.fn()}
         occurrenceView="chapter"
         onOccurrenceViewChange={vi.fn()}
+        selectedSenseId={undefined}
+        onSelectedSenseIdChange={vi.fn()}
         onSelectOccurrence={vi.fn()}
         onClickScrollToTop={vi.fn()}
       />,

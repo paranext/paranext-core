@@ -257,6 +257,41 @@ describe('Dictionary entry links', () => {
     expect(screen.queryByRole('button', { name: 'Ruth 1:2' })).not.toBeInTheDocument();
   });
 
+  it('keeps the selected sense after going to one of its occurrences in another chapter', async () => {
+    const RUTH_4_5 = { ...RUTH_4_11, verseNum: 5 };
+    const naomi = entry('000777', 'נָעֳמִי', [
+      { gloss: 'Naomi', definition: 'the name', verseRefs: [SCR_REF, RUTH_4_11] },
+      { gloss: 'Mara', definition: 'her other name', verseRefs: [{ ...SCR_REF, book: 'GEN' }] },
+      { gloss: 'pleasant', definition: 'the meaning of the name', verseRefs: [SCR_REF, RUTH_4_5] },
+    ]);
+    render(
+      <DictionaryInScrollGroup
+        getEntries={async () => ({ entriesById: { [naomi.id]: [naomi] } })}
+      />,
+    );
+    // Two senses occur in Ruth 1, so none is selected until the reader picks the third
+    fireEvent.click(await screen.findByText('the meaning of the name'));
+    fireEvent.click(screen.getByRole('button', { name: 'All (2)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ruth 4:5' }));
+
+    // In Ruth 4 two senses occur again, and the third is still the one selected
+    expect(await screen.findByText('Occurrences for 3')).toBeInTheDocument();
+    expect(screen.getByText('the meaning of the name').closest('button')).toHaveAttribute(
+      'data-state',
+      'on',
+    );
+    expect(screen.queryByRole('button', { name: 'Ruth 4:11' })).not.toBeInTheDocument();
+  });
+
+  it('reads the full entry once while the list reloads around it', async () => {
+    const getFullEntry = vi.fn(async (e: Entry) => e);
+    render(<DictionaryInScrollGroup getFullEntry={getFullEntry} />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Ruth 4:3' }));
+    // Ruth 4 lists Elimelech again, as a new object, and it stays open
+    expect(await screen.findByText('Boaz')).toBeInTheDocument();
+    expect(getFullEntry).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps a linked entry open after going to its occurrence in another chapter', async () => {
     render(<DictionaryInScrollGroup />);
     fireEvent.click(await screen.findByRole('link', { name: 'Bethlehem' }));

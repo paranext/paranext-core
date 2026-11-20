@@ -67,6 +67,8 @@ type ViewSettingProps = Pick<
   | 'onAreLessRelevantSensesHiddenChange'
   | 'occurrenceView'
   | 'onOccurrenceViewChange'
+  | 'selectedSenseId'
+  | 'onSelectedSenseIdChange'
 >;
 
 /**
@@ -80,6 +82,7 @@ function EntryWithViewSettings({
   Partial<Pick<ViewSettingProps, 'areLessRelevantSensesHidden'>>) {
   const [areLessRelevantSensesHidden, setAreLessRelevantSensesHidden] = useState(initiallyHidden);
   const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
+  const [selectedSenseId, setSelectedSenseId] = useState<string | undefined>(undefined);
   return (
     <DictionaryEntryDisplay
       {...props}
@@ -87,6 +90,8 @@ function EntryWithViewSettings({
       onAreLessRelevantSensesHiddenChange={setAreLessRelevantSensesHidden}
       occurrenceView={occurrenceView}
       onOccurrenceViewChange={setOccurrenceView}
+      selectedSenseId={selectedSenseId}
+      onSelectedSenseIdChange={setSelectedSenseId}
     />
   );
 }
@@ -190,6 +195,17 @@ describe('DictionaryEntryDisplay senses', () => {
     renderEntry(verseRef('LEV', 1), TWO_SENSE_ENTRY);
     expect(screen.getByRole('button', { name: 'All (2)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Chapter (0)' })).toBeInTheDocument();
+  });
+
+  it('does not number the sense of an entry that has only one, as in Paratext 9', () => {
+    // Only the fields this component reads are filled in; the full Entry type carries many more.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const entry = {
+      ...TWO_SENSE_ENTRY,
+      senses: { s1: sense('s1', 'word', 'GEN', 1) },
+    } as unknown as Entry;
+    renderEntry(verseRef('GEN', 1), entry);
+    expect(senseCard('word')).not.toHaveTextContent(/^\d/);
   });
 
   it('neither numbers nor dims senses when the entry may be missing some', () => {

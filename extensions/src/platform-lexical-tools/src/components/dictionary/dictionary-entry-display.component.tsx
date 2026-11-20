@@ -11,7 +11,7 @@ import {
 } from 'platform-bible-react';
 import { ChevronUpIcon } from 'lucide-react';
 import { Entry, Sense } from 'platform-lexical-tools';
-import { Fragment, useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { Dispatch, Fragment, SetStateAction, useCallback, useEffect, useId, useMemo } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, formatScrRef, LanguageStrings } from 'platform-bible-utils';
 import {
@@ -46,8 +46,8 @@ export type DictionaryEntryDisplayProps = {
   scope?: DictionaryScope;
   /**
    * Whether `dictionaryEntry` has all of the entry's senses, rather than only those in scope.
-   * Senses are numbered and dimmed only when it does, so their numbers never change. Defaults to
-   * `true`.
+   * Senses are dimmed, and numbered if there is more than one, only when it does, so their numbers
+   * never change. Defaults to `true`.
    */
   hasAllSenses?: boolean;
   /**
@@ -61,6 +61,16 @@ export type DictionaryEntryDisplayProps = {
   occurrenceView: DictionaryOccurrenceView;
   /** Called when the reader switches between the chapter's occurrences and all of them */
   onOccurrenceViewChange: (occurrenceView: DictionaryOccurrenceView) => void;
+  /**
+   * The ID of the selected sense, if any. It is kept by the caller, so it lasts while the list
+   * reloads around the entry, and matched by ID, since a reloaded entry is a new object.
+   */
+  selectedSenseId: string | undefined;
+  /**
+   * Sets the selected sense. Like a state setter, it takes the new ID or a function of the current
+   * one.
+   */
+  onSelectedSenseIdChange: Dispatch<SetStateAction<string | undefined>>;
   /** Callback function to handle occurrence selection */
   onSelectOccurrence: (scrRefOfOccurrence: SerializedVerseRef) => void;
   /** Callback function to handle scroll to top */
@@ -86,11 +96,12 @@ export function DictionaryEntryDisplay({
   onAreLessRelevantSensesHiddenChange,
   occurrenceView,
   onOccurrenceViewChange,
+  selectedSenseId,
+  onSelectedSenseIdChange,
   onSelectOccurrence,
   onClickScrollToTop,
   onEntryLinkClick,
 }: DictionaryEntryDisplayProps) {
-  const [selectedSense, setSelectedSense] = useState<Sense | undefined>();
   // Only what decides the scope, so a verse move within the chapter keeps the selected sense
   const scopeReference = useScopeReference(scriptureReferenceToFilterBy, scope);
 
@@ -111,6 +122,7 @@ export function DictionaryEntryDisplay({
     () => allSenses.filter(isSenseInScope),
     [allSenses, isSenseInScope],
   );
+  const selectedSense = allSenses.find((sense) => sense.id === selectedSenseId);
   // An entry opened from a link may not occur in scope at all. Its senses are still dimmed, but
   // hiding them would leave none, so they are not hidden, and the header lists all of their glosses.
   const hasSensesInScope = sensesInScope.length > 0;
@@ -128,9 +140,11 @@ export function DictionaryEntryDisplay({
 
   const sensesListId = useId();
   const lessRelevantSenseCount = allSenses.length - sensesInScope.length;
+  // Like Paratext 9, senses are numbered only when there is more than one
+  const areSensesNumbered = hasAllSenses && allSenses.length > 1;
   const getSenseNumber = (sense: Sense) => allSenses.indexOf(sense) + 1;
   const selectedSenseNumber =
-    selectedSense && hasAllSenses ? getSenseNumber(selectedSense) : undefined;
+    selectedSense && areSensesNumbered ? getSenseNumber(selectedSense) : undefined;
 
   const occurrencesLabel = selectedSenseNumber
     ? formatReplacementString(
@@ -161,10 +175,16 @@ export function DictionaryEntryDisplay({
   const TitleComponent = isDrawer ? DrawerTitle : 'span';
   const DescriptionComponent = isDrawer ? DrawerDescription : 'span';
 
-  // Automatically select the only sense in scope if there is exactly one; otherwise clear selection
+  // When what is in scope changes, a selected sense that is still in scope stays selected, such as
+  // after going to one of its occurrences. Otherwise the only sense in scope, if there is just one,
+  // is selected. The current selection is read through the update, not as a dependency, so
+  // deselecting the only sense in scope does not select it again.
   useEffect(() => {
-    setSelectedSense(sensesInScope.length === 1 ? sensesInScope[0] : undefined);
-  }, [sensesInScope, dictionaryEntry]);
+    onSelectedSenseIdChange((currentId) => {
+      if (sensesInScope.some((sense) => sense.id === currentId)) return currentId;
+      return sensesInScope.length === 1 ? sensesInScope[0].id : undefined;
+    });
+  }, [sensesInScope, onSelectedSenseIdChange]);
 
   return (
     <>
@@ -219,7 +239,7 @@ export function DictionaryEntryDisplay({
                   selectedSense &&
                   !isSenseInScope(selectedSense)
                 )
-                  setSelectedSense(undefined);
+                  onSelectedSenseIdChange(undefined);
                 onAreLessRelevantSensesHiddenChange(!shouldHideLessRelevantSenses);
               }}
             >
@@ -246,10 +266,10 @@ export function DictionaryEntryDisplay({
             selectedSense ? `${selectedSense.lexicalReferenceTextId}-sense-${selectedSense.id}` : ''
           }
           onValueChange={(value) =>
-            setSelectedSense(
+            onSelectedSenseIdChange(
               allSenses.find(
                 (sense) => `${sense.lexicalReferenceTextId}-sense-${sense.id}` === value,
-              ),
+              )?.id,
             )
           }
           className="tw:flex tw:w-full tw:flex-col tw:gap-3"
@@ -264,7 +284,7 @@ export function DictionaryEntryDisplay({
                 className="tw:flex tw:w-full tw:h-fit tw:flex-col tw:items-start tw:whitespace-normal tw:text-start tw:border tw:rounded-lg tw:shadow-sm tw:p-4 tw:cursor-pointer tw:data-[state=on]:border-accent tw:data-[state=on]:shadow-md tw:transition-colors tw:data-[less-relevant=true]:opacity-60"
               >
                 <div className="tw:flex tw:items-baseline tw:gap-2">
-                  {hasAllSenses && (
+                  {areSensesNumbered && (
                     <span className="tw:font-bold tw:text-accent-foreground">
                       {getSenseNumber(sense)}
                     </span>
