@@ -123,7 +123,8 @@ export type UseEditorContextMenuResult = {
    * Whether the hook is claiming the keyboard for its menu right now: true from the right-click
    * until the request settles or two seconds have passed, whichever comes first, and false after
    * `dismiss`, a dropped request or unmount. Hosts read it to keep their own key handling away from
-   * a key the menu owns; once it is false the editor must behave as if no menu were pending.
+   * a key the menu owns; once it is false the editor must behave as if no menu were pending. Keys
+   * typed while the claim is active are dropped, not replayed once it ends.
    *
    * @experimental This property is unstable and may change shape or disappear without notice
    */
