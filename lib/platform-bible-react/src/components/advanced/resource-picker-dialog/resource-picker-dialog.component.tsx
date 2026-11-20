@@ -431,6 +431,8 @@ function matchesSearch(resource: DblResourceData, searchText: string): boolean {
   const lower = searchText.toLowerCase();
   return (
     resource.displayName.toLowerCase().includes(lower) ||
+    // Search predicate — matches on either name, renders neither.
+    // eslint-disable-next-line paranext/no-inline-project-name
     resource.fullName.toLowerCase().includes(lower) ||
     resource.bestLanguageName.toLowerCase().includes(lower)
   );

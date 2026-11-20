@@ -6,9 +6,8 @@
  * `lucide-react` icon or a `platform-bible-react` component as a *value* makes the whole extension
  * fail to activate, so no scripture editor opens. Type-only imports are erased by the compiler and
  * are fine. Helpers that need runtime UI values belong in a module the host never reaches — see
- * `character-marker-menu.utils.ts`. Neither the build nor lint catches a violation, so
- * `extension-host-import-boundary.test.ts` walks `main.ts`'s transitive value-import graph and fails
- * on any module the host's `require` shim does not supply.
+ * `character-marker-menu.utils.ts`. The extensions' main-bundle build walks `main.ts`'s module graph
+ * and fails on any module the host's `require` shim does not supply.
  */
 
 import {

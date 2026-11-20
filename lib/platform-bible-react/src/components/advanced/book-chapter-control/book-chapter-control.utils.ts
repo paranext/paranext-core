@@ -138,6 +138,8 @@ export function calculateTopMatch(
           };
 
           const matchingBookIdForFullName = getBookIdFromEnglishName(book);
+          // A BOOK's full English name resolved to a book id — no project name is involved.
+          // eslint-disable-next-line paranext/no-inline-project-name
           if (matchingBookIdForFullName && availableBooks.includes(matchingBookIdForFullName)) {
             validBookId = matchingBookIdForFullName;
           }

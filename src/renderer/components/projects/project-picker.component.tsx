@@ -87,6 +87,8 @@ function matchesSearch(project: ProjectItem, searchText: string): boolean {
   if (!searchText) return true;
   const lower = searchText.toLowerCase();
   return (
+    // Search predicate — matches on either name, renders neither.
+    // eslint-disable-next-line paranext/no-inline-project-name
     (project.fullName?.toLowerCase().includes(lower) ?? false) ||
     project.shortName.toLowerCase().includes(lower) ||
     (project.language?.toLowerCase().includes(lower) ?? false)

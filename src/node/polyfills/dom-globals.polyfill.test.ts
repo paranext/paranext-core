@@ -23,11 +23,6 @@ async function importPolyfillFresh(): Promise<void> {
  * Whether an `import`/`export` clause is erased by the compiler, so it loads nothing at runtime.
  * True for `import type { … }` and for a clause whose every named binding is individually
  * `type`-prefixed.
- *
- * `extensions/src/platform-scripture-editor/src/extension-host-import-boundary.test.ts` needs the
- * same parsing for the same reason; the two cannot share a helper across the workspace boundary, so
- * this function and the specifier patterns below are a deliberate copy of that file's. Fix a
- * parsing bug in one and fix it in the other.
  */
 function isTypeOnlyClause(clause: string): boolean {
   const trimmed = clause.trim();

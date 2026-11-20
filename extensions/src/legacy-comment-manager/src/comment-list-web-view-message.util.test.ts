@@ -9,8 +9,7 @@ import { ALL_BOOKS_SCOPE_FILTER, DEFAULT_COMMENT_FILTERS } from './comment-list-
 import { resolveSetFiltersMessage } from './comment-list-web-view-message.util';
 
 // This util is the web-view-side boundary that supplies the `warn` sink comment-list-filters.model.ts
-// takes as a parameter (the model itself must not import a logger -- see `WarnFn`'s doc and
-// extension-host-import-boundary.test.ts).
+// takes as a parameter (the model itself must not import a logger -- see `WarnFn`'s doc).
 vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
