@@ -60,7 +60,7 @@ describe('createContextMenuRequestLog', () => {
     );
   });
 
-  it('logs once more when a request is still unsettled two seconds later', () => {
+  it('logs once more when a request is still open two seconds later', () => {
     const { log, logger } = makeLog();
     log.track({ ...MOUSE_REQUEST, isKeyboardInvoked: true }, openMenuRequest().promise);
     logger.debug.mockClear();
@@ -69,7 +69,9 @@ describe('createContextMenuRequestLog', () => {
     expect(logger.debug).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(logger.debug).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(new RegExp(`${WEB_VIEW_ID}.*still unsettled after 2000 ms`)),
+      expect.stringMatching(
+        new RegExp(`${WEB_VIEW_ID}.*still open after 2000 ms.*still showing or never appeared`),
+      ),
     );
 
     vi.advanceTimersByTime(CONTEXT_MENU_STALL_LOG_MS * 3);
