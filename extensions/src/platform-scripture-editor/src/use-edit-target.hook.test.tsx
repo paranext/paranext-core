@@ -79,17 +79,30 @@ describe('useEditTarget', () => {
     select(readOnlyText);
     expect(result.current).toEqual({ target: 'footnotes', hasSelection: true });
 
-    // Nowhere: the toolbar, then no selection at all.
+    // Nowhere: the toolbar (the pane's selection is gone), then no selection at all.
     select(toolbarButton);
-    expect(result.current.target).toBe('footnotes');
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: false });
     act(() => {
       document.getSelection()?.removeAllRanges();
       document.dispatchEvent(new Event('selectionchange'));
     });
-    expect(result.current).toEqual({ target: 'footnotes', hasSelection: true });
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: false });
 
     select(mainText);
     expect(result.current).toEqual({ target: 'main', hasSelection: true });
+  });
+
+  it('drops the footnote selection when the selection moves outside both editors, keeping the target', () => {
+    const { result } = render();
+    select(readOnlyText);
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: true });
+
+    // Control: a selection change that stays inside the rows keeps the selection.
+    select(rowEditorText);
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: true });
+
+    select(toolbarButton);
+    expect(result.current).toEqual({ target: 'footnotes', hasSelection: false });
   });
 
   it('counts a selection inside the row editor as a footnote selection', () => {

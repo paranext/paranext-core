@@ -34,8 +34,10 @@ export type EditTargetState = {
  * Tracks which editor the user last worked in. One signal decides it: the document's selection
  * (watched through `selectionchange` and `focusin`). A selection in the main editor makes the
  * target `'main'`, one in the footnotes pane's rows makes it `'footnotes'`, and one anywhere else
- * (or none, as when a menu opens) changes nothing while the rows are rendered, so the target is
- * sticky. Once the rows are gone from the document the target is `'main'`.
+ * (or none, as when a menu opens) leaves the target where it is while the rows are rendered, so the
+ * target is sticky. A selection that moves from the rows to somewhere else ends the pane's
+ * selection (`hasSelection` is false) without moving the target. Once the rows are gone from the
+ * document the target is `'main'`.
  *
  * The main editor's own selection report does not move the target; it only feeds `hasSelection`
  * while the target is `'main'`.
@@ -77,8 +79,13 @@ export function useEditTarget({
       if (
         classifySelectionAnchor(anchor, { mainEditorRoot: undefined, footnotesRows }) !==
         'footnotes'
-      )
+      ) {
+        // The target stays, but a selection that left the rows no longer counts as the pane's.
+        setHasFootnotesSelection((had) =>
+          had ? hasFootnotesRowsSelection(selection, footnotesRows) : had,
+        );
         return;
+      }
       setTarget('footnotes');
       setHasFootnotesSelection(hasFootnotesRowsSelection(selection, footnotesRows));
     };
