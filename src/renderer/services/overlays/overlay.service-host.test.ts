@@ -253,6 +253,55 @@ describe('overlay.service-host', () => {
       return promise2;
     });
 
+    describe('debounce clock', () => {
+      let wallClock: number;
+      let monotonicClock: number;
+
+      beforeEach(() => {
+        wallClock = 1_000_000;
+        monotonicClock = 5_000;
+        vi.spyOn(Date, 'now').mockImplementation(() => wallClock);
+        vi.spyOn(performance, 'now').mockImplementation(() => monotonicClock);
+      });
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      it('does not reject a request when the wall clock steps back between requests', async () => {
+        const promise1 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        await Promise.resolve();
+        monotonicClock += 100;
+        wallClock -= 2000;
+
+        const promise2 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        await Promise.resolve();
+
+        await expect(promise1).rejects.toSatisfy(
+          (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+        );
+        const menus = getOverlays().filter((o) => o.type === 'contextMenu');
+        expect(menus).toHaveLength(1);
+        menus[0].resolve(undefined);
+        await promise2;
+      });
+
+      it('still debounces two requests 10 ms apart on the monotonic clock', async () => {
+        const promise1 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        await Promise.resolve();
+        monotonicClock += 10;
+        wallClock -= 2000;
+
+        await expect(
+          overlayService.showContextMenu('ext.testWebView', 'test-webview'),
+        ).rejects.toSatisfy(
+          (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
+        );
+        getOverlays()[0].resolve(undefined);
+        await promise1;
+      });
+    });
+
     it('should reject with RESOURCE_EXHAUSTED within debounce cooldown', async () => {
       const promise1 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
 
@@ -2592,6 +2641,29 @@ describe('overlay.service-host', () => {
     });
 
     describe('when the app loses focus', () => {
+      it('ends the creation grace on the monotonic clock when the wall clock steps back', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        vi.setSystemTime(Date.now() - 2000);
+
+        window.dispatchEvent(new Event('blur'));
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(getOverlays()).toHaveLength(0);
+      });
+
+      it('keeps the creation grace for a blur right after a menu opened, even if the wall clock steps forward', async () => {
+        vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+        const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        await vi.advanceTimersByTimeAsync(0);
+        vi.setSystemTime(Date.now() + 10_000);
+
+        window.dispatchEvent(new Event('blur'));
+
+        expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);
+        getOverlays()[0].resolve(undefined);
+        await promise;
+      });
+
       it('returns focus on a parent window blur with the app deactivated and focus inside', async () => {
         const { dismissed } = await openContextMenuPastGrace();
         focusInsideOverlayContent(getOverlays()[0].id);
