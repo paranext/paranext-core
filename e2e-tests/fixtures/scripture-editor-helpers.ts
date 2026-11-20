@@ -376,6 +376,22 @@ export async function getSampleProjectChapterUsfm(
 }
 
 /**
+ * One whole book of the sample WEB project as saved, read through its data provider. With
+ * {@link setSampleProjectBookUsfm} it puts a book back byte for byte: a chapter write corrects the
+ * chapter marker's line, so it cannot.
+ */
+export async function getSampleProjectBookUsfm(
+  book: SampleChapterRef,
+): Promise<string | undefined> {
+  return sendPapiRequestOnce<string | undefined>(
+    `object:${await getSampleProjectDataProviderId()}.getBookUSFM`,
+    [book],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+}
+
+/**
  * Replaces a whole book of the sample WEB project through its data provider. A book write skips the
  * chapter-marker correction a chapter write gets, so this can set up a book with no chapters at
  * all. Writes project data, so it refuses to run unless the app was launched with
@@ -727,6 +743,55 @@ export async function findScriptureEditorFrame(page: Page, timeout = 30_000): Pr
     await page.waitForTimeout(500);
   }
   throw new Error(`Scripture editor not found: no Project button visible after ${timeout}ms`);
+}
+
+/**
+ * The platform's right-click menu. It renders in the app window's TOP document, not inside the web
+ * view that asked for it, so it is reached through the main page even for a Scripture editor.
+ * `.overlay-context-menu-content` is the rendered menu; `[data-overlay-context-menu]` marks its
+ * zero-size anchor, which is never visible.
+ */
+export function platformContextMenu(page: Page): Locator {
+  return page.locator('.overlay-context-menu-content');
+}
+
+/**
+ * Each item's label in menu order, without the keycaps a cataloged command shows after it: the
+ * label is the item's own text, the keycaps are an element of their own.
+ */
+export async function readContextMenuLabels(menu: Locator): Promise<string[]> {
+  return menu.evaluate((element) =>
+    Array.from(element.querySelectorAll('[role="menuitem"]')).map((item) =>
+      Array.from(item.childNodes)
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent ?? '')
+        .join('')
+        .trim(),
+    ),
+  );
+}
+
+/**
+ * The item labelled `label` exactly. Matched on {@link readContextMenuLabels}, not on the item's
+ * accessible name: that name also carries the keycaps, and "Paste" is a prefix of "Paste as plain
+ * text".
+ */
+export async function contextMenuItem(menu: Locator, label: string): Promise<Locator> {
+  const labels = await readContextMenuLabels(menu);
+  const index = labels.indexOf(label);
+  if (index < 0) throw new Error(`The context menu has no "${label}" item; it has ${labels}`);
+  return menu.getByRole('menuitem').nth(index);
+}
+
+/** The label of the menu item the keyboard has highlighted, or undefined when none is. */
+export async function readHighlightedContextMenuLabel(menu: Locator): Promise<string | undefined> {
+  const labels = await readContextMenuLabels(menu);
+  const index = await menu.evaluate((element) =>
+    Array.from(element.querySelectorAll('[role="menuitem"]')).findIndex((item) =>
+      item.hasAttribute('data-highlighted'),
+    ),
+  );
+  return index < 0 ? undefined : labels[index];
 }
 
 /**
