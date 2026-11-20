@@ -5,6 +5,8 @@ import {
   getCombinedOccurrencesCountFromDictionaryEntrySenses,
   getDeduplicatedOccurrencesFromSenses,
   getFormatGlossesStringFromDictionaryEntrySenses,
+  isReferenceInScope,
+  isSenseInScope,
 } from './dictionary.utils';
 
 const mockVerseRef = (book: string, chapterNum: number, verseNum = 1): SerializedVerseRef => ({
@@ -13,10 +15,20 @@ const mockVerseRef = (book: string, chapterNum: number, verseNum = 1): Serialize
   verseNum,
 });
 
-const createOccurrence = (book: string, chapterNum: number): Occurrence => ({
-  verseRef: mockVerseRef(book, chapterNum),
-  wordNum: 1,
+const createOccurrence = (
+  book: string,
+  chapterNum: number,
+  verseNum = 1,
+  wordNum = 1,
+): Occurrence => ({
+  verseRef: mockVerseRef(book, chapterNum, verseNum),
+  wordNum,
 });
+
+const senseOccurringAt = (...occurrences: Occurrence[]) =>
+  // These are not fully constructed Sense objects, but they are sufficient for testing so I asserted them.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  ({ occurrences: { project: occurrences } }) as unknown as Sense;
 
 describe('dictionary.util.ts', () => {
   describe('getFormatGlossesStringFromDictionaryEntrySenses', () => {
@@ -64,6 +76,74 @@ describe('dictionary.util.ts', () => {
       const result = getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef);
       expect(result).toBe('joy');
     });
+    it('shows glosses without their markup', () => {
+      // These are not fully constructed Entry objects, but they are sufficient for testing so I asserted them.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const entry: Entry = {
+        senses: {
+          s1: { glosses: ['hearing{N:001}', 'majesty || honor'], occurrences: {} },
+          s2: { glosses: ['{L:storehouses<SDBH:אוֹצָר>}'], occurrences: {} },
+        },
+      } as unknown as Entry;
+
+      const result = getFormatGlossesStringFromDictionaryEntrySenses(entry);
+      expect(result).toBe('hearing, majesty / honor, storehouses');
+    });
+
+    it('filters glosses by the verse in verse scope', () => {
+      // These are not fully constructed Entry objects, but they are sufficient for testing so I asserted them.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const entry: Entry = {
+        senses: {
+          s1: { glosses: ['joy'], occurrences: { project: [createOccurrence('GEN', 1, 2)] } },
+          s2: { glosses: ['peace'], occurrences: { project: [createOccurrence('GEN', 1, 3)] } },
+        },
+      } as unknown as Entry;
+
+      const result = getFormatGlossesStringFromDictionaryEntrySenses(
+        entry,
+        mockVerseRef('GEN', 1, 3),
+        'verse',
+      );
+      expect(result).toBe('peace');
+    });
+  });
+
+  describe('isSenseInScope', () => {
+    const sense = senseOccurringAt(createOccurrence('GEN', 1, 2));
+
+    it('is true for a sense in the chapter in chapter scope', () => {
+      expect(isSenseInScope(sense, mockVerseRef('GEN', 1, 9), 'chapter')).toBe(true);
+    });
+
+    it('is false for a sense in another chapter in chapter scope', () => {
+      expect(isSenseInScope(sense, mockVerseRef('GEN', 2, 2), 'chapter')).toBe(false);
+    });
+
+    it('is true for a sense in the verse in verse scope', () => {
+      expect(isSenseInScope(sense, mockVerseRef('GEN', 1, 2), 'verse')).toBe(true);
+    });
+
+    it('is false for a sense elsewhere in the chapter in verse scope', () => {
+      expect(isSenseInScope(sense, mockVerseRef('GEN', 1, 9), 'verse')).toBe(false);
+    });
+
+    it('is true for every sense when there is no reference', () => {
+      expect(isSenseInScope(sense, undefined, 'verse')).toBe(true);
+    });
+  });
+
+  describe('isReferenceInScope', () => {
+    // Each case checks Genesis 1:2 against the reader's reference
+    it.each([
+      { where: 'the same chapter', scrRef: mockVerseRef('GEN', 1, 9), scope: 'chapter', is: true },
+      { where: 'another chapter', scrRef: mockVerseRef('GEN', 2, 2), scope: 'chapter', is: false },
+      { where: 'another book', scrRef: mockVerseRef('EXO', 1, 2), scope: 'chapter', is: false },
+      { where: 'the same verse', scrRef: mockVerseRef('GEN', 1, 2), scope: 'verse', is: true },
+      { where: 'another verse', scrRef: mockVerseRef('GEN', 1, 9), scope: 'verse', is: false },
+    ] as const)('is $is for $where in $scope scope', ({ scrRef, scope, is }) => {
+      expect(isReferenceInScope(mockVerseRef('GEN', 1, 2), scrRef, scope)).toBe(is);
+    });
   });
 
   describe('getCombinedOccurrencesCountFromDictionaryEntrySenses', () => {
@@ -95,7 +175,6 @@ describe('dictionary.util.ts', () => {
 
   describe('getDeduplicatedOccurrencesFromSenses', () => {
     it('returns deduplicated occurrences from senses', () => {
-      const scrRef = mockVerseRef('GEN', 1);
       // These are not fully constructed Sense objects, but they are sufficient for testing so I asserted them.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const senses: Sense[] = [
@@ -111,9 +190,24 @@ describe('dictionary.util.ts', () => {
         },
       ] as unknown as Sense[];
 
-      const result = getDeduplicatedOccurrencesFromSenses(senses, scrRef);
-      expect(result).toHaveLength(1);
-      expect(result[0].verseRef.book).toBe('GEN');
+      const result = getDeduplicatedOccurrencesFromSenses(senses);
+      expect(result.map(({ verseRef }) => verseRef.book)).toEqual(['GEN', 'EXO']);
+    });
+
+    it('lists the occurrences of several senses in Bible order', () => {
+      const senses = [
+        senseOccurringAt(createOccurrence('GEN', 1, 14), createOccurrence('EXO', 1, 1)),
+        senseOccurringAt(createOccurrence('GEN', 1, 5, 4), createOccurrence('GEN', 1, 5, 2)),
+      ];
+
+      const result = getDeduplicatedOccurrencesFromSenses(senses);
+      expect(
+        result.map(({ verseRef, wordNum }) => [verseRef.book, verseRef.verseNum, wordNum]),
+      ).toEqual([
+        ['GEN', 5, 2],
+        ['GEN', 14, 1],
+        ['EXO', 1, 1],
+      ]);
     });
   });
 });
