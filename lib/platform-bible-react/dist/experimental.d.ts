@@ -2224,8 +2224,8 @@ export declare function useEditorContextMenu(options: UseEditorContextMenuOption
  * finds the user's selection again.
  *
  * A selection whose nodes the action removed is not put back: the browser ignores a selection on
- * nodes outside the document. Nothing is kept when there is no browser selection to begin with,
- * for example while a paragraph marker is the editor's selection.
+ * nodes outside the document. Nothing is kept when there is no browser selection to begin with, for
+ * example while a paragraph marker is the editor's selection.
  *
  * @param action What to run
  * @param doc The document whose selection to keep; without one, `action` just runs

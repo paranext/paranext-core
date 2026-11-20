@@ -5,6 +5,7 @@ import {
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
 import { RefObject, useCallback, useEffect, useRef } from 'react';
+import { isMacOs } from '@/utils/platform.util';
 
 /**
  * What the platform context menu needs to know about one right-click (or keyboard-raised context
@@ -174,23 +175,6 @@ function isKeyboardRaised(event: MouseEvent): boolean {
 /** Whether a mouse event is a primary-button press with Ctrl held: a right-click on macOS. */
 function isCtrlPrimaryClick(event: MouseEvent): boolean {
   return event.button === 0 && event.ctrlKey;
-}
-
-/**
- * Whether the frame runs on macOS, the only platform that turns a Ctrl+click into a right-click (a
- * `contextmenu`). Elsewhere a Ctrl+click is an ordinary click, so its press must close an open menu
- * like any other. Read at event time; `userAgentData` first, where the browser offers it.
- */
-function isMacPlatform(): boolean {
-  const userAgentData: unknown = Reflect.get(navigator, 'userAgentData');
-  const userAgentDataPlatform =
-    typeof userAgentData === 'object' &&
-    userAgentData &&
-    'platform' in userAgentData &&
-    typeof userAgentData.platform === 'string'
-      ? userAgentData.platform
-      : undefined;
-  return /mac/i.test(userAgentDataPlatform || navigator.platform || '');
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -433,9 +417,9 @@ export function useEditorContextMenu(
     const handlePointerDown = (event: PointerEvent) => {
       // A right-click the hook will claim (a macOS Ctrl+click included) replaces the open menu with
       // its own request, so it must not also dismiss. Any other pointerdown, a right-click
-      // elsewhere included, closes the menu.
-      const isRightClickPress =
-        event.button === 2 || (isCtrlPrimaryClick(event) && isMacPlatform());
+      // elsewhere included, closes the menu. Only macOS turns a Ctrl+click into a `contextmenu`;
+      // elsewhere it is an ordinary click and closes the menu like any other.
+      const isRightClickPress = event.button === 2 || (isCtrlPrimaryClick(event) && isMacOs());
       if (isRightClickPress && findClaimingContainer(event.target)) return;
       if (openRequestsRef.current.size > 0) dropOpenRequests();
     };

@@ -1146,23 +1146,21 @@ describe('useEditorContextMenu', () => {
       );
     }
 
-    /**
-     * Makes the frame report `platform` through `navigator.platform` and, when given,
-     * `navigator.userAgentData.platform`; undone by {@link restorePlatform}.
-     */
-    function stubPlatform(platform: string, userAgentDataPlatform?: string) {
-      Object.defineProperty(navigator, 'platform', { configurable: true, get: () => platform });
-      if (userAgentDataPlatform !== undefined)
-        Object.defineProperty(navigator, 'userAgentData', {
-          configurable: true,
-          get: () => ({ platform: userAgentDataPlatform }),
-        });
+    /** User agents the OS check (`isMacOs`) reads, one per desktop platform. */
+    const USER_AGENTS = {
+      mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)',
+      windows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+      linux: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)',
+    };
+
+    /** Makes the frame report `userAgent`; undone by {@link restorePlatform}. */
+    function stubPlatform(userAgent: string) {
+      Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => userAgent });
     }
 
     function restorePlatform() {
-      // Removes the own properties `stubPlatform` put over jsdom's prototype getters.
-      Reflect.deleteProperty(navigator, 'platform');
-      Reflect.deleteProperty(navigator, 'userAgentData');
+      // Removes the own property `stubPlatform` put over jsdom's prototype getter.
+      Reflect.deleteProperty(navigator, 'userAgent');
     }
 
     function renderWithOpenRequest() {
@@ -1182,7 +1180,7 @@ describe('useEditorContextMenu', () => {
     }
 
     it('keeps the request open on the pointerdown of a macOS Ctrl+click the hook will claim', () => {
-      stubPlatform('MacIntel');
+      stubPlatform(USER_AGENTS.mac);
       try {
         const { getByTestId, dismissMenu, isPending } = renderWithOpenRequest();
 
@@ -1196,7 +1194,7 @@ describe('useEditorContextMenu', () => {
     });
 
     it('drops the open request on a macOS Ctrl press of another button (control)', () => {
-      stubPlatform('MacIntel');
+      stubPlatform(USER_AGENTS.mac);
       try {
         const { getByTestId, dismissMenu, isPending } = renderWithOpenRequest();
 
@@ -1217,27 +1215,13 @@ describe('useEditorContextMenu', () => {
       }
     });
 
-    it('reads macOS from userAgentData ahead of navigator.platform', () => {
-      stubPlatform('Linux x86_64', 'macOS');
-      try {
-        const { getByTestId, dismissMenu, isPending } = renderWithOpenRequest();
-
-        ctrlPrimaryPointerDown(getByTestId('text'));
-
-        expect(dismissMenu).not.toHaveBeenCalled();
-        expect(isPending()).toBe(true);
-      } finally {
-        restorePlatform();
-      }
-    });
-
     it.each([
-      ['Windows', 'Win32'],
-      ['Linux', 'Linux x86_64'],
+      ['Windows', USER_AGENTS.windows],
+      ['Linux', USER_AGENTS.linux],
     ])(
       'drops the open request on a Ctrl+click on %s, where it raises no context menu',
-      (_name, platform) => {
-        stubPlatform(platform);
+      (_name, userAgent) => {
+        stubPlatform(userAgent);
         try {
           const { getByTestId, dismissMenu, isPending } = renderWithOpenRequest();
 

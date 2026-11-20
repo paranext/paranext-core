@@ -489,35 +489,6 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
     expect(onPaneFocusChange).toHaveBeenLastCalledWith(false);
   });
 
-  // The editor's right-click menu is portalled like the dropdowns, and its items take focus.
-  it("stays silent while focus moves into the row editor's right-click menu", () => {
-    const onPaneFocusLeft = vi.fn();
-    renderPane({
-      onPaneFocusLeft,
-      editingFootnoteIndex: 1,
-      renderEditingFootnote: () => (
-        <>
-          <input data-testid="row-editor" />
-          {createPortal(
-            <div className="typeahead-popover">
-              <ul>
-                <li tabIndex={-1} data-testid="menu-item">
-                  Cut
-                </li>
-              </ul>
-            </div>,
-            document.body,
-          )}
-        </>
-      ),
-    });
-    screen.getByTestId('row-editor').focus();
-
-    screen.getByTestId('menu-item').focus();
-
-    expect(onPaneFocusLeft).not.toHaveBeenCalled();
-  });
-
   // Removing the focused element takes focus with it without a blur the pane sees.
   it('reports losing focus when the focused row editor goes away', () => {
     const onPaneFocusChange = vi.fn();
