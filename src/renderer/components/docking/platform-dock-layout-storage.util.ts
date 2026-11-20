@@ -30,7 +30,6 @@ import { getErrorMessage } from 'platform-bible-utils';
 import { readDirection } from 'platform-bible-react/experimental';
 
 import { DIALOGS } from '@renderer/components/dialogs';
-import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import {
   TAB_TYPE_SETTINGS_TAB,
   loadSettingsTab,
@@ -1728,7 +1727,11 @@ function setDocumentFocusToTab(dockLayout: DockLayout, tabId: string) {
 
   // Select the WebView iframe if one exists. Must do this then select the last focused element
   // inside it if available
-  const webViewIframe = getWebViewIframe(tabId);
+  // A WebView's tab header carries the same `data-web-view-id` and comes before the iframe in the
+  // document, so while the header is rendered this selects the header, not the iframe: the tab is
+  // then focused through `lastFocusedElement` or the panel's first child, and its frame does not
+  // take keyboard focus here.
+  const webViewIframe = document.querySelector(`[data-web-view-id='${tabId}']`);
   if (webViewIframe instanceof HTMLIFrameElement) {
     if (!webViewIframe.contentWindow) {
       webViewIframe.focus();
