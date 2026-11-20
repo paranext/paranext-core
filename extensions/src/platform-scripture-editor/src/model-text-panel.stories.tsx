@@ -15,10 +15,9 @@ import type {
 import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 // The editor's USJ node styling. The real app loads these globally; Storybook doesn't, so without
-// them the editor's read-only marker toolbar renders as a stray inline label. We import the same
-// icon-free subset the editorial layout stories used (editor.css/editor-overrides.css no longer
-// reference toolbar icon SVGs by an absolute URL the css-loader cannot resolve, so they can be
-// used; the minimal wrapper styles are inlined in EDITOR_WRAPPER_STYLE below).
+// them the editor's read-only marker toolbar renders as a stray inline label. The story imports the
+// editor's icon-free stylesheet subset; the minimal wrapper styles are inlined in
+// EDITOR_WRAPPER_STYLE below.
 /* eslint-disable import/no-relative-packages -- these editor demo CSS files are not part of
    platform-bible-react's package exports (only `.` → dist is exported), so they can only be pulled
    in by relative path; this mirrors src/stories/platform/ten-layout-shared.tsx. */
