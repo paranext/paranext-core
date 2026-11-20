@@ -1781,7 +1781,7 @@ describe('Scripture editor right-click menu', () => {
         expect(clipboardCallsOn(main)).toEqual([]);
       });
 
-      it('keeps the target when the selection moves somewhere that is neither editor: Copy then does nothing rather than copying from the main text', async () => {
+      it('keeps the target when the selection moves somewhere that is neither editor: the selection key goes false and Copy does nothing rather than copying from the main text', async () => {
         const { main, row } = await renderWithReadOnlyRow();
         main.setLiveSelection(selectionRange);
         await selectIn(row);
@@ -1792,7 +1792,8 @@ describe('Scripture editor right-click menu', () => {
         await selectIn(outside);
         outside.remove();
 
-        expect(lastPublished(HAS_SELECTION)).toBe(true);
+        // The selection left the rows, so the pane has none to copy, and the target stays put.
+        expect(lastPublished(HAS_SELECTION)).toBe(false);
         await runTopMenu(COPY);
         expect(execCommand).not.toHaveBeenCalled();
         expect(clipboardCallsOn(main)).toEqual([]);
