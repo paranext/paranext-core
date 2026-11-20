@@ -4,6 +4,7 @@ import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 
 const EDITOR_OVERRIDES_SCSS_PATH = join(__dirname, '_editor-overrides.scss');
+const USJ_NODES_SCSS_PATH = join(__dirname, '_usj-nodes.scss');
 const DEMO_EDITOR_OVERRIDES_CSS_PATH = join(
   __dirname,
   '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/editor-overrides.css',
@@ -87,15 +88,17 @@ describe('selected paragraph marker row', () => {
   it('measures the reach in a gutter width registered as a length, not in the paragraph’s own font size', () => {
     // An unregistered `4em` resolves where it is used, so a `\mt1` (166%) would push the bar past
     // the editor's edge, where it is clipped, and a `\cd` (91%) would stop it inside the gutter.
-    expect(declarations).toMatch(
-      /@property --psc-para-marker-gutter-width\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true[^}]*initial-value:/,
+    // usj-nodes-styles.test.ts pins the registration's syntax in both copies; this pins that the
+    // gutter the reach reads is registered at all, outside a comment.
+    const usjNodes = readFileSync(USJ_NODES_SCSS_PATH, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    expect(usjNodes).toMatch(
+      /@property --psc-gutter-width\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true[^}]*initial-value:/,
     );
-    expect(block('.psc-gutter-markers')).toContain(
-      '--psc-para-marker-gutter-width: var(--psc-gutter-width',
-    );
+    expect(usjNodes).toMatch(/(?:^|\})\s*\.psc-gutter-markers\s*\{[^}]*--psc-gutter-width: 4em;/);
     const reach = block(SELECTED_ROW)?.match(/--psc-para-marker-selection-reach:([^;]*);/)?.[1];
-    expect(reach).toContain('var(--psc-para-marker-gutter-width)');
-    expect(reach).not.toContain('var(--psc-gutter-width)');
+    expect(reach).toContain('var(--psc-gutter-width)');
   });
 
   it('fills the row and reaches the fill and bar toward the left in LTR', () => {

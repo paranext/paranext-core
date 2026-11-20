@@ -405,25 +405,12 @@ button {
 // `--foreground` is the bar token by measured contrast (>= 3:1 against --background and --accent in
 // every built-in theme), pinned by paragraph-marker-selection-contrast.test.ts.
 //
-// The gutter width is a registered length so it computes once, on `.psc-gutter-markers`. The
-// gutter's own `--psc-gutter-width` is an unregistered `4em`, which would otherwise resolve in each
-// paragraph's own font size: on a `\mt1` (166%) the bar would overshoot the editor's edge and be
-// clipped, and on a `\cd` (91%) it would stop short inside the gutter.
+// `--psc-gutter-width` is a registered length (_usj-nodes.scss), so it computes once, on
+// `.psc-gutter-markers`, and the reach is the same on a `\mt1` (166%) or a `\cd` (91%) as on a `\p`.
 // `--para-indent` stays per paragraph, since it is that paragraph's own indent compensation.
-@property --psc-para-marker-gutter-width {
-  syntax: '<length>';
-  inherits: true;
-  initial-value: 0;
-}
-
-.psc-gutter-markers {
-  --psc-para-marker-gutter-width: var(--psc-gutter-width, 4em);
-}
 
 .psc-gutter-markers .para.psc-para-marker-selected {
-  --psc-para-marker-selection-reach: calc(
-    var(--psc-para-marker-gutter-width) + var(--para-indent, 0px)
-  );
+  --psc-para-marker-selection-reach: calc(var(--psc-gutter-width) + var(--para-indent, 0px));
   // Muted text in the row (the empty-verse placeholder) drops below 4.5:1 on the fill in the
   // light theme, so while selected it takes the fill's own foreground.
   --muted-foreground: var(--accent-foreground);
