@@ -177,6 +177,7 @@ export {
   type UseEditorContextMenuResult,
 } from './hooks/use-editor-context-menu.hook';
 export { runKeepingBrowserSelection } from './utils/browser-selection.util';
+export { focusEditorKeepingSelection } from './utils/focus-editor-keeping-selection.util';
 export {
   LucideIcon,
   LUCIDE_ICON_NAMES,

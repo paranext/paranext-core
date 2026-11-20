@@ -39,7 +39,6 @@ import type {
 } from '@eten-tech-foundation/platform-editor';
 import { type FootnoteEditorHandle, type MarkerMenuItem } from 'platform-bible-react';
 import { markerMenuItemToPaletteItem } from 'platform-bible-react/experimental';
-import { focusEditorKeepingSelection } from './focus-editor-keeping-selection.util';
 import type { FlushableDebouncer } from './flushable-debouncer.util';
 import {
   showsReadOnlyPreview,
@@ -47,8 +46,6 @@ import {
 } from './platform-scripture-editor.utils';
 import { EDITOR_OWNERSHIP_WINDOW_MS, type EditorFocusLocation } from './use-editor-pdp-sync.hook';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
-
-export { focusEditorKeepingSelection };
 
 /**
  * Function that generates the inline marker menu items that will update as the cursor location

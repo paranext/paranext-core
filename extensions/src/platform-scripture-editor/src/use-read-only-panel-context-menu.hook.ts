@@ -1,5 +1,6 @@
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import {
+  focusEditorKeepingSelection,
   useEditorContextMenu,
   type EditorContextMenuRequest,
   type UseEditorContextMenuResult,
@@ -8,7 +9,6 @@ import { getErrorMessage } from 'platform-bible-utils';
 import { RefObject } from 'react';
 import { runEditMenuAction } from './edit-menu-actions.util';
 import { dispatchContextMenuPick } from './editor-context-menu-pick.util';
-import { focusEditorKeepingSelection } from './focus-editor-keeping-selection.util';
 
 /**
  * What a read-only Scripture panel needs from its web view to serve the platform context menu. The
