@@ -2199,7 +2199,8 @@ describe('EnhancedScripturePane platform context menu', () => {
     rightClick(editor);
     await flushMenuRequest();
 
-    expect(frameFocusSpy).toHaveBeenCalledTimes(1);
+    // Once before the copy and once on the next animation frame (the shim runs it at once)
+    expect(frameFocusSpy).toHaveBeenCalledTimes(2);
     expect(focusSpy).not.toHaveBeenCalled();
     expect(copySpy).toHaveBeenCalledTimes(1);
     // The selection survived the copy: only the selection-keeping wrapper restores it
@@ -2209,6 +2210,63 @@ describe('EnhancedScripturePane platform context menu', () => {
       copySpy.mock.invocationCallOrder[0],
     );
     expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('gives the frame focus again on the next animation frame after a picked Copy, never the editor', async () => {
+    const frameFocusSpy = vi.spyOn(window, 'focus').mockImplementation(() => {});
+    const queuedFrames: FrameRequestCallback[] = [];
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      queuedFrames.push(cb);
+      return 0;
+    }) as typeof globalThis.requestAnimationFrame;
+    mockShowContextMenu.mockResolvedValue('platformEnhancedResources.copySelection');
+    renderPane();
+    const editor = addTextToEditor();
+    selectTextIn(editor);
+    // Frames the pane queued while mounting are not the pick's
+    queuedFrames.length = 0;
+    rightClick(editor);
+    await flushMenuRequest();
+
+    expect(copySpy).toHaveBeenCalledTimes(1);
+    expect(frameFocusSpy).toHaveBeenCalledTimes(1);
+    expect(queuedFrames).toHaveLength(1);
+
+    queuedFrames[0](0);
+
+    expect(frameFocusSpy).toHaveBeenCalledTimes(2);
+    expect(focusSpy).not.toHaveBeenCalled();
+  });
+
+  it('dismisses an open menu when the chapter changes, and not when it stays the same', async () => {
+    mockShowContextMenu.mockReturnValue(new Promise(() => {}));
+    const usj = makeTestUsj(3);
+    const { rerender } = renderPane({ usj, scrRef: SCR_REF_JHN_1_1 });
+    rightClick(addTextToEditor());
+    await flushMenuRequest();
+    expect(mockShowContextMenu).toHaveBeenCalledTimes(1);
+    mockDismissContextMenu.mockClear();
+
+    // Control: a re-render with the same book and chapter leaves the menu open
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={[]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        scrRef={{ ...SCR_REF_JHN_1_1, verseNum: 5 }}
+      />,
+    );
+    expect(mockDismissContextMenu).not.toHaveBeenCalled();
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={[]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        scrRef={{ ...SCR_REF_JHN_1_1, chapterNum: 2 }}
+      />,
+    );
+    expect(mockDismissContextMenu).toHaveBeenCalledWith('test-webview');
   });
 
   it('sends any other picked command, such as another extension contributed, with the web view id', async () => {
