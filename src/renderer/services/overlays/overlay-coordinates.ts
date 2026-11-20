@@ -4,18 +4,7 @@
  * visibility.
  */
 
-/**
- * Finds a WebView iframe element by its data-web-view-id attribute.
- *
- * @param webViewId The webViewId to search for
- * @returns The iframe element, or null if not found
- */
-export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
-  // CSS.escape prevents selector injection if webViewId contains characters like " or ]
-  return document.querySelector<HTMLIFrameElement>(
-    `iframe[data-web-view-id="${CSS.escape(webViewId)}"]`,
-  );
-}
+import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 
 /**
  * Translates iframe-relative coordinates to document-relative coordinates using

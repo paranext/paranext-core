@@ -73,6 +73,10 @@ import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-in
 import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
 import { RESOURCE_COLLECTION_OPTIONS_KEYS } from './resource-collection-options/resource-collection-options.types';
 import { getInstallFailureMessageKey } from './install-failure-message.utils';
+import {
+  useReadOnlyPanelContextMenu,
+  type ReadOnlyPanelContextMenuCallbacks,
+} from './use-read-only-panel-context-menu.hook';
 
 /**
  * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
@@ -405,6 +409,11 @@ export type ResourceTextPanelProps = {
   /** Logger forwarded to the editor (the web view supplies the PAPI logger; tests may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
   /**
+   * The platform calls behind the panel's right-click menu. The web view supplies them because
+   * opening the menu needs PAPI; the panel's own part (Copy on its editor) stays here.
+   */
+  contextMenu: ReadOnlyPanelContextMenuCallbacks;
+  /**
    * The selected resource's copyright notice, shown under the selector whatever the content state
    * (loading, missing book, error or text). The web view supplies it because reading the notice
    * needs PAPI.
@@ -460,6 +469,7 @@ export function ResourceTextPanel({
   isOnline,
   onShowResourcePicker,
   logger,
+  contextMenu,
   copyrightNotice,
 }: ResourceTextPanelProps) {
   // #region Content state
@@ -562,6 +572,8 @@ export function ResourceTextPanel({
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
+      // The platform's context menu replaces the editor's own
+      hasBuiltInContextMenu: false,
       textDirection,
       copyLimit,
       view: { ...getDefaultViewOptions(), allowInvisibleCharacters },
@@ -569,6 +581,23 @@ export function ResourceTextPanel({
     }),
     [textDirection, copyLimit, allowInvisibleCharacters, extraValidMarkers],
   );
+
+  // The right-click menu is claimed only inside the element that directly wraps the editor. That
+  // element exists only while the editor is what the panel shows, so a message, a spinner or the
+  // resource selector never opens it.
+  // A ref starts out as null for React to be able to set it as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const { dismiss: dismissContextMenu } = useReadOnlyPanelContextMenu({
+    containerRef: editorContainerRef,
+    editorRef,
+    callbacks: contextMenu,
+    logger,
+  });
+  // A menu left open across a change of resource, book or chapter would point at text that is gone.
+  useEffect(() => {
+    dismissContextMenu();
+  }, [dismissContextMenu, resourceProjectId, scrRef.book, scrRef.chapterNum]);
 
   // `contentState` and `isBlankChapter` are deps because the content-area branches below UNMOUNT
   // `Editorial` rather than hiding it. A remounted editor holds nothing, and this effect is its only
@@ -935,6 +964,7 @@ export function ResourceTextPanel({
     // default area stands in.
     return (
       <div
+        ref={editorContainerRef}
         className="tw:flex-1 tw:overflow-auto"
         dir={options.textDirection}
         data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID}

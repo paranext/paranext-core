@@ -18,6 +18,14 @@
 //     Their assertions therefore pin the flag's survival in the USJ, not its effect on the bytes;
 //     that survival is what reaches ParatextData and what a future flip of the markers map's
 //     `shouldOptionalClosingMarkersBePresent` would depend on.
+//
+// The last describe block uses the same apply path to force a settle and pins a second editor
+// behaviour: an `\id` book line whose content is more than one string (a description and a note)
+// keeps all of it. The Insert footnote / cross-reference / endnote commands are gated only on
+// read-only, not on "is the caret on an `\id` line", so an editor that dropped that content on
+// settle would lose project text the first time one of them is used at the start of a book. The
+// result depends on the editor build `dev-packages.json` resolves, not on code in this repo: if it
+// goes red after that build changes, fix the build, never skip the test.
 import { describe, it, expect } from 'vitest';
 import { createRef } from 'react';
 import { render, act, waitFor } from '@testing-library/react';
@@ -101,12 +109,15 @@ function findMarkerObjects(usj: Usj, marker: string): UsjMarkerObject[] {
   return found;
 }
 
-/** Renders a real editor over {@link initialUsj} and returns its ref once the content has loaded. */
-async function renderEditor() {
+/**
+ * Renders a real editor over `defaultUsj` (one `\p` paragraph) and returns its ref once the content
+ * has loaded.
+ */
+async function renderEditor(defaultUsj: Usj = initialUsj) {
   const editorRef = createRef<EditorRef | null>();
-  render(<Editorial ref={editorRef} defaultUsj={initialUsj} />);
+  render(<Editorial ref={editorRef} defaultUsj={defaultUsj} />);
   await waitFor(() => {
-    expect(findMarkerObjects(editorRef.current?.getUsj() ?? initialUsj, 'p')).toHaveLength(1);
+    expect(findMarkerObjects(editorRef.current?.getUsj() ?? defaultUsj, 'p')).toHaveLength(1);
   });
   return editorRef;
 }
@@ -175,5 +186,57 @@ describe('implicitly-closed char spans through the collab apply path', () => {
     expect(findMarkerObjects(usj, 'ft')[0]).toMatchObject({ marker: 'ft', closed: 'false' });
     const usfm = toUsfm(usj);
     expect(usfm).toContain('\\f + \\fr 1:1 \\ft note text\\f*');
+  });
+});
+
+/** An `\id` book line whose content is a description string followed by a footnote-shaped note. */
+const bookWithNoteUsj: Usj = {
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    {
+      type: 'book',
+      marker: 'id',
+      code: 'JON',
+      content: [
+        'some description text',
+        {
+          type: 'note',
+          marker: 'fe',
+          caller: '+',
+          content: [{ type: 'char', marker: 'ft', content: ['a note'] }],
+        },
+      ],
+    },
+    { type: 'chapter', marker: 'c', number: '1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [{ type: 'verse', marker: 'v', number: '1' }, PARA_TEXT],
+    },
+  ],
+};
+
+describe('an \\id book line through a forced settle', () => {
+  it("keeps an \\id book line's non-string content (e.g. a note) through a forced settle", async () => {
+    const editorRef = await renderEditor(bookWithNoteUsj);
+
+    // An unforced `getUsj()` right after mount returns the cached `defaultUsj` verbatim and would
+    // pass whether or not the editor keeps the book's content. A harmless remote insertion forces a
+    // real read-back of the editor's tree. Retaining 3 units lands the insert inside the book
+    // line's own description text ("some" -> "somXe"), so the settle touches the node under test.
+    const usj = applyAndReadUsj(editorRef, [{ retain: 3 }, { insert: 'X' }], 'remote');
+
+    // Control: the insert reached the book line's text, so `getUsj()` reflects the settled tree
+    // rather than echoing the cached `defaultUsj`.
+    expect(JSON.stringify(usj)).toContain('somXe');
+
+    const bookNode = findMarkerObjects(usj, 'id')[0];
+    if (!bookNode) throw new Error('book (\\id) node not found after settle');
+
+    expect(bookNode.content).toBeDefined();
+    const bookContentDescribed = JSON.stringify(bookNode.content);
+    expect(bookContentDescribed).toContain('description text');
+    expect(bookContentDescribed).toContain('a note');
   });
 });

@@ -9,7 +9,10 @@ import { describe, expect, test } from 'vitest';
 // module resolution treats `extensions` (excluded from the root tsconfig's `include`) any
 // differently for an explicit relative import than for a file this project owns.
 import { getMenuSectionsWithItems } from '../../../lib/platform-bible-react/src/components/advanced/menus/menu.util';
-import { EDIT_MENU_COMMANDS } from '../../../extensions/src/platform-scripture-editor/src/edit-menu-actions.util';
+import {
+  EDIT_MENU_COMMANDS,
+  isEditMenuCommand,
+} from '../../../extensions/src/platform-scripture-editor/src/edit-menu-actions.util';
 import {
   EXTENSIONS_DIR,
   getMenuContributingExtensions,
@@ -489,38 +492,101 @@ describe("The scripture editor's Project menu, per mode", () => {
   });
 
   /**
-   * `EDIT_MENU_COMMANDS` (in `edit-menu-actions.util.ts`) lists the Edit flyout commands the web
-   * view intercepts because they need the click's user activation (the clipboard ones). It and the
-   * Edit ▸ flyout's command list in `menus.json` are two independently maintained lists: the web
-   * view's `menuCommandHandler` intercepts a flyout click only when `isEditMenuCommand` recognizes
-   * it, so a clipboard item added or reordered in `menus.json` without a matching update there
-   * falls through to a `sendCommand` call for a command PAPI never registers. Undo and Redo are
-   * registered PAPI commands, so they lead the flyout and are not on the list. Comparing against
-   * the ids this test derives from the served menu, rather than a third hardcoded list, is what
-   * catches that drift.
+   * The clipboard commands the editor's right-click menu offers, read from the real `menus.json`
+   * (Copy appears twice there, once per resource and non-resource variant), in first-seen order.
    */
-  test('EDIT_MENU_COMMANDS matches the Edit flyout clipboard commands, in order', async () => {
-    const registeredEditCommands = ['platformScriptureEditor.undo', 'platformScriptureEditor.redo'];
+  function contextMenuClipboardCommandIds(): string[] {
+    const menus = JSON.parse(readFileSync(EDITOR_MENUS_PATH, 'utf8'));
+    const { items }: { items: { group: string; command?: string }[] } =
+      menus.webViewMenus[SCRIPTURE_EDITOR_WEB_VIEW_TYPE].contextMenu;
+    const commands = items.flatMap((item) =>
+      item.group === 'platformScriptureEditor.contextClipboard' && item.command
+        ? [item.command]
+        : [],
+    );
+    return [...new Set(commands)];
+  }
+
+  const REGISTERED_EDIT_COMMANDS = ['platformScriptureEditor.undo', 'platformScriptureEditor.redo'];
+
+  /**
+   * `EDIT_MENU_COMMANDS` (in `edit-menu-actions.util.ts`) lists the commands the web view
+   * intercepts and runs in-frame because they need the click's user activation (the clipboard
+   * ones). The Edit flyout and the editor's right-click menu offer them, and both lists live in
+   * `menus.json` independently of it: the web view's `menuCommandHandler` intercepts a click only
+   * when `isEditMenuCommand` recognizes it, so a clipboard item added or reordered in a menu
+   * without a matching update there falls through to a `sendCommand` call for a command PAPI never
+   * registers. Undo and Redo are registered PAPI commands, so they lead the flyout and are not on
+   * the list. Comparing against the ids this test derives from the real menus, rather than a third
+   * hardcoded list, is what catches that drift.
+   */
+  test('the Edit flyout offers Undo, Redo and the intercepted clipboard commands the right-click menu shares, in order', async () => {
+    const flyoutClipboard = EDIT_MENU_COMMANDS.slice(0, 3);
     const simpleMenu = await getEditorTopMenuInMode('simple');
     expect(flyoutCommandIds(simpleMenu, 'platformScriptureEditor.editSubmenu')).toEqual([
-      ...registeredEditCommands,
-      ...EDIT_MENU_COMMANDS,
+      ...REGISTERED_EDIT_COMMANDS,
+      ...flyoutClipboard,
     ]);
     // Power's flyout adds Find after the edit actions, which the web view routes to its own handler
     const powerMenu = await getEditorTopMenuInMode('power');
     expect(flyoutCommandIds(powerMenu, 'platformScriptureEditor.editSubmenu')).toEqual([
-      ...registeredEditCommands,
-      ...EDIT_MENU_COMMANDS,
+      ...REGISTERED_EDIT_COMMANDS,
+      ...flyoutClipboard,
       'platformScripture.openFind',
     ]);
   });
 
-  test('the intercepted Edit flyout commands are the three clipboard ones', () => {
-    expect([...EDIT_MENU_COMMANDS]).toEqual([
+  test('the intercepted commands are the union of the Edit flyout and right-click menu clipboard commands', async () => {
+    const flyoutClipboard = flyoutCommandIds(
+      await getEditorTopMenuInMode('simple'),
+      'platformScriptureEditor.editSubmenu',
+    ).filter((command) => !REGISTERED_EDIT_COMMANDS.includes(command));
+    expect(flyoutClipboard).toEqual([
       'platformScriptureEditor.cutSelection',
       'platformScriptureEditor.copySelection',
       'platformScriptureEditor.pasteAtSelection',
     ]);
+    // The right-click menu offers those three plus Paste as plain text
+    expect(contextMenuClipboardCommandIds()).toEqual([
+      ...flyoutClipboard,
+      'platformScriptureEditor.pasteAsPlainTextAtSelection',
+    ]);
+    // The intercepted list is the union of the two, neither side missing or extra
+    expect([...EDIT_MENU_COMMANDS]).toEqual([
+      ...new Set([...flyoutClipboard, ...contextMenuClipboardCommandIds()]),
+    ]);
+  });
+
+  /**
+   * Every command the editor's right-click menu runs must be one the web view can run: an
+   * intercepted clipboard command (in the clipboard group, which the union test above reads), Find
+   * (routed to its own handler), or a command the top menu already uses (the Insert items,
+   * registered PAPI commands). Any other command, such as a clipboard item moved to another group
+   * or a made-up one, would be sent as an unregistered PAPI command.
+   */
+  test('every command of the right-click menu is intercepted, Find, or one the top menu already runs', () => {
+    const menus = JSON.parse(readFileSync(EDITOR_MENUS_PATH, 'utf8'));
+    const { items }: { items: { group: string; command?: string }[] } =
+      menus.webViewMenus[SCRIPTURE_EDITOR_WEB_VIEW_TYPE].contextMenu;
+    const commandItems = items.flatMap((item) =>
+      item.command ? [{ group: item.group, command: item.command }] : [],
+    );
+    // Positive control: the menu has command items, and each class below is represented
+    expect(commandItems.length).toBeGreaterThan(5);
+    const topMenuCommands = declaredEditorCommandIds();
+    const unexplained = commandItems
+      .filter(({ group, command }) => {
+        const isIntercepted = isEditMenuCommand(command);
+        if (isIntercepted) return group !== 'platformScriptureEditor.contextClipboard';
+        if (group === 'platformScriptureEditor.contextClipboard') return true;
+        return command !== 'platformScripture.openFind' && !topMenuCommands.has(command);
+      })
+      .map(({ group, command }) => `${command} in ${group}`);
+    expect(unexplained).toEqual([]);
+    expect(commandItems.some(({ command }) => command === 'platformScripture.openFind')).toBe(true);
+    expect(
+      commandItems.some(({ command }) => command.startsWith('platformScriptureEditor.insert')),
+    ).toBe(true);
   });
 
   /**

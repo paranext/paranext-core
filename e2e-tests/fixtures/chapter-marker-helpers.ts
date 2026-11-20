@@ -38,7 +38,7 @@ export function getChapterUsfmFromProvider(
 
 /**
  * Open the sample project in the editable Standard-view editor (Power mode) and return its frame
- * and its contenteditable root. `.first()` because the footnote-editor popover renders its own
+ * and its contenteditable root. `.first()` because the footnotes pane's row editor renders its own
  * `.editor-input.marker-editable`.
  */
 export async function openSampleEditorInStandardView(

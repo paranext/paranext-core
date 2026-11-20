@@ -73,6 +73,8 @@ import {
   measureBox,
   useLivePopoverAnchor,
 } from '@/hooks/use-live-popover-anchor.hook';
+import { runKeepingBrowserSelection } from '@/utils/browser-selection.util';
+import { focusEditorKeepingSelection } from '@/utils/focus-editor-keeping-selection.util';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
@@ -102,13 +104,56 @@ export interface FootnoteEditorHandle {
    * or the note is unchanged.
    */
   flushPendingEdits: () => void;
-  /** Puts DOM focus back in the note text, on the caret the editor last held. */
+  /**
+   * Puts DOM focus back in the note text, on the caret the editor last held. When the editor has
+   * lost its selection (a menu or toolbar took focus), the selection captured as focus left is put
+   * back first, so focus does not land at the end of the document. With nothing to put back, the
+   * caret goes to the end of the note. Does nothing while the inner editor is not mounted.
+   */
   focus: () => void;
   /**
    * Whether DOM focus is anywhere in this editor - its note text or its own controls. Reads the
    * document's active element, so it stays true while the window itself is not focused.
    */
   containsFocus: () => boolean;
+  /**
+   * Cuts the selected note text to the clipboard. Puts the selection captured when focus last left
+   * the editor back first, if the editor has none now (a menu or toolbar took focus), then focuses
+   * the note text, or only the frame when there is no selection to land on or the editor is
+   * read-only. Does nothing while the inner editor is not mounted. Throws when the inner editor is
+   * read-only; the host handles that.
+   *
+   * @experimental This method is unstable and may change shape or disappear without notice
+   */
+  cut: () => void;
+  /**
+   * Copies the selected note text to the clipboard. Puts the selection captured when focus last
+   * left the editor back first, if the editor has none now, then focuses the note text, or only the
+   * frame when there is no selection to land on or the editor is read-only. Does nothing while the
+   * inner editor is not mounted.
+   *
+   * @experimental This method is unstable and may change shape or disappear without notice
+   */
+  copy: () => void;
+  /**
+   * Pastes the clipboard's contents at the selection. Puts the selection captured when focus last
+   * left the editor back first, if the editor has none now, then focuses the note text, or only the
+   * frame when there is no selection to land on or the editor is read-only. Does nothing while the
+   * inner editor is not mounted. Throws when the inner editor is read-only; the host handles that.
+   *
+   * @experimental This method is unstable and may change shape or disappear without notice
+   */
+  paste: () => void;
+  /**
+   * Pastes the clipboard's contents at the selection as plain text. Puts the selection captured
+   * when focus last left the editor back first, if the editor has none now, then focuses the note
+   * text, or only the frame when there is no selection to land on or the editor is read-only. Does
+   * nothing while the inner editor is not mounted. Throws when the inner editor is read-only; the
+   * host handles that.
+   *
+   * @experimental This method is unstable and may change shape or disappear without notice
+   */
+  pastePlainText: () => void;
 }
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
@@ -200,6 +245,15 @@ export interface FootnoteEditorProps {
    * a long live edit is never treated as an abandoned session).
    */
   onNoteEdit?: () => void;
+  /**
+   * Whether the inner editor shows the editor package's own right-click menu. A host that serves
+   * the right-click itself (a platform context menu) passes `false`; the inner editor then opens
+   * nothing on a right-click and this component stops reading the built-in menu's open state.
+   *
+   * @default true
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  hasBuiltInContextMenu?: boolean;
 }
 
 /**
@@ -406,6 +460,7 @@ export default function FootnoteEditor({
   initialCaretPosition,
   markerPalette,
   onNoteEdit,
+  hasBuiltInContextMenu = true,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
   /* eslint-disable no-null/no-null */
@@ -695,12 +750,12 @@ export default function FootnoteEditor({
   const options = useMemo<EditorOptions>(
     () => ({
       ...editorOptions,
-      // Drop any inherited context-menu extras (e.g. the main editor's "Insert footnote" /
-      // "Insert cross-reference" / "Insert comment" items). Those items' onSelect closures are
-      // bound to the OUTER main-document editorRef, so surfacing them inside this popover would
-      // let a right-click here silently mutate the main document. The popover keeps only the
-      // built-in Cut/Copy/Paste context-menu items.
+      // Drop any context-menu extras the host's editor options carry (for example Insert footnote
+      // or Insert comment items). Their onSelect closures are bound to the host's own editor, so
+      // surfacing them inside this editor would let a right-click here silently change the host's
+      // document. While the built-in menu is shown it keeps only its Cut/Copy/Paste items.
       contextMenu: undefined,
+      hasBuiltInContextMenu,
       markerMenuTrigger: defaultMarkerMenuTrigger,
       hasExternalUI: true,
       view: {
@@ -719,7 +774,24 @@ export default function FootnoteEditor({
         showParaMarkerPrefixes: false,
       },
     }),
-    [editorOptions, defaultMarkerMenuTrigger],
+    [editorOptions, defaultMarkerMenuTrigger, hasBuiltInContextMenu],
+  );
+  const isReadonly = !!options.isReadonly;
+
+  // Read at event time by the keydown guards, so a host passing a new closure does not re-register
+  // their document listeners.
+  const hasBuiltInContextMenuRef = useRef(hasBuiltInContextMenu);
+  useEffect(() => {
+    hasBuiltInContextMenuRef.current = hasBuiltInContextMenu;
+  }, [hasBuiltInContextMenu]);
+
+  /**
+   * Whether the editor package's own right-click menu is open over this editor (read from the mark
+   * it leaves on this editor's root). Never when that menu is turned off.
+   */
+  const isBuiltInContextMenuOpen = useCallback(
+    () => hasBuiltInContextMenuRef.current && isEditorContextMenuOpenFor(editorParentRef.current),
+    [],
   );
 
   const inlineMarkerMenuItems = useMemo(
@@ -1047,17 +1119,65 @@ export default function FootnoteEditor({
     flushPendingApply();
   }, [flushPendingApply]);
 
+  /**
+   * Puts back the caret or selection focus last left the inner editor with when the editor has none
+   * now (a menu took focus and Lexical's blur handling dropped it). Unlike
+   * {@link restoreSelectionIfLost} it never falls back to selecting the note. A selected paragraph
+   * marker counts as a live selection, as there. Call it BEFORE focusing: with no selection, focus
+   * puts the caret at the end of the document, and the editor would then report a selection and the
+   * restore would never run.
+   *
+   * @returns The inner editor, or `undefined` while it is not mounted
+   */
+  const restoreLostSelection = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return undefined;
+    const lastFocusOutSelection = lastFocusOutSelectionRef.current;
+    if (lastFocusOutSelection && !editor.getSelection() && !editor.getSelectedParaMarker())
+      editor.setSelection(lastFocusOutSelection);
+    return editor;
+  }, []);
+
+  /**
+   * Runs a clipboard action on the inner editor, focused first: the clipboard read behind Paste
+   * needs the frame focused when it runs.
+   *
+   * Focus follows {@link focusEditorKeepingSelection}: the inner editor's own `focus()` only when it
+   * is editable and has a selection to land on, otherwise just the frame's window.
+   */
+  const runClipboardMethod = useCallback(
+    (method: 'cut' | 'copy' | 'paste' | 'pastePlainText') => {
+      const editor = restoreLostSelection();
+      if (!editor) return;
+      const ownerDocument = editorParentRef.current?.ownerDocument;
+      focusEditorKeepingSelection(editor, !isReadonly, ownerDocument?.defaultView ?? window);
+      // The editor's copy leaves the browser selection on a hidden element at the end of the note;
+      // put it back before the editor takes that as its selection.
+      if (method === 'copy') runKeepingBrowserSelection(() => editor.copy(), ownerDocument);
+      else editor[method]();
+    },
+    [isReadonly, restoreLostSelection],
+  );
+
   useImperativeHandle(
     ref,
     () => ({
       flushPendingEdits,
-      focus: () => editorRef.current?.focus(),
+      focus: () => {
+        // Always the editor itself, so typing lands in the note: with nothing to restore, its
+        // focus puts the caret at the end of the note.
+        restoreLostSelection()?.focus();
+      },
       containsFocus: () => {
         const container = containerRef.current;
         return !!container && container.contains(container.ownerDocument.activeElement);
       },
+      cut: () => runClipboardMethod('cut'),
+      copy: () => runClipboardMethod('copy'),
+      paste: () => runClipboardMethod('paste'),
+      pastePlainText: () => runClipboardMethod('pastePlainText'),
     }),
-    [flushPendingEdits],
+    [flushPendingEdits, restoreLostSelection, runClipboardMethod],
   );
 
   const closeAndSave = useCallback(() => {
@@ -1545,14 +1665,13 @@ export default function FootnoteEditor({
           return;
         }
 
-        // This popover's own right-click menu is up: let its own keydown listener handle every
-        // key instead of the guards below, which otherwise resolve against the caret/selection —
-        // collapsing a selection the menu's own Enter (e.g. Cut) is about to act on. Still claim
-        // and drop `\`, mirroring the main editor's swallow-while-menu-open behavior, so the
-        // literal backslash never leaks into the note once the menu closes. See
-        // `isEditorContextMenuOpenFor`. Scoped to THIS popover's root — a second editor's open
-        // menu (e.g. the main Standard-view editor) must never trip this gate.
-        if (isEditorContextMenuOpenFor(editorParentRef.current)) {
+        // This editor's own built-in right-click menu is up: let its own keydown listener handle
+        // every key instead of the guards below, which otherwise resolve against the
+        // caret/selection — collapsing a selection the menu's own Enter (e.g. Cut) is about to act
+        // on. Still claim and drop `\`, so the literal backslash never
+        // leaks into the note once the menu closes. See `isEditorContextMenuOpenFor`. Scoped to
+        // THIS editor's root — another editor's open menu must never trip this gate.
+        if (isBuiltInContextMenuOpen()) {
           if (event.key === defaultMarkerMenuTrigger) {
             event.preventDefault();
             event.stopPropagation();
@@ -1638,8 +1757,8 @@ export default function FootnoteEditor({
     const isEditorFocusedWithoutMenu = () => {
       const editorInput = getEditorInput();
       if (!editorInput || document.activeElement !== editorInput) return false;
-      // The popover's own right-click menu takes Enter to run its highlighted item.
-      return !isEditorContextMenuOpenFor(editorParentRef.current);
+      // The built-in right-click menu takes Enter to run its highlighted item.
+      return !isBuiltInContextMenuOpen();
     };
     const swallowEnter = (event: KeyboardEvent) => {
       if (event.key !== 'Enter' || isImeCompositionKeyEvent(event)) return;
@@ -1689,6 +1808,7 @@ export default function FootnoteEditor({
     markerPalette,
     openMarkerPaletteAtCaret,
     isDomCaretInsideNote,
+    isBuiltInContextMenuOpen,
   ]);
 
   // The inline surface renders no Cancel/Close control - its edits apply live - so Escape is its

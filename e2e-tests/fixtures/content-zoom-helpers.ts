@@ -292,16 +292,17 @@ export async function expectPopupBesideTriggerAndInsideFrame(
 }
 
 /**
- * The in-text caller that opens the footnote editor popover (`.immutable-note-caller > button`,
- * shared with cross-references). Scoped to `data-note-kind="footnote"` so it lands on a real
- * footnote — the sample WEB project's Jonah 1 carries footnote callers at verses 1, 6 and 9
- * (`c-sharp/assets/WEB/32JONengWEBUS.SFM`), and the specs using it navigate to Jonah 1:1.
+ * The in-text caller that opens the footnote's row editor in the footnotes pane
+ * (`.immutable-note-caller > button`, shared with cross-references). Scoped to
+ * `data-note-kind="footnote"` so it lands on a real footnote — the sample WEB project's Jonah 1
+ * carries footnote callers at verses 1, 6 and 9 (`c-sharp/assets/WEB/32JONengWEBUS.SFM`), and the
+ * specs using it navigate to Jonah 1:1.
  */
 export const TEXT_NOTE_CALLER_SELECTOR =
   '.note[data-note-kind="footnote"] .immutable-note-caller > button';
 
 /**
- * The main text editor's container. `.first()`: an open footnote popover renders a second
+ * The main text editor's container. `.first()`: an open footnote row editor renders a second
  * `.editor-container` of its own (portaled after the main one), so the bare selector is ambiguous
  * while it is open.
  */

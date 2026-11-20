@@ -15,11 +15,9 @@ import type {
 import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 // The editor's USJ node styling. The real app loads these globally; Storybook doesn't, so without
-// them the editor's context menu is unstyled and its read-only marker toolbar renders as a stray
-// inline label. We import the same icon-free subset the editorial layout stories used
-// (editor.css/editor-overrides.css were skipped because they previously referenced toolbar icon
-// SVGs by absolute URL that the css-loader couldn't resolve but have now been cleaned up and can be
-// used; the minimal wrapper styles are inlined in EDITOR_WRAPPER_STYLE below).
+// them the editor's read-only marker toolbar renders as a stray inline label. The story imports the
+// editor's icon-free stylesheet subset; the minimal wrapper styles are inlined in
+// EDITOR_WRAPPER_STYLE below.
 /* eslint-disable import/no-relative-packages -- these editor demo CSS files are not part of
    platform-bible-react's package exports (only `.` → dist is exported), so they can only be pulled
    in by relative path; this mirrors src/stories/platform/ten-layout-shared.tsx. */
@@ -69,6 +67,13 @@ const sampleUsj = usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
 `);
 
 const DATA_VERSION = '1.0.0';
+
+const STORY_CONTEXT_MENU = {
+  requestMenu: async () => undefined,
+  dismissMenu: () => {},
+  openFind: () => {},
+  sendCommand: () => {},
+};
 
 const seedResources: DblResourceData[] = [
   {
@@ -264,6 +269,8 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         getResourceChapter={getResourceChapter}
         resourceCopyLimit={undefined}
         allowInvisibleCharacters={false}
+        // Storybook has no platform menu service: a right-click opens nothing
+        contextMenu={STORY_CONTEXT_MENU}
         copyrightNotice={config.copyrightNotice}
       />
       <Dialog

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
- * The popover mounts the library's `ContextMenuPlugin` unconditionally (like the main Standard-view
- * editor), and its own `\` handler must claim and drop the trigger while THAT menu is open — the
- * same swallow-while-menu-open behavior the main editor applies to itself. Without that check,
- * right-clicking the note and then pressing `\` would open the marker palette underneath the
- * still-open menu.
+ * A `FootnoteEditor` that shows the editor package's own right-click menu (`hasBuiltInContextMenu`,
+ * on by default) mounts the library's `ContextMenuPlugin`, and its own `\` handler must claim and
+ * drop the trigger while THAT menu is open. Without that check, right-clicking the note and then
+ * pressing `\` would open the marker palette underneath the still-open menu. The second block pins
+ * that a host that turns the built-in menu off gets none of that gating.
  *
  * Mounts the REAL `Editorial` (like footnote-editor.enter-guard.test.tsx and
  * footnote-editor.palette-commit.test.tsx, with which it shares footnote-editor.test-harness) so
@@ -268,5 +268,53 @@ describe('FootnoteEditor context-menu gate (the popover claims `\\` while its ow
     });
 
     expect(show).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('FootnoteEditor context-menu gate (the built-in menu turned off)', () => {
+  it('ignores the built-in menu marker when the built-in menu is turned off', async () => {
+    const { markerPalette, show } = makeMarkerPalette();
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      markerPalette,
+      extraProps: { hasBuiltInContextMenu: false },
+    });
+    await placeCaretInNote(lexical, editorInput);
+    // The mark the built-in menu leaves on its editor root while open. With that menu off nothing in
+    // this editor sets it, so it must not stop the palette from opening.
+    editorInput.setAttribute('aria-controls', 'editor-context-menu');
+
+    await act(async () => {
+      dispatchBackslash(editorInput);
+      await Promise.resolve();
+    });
+
+    expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Enter with the caret inside the note is the `\\fp` break in Standard view: the editor's own
+   * handler, which a menu in another document must never trigger. Sees whether the key got there.
+   */
+  async function pressEnterInNote(editorInput: HTMLElement) {
+    const editorSawEnter = vi.fn();
+    editorInput.addEventListener('keydown', editorSawEnter);
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    await act(async () => {
+      editorInput.dispatchEvent(event);
+      await Promise.resolve();
+    });
+    editorInput.removeEventListener('keydown', editorSawEnter);
+    return { event, editorSawEnter };
+  }
+
+  it('leaves Enter in the note to the editor when the built-in menu is turned off (control)', async () => {
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      extraProps: { hasBuiltInContextMenu: false },
+    });
+    await placeCaretInNote(lexical, editorInput);
+
+    const { editorSawEnter } = await pressEnterInNote(editorInput);
+
+    expect(editorSawEnter).toHaveBeenCalled();
   });
 });

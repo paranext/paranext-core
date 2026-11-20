@@ -58,6 +58,7 @@ import {
 } from './scripture-text-grid-persistence.utils';
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
+import { useReadOnlyPanelContextMenuCallbacks } from './use-read-only-panel-context-menu-callbacks.hook';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 import {
   notifySelectionNotStored,
@@ -101,6 +102,7 @@ const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
  */
 globalThis.webViewComponent = function ResourceTextPanelWebView({
   id: webViewId,
+  webViewType,
   projectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
@@ -439,6 +441,11 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // Ctrl+F opens Find for the displayed resource.
   useOpenFindShortcut(webViewId, resourceProjectId);
+  const contextMenuCallbacks = useReadOnlyPanelContextMenuCallbacks(
+    webViewId,
+    webViewType,
+    resourceProjectId,
+  );
 
   // This web view's definition `projectId` is the container project whose reference list is shown,
   // so the displayed resource is invisible to global navigation UI unless declared here.
@@ -715,6 +722,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       isOnline={isOnline}
       onShowResourcePicker={openResourcePicker}
       logger={logger}
+      contextMenu={contextMenuCallbacks}
       copyrightNotice={
         <ProjectCopyrightNotice
           projectId={resourceProjectId}

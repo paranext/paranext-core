@@ -13,7 +13,10 @@
 import { act, render } from '@testing-library/react';
 import type { DeltaOpInsertNoteEmbed, EditorOptions } from '@eten-tech-foundation/platform-editor';
 import { $getSelection, $isRangeSelection, LexicalEditor, LexicalNode } from 'lexical';
-import FootnoteEditor, { FootnoteEditorMarkerPalette } from './footnote-editor.component';
+import FootnoteEditor, {
+  FootnoteEditorMarkerPalette,
+  FootnoteEditorProps,
+} from './footnote-editor.component';
 import { buildLocalizedStrings, scrRef, sentinelNoteOp } from './footnote-editor.fixtures';
 
 // Re-export the shared fixtures so existing importers of the harness keep working.
@@ -99,6 +102,9 @@ export async function settle(ms = 50) {
  *
  * `onChange` (optional) receives the popover's saved note ops (the component's auto-save and Save
  * flows), for suites asserting on what the save path emits.
+ *
+ * `extraProps` (optional) are passed through to the editor last, for suites exercising a prop the
+ * harness has no named option for (the host context-menu props, for example).
  */
 export async function renderPopoverAndWaitForInit(
   view: EditorOptions['view'],
@@ -106,10 +112,12 @@ export async function renderPopoverAndWaitForInit(
     waitMs = 50,
     markerPalette = undefined,
     onChange = undefined,
+    extraProps = undefined,
   }: {
     waitMs?: number;
     markerPalette?: FootnoteEditorMarkerPalette;
     onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
+    extraProps?: Partial<FootnoteEditorProps>;
   } = {},
 ) {
   const utils = render(
@@ -123,6 +131,7 @@ export async function renderPopoverAndWaitForInit(
       localizedStrings={buildLocalizedStrings()}
       markerPalette={markerPalette}
       onChange={onChange}
+      {...extraProps}
     />,
   );
   const editorInput = utils.container.querySelector('.editor-input');

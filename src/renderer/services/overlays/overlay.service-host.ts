@@ -48,7 +48,9 @@ import type {
 import { contextKeysService } from '@shared/services/context-keys.service';
 import { evaluateMenuRecordingReads } from '@shared/utils/evaluate-menu-recording-reads.util';
 import { collectContextMenuKeys } from '@renderer/components/overlays/overlay-context-menu-localization.util';
+import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import { webViewService } from '@shared/services/web-view.service';
+import { isRunningInWebView, shouldSuppressFocusReturn } from 'platform-bible-react';
 import type { ReactElement } from 'react';
 import {
   CommandPaletteItem,
@@ -57,6 +59,7 @@ import {
   OverlayEntry,
   PopoverContent,
   PopoverRequest,
+  ShowContextMenuOptions,
 } from './overlay.service-model';
 import { filterPaletteItems, getPaletteFilterMode } from './overlay-palette-filter.util';
 import { convertContributionToContextMenuItems } from './overlay-menu-converter';
@@ -77,12 +80,7 @@ import {
   updateContextMenuItems,
   updateCommandPaletteState,
 } from './overlay-store';
-import {
-  translateCoordinates,
-  clampToViewport,
-  isWebViewVisible,
-  getWebViewIframe,
-} from './overlay-coordinates';
+import { translateCoordinates, clampToViewport, isWebViewVisible } from './overlay-coordinates';
 import {
   markOverlayFocusReturnIfFocusInside,
   resetOverlayFocusReturnMarks,
@@ -105,21 +103,25 @@ const DEBOUNCE_COOLDOWN_MS = 50;
  */
 const OVERLAY_CREATION_GRACE_MS = 300;
 
-/** Timestamp of the most recent overlay creation */
-let lastOverlayCreatedAt = 0;
+/**
+ * Monotonic timestamp (`performance.now()`) of the most recent overlay creation. Elapsed time in
+ * this service is measured on the monotonic clock because the wall clock can step backwards (when
+ * the system clock is set back, for example), which makes a `Date.now()` difference negative.
+ */
+let lastOverlayCreatedAt = -Infinity;
 
 /** ID of the most recently created overlay, paired with {@link lastOverlayCreatedAt} */
 let lastOverlayCreatedId: string | undefined;
 
 /** Records an overlay creation for the auto-dismiss listeners' grace period */
 function noteOverlayCreated(overlayId: string): void {
-  lastOverlayCreatedAt = Date.now();
+  lastOverlayCreatedAt = performance.now();
   lastOverlayCreatedId = overlayId;
 }
 
 /** Whether an overlay was created too recently for an auto-dismiss listener to act on it */
 function isWithinOverlayCreationGrace(): boolean {
-  return Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS;
+  return performance.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS;
 }
 
 /**
@@ -137,7 +139,7 @@ function isWithinOverlayCreationGrace(): boolean {
 const OVERLAY_CONTENT_SELECTOR =
   '[data-overlay-host], [data-overlay-popover], [data-overlay-command-palette], [data-radix-popper-content-wrapper]';
 
-/** Tracks the last invocation time per overlay type per webViewId */
+/** Tracks the last invocation time (monotonic, `performance.now()`) per overlay type per webViewId */
 const lastInvocationTime = new Map<string, number>();
 
 /**
@@ -146,7 +148,7 @@ const lastInvocationTime = new Map<string, number>();
  */
 function debounceCheck(overlayType: string, webViewId: string): boolean {
   const key = `${webViewId}:${overlayType}`;
-  const now = Date.now();
+  const now = performance.now();
   const lastTime = lastInvocationTime.get(key);
 
   if (lastTime !== undefined && now - lastTime < DEBOUNCE_COOLDOWN_MS) {
@@ -255,24 +257,85 @@ function resolveFocusTarget(
 }
 
 /**
+ * Puts keyboard focus inside a web view's frame once focus has been returned to that web view.
+ * Focusing a web view's tab focuses the tab's panel or its last focused element, not its frame, so
+ * a web view whose content never had a focused element (read-only Scripture text) would be left
+ * without keyboard focus inside its frame, and Ctrl+C would copy nothing. `contentWindow.focus()`
+ * focuses the frame without changing its selection or its own focused element.
+ *
+ * Does nothing unless the frame exists and is visible, the app window still has focus, and focus is
+ * still where returning it left it (the page body, the tab's own panel, or this frame), so whatever
+ * the user focused while focus was being returned keeps it. A click on an unfocusable part of the
+ * page in that moment also leaves focus on the body, which cannot be told apart from where
+ * returning focus leaves a tab whose panel is not focusable, so the frame is focused then too.
+ * Never throws.
+ */
+function focusReturnedWebViewFrame(webViewId: string): void {
+  try {
+    const frame = getWebViewIframe(webViewId);
+    const frameWindow = frame?.contentWindow;
+    if (!frame || !frameWindow || !isWebViewVisible(webViewId) || !document.hasFocus()) return;
+
+    const active = document.activeElement;
+    if (active !== frame) {
+      // Another frame holds focus: the shared focus-return rule leaves it there
+      if (shouldSuppressFocusReturn(document, isRunningInWebView())) return;
+      const isStillWhereReturnLeftIt =
+        !active ||
+        active === document.body ||
+        active.closest('[data-tab-id]')?.getAttribute('data-tab-id') === webViewId;
+      if (!isStillWhereReturnLeftIt) return;
+    }
+    frameWindow.focus();
+  } catch (error) {
+    logger.debug(
+      `Could not focus the frame of web view ${webViewId} after its context menu closed: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+/** How an overlay that returns focus to its opener follows that up */
+type FocusReturnOptions = {
+  /**
+   * Also focus the requesting web view's frame once focus is back (see
+   * {@link focusReturnedWebViewFrame}). Context menus only.
+   */
+  focusRequesterFrame?: boolean;
+};
+
+/**
  * Settles an overlay's focus record when it closes, returning focus to the opener when asked to.
- * Called synchronously from the one place each overlay type settles. This function itself never
- * reads where focus currently is; the only focus read is the containment check in
- * {@link settleTransientOverlayFocus}, so a click elsewhere can never pull focus back.
+ * Called synchronously from the one place each overlay type settles. Whether to return focus never
+ * depends on where focus currently is, apart from the containment check in
+ * {@link settleTransientOverlayFocus}, so a click elsewhere can never pull focus back. Focusing the
+ * requester's frame afterwards reads the active element only to avoid overriding a focus move made
+ * meanwhile.
  *
  * @param overlayId The overlay that is closing
  * @param shouldReturnFocus Whether this close hands focus back to the opener
+ * @param options How returning focus is followed up
  */
-function settleFocus(overlayId: string, shouldReturnFocus: boolean): void {
+function settleFocus(
+  overlayId: string,
+  shouldReturnFocus: boolean,
+  options: FocusReturnOptions = {},
+): void {
   const record = focusRecords.get(overlayId);
   focusRecords.delete(overlayId);
   if (!shouldReturnFocus || !record) return;
 
   const target = resolveFocusTarget(record);
   if (!target) return;
-  windowService.setFocus(target).catch(() => {
-    // Best-effort focus restore
-  });
+  windowService
+    .setFocus(target)
+    .then(() => {
+      if (options.focusRequesterFrame && target.focusType === 'webView')
+        focusReturnedWebViewFrame(target.id);
+      return undefined;
+    })
+    .catch(() => {
+      // Best-effort focus restore
+    });
 }
 
 /**
@@ -280,10 +343,20 @@ function settleFocus(overlayId: string, shouldReturnFocus: boolean): void {
  * when an item was picked (a result came back), or when the close was marked as returning focus and
  * focus was inside the overlay's own content at that moment. A click elsewhere, a pane or tab
  * switch, a replacement, a timeout and a scroll never return focus.
+ *
+ * @param options How returning focus is followed up; see {@link settleFocus}
  */
-function settleTransientOverlayFocus(overlayId: string, wasPicked: boolean): void {
+function settleTransientOverlayFocus(
+  overlayId: string,
+  wasPicked: boolean,
+  options: FocusReturnOptions = {},
+): void {
   const isMarked = takeOverlayFocusReturnMark(overlayId);
-  settleFocus(overlayId, wasPicked || (isMarked && isFocusInsideOverlayContent(overlayId)));
+  settleFocus(
+    overlayId,
+    wasPicked || (isMarked && isFocusInsideOverlayContent(overlayId)),
+    options,
+  );
 }
 
 /** Whether a rejection is the replacement or shutdown of an overlay rather than an answer to it */
@@ -551,20 +624,27 @@ function menuExpressionsUseTemplateVar(menu: Localized<SingleColumnMenu>, name: 
 
 // ── Core Service Methods ──
 
+/** A `showContextMenu` call that has not registered its overlay yet */
+type PendingContextMenuRequest = { cancel: () => void; isCancelled: () => boolean };
+
+/** The context menu requests of each web view that are still preparing their menu, by web view ID */
+const pendingContextMenuRequests = new Map<string, Set<PendingContextMenuRequest>>();
+
 /**
  * Shows a context menu from menu.json contributions registered for the given webViewType. Fetches
- * menu data, renders the menu, and auto-executes the selected command.
+ * menu data, renders the menu, and runs the selected command unless `shouldRunCommand` is `false`.
  *
  * @param webViewType The webViewType to look up in the menu data service
  * @param webViewId The webViewId that originated the request
- * @returns The command string that was executed, or undefined if dismissed
+ * @param options Position, whether to run the picked command, and per-request context keys
+ * @returns The picked command string, or undefined if dismissed
  * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
  *   debounce cooldown
  */
 async function showContextMenu(
   webViewType: string,
   webViewId: string,
-  options?: { position?: { x: number; y: number } },
+  options?: ShowContextMenuOptions,
 ): Promise<string | undefined> {
   if (!isWebViewVisible(webViewId)) {
     throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
@@ -574,11 +654,42 @@ async function showContextMenu(
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
+  // Registered for the whole call so `dismissContextMenu` can cancel it while it awaits data. An
+  // entry lives only as long as its call, so the map cannot outgrow the requests in flight.
+  let cancelled = false;
+  const request: PendingContextMenuRequest = {
+    cancel: () => {
+      cancelled = true;
+    },
+    isCancelled: () => cancelled,
+  };
+  let pendingForWebView = pendingContextMenuRequests.get(webViewId);
+  if (!pendingForWebView) {
+    pendingForWebView = new Set();
+    pendingContextMenuRequests.set(webViewId, pendingForWebView);
+  }
+  pendingForWebView.add(request);
+  try {
+    return await buildAndShowContextMenu(webViewType, webViewId, request, options);
+  } finally {
+    const remaining = pendingContextMenuRequests.get(webViewId);
+    remaining?.delete(request);
+    if (remaining?.size === 0) pendingContextMenuRequests.delete(webViewId);
+  }
+}
+
+/** Fetches the menu data, then registers the overlay unless the request was cancelled meanwhile. */
+async function buildAndShowContextMenu(
+  webViewType: string,
+  webViewId: string,
+  request: PendingContextMenuRequest,
+  options?: ShowContextMenuOptions,
+): Promise<string | undefined> {
   // Fetch menu contributions for this webViewType
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const { contextMenu } = await menuDataService.getWebViewMenu(webViewType as ReferencedItem);
 
-  if (!contextMenu) {
+  if (!contextMenu || request.isCancelled()) {
     return undefined;
   }
 
@@ -597,6 +708,8 @@ async function showContextMenu(
       );
     }
   }
+  if (request.isCancelled()) return undefined;
+
   const templateVars = createMenuTemplateVars({ webViewId, webViewType, projectId });
   // `when` hides an item and `enabledWhen` on a command item disables it. `checkedWhen`, and
   // `enabledWhen` on a submenu, are rejected at load. While the menu is open it re-evaluates
@@ -609,6 +722,7 @@ async function showContextMenu(
     contextMenu,
     templateVars,
     onEvaluationError,
+    options?.contextKeys,
   );
   let { readKeys } = initialEvaluation;
   const items = convertContributionToContextMenuItems(initialEvaluation.evaluatedMenu);
@@ -651,11 +765,11 @@ async function showContextMenu(
       localizeKeys,
       position: clampedPosition,
       resolve: (result) => {
-        settleTransientOverlayFocus(overlayId, result !== undefined);
+        settleTransientOverlayFocus(overlayId, result !== undefined, { focusRequesterFrame: true });
         resolve(result);
       },
       reject: (reason?: unknown) => {
-        settleTransientOverlayFocus(overlayId, false);
+        settleTransientOverlayFocus(overlayId, false, { focusRequesterFrame: true });
         reject(reason);
       },
     });
@@ -665,7 +779,12 @@ async function showContextMenu(
     if (!readKeys.has(event.key)) return;
     try {
       if (!getOverlayById(overlayId)) return;
-      const next = evaluateMenuRecordingReads(contextMenu, templateVars, onEvaluationError);
+      const next = evaluateMenuRecordingReads(
+        contextMenu,
+        templateVars,
+        onEvaluationError,
+        options?.contextKeys,
+      );
       readKeys = next.readKeys;
       const nextItems = convertContributionToContextMenuItems(next.evaluatedMenu);
       if (nextItems.length === 0) {
@@ -685,7 +804,7 @@ async function showContextMenu(
     unsubscribe();
   }
 
-  if (selectedCommand) {
+  if (selectedCommand && options?.shouldRunCommand !== false) {
     try {
       // The command string comes from menu contributions at runtime so it can't be statically typed
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -1278,6 +1397,23 @@ async function dismissCommandPalette(webViewId: string): Promise<void> {
   resolveAndRemoveOverlay(entry.id, 'commandPalette', undefined);
 }
 
+/**
+ * Dismisses the open context menu for the given WebView, resolving its `showContextMenu` promise
+ * with `undefined` without running a command. It also cancels a context menu of that WebView that
+ * is still being prepared, so that menu never opens. No-op if the WebView has neither.
+ *
+ * @param webViewId The WebView whose context menu should be dismissed
+ */
+async function dismissContextMenu(webViewId: string): Promise<void> {
+  pendingContextMenuRequests.get(webViewId)?.forEach((request) => request.cancel());
+  getOverlaysByWebView(webViewId)
+    .filter((overlay) => overlay.type === 'contextMenu')
+    .forEach((overlay) => {
+      markOverlayFocusReturnIfFocusInside(overlay.id);
+      resolveAndRemoveOverlay(overlay.id, 'contextMenu', undefined);
+    });
+}
+
 /** The overlay service instance exposed on papi */
 export const overlayService: IOverlayService = {
   showContextMenu,
@@ -1289,6 +1425,7 @@ export const overlayService: IOverlayService = {
   updateCommandPalette,
   commitCommandPaletteSelection,
   dismissCommandPalette,
+  dismissContextMenu,
 };
 
 // ── Event Listeners for Auto-Dismiss ──
@@ -1387,7 +1524,7 @@ function handleAppWindowInput(event: AppWindowInputEvent): void {
   setTimeout(() => {
     const recentParentPointerDown =
       lastParentPointerDown &&
-      Date.now() - lastParentPointerDown.time < PARENT_POINTER_DOWN_CORRELATION_MS
+      performance.now() - lastParentPointerDown.time < PARENT_POINTER_DOWN_CORRELATION_MS
         ? lastParentPointerDown
         : undefined;
     // Consume-once: this record correlates ONE app-window signal with ONE parent pointerdown.
@@ -1447,7 +1584,7 @@ function registerAutoDismissListeners(): void {
       // make the app-window mouse-down that follows look like a click on overlay content.
       if (isWindowBlurPress(e)) return;
       lastParentPointerDown = {
-        time: Date.now(),
+        time: performance.now(),
         insideOverlay: e.target instanceof Element && !!e.target.closest(OVERLAY_CONTENT_SELECTOR),
       };
     },

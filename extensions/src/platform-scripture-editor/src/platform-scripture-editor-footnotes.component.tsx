@@ -54,11 +54,10 @@ const maximumFootnotesPaneWidthPercent = 50;
  * Overlay content the pane's own row editor puts on screen. Radix renders dropdown and popover
  * content through a React portal at `document.body`, so it is nowhere inside the pane's DOM even
  * though the pane is what opened it - the row editor's note-type and caller dropdowns and its
- * marker menu are all this shape. The editor's right-click menu (`.typeahead-popover`) is portalled
- * the same way, and its items take focus on mousedown.
+ * marker menu are all this shape. The row editor's right-click menu is not: it is the platform's
+ * context menu, which opens in the app window, outside this web view's document.
  */
-const paneOverlaySelector =
-  '[data-slot="dropdown-menu-content"], [data-slot="popover-content"], .typeahead-popover';
+const paneOverlaySelector = '[data-slot="dropdown-menu-content"], [data-slot="popover-content"]';
 
 /**
  * Whether a focus target counts as still being in the pane, including {@link paneOverlaySelector}
@@ -621,6 +620,10 @@ function FootnotesPane({
         label={zoomAreaLabel}
         className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li]:pe-7"
         onCopy={handleFootnotesCopy}
+        // Kept as a literal for the same reason as `data-footnotes-pane` above. Must match
+        // `FOOTNOTES_ROWS_ATTRIBUTE` in `editor-dom.util.ts`, which the web view's edit-target
+        // tracking queries for.
+        data-footnotes-rows=""
       >
         {footnotes.length === 0 && !isLoading && (
           <EmptyState

@@ -74,3 +74,9 @@ export const RESOURCE_PANEL_INSTALL_FAILURE_KEYS: InstallFailureMessageKeys<Reso
     failedOffline: '%webView_resourcePanel_installFailedOffline%',
     installedButUnavailable: '%webView_resourcePanel_installedButUnavailable%',
   };
+
+/** The web view type of the Bible Texts panel. */
+export const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
+
+/** The web view type of the Commentaries panel. */
+export const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';

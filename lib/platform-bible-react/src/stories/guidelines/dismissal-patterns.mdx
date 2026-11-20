@@ -199,8 +199,9 @@ Consequences to know about:
   it acts there (places a caret, focuses the pane) and the surface closes.
 - Not wired: `Select` (it closes on window blur by itself; `SelectContent` applies the same
   focus-return rule), `Tooltip` and `Dialog` (not on this axis), sub-menu contents (dismissing the
-  root closes them), and the Scripture editor's right-click menu (not Radix; its window-blur close
-  is fixed separately in the editor package).
+  root closes them), and the editor package's own right-click menu (not Radix; its window-blur
+  close is fixed separately in the editor package). The app's Scripture editors show the overlay
+  service's context menu instead, which closes on window blur by its own rule.
 - Escape is not forwarded across frames. After a click into another frame, Escape goes to that
   frame.
 - A modal menu opened inside a picker closes alone on a window blur; the picker stays open until the

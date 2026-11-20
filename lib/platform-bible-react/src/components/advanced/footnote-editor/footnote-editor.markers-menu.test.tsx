@@ -78,4 +78,31 @@ describe('FootnoteEditor inline markers menu', () => {
     expect(markerMenuSearchBox()).not.toBeNull();
     expect(screen.queryByText('xo')).not.toBeNull();
   });
+
+  describe('with the built-in context menu turned off', () => {
+    /** Sends the trigger key and returns the event. */
+    async function pressTrigger() {
+      const event = new KeyboardEvent('keydown', {
+        key: MARKER_MENU_TRIGGER,
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        document.dispatchEvent(event);
+      });
+      await settle();
+      return event;
+    }
+
+    it('opens the menu on the trigger', async () => {
+      const { editorInput } = await renderPopoverAndWaitForInit(visibleView, {
+        extraProps: { hasBuiltInContextMenu: false },
+      });
+      editorInput.focus();
+
+      await pressTrigger();
+
+      expect(markerMenuSearchBox()).not.toBeNull();
+    });
+  });
 });

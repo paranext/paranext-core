@@ -3,6 +3,8 @@ import type { Localized, WebViewMenu } from 'platform-bible-utils';
 
 import { menuDataService } from '@shared/services/menu-data.service';
 import { logger } from '@shared/services/logger.service';
+import { sendCommand } from '@shared/services/command.service';
+import { contextKeysService } from '@shared/services/context-keys.service';
 import { webViewService } from '@shared/services/web-view.service';
 import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 import type { OverlayEntry } from './overlay.service-model';
@@ -27,6 +29,9 @@ vi.mock('./overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_wvId: string, pos: { x: number; y: number }) => pos),
   clampToViewport: vi.fn((pos: { x: number; y: number }) => pos),
   isWebViewVisible: vi.fn(() => true),
+}));
+
+vi.mock('@renderer/components/web-view-iframe.util', () => ({
   getWebViewIframe: vi.fn(() => undefined),
 }));
 
@@ -542,6 +547,248 @@ describe('showContextMenu contribution integration', () => {
       expect(currentOverlay(overlay.id).items).toHaveLength(2);
       overlay.resolve(undefined);
       await promise;
+    });
+  });
+
+  describe('request options and dismissal', () => {
+    type ContextMenu = NonNullable<Localized<WebViewMenu>['contextMenu']>;
+    type ShowOptions = Parameters<typeof overlayService.showContextMenu>[2];
+
+    function singleItemMenu(extra: { when?: string; enabledWhen?: string }): ContextMenu {
+      return {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 1,
+            localizeNotes: '',
+            ...extra,
+          },
+        ],
+      };
+    }
+
+    async function openMenu(contextMenu: ContextMenu, options?: ShowOptions, webViewId = 'opt-wv') {
+      mockGetWebViewMenu.mockResolvedValue({
+        includeDefaults: false,
+        topMenu: undefined,
+        contextMenu,
+      });
+      const promise = overlayService.showContextMenu('ext.myWebView', webViewId, options);
+      await vi.waitFor(() =>
+        expect(getOverlays().filter((o) => o.webViewId === webViewId)).toHaveLength(1),
+      );
+      const overlay = asContextMenuOverlay(getOverlays().find((o) => o.webViewId === webViewId));
+      return { promise, overlay };
+    }
+
+    function currentOverlay(id: string): ContextMenuOverlay {
+      return asContextMenuOverlay(getOverlayById(id));
+    }
+
+    it('shouldRunCommand false resolves with the command without sending it', async () => {
+      const { promise, overlay } = await openMenu(singleItemMenu({}), { shouldRunCommand: false });
+
+      overlay.resolve('ext.cmd');
+
+      await expect(promise).resolves.toBe('ext.cmd');
+      expect(sendCommand).not.toHaveBeenCalled();
+    });
+
+    it('runs the picked command by default', async () => {
+      const { promise, overlay } = await openMenu(singleItemMenu({}));
+
+      overlay.resolve('ext.cmd');
+
+      await expect(promise).resolves.toBe('ext.cmd');
+      expect(sendCommand).toHaveBeenCalledTimes(1);
+      expect(sendCommand).toHaveBeenCalledWith('ext.cmd');
+    });
+
+    const requestKeyMenu = singleItemMenu({ enabledWhen: 'ext.req.hasSelection' });
+
+    it('enables an item when the request key is true, without asking the shared service', async () => {
+      const { promise, overlay } = await openMenu(requestKeyMenu, {
+        contextKeys: { 'ext.req.hasSelection': true },
+      });
+
+      expect(overlay.items[0]).not.toHaveProperty('disabled');
+      expect(contextKeysService.get).not.toHaveBeenCalledWith('ext.req.hasSelection');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('disables an item when the request key is false', async () => {
+      const { promise, overlay } = await openMenu(requestKeyMenu, {
+        contextKeys: { 'ext.req.hasSelection': false },
+      });
+
+      expect(overlay.items[0]).toMatchObject({ disabled: true });
+      expect(contextKeysService.get).not.toHaveBeenCalledWith('ext.req.hasSelection');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('disables an item when the request key is absent, asking the shared service', async () => {
+      const { promise, overlay } = await openMenu(requestKeyMenu);
+
+      expect(overlay.items[0]).toMatchObject({ disabled: true });
+      expect(contextKeysService.get).toHaveBeenCalledWith('ext.req.hasSelection');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('hides an item whose when reads a false request key', async () => {
+      const menu: ContextMenu = {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          { command: 'ext.a', group: 'ext.group1', label: 'A', order: 1, localizeNotes: '' },
+          {
+            command: 'ext.b',
+            group: 'ext.group1',
+            label: 'B',
+            order: 2,
+            localizeNotes: '',
+            when: 'ext.req.show',
+          },
+        ],
+      };
+
+      const { promise, overlay } = await openMenu(menu, { contextKeys: { 'ext.req.show': false } });
+
+      expect(overlay.items).toEqual([{ type: 'item', id: 'ext.a', label: 'A' }]);
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('lets a request key shadow a shared key of the same name', async () => {
+      keyValues.set('ext.req.flag', true);
+
+      const { promise, overlay } = await openMenu(singleItemMenu({ enabledWhen: 'ext.req.flag' }), {
+        contextKeys: { 'ext.req.flag': false },
+      });
+
+      expect(overlay.items[0]).toMatchObject({ disabled: true });
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('keeps applying request keys when a shared key re-evaluates the menu', async () => {
+      const { promise, overlay } = await openMenu(
+        singleItemMenu({ enabledWhen: 'ext.req.a && ext.shared.b' }),
+        { contextKeys: { 'ext.req.a': true } },
+      );
+      expect(overlay.items[0]).toMatchObject({ disabled: true });
+
+      emitKey('ext.shared.b', true);
+
+      expect(currentOverlay(overlay.id).items[0]).not.toHaveProperty('disabled');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('dismissContextMenu resolves the open menu with undefined and runs no command', async () => {
+      const { promise } = await openMenu(singleItemMenu({}));
+
+      await overlayService.dismissContextMenu('opt-wv');
+
+      await expect(promise).resolves.toBeUndefined();
+      expect(getOverlays()).toEqual([]);
+      expect(sendCommand).not.toHaveBeenCalled();
+    });
+
+    describe('dismissContextMenu while the menu is still being prepared', () => {
+      function deferred<T>() {
+        let settle!: (value: T) => void;
+        const promise = new Promise<T>((resolve) => {
+          settle = resolve;
+        });
+        return { promise, resolve: settle };
+      }
+
+      const readyMenu: Localized<WebViewMenu> = {
+        includeDefaults: false,
+        topMenu: undefined,
+        contextMenu: {
+          groups: { 'ext.group1': { order: 1 } },
+          items: [
+            { command: 'ext.cmd', group: 'ext.group1', label: 'Cmd', order: 1, localizeNotes: '' },
+          ],
+        },
+      };
+
+      it('cancels a request whose menu data is still pending', async () => {
+        const menuData = deferred<Localized<WebViewMenu>>();
+        mockGetWebViewMenu.mockReturnValueOnce(menuData.promise);
+        const promise = overlayService.showContextMenu('ext.myWebView', 'pending-wv');
+
+        await overlayService.dismissContextMenu('pending-wv');
+        menuData.resolve(readyMenu);
+
+        await expect(promise).resolves.toBeUndefined();
+        expect(getOverlays()).toEqual([]);
+        expect(sendCommand).not.toHaveBeenCalled();
+      });
+
+      it('cancels a request whose project lookup is still pending', async () => {
+        const lookup = deferred<SavedWebViewDefinition | undefined>();
+        vi.mocked(webViewService.getOpenWebViewDefinition).mockReturnValueOnce(lookup.promise);
+        mockGetWebViewMenu.mockResolvedValue({
+          ...readyMenu,
+          contextMenu: singleItemMenu({ enabledWhen: 'ext.project.{projectId}.flag' }),
+        });
+        const promise = overlayService.showContextMenu('ext.myWebView', 'lookup-wv');
+        await vi.waitFor(() => expect(webViewService.getOpenWebViewDefinition).toHaveBeenCalled());
+
+        await overlayService.dismissContextMenu('lookup-wv');
+        lookup.resolve({ id: 'lookup-wv', webViewType: 'ext.myWebView', projectId: 'proj1' });
+
+        await expect(promise).resolves.toBeUndefined();
+        expect(getOverlays()).toEqual([]);
+        expect(sendCommand).not.toHaveBeenCalled();
+      });
+
+      it('does not affect a request that starts after the dismissal', async () => {
+        await overlayService.dismissContextMenu('later-wv');
+
+        const { promise, overlay } = await openMenu(singleItemMenu({}), undefined, 'later-wv');
+
+        expect(overlay.items).toHaveLength(1);
+        overlay.resolve(undefined);
+        await promise;
+      });
+
+      it("does not cancel another web view's pending request", async () => {
+        const menuData = deferred<Localized<WebViewMenu>>();
+        mockGetWebViewMenu.mockReturnValueOnce(menuData.promise);
+        const promise = overlayService.showContextMenu('ext.myWebView', 'wv-b');
+
+        await overlayService.dismissContextMenu('wv-a');
+        menuData.resolve(readyMenu);
+
+        await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+        asContextMenuOverlay(getOverlays()[0]).resolve(undefined);
+        await promise;
+      });
+    });
+
+    it('dismissContextMenu is a no-op without an open menu', async () => {
+      await expect(overlayService.dismissContextMenu('nobody')).resolves.toBeUndefined();
+    });
+
+    it("dismissContextMenu leaves another web view's menu open", async () => {
+      const mine = await openMenu(singleItemMenu({}), undefined, 'wv-mine');
+      resetDebounceState();
+      const other = await openMenu(singleItemMenu({}), undefined, 'wv-other');
+
+      await overlayService.dismissContextMenu('wv-mine');
+
+      await expect(mine.promise).resolves.toBeUndefined();
+      expect(getOverlayById(other.overlay.id)).toBeDefined();
+      other.overlay.resolve(undefined);
+      await other.promise;
     });
   });
 });

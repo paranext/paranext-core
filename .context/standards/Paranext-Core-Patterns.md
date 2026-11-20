@@ -1650,6 +1650,13 @@ and remove every key it set in the effect's cleanup so a closed tab leaves nothi
 name by `webViewId`. A web view that renders its own menu evaluates it with `useEvaluatedMenu` from
 `@papi/frontend/react`, passing a memoized template-variable object.
 
+**For one context menu only (request-scoped keys).** A fact about a single right-click, such as
+whether text is selected in the editor that was clicked, is not published at all: pass it in
+`showContextMenu`'s `contextKeys` option (experimental). Those keys are read first by that one
+menu's expressions and never reach the shared store, so name them under your own prefix and never
+after a shared key, which they would shadow. See "Web View Context Menus" in
+[Entry-Point-Guide.md](Entry-Point-Guide.md).
+
 ---
 
 ## Naming Conventions Summary
