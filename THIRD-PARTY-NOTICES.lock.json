@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "36c7dcf246f537c6cc00e45b9ecaf8ad377efc85c7a24e7d83970752d1fc1ff3",
+  "documentSha256": "d243ea62bd5ff71dc2d6163950a6941484dfcc361fba38a8d32cd4dfd388da86",
   "packages": [
     {
       "ecosystem": "npm",
@@ -1089,7 +1089,7 @@
     {
       "ecosystem": "npm",
       "name": "electron-log",
-      "version": "5.4.1",
+      "version": "5.4.4",
       "spdxId": "MIT",
       "confidence": 100,
       "matchedFile": "LICENSE",

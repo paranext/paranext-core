@@ -181,7 +181,11 @@ export function readClipboardText(electronApp: ElectronApplication): Promise<str
 /** Reads the HTML on the real OS clipboard from the Electron main process, with link retry. */
 export function readClipboardHtml(electronApp: ElectronApplication): Promise<string> {
   return withMainProcessLinkRetry(electronApp, () =>
-    electronApp.evaluate(({ clipboard }) => clipboard.readHTML()),
+    electronApp.evaluate(async ({ clipboard }) => {
+      const [item] = await clipboard.read();
+      if (!item?.types.includes('text/html')) return '';
+      return (await item.getType('text/html')).text();
+    }),
   );
 }
 
@@ -194,23 +198,36 @@ export function readClipboardTextAndHtml(
   electronApp: ElectronApplication,
 ): Promise<{ text: string; html: string }> {
   return withMainProcessLinkRetry(electronApp, () =>
-    electronApp.evaluate(({ clipboard }) => ({
-      text: clipboard.readText(),
-      html: clipboard.readHTML(),
-    })),
+    electronApp.evaluate(async ({ clipboard }) => {
+      const [item] = await clipboard.read();
+      const htmlBlob = item?.types.includes('text/html')
+        ? await item.getType('text/html')
+        : undefined;
+      return { text: await clipboard.readText(), html: htmlBlob ? await htmlBlob.text() : '' };
+    }),
   );
 }
 
 /**
- * Replaces the real OS clipboard's contents with `data` (`clipboard.write`: each flavour given is
- * set, the others are cleared), from the Electron main process, with link retry.
+ * Replaces the real OS clipboard's contents with `data` (`clipboard.write` with one
+ * `ClipboardItem`: each flavour given is set, the others are cleared), from the Electron main
+ * process, with link retry.
  */
 export function writeClipboard(
   electronApp: ElectronApplication,
   data: { text?: string; html?: string },
 ): Promise<void> {
   return withMainProcessLinkRetry(electronApp, () =>
-    electronApp.evaluate(({ clipboard }, payload) => clipboard.write(payload), data),
+    electronApp.evaluate(
+      ({ clipboard, ClipboardItem }, payload) =>
+        clipboard.write([
+          new ClipboardItem({
+            ...(payload.text !== undefined ? { 'text/plain': payload.text } : {}),
+            ...(payload.html !== undefined ? { 'text/html': payload.html } : {}),
+          }),
+        ]),
+      data,
+    ),
   );
 }
 

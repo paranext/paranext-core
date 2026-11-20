@@ -2125,6 +2125,114 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
+
+## adr-create-element-guard-trusts-call-sites: The renderer's `createElement` guard identifies the caller by V8 call-site file name, built only from references captured before any web view runs
+
+- **Date:** 2026-11-16
+- **Status:** Accepted
+- **Context:** Web views run in same-origin iframes (`allow-same-origin`) and can reach the renderer
+  as `parent` / `window.top`, where the CSP's `script-src-elem 'unsafe-inline'` lets an injected
+  script run with full renderer privileges. The renderer therefore guards the creation of restricted
+  tags (`FORBIDDEN_HTML_TAGS`, `RESTRICTED_HTML_TAGS` in `web-view.service-shard.ts`). The old
+  guard read the TEXT of `Error().stack` and regex-matched it, so a function name containing a
+  newline, a `//# sourceURL=` label on `eval` code, or a hijacked `Error.prepareStackTrace` could
+  make an attacker's call look like a renderer frame; a poisoned `Array.prototype.includes` skipped
+  the tag lookup altogether, and the patch on the `document` instance was bypassed by
+  `Document.prototype.createElement.call` and by `createElementNS`.
+- **Decision:** `installCreateElementGuard` (in `renderer-create-element-guard.util.ts`, called from
+  `initialize` in `web-view.service-shard.ts`) patches `Document.prototype.createElement` and
+  `createElementNS` (non-writable, non-configurable) and decides from the real script URL of the
+  caller's V8 call site, via `isCreateElementCallerAllowed`: the renderer bundle (measured at install
+  from the installer's own call site) or a Usersnap widget chunk (`https` only, exact path shape).
+  `getFileName()` returns `null` for `eval` / `new Function` frames, so those are rejected.
+  - **Trust only what was captured before any web view ran.** A same-origin frame can rewrite any
+    shared global or prototype, and in production the guard module shares its realm with the window
+    it guards, so nothing on the call-time path may be looked up when a call is judged. The
+    installer captures `Error`, `captureStackTrace`, `Object` and its static methods, `String` and
+    its `toLowerCase` / `indexOf` / `slice`, `Reflect.apply` / `Reflect.deleteProperty` /
+    `Reflect.get`, the original `createElement` / `createElementNS` and the `CallSite` methods;
+    `isCreateElementCallerAllowed` uses `RegExp.prototype.exec` and `Reflect.apply` captured when
+    its module loads. Everything else on the path is an operator (`!!`, not `Boolean(...)`) or an
+    own property of a value the guard created or V8 handed it — no free globals, `.call` / `.apply`,
+    iterators or spread. The tag list is a null-prototype record. A non-string tag argument is
+    coerced once and the original receives the coerced string; a string primitive is passed through
+    unchanged. If `onRejected` returns instead of throwing, the guard throws its own error.
+  - **Own the stack-trace machinery.** The installer makes `Error.prepareStackTrace` a
+    non-configurable accessor whose getter returns the guard's formatter only during a guard
+    capture, and also locks `window.Error` (non-writable, non-configurable): under an embedder
+    prepare-stack-trace callback (Node's reads `globalThis.Error.prepareStackTrace`), swapping
+    `window.Error` let a frame call the guard's formatter with a harvested renderer-bundle call
+    site. V8 picks the `prepareStackTrace` realm from the holder passed to `captureStackTrace`, so
+    the holder is built with the window's captured `Object`. `Error.stackTraceLimit` is honored only
+    as a data property, so it is set to the capture depth (10 frames, V8's default: the decision
+    reads only the first, the rest are logged) and restored rather than locked; if an attacker
+    breaks it, the capture yields no frames and the call is rejected (fail closed).
+  - **The guard stays until same-origin web views go.** As of 2026-11-16, PT-2912 and PT-2896 are in
+    Triage; until a web view can no longer be same-origin with the renderer, this is the only guard
+    on restricted-tag `createElement` calls. What it buys today is narrow: it stops the direct route
+    of a web view calling `parent.document.createElement` (or the prototype method, or
+    `createElementNS`) for a restricted tag, which raises the bar against casual or accidental misuse
+    but not against a deliberate attacker (see probe (a) under Consequences). Its price is the
+    renderer-wide locks on `window.Error`, `Error.prepareStackTrace` and the `Document.prototype`
+    methods. No cheap fix closes the gap: dropping `'unsafe-inline'` breaks every `srcdoc` web view,
+    which inherits the renderer CSP; a nonce is readable by a same-origin web view; a `<meta>` CSP
+    cannot add hashes after load; and guarding insertion means patching React's hottest DOM paths and
+    still leaves gaps. The real fix is web views on their own origin (PT-2896 / PT-2912).
+- **Alternatives:** (1) A capability (a token the renderer's own code holds) instead of file names:
+  not workable, because Usersnap's remote chunks (loaded by `loadSpace` in `usersnap.service.ts`) and
+  webpack's chunk loader both call the global `document.createElement` themselves and cannot be
+  made to present one. (2) Keep matching stack text with tighter regexes: the text is attacker
+  influenced by construction. (3) Chase HTML-text insertion, element copying and cross-realm
+  creation in this change: rejected as not cheap side doors; see Consequences.
+- **Consequences:** The guard's claim is only "the caller cannot be faked", not "a web view cannot
+  add scripts, frames, forms or links to the app window". Known unguarded paths, tracked in
+  PT-5086: any renderer-bundle code reachable from a web view that calls a function the web view
+  supplies, or creates elements from data it supplies, is a trusted caller — for example
+  `parent.React.Children.map(['script'], parent.document.createElement.bind(parent.document))`,
+  `createRoot` on the app window, webpack's chunk-loading global if one is reachable, and possibly
+  the bundle file itself loaded into the web view's realm (the web view CSP allows
+  `script-src-elem 'self'`); none of these was verified live. Also unguarded: element copying
+  (`cloneNode`, `importNode`, `adoptNode`); customized built-in elements (a class extending
+  `parent.HTMLScriptElement`, defined with `{ extends: 'script' }` on `parent.customElements` and
+  constructed with `new`, is created in the app document without calling `createElement`; confirmed
+  in jsdom, not in Chromium); HTML-text insertion (`innerHTML`, `insertAdjacentHTML`,
+  `document.write`, `DOMParser`, `<template>`, and similar); and creating in the web view's own
+  document, or via its own `Document.prototype`, and adopting into the app window. Constraints for
+  maintainers: nothing in the renderer may reassign `window.Error` after startup; the installer
+  throws if `Error` or `Error.prepareStackTrace` is already locked, and refuses a second install, so
+  renderer unit tests that call `initialize()` repeatedly mock `installCreateElementGuard` (its real
+  behaviour is tested in `renderer-create-element-guard.install.test.ts` against separate jsdom
+  realms, and with the module evaluated inside the guarded realm as production runs it, attacked by
+  poisoning that realm's builtins). Either trusted caller may create any restricted tag; per-tag
+  rules were not asked for. Because the guard fails closed, a web view can stop the renderer itself
+  from creating any restricted tag for the rest of the session, by making `parent.Error`'s
+  `stackTraceLimit` read-only or an accessor: the guard's capture then finds no caller, so chunk
+  loading, new web view iframes and anchors are rejected too. That denial of service is accepted;
+  a hostile web view has other ways to break the window.
+  **Revisit** when PT-2912 / PT-2896 land: if web views stop being same-origin, delete the guard.
+  - **Live check (2026-11-16, dev build):** the `evil` web view's forgery attempts logged no
+    `<<BAD>>`. A webpack hot update created its script through
+    `__webpack_require__.l` in `renderer.dev.js` and was allowed, which confirms that the guard
+    measured the bundle that holds the chunk loader. In the production build, the guard and the
+    chunk loader are also both in `renderer.js`. A `script` created from DevTools-evaluated code
+    was rejected. Toolbar SVG icons rendered. The Usersnap path was not exercised, because this
+    build has no Usersnap keys. PT-5086 probes: (a) a script that the web view created in its own
+    document and appended to the app window RAN in the app window. So in practice the guard does not
+    stop script injection today: removing `'unsafe-inline'` from the renderer CSP (PT-2801) or
+    landing PT-2896 is the real fix; see PT-5086. (b) an iframe rendered through
+    the app window's `createRoot` was allowed by this guard (React in the renderer bundle is a
+    trusted caller), but the separate no-sandbox iframe check removed it, so it did not appear.
+  - **Packaged check (2026-11-18, unpacked Linux build with `app.asar`, `DEV_NOISY=true`):** the
+    guard installed and measured `app.asar/dist/renderer/renderer.js`; trusted iframes were allowed
+    with their full trail logged; with the `evil` tab active, its `script`, `iframe` and `a`
+    attempts were rejected from `evil.web-view.html` and no renderer `<<BAD>>` was logged. Probes
+    (a) and (b) behaved as in the dev build.
+  - **Usersnap check (2026-11-18, dev build with the Paratext 10 Studio Usersnap keys added
+    locally):** both feedback forms opened and took input; the widget's `form` and `a` were allowed
+    from `https://resources.usersnap.com/widget-assets/js/chunks/<digits>/<hash>.js` (no query
+    string), with no rejection and no `TypeError` from the `window.Error` lock.
+- **Source:** PT-4767 (epic PT-2091).
+
 ## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
 
 - **Date:** 2026-09-21
@@ -3991,6 +4099,68 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `UsjSearchOptions.wordEdges` (`lib/platform-bible-utils/src/scripture/usj-reader-writer.model.ts`).
 - **Source:** PT-4969 (parent PT-4910). PT-3199 for searching with markers.
 
+## adr-find-reveals-text-collection-cell: Find activates the Text Collection and asks it to reveal the matching resource's cell
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** [adr-find-searchable-tabs](#adr-find-searchable-tabs) left the Text Collection out
+  of Find's searchable tabs because "go to result" had no defined behavior there: each cell is its
+  own editor, so activating the grid's tab would not show which cell held the match. Meanwhile the
+  grid already handed its focused resource to Ctrl+F, so Find received a project it had no open tab
+  for, took the reassignment effect's cross-project fallback, and searched an unrelated project.
+- **Decision:** The grid registers a web view controller
+  (`WebViewControllers['platformScriptureEditor.scriptureTextGrid']`) with one method,
+  `revealResource(projectId)`, which brings that resource's cell into view and outlines it; the
+  match itself is not selected. Verse view focuses the row. Chapter view focuses the column's own
+  scroll area (an explicit tab stop, like the aligned view's shared scroll area), and aligned view
+  focuses that shared area, so Arrow and Page Down scroll the text at once; the column itself is
+  never focused, because a focused column root is not a scroller and breaks keyboard scrolling.
+  Aligned view also announces the resource to screen readers, since its shared area is not named
+  for any one resource; a chapter column's scroll area sits inside the column's region, which is.
+  The outline lasts until the user next interacts with the grid or its tab is hidden. A verse row's
+  outline is a 2px ring, the row's focus indicator, since the row holds focus. A column's is a
+  thicker outline set in from the edge of what it frames: focus is on its scroll area or the shared
+  root instead, and the outline outlives focus moving to Find, so it must not read as a second focus
+  ring. An aligned column's outline frames the whole column; a chapter column's frames the text
+  area below the header, inside the scrollbar, since an outline set in from the column's edge would
+  run down the middle of the scrollbar. CSS cannot know the scrollbar's width or side, so the column
+  measures its scroll area's client box (`useRevealOutlineInsets`). Find adds
+  the grid to `FIND_SEARCHABLE_WEB_VIEW_TYPES` and to `DECLARING_WEB_VIEW_TYPES`, so it lists the
+  resources the grid declares. "Go to result" targets one tab, in this order: an editor showing
+  the project (driven through its controller), then any reference panel showing it, then the Text
+  Collection. Any reference panel includes Model text, which is never activated, so a resource
+  shown in Model text activates nothing. For the grid, Find writes the result's verse to the scroll
+  group, activates the grid's tab, and calls `revealResource`. The grid receives the message
+  through a module-scope listener and holds the request until its tab is shown and its resources
+  have loaded. A request that waits hidden for more than 5 s (`REVEAL_REQUEST_MAX_AGE_MS`), or whose
+  tab is hidden again before the resources load, is dropped, so a tab the user shows later by hand
+  does not jump.
+- **Alternatives:** **Activate the tab only** — rejected: in a view with many resources nothing
+  tells the user which cell holds the result. **Select and highlight the match in the cell**, as
+  in an editor — deferred: it needs a range converted for the cell's editor and per-cell
+  annotations, for little gain over an outlined cell at the right verse. **A command instead of a
+  controller** — rejected: a controller is how Find already reaches the editor, and it keeps the
+  message nonce inside the web view provider. **A listener registered in a React effect** —
+  rejected: the renderer buffers messages for a tab that has never been shown and flushes them when
+  its iframe loads, which can happen before any effect runs, so the request would be lost. **A
+  renderer-side ready handshake** (flush a web view's buffered messages only once it says its
+  listener exists) — not done here: it changes delivery for every web view, so it is platform work;
+  the rule for consumers is in `.claude/rules/cross-view-sync-hidden-views.md`.
+- **Consequences:** In Simple mode the grid shares Find's Column 3 stack, so "go to result" on a
+  grid-only resource hides Find, as it does for Bible texts; single-click preview never activates
+  the grid. The grid's container project is dropped from Find's picker like a reference panel's,
+  since the grid does not display it. Rows follow the container project's versification (PT-4897),
+  so a revealed cell can show the wrong verse for a resource whose versification differs.
+- **Key symbols:** `SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE`, `DECLARING_WEB_VIEW_TYPES`,
+  `FIND_SEARCHABLE_WEB_VIEW_TYPES`
+  (`extensions/src/platform-scripture/src/resource-panel-web-view-types.const.ts`);
+  `targetTextCollectionWebViewId`, `handleOpenAtResult`
+  (`extensions/src/platform-scripture/src/find.web-view.tsx`); `TextCollectionWebViewController`
+  (`extensions/src/platform-scripture-editor/src/types/platform-scripture-editor.d.ts`);
+  `installRevealRequestListener`, `useRevealRequest`
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/reveal-request-store.ts`).
+- **Source:** PT-4507.
+
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 
 - **Date:** 2026-09-03
@@ -4033,6 +4203,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   iframe, since PAPI exposes no visibility query for another web view.
   **Revisit** if per-cell reveal is designed for the Text Collection, which would bring it into the
   searchable set.
+- **Amended 2026-11-12:** the Text Collection deferral is resolved by
+  `adr-find-reveals-text-collection-cell`.
 
 ## adr-find-tolerance-as-engine-options: Find expresses whitespace and diacritic tolerance as engine options, never by rewriting the query
 
@@ -5382,7 +5554,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-leaked-emudhra-certificates-blocked-in-app: The app blocks the leaked eMudhra intermediate certificates itself until Electron is upgraded
 
 - **Date:** 2026-10-27
-- **Status:** Accepted (temporary; superseded once PT-3111 upgrades Electron)
+- **Status:** Superseded: Electron 45 (PT-3111) blocks these certificates itself; the modules were
+  removed, and the rules below no longer apply. Kept rather than retired, as prior art if a future
+  leak hits an Electron release that has no fix.
 - **Context:** In October 2026 the private keys of eight eMudhra intermediate certificates (16
   certificates, including Sectigo `AAA Certificate Services` cross-signs) became recoverable by
   anyone (https://emudhra.we-have-a-problem.com/). Operating systems and browsers blocked them, but
@@ -5408,8 +5582,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   unpatched system still accepts the leaked certificates there (PT-4913); processes extensions
   start with `createProcess.fork` and worker threads are not covered (none makes network requests
   today). Distrusting whole roots also refuses legitimate sites that chain to them; none of the
-  sites the app uses does. Remove both modules, and retire this entry, when PT-3111 upgrades
-  Electron to a release that blocks the certificates itself.
+  sites the app uses does. Remove both modules when PT-3111 upgrades Electron to a release that
+  blocks the certificates itself.
 - **Source:** PR #2938
 
 ## adr-library-string-keys-ship-in-shell-assets: `platform-bible-react` string-key values ship in the platform shell's locale assets by default
@@ -5907,6 +6081,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   jsdom cannot judge. Neither can assert the ring itself — the Storybook harness does not paint the
   trigger's ring at all, so an assertion on it would pass whatever the code did. That the attribute
   removes a ring the user can see is confirmed by hand in the running app.
+- **Amended 2026-11-14 (PT-3111, Electron 45):** the app now ships Chromium 156, so the runtime reason
+  for rejecting alternative (b) no longer holds (the option already worked in Chromium 145). The CSS
+  approach stays: it works and does not depend on the runtime. Moving to
+  `focus({ focusVisible: false })` would be a separate change, with its own check that the
+  scripture editor's own `:focus-visible` outline stays hidden.
 - **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
   found not to work in the shipped runtime.
 
@@ -7829,6 +8008,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
+- **Amended 2026-11-13:** the Text Collection's resource tracker is now
+  `useActiveResourceProjectId`. Besides focus, it follows a pointer press and the resource Find
+  last revealed: in the aligned view, focus lands on the shared scroll area, outside every cell, so
+  focus alone would leave Ctrl+F with no resource or a stale one. Before any of those, as in a
+  freshly opened Text Collection, Ctrl+F searches the first installed resource displayed (usually
+  the top row or the first column) rather than doing nothing; Find's picker switches to another. It
+  is a no-op only while no displayed resource is installed. See `adr-find-reveals-text-collection-cell`.
 
 ## adr-per-web-view-state-lives-in-the-definition: Per-web-view state lives in the web view definition; user defaults and cross-instance memory live in settings
 
@@ -10809,6 +10995,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   content tag from the snap store's perspective, so store-granted auto-connection for it should be
   confirmed on a published build rather than inferred from sideload testing, which bypasses store
   assertions.
+- **Amended 2026-11-14 (PT-3111, Electron 45):** electron-builder is now pinned to 26.18.1, which
+  pins `app-builder-lib` 26.18.1, so this patch is
+  `app-builder-lib+26.18.1+002+rename-gnome-platform-plug.patch` and paratext-10-studio's is
+  `app-builder-lib+26.18.1+001+mercurial-snap-parts.patch`. The sequencing still keeps them apart,
+  but "no companion studio change" no longer holds: a patch-package file name carries the package
+  version, so every `app-builder-lib` version change also needs paratext-10-studio to rename its
+  patch, and to update the `notices/policy.json` evidence entry and `LICENSING.md` that name it.
 - **Source:** PT-4496. PR #2747 review raised the upgrade path, which the original cold-install
   diagnosis had not considered; its re-review then established the sequenced-patch mechanism above,
   correcting an earlier belief that patch-package allows only one patch per package+version and that
