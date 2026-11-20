@@ -7,6 +7,7 @@ import {
   FAILED_PRECONDITION,
   LanguageStrings,
 } from 'platform-bible-utils';
+import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -20,7 +21,6 @@ import {
 } from './overlay.service-model';
 import { getOverlays, getOverlayById, clearAllOverlays, subscribe } from './overlay-store';
 import { isWebViewVisible } from './overlay-coordinates';
-import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import { markOverlayFocusReturnIfFocusInside } from './overlay-focus-return.util';
 import { WINDOW_BLUR_PRESS_MARKER } from './window-blur-press.util';
 

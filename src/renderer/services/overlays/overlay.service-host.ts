@@ -48,6 +48,7 @@ import type {
 import { contextKeysService } from '@shared/services/context-keys.service';
 import { evaluateMenuRecordingReads } from '@shared/utils/evaluate-menu-recording-reads.util';
 import { collectContextMenuKeys } from '@renderer/components/overlays/overlay-context-menu-localization.util';
+import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import { webViewService } from '@shared/services/web-view.service';
 import type { ReactElement } from 'react';
 import {
@@ -79,7 +80,6 @@ import {
   updateCommandPaletteState,
 } from './overlay-store';
 import { translateCoordinates, clampToViewport, isWebViewVisible } from './overlay-coordinates';
-import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import {
   markOverlayFocusReturnIfFocusInside,
   resetOverlayFocusReturnMarks,
