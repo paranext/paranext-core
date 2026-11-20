@@ -3,9 +3,9 @@ import { useEffect, useMemo } from 'react';
 import { logContextMenuOutcome } from './editor-context-menu-pick.util';
 
 /**
- * How long a context-menu request may stay unsettled before the log says so. The same two seconds
- * the menu hook claims the keyboard for: a request still open by then is one the user waited for
- * with no menu on screen.
+ * How long a context-menu request may stay open before the log says so. The same two seconds the
+ * menu hook claims the keyboard for: a request still open by then is either a menu the user is
+ * still looking at or one that never appeared.
  */
 export const CONTEXT_MENU_STALL_LOG_MS = 2000;
 
@@ -24,8 +24,9 @@ export type ContextMenuRequestLogOptions = {
 /** A debug log of one editor's context-menu requests. */
 export type ContextMenuRequestLog = {
   /**
-   * Logs that `request` was made, logs once more if `showMenu` is still unsettled after
-   * {@link CONTEXT_MENU_STALL_LOG_MS}, and logs how it settled.
+   * Logs that `request` was made, logs once more if `showMenu` is still open after
+   * {@link CONTEXT_MENU_STALL_LOG_MS} (the menu is still showing or never appeared), and logs how it
+   * settled.
    *
    * @returns `showMenu`'s own outcome
    */
@@ -39,9 +40,9 @@ export type ContextMenuRequestLog = {
 
 /**
  * Logs each context-menu request an editor makes at debug level: when it is made, when it is still
- * unsettled two seconds later, and how it settled (see {@link logContextMenuOutcome}). A right-click
- * that showed no menu can then be told apart in the log: never requested, requested and stalled
- * before its menu existed, rejected, or dismissed.
+ * still open two seconds later (the menu is still showing or never appeared), and how it settled
+ * (see {@link logContextMenuOutcome}). A right-click that showed no menu can then be told apart in
+ * the log: never requested, requested and still open with no menu showing, rejected, or dismissed.
  */
 export function createContextMenuRequestLog({
   webViewId,
@@ -62,7 +63,7 @@ export function createContextMenuRequestLog({
       const stallTimer = setTimeout(() => {
         stallTimers.delete(stallTimer);
         logger.debug(
-          `${label}: request #${number} is still unsettled after ${CONTEXT_MENU_STALL_LOG_MS} ms`,
+          `${label}: request #${number} is still open after ${CONTEXT_MENU_STALL_LOG_MS} ms (the menu is still showing or never appeared)`,
         );
       }, CONTEXT_MENU_STALL_LOG_MS);
       stallTimers.add(stallTimer);
