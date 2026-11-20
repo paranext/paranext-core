@@ -2795,14 +2795,6 @@ function PlatformScriptureEditor({
 
   // #endregion Marker Palettes
 
-  // #region Context Menu
-
-  // Whether the platform context menu is claiming the keyboard right now. Set where the menu hook
-  // is called, below the state it depends on; the key listeners that follow read it at event time.
-  const isEditorContextMenuClaimingKeysRef = useRef<() => boolean>(() => false);
-
-  // #endregion Context Menu
-
   // #region Keydown Routing
 
   // Ctrl+F opens Find for this editor's own project. Uses the same hook as the read-only reference
@@ -2909,15 +2901,6 @@ function PlatformScriptureEditor({
 
         // Everything below runs only with no open session — the `if (session)` above returns.
         if (event.key === INLINE_MARKERS_MENU_TRIGGER) {
-          // While the platform context menu claims the keyboard the key is CLAIMED, not merely
-          // declined: the editor keeps DOM focus while the menu opens, so an unclaimed `\` would
-          // fall through to Lexical and type a backslash into the document behind the menu, and the
-          // menu has no use for it. Once the claim lapses the key behaves as with no menu.
-          if (isEditorContextMenuClaimingKeysRef.current()) {
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-          }
           // The trigger never lands, whatever the selection shape — typing filters the palette,
           // not the document. In capture phase the claim keeps Lexical from ever seeing the `\`.
           // Every kind opens the same way: focus goes to the palette's LIST.
@@ -2937,15 +2920,6 @@ function PlatformScriptureEditor({
         // representation, so it serializes as a plain space: the same data problem as an unmarked
         // split.
         if (event.key === 'Enter') {
-          // While the platform context menu claims the keyboard, Enter is CLAIMED too: the menu
-          // lives in the app window and never receives a press made in this frame, and an unclaimed
-          // Enter would let Lexical split the paragraph with no marker. Once the claim lapses the
-          // key opens the paragraph palette as with no menu.
-          if (isEditorContextMenuClaimingKeysRef.current()) {
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-          }
           const ctx = editorRef.current?.getMarkerMenuContext();
           // Pass through untouched when there's no context, inside a note, or inside marker glyph
           // text — the library engine owns Enter in those cases (e.g. `\fp` inside a footnote).
@@ -2973,9 +2947,7 @@ function PlatformScriptureEditor({
           })
         ) {
           event.preventDefault();
-          // Swallowed while the platform context menu claims the keyboard, so no popup opens over
-          // it; once the claim lapses the key opens the menu as with no menu.
-          if (!isEditorContextMenuClaimingKeysRef.current()) showInlineMarkersMenu();
+          showInlineMarkersMenu();
         } else if (showMarkersMenu && event.key === 'Escape') {
           event.preventDefault();
           setShowMarkersMenu(false);
@@ -2989,9 +2961,7 @@ function PlatformScriptureEditor({
         // bubble phase.
         event.preventDefault();
         event.stopPropagation();
-        // Swallowed while the platform context menu claims the keyboard, like the Ctrl+T shortcuts
-        // below; once the claim lapses the chord inserts as with no menu.
-        if (!isEditorContextMenuClaimingKeysRef.current()) insertCommentAtCurrentSelection();
+        insertCommentAtCurrentSelection();
       } else {
         const chordMatch = matchEditorChord(event);
         if (
@@ -3024,9 +2994,6 @@ function PlatformScriptureEditor({
               );
           },
           insertNote: (method) => {
-            // Swallowed while the platform context menu claims the keyboard, so no footnote editor
-            // opens over it; once the claim lapses the chord inserts as with no menu.
-            if (isEditorContextMenuClaimingKeysRef.current()) return;
             // insertNoteAtCurrentSelection is async and this handler is not, so surface a rejection
             // instead of dropping it as an unhandled promise: the user pressed a key and must not
             // be left with no marker and no explanation.
@@ -4489,26 +4456,23 @@ function PlatformScriptureEditor({
           notifyEditActionBlocked(localizedStrings);
         }}
       >
-        {(isClaimingKeys) => (
-          <FootnoteEditor
-            inline
-            ref={paneNoteEditorRef}
-            classNameForEditor="scripture-font"
-            noteOps={editingNoteOps.current}
-            noteKey={editingNoteKey.current}
-            initialCaretPosition={paneEditingCaret}
-            onClose={closePaneFootnoteEditorFromInside}
-            onNoteEdit={onFootnoteEditorNoteEdit}
-            scrRef={scrRef}
-            editorOptions={paneFootnoteEditorOptions}
-            defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
-            localizedStrings={localizedStrings}
-            parentEditorRef={editorRef}
-            markerPalette={footnoteMarkerPalette}
-            hasBuiltInContextMenu={false}
-            isHostContextMenuClaimingKeys={isClaimingKeys}
-          />
-        )}
+        <FootnoteEditor
+          inline
+          ref={paneNoteEditorRef}
+          classNameForEditor="scripture-font"
+          noteOps={editingNoteOps.current}
+          noteKey={editingNoteKey.current}
+          initialCaretPosition={paneEditingCaret}
+          onClose={closePaneFootnoteEditorFromInside}
+          onNoteEdit={onFootnoteEditorNoteEdit}
+          scrRef={scrRef}
+          editorOptions={paneFootnoteEditorOptions}
+          defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
+          localizedStrings={localizedStrings}
+          parentEditorRef={editorRef}
+          markerPalette={footnoteMarkerPalette}
+          hasBuiltInContextMenu={false}
+        />
       </PaneFootnoteEditorContextMenu>
     ),
     [
@@ -5324,46 +5288,44 @@ function PlatformScriptureEditor({
     isMainEditor: true,
     logger,
   });
-  const { dismiss: dismissEditorContextMenu, isClaimingKeys: isEditorContextMenuClaimingKeys } =
-    useEditorContextMenu({
-      containerRef: mainEditorWrapperRef,
-      isEnabled: isEditorTextShown,
-      hasNonTextSelection: () => !!editorRef.current?.getSelectedParaMarker(),
-      requestMenu: (request) =>
-        trackEditorContextMenuRequest(
-          request,
-          papi.overlays.showContextMenu(
-            SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-            webViewId,
-            getContextMenuShowOptions(request, true),
-          ),
+  const { dismiss: dismissEditorContextMenu } = useEditorContextMenu({
+    containerRef: mainEditorWrapperRef,
+    isEnabled: isEditorTextShown,
+    hasNonTextSelection: () => !!editorRef.current?.getSelectedParaMarker(),
+    requestMenu: (request) =>
+      trackEditorContextMenuRequest(
+        request,
+        papi.overlays.showContextMenu(
+          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+          webViewId,
+          getContextMenuShowOptions(request, true),
         ),
-      dismissMenu: () => papi.overlays.dismissContextMenu(webViewId),
-      onPick: (command, request) =>
-        dispatchContextMenuPick(command, request, {
-          runClipboardCommand: (clipboardCommand) => {
-            // Put back a selection the menu's blur dropped BEFORE focusing: with no selection, the
-            // editor's focus() puts the caret at the end of the text, and the restore would then
-            // find a selection and leave it there.
-            restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
-            // The menu hands focus back to its tab asynchronously; the clipboard read behind Paste
-            // needs the frame focused when it runs, so focus first. The editor itself only when it
-            // has a selection to land on, so that a pick can never move the caret or the reference.
-            focusEditorKeepingSelection(editorRef.current, !isReadOnlyEffective);
-            runEditMenuCommand(clipboardCommand);
-          },
-          ...createContextMenuCommandEffects({
-            webViewId,
-            projectId,
-            viewOptions,
-            editorName: 'editor',
-            papi,
-            logger,
-          }),
+      ),
+    dismissMenu: () => papi.overlays.dismissContextMenu(webViewId),
+    onPick: (command, request) =>
+      dispatchContextMenuPick(command, request, {
+        runClipboardCommand: (clipboardCommand) => {
+          // Put back a selection the menu's blur dropped BEFORE focusing: with no selection, the
+          // editor's focus() puts the caret at the end of the text, and the restore would then
+          // find a selection and leave it there.
+          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
+          // The menu hands focus back to its tab asynchronously; the clipboard read behind Paste
+          // needs the frame focused when it runs, so focus first. The editor itself only when it
+          // has a selection to land on, so that a pick can never move the caret or the reference.
+          focusEditorKeepingSelection(editorRef.current, !isReadOnlyEffective);
+          runEditMenuCommand(clipboardCommand);
+        },
+        ...createContextMenuCommandEffects({
+          webViewId,
+          projectId,
+          viewOptions,
+          editorName: 'editor',
+          papi,
+          logger,
         }),
-      onError: (error) => logger.warn(`The editor context menu failed: ${getErrorMessage(error)}`),
-    });
-  isEditorContextMenuClaimingKeysRef.current = isEditorContextMenuClaimingKeys;
+      }),
+    onError: (error) => logger.warn(`The editor context menu failed: ${getErrorMessage(error)}`),
+  });
 
   // A menu left open across a project, book, chapter or view change would point at content that is
   // gone.

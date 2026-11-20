@@ -39,11 +39,8 @@ export type PaneFootnoteEditorContextMenuProps = {
   rowEditorRef: RefObject<FootnoteEditorHandle | null>;
   /** Tells the user a clipboard action was refused, without naming a reason. */
   notifyActionBlocked: () => void;
-  /**
-   * Renders the row editor. Receives whether the platform menu is claiming the keyboard right now,
-   * for the row editor's own key handling to stand away from.
-   */
-  children: (isClaimingKeys: () => boolean) => ReactNode;
+  /** The row editor. */
+  children: ReactNode;
 };
 
 /**
@@ -77,7 +74,7 @@ export function PaneFootnoteEditorContextMenu({
     isMainEditor: false,
     logger,
   });
-  const { isClaimingKeys } = useEditorContextMenu({
+  useEditorContextMenu({
     containerRef: wrapperRef,
     requestMenu: (request) =>
       trackRequest(
@@ -123,7 +120,7 @@ export function PaneFootnoteEditorContextMenu({
 
   return (
     <div ref={wrapperRef} className="tw:contents">
-      {children(isClaimingKeys)}
+      {children}
     </div>
   );
 }

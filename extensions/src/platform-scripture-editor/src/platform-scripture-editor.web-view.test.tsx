@@ -1564,15 +1564,8 @@ describe('Scripture editor right-click menu', () => {
     /** Right-clicks with a menu that never answers: the request stays pending for good. */
     const openPendingMenu = async () => {
       mockShowContextMenu.mockReturnValue(new Promise(() => {}));
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       await rightClick(screen.getByTestId('editorial'));
     };
-
-    /** Lets the hook's two-second key claim lapse while the request is still pending. */
-    const letClaimLapse = () =>
-      act(async () => {
-        vi.advanceTimersByTime(2100);
-      });
 
     const press = async (init: KeyboardEventInit) => {
       const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
@@ -1595,23 +1588,9 @@ describe('Scripture editor right-click menu', () => {
         return { acted: () => stub[effect].mock.calls.length > 0 };
       };
 
-      it('does nothing while the menu claims the keyboard', async () => {
+      it('acts while a menu request is still open', async () => {
         const { acted } = await setup();
         await openPendingMenu();
-
-        const event = await press(init);
-
-        expect(acted()).toBe(false);
-        // Every key is consumed while the menu claims the keyboard.
-        expect(event.defaultPrevented).toBe(true);
-      });
-
-      it('acts as with no menu once the claim lapsed, although the request is still pending', async () => {
-        const { acted } = await setup();
-        await openPendingMenu();
-        await letClaimLapse();
-        // Positive control: a key no gate handles is no longer claimed, so the claim has lapsed.
-        expect((await press({ key: 'x' })).defaultPrevented).toBe(false);
 
         const event = await press(init);
 
