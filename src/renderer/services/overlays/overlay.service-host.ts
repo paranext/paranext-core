@@ -50,6 +50,7 @@ import { evaluateMenuRecordingReads } from '@shared/utils/evaluate-menu-recordin
 import { collectContextMenuKeys } from '@renderer/components/overlays/overlay-context-menu-localization.util';
 import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import { webViewService } from '@shared/services/web-view.service';
+import { isRunningInWebView, shouldSuppressFocusReturn } from 'platform-bible-react';
 import type { ReactElement } from 'react';
 import {
   CommandPaletteItem,
@@ -256,24 +257,72 @@ function resolveFocusTarget(
 }
 
 /**
+ * Puts keyboard focus inside a web view's frame once focus has been returned to that web view.
+ * Focusing a web view's tab focuses the tab's panel or its last focused element, not its frame, so
+ * a web view whose content never had a focused element (read-only Scripture text) would be left
+ * without keyboard focus inside its frame, and Ctrl+C would copy nothing. `contentWindow.focus()`
+ * focuses the frame without changing its selection or its own focused element.
+ *
+ * Does nothing unless the frame exists and is visible, the app window still has focus, and focus is
+ * still where returning it left it (the page body, the tab's own panel, or this frame), so whatever
+ * the user focused while focus was being returned keeps it. Never throws.
+ */
+function focusReturnedWebViewFrame(webViewId: string): void {
+  try {
+    const frame = getWebViewIframe(webViewId);
+    const frameWindow = frame?.contentWindow;
+    if (!frame || !frameWindow || !isWebViewVisible(webViewId) || !document.hasFocus()) return;
+
+    const active = document.activeElement;
+    if (active !== frame) {
+      // Another frame holds focus: the shared focus-return rule leaves it there
+      if (shouldSuppressFocusReturn(document, isRunningInWebView())) return;
+      const isStillWhereReturnLeftIt =
+        !active ||
+        active === document.body ||
+        active.closest('[data-tab-id]')?.getAttribute('data-tab-id') === webViewId;
+      if (!isStillWhereReturnLeftIt) return;
+    }
+    frameWindow.focus();
+  } catch (error) {
+    logger.debug(
+      `Could not focus the frame of web view ${webViewId} after its context menu closed: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+/**
  * Settles an overlay's focus record when it closes, returning focus to the opener when asked to.
- * Called synchronously from the one place each overlay type settles. This function itself never
- * reads where focus currently is; the only focus read is the containment check in
- * {@link settleTransientOverlayFocus}, so a click elsewhere can never pull focus back.
+ * Called synchronously from the one place each overlay type settles. Whether to return focus never
+ * depends on where focus currently is, apart from the containment check in
+ * {@link settleTransientOverlayFocus}, so a click elsewhere can never pull focus back. A context
+ * menu also focuses the requesting web view's frame once focus is back; that step reads the active
+ * element only to avoid overriding a focus move made meanwhile.
  *
  * @param overlayId The overlay that is closing
  * @param shouldReturnFocus Whether this close hands focus back to the opener
+ * @param isContextMenu Whether the overlay is a context menu, which also focuses the frame
  */
-function settleFocus(overlayId: string, shouldReturnFocus: boolean): void {
+function settleFocus(
+  overlayId: string,
+  shouldReturnFocus: boolean,
+  isContextMenu: boolean = false,
+): void {
   const record = focusRecords.get(overlayId);
   focusRecords.delete(overlayId);
   if (!shouldReturnFocus || !record) return;
 
   const target = resolveFocusTarget(record);
   if (!target) return;
-  windowService.setFocus(target).catch(() => {
-    // Best-effort focus restore
-  });
+  windowService
+    .setFocus(target)
+    .then(() => {
+      if (isContextMenu && target.focusType === 'webView') focusReturnedWebViewFrame(target.id);
+      return undefined;
+    })
+    .catch(() => {
+      // Best-effort focus restore
+    });
 }
 
 /**
@@ -281,10 +330,20 @@ function settleFocus(overlayId: string, shouldReturnFocus: boolean): void {
  * when an item was picked (a result came back), or when the close was marked as returning focus and
  * focus was inside the overlay's own content at that moment. A click elsewhere, a pane or tab
  * switch, a replacement, a timeout and a scroll never return focus.
+ *
+ * @param isContextMenu Whether the overlay is a context menu; see {@link settleFocus}
  */
-function settleTransientOverlayFocus(overlayId: string, wasPicked: boolean): void {
+function settleTransientOverlayFocus(
+  overlayId: string,
+  wasPicked: boolean,
+  isContextMenu: boolean = false,
+): void {
   const isMarked = takeOverlayFocusReturnMark(overlayId);
-  settleFocus(overlayId, wasPicked || (isMarked && isFocusInsideOverlayContent(overlayId)));
+  settleFocus(
+    overlayId,
+    wasPicked || (isMarked && isFocusInsideOverlayContent(overlayId)),
+    isContextMenu,
+  );
 }
 
 /** Whether a rejection is the replacement or shutdown of an overlay rather than an answer to it */
@@ -693,11 +752,11 @@ async function buildAndShowContextMenu(
       localizeKeys,
       position: clampedPosition,
       resolve: (result) => {
-        settleTransientOverlayFocus(overlayId, result !== undefined);
+        settleTransientOverlayFocus(overlayId, result !== undefined, true);
         resolve(result);
       },
       reject: (reason?: unknown) => {
-        settleTransientOverlayFocus(overlayId, false);
+        settleTransientOverlayFocus(overlayId, false, true);
         reject(reason);
       },
     });
