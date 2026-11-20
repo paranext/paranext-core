@@ -218,13 +218,14 @@ Card, list and table reference implementations mark each project-text element wi
 
 **Pop-ups stay at interface scale.** Menus, popovers, dropdowns and tooltips from
 `platform-bible-react`, the pop-ups requested through `papi.overlays` (`showCommandPalette`,
-`showPopover`, `showContextMenu`, which the Scripture editors' right-click menus use) never take content
-zoom, even when they open from zoomed text: content zoom makes project text readable, it does not
-resize controls. Only their position follows the zoomed content. A pop-up you anchor to a position
-in the text should read that position live — `useLivePopoverAnchor` from `platform-bible-react`
-re-measures on scroll, resize and reflow — because `getBoundingClientRect()` inside a zoomed element
-already reports viewport pixels, which is what the pop-up is placed in. Never put
-`data-platform-content-zoom-root` on pop-up content: the platform zooms every element that carries it.
+`showPopover`, `showContextMenu`) and the Scripture editors' right-click menus, which are the
+`showContextMenu` kind, never take content zoom, even when they open from zoomed text: content zoom
+makes project text readable, it does not resize controls. Only their position follows the zoomed
+content. A pop-up you anchor to a position in the text should read that position live —
+`useLivePopoverAnchor` from `platform-bible-react` re-measures on scroll, resize and reflow —
+because `getBoundingClientRect()` inside a zoomed element already reports viewport pixels, which is
+what the pop-up is placed in. Never put `data-platform-content-zoom-root` on pop-up content: the
+platform zooms every element that carries it.
 
 ---
 
@@ -871,4 +872,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.7.6 | 2026-09-23 | List the card, list and table reference implementations of text-level zoom markers (Find, the inventories, Checks, the Markers Checklist, the Lexical Tools dictionary) and note that these types are declared zoomable in core. |
 | 1.7.7 | 2026-09-24 | "Content Zoom Opt-In": name areas the user cannot tell apart with `ContentZoomRoot`'s `label`, and tie unscaled rows, columns and cards to one area with `data-platform-content-zoom-scope` (both experimental); the Text Collection grid is the reference, one `resource-<id>` area per resource, with its right-click and "⋮" zoom menus running the platform's zoom commands. |
 | 1.7.8 | 2026-10-19 | "Existing Strings Are Immutable": the one replacement recipe — a new key with `fallbackKey` pointing at the old key, every consumer switched and the old key verified unused, inbound `fallbackKey`s re-pointed, `deprecationInfo` on the old key, old key and values untouched — matching the Localization Guide. |
-| 1.7.9 | 2026-11-19 | "Pop-ups stay at interface scale": the Scripture editors' right-click menus are now the context menu requested through `papi.overlays`. |
+| 1.7.9 | 2026-11-19 | "Pop-ups stay at interface scale": names the context menu requested through `papi.overlays` as the Scripture editors' right-click menu. |

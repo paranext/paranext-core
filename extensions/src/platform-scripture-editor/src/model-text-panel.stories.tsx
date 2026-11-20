@@ -15,8 +15,8 @@ import type {
 import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 // The editor's USJ node styling. The real app loads these globally; Storybook doesn't, so without
-// them the editor's read-only marker toolbar renders as a stray inline label. We import the same icon-free subset the editorial layout stories used
-// (editor.css/editor-overrides.css were skipped because they previously referenced toolbar icon
+// them the editor's read-only marker toolbar renders as a stray inline label. We import the same
+// icon-free subset the editorial layout stories used (editor.css/editor-overrides.css were skipped because they previously referenced toolbar icon
 // SVGs by absolute URL that the css-loader couldn't resolve but have now been cleaned up and can be
 // used; the minimal wrapper styles are inlined in EDITOR_WRAPPER_STYLE below).
 /* eslint-disable import/no-relative-packages -- these editor demo CSS files are not part of
