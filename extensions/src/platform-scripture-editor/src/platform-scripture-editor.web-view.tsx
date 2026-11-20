@@ -88,6 +88,7 @@ import {
   useMarkerPaletteFocusOutCapture,
   useMarkerPaletteSessionWriters,
   useEditorContextMenu,
+  focusEditorKeepingSelection,
   type FootnoteEditorMarkerPalette,
 } from 'platform-bible-react/experimental';
 import {
@@ -281,7 +282,6 @@ import {
   getEditorWebViewContextKeys,
   hasNonCollapsedSelection,
   flushRowEditsThenSave,
-  focusEditorKeepingSelection,
   forgetCaretSnapshotIfParaMarkerSelected,
   generateInlineMarkerMenuListItems,
   getChapterKey,

@@ -23,7 +23,6 @@ const PAPI_FREE_FILES = [
   'resource-text-panel.component.tsx',
   'model-text-panel.component.tsx',
   'use-read-only-panel-context-menu.hook.ts',
-  'focus-editor-keeping-selection.util.ts',
   'edit-menu-actions.util.ts',
   'editor-context-menu-pick.util.ts',
   'find-trigger.util.ts',

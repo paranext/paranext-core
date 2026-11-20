@@ -74,6 +74,7 @@ import {
   useLivePopoverAnchor,
 } from '@/hooks/use-live-popover-anchor.hook';
 import { runKeepingBrowserSelection } from '@/utils/browser-selection.util';
+import { focusEditorKeepingSelection } from '@/utils/focus-editor-keeping-selection.util';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
@@ -1160,19 +1161,15 @@ export default function FootnoteEditor({
    * Runs a clipboard action on the inner editor, focused first: the clipboard read behind Paste
    * needs the frame focused when it runs.
    *
-   * The inner editor's `focus()` re-asserts the selection it holds, and with none it puts the caret
-   * at the end of the note; it also re-reads the browser selection, which the editor's own copy
-   * leaves at the end of the note. So here it is called only when the editor is editable and has a
-   * selection to land on. Otherwise only the frame's window is focused, which brings keyboard
-   * shortcuts back to the frame and leaves the selection where it is.
+   * Focus follows {@link focusEditorKeepingSelection}: the inner editor's own `focus()` only when it
+   * is editable and has a selection to land on, otherwise just the frame's window.
    */
   const runClipboardMethod = useCallback(
     (method: 'cut' | 'copy' | 'paste' | 'pastePlainText') => {
       const editor = restoreLostSelection();
       if (!editor) return;
       const ownerDocument = editorParentRef.current?.ownerDocument;
-      if (!isReadonly && (editor.getSelection() || editor.getSelectedParaMarker())) editor.focus();
-      else (ownerDocument?.defaultView ?? window).focus();
+      focusEditorKeepingSelection(editor, !isReadonly, ownerDocument?.defaultView ?? window);
       // The editor's copy leaves the browser selection on a hidden element at the end of the note;
       // put it back before the editor takes that as its selection.
       if (method === 'copy') runKeepingBrowserSelection(() => editor.copy(), ownerDocument);
