@@ -1935,9 +1935,9 @@ function PlatformScriptureEditor({
 
     // Comment creation is gated by canUserCreateComments (not read-only), so it must be blocked
     // separately during an automatic Send/Receive. Guarding here covers both the hotkey and the
-    // context-menu item's onSelect.
+    // Insert comment menu items.
     if (!selection?.start || !canUserCreateComments) return;
-    // The context-menu item is visibly disabled while sync-blocked, but the hotkey reaches here
+    // The menu items are visibly disabled while sync-blocked, but the hotkey reaches here
     // directly — show the same "editing paused" notice instead of silently no-op'ing.
     if (isSyncBlocked) {
       notifySyncEditBlocked();
@@ -2036,8 +2036,8 @@ function PlatformScriptureEditor({
 
   /**
    * Inserts a textual note (footnote, cross-reference, or endnote) at the current selection, driven
-   * by {@link NOTE_INSERT_CONFIG}. Shared by each kind's context-menu item, the top-menu command
-   * (via the `webViewMessageListener` effect below), and — for footnote/cross-reference — the
+   * by {@link NOTE_INSERT_CONFIG}. Shared by each kind's top-menu and right-click menu command (via
+   * the `webViewMessageListener` effect below), and — for footnote/cross-reference — the
    * Ctrl+T/Ctrl+Shift+T keyboard shortcuts, so the read-only guard, the version-history commit, and
    * `insertMarker` behavior stay identical across every entry point for every kind.
    *
