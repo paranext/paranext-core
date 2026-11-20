@@ -6,9 +6,6 @@
 
 import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 
-// The overlay service and content zoom look frames up through this module.
-export { getWebViewIframe };
-
 /**
  * Translates iframe-relative coordinates to document-relative coordinates using
  * getBoundingClientRect of the WebView iframe. The platform never scales the iframe element itself

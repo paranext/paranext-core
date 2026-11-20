@@ -40,7 +40,6 @@ import {
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
 import type {
-  ContextKeyValue,
   LanguageStrings,
   Localized,
   PlatformError,
@@ -58,6 +57,7 @@ import {
   OverlayEntry,
   PopoverContent,
   PopoverRequest,
+  ShowContextMenuOptions,
 } from './overlay.service-model';
 import { filterPaletteItems, getPaletteFilterMode } from './overlay-palette-filter.util';
 import { convertContributionToContextMenuItems } from './overlay-menu-converter';
@@ -78,12 +78,8 @@ import {
   updateContextMenuItems,
   updateCommandPaletteState,
 } from './overlay-store';
-import {
-  translateCoordinates,
-  clampToViewport,
-  isWebViewVisible,
-  getWebViewIframe,
-} from './overlay-coordinates';
+import { translateCoordinates, clampToViewport, isWebViewVisible } from './overlay-coordinates';
+import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import {
   markOverlayFocusReturnIfFocusInside,
   resetOverlayFocusReturnMarks,
@@ -108,8 +104,8 @@ const OVERLAY_CREATION_GRACE_MS = 300;
 
 /**
  * Monotonic timestamp (`performance.now()`) of the most recent overlay creation. Elapsed time in
- * this service is measured on the monotonic clock because the wall clock can step backwards (an NTP
- * correction, a manual change), which makes a `Date.now()` difference negative.
+ * this service is measured on the monotonic clock because the wall clock can step backwards (when
+ * the system clock is set back, for example), which makes a `Date.now()` difference negative.
  */
 let lastOverlayCreatedAt = -Infinity;
 
@@ -555,13 +551,6 @@ function menuExpressionsUseTemplateVar(menu: Localized<SingleColumnMenu>, name: 
 }
 
 // ── Core Service Methods ──
-
-/** Options of {@link showContextMenu} */
-type ShowContextMenuOptions = {
-  position?: { x: number; y: number };
-  shouldRunCommand?: boolean;
-  contextKeys?: Record<string, ContextKeyValue>;
-};
 
 /** A `showContextMenu` call that has not registered its overlay yet */
 type PendingContextMenuRequest = { cancel: () => void; isCancelled: () => boolean };

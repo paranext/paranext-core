@@ -13374,6 +13374,39 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    */
   export type { PaletteFilterMode };
   /**
+   * Options of {@link IOverlayService.showContextMenu}
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ShowContextMenuOptions = {
+    /**
+     * Where to draw the menu, relative to the requesting WebView's iframe
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    position?: {
+      x: number;
+      y: number;
+    };
+    /**
+     * Whether the service runs the picked command. Defaults to `true`. With `false` the pick only
+     * resolves the promise, so the caller decides what to do with it. A caller that runs the command
+     * itself should note that an item whose command duplicates another visible item's command cannot
+     * be told apart by the resolved value.
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    shouldRunCommand?: boolean;
+    /**
+     * Context keys for this request only, evaluated by the menu's `when` and `enabledWhen`
+     * expressions as if they were shared context keys. A request key shadows a shared key of the same
+     * name and is never written to the shared context key service.
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    contextKeys?: Record<string, ContextKeyValue>;
+  };
+  /**
    *
    * Service for showing overlays (context menus, popovers, command palettes) that render outside
    * iframe boundaries in the renderer's top-level document. Renderer-only service.
@@ -13409,29 +13442,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     showContextMenu(
       webViewType: string,
       webViewId: string,
-      options?: {
-        position?: {
-          x: number;
-          y: number;
-        };
-        /**
-         * Whether the service runs the picked command. Defaults to `true`. With `false` the pick only
-         * resolves the promise, so the caller decides what to do with it. A caller that runs the
-         * command itself should note that an item whose command duplicates another visible item's
-         * command cannot be told apart by the resolved value.
-         *
-         * @experimental This option is unstable and may change or disappear without notice
-         */
-        shouldRunCommand?: boolean;
-        /**
-         * Context keys for this request only, evaluated by the menu's `when` and `enabledWhen`
-         * expressions as if they were shared context keys. A request key shadows a shared key of the
-         * same name and is never written to the shared context key service.
-         *
-         * @experimental This option is unstable and may change or disappear without notice
-         */
-        contextKeys?: Record<string, ContextKeyValue>;
-      },
+      options?: ShowContextMenuOptions,
     ): Promise<string | undefined>;
     /**
      * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
@@ -15983,13 +15994,6 @@ declare module 'renderer/components/web-view-iframe.util' {
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
 }
 declare module 'renderer/services/overlays/overlay-coordinates' {
-  /**
-   * Coordinate translation utilities for the overlay service. Translates iframe-relative coordinates
-   * to document-relative coordinates, clamps positions to the viewport, and checks WebView
-   * visibility.
-   */
-  import { getWebViewIframe } from 'renderer/components/web-view-iframe.util';
-  export { getWebViewIframe };
   /**
    * Translates iframe-relative coordinates to document-relative coordinates using
    * getBoundingClientRect of the WebView iframe. The platform never scales the iframe element itself

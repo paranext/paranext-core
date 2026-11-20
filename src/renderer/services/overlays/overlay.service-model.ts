@@ -263,6 +263,37 @@ export interface CommandPaletteRequest {
  */
 export type { PaletteFilterMode };
 
+/**
+ * Options of {@link IOverlayService.showContextMenu}
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShowContextMenuOptions = {
+  /**
+   * Where to draw the menu, relative to the requesting WebView's iframe
+   *
+   * @experimental This option is unstable and may change or disappear without notice
+   */
+  position?: { x: number; y: number };
+  /**
+   * Whether the service runs the picked command. Defaults to `true`. With `false` the pick only
+   * resolves the promise, so the caller decides what to do with it. A caller that runs the command
+   * itself should note that an item whose command duplicates another visible item's command cannot
+   * be told apart by the resolved value.
+   *
+   * @experimental This option is unstable and may change or disappear without notice
+   */
+  shouldRunCommand?: boolean;
+  /**
+   * Context keys for this request only, evaluated by the menu's `when` and `enabledWhen`
+   * expressions as if they were shared context keys. A request key shadows a shared key of the same
+   * name and is never written to the shared context key service.
+   *
+   * @experimental This option is unstable and may change or disappear without notice
+   */
+  contextKeys?: Record<string, ContextKeyValue>;
+};
+
 // ── Service Interface ──
 
 /**
@@ -302,26 +333,7 @@ export interface IOverlayService {
   showContextMenu(
     webViewType: string,
     webViewId: string,
-    options?: {
-      position?: { x: number; y: number };
-      /**
-       * Whether the service runs the picked command. Defaults to `true`. With `false` the pick only
-       * resolves the promise, so the caller decides what to do with it. A caller that runs the
-       * command itself should note that an item whose command duplicates another visible item's
-       * command cannot be told apart by the resolved value.
-       *
-       * @experimental This option is unstable and may change or disappear without notice
-       */
-      shouldRunCommand?: boolean;
-      /**
-       * Context keys for this request only, evaluated by the menu's `when` and `enabledWhen`
-       * expressions as if they were shared context keys. A request key shadows a shared key of the
-       * same name and is never written to the shared context key service.
-       *
-       * @experimental This option is unstable and may change or disappear without notice
-       */
-      contextKeys?: Record<string, ContextKeyValue>;
-    },
+    options?: ShowContextMenuOptions,
   ): Promise<string | undefined>;
   /**
    * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
