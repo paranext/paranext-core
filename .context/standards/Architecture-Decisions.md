@@ -3329,10 +3329,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     promise resolves or rejects) or two seconds have passed, whichever comes first, the hook claims
     every key in the frame except bare modifiers, and Escape cancels the menu. A window key listener
     registered before the hook's runs first and must read `isClaimingKeys()` itself: the web view's
-    capture-phase `handleStandardViewTriggers` (the `\` and Enter triggers). The web view's other key
-    gates and `FootnoteEditor`'s (`isHostContextMenuClaimingKeys`) read it too, as a second line of
-    defence. Never gate on `isPending()`, which stays true for a stalled request. See "While the right-click menu is opening, no palette
-    opens" in `Standard-View-Invariants.md`.
+    capture-phase `handleStandardViewTriggers` (the `\` and Enter triggers). The web view's other
+    key gates and `FootnoteEditor`'s (`isHostContextMenuClaimingKeys`) read it too, as a second line
+    of defence. Never gate on `isPending()`, which stays true for a stalled request. See "While the
+    right-click menu is opening, no palette opens" in `Standard-View-Invariants.md`.
   - After a pick, a read-only editor is never focused through the editor's own `focus()`: with no
     selection it selects the end of the document, which moves the caret and the reference the
     caret drives. `focusEditorKeepingSelection` focuses the frame's window instead, and

@@ -186,12 +186,12 @@ for the snapshot).
 Request-scoped keys (experimental) are plain facts too, but about one right-click only. They are
 never published, so the producer rule below does not apply to them. The Scripture editor's context
 menus read `platformScriptureEditor.contextMenu.hasSelection`,
-`platformScriptureEditor.contextMenu.isMainEditor` and `platformScriptureEditor.contextMenu.canFind`;
-the Enhanced Resources Scripture pane's reads `platformEnhancedResources.contextMenu.hasSelection`.
-The short name `hasSelection` is used twice on purpose: the shared per-tab key
-`platformScriptureEditor.webView.{webViewId}.hasSelection` drives the top menu, and the request key
-`platformScriptureEditor.contextMenu.hasSelection` drives the right-click menu. See "Web View
-Context Menus" below.
+`platformScriptureEditor.contextMenu.isMainEditor` and
+`platformScriptureEditor.contextMenu.canFind`; the Enhanced Resources Scripture pane's reads
+`platformEnhancedResources.contextMenu.hasSelection`. The short name `hasSelection` is used twice on
+purpose: the shared per-tab key `platformScriptureEditor.webView.{webViewId}.hasSelection` drives
+the top menu, and the request key `platformScriptureEditor.contextMenu.hasSelection` drives the
+right-click menu. See "Web View Context Menus" below.
 
 Each key has exactly **one producer process**: a TypeScript process refuses (logs, does not throw)
 a write to a key another process wrote first; the .NET store does not check, so a C# write to
@@ -258,18 +258,20 @@ report it: `ABORTED` (a newer context menu from the same web view replaced this 
 
 ```typescript
 // `papi` and `logger` from '@papi/frontend'; the rest from 'platform-bible-utils'
+const { webViewId } = globalThis;
 const QUIET_CODES: string[] = [ABORTED, RESOURCE_EXHAUSTED, FAILED_PRECONDITION];
 
 element.addEventListener('contextmenu', async (event) => {
   event.preventDefault();
+  const hasSelection = !document.getSelection()?.isCollapsed;
   try {
-    const command = await papi.overlays.showContextMenu('myExtension.myView', globalThis.webViewId, {
+    const command = await papi.overlays.showContextMenu('myExtension.myView', webViewId, {
       position: { x: event.clientX, y: event.clientY },
       shouldRunCommand: false,
-      contextKeys: { 'myExtension.contextMenu.hasSelection': !document.getSelection()?.isCollapsed },
+      contextKeys: { 'myExtension.contextMenu.hasSelection': hasSelection },
     });
     if (command === 'myExtension.copySelection') document.execCommand('copy'); // in this frame
-    else if (command) await papi.commands.sendCommand(command, globalThis.webViewId);
+    else if (command) await papi.commands.sendCommand(command, webViewId);
   } catch (error) {
     if (!isPlatformError(error) || !QUIET_CODES.includes(error.code))
       logger.warn(`Context menu failed: ${getErrorMessage(error)}`);
