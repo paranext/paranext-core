@@ -998,6 +998,100 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
 
     [Test]
     [Description(
+        "A non-interlinear file a user left inside an Interlinear_* directory (e.g. an exported "
+            + "wordlist) is neither listed nor parsed, so it cannot fail the read."
+    )]
+    public void GetPt9InterlinearData_IgnoresForeignFileInsideAnInterlinearDirectory()
+    {
+        const string foreignPath = "Interlinear_en/lele wordlist paratext.xml";
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+        WriteProjectFile(
+            foreignPath,
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<wordlist>\n  <item word=\"a\" count=\"1\" />\n</wordlist>"
+        );
+
+        var data = _provider.GetPt9InterlinearData();
+
+        Assert.That(
+            data.Books.Select(book => book.FilePath),
+            Is.EqualTo(new[] { "Interlinear_en/Interlinear_en_JAS.xml" })
+        );
+        Assert.That(
+            _provider.GetPt9InterlinearManifest().Files.Keys,
+            Does.Not.Contain(foreignPath)
+        );
+    }
+
+    [Test]
+    [Description(
+        "A file can have the interlinear prefix but a root element other than InterlinearData. "
+            + "If it is well-formed, it is neither listed nor parsed, so it cannot fail the read."
+    )]
+    public void GetPt9InterlinearData_IgnoresPrefixedFileWithAnotherRoot()
+    {
+        const string foreignPath = "Interlinear_en/Interlinear_wordlist.xml";
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+        WriteProjectFile(
+            foreignPath,
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<wordlist>\n  <item word=\"a\" count=\"1\" />\n</wordlist>"
+        );
+
+        var data = _provider.GetPt9InterlinearData();
+
+        Assert.That(
+            data.Books.Select(book => book.FilePath),
+            Is.EqualTo(new[] { "Interlinear_en/Interlinear_en_JAS.xml" })
+        );
+        Assert.That(
+            _provider.GetPt9InterlinearManifest().Files.Keys,
+            Is.EquivalentTo(new[] { "Interlinear_en/Interlinear_en_JAS.xml" })
+        );
+    }
+
+    [Test]
+    [Description(
+        "A book file that cannot be opened fails only the reads that select it. A read selecting "
+            + "another book still succeeds."
+    )]
+    public void GetPt9InterlinearData_UnreadableUnselectedBook_DoesNotBlockTheSelectedBook()
+    {
+        const string readablePath = "Interlinear_en/Interlinear_en_JAS.xml";
+        const string unreadablePath = "Interlinear_es/Interlinear_es_MAT.xml";
+        WriteProjectFile(readablePath, InterlinearEnJasXml);
+        WriteProjectFile(unreadablePath, InterlinearEsMatXml);
+        _scrText.MakeFileUnreadable(unreadablePath);
+
+        // Positive control: the file really is unreadable to a read that selects it.
+        var exception = Assert.Throws<InvalidDataException>(
+            () => _provider.GetPt9InterlinearData(new Pt9InterlinearDataSelector([unreadablePath]))
+        );
+        Assert.That(exception!.Message, Does.Contain(unreadablePath));
+
+        var data = _provider.GetPt9InterlinearData(new Pt9InterlinearDataSelector([readablePath]));
+
+        Assert.That(data.Books.Select(book => book.FilePath), Is.EqualTo(new[] { readablePath }));
+    }
+
+    [Test]
+    [Description(
+        "A book file that is malformed at its root is not mistaken for a foreign file: it still "
+            + "fails the read with the typed error naming its path."
+    )]
+    public void GetPt9InterlinearData_MalformedBookFile_StillFailsTheRead()
+    {
+        const string malformedPath = "Interlinear_en/Interlinear_en_MAT.xml";
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+        WriteProjectFile(malformedPath, "this is not xml");
+
+        var exception = Assert.Throws<InvalidDataException>(
+            () => _provider.GetPt9InterlinearData()
+        );
+
+        Assert.That(exception!.Message, Does.Contain(malformedPath));
+    }
+
+    [Test]
+    [Description(
         "A Send/Receive merge can leave a root-level twin beside the canonical file; both are "
             + "served, distinguished by path, and only the canonical one is marked as the file "
             + "PT9 reads."
@@ -1738,9 +1832,7 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         var exception = Assert.Throws<InvalidDataException>(
             () =>
                 _provider.GetPt9InterlinearData(
-                    new Pt9InterlinearDataSelector(
-                        ["interlinear_en/interlinear_en_jas.xml"]
-                    )
+                    new Pt9InterlinearDataSelector(["interlinear_en/interlinear_en_jas.xml"])
                 )
         );
 
@@ -1801,11 +1893,11 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
 
     [Test]
     [Description(
-        "The book identity comes from the root element only, so an InterlinearData nested inside "
-            + "another document does not name the file - which would disagree with the payload, "
-            + "whose parse binds the root."
+        "Only the root element makes a book file. An InterlinearData nested inside another "
+            + "document does not, so the file is neither listed nor read. The payload parse also "
+            + "binds only the root, so the scan and the parse agree."
     )]
-    public void GetPt9InterlinearManifest_NestedInterlinearData_DoesNotNameTheFile()
+    public void GetPt9InterlinearManifest_NestedInterlinearData_IsNotListed()
     {
         WriteProjectFile(
             "Interlinear_en/Interlinear_en_JAS.xml",
@@ -1814,9 +1906,8 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
 
         var manifest = _provider.GetPt9InterlinearManifest();
 
-        var info = manifest.Files["Interlinear_en/Interlinear_en_JAS.xml"];
-        Assert.That(info.BookId, Is.Null);
-        Assert.That(info.GlossLanguage, Is.Null);
+        Assert.That(manifest.Files, Is.Empty);
+        Assert.That(_provider.GetPt9InterlinearData().Books, Is.Empty);
     }
 
     [Test]
