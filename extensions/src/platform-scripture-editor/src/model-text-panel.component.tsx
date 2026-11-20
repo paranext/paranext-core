@@ -241,7 +241,7 @@ export function ModelTextPanel({
     ref: modelTextLabelRef,
     open: isModelTextLabelTruncatedHovered,
     onPointerEnter: onModelTextLabelPointerEnter,
-    onPointerLeave: onModelTextLabelPointerLeave,
+    onPointerLeave: closeModelTextLabelTooltip,
   } = useTruncationTooltip<HTMLSpanElement>();
 
   const [isSelecting, setIsSelecting] = useState(false);
@@ -928,12 +928,12 @@ export function ModelTextPanel({
             <TooltipTrigger
               asChild
               onPointerEnter={onModelTextLabelPointerEnter}
-              onPointerLeave={onModelTextLabelPointerLeave}
-              onPointerDown={onModelTextLabelPointerLeave}
+              onPointerLeave={closeModelTextLabelTooltip}
+              onPointerDown={closeModelTextLabelTooltip}
               onFocus={(event) => {
                 if (event.currentTarget.matches(':focus-visible')) onModelTextLabelPointerEnter();
               }}
-              onBlur={onModelTextLabelPointerLeave}
+              onBlur={closeModelTextLabelTooltip}
               data-testid="model-text-header"
             >
               {isUserChosenModelText ? (
@@ -945,7 +945,7 @@ export function ModelTextPanel({
                   aria-haspopup="dialog"
                   onClick={() => {
                     // A keyboard press fires no pointer event, so close the tooltip here too.
-                    onModelTextLabelPointerLeave();
+                    closeModelTextLabelTooltip();
                     handlePickModelText();
                   }}
                   aria-label={formatReplacementString(
@@ -974,8 +974,8 @@ export function ModelTextPanel({
             </TooltipTrigger>
             <TooltipContent
               dir="auto"
-              onEscapeKeyDown={onModelTextLabelPointerLeave}
-              onPointerDownOutside={onModelTextLabelPointerLeave}
+              onEscapeKeyDown={closeModelTextLabelTooltip}
+              onPointerDownOutside={closeModelTextLabelTooltip}
             >
               {modelTextLabel}
             </TooltipContent>

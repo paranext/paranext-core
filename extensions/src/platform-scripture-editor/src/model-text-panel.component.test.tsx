@@ -1716,6 +1716,56 @@ describe('ModelTextPanel changing a model text the user chose', () => {
 
       await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
     });
+
+    /** Hovers the header and waits for the tooltip and Radix's zero-delay timers to settle. */
+    async function hoverHeader() {
+      clipLabel();
+      renderUserChosenWeb();
+      const header = await screen.findByRole('button', { name: CHANGE_WEB });
+      act(() => {
+        header.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+      });
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+      return header;
+    }
+
+    it('closes when the pointer leaves the header', async () => {
+      const header = await hoverHeader();
+
+      act(() => {
+        header.dispatchEvent(
+          new MouseEvent('pointerout', { bubbles: true, relatedTarget: document.body }),
+        );
+      });
+
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    });
+
+    it('closes when the header is pressed', async () => {
+      const header = await hoverHeader();
+
+      // The press alone, without the click that also closes it, so only the press can close it.
+      act(() => {
+        header.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      });
+
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    });
+
+    it('closes on a press outside the header', async () => {
+      await hoverHeader();
+
+      act(() => {
+        document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      });
+
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    });
   });
 
   describe('when the book is missing', () => {

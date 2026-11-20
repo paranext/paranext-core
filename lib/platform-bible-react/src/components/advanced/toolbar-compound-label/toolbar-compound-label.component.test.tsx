@@ -504,6 +504,27 @@ describe('ToolbarCompoundLabel', () => {
       });
     });
 
+    test('does not take a container focused only from code as the control', async () => {
+      render(
+        <div tabIndex={-1}>
+          <ToolbarCompoundLabel
+            primary="GEN"
+            secondary="1:1"
+            showSecondary={false}
+            fullText="Genesis 1:1"
+          />
+          <span>elsewhere in the container</span>
+        </div>,
+      );
+
+      await userEvent.hover(screen.getByText('elsewhere in the container'));
+      await waitForTimers();
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      await userEvent.hover(screen.getByText('GEN'));
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+    });
+
     test('closes when the pointer leaves the control', async () => {
       renderInButton();
 

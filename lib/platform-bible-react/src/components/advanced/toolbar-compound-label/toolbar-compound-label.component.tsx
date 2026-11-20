@@ -10,8 +10,12 @@ import { useTruncationTooltip } from '@/hooks/use-truncation-tooltip.hook';
 import { getLastInteractionModality } from '@/utils/focus.util';
 import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 
-/** What counts as the control the label sits in. Hover and keyboard focus are both read from it. */
-const HOST_SELECTOR = 'button, [role="combobox"], [tabindex]';
+/**
+ * What counts as the control the label sits in. Hover and keyboard focus are both read from it.
+ * `tabindex="-1"` is left out: it marks a container focused from code, not a control a user
+ * reaches, and taking one as the host would spread hover over the whole container.
+ */
+const HOST_SELECTOR = 'button, [role="combobox"], [tabindex]:not([tabindex="-1"])';
 
 export type ToolbarCompoundLabelProps = {
   /** The field that identifies the item — a book abbreviation, project short name, marker code. */
@@ -145,7 +149,8 @@ export function ToolbarCompoundLabel({
     onSecondaryClipPointerEnter,
   ]);
 
-  // Wired to both pointer-leave and pointer-down. The press case is not redundant: these labels sit
+  // The one close path: leaving or pressing the control, blur, Escape and an outside press all end
+  // here. The press case is not redundant: these labels sit
   // inside popover and select triggers, and without it the tooltip stays open on top of the popover
   // the click just opened, because the pointer never "leaves".
   const closeTooltip = useCallback(() => {
