@@ -250,18 +250,16 @@ export function ToolbarCompoundLabel({
     // Nested TooltipProviders are harmless in Radix, so carrying our own means this works in any
     // host, including toolbars that never set one up.
     <TooltipProvider>
-      {/* `onOpenChange` is what makes this dismissable. A controlled Radix tooltip routes every
-          close it decides on — Escape, an outside pointer press — through this callback, so
-          without it the tooltip's own dismiss handler is a no-op AND its dismissable layer still
-          calls `preventDefault()` on that Escape, swallowing the keypress from whatever popover
-          sits underneath. Only closes are honoured; opening stays ours to decide. */}
+      {/* No `onOpenChange`: Radix's own close requests are not honoured. Besides Escape and an
+          outside press, Radix closes a tooltip whenever any tooltip broadcasts its "another tooltip
+          opened" event — and an uncontrolled tooltip around this control (`DisabledActionTooltip`
+          wrapping a toolbar trigger, for one) broadcasts on every hover, on a zero-delay timer, so
+          this one would close the moment it appeared. Escape and outside presses are handled on
+          the content below; leaving, pressing and blurring the control are handled above. */}
       <Tooltip
         open={
           isPrimaryClipHovered || isSecondaryClipHovered || isIncompleteHovered || isFocusRevealed
         }
-        onOpenChange={(isOpen) => {
-          if (!isOpen) closeTooltip();
-        }}
       >
         <span
           ref={rootRef}
@@ -275,10 +273,8 @@ export function ToolbarCompoundLabel({
         >
           {/* The tooltip's anchor: an invisible box laid over the whole control, so the tooltip
               opens clear of the control rather than of the text, never on top of the control where
-              it would sit under the pointer. It takes no pointer events, which also keeps Radix's
-              own hover handling out: Radix opens on a timer that can still read this controlled
-              tooltip as closed, broadcasts its "another tooltip opened" event, and the tooltip
-              closes itself the moment it appears. */}
+              it would sit under the pointer. It takes no pointer events: hover is read from the
+              control itself. */}
           <TooltipTrigger asChild>
             <span aria-hidden className="tw:pointer-events-none tw:absolute" style={anchorBox} />
           </TooltipTrigger>
@@ -295,7 +291,16 @@ export function ToolbarCompoundLabel({
         {/* `dir="auto"` because the tooltip is the joined form as one text node: at the narrowest
             step it is the only place the secondary field is readable at all, and a separator
             between two scripts otherwise lands on the visually wrong side. */}
-        <TooltipContent dir="auto">{fullText}</TooltipContent>
+        {/* Closing here also keeps the Escape from being swallowed for nothing: the content's
+            dismissable layer default-prevents the Escape it handles, so whatever popover sits
+            underneath never sees it, and the tooltip has to actually close in return. */}
+        <TooltipContent
+          dir="auto"
+          onEscapeKeyDown={closeTooltip}
+          onPointerDownOutside={closeTooltip}
+        >
+          {fullText}
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

@@ -12,7 +12,7 @@ import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyCommen
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PointerEvent as PointerEvent$1, PropsWithChildren, ReactNode, Ref, RefCallback, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefCallback, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -4907,13 +4907,6 @@ export type UseTruncationTooltipResult<T extends HTMLElement> = {
 	onPointerEnter: () => void;
 	/** Pointer-leave handler for the trigger; closes the tooltip. */
 	onPointerLeave: () => void;
-	/**
-	 * Pointer-move handler for the `TooltipTrigger`. Required whenever the tooltip passes Radix's
-	 * closes through `onOpenChange`: it stops Radix's own hover handling, whose zero-delay open can
-	 * still read this controlled tooltip as closed, broadcast Radix's "another tooltip opened" event,
-	 * and so close the tooltip right after `onPointerEnter` opened it.
-	 */
-	onPointerMove: (event: React$1.PointerEvent) => void;
 };
 /**
  * Drives a controlled tooltip that opens on hover only when the trigger element's text is actually
@@ -4922,11 +4915,10 @@ export type UseTruncationTooltipResult<T extends HTMLElement> = {
  * when the text already fits.
  *
  * Attach the returned `ref` to the truncating trigger element, spread `onPointerEnter` /
- * `onPointerLeave` / `onPointerMove` onto the `TooltipTrigger`, and pass `open` to a controlled
- * Radix `<Tooltip open={...}>`.
+ * `onPointerLeave` onto it, and pass `open` to a controlled Radix `<Tooltip open={...}>`.
  *
  * @typeParam T - The type of the trigger element (e.g. `HTMLSpanElement`, `HTMLDivElement`).
- * @returns An object with `ref`, `open`, `onPointerEnter`, `onPointerLeave`, and `onPointerMove`.
+ * @returns An object with `ref`, `open`, `onPointerEnter`, and `onPointerLeave`.
  */
 export declare function useTruncationTooltip<T extends HTMLElement>(): UseTruncationTooltipResult<T>;
 /** Properties of one option contained in a listbox */
