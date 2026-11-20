@@ -226,6 +226,25 @@ describe('_simple-mode.scss', () => {
     );
   });
 
+  it('keeps the active text box’s end stroke short of the bar trigger at every zoom level', () => {
+    // The trigger starts 4px past the text column and does not zoom; the box's 3px reach past the
+    // column does, unless it is divided by the area's factor. Whitespace-insensitive, as above.
+    const code = compiledSimpleModeRules()
+      .filter(
+        (rule) =>
+          rule.selector === '.editor-container-simple .psc-active-focus .psc-active-text::after',
+      )
+      .flatMap((rule) => rule.nodes.flatMap((node) => (node.type === 'decl' ? [node] : [])))
+      .map(
+        (decl) =>
+          `${decl.prop}: ${decl.value.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')')}`,
+      );
+
+    expect(code).toEqual([
+      'inset-inline-end: calc(-3px / var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1)))',
+    ]);
+  });
+
   describe('character markers with no visible style', () => {
     const indicatorRules = () =>
       compiledSimpleModeRules().filter(({ selector }) =>

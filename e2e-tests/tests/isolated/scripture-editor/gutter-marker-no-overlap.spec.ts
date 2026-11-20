@@ -2,11 +2,11 @@
  * In Simple's gutter view the paragraph marker glyph must never overlap the paragraph's text,
  * whatever the column width.
  *
- * Each `.para` glyph is absolutely positioned at `left: calc(-(gutter width) + 0.5em -
- * var(--para-indent))`, so it only clears the text when `--para-indent` equals the paragraph's own
+ * Each `.para` glyph is absolutely positioned at `right: calc(100% + var(--para-indent) + marker
+ * gap - 1ch)`, so it only clears the text when `--para-indent` equals the paragraph's own
  * text-spacing margin; hanging-indent paragraphs additionally start their first line at a negative
  * `text-indent`, which `--verse-text-start` mirrors for the focus box. Both indents are `vw`-based
- * while the gutter is `em`-based, so the gap between glyph and text shrinks as the column narrows —
+ * while the gap is `em`-based, so a mismatch between them moves the glyph as the column narrows —
  * which is why this sweeps the column from its opened width down to the Simple column floor rather
  * than measuring once. The stylesheet-level guard for the same mechanism is
  * `usj-nodes-scss-coverage.test.ts` in the extension; this spec is the rendered half, and is what

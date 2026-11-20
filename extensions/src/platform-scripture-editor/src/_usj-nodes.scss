@@ -2773,14 +2773,35 @@ span.read img {
   initial-value: 16px;
 }
 
+/* The gutter's width and the gap between a paragraph marker and its text, registered so each
+   computes once, on `.psc-gutter-markers`, in the editor's own font size. Unregistered, a `4em`
+   would resolve in each paragraph's own font size, so a large-font paragraph (`\mt1` is 166%)
+   would get a wider gutter than a `\p`, and its active text box would start outside the editor.
+   They are registered rather than derived from --psc-base-font-size because the demo copy of this
+   stylesheet has no base size, and both copies share these rules. */
+@property --psc-gutter-width {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --psc-gutter-marker-gap {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
 .psc-gutter-markers {
   --psc-base-font-size: 1em;
   --scripture-accent: #c4956a;
   --scripture-accent-chapter: rgba(196, 149, 106, 0.55);
   --scripture-accent-marker: rgba(196, 149, 106, 0.45);
-  /* Gutter width. The marker left offset uses calc(-(--psc-gutter-width) + 0.5em),
-     so both values must be updated together if the gutter size changes. */
+  /* Gutter width, and the gap between each paragraph marker's visible text and the paragraph's
+     text, the same for every marker whatever the paragraph's font size. A marker whose text is
+     wider than `--psc-gutter-width` minus the gap runs past the editor's edge, where
+     `.editor-container` clips it. */
   --psc-gutter-width: 4em;
+  --psc-gutter-marker-gap: 0.825em;
   /* Verse numbers are 13/16 of the base size. Not registered: the base is already an absolute
      length here, so every rule reading this gets the same value. */
   --psc-verse-number-size: calc(var(--psc-base-font-size) * 13 / 16);
@@ -2916,14 +2937,20 @@ span.read img {
 .psc-gutter-markers .book > .marker:first-child {
   display: block;
   position: absolute;
-  /* left = -(gutter-width) + 0.5em-gap + para-indent-compensation */
-  left: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
+  /* Right-aligned in the gutter: the marker's visible text ends the marker gap before the text
+     column, with --para-indent undoing the paragraph's own indent so every marker shares one edge.
+     The editor ends each marker's text with a no-break space, one `ch` of the marker's own font
+     (monospace), so the box reaches 1ch into the gap and the space, not the text, sits there. The
+     box is as wide as the marker, so a longer one grows away from the text. */
+  right: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap) - 1ch);
   top: 0;
-  width: 3em;
   direction: ltr;
   unicode-bidi: isolate;
   text-align: right;
   white-space: nowrap;
+  /* The paragraph's own text-indent (negative for hanging indents, positive for \p) is inherited,
+     and would widen or collapse this shrink-to-fit box and shift the glyph inside it. */
+  text-indent: 0;
   color: var(--scripture-accent-marker);
   font-size: 0.75em;
   font-family: monospace;
@@ -3130,19 +3157,17 @@ span.read img {
   padding-left: 10px; /* restore base value */
 }
 
-/* RTL: gutter moves to the right. Physical right is used for the same reason as left above.
-   var(--para-indent) is inherited from the paragraph element (same variable the LTR left
-   calc uses), so indented para types automatically get the correct gutter column without
-   needing per-type overrides.
-   text-align is intentionally NOT overridden here: the base rule's `text-align: right` is
-   what keeps the (forced-ltr) marker text painting inside its 3em box. Setting
-   `text-align: left` here in an RTL containing block triggers a Chrome/Firefox bidi quirk
-   where the text glyphs are painted ~57px outside the box to the left (only manifests when
-   the box width matches the CSS width — auto-widened boxes like \mt1, \ms1 escape it). */
+/* RTL: gutter moves to the right, so the marker is anchored by its physical left edge (the edge
+   facing the text) instead of its right, for the same reason the LTR rule uses physical
+   properties. var(--para-indent) is inherited from the paragraph element (the same variable the
+   LTR `right` calc uses), so indented para types get the correct gutter column without per-type
+   overrides. The marker's text stays LTR, so its trailing no-break space is on the outer side
+   here and needs no 1ch correction. text-align is not overridden: with `text-indent: 0` the box
+   is exactly as wide as its text, so alignment inside it does not move the glyph. */
 .psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child,
 .psc-gutter-markers[dir='rtl'] .book > .marker:first-child {
-  left: auto;
-  right: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
+  right: auto;
+  left: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap));
 }
 
 /* ── Active text focus box ────────────────────────────────────────────────────
@@ -3170,7 +3195,10 @@ span.read img {
   content: '';
   position: absolute;
   inset-inline-start: var(--verse-text-start, 0px);
-  inset-inline-end: 0;
+  /* A little past the text column's end, so a glyph or the caret at the end of a line clears the
+     stroke. No further: in Simple mode the inline-end padding is the character-marker bar, whose
+     trigger starts 4px past the column and would cover a stroke drawn there. */
+  inset-inline-end: -3px;
   top: -2px;
   bottom: -2px;
   border: 2.5px solid var(--scripture-accent);
@@ -3182,7 +3210,9 @@ span.read img {
    gutter to the inline-start side of the paragraph's content box. Extend the outline's
    inline-start so the box surrounds the marker too — using min() against the hanging-indent
    text start (--verse-text-start). For every marker in this file the marker's own column is
-   further into the gutter, so it is what wins today. */
+   further into the gutter, so it is what wins today. The gutter term is the gutter's outer edge,
+   which is also where the editor clips, so a marker too wide for the gutter is clipped there
+   rather than left outside the box. */
 .psc-active-focus.psc-gutter-markers .psc-active-text::after {
   inset-inline-start: min(
     var(--verse-text-start, 0px),

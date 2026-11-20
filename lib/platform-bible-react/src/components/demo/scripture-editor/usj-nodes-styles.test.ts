@@ -342,7 +342,7 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     // upstream commits, and nothing structural keeps their rule sets in agreement — with each
     // suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation, the
     // ::after outline) can land in one copy and silently miss the other. The shipping suite
-    // carries the same three pins, so a fix landing in one copy fails the other's suite until it
+    // carries the same four pins, so a fix landing in one copy fails the other's suite until it
     // is forwarded. The gutter indent-compensation block is covered structurally instead: the
     // extension's usj-nodes-scss-coverage.test.ts derives it from each copy's base rules and
     // compares the two copies' results, so no pin is needed for it here.
@@ -360,6 +360,31 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     it('renders the active-text outline via ::after, never ::before (book-code collision)', () => {
       expect(css).toMatch(/\.psc-active-focus \.psc-active-text::after\s*\{/);
       expect(declarations).not.toMatch(/\.psc-active-focus \.psc-active-text::before/);
+    });
+    it("right-aligns every gutter marker to a gap measured in the editor's own font size", () => {
+      // Each length is registered so it computes once, on `.psc-gutter-markers`; unregistered, a
+      // large-font paragraph (`\mt1`) would get a wider gutter than a `\p`.
+      // The marker drops the paragraph's inherited text-indent, which would otherwise collapse or
+      // widen its shrink-to-fit box (a hanging-indent `\q2`'s box would be 0px wide).
+      const code = css.replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const name of ['gutter-width', 'gutter-marker-gap']) {
+        expect(code).toMatch(
+          new RegExp(
+            `@property --psc-${name}\\s*\\{[^}]*syntax:\\s*'<length>'[^}]*inherits:\\s*true[^}]*initial-value:`,
+          ),
+        );
+      }
+      const gutterRoot = /(?:^|\})\s*\.psc-gutter-markers\s*\{([^}]*)\}/.exec(code)?.[1] ?? '';
+      expect(gutterRoot).toContain('--psc-gutter-width: 4em;');
+      expect(gutterRoot).toContain('--psc-gutter-marker-gap: 0.825em;');
+      const marker =
+        /(?:^|\})\s*\.psc-gutter-markers \.para > \.marker:not\(\.verse\):not\(\.chapter\):first-child,\s*\.psc-gutter-markers \.book > \.marker:first-child\s*\{([^}]*)\}/.exec(
+          code,
+        )?.[1] ?? '';
+      expect(marker).toContain('text-indent: 0;');
+      expect(marker).toContain(
+        'right: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap) - 1ch);',
+      );
     });
     describe('empty-verse caret', () => {
       // The caret rules only show in layout, so what is pinned is that each load-bearing
