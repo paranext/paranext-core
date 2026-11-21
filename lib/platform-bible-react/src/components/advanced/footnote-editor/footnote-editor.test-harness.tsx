@@ -99,6 +99,9 @@ export async function settle(ms = 50) {
  *
  * `onChange` (optional) receives the popover's saved note ops (the component's auto-save and Save
  * flows), for suites asserting on what the save path emits.
+ *
+ * `onUnstorableTextRemoved` (optional) is the editor option of that name, for suites asserting on
+ * when a hidden-marker view tells the user it refused `\` or `//`.
  */
 export async function renderPopoverAndWaitForInit(
   view: EditorOptions['view'],
@@ -106,10 +109,12 @@ export async function renderPopoverAndWaitForInit(
     waitMs = 50,
     markerPalette = undefined,
     onChange = undefined,
+    onUnstorableTextRemoved = undefined,
   }: {
     waitMs?: number;
     markerPalette?: FootnoteEditorMarkerPalette;
     onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
+    onUnstorableTextRemoved?: EditorOptions['onUnstorableTextRemoved'];
   } = {},
 ) {
   const utils = render(
@@ -118,7 +123,7 @@ export async function renderPopoverAndWaitForInit(
       onClose={() => {}}
       scrRef={scrRef}
       noteKey={undefined}
-      editorOptions={{ view }}
+      editorOptions={{ view, onUnstorableTextRemoved }}
       defaultMarkerMenuTrigger={'\\'}
       localizedStrings={buildLocalizedStrings()}
       markerPalette={markerPalette}

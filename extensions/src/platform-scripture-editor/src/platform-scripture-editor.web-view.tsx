@@ -295,6 +295,7 @@ import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import {
   INLINE_MARKERS_MENU_TRIGGER,
+  shouldClaimInlineMarkersMenuTrigger,
   shouldOpenInlineMarkersMenu,
   shouldRoutePaletteKey,
 } from './palette-key-routing.util';
@@ -314,6 +315,7 @@ import {
   SettingUnreadableBanner,
   SETTING_UNREADABLE_BANNER_STRING_KEYS,
 } from './setting-unreadable-banner.component';
+import { createUnstorableTextNotifier } from './unstorable-text-notice.utils';
 import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 import {
@@ -580,6 +582,12 @@ function PlatformScriptureEditor({
         (confirmOptions) => papi.dialogs.showDialog('platform.confirm', confirmOptions),
       ),
     [],
+  );
+
+  /** Tells the user when the editor removes `\` or `//`, or refuses an edit that would create one. */
+  const handleUnstorableTextRemoved = useMemo(
+    () => createUnstorableTextNotifier(papi.notifications.send, webViewId),
+    [webViewId],
   );
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -1805,6 +1813,7 @@ function PlatformScriptureEditor({
     () => getEditorViewOptions(viewType, isPowerMode, allowInvisibleCharacters),
     [viewType, isPowerMode, allowInvisibleCharacters],
   );
+  const viewMarkerMode = viewOptions.markerMode;
 
   /**
    * Always-current {@link closeFootnoteEditor}, which is declared far below this point: the ref
@@ -2161,6 +2170,7 @@ function PlatformScriptureEditor({
       structureProtectionMode,
       // A read-only editor makes no edits, so there is nothing to ask about.
       onHiddenContentDelete: isReadOnlyEffective ? undefined : handleHiddenContentDelete,
+      onUnstorableTextRemoved: isReadOnlyEffective ? undefined : handleUnstorableTextRemoved,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -2195,6 +2205,7 @@ function PlatformScriptureEditor({
       isReadOnlyEffective,
       structureProtectionMode,
       handleHiddenContentDelete,
+      handleUnstorableTextRemoved,
       canUserCreateComments,
       isSyncBlocked,
       isResource,
@@ -2551,7 +2562,12 @@ function PlatformScriptureEditor({
     if (!showMarkersMenu) editorRef.current?.focus();
   }, [showMarkersMenu]);
 
-  const showInlineMarkersMenu = useCallback(() => {
+  /**
+   * Opens the inline marker menu at the DOM selection.
+   *
+   * @returns `false` if there is no selection to anchor the menu or no marker items to offer.
+   */
+  const showInlineMarkersMenu = useCallback((): boolean => {
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
@@ -2564,7 +2580,7 @@ function PlatformScriptureEditor({
       const contextElement = rangeElement?.closest('.editor-input') ?? rangeElement;
       // A selection outside any element has nothing to anchor to; opening anyway would place the
       // menu against a previous selection.
-      if (!contextElement) return;
+      if (!contextElement) return false;
       markersMenuAnchor.setSource({
         measure: () => {
           const rect = measureBox(range);
@@ -2573,7 +2589,9 @@ function PlatformScriptureEditor({
         contextElement,
       });
       setShowMarkersMenu(true);
+      return true;
     }
+    return false;
   }, [inlineMarkerMenuItems, markersMenuAnchor]);
 
   // Need to add a window listener for click events that will close the markers menu when you click
@@ -2940,22 +2958,47 @@ function PlatformScriptureEditor({
             (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
     };
 
-    // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
-    // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
+    // CAPTURE phase: the keys this listener claims (the Standard-view `\`/Enter marker palette
+    // triggers and session keys, and the inline marker menu's `\` in a hidden-marker view) must run
+    // BEFORE Lexical's own root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
     // before it can preventDefault. Registering in capture puts this ahead of Lexical.
     // Every claimed key (the `\`/Enter triggers and the whole in-session table: filter
     // characters, Space, Arrow/Enter/Escape/Backspace) additionally stopPropagations so Lexical
     // never processes it — under the ACTIVE palette nothing of the palette's may land in the
     // document. Keys the table declines (IME composition, pure modifiers, chords, resumed-typing
-    // dismissals) still propagate. The non-standard-view interception (the inline marker menu)
-    // lives in the bubble-phase `handleKeyDown` below.
-    const handleStandardViewTriggers = (event: KeyboardEvent) => {
+    // dismissals) still propagate. The inline marker menu of the other views opens from the
+    // bubble-phase `handleKeyDown` below, except in a hidden-marker view, where this listener
+    // claims its trigger too (see `shouldClaimInlineMarkersMenuTrigger`).
+    const handleCaptureKeyTriggers = (event: KeyboardEvent) => {
       // Never intercept IME composition keys: an Enter (or `\`) that confirms or feeds a
       // CJK/complex-script candidate arrives with `isComposing` (keyCode 229) and must reach
       // Lexical's own composition-guarded handlers, not open a marker palette. This capture-phase
       // listener runs ahead of MarkerEditPlugin's `editor.isComposing()` guard, so it needs its own.
       if (event.isComposing || event.keyCode === 229) return;
+
+      // A hidden-marker view's editor refuses a typed `\` with a "can't be typed" notice, so the
+      // inline menu's trigger is taken here, before the editor sees it. Claimed only when the key
+      // is used — the menu opens, or the right-click menu swallows it as the bubble-phase path
+      // does — so with no menu to open the editor still refuses the key and says why.
+      if (
+        currentSelectionRef.current &&
+        shouldClaimInlineMarkersMenuTrigger({
+          key: event.key,
+          isMenuShown: showMarkersMenu,
+          isEditorFocused: !!editorRef.current?.isFocused(),
+          isReadOnly: isReadOnlyEffective,
+          isChapterLoading: isChapterLoadingRef.current,
+          viewType,
+          markerMode: viewMarkerMode,
+        })
+      ) {
+        if (isEditorContextMenuOpen(editorContainerRef.current) || showInlineMarkersMenu()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
 
       // Scoped to the MAIN editor instance via `isFocused()`, not a global `.editor-input` query:
       // the footnote-editor popover renders its own `.editor-input`, and a captured element goes
@@ -3016,9 +3059,8 @@ function PlatformScriptureEditor({
         // Enter is claimed in EVERY modifier state, which is why this tests the key alone (PT9
         // parity: KeyPressEditHandler has no modifier check). An unclaimed Ctrl/Alt/Meta+Enter
         // would let Lexical plain-split the paragraph — the unmarked empty-paragraph merge problem
-        // this palette exists to prevent — and Shift+Enter's soft line break has no USFM
-        // representation, so it serializes as a plain space: the same data problem as an unmarked
-        // split.
+        // this palette exists to prevent — and Shift+Enter is Enter here too: the editor library
+        // runs a line break as Enter, since one has no USFM representation.
         if (event.key === 'Enter') {
           // The editor's own right-click menu is up: HANDED DOWN rather than claimed here, so the
           // menu's own listener gets the press. See `isEditorContextMenuOpen`.
@@ -3046,6 +3088,7 @@ function PlatformScriptureEditor({
             isMenuShown: showMarkersMenu,
             isEditorFocused: !!editorRef.current?.isFocused(),
             isReadOnly: isReadOnlyEffective,
+            isChapterLoading: isChapterLoadingRef.current,
             viewType,
           })
         ) {
@@ -3116,11 +3159,11 @@ function PlatformScriptureEditor({
       }
     };
 
-    window.addEventListener('keydown', handleStandardViewTriggers, { capture: true });
+    window.addEventListener('keydown', handleCaptureKeyTriggers, { capture: true });
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('keydown', handleStandardViewTriggers, { capture: true });
+      window.removeEventListener('keydown', handleCaptureKeyTriggers, { capture: true });
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [
@@ -3134,6 +3177,7 @@ function PlatformScriptureEditor({
     showCommentEditor,
     webViewId,
     viewType,
+    viewMarkerMode,
     styleInfo,
     openMarkerPaletteAtCaret,
     openMarkerPalette,
