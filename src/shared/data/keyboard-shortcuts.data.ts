@@ -356,7 +356,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   // Paste and Paste as plain text are handled inside the editor library that ships as the
   // `@eten-tech-foundation/platform-editor` package (its `ClipboardPlugin` reads the clipboard and
   // dispatches the paste), so there is no handler file in this repo to link. `locations` names the
-  // web view that mounts that editor, because a path in another repo would not resolve. No
+  // web view and the footnotes component that mount that editor, because a path in another repo would not resolve. No
   // `command`: the chord is the editor's own, not a PAPI command a menu item runs.
   {
     id: 'scripture-editor-paste',
@@ -367,6 +367,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌘V', windows: 'Ctrl+V', linux: 'Ctrl+V' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx',
     ],
   },
   {
@@ -381,6 +382,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⇧⌘V', windows: 'Ctrl+Shift+V', linux: 'Ctrl+Shift+V' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx',
     ],
   },
   // The handler is the scripture-editors repo's CopyLimitPlugin; the listed files supply the copy
