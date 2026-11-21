@@ -216,6 +216,8 @@ If merge conflicts occur:
 2. Complete the commit
 3. Run the script again
 
+For the full procedure (pulls that look applied backwards, core's deliberate differences from the templates, the lockfile, verification and the merge-commit PR), use the `update-from-templates` skill.
+
 ## What the Script Does
 
 The `npm run create-extension` script:

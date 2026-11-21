@@ -1,0 +1,194 @@
+---
+name: update-from-templates
+description: "Bring the extension templates' latest changes into paranext-core's extensions/ or into an extension repo built from the multi-extension template (paratext-bible-internal-extensions, paratext-assistant, paratext-bible-extensions, ...) with `npm run update-from-templates`. Covers the run loop, telling a forward pull from one applied backwards, conflict resolution rules, the lockfile, verification gotchas and the merge-commit PR. Use whenever a template PR has merged and a repo needs its changes, or when asked to apply or check template updates."
+allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+---
+
+# Update From Templates
+
+Two templates feed every extension repo:
+
+- `paranext-multi-extension-template`: repo-level scaffolding (root `package.json`, webpack config, `lib/` scripts, CI).
+- `paranext-extension-template`: one extension's scaffolding, as used in each `src/<extension>` folder.
+
+`npm run update-from-templates` brings their `main` into the repo so that git records the changes as coming from the templates. That record is what lets the next update apply cleanly, so **the PR must be merged with a merge commit, never squashed** (see `.context/standards/Git-Guide.md` § "Template Updates Exception").
+
+## What the script does
+
+1. Refuses to start with uncommitted changes.
+2. Repo level:
+   - **paranext-core:** `extensions/` is a squashed subtree of the multi-extension template: `git subtree pull --prefix extensions … --squash`.
+   - **extension repos:** the repo root is the multi-extension template's history: `git merge paranext-multi-extension-template/main --allow-unrelated-histories`.
+3. Each extension folder: `git subtree pull --prefix <folder> paranext-extension-template main --squash`, one at a time. A folder that was never added as a subtree is skipped with a "never added" warning (expected for core's `c-sharp-provider-test` and `evil`; NOT expected for any template-based extension). Workspaces without a `manifest.json` (helper packages, for example scripture-forge-platform-extensions' `src/messages` and `src/sf-pdp`) are not extensions: the script skips them without a warning, so check their dependencies yourself (step 4).
+4. Resolves only conflicts in unused workspace `package-lock.json` files (deletes them). Any other conflict stops the script; resolve, commit, and run it again until everything reports up to date.
+5. A formatting and identity pass over the repo root and each template-based extension. Its messages (`Updated README.md …`, `Updated manifest.json …`, `Updated package.json …`, `Types file … not found, skipping rename operation`) are normal even when they change nothing: a clean `git status` is what counts. Commit anything it does change. In paranext-core the pass also stamps core's license over the template's MIT, on `extensions/` and on every extension (`stampExtensionsRootLicense` and `stampExtensionLicense` in `extensions/lib/git.util.ts`; message `Set license to …`), unless the extension sets `"licenseIsDeliberate": true` (see `LICENSING.md`).
+
+Some conflicts are expected on every update and are not a sign of trouble: the root `package-lock.json` (whenever the template's lockfile changed; take the current branch's side, see step 2), and each extension's `volta` block on a Node.js bump where the repo uses `volta.extends`.
+
+**Known script bugs:**
+
+- **The exit code means nothing** (until PT-5114 is fixed). It is 0 after an ordinary stop on conflicts, and non-zero after the crash below. Read its output and `git status`, never the exit code.
+- **It crashes when `package.json` itself conflicts** (until PT-5102 is fixed): the lockfile auto-resolver `JSON.parse`s the conflicted root `package.json` ("Expected double-quoted property name"). The merge is left in progress with the conflicts marked; resolve by hand as below.
+- **While the root `package.json` has conflict markers, Volta refuses to run any `node` or `npm` command inside the repo** ("Could not parse project manifest"), including the helper and any resolution script of your own. Run them with the working directory outside the repo, passing the repo's path.
+
+The script also `git rm`s each extension's `package-lock.json` when the template side adds one; these are not tracked on `main`, so the net change to tracked files is nothing. Confirm with `git diff --name-status origin/main` if unsure.
+
+## Setup
+
+- **Fetch, then branch a fresh worktree from `origin/main`**, not a stale main checkout (count incoming commits against `origin/main`, never a local `main`). Name the branch after the work's ticket (for example `pt-1234-template-update`); if none was given, use the ticket in the incoming template commits' titles, or ask. Stop the branch tracking `main`, so a later push goes to its own branch:
+
+  ```bash
+  git -C <repo> fetch origin
+  git -C <repo> worktree add --no-track -b <branch> <worktree path> origin/main
+  # push later with: git push -u origin <branch>
+  ```
+
+- **Which core it builds against:** an extension repo installs core from `../paranext-core`, so it is the folder named `paranext-core` beside the worktree that counts, whatever other core checkouts sit nearby. It can be on any branch: what counts is that its `lib/` matches core `main` (`git -C ../paranext-core diff origin/main -- lib` is empty) and that it is built. Check the build with `test -d ../paranext-core/lib/platform-bible-utils/dist && test -d ../paranext-core/lib/platform-bible-react/dist`; listing a `dist/` folder is denied by core's permission rules (see step 5).
+- **Install under the repo's current pin** so `tsx` is available: `volta run --node <volta.node from package.json> npm ci --ignore-scripts`. The pin may change during the update (for example when the template moves Node.js); from then on use the new one. The script itself only needs `tsx`, so it does not need a reinstall when the pin changes; step 5's fresh `npm ci` does that before verifying.
+- **Use the skill's helper from the core checkout that holds this skill** (its absolute path), not a path relative to the extension repo: `node <core>/.claude/skills/update-from-templates/scripts/conflict-sides.mjs`.
+
+### 0. How far behind is the repo, and what is coming in?
+
+Before running anything, list the template commits the repo will receive:
+
+```bash
+git -C <worktree> fetch paranext-multi-extension-template main
+git -C <worktree> log --oneline HEAD..paranext-multi-extension-template/main   # extension repos
+# paranext-core: compare with the last "Squashed 'extensions/' changes from …..<sha>" commit
+```
+
+A repo several template changes behind can receive big upgrades (React 19, Tailwind 4, a new shadcn baseline) on top of the change that prompted the update. Those can need migrating the repo's own extension code (step 5's leftover-convention checks). If nothing coming in needs the repo's own code migrated (for example only version bumps), report what is coming in and carry on. Otherwise tell the user what is coming before going ahead, and agree whether follow-on fixes to the repo's own code belong on this branch.
+
+While waiting for that answer, the template merges themselves can go ahead: they don't depend on it.
+
+For each breaking template change coming in, its migration checklist for extension code is announced in the Discord [`#platform-changes`](https://discord.com/channels/1064938364597436416/1136038164818034849) forum, not in the template PR. Work through it against the repo's own code before calling the update done. The one known so far:
+
+- **React 19, Tailwind 4 and the new shadcn baseline** (multi-extension template #91; announced 2026-05-13 in ["Upgrade to React 19, Tailwind 4, and new shadcn baseline"](https://discord.com/channels/1064938364597436416/1503904008782483536)). Its checklist, summarised:
+  - Tailwind classes: `tw-` → `tw:`, with the prefix moved in front of any variant (`hover:tw-px-3` → `tw:hover:px-3`), and Tailwind 4's renamed utilities (for example `flex-shrink-0` → `shrink-0`; see the [Tailwind upgrade guide](https://tailwindcss.com/docs/upgrade-guide)).
+  - CSS variables in the extension's own CSS: `hsl(var(--x))` → `var(--x)` (the template update already converts the Tailwind classes; the old form is believed to still work, but change it anyway); `--sidebar-background` → `--sidebar`.
+  - shadcn components: `Badge` renders a `<span>` (a `ref` typed `Ref<HTMLDivElement>` becomes `Ref<HTMLSpanElement>`; code relying on its block layout needs its own wrapper or `tw:block` / `tw:inline-block`); `Select` no longer has sizes `lg` and `icon`; the resizable components' API changed (`direction` and `onLayout` kept); `Input` now has a `dark:` background, so matching light and dark colours needs `tw:dark:bg-…` classes too; `selectTriggerVariants` is gone.
+  - React 19 (see the [React 19 upgrade guide](https://react.dev/blog/2024/04/25/react-19-upgrade-guide)); a dependency that bundles its own older React breaks.
+
+Read the full post (Discord needs a signed-in browser; if you cannot reach it, ask the user). It attaches the checklist as raw Markdown (`upgrading-react-tailwind-shadcn.md`), and a later reply attaches the prompt TJ used to have AI make these changes after a manual template update (`update-shadcn-prompt.md`). For a breaking change not listed here, ask the user for its announcement, and add its checklist and link here afterwards.
+
+## The loop
+
+For each run of the script:
+
+### 1. Before resolving anything: did the pull go the right way?
+
+Sometimes a pull's conflicts look applied in the wrong direction: the template's changes show up as removals, or the repo's own edits get undone. **Never hand-resolve a pull like that.** Abort it (`git merge --abort`, or `git reset --hard <commit before the run>`), run the script again, and record what happened (see "Record what you see").
+
+Check these:
+
+- **Root merge (extension repos).** The repo-level step is a plain `git merge`, so list what it brings in: `git log --oneline HEAD..MERGE_HEAD` should be the template commits found in step 0, and `git merge-base HEAD MERGE_HEAD` the template commit the repo last merged.
+
+- **Merge base (deterministic; subtree pulls).** `git subtree pull --squash` takes its merge base from the newest commit whose message carries `git-subtree-dir: <prefix>` and `git-subtree-split:` trailers. While the pull's merge is in progress, `HEAD` is still the commit from before the pull, so check what that search finds from there:
+
+  ```bash
+  git log -1 --format='%h %p | %s' --grep='^git-subtree-dir: <prefix>/*$' HEAD
+  ```
+
+  It should be a real squash commit: subject `Squashed '<prefix>/' content from commit …` (no parent) or `Squashed '<prefix>/' changes from … ..…` (one parent). If it is anything else, typically a squash-merged PR whose message copied those trailers (paranext-core's #1634, `4c021221dbe`, is one for `extensions/src/hello-rock3`), expect a wrong merge base and a pull that looks backwards. That is a candidate cause, not yet confirmed: record the case on PT-5115 either way.
+
+- **Each side's changes (judgment).** For every conflicted file, compare what the template changed since the merge base with what the repo changed:
+
+  ```bash
+  node <core>/.claude/skills/update-from-templates/scripts/conflict-sides.mjs <repo dir> <out file>
+  ```
+
+  A forward pull's template side ADDS the template's recent changes (for example a new Node.js version, a new dependency, a new script). If the template side instead removes things the template itself added, the pull is backwards. The helper says when a side deleted the file or the merge base has no copy of it, and stops with an error rather than write a partial report.
+
+### 2. Resolve a forward pull
+
+- **Keep the repo's identity and layout:** `name`, `version`, `license`, `description`, `types`; its `lib/` paths (core: `../lib/…` and `../../../lib/…`; extension repos: `../paranext-core/lib/…` and `../../../paranext-core/lib/…`); and `volta.extends` where the repo uses it instead of `volta.node`.
+- **Take the template's version bumps and additions** that sit next to the repo's own lines (the usual cause of a conflict).
+- **Scripts:** keep the repo's own script bodies (for example a custom `build`) and add the template's new scripts beside them (for example `prebuild`, which npm runs before `build`). If the repo keeps its scripts in alphabetical order, put the additions in sorted position, and don't duplicate a template context line that the repo already has.
+- **An `overrides` block the template adds to an extension's `package.json` does nothing there** (npm reads `overrides` only from the root). Take it anyway, for template parity, and say so in the PR so a reviewer doesn't query it.
+- **Lockfiles:** take the current branch's side (`git checkout --ours -- package-lock.json`) and reconcile later (step 4).
+- **paranext-core only, where core deliberately differs from the templates:**
+  - `extensions/package.json`: no `prebuild` / `prebuild:production`. npm runs `prebuild` automatically inside core's root build, which already mints the third-party-notices build ID once (`.erb/scripts/notices-build-id.ts`). Each extension's own `package.json` keeps the template's `prebuild`: core never runs an extension's own npm build.
+  - `extensions/webpack/`: keep core's notices plugin import from `.erb/configs`, its webpack cache directories, and its Tailwind prebuild loader; leave out Sass `style: 'expanded'` (core feeds web views prebuilt Tailwind).
+  - `tailwind.config.ts` (root and each extension): keep core's blockquote settings, which match `lib/platform-bible-react/tailwind.config.ts`.
+  - `license` fields and `LICENSE` files under `extensions/`: keep core's AGPL side of any conflict. The formatting pass (step 5 of "What the script does") re-stamps them after every run, and it stops with an error if the repo root's `LICENSE` is not the AGPL text.
+  - Template-only files that arrive (`extensions/webpack/emit-shipped-modules-plugin.ts`, `notices-build-id.ts`, `.github/` workflows) can stay: core does not use them, and keeping them stops them coming back as additions on every pull.
+- Anything the template changes that alters behaviour and merged without a conflict still needs a decision: list it in the PR (step 6).
+
+Commit with `git commit --no-edit`, then run the script again. Keep git's own merge message on these commits, with no added attribution trailer: it is part of the template history. Commits you write yourself on the branch (the lockfile, follow-on fixes) follow the repo's normal commit conventions. A template-update branch keeps all its commits; never squash or amend them into one.
+
+### 3. Until it is up to date
+
+Repeat until every pull reports `Already up to date` / `Subtree is already at commit …` and `git status` is clean. Only the expected folders may report "never added".
+
+### 4. Lockfile
+
+Run `npm i --ignore-scripts` under the repo's pinned Node.js, not whatever Volta picks for the folder:
+
+```bash
+volta run --node <volta.node from package.json> npm i --ignore-scripts
+```
+
+Read the lockfile diff: it should hold only what the `package.json` changes declare (for example a new `@types/node` and its `undici-types`, or a dependency declared per extension). For a large update, compare the lockfile's `packages` maps before and after (added, removed and version-changed top-level packages) rather than reading the raw diff, and match each change to a `package.json` change. A Node.js or npm major change can also add or restore optional platform packages no `package.json` names (`fsevents`, `@esbuild/*`, `@swc/core-*`); check the template's own lockfile before treating one as unexplained. Transitive version bumps pulled up by a new or updated dependency (for example `postcss`, `browserslist`, `caniuse-lite` after `@tailwindcss/postcss` arrives) are expected too: confirm they come from such a dependency (`npm ls <package>`), but don't chase each one further.
+
+Then run `npm ls --all` and fix any `invalid` entry. A version-2 lockfile (one with a legacy `dependencies` tree) can keep a stale nested copy after a range changes; remove its entry from the lockfile's `packages` and `dependencies` sections and from `node_modules/.package-lock.json`, delete the nested folder, and run `npm i --ignore-scripts` again.
+
+**Workspaces the script doesn't touch** (helper packages without a `manifest.json`) keep their old dependency ranges. Move any dependency the template just moved there too (`@types/node`, ESLint plugins): a range left behind gets its own nested copy, and two copies of an ESLint plugin break `npm run lint` ("couldn't determine the plugin … uniquely"). Then check every pin agrees:
+
+```bash
+git grep -nE '"node": "|"@types/node"|"extends"' -- '*package.json'
+```
+
+Every extension should either pin the same `volta.node` as the root or use `volta.extends`; one with neither is a defect to fix.
+
+### 5. Verify
+
+Under the repo's pinned Node.js, judge each command by its exit code (and, for chained scripts, check the log shows every step ran):
+
+- **paranext-core:** `npm run typecheck`, `npm run lint`, `npm test` (the root runs every workspace's tests, extensions included), `npm run build:extensions`. After a Playwright upgrade, `platform-bible-react`'s browser tests need `npx playwright install chromium-headless-shell` first.
+- **extension repos:** `npm ci`, `npm run lint`, `npm run format:check` (CI runs it), `npm run build`, `npm run build:production` (some template changes affect production builds only), and `npm test` where the repo has a test script (some have none; record that rather than a failure). Check whether the root `npm test` covers each extension: in paratext-assistant it does not, so also run `npm test` inside `src/checking-assistant`.
+  - **Type-check:** webpack compiles with SWC, which does not type-check, and lint and build do not run `tsc`. Run the repo's `typecheck` script, or `npx tsc --noEmit -p <tsconfig>` for each extension's `tsconfig.json` (the root one is optional; it can report many unrelated errors), on the branch and on the control. Compare the `error TS` lines, not the exit code (under `volta run` on Windows `tsc` can exit 126 after printing errors): only errors new on the branch count.
+- **Conventions the build does not check** (skip this when only version bumps came in). A template upgrade can change conventions the repo's own code must follow, and lint and build can pass while the result is broken. After a Tailwind 3 → 4 upgrade, for example, classes use the `tw:` prefix, not `tw-`; leftover `tw-` classes and `@apply tw-…` lines silently generate no CSS. Search the repo's own extension code (`.tsx`, `.ts`, `.scss`, `.css`) for the old forms. Then check the new forms generate CSS without reading `dist/`: compile the extension's Tailwind entry stylesheet with its own PostCSS setup and `@tailwindcss/postcss` in a scratch folder, check every class you migrated gets a rule, and include a made-up class as a negative control. Where you can (no login needed), also look at the result in Platform.Bible: `npm start` in the extension repo starts `../paranext-core` with the extension loaded. To stop it, close the app and end the process tree `npm start` began (on Windows `taskkill //T //F //PID <pid>`), then check ports 8876 and 1212 are free. Don't run core's `npm stop` without asking: it kills every webpack, esbuild and Vite process on the machine, including other sessions'.
+- **Build output (`dist/`) is not readable from a session started in a paranext-core checkout:** core's `.claude/settings.json` denies `Read(**/dist/**)`, and that also covers an extension repo the session works in. To check what a build generated, ask the user to copy the files somewhere readable with a `!` command (in Git Bash, so write Windows paths with forward slashes), check the copies, and delete them afterwards.
+- **Before blaming the update for a failure, run the same check on `origin/main` as a control.** A control can also show that something looking broken on the branch was already broken on `main` (platform-bible-sample-extensions' `verse-ref-view` had no Tailwind utilities before the update, because its SCSS used `@import './tailwind.css'`, which Sass leaves as a plain CSS import; `@use` is the fix). Use a second worktree beside the first (for example `<repo>-main-control`), installed under `main`'s Node.js pin. Known pre-existing failures as of 2026-11-21: paratext-bible-internal-extensions' send-receive web-view tests time out under the full suite (they pass alone); paratext-assistant's `checking-assistant` date tests fail outside a UTC-like time zone (run them with `TZ=UTC`).
+- **Never remove a control worktree with `git worktree remove` alone:** on Windows it follows the `file:` links in `node_modules` into the core checkout and deletes its files. See step 7 for the safe order.
+- npm 11 may warn that some packages' install scripts are not in an `allowScripts` list (`@swc/core`, `esbuild`, …). Builds still work; note it in the PR if it appears.
+
+### 6. PR
+
+Draft the PR body even when asked to stop before pushing; it is where the decisions are recorded. Save it outside the repo, beside the worktree (for example `<workspace>/<repo>-pr-body.md`), and say where; delete the draft once the PR holds it. Link Jira keys to `https://paratextstudio.atlassian.net/browse/<KEY>`.
+
+**Title:** follow the repo's previous template-update PR (`gh pr list -R <owner>/<repo> --state merged --search "template" --limit 5`; not every repo is under `paranext`); otherwise `<TICKET>: Update from the templates (<what came in>)`.
+
+**Body:**
+
+- Open with a GitHub alert, so the person merging cannot miss it. If auto-merge is on, say so in the same alert, since an approval then merges the PR:
+
+  ```markdown
+  > [!IMPORTANT]
+  > **Merge with a merge commit, not squash.** The template merges and squashed subtree commits on this branch are the record `npm run update-from-templates` uses to find its merge base next time; a squash merge loses them, and the next update conflicts on everything again. Auto-merge (merge commit) is on, so an approval merges it.
+  ```
+
+- A `### Why review this` section naming the ticket and the work it belongs to.
+- **Template commits pulled:** each template's range, with the template PRs that came in.
+- **Run record:** starting commit, and per folder the merge base, the range pulled, forward or backwards, and the conflicting files (see "Record what you see").
+- **Decisions:** what you kept from the repo, what you took from the template, and every behaviour change, each with its reason.
+- **Verification:** a branch-versus-control table, honest about pre-existing failures and the control that shows they are pre-existing.
+- Refer to template and core PRs with their full repo prefix (`paranext/paranext-multi-extension-template#91`, `paranext/paranext-core#1622`): a bare `#91` links to the extension repo's own #91.
+- Put package names in backticks (`` `@sillsdev/scripture` ``), including ones copied from template PR titles: GitHub can read a bare `@org/name` as a team mention.
+- End with `AI-assisted (Claude Code).` before the generated-with footer.
+
+**Reviewers:** none designated unless asked. GitHub still adds the repo's CODEOWNERS as reviewers; that is expected, so leave them.
+
+**Auto-merge:** turning it on means an approval merges the PR, so ask the user first, unless they already asked for it. Only where GitHub holds the PR for a review; never assume which repos those are, check. Visibility is `gh repo view <owner>/<repo> --json visibility`; the deciding test is `gh pr view <n> -R <owner>/<repo> --json reviewDecision,mergeStateStatus`: `reviewDecision` is `REVIEW_REQUIRED` only when the branch's rules require an approving review, and `mergeStateStatus` is then `BLOCKED`. `BLOCKED` on its own is not enough, since pending CI also blocks. Reading the protection rule itself needs admin rights on the repo (the API returns 404 or 403 without them), so rely on `reviewDecision`. As of 2026-11-23: paranext-core, paratext-bible-extensions and platform-bible-sample-extensions are public and hold PRs for review; paratext-bible-internal-extensions and paratext-assistant are private with no branch protection, so a mergeable PR there merges the moment auto-merge is on. Where it is safe: `gh pr merge <n> --auto --merge --match-head-commit <full sha>`, then add the auto-merge note to the banner. Elsewhere, merge by hand with a merge commit after approval. The merge-state test needs the PR to exist, so on a stop-before-push run leave the auto-merge sentence out of the drafted banner and say the decision is still open.
+
+### 7. Clean up
+
+After the PR is up. If you were asked to stop before pushing, leave the control worktree and your logs in place, and list them in your report so they can be cleaned up after the PR:
+
+- **Remove the control worktree, `node_modules` first:** delete its `node_modules` with Node.js (`node -e "require('fs').rmSync('<control>/node_modules',{recursive:true,force:true})"`), check the core checkout's `git status` is unchanged, then `git worktree remove --force <control>` (`--force` is needed because the control holds untracked build output, and is safe once `node_modules` is gone), and check core's `git status` again.
+- Delete any helper scripts and run logs you made outside the repo.
+- Keep the branch's worktree until the PR has merged, for review fixes.
+
+## Record what you see
+
+For every run, and above all for every pull that looked backwards, record: repo, starting commit, template commits pulled, per-folder outcome (clean / forward conflicts / looked backwards), the merge-base check result, the conflicting files, what looked reversed, and whether a re-run fixed it. Put it in the PR description, and record every backwards case on PT-5115 so the cause can be found.

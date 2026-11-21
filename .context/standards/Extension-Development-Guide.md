@@ -590,6 +590,8 @@ platform-bible --extensionDirs /path/to/extensions/folder
 
 ## Merging Template Updates
 
+This section covers a repo with one extension. paranext-core's `extensions/` and the repos built from `paranext-multi-extension-template` update with `npm run update-from-templates` instead: see [Git-Guide "Merging Template Changes into an Extension"](./Git-Guide.md#merging-template-changes-into-an-extension) and the `update-from-templates` skill.
+
 Keep your extension synchronized with template improvements:
 
 ```bash
