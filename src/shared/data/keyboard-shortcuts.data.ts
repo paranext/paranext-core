@@ -353,6 +353,36 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: 'F12', windows: 'F12', linux: 'F12' },
     locations: ['src/main/main.ts'],
   },
+  // Paste and Paste as plain text are handled inside the editor library that ships as the
+  // `@eten-tech-foundation/platform-editor` package (its `ClipboardPlugin` reads the clipboard and
+  // dispatches the paste), so there is no handler file in this repo to link. `locations` names the
+  // web view that mounts that editor, because a path in another repo would not resolve. No
+  // `command`: the chord is the editor's own, not a PAPI command a menu item runs.
+  {
+    id: 'scripture-editor-paste',
+    purpose: 'Paste the clipboard into the editor, keeping any markers and formatting it holds',
+    category: 'Editing',
+    context:
+      'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
+    keys: { macOS: '⌘V', windows: 'Ctrl+V', linux: 'Ctrl+V' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'scripture-editor-paste-plain-text',
+    purpose:
+      'Paste the clipboard as plain text. Where the editor shows markers as editable text (the Standard view, and the footnote editors), USFM in the clipboard pastes as the prose a view with hidden markers copies: a footnote’s words inline, no markers, no verse or chapter numbers. Elsewhere it pastes the clipboard’s text as it is',
+    category: 'Editing',
+    context:
+      'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
+    // The editor's right-click menu has the same "Paste as Plain Text" item. macOS’s own
+    // ⌥⇧⌘V ("Paste and Match Style") is not handled by the editor, so it keeps the unconverted paste.
+    keys: { macOS: '⇧⌘V', windows: 'Ctrl+Shift+V', linux: 'Ctrl+Shift+V' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
   // The handler is the scripture-editors repo's CopyLimitPlugin; the listed files supply the copy
   // limit that turns it on. It blocks the shortcut anywhere on the page, not only in the editor.
   // The macOS Edit menu's Select All is a native menu command it cannot block; a copy after it is
