@@ -53,6 +53,28 @@ If you accidentally squash-merge a template update:
 
 Keep extensions synchronized with template improvements.
 
+### Repos with several extensions (paranext-core and the multi-extension-template repos)
+
+paranext-core's `extensions/`, and repos built from `paranext-multi-extension-template` (such as paratext-bible-internal-extensions and paratext-assistant), update with one script, run from a clean branch off `main`:
+
+```bash
+npm run update-from-templates   # in paranext-core, run it inside extensions/
+```
+
+It brings in the multi-extension template (a subtree pull for core's `extensions/`, a merge at the root of the other repos), then subtree-pulls `paranext-extension-template` into each extension folder. It stops at the first conflict: resolve, commit, and run it again until every pull reports up to date. Then reconcile `package-lock.json` (take `main`'s side of any lockfile conflict, then `npm i --ignore-scripts` under the repo's pinned Node.js) and run the repo's checks.
+
+Things to know:
+
+- **Don't trust the script's exit code.** It exits 0 even when it stopped on conflicts; read its output and `git status`.
+- **Check the direction before resolving.** If a pull's conflicts look applied backwards (the template's changes showing up as removals, or the repo's own edits undone), abort it and run the script again rather than resolving by hand.
+- **Keep the repo's own identity and layout** (name, version, licence, `lib/` paths, `volta.extends`) and take the template's version bumps and additions.
+
+The full procedure (the backwards-pull checks, core's deliberate differences from the templates, verification gotchas and the PR) is the `update-from-templates` skill: `.claude/skills/update-from-templates/SKILL.md`.
+
+### A repo with one extension
+
+A repo created directly from `paranext-extension-template` merges it:
+
 ```bash
 # One-time setup: add the template as a remote
 git remote add template https://github.com/paranext/paranext-extension-template.git
@@ -63,11 +85,10 @@ git checkout main
 git merge template/main --allow-unrelated-histories
 ```
 
-**Important:**
+### Either way
 
-- The merge commits created when updating from the template are part of the tracking history. Don't edit them out.
-- Removing these merge commits causes duplicate conflicts in future template updates.
-- After merging, resolve any conflicts and run `npm i` to update dependencies.
+- The merge and squash commits created when updating from the templates are part of the tracking history. Don't edit them out, and merge the PR with a merge commit (see "Template Updates Exception").
+- Removing these commits, or squash-merging the PR, causes duplicate conflicts in future template updates, or pulls that reset an extension to the template's state.
 
 For full details, see the [Merging Template Changes wiki](https://github.com/paranext/paranext-extension-template/wiki/Merging-Template-Changes-into-Your-Extension).
 
