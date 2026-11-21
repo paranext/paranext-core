@@ -42,7 +42,12 @@
 import fs from 'fs';
 import type { ConsoleMessage, Locator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { sendPapiRequestOnce, waitForAppReady } from '../../../fixtures/helpers';
+import {
+  readClipboardTextAndHtml,
+  sendPapiRequestOnce,
+  waitForAppReady,
+  writeClipboard,
+} from '../../../fixtures/helpers';
 import {
   COPY_KEY,
   installedBookPath,
@@ -368,23 +373,18 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
       expect(read.nodeCopy, 'the attribute holds the note’s category').toContain('"TN"');
 
       // Only the text and the html from here on, so the attribute is all that differs below.
-      await electronApp.evaluate(({ clipboard }) =>
-        clipboard.write({ text: clipboard.readText(), html: clipboard.readHTML() }),
-      );
+      const copied = await readClipboardTextAndHtml(electronApp);
+      await writeClipboard(electronApp, copied);
       await expectPastedAt(CATEGORY_PASTE_POINT, CATEGORY_COPIED_USFM, () =>
         editorInput.press(PASTE_KEY),
       );
       expect(countOf(readNormalizedBook(), CATEGORY_MARKUP)).toBe(categoriesBefore + 1);
 
       // The control: the same clipboard with only the attribute taken out, as another program's html.
-      await electronApp.evaluate(
-        ({ clipboard }, attribute) =>
-          clipboard.write({
-            text: clipboard.readText(),
-            html: clipboard.readHTML().replace(new RegExp(`\\s${attribute}="[^"]*"`), ''),
-          }),
-        NODE_COPY_HTML_ATTRIBUTE,
-      );
+      await writeClipboard(electronApp, {
+        text: copied.text,
+        html: copied.html.replace(new RegExp(`\\s${NODE_COPY_HTML_ATTRIBUTE}="[^"]*"`), ''),
+      });
       const before = fs.readFileSync(bookPath);
       await selectInEditor(editorInput, CATEGORY_LOST_PASTE_POINT);
       await editorInput.press(PASTE_KEY);
