@@ -6,6 +6,7 @@ import {
   createSuccessResponse,
   EventHandler,
   GET_METHODS,
+  INTENTIONAL_CLOSE_CODE,
   InternalRequestHandler,
   REGISTER_EVENT,
   REGISTER_METHOD,
@@ -15,6 +16,8 @@ import {
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
   MAX_WEBSOCKET_PAYLOAD_BYTES,
+  PAPI_CLIENT_SECRET_HEADER,
+  PAPI_SERVER_SECRET_HEADER,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import {
@@ -23,6 +26,7 @@ import {
   IRpcWebSocketClientCloser,
   RegisteredRpcMethodDetails,
   RpcClientDisconnectEvent,
+  RpcMethodRegistrationOptions,
 } from '@shared/models/rpc.interface';
 import {
   createEmptyOpenRpc,
@@ -40,7 +44,9 @@ import { WebSocketServer } from 'ws';
 import { logger } from '@shared/services/logger.service';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
+import { ConnectionIdentity, isRegistrationAllowed } from '@shared/data/request-access.data';
 import { RpcServer } from './rpc-server';
+import { IdentifiedLaunch, identifyClientSecret, LaunchedIdentity } from './launch-secrets.service';
 // RpcEventRegistry was extracted to its own file to satisfy max-classes-per-file
 import { RpcEventRegistry } from './rpc-event-registry';
 
@@ -65,6 +71,14 @@ const BIND_TIMEOUT_MS = 10_000;
 function onServerError(error: unknown): void {
   logger.error(`PAPI websocket server error: ${getErrorMessage(error)}`);
 }
+
+/** HTTP status for a handshake whose client secret matches no current launch */
+const UNKNOWN_SECRET_STATUS = 401;
+/** HTTP status for a handshake whose launch already has an open connection */
+const LAUNCH_ALREADY_CONNECTED_STATUS = 409;
+
+/** The open connection a launched child made, and which launch made it */
+type LaunchedConnection = { socket: ServerSocketLike; launchId: number };
 
 /**
  * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
@@ -118,6 +132,13 @@ export class RpcWebSocketListener
   private readonly warnedForeignAnnouncements = new Set<string>();
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
   private readonly connectionLostEmitter = new PlatformEventEmitter<void>();
+  /** Handshakes that presented a valid client secret, kept until their connection is set up */
+  private readonly verifiedLaunchByRequest = new WeakMap<IncomingMessage, IdentifiedLaunch>();
+  /** The one open connection each launched child may have */
+  private readonly openConnectionByLaunchedIdentity = new Map<
+    LaunchedIdentity,
+    LaunchedConnection
+  >();
 
   /**
    * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
@@ -176,8 +197,10 @@ export class RpcWebSocketListener
         host: 'localhost',
         port: this.port,
         maxPayload: MAX_WEBSOCKET_PAYLOAD_BYTES,
+        verifyClient: this.verifyClient,
       });
       this.webSocketServer = webSocketServer;
+      webSocketServer.addListener('headers', this.addServerSecretToHandshakeReply);
       webSocketServer.addListener('connection', this.onClientConnect);
       webSocketServer.addListener('close', this.disconnect);
 
@@ -238,6 +261,7 @@ export class RpcWebSocketListener
         // hazard is not re-entrancy but staleness: left attached, the failed server's `close`
         // arrives after a subsequent attempt has already bound and runs `disconnect` against the
         // NEW server, closing it and reporting Disconnected while `connect()` returned true.
+        webSocketServer.removeListener('headers', this.addServerSecretToHandshakeReply);
         webSocketServer.removeListener('connection', this.onClientConnect);
         webSocketServer.removeListener('close', this.disconnect);
         webSocketServer.close();
@@ -255,6 +279,7 @@ export class RpcWebSocketListener
   async disconnect(): Promise<void> {
     return this.connectionMutex.runExclusive(() => {
       if (this.webSocketServer) {
+        this.webSocketServer.removeListener('headers', this.addServerSecretToHandshakeReply);
         this.webSocketServer.removeListener('connection', this.onClientConnect);
         this.webSocketServer.removeListener('close', this.disconnect);
         this.webSocketServer.removeListener('error', onServerError);
@@ -304,7 +329,12 @@ export class RpcWebSocketListener
     methodName: string,
     method: InternalRequestHandler,
     methodDocs?: SingleMethodDocumentation,
+    options?: RpcMethodRegistrationOptions,
   ): Promise<boolean> {
+    if (!isRegistrationAllowed(methodName, 'main')) {
+      logger.warn(`Refused to register '${methodName}' in main: another process owns it`);
+      return false;
+    }
     if (
       this.rpcMethodDetailsByMethodName.has(methodName) ||
       this.localMethodsByMethodName.has(methodName)
@@ -322,7 +352,11 @@ export class RpcWebSocketListener
       return false;
     }
 
-    this.rpcMethodDetailsByMethodName.set(methodName, { handler: this, methodDocs });
+    this.rpcMethodDetailsByMethodName.set(methodName, {
+      handler: this,
+      methodDocs,
+      allowedCallers: options?.allowedCallers ? [...options.allowedCallers] : undefined,
+    });
     this.localMethodsByMethodName.set(methodName, method);
     return true;
   }
@@ -368,9 +402,9 @@ export class RpcWebSocketListener
       throw new Error(
         `The PAPI network is not accepting clients (status ${this.connectionStatus})`,
       );
-    // Only renderers connect this way, and a web view can drive its renderer's connection
-    this.serveClient(socket, name, false);
-    logger.info(`PAPI client ${name} connected over a local port`);
+    // Only renderers connect this way; `'renderer'` therefore includes their WebViews
+    this.serveClient(socket, name, 'renderer');
+    logger.info(`PAPI client ${name} connected over a local port as renderer`);
   }
 
   /**
@@ -414,6 +448,24 @@ export class RpcWebSocketListener
             required: false,
             summary: 'Documentation for the method in OpenRPC format',
             schema: { type: 'object' },
+          },
+          {
+            name: 'options',
+            required: false,
+            summary:
+              'Registration options. `allowedCallers` lists the processes that may call the method (main always may); when omitted, any connection may. Ignored for request types the platform restricts itself.',
+            schema: {
+              type: 'object',
+              properties: {
+                allowedCallers: {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                    enum: ['renderer', 'extensionHost', 'dotnetDataProvider'],
+                  },
+                },
+              },
+            },
           },
         ],
         result: {
@@ -655,27 +707,94 @@ export class RpcWebSocketListener
   }
 
   /**
+   * Decides whether to complete a WebSocket handshake. A client that presents no secret is served
+   * as `unidentified`. One that presents a secret must present a current launch's client secret,
+   * and that launch must not already have an open connection.
+   *
+   * Never logs the presented header: it may be a real secret sent to the wrong place.
+   */
+  private verifyClient(
+    info: { req: IncomingMessage },
+    callback: (isAccepted: boolean, code?: number) => void,
+  ): void {
+    const presented = info.req.headers[PAPI_CLIENT_SECRET_HEADER];
+    if (presented === undefined) {
+      callback(true);
+      return;
+    }
+    // Node joins a repeated custom header into one string, which matches no secret
+    const verified = typeof presented === 'string' ? identifyClientSecret(presented) : undefined;
+    if (!verified) {
+      logger.warn('Refused a PAPI websocket handshake that presented an unknown client secret');
+      callback(false, UNKNOWN_SECRET_STATUS);
+      return;
+    }
+    if (
+      this.openConnectionByLaunchedIdentity.get(verified.identity)?.launchId === verified.launchId
+    ) {
+      logger.warn(
+        `Refused a PAPI websocket handshake as ${verified.identity}: that launch already has an open connection`,
+      );
+      callback(false, LAUNCH_ALREADY_CONNECTED_STATUS);
+      return;
+    }
+    this.verifiedLaunchByRequest.set(info.req, verified);
+    callback(true);
+  }
+
+  /** Proves main to a child it identified by returning that launch's server secret */
+  private addServerSecretToHandshakeReply(headers: string[], request: IncomingMessage): void {
+    const verified = this.verifiedLaunchByRequest.get(request);
+    if (verified) headers.push(`${PAPI_SERVER_SECRET_HEADER}: ${verified.serverSecret}`);
+  }
+
+  /**
    * @param upgradeRequest The handshake request, which `ws` always passes. Without one the client
-   *   is treated as having sent `Origin`.
+   *   is served as `unidentified`.
    */
   private onClientConnect(webSocket: WebSocket, upgradeRequest?: IncomingMessage): void {
     const socketId = this.nextSocketId;
-    // TODO(PT-2893): The Origin check is an insecure temporary stopgap; see RpcServer.processMessage
-    this.serveClient(
-      webSocket,
-      socketId,
-      !!upgradeRequest && upgradeRequest.headers.origin === undefined,
-    );
+    const verified = upgradeRequest && this.verifiedLaunchByRequest.get(upgradeRequest);
+    if (upgradeRequest) this.verifiedLaunchByRequest.delete(upgradeRequest);
+    if (verified && !this.trackLaunchedConnection(webSocket, verified)) {
+      webSocket.close(INTENTIONAL_CLOSE_CODE, 'launch already connected');
+      return;
+    }
+    const identity = verified ? verified.identity : 'unidentified';
+    this.serveClient(webSocket, socketId, identity);
     // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
-    logger.info(`Websocket client ${socketId} connected`);
+    logger.info(`Websocket client ${socketId} connected as ${identity}`);
+  }
+
+  /**
+   * Records the open connection of a launched child. A connection from an earlier launch of the
+   * same child is closed: main has replaced that process, and its socket may not have closed yet.
+   *
+   * @returns `false` when the same launch already has an open connection, which happens only when
+   *   two handshakes with the same secret pass the handshake check together
+   */
+  private trackLaunchedConnection(socket: ServerSocketLike, verified: IdentifiedLaunch): boolean {
+    const previous = this.openConnectionByLaunchedIdentity.get(verified.identity);
+    if (previous?.launchId === verified.launchId) return false;
+    this.openConnectionByLaunchedIdentity.set(verified.identity, {
+      socket,
+      launchId: verified.launchId,
+    });
+    const forgetConnection = () => {
+      socket.removeEventListener('close', forgetConnection);
+      if (this.openConnectionByLaunchedIdentity.get(verified.identity)?.socket === socket)
+        this.openConnectionByLaunchedIdentity.delete(verified.identity);
+    };
+    socket.addEventListener('close', forgetConnection);
+    if (previous) {
+      logger.info(`Closing the previous ${verified.identity} connection: a new launch connected`);
+      previous.socket.close(INTENTIONAL_CLOSE_CODE, 'replaced by a new launch');
+    }
+    return true;
   }
 
   /** Attach an `RpcServer` to a socket and track it until the socket closes */
-  private serveClient(
-    socket: ServerSocketLike,
-    name: string,
-    isWebSocketWithoutOrigin: boolean,
-  ): void {
+  private serveClient(socket: ServerSocketLike, name: string, identity: ConnectionIdentity): void {
     const rpcServer = new RpcServer(
       name,
       socket,
@@ -683,7 +802,7 @@ export class RpcWebSocketListener
       this.rpcMethodDetailsByMethodName,
       this.rpcEventDetailsByEventName,
       this.announceClientDisconnect,
-      isWebSocketWithoutOrigin,
+      identity,
     );
     rpcServer.connect();
     this.rpcServerBySocket.set(socket, rpcServer);

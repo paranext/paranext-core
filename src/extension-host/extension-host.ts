@@ -35,6 +35,8 @@ import {
   registerExtensionHostStartedEvent,
 } from '@extension-host/announce-extension-host-started';
 import { markStartup } from '@shared/utils/startup-timing.util';
+import { setLaunchSecrets, setLaunchSecretsArrival } from '@client/services/launch-secrets';
+import { receiveLaunchSecrets } from '@extension-host/receive-launch-secrets';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
 logger.info(
@@ -42,6 +44,17 @@ logger.info(
 );
 logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
 markStartup(STARTUP_MARK_PROCESS_START);
+
+// Listen for the launch secrets before anything else can run: main sends them right after forking,
+// and the connection to main presents them, waiting for them however early it is asked for. No
+// extension loads before that connection is made.
+setLaunchSecretsArrival(
+  receiveLaunchSecrets({
+    process,
+    setLaunchSecrets,
+    exitProcess: (code) => process.exit(code),
+  }),
+);
 
 // Make a graceful way to tear down the process since Windows and POSIX operating systems handle it differently
 process.on('message', (message) => {

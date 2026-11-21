@@ -43,6 +43,14 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
+import {
+  ConnectionIdentity,
+  getRefusedRequestMessage,
+  isCallAllowed,
+  isRegistrationAllowed,
+  parseAllowedCallers,
+} from '@shared/data/request-access.data';
+import type { RequestCallerProcess } from '@shared/models/network.model';
 
 /**
  * Narrows a handler's error to what requesters need: its `code` and `message`, plus the platform
@@ -88,15 +96,19 @@ export function setAppShutdownSignal(signal: () => boolean): void {
 }
 
 /**
- * Request types main refuses from connections that could be a browser page, an extension web view
- * or a renderer. See the TODO(PT-2893) in {@link RpcServer.processMessage}.
+ * Reads the options a client sent with `network:registerMethod`, which arrive as untrusted JSON.
+ *
+ * @returns The `allowedCallers` the client declared, or `undefined` when it declared none
+ * @throws When the options are not an object, or `allowedCallers` is malformed
  */
-const REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS: ReadonlySet<string> = new Set([
-  // REGISTRY_TOKEN_REQUEST_TYPE from `src/node/services/request-registry-tokens.service-model.ts`,
-  // spelled out because importing it would publish that module in `papi.d.ts`. The real-socket
-  // tests send the constant itself, so they fail if the two drift apart.
-  'requestRegistryTokens:getAccessToken',
-]);
+function parseRegistrationOptions(options: unknown): RequestCallerProcess[] | undefined {
+  // JSON carries a missing optional parameter as `null`
+  // eslint-disable-next-line no-null/no-null
+  if (options === undefined || options === null) return undefined;
+  if (typeof options !== 'object' || Array.isArray(options))
+    throw new Error('registration options must be an object');
+  return parseAllowedCallers('allowedCallers' in options ? options.allowedCallers : undefined);
+}
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
 
@@ -112,6 +124,8 @@ type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
  */
 export class RpcServer implements IRpcHandler {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
+  /** Which process is on the other end of this connection, as main determined when accepting it */
+  readonly identity: ConnectionIdentity;
   /**
    * Whether {@link onWebSocketClose} has already run for the current socket.
    *
@@ -143,14 +157,11 @@ export class RpcServer implements IRpcHandler {
   private readonly propagateEventMethod: PropagateEventMethod;
   /** Called by an RpcServer once its client's methods have been removed from the registry */
   private readonly announceClientDisconnectMethod: AnnounceClientDisconnectMethod;
-  /** See the constructor's `isWebSocketWithoutOrigin` */
-  private readonly isWebSocketWithoutOrigin: boolean;
 
   /**
-   * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
-   *   carried no `Origin` header. Only such a client may send the request types main refuses to
-   *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
-   *   them.
+   * @param identity Which process is on the other end, as main determined when accepting the
+   *   connection. Defaults to `'unidentified'`, so a connection nobody vouched for gets no more
+   *   than an unknown client.
    */
   constructor(
     name: string,
@@ -159,14 +170,14 @@ export class RpcServer implements IRpcHandler {
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
     rpcEventDetailsByEventName: IRpcEventRegistry,
     announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
-    isWebSocketWithoutOrigin = false,
+    identity: ConnectionIdentity = 'unidentified',
   ) {
     bindClassMethods.call(this);
     this.name = name;
     this.ws = webSocket;
     this.propagateEventMethod = propagateEventMethod;
     this.announceClientDisconnectMethod = announceClientDisconnectMethod;
-    this.isWebSocketWithoutOrigin = isWebSocketWithoutOrigin;
+    this.identity = identity;
 
     // Uncomment the following to log every message sent
     /*
@@ -268,9 +279,32 @@ export class RpcServer implements IRpcHandler {
     }
   }
 
-  registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean {
+  registerRemoteMethod(
+    methodName: string,
+    methodDocs?: SingleMethodDocumentation,
+    options?: unknown,
+  ): boolean {
+    let allowedCallers: RequestCallerProcess[] | undefined;
+    try {
+      allowedCallers = parseRegistrationOptions(options);
+    } catch (error) {
+      logger.warn(
+        `Refused to register '${methodName}' for ${this.describePeer()}: ${getErrorMessage(error)}`,
+      );
+      return false;
+    }
+    if (!isRegistrationAllowed(methodName, this.identity)) {
+      logger.warn(
+        `Refused to register '${methodName}' for ${this.describePeer()} (${this.identity})`,
+      );
+      return false;
+    }
     if (this.rpcMethodDetailsByMethodName.has(methodName)) return false;
-    this.rpcMethodDetailsByMethodName.set(methodName, { handler: this, methodDocs });
+    this.rpcMethodDetailsByMethodName.set(methodName, {
+      handler: this,
+      methodDocs,
+      allowedCallers,
+    });
     return true;
   }
 
@@ -436,23 +470,25 @@ export class RpcServer implements IRpcHandler {
       const requests: JSONRPCRequest[] = isJSONRPCRequest(message) ? [message] : message;
       const promises = requests.map(async (request) => {
         try {
-          // TODO(PT-2893): An insecure temporary stopgap, not a security boundary; replace it with
-          // PT-2893's caller identification. Browsers always send `Origin` on a WebSocket handshake
-          // and page script can't remove it, and web views can drive their renderer's MessagePort,
-          // so this keeps browser pages and extension web views from minting Registry tokens. It
-          // trusts a header instead of identifying the caller, so any local process that leaves
-          // `Origin` out still gets through. Checked before the event branch too, so the request
-          // type can't be sent on as an event either.
-          if (
-            !this.isWebSocketWithoutOrigin &&
-            REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS.has(request.method)
-          ) {
-            logger.warn(`Refused '${request.method}' from ${this.describePeer()}`);
+          const isAllowed = () =>
+            isCallAllowed(
+              request.method,
+              this.identity,
+              this.rpcMethodDetailsByMethodName.get(request.method)?.allowedCallers,
+            );
+          const logRefusal = () =>
+            logger.warn(
+              `Refused '${request.method}' from ${this.describePeer()} (${this.identity})`,
+            );
+          // Checked before the event branch, so a restricted request type can't be sent on as an
+          // event either
+          if (!isAllowed()) {
+            logRefusal();
             if (request.id)
               sendPayloadToWebSocket(
                 this.ws,
                 createErrorResponse(
-                  `'${request.method}' is not available on this connection`,
+                  getRefusedRequestMessage(request.method),
                   JSONRPCErrorCode.MethodNotFound,
                   request.id,
                 ),
@@ -464,12 +500,30 @@ export class RpcServer implements IRpcHandler {
             this.propagateEventMethod(this, request.method, request.params);
             return;
           }
-          const response = await this.request(
-            // Assert the required type
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            request.method as SerializedRequestType,
-            request.params,
+          // Checked again on every attempt: the handler a request waits for may restrict its
+          // callers when it registers. A refusal is answered as a missing handler, so it is retried
+          // like one and sent once the attempts run out.
+          let isRefused = false;
+          const response = await requestWithRetry(
+            async () => {
+              isRefused = !isAllowed();
+              if (isRefused)
+                return createErrorResponse(
+                  getRefusedRequestMessage(request.method),
+                  JSONRPCErrorCode.MethodNotFound,
+                );
+              return this.request(
+                // Assert the required type
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                request.method as SerializedRequestType,
+                request.params,
+                true,
+              );
+            },
+            this.name,
+            request.method,
           );
+          if (isRefused) logRefusal();
           const payload =
             'result' in response
               ? createSuccessResponse(response.result, request.id)
