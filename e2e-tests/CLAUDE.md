@@ -52,6 +52,36 @@ strategy). If you do, register a named project in `playwright.config.ts` whose s
 own Electron, as the `isolated` and `smoke` projects do, and add a `test:e2e:<name>` npm script if
 the suite is meant to be run routinely.
 
+### The isolated e2e map
+
+A new subset directory or loose spec under `tests/isolated/` needs an entry in
+`tests/isolated/subset-sources.json`: `main` lists the source prefixes the group is about,
+`incidental` the source it only drives. `e2e-recommendations.test.ts` fails when an entry is
+missing, and when a tracked file under `src/`, `extensions/src/` or `c-sharp/` that the app never
+loads (a dotfile, a license, a story, a file type the app does not read) is still classified as
+runtime code. If the file is app code of a new type, add its extension to `LOADED_EXTENSIONS` in
+`e2e-recommendations.test.ts` (one file of a type the app does not load that still changes what it
+does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to `NON_RUNTIME` in
+`e2e-recommendations.ts`.
+
+The test also fails when a runtime file that matches an `editor_paths` entry in `test.yml`
+reaches no key through `main`: add it to the right key.
+
+A prefix that names a file that no longer exists does not fail the test:
+`e2e-recommendations.ts` reports it as `stalePrefixes`, and `/review-paratext` shows it to the
+author as a warning, so moving or deleting a source file a prefix names means updating the
+prefix.
+
+`/review-paratext` uses the map to recommend which subsets to run. A new
+`scripture-editor/no-unasked-edits-*.spec.ts` needs no key of its own: the prefix key
+`scripture-editor/no-unasked-edits-` covers it.
+
+`/review-paratext` stops asking whether a branch needs a new e2e test once the report's
+`specsChanged` is true: the branch changes an e2e spec or its support code (any file under
+`tests/` or `fixtures/`, any `.ts` under `reporters/`, the global setup or teardown, a Playwright
+config, `scoped-cleanup.ts`, `parked-enhanced-resources.ts`, `run-isolated.mjs` or `run-e2e-wsl.sh`,
+except unit tests, Markdown files and `tests/isolated/subset-sources.json`).
+
 ## What NOT to do
 
 - Do not leave a spec that no config runs. Either get it running, or park it: an ignore entry in

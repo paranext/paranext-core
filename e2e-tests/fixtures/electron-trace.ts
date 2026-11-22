@@ -72,3 +72,49 @@ export function electronTracePlan(trace: TraceOption, retry: number): ElectronTr
       (mode === 'retain-on-failure-and-retries' && retry === 0),
   };
 }
+
+/** What {@link stopElectronTrace} needs from the fixture: the app's tracing and the test's output. */
+export interface StopElectronTraceOptions {
+  /** Whether to save the trace (the attempt failed, or the plan keeps every trace). */
+  keep: boolean;
+  /** Stops tracing; saves the trace to `path` when one is given, discards it otherwise. */
+  stop: (path: string | undefined) => Promise<void>;
+  /** Where to save a kept trace. */
+  tracePath: () => string;
+  /** Attaches a saved trace to the test result. */
+  attach: (path: string) => Promise<void>;
+  /** Reports a trace that was to be kept but could not be saved. */
+  warn: (message: string) => void;
+}
+
+/**
+ * Stops an Electron trace: saves and attaches it when `keep`, discards it otherwise. Stopping fails
+ * most often because the app is already gone (it crashed, or the test closed it), and the trace
+ * with it. That is worth a warning only when the trace was to be kept; a trace that was going to be
+ * discarded is lost to no one.
+ */
+export async function stopElectronTrace(options: StopElectronTraceOptions): Promise<void> {
+  if (!options.keep) {
+    try {
+      await options.stop(undefined);
+    } catch {
+      // The trace was going to be discarded; losing it costs nothing.
+    }
+    return;
+  }
+  let tracePath: string;
+  try {
+    tracePath = options.tracePath();
+    await options.stop(tracePath);
+  } catch (error) {
+    options.warn(`Could not save the Electron trace: ${error}`);
+    return;
+  }
+  try {
+    await options.attach(tracePath);
+  } catch (error) {
+    options.warn(
+      `The Electron trace was saved to ${tracePath} but could not be attached: ${error}`,
+    );
+  }
+}
