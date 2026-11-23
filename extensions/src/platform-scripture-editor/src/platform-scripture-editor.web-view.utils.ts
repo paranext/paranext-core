@@ -11,8 +11,8 @@
  *
  * Therefore this module must ONLY ever be imported by web-view code (and its tests) — NEVER by
  * `main.ts` or anything `main.ts` reaches. Main-bundle-safe helpers live in
- * `platform-scripture-editor.utils.ts`. `extension-host-import-boundary.test.ts` walks the import
- * graph from `main.ts` and enforces this.
+ * `platform-scripture-editor.utils.ts`. The extensions' main-bundle build walks the import graph
+ * from `main.ts` and fails if this module's externals are reached.
  */
 
 import type { FocusSubject } from '@papi/core';

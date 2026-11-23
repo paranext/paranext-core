@@ -252,6 +252,9 @@ function TeamLayoutDialogWrapper({
   const projectName = useMemo(() => {
     const shortName = isPlatformError(projectShortNameSetting) ? '' : projectShortNameSetting;
     const fullName = isPlatformError(projectFullNameSetting) ? '' : projectFullNameSetting;
+    // The label is `formatProjectName` on the next line; the full name is a defensive fallback for
+    // a project with an empty short name, not a composed label.
+    // eslint-disable-next-line paranext/no-inline-project-name
     if (!shortName) return fullName || undefined;
     return formatProjectName({ shortName, fullName });
   }, [projectShortNameSetting, projectFullNameSetting]);

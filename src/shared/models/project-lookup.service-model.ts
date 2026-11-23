@@ -505,6 +505,8 @@ async function internalGetMetadata(
                 enrichedMd.projectInterfaces.push(newProjectInterface);
             });
             enrichedMd.name ??= md.name;
+            // Metadata merge between two sources — no display involved.
+            // eslint-disable-next-line paranext/no-inline-project-name
             enrichedMd.fullName ??= md.fullName;
             enrichedMd.language ??= md.language;
             enrichedMd.languageTag ??= md.languageTag;

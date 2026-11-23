@@ -12,6 +12,9 @@ import WebViewResolveWebpackPlugin from './web-view-resolve-webpack-plugin';
 // being written, which drops this bundle's packages from the notices document with the build
 // still exiting 0.
 import { EmitShippedModulesPlugin } from '../../.erb/configs/emit-shipped-modules-plugin';
+// paranext-core only, for the same reason: the plugin reads the extension host's allowlist from
+// `src/extension-host/`, which the template does not carry.
+import ExtensionHostImportBoundaryWebpackPlugin from './extension-host-import-boundary-webpack-plugin';
 import {
   outputFolder,
   getExtensions,
@@ -78,6 +81,13 @@ const configMain: () => Promise<webpack.Configuration> = async () => {
       new EmitShippedModulesPlugin({
         bundleName: 'extension-main',
         outputDir: path.join(rootDir, '..', '.notices', 'modules'),
+      }),
+      // Fails the build when an extension's entry point reaches a module the extension host's
+      // `require` shim does not supply, which would otherwise surface only as a failed activation
+      new ExtensionHostImportBoundaryWebpackPlugin({
+        extensionNameByEntry: new Map(
+          extensions.map((extension) => [extension.entryFilePath, extension.dirName]),
+        ),
       }),
     ],
 

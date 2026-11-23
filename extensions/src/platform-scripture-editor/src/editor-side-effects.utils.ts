@@ -10,7 +10,7 @@
  *
  * This module value-imports `@papi/frontend`, which the extension host's `require` shim rejects, so
  * it must stay out of `main.ts`'s import graph — reach it from web views and their components only.
- * `extension-host-import-boundary.test.ts` enforces that.
+ * The extensions' main-bundle build fails if it does not.
  */
 
 import papi, { logger } from '@papi/frontend';

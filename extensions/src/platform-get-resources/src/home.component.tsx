@@ -714,6 +714,8 @@ export function Home({
       if (!isShownByProjectResourceFilter(projectResourceFilter, project.isPublished)) return false;
       const filter = textFilter.toLowerCase();
       return (
+        // Search predicate — matches on either name, renders neither.
+        // eslint-disable-next-line paranext/no-inline-project-name
         (project.fullName ?? '').toLowerCase().includes(filter) ||
         project.name.toLowerCase().includes(filter) ||
         project.language.toLowerCase().includes(filter)
@@ -743,7 +745,12 @@ export function Home({
         case 'fullName': {
           // A project with no full name sorts as the empty string, so the nameless rows group
           // together at one end rather than sorting by a name the column does not show.
+          // Sort key — substitutes the empty string for an absent full name so the column orders;
+          // renders nothing.
+          // eslint-disable-next-line paranext/no-inline-project-name
           const aFullName = a.fullName ?? '';
+          // The same sort key, for the other row.
+          // eslint-disable-next-line paranext/no-inline-project-name
           const bFullName = b.fullName ?? '';
           if (aFullName < bFullName) {
             return effectiveSortConfig.direction === 'ascending' ? -1 : 1;
