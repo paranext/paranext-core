@@ -68,6 +68,19 @@ export function parseTarget(json: string): CheckTarget | undefined {
   return { pr, sha, description };
 }
 
+/**
+ * Whether a target read from an artifact belongs to the run that is being reported. The artifact is
+ * untrusted, so it must agree with what GitHub says about the triggering run: a push run checks
+ * exactly its own commit and has no pull request; a pull request run checks its own head commit; a
+ * manual run re-checks a pull request whose head it fetched itself.
+ */
+export function isTargetForRun(target: CheckTarget, event: string, runHeadSha: string): boolean {
+  if (event === 'push') return target.pr === undefined && target.sha === runHeadSha;
+  if (event === 'pull_request') return target.pr !== undefined && target.sha === runHeadSha;
+  if (event === 'workflow_dispatch') return target.pr !== undefined;
+  return false;
+}
+
 /** A result is reported only while the checked commit is still the head. */
 export function shouldReportResult(checkedSha: string, currentHeadSha: string): boolean {
   return checkedSha === currentHeadSha;

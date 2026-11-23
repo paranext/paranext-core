@@ -74,6 +74,11 @@ jobs:
           ref: ${{ steps.target.outputs.pr != '' && steps.target.outputs.base_ref || steps.target.outputs.head_sha }}
           fetch-depth: 0
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+
       - name: Merge the pull request into its base
         if: steps.target.outputs.pr != ''
         env:
@@ -84,7 +89,7 @@ jobs:
           git fetch origin "refs/pull/$PR/head"
           git config user.name library-dist-check
           git config user.email library-dist-check@users.noreply.github.com
-          if ! git merge --no-ff --no-commit "$HEAD_SHA"; then
+          if ! git merge --no-ff -m "Simulated merge for the library dist check" "$HEAD_SHA"; then
             node .erb/scripts/library-dist/write-description.ts "Merge conflict with $BASE_REF: merge it into your branch and resolve"
             exit 1
           fi
@@ -97,30 +102,19 @@ jobs:
           DIFF_FROM: ${{ steps.target.outputs.diff_from }}
         run: |
           if [ -n "$PR" ]; then
-            FILES=$(git diff --name-only "$(git merge-base HEAD "$HEAD_SHA")" "$HEAD_SHA")
+            FILES=$(git diff --name-only "$(git merge-base HEAD^1 "$HEAD_SHA")" "$HEAD_SHA")
           elif [ -z "$DIFF_FROM" ] || [ "$DIFF_FROM" = 0000000000000000000000000000000000000000 ]; then
             FILES=lib/platform-bible-react/
           else
             FILES=$(git diff --name-only "$DIFF_FROM" HEAD)
           fi
-          echo "library=$(printf '%s\n' "$FILES" | node .erb/scripts/library-dist/classify-library-change.ts)" >> "$GITHUB_OUTPUT"
+          LIBRARY=$(printf '%s\n' "$FILES" | node .erb/scripts/library-dist/classify-library-change.ts)
+          [ "$LIBRARY" = true ] || [ "$LIBRARY" = false ] || { echo "Unexpected classification: $LIBRARY"; exit 1; }
+          echo "library=$LIBRARY" >> "$GITHUB_OUTPUT"
 
       - name: No library changes
         if: steps.classify.outputs.library != 'true'
         run: node .erb/scripts/library-dist/write-description.ts "No library changes"
-
-      - name: Read package.json
-        if: steps.classify.outputs.library == 'true'
-        id: package_json
-        uses: zoexx/github-action-json-file-properties@1.0.6
-        with:
-          file_path: 'package.json'
-
-      - uses: actions/setup-node@v4
-        if: steps.classify.outputs.library == 'true'
-        with:
-          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
-          cache: npm
 
       - name: Install
         if: steps.classify.outputs.library == 'true'
@@ -151,35 +145,3 @@ jobs:
           name: library-dist-target
           path: ${{ runner.temp }}/library-dist/target.json
           overwrite: true
-
-  recheck-open-pull-requests:
-    # After a library change lands on a base branch, open library PRs into it may no longer merge
-    # into a current dist. Mark them pending so none merges on an old success, then re-check each.
-    # Runs only base-branch code; it never builds or executes pull request code.
-    if: github.event_name == 'push'
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      pull-requests: read
-      statuses: write
-      actions: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Re-check open library pull requests
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          if [ "$BEFORE_SHA" != 0000000000000000000000000000000000000000 ]; then
-            CHANGED=$(git diff --name-only "$BEFORE_SHA" HEAD | node .erb/scripts/library-dist/classify-library-change.ts)
-            [ "$CHANGED" = true ] || { echo "No library changes; nothing to re-check"; exit 0; }
-          fi
-          gh pr list --base "$GITHUB_REF_NAME" --state open --limit 200 --json number,headRefOid,files \
-            | node .erb/scripts/library-dist/select-library-prs.ts \
-            | while read -r PR SHA; do
-                gh api "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state=pending \
-                  -f context="Library dist current" -f description="Re-checking after a library change on $GITHUB_REF_NAME"
-                gh workflow run library-dist-check.yml --ref "$GITHUB_REF_NAME" -f pr="$PR"
-              done

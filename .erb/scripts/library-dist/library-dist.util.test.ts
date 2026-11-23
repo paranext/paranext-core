@@ -4,6 +4,7 @@ import {
   buildStatus,
   hasLibraryChanges,
   isLibraryPath,
+  isTargetForRun,
   parseTarget,
   PLACEHOLDER_DESCRIPTION,
   selectLibraryPullRequests,
@@ -87,6 +88,29 @@ describe('shouldReportResult', () => {
     expect(shouldReportResult(SHA_A, SHA_A)).toBe(true));
   it('discards a result for a superseded commit', () =>
     expect(shouldReportResult(SHA_A, SHA_B)).toBe(false));
+});
+
+describe('isTargetForRun', () => {
+  const push = { sha: SHA_A, description: 'x' };
+  const pull = { pr: 7, sha: SHA_A, description: 'x' };
+
+  it('accepts a push target for the run commit without a pull request', () =>
+    expect(isTargetForRun(push, 'push', SHA_A)).toBe(true));
+  it('rejects a push target with a pull request number', () =>
+    expect(isTargetForRun(pull, 'push', SHA_A)).toBe(false));
+  it('rejects a push target for another commit', () =>
+    expect(isTargetForRun(push, 'push', SHA_B)).toBe(false));
+  it('accepts a pull request target for the run head commit', () =>
+    expect(isTargetForRun(pull, 'pull_request', SHA_A)).toBe(true));
+  it('rejects a pull request target without a pull request number', () =>
+    expect(isTargetForRun(push, 'pull_request', SHA_A)).toBe(false));
+  it('rejects a pull request target for another commit', () =>
+    expect(isTargetForRun(pull, 'pull_request', SHA_B)).toBe(false));
+  it('accepts a manual run target with a pull request number', () =>
+    expect(isTargetForRun(pull, 'workflow_dispatch', SHA_B)).toBe(true));
+  it('rejects a manual run target without a pull request number', () =>
+    expect(isTargetForRun(push, 'workflow_dispatch', SHA_A)).toBe(false));
+  it('rejects any other event', () => expect(isTargetForRun(pull, 'schedule', SHA_A)).toBe(false));
 });
 
 describe('buildStatus', () => {

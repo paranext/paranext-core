@@ -20,7 +20,13 @@ jobs:
       # Runs only this repository's default-branch code; the artifact is untrusted data.
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: .erb/scripts/library-dist
+          sparse-checkout: |
+            .erb/scripts/library-dist
+            package.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
       - uses: actions/download-artifact@v4
         with:
           name: library-dist-target
@@ -31,6 +37,8 @@ jobs:
       - name: Post the status
         env:
           TARGET_FILE: result/target.json
+          EVENT: ${{ github.event.workflow_run.event }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
           REPOSITORY: ${{ github.repository }}

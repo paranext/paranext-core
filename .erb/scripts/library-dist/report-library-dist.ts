@@ -7,7 +7,12 @@
 
 const fs = require('fs');
 // Explicit `.ts`: bare `node` does not resolve extensionless TypeScript files.
-const { parseTarget, shouldReportResult, buildStatus } = require('./library-dist.util.ts');
+const {
+  parseTarget,
+  isTargetForRun,
+  shouldReportResult,
+  buildStatus,
+} = require('./library-dist.util.ts');
 
 async function githubRequest(
   method: string,
@@ -27,7 +32,8 @@ async function githubRequest(
 }
 
 async function main(): Promise<void> {
-  const { TARGET_FILE, CONCLUSION, RUN_URL, REPOSITORY, GITHUB_TOKEN } = process.env;
+  const { TARGET_FILE, CONCLUSION, RUN_URL, REPOSITORY, GITHUB_TOKEN, EVENT, RUN_HEAD_SHA } =
+    process.env;
 
   let contents: string | undefined;
   try {
@@ -41,9 +47,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (!CONCLUSION || !RUN_URL || !REPOSITORY || !GITHUB_TOKEN) {
-    console.error('CONCLUSION, RUN_URL, REPOSITORY and GITHUB_TOKEN are required');
+  if (!CONCLUSION || !RUN_URL || !REPOSITORY || !GITHUB_TOKEN || !EVENT || !RUN_HEAD_SHA) {
+    console.error(
+      'CONCLUSION, RUN_URL, REPOSITORY, GITHUB_TOKEN, EVENT and RUN_HEAD_SHA are required',
+    );
     process.exit(1);
+  }
+
+  if (!isTargetForRun(target, EVENT, RUN_HEAD_SHA)) {
+    console.log(`Target does not match the ${EVENT} run at ${RUN_HEAD_SHA}; not posting a status`);
+    return;
   }
 
   const apiRoot = `https://api.github.com/repos/${REPOSITORY}`;
@@ -58,7 +71,11 @@ async function main(): Promise<void> {
     const head: unknown = pull && typeof pull === 'object' ? Reflect.get(pull, 'head') : undefined;
     const headSha: unknown =
       head && typeof head === 'object' ? Reflect.get(head, 'sha') : undefined;
-    if (typeof headSha !== 'string' || !shouldReportResult(target.sha, headSha)) {
+    if (typeof headSha !== 'string') {
+      console.log(`Pull request ${target.pr} response has no head sha; not posting a status`);
+      return;
+    }
+    if (!shouldReportResult(target.sha, headSha)) {
       console.log(`Pull request ${target.pr} has a newer head than ${target.sha}; skipping`);
       return;
     }
