@@ -836,7 +836,8 @@ describe('Scripture editor resource wiring', () => {
     const props = titleProps();
 
     const result = await renderTab(props);
-    // Positive control: the settled title would be sent were it not held back.
+    // Held back while platform.isPublished loads; the same props send the title once it settles
+    // (below).
     expect(props.updateWebViewDefinition).not.toHaveBeenCalled();
 
     loadingProjectSettings.delete('platform.isPublished');
@@ -844,7 +845,9 @@ describe('Scripture editor resource wiring', () => {
     await rerenderTab(result, props);
 
     expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ title: 'engWEBUS' });
-    expect(props.updateWebViewDefinition).toHaveBeenCalledTimes(1);
+    // The tab has no icon yet, so the resource's book icon is sent separately.
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ iconName: 'book-open' });
+    expect(props.updateWebViewDefinition).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the read-only indicator in the title of a read-only project', async () => {
@@ -855,6 +858,58 @@ describe('Scripture editor resource wiring', () => {
     await renderTab(props);
 
     expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ title: '(Read-only) engWEBUS' });
+  });
+
+  /** The `iconName` values sent through `updateWebViewDefinition`, in call order. */
+  const sentIconNames = (props: WebViewProps) =>
+    vi
+      .mocked(props.updateWebViewDefinition)
+      .mock.calls.filter(([update]) => 'iconName' in update)
+      .map(([update]) => update.iconName);
+
+  it('gives a resource tab the book icon once the published setting is read', async () => {
+    loadingProjectSettings.add('platform.isPublished');
+    const props: WebViewProps = { ...makeProps(''), iconName: undefined };
+
+    const result = await renderTab(props);
+    expect(sentIconNames(props)).toEqual([]);
+
+    loadingProjectSettings.delete('platform.isPublished');
+    projectSettings.set('platform.isPublished', true);
+    await rerenderTab(result, props);
+
+    expect(sentIconNames(props)).toEqual(['book-open']);
+  });
+
+  it('sends no icon to a resource tab that already shows the book icon', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    projectSettings.set('platform.isPublished', true);
+    const props: WebViewProps = { ...titleProps(), iconName: 'book-open' };
+
+    await renderTab(props);
+
+    // Positive control: the tab is read as a resource, as its title without "(Read-only)" shows.
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ title: 'engWEBUS' });
+    expect(sentIconNames(props)).toEqual([]);
+  });
+
+  it('never takes the book icon away from a tab, for a project or when the setting cannot be read', async () => {
+    projectSettings.set('platform.isPublished', false);
+    const projectProps: WebViewProps = { ...makeProps(''), iconName: 'book-open' };
+    const projectResult = await renderTab(projectProps);
+    expect(sentIconNames(projectProps)).toEqual([]);
+    projectResult?.unmount();
+
+    projectSettings.set('platform.isPublished', newPlatformError('project unavailable'));
+    const failedProps: WebViewProps = { ...makeProps(''), iconName: 'book-open' };
+    await renderTab(failedProps);
+    expect(sentIconNames(failedProps)).toEqual([]);
+
+    // Positive control: a resource tab without the icon does get one under the same props.
+    projectSettings.set('platform.isPublished', true);
+    const resourceProps: WebViewProps = { ...makeProps(''), iconName: undefined };
+    await renderTab(resourceProps);
+    expect(sentIconNames(resourceProps)).toEqual(['book-open']);
   });
 
   beforeEach(() => {

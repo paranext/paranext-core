@@ -223,6 +223,7 @@ import {
   deepEqualAcrossIframes,
   findEditorUsjNotes,
   formatEditorTitle,
+  getEditorTabIconName,
   getEditorTitleEditability,
   generateParagraphMenuListItems,
   getSimpleModeRootClassNames,
@@ -561,6 +562,7 @@ function PlatformScriptureEditor({
   id: webViewId,
   projectId,
   title,
+  iconName,
   useWebViewState,
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
@@ -1828,6 +1830,15 @@ function PlatformScriptureEditor({
       title: newTitleIfUpdated,
     });
   }, [newTitleIfUpdated, updateWebViewDefinition]);
+
+  // Give a resource tab the book icon once `platform.isPublished` is read: the factory picks the
+  // icon when the tab opens, and its lookup can fail and leave a resource on the project icon.
+  // `getEditorTabIconName` only ever swaps in the book icon, so a project, a setting still loading
+  // (`isResource` is then its default, false) or one that cannot be read keeps the tab's own icon.
+  useEffect(() => {
+    const correctedIconName = getEditorTabIconName(isResource, iconName);
+    if (correctedIconName !== iconName) updateWebViewDefinition({ iconName: correctedIconName });
+  }, [isResource, iconName, updateWebViewDefinition]);
 
   const viewOptions = useMemo<ViewOptions>(
     () => getEditorViewOptions(viewType, isPowerMode, allowInvisibleCharacters),
