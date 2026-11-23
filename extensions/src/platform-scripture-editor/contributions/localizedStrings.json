@@ -1440,7 +1440,8 @@
       }
     },
     "%webView_platformScriptureEditor_title_format_2%": {
-      "fallbackKey": "%webView_platformScriptureEditor_title_format%"
+      "fallbackKey": "%webView_platformScriptureEditor_title_format%",
+      "notes": "Scripture editor tab title. {projectName} is the project's short name; {editable} becomes \"(Editable)\" or \"(Read-only)\" for a project, and is removed for a resource together with the space next to it. Keep {editable} separated from the rest of the title by spaces only, with no brackets, dashes or other punctuation around it, or a resource's title keeps that punctuation (for example \"NBV21 -\")."
     },
     "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": {
       "deprecationInfo": {
