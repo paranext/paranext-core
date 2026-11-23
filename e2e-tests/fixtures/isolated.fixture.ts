@@ -16,7 +16,7 @@ import {
   teardownElectronApp,
   WindowSize,
 } from './helpers';
-import { electronTracePlan } from './electron-trace';
+import { electronTracePlan, stopElectronTrace } from './electron-trace';
 import { suppressOnboardingTour } from './onboarding-tour.page';
 
 export { expect } from '@playwright/test';
@@ -154,23 +154,17 @@ export const test = base.extend<IsolatedFixtures>({
         await use(ctx.electronApp);
       } finally {
         if (tracing) {
-          const keep = !tracePlan.keepOnlyOnFailure || testInfo.status !== testInfo.expectedStatus;
-          try {
-            if (keep) {
-              const tracePath = testInfo.outputPath('electron-trace.zip');
-              await ctx.electronApp.context().tracing.stop({ path: tracePath });
-              await testInfo.attach('electron-trace', {
-                path: tracePath,
-                contentType: 'application/zip',
-              });
-            } else {
-              await ctx.electronApp.context().tracing.stop();
-            }
-          } catch (error) {
-            // Most often the app is already gone (it crashed, or the test closed it), and the
-            // trace with it.
-            console.warn(`Could not save the Electron trace: ${error}`);
-          }
+          await stopElectronTrace({
+            keep: !tracePlan.keepOnlyOnFailure || testInfo.status !== testInfo.expectedStatus,
+            // The context is read inside `stop`, so a failure there stays within
+            // stopElectronTrace and the teardown below still runs.
+            stop: (path) =>
+              ctx.electronApp.context().tracing.stop(path === undefined ? undefined : { path }),
+            tracePath: () => testInfo.outputPath('electron-trace.zip'),
+            attach: (path) =>
+              testInfo.attach('electron-trace', { path, contentType: 'application/zip' }),
+            warn: (message) => console.warn(message),
+          });
         }
         const teardownStart = Date.now();
         console.log('[teardown +0ms] Test-scoped app teardown starting...');

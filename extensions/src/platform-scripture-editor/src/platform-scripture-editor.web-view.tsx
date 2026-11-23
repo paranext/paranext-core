@@ -2311,6 +2311,18 @@ function PlatformScriptureEditor({
           );
           break;
         }
+        case 'changeFootnotesPaneLocation': {
+          // `FootnotesLayout` moves the pane; this opens it too, so the user sees where it went.
+          // Opening re-wraps the text the same way the visibility toggle does, so it keeps the
+          // text's scroll position the same way.
+          if (footnotesPaneVisibleRef.current) break;
+          keepScrollPositionAcross(
+            editorContainerRef.current?.querySelector<HTMLElement>('.editor-container') ??
+              undefined,
+            () => setFootnotesPaneVisible(true),
+          );
+          break;
+        }
         // These three arrive from top-menu commands that are enabled regardless of whether the
         // editor can take the insert, and the command has already resolved by the time the message
         // lands — so a rejection here has nobody to return to. See `logInsertRejection`.
@@ -2480,9 +2492,6 @@ function PlatformScriptureEditor({
           }
           break;
         }
-        case 'changeFootnotesPaneLocation': {
-          break;
-        } // handled in FootnoteLayout
         default:
           // Unknown method name
           logger.debug(
