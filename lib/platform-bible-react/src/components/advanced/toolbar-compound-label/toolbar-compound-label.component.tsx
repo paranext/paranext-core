@@ -194,6 +194,8 @@ export function ToolbarCompoundLabel({
   }, [getHost, handlePointerEnter, closeTooltip]);
 
   useEffect(() => {
+    // Not `getHost()`: it falls back to the label itself, which cannot take focus, so with no
+    // focusable host there is nothing to listen on.
     const focusable = rootRef.current?.closest(HOST_SELECTOR);
     if (!focusable) return undefined;
 

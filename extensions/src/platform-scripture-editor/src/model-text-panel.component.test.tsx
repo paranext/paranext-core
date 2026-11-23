@@ -1681,6 +1681,15 @@ describe('ModelTextPanel changing a model text the user chose', () => {
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     });
 
+    /** Lets Radix's zero-delay hover timers fire, and React render what they set. */
+    async function settleRadixTimers() {
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+    }
+
     it('stays open once the pointer has moved over the header', async () => {
       // Radix's own hover handling opens on a zero-delay timer that can still read this controlled
       // tooltip as closed; it then broadcasts its "another tooltip opened" event and the tooltip
@@ -1696,11 +1705,7 @@ describe('ModelTextPanel changing a model text the user chose', () => {
         header.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }));
       });
       expect(await screen.findByRole('tooltip')).toBeInTheDocument();
-      await act(async () => {
-        await new Promise((resolve) => {
-          setTimeout(resolve, 20);
-        });
-      });
+      await settleRadixTimers();
 
       expect(screen.queryByRole('tooltip')).toHaveTextContent('WEB - World English Bible');
     });
@@ -1726,11 +1731,7 @@ describe('ModelTextPanel changing a model text the user chose', () => {
         header.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
       });
       expect(await screen.findByRole('tooltip')).toBeInTheDocument();
-      await act(async () => {
-        await new Promise((resolve) => {
-          setTimeout(resolve, 20);
-        });
-      });
+      await settleRadixTimers();
       return header;
     }
 
