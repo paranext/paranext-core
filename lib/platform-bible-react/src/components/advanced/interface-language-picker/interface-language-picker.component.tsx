@@ -231,14 +231,16 @@ export function InterfaceLanguagePicker({
                   else rowRefs.current.delete(tag);
                 }}
                 value={tag}
-                // aria-current (not aria-selected, which cmdk uses for the keyboard-highlighted item).
                 // `data-checked` drives the leading check mark the vendored CommandItem renders, so we
                 // don't render our own icon (that would double it up). It is set on every row, not
-                // only the selected one, so every label starts at the same offset, and CommandItem
-                // turns it into `aria-checked`. The visually hidden label stays for screen readers
-                // that do not announce `aria-checked` on list options.
-                aria-current={isSelected ? 'true' : undefined}
+                // only the selected one, so every label starts at the same offset.
+                // The selection is announced once, by the visually hidden label below, because some
+                // screen readers do not announce `aria-checked` on list options. So this row opts
+                // out of the `aria-checked` CommandItem derives from `data-checked`, and sets no
+                // `aria-current` either: each would add a second announcement ("checked",
+                // "current") of the same state. aria-selected is cmdk's keyboard highlight.
                 data-checked={isSelected}
+                aria-checked={undefined}
                 onSelect={() => onChange(tag)}
               >
                 {/* dir="auto" so each autonym lays out per its own script (e.g. RTL Arabic, or the

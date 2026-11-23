@@ -134,24 +134,21 @@ describe('LanguageStep', () => {
   test('shows a current language that is not offered by its real autonym', () => {
     hookState.interfaceLanguage = ['fr']; // has a locale file but is not offered
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
-    expect(screen.getByRole('option', { name: /Français/ })).toHaveAttribute(
-      'aria-current',
-      'true',
-    );
+    expect(screen.getByRole('option', { name: /Français/ })).toHaveAccessibleName(/Selected/);
     expect(screen.queryByText('fr')).not.toBeInTheDocument();
   });
 
   test('labels a hidden current language from the shared language details', () => {
     hookState.interfaceLanguage = ['km'];
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
-    expect(screen.getByRole('option', { name: /ខ្មែរ/ })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('option', { name: /ខ្មែរ/ })).toHaveAccessibleName(/Selected/);
     expect(availableInterfaceLanguagesHook).not.toHaveBeenCalled();
   });
 
   test('falls back to the raw tag when the current language has no known details', () => {
     hookState.interfaceLanguage = ['xyz']; // no language details for this tag
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
-    expect(screen.getByRole('option', { name: /xyz/ })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('option', { name: /xyz/ })).toHaveAccessibleName(/Selected/);
   });
 
   test('gates Next off while languages are loading', () => {

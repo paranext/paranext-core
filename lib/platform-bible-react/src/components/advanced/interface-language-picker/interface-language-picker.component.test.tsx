@@ -73,7 +73,7 @@ describe('InterfaceLanguagePicker', () => {
     expect(screen.getByText('English')).toBeInTheDocument();
   });
 
-  test('marks the selected language', () => {
+  test('announces the selected language once, by its hidden label', () => {
     render(
       <InterfaceLanguagePicker
         languages={LANGUAGES}
@@ -82,7 +82,12 @@ describe('InterfaceLanguagePicker', () => {
         localizedStrings={STRINGS}
       />,
     );
-    expect(screen.getByRole('option', { name: /Español/ })).toHaveAttribute('aria-current', 'true');
+    const selected = screen.getByRole('option', { name: /Español/ });
+    expect(selected).toHaveAccessibleName(/Selected/);
+    // No second announcement of the same state ("checked", "current")
+    expect(selected).not.toHaveAttribute('aria-checked');
+    expect(selected).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('option', { name: /English/ })).not.toHaveAccessibleName(/Selected/);
   });
 
   test('checks the selected language and keeps the check space on every other row', () => {
