@@ -25,13 +25,6 @@ const DB_IP_LICENSE = 'CC BY 4.0';
 const DB_IP_ATTRIBUTION_LINK = 'https://creativecommons.org/licenses/by/4.0/';
 
 /**
- * Matches `Button variant="link"`, which the Terms of Service link uses. This tab is outside any
- * `.pr-twp` scope, so Tailwind's preflight does not reset anchor color and a bare `<a>` would get
- * the browser's default link blue, which is unreadable in dark mode.
- */
-const LINK_CLASS_NAME = 'tw:text-primary tw:underline-offset-4 tw:hover:underline';
-
-/**
  * Years the application's copyright covers. Kept out of the localized string so advancing the range
  * does not need a new key in every language. Canonical statement: LICENSING.md's Copyright section,
  * which README.md repeats.
@@ -127,7 +120,7 @@ function AboutDialog() {
     <>
       <Button
         variant="link"
-        className="tw:h-auto tw:p-0"
+        className="about-link tw:h-auto tw:p-0"
         onClick={openTermsOfService}
         aria-describedby={opensTermsOfServiceId}
       >
@@ -172,19 +165,14 @@ function AboutDialog() {
           {formatReplacementStringToArray(dbIpAttributionFormat, {
             intro: dbIpAttributionIntro,
             websiteLink: (
-              <a
-                className={LINK_CLASS_NAME}
-                target="_blank"
-                rel="noreferrer"
-                href={DB_IP_WEBSITE_LINK}
-              >
+              <a className="about-link" target="_blank" rel="noreferrer" href={DB_IP_WEBSITE_LINK}>
                 {DB_IP_WEBSITE_NAME}
               </a>
             ),
             license: DB_IP_LICENSE,
             terms: (
               <a
-                className={LINK_CLASS_NAME}
+                className="about-link"
                 target="_blank"
                 rel="noreferrer"
                 href={DB_IP_ATTRIBUTION_LINK}
