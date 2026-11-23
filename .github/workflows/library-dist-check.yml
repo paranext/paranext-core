@@ -1,0 +1,185 @@
+name: Library dist check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: ['main', 'release-prep', 'hotfix-*']
+  push:
+    branches: ['main', 'release-prep', 'hotfix-*']
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to re-check
+        required: true
+        type: string
+
+# One run per pull request (or per base branch for pushes); a newer run cancels an older one so
+# only the newest result is reported.
+concurrency:
+  group: library-dist-${{ github.event.pull_request.number || inputs.pr || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check:
+    # Builds the pull request's code, so it holds a read-only token. The status is posted by
+    # library-dist-report.yml.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Resolve what to check
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          INPUT_PR: ${{ inputs.pr }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          # The target file lives outside the workspace because actions/checkout cleans untracked
+          # files there. The `runner` context is unavailable in job-level `env`, so it is set here.
+          TARGET_FILE="$RUNNER_TEMP/library-dist/target.json"
+          mkdir -p "$(dirname "$TARGET_FILE")"
+          echo "TARGET_FILE=$TARGET_FILE" >> "$GITHUB_ENV"
+          if [ "$EVENT_NAME" = push ]; then
+            echo "pr=" >> "$GITHUB_OUTPUT"
+            echo "head_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "base_ref=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "diff_from=$BEFORE_SHA" >> "$GITHUB_OUTPUT"
+            printf '{"sha":"%s","description":"Checking"}' "$GITHUB_SHA" > "$TARGET_FILE"
+          else
+            PR="${EVENT_PR:-$INPUT_PR}"
+            [[ "$PR" =~ ^[0-9]+$ ]] || { echo "Invalid pull request number"; exit 1; }
+            read -r HEAD_SHA BASE_REF < <(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '"\(.head.sha) \(.base.ref)"')
+            echo "pr=$PR" >> "$GITHUB_OUTPUT"
+            echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+            echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+            printf '{"pr":%s,"sha":"%s","description":"Checking"}' "$PR" "$HEAD_SHA" > "$TARGET_FILE"
+          fi
+
+      - name: Upload the target early
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-dist-target
+          path: ${{ runner.temp }}/library-dist/target.json
+          overwrite: true
+
+      # A pull request is checked as merged into its base's current tip; a push is checked at the
+      # pushed commit.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.pr != '' && steps.target.outputs.base_ref || steps.target.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Merge the pull request into its base
+        if: steps.target.outputs.pr != ''
+        env:
+          PR: ${{ steps.target.outputs.pr }}
+          HEAD_SHA: ${{ steps.target.outputs.head_sha }}
+          BASE_REF: ${{ steps.target.outputs.base_ref }}
+        run: |
+          git fetch origin "refs/pull/$PR/head"
+          git config user.name library-dist-check
+          git config user.email library-dist-check@users.noreply.github.com
+          if ! git merge --no-ff --no-commit "$HEAD_SHA"; then
+            node .erb/scripts/library-dist/write-description.ts "Merge conflict with $BASE_REF: merge it into your branch and resolve"
+            exit 1
+          fi
+
+      - name: Classify the change
+        id: classify
+        env:
+          PR: ${{ steps.target.outputs.pr }}
+          HEAD_SHA: ${{ steps.target.outputs.head_sha }}
+          DIFF_FROM: ${{ steps.target.outputs.diff_from }}
+        run: |
+          if [ -n "$PR" ]; then
+            FILES=$(git diff --name-only "$(git merge-base HEAD "$HEAD_SHA")" "$HEAD_SHA")
+          elif [ -z "$DIFF_FROM" ] || [ "$DIFF_FROM" = 0000000000000000000000000000000000000000 ]; then
+            FILES=lib/platform-bible-react/
+          else
+            FILES=$(git diff --name-only "$DIFF_FROM" HEAD)
+          fi
+          echo "library=$(printf '%s\n' "$FILES" | node .erb/scripts/library-dist/classify-library-change.ts)" >> "$GITHUB_OUTPUT"
+
+      - name: No library changes
+        if: steps.classify.outputs.library != 'true'
+        run: node .erb/scripts/library-dist/write-description.ts "No library changes"
+
+      - name: Read package.json
+        if: steps.classify.outputs.library == 'true'
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - uses: actions/setup-node@v4
+        if: steps.classify.outputs.library == 'true'
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install
+        if: steps.classify.outputs.library == 'true'
+        run: npm ci
+
+      - name: Rebuild and compare dist
+        if: steps.classify.outputs.library == 'true'
+        run: |
+          if npm run verify:library-dist; then
+            node .erb/scripts/library-dist/write-description.ts "dist matches a fresh build"
+          else
+            node .erb/scripts/library-dist/write-description.ts "dist is stale: run npm run build:pbu and build:pbr, commit"
+            exit 1
+          fi
+
+      - name: Smoke-load dist
+        if: steps.classify.outputs.library == 'true'
+        run: |
+          npm run verify:library-dist-load || {
+            node .erb/scripts/library-dist/write-description.ts "dist fails to load; see the run log"
+            exit 1
+          }
+
+      - name: Upload the result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-dist-target
+          path: ${{ runner.temp }}/library-dist/target.json
+          overwrite: true
+
+  recheck-open-pull-requests:
+    # After a library change lands on a base branch, open library PRs into it may no longer merge
+    # into a current dist. Mark them pending so none merges on an old success, then re-check each.
+    # Runs only base-branch code; it never builds or executes pull request code.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Re-check open library pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$BEFORE_SHA" != 0000000000000000000000000000000000000000 ]; then
+            CHANGED=$(git diff --name-only "$BEFORE_SHA" HEAD | node .erb/scripts/library-dist/classify-library-change.ts)
+            [ "$CHANGED" = true ] || { echo "No library changes; nothing to re-check"; exit 0; }
+          fi
+          gh pr list --base "$GITHUB_REF_NAME" --state open --limit 200 --json number,headRefOid,files \
+            | node .erb/scripts/library-dist/select-library-prs.ts \
+            | while read -r PR SHA; do
+                gh api "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state=pending \
+                  -f context="Library dist current" -f description="Re-checking after a library change on $GITHUB_REF_NAME"
+                gh workflow run library-dist-check.yml --ref "$GITHUB_REF_NAME" -f pr="$PR"
+              done

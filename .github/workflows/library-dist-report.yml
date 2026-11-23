@@ -1,0 +1,38 @@
+name: Library dist report
+
+on:
+  workflow_run:
+    workflows: ['Library dist check']
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  report:
+    # A cancelled run was superseded by a newer one for the same pull request, which reports instead.
+    if: github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-22.04
+    steps:
+      # Runs only this repository's default-branch code; the artifact is untrusted data.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .erb/scripts/library-dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: library-dist-target
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: result
+        continue-on-error: true
+      - name: Post the status
+        env:
+          TARGET_FILE: result/target.json
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .erb/scripts/library-dist/report-library-dist.ts

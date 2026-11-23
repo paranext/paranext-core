@@ -1,0 +1,84 @@
+/**
+ * Posts the `Library dist current` commit status for a finished check run. The target file comes
+ * from an artifact that a fork pull request's run can write, so it is treated as data: only the
+ * commit, pull request number and description come from it, and the state comes from the run's
+ * conclusion. Runs under bare `node` with type stripping.
+ */
+
+const fs = require('fs');
+// Explicit `.ts`: bare `node` does not resolve extensionless TypeScript files.
+const { parseTarget, shouldReportResult, buildStatus } = require('./library-dist.util.ts');
+
+async function githubRequest(
+  method: string,
+  url: string,
+  token: string,
+  body?: object,
+): Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }> {
+  return fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+async function main(): Promise<void> {
+  const { TARGET_FILE, CONCLUSION, RUN_URL, REPOSITORY, GITHUB_TOKEN } = process.env;
+
+  let contents: string | undefined;
+  try {
+    contents = TARGET_FILE ? fs.readFileSync(TARGET_FILE, 'utf8') : undefined;
+  } catch {
+    contents = undefined;
+  }
+  const target = contents === undefined ? undefined : parseTarget(contents);
+  if (!target) {
+    console.log('No valid check target; not posting a status');
+    return;
+  }
+
+  if (!CONCLUSION || !RUN_URL || !REPOSITORY || !GITHUB_TOKEN) {
+    console.error('CONCLUSION, RUN_URL, REPOSITORY and GITHUB_TOKEN are required');
+    process.exit(1);
+  }
+
+  const apiRoot = `https://api.github.com/repos/${REPOSITORY}`;
+
+  if (target.pr !== undefined) {
+    const response = await githubRequest('GET', `${apiRoot}/pulls/${target.pr}`, GITHUB_TOKEN);
+    if (!response.ok) {
+      console.error(`Fetching pull request ${target.pr} failed: HTTP ${response.status}`);
+      process.exit(1);
+    }
+    const pull: unknown = await response.json();
+    const head: unknown = pull && typeof pull === 'object' ? Reflect.get(pull, 'head') : undefined;
+    const headSha: unknown =
+      head && typeof head === 'object' ? Reflect.get(head, 'sha') : undefined;
+    if (typeof headSha !== 'string' || !shouldReportResult(target.sha, headSha)) {
+      console.log(`Pull request ${target.pr} has a newer head than ${target.sha}; skipping`);
+      return;
+    }
+  }
+
+  const status = buildStatus(CONCLUSION, target.description, RUN_URL);
+  const response = await githubRequest(
+    'POST',
+    `${apiRoot}/statuses/${target.sha}`,
+    GITHUB_TOKEN,
+    status,
+  );
+  if (!response.ok) {
+    console.error(`Posting the status failed: HTTP ${response.status}`);
+    process.exit(1);
+  }
+  console.log(`Posted ${status.state} for ${target.sha}: ${status.description}`);
+}
+
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});
