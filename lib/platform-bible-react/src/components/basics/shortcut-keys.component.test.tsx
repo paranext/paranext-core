@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import '@testing-library/jest-dom';
@@ -175,6 +175,29 @@ describe('ShortcutKeys tooltip', () => {
     installNoopResizeObserver();
   });
 
+  // Fake timeouts so a test skips the readout's open delay instead of waiting it out. Only the
+  // timeouts, so the popper keeps its real scheduling. Assert with `getBy*`, not `findBy*`: a
+  // `findBy*` timeout is itself a faked timeout, so a missing tooltip would hang instead of failing.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A user whose pauses between actions move the fake clock instead of waiting on it */
+  function setUpUser() {
+    return userEvent.setup({ advanceTimers: vi.advanceTimersByTime, pointerEventsCheck: 0 });
+  }
+
+  /** Lets the pointer rest on the keycaps for as long as the readout waits before opening */
+  function waitOutOpenDelay() {
+    act(() => {
+      vi.advanceTimersByTime(READOUT_OPEN_DELAY_MS);
+    });
+  }
+
   const localizedStrings = { '%shortcutKeys_tooltip%': 'Press {keys}' };
 
   /** Renders the keycaps the way the app does: with the strings provided above them */
@@ -194,7 +217,13 @@ describe('ShortcutKeys tooltip', () => {
   async function hoverKeycaps() {
     const trigger = document.querySelector('[data-slot="tooltip-trigger"]');
     if (!trigger) throw new Error('No tooltip trigger rendered');
-    await userEvent.hover(trigger);
+    await setUpUser().hover(trigger);
+  }
+
+  /** Hovers the keycaps and rests there until the readout opens */
+  async function restOnKeycaps() {
+    await hoverKeycaps();
+    waitOutOpenDelay();
   }
 
   it.each([
@@ -206,8 +235,8 @@ describe('ShortcutKeys tooltip', () => {
   ])('reads %s out as "%s" when the keycaps are hovered', async (hint, expected) => {
     // No TooltipProvider above: a menu does not need one for its keycaps to get a tooltip
     renderWithStrings(<ShortcutKeys hint={hint} />);
-    await hoverKeycaps();
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(expected);
+    await restOnKeycaps();
+    expect(screen.getByRole('tooltip')).toHaveTextContent(expected);
   });
 
   it('joins the keys in the language of the strings, not the runtime locale', async () => {
@@ -216,8 +245,8 @@ describe('ShortcutKeys tooltip', () => {
       { '%shortcutKeys_tooltip%': 'Presione {keys}' },
       'es',
     );
-    await hoverKeycaps();
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Presione Control, Shift y N');
+    await restOnKeycaps();
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Presione Control, Shift y N');
   });
 
   it.each([
@@ -230,15 +259,15 @@ describe('ShortcutKeys tooltip', () => {
       { '%shortcutKeys_tooltip%': 'Presione {keys}' },
       'es',
     );
-    await hoverKeycaps();
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(expected);
+    await restOnKeycaps();
+    expect(screen.getByRole('tooltip')).toHaveTextContent(expected);
   });
 
   it('falls back to the runtime locale for a malformed language tag instead of failing', async () => {
     renderWithStrings(<ShortcutKeys hint="Ctrl++" />, localizedStrings, 'en_US');
-    await hoverKeycaps();
+    await restOnKeycaps();
     // The template still renders; only the language of the "and" may differ
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(/^Press Control .*\+$/);
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/^Press Control .*\+$/);
   });
 
   it('reads strings from the context another copy of this library put in the shared slot', async () => {
@@ -259,8 +288,8 @@ describe('ShortcutKeys tooltip', () => {
           <ShortcutKeysFromThisCopy hint="Ctrl++" />
         </OtherCopysContext.Provider>,
       );
-      await hoverKeycaps();
-      expect(await screen.findByRole('tooltip')).toHaveTextContent('Press Control and +');
+      await restOnKeycaps();
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Press Control and +');
     } finally {
       registry[key] = original;
       vi.resetModules();
@@ -270,18 +299,22 @@ describe('ShortcutKeys tooltip', () => {
   it('waits for the pointer to rest on the keycaps before opening', async () => {
     renderWithStrings(<ShortcutKeys hint="Ctrl++" />);
     await hoverKeycaps();
-    // Not yet: a pointer passing over the keycaps opens nothing
+    // Not yet: a pointer passing over the keycaps opens nothing, even just short of the delay
+    act(() => {
+      vi.advanceTimersByTime(READOUT_OPEN_DELAY_MS - 1);
+    });
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     // Positive control: resting there opens it once the delay has passed
-    expect(
-      await screen.findByRole('tooltip', undefined, { timeout: READOUT_OPEN_DELAY_MS + 1000 }),
-    ).toHaveTextContent('Press Control and +');
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Press Control and +');
   });
 
   it('shows each key name in the tooltip as a keycap', async () => {
     renderWithStrings(<ShortcutKeys hint="Ctrl++" />);
-    await hoverKeycaps();
-    const tooltip = await screen.findByRole('tooltip');
+    await restOnKeycaps();
+    const tooltip = screen.getByRole('tooltip');
     expect(Array.from(tooltip.querySelectorAll('kbd')).map((kbd) => kbd.textContent)).toEqual([
       'Control',
       '+',
@@ -312,14 +345,15 @@ describe('ShortcutKeys tooltip', () => {
     }
 
     async function openMenuAndHoverFirstKeycaps() {
-      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const user = setUpUser();
       await user.click(screen.getByRole('button', { name: 'Project' }));
-      await screen.findByRole('menu');
+      screen.getByRole('menu');
       const trigger = document.querySelector('[role="menu"] [data-slot="tooltip-trigger"]');
       if (!trigger) throw new Error('No keycap tooltip trigger in the menu');
       await user.hover(trigger);
+      waitOutOpenDelay();
       // Positive control: the keycap tooltip is open, so it is the topmost layer
-      await screen.findByRole('tooltip');
+      screen.getByRole('tooltip');
       return user;
     }
 
@@ -366,8 +400,8 @@ describe('ShortcutKeys tooltip', () => {
         </Tooltip>
       </TooltipProvider>,
     );
-    await userEvent.hover(screen.getByRole('button', { name: 'Undo' }));
-    const outerTooltip = await screen.findByRole('tooltip');
+    await setUpUser().hover(screen.getByRole('button', { name: 'Undo' }));
+    const outerTooltip = screen.getByRole('tooltip');
     // Positive control: the keycaps did render inside the outer tooltip
     expect(outerTooltip).toHaveTextContent('Ctrl+Z');
     expect(
