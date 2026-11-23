@@ -251,6 +251,67 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public void SyncActivityState_SerializesTheResourceIds()
+        {
+            var json = JsonSerializer.Serialize(
+                new SyncActivityState(true, ["PROJ1"]) { ResourceIds = ["97196133a859179b"] },
+                WireSerializerOptions()
+            );
+
+            Assert.That(json, Does.Contain("\"resourceIds\":[\"97196133a859179b\"]"));
+        }
+
+        [Test]
+        public void SyncActivityState_ResourceIdsDefaultToEmpty()
+        {
+            // Empty rather than null, so the wire carries `resourceIds: []` and a C# reader can
+            // enumerate it without a null check — including on a `default` instance.
+            var idle = new SyncActivityState(false, []);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(idle.ResourceIds, Is.Not.Null.And.Empty);
+                Assert.That(default(SyncActivityState).ResourceIds, Is.Not.Null.And.Empty);
+                Assert.That(
+                    JsonSerializer.Serialize(idle, WireSerializerOptions()),
+                    Does.Contain("\"resourceIds\":[]")
+                );
+            });
+        }
+
+        [Test]
+        public void SyncActivityState_EqualityIncludesTheResourceIds()
+        {
+            // Publishers dedupe on this equality, so a snapshot that differs from the one before it
+            // only in its resources must not be dropped as a repeat.
+            var none = new SyncActivityState(true, ["PROJ1"]);
+            var one = none with { ResourceIds = ["97196133a859179b"] };
+            var sameInOtherCase = none with { ResourceIds = ["97196133A859179B"] };
+            var two = none with { ResourceIds = ["97196133a859179b", "6c21e835eb8ca3b2"] };
+            var twoReordered = none with { ResourceIds = ["6c21e835eb8ca3b2", "97196133a859179b"] };
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(none == one, Is.False, "no resources versus one");
+                Assert.That(one == two, Is.False, "one resource versus two");
+                Assert.That(two == twoReordered, Is.True, "the same resources in another order");
+                Assert.That(two.GetHashCode(), Is.EqualTo(twoReordered.GetHashCode()));
+                Assert.That(one == sameInOtherCase, Is.True, "the same resource in another case");
+                Assert.That(one.GetHashCode(), Is.EqualTo(sameInOtherCase.GetHashCode()));
+                Assert.That(
+                    none
+                        == default(SyncActivityState) with
+                        {
+                            IsSyncing = true,
+                            ProjectIds = ["PROJ1"],
+                        },
+                    Is.True,
+                    "a default instance's absent resources equal an empty list"
+                );
+            });
+        }
+
+        [Test]
         public void SyncActivityState_EqualityIncludesTheOutcome()
         {
             // Publishers dedupe on this equality (`if (snapshot == _last) return;`), so a closing

@@ -26,6 +26,14 @@ describe('platform-get-resources localized strings', () => {
     expect(Object.keys(es).filter((key) => !(key in en))).toEqual([]);
   });
 
+  it('names the project and the message in the per-project sync failure', () => {
+    const key = '%resources_syncFailedProject_format%';
+    expect(en[key]).toContain('{name}');
+    expect(en[key]).toContain('{message}');
+    expect(es[key]).toContain('{name}');
+    expect(es[key]).toContain('{message}');
+  });
+
   it('has no empty Spanish string', () => {
     expect(Object.keys(es).filter((key) => !es[key].trim())).toEqual([]);
   });

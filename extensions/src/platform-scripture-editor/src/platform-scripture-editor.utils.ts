@@ -25,8 +25,10 @@ import type PapiFrontend from '@papi/frontend';
 import type { MarkerContent, MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
+  formatProjectTitle,
   formatReplacementString,
   getErrorMessage,
+  getProjectDisplayName,
   isLocalizeKey,
   isString,
   isWhiteSpace,
@@ -44,10 +46,11 @@ import {
   UsjReaderWriter,
   UsjTextContentLocation,
 } from 'platform-bible-utils';
+import { isSyncRequestRemovedError, REQUEST_SYNC_COMMAND } from 'platform-bible-utils/experimental';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
-import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
+import type { SyncRequestOptions, UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
 import type { InternetUse } from 'paratext-registration';
 import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
@@ -945,22 +948,31 @@ export function resolveNoteVerseRef(
 
 // #region Editor Title Formatting
 
-const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
+const PROJECT_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format_2%';
 const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
 const READONLY_KEY = '%webView_platformScriptureEditor_title_readonly_indicator%';
 const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
 const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
+/**
+ * Builds the editor's tab title. A localize key title is localized, then `{projectName}` is
+ * replaced with the project's short name (or its id when the name is unavailable) and `{editable}`
+ * with the editable or read-only indicator. `{projectId}` is replaced with the short name too, for
+ * titles written before `{projectName}` existed.
+ *
+ * @param getProjectName Gets the project's `platform.name` setting. When it resolves to something
+ *   missing, blank, or not a string, the title shows the project id instead.
+ */
 export async function formatEditorTitle(
   unformattedTitle: string | undefined,
   projectId: string | undefined,
   isReadOnly: boolean,
-  getProjectName: (projectId: string) => Promise<string>,
+  getProjectName: (projectId: string) => Promise<unknown>,
   getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LanguageStrings>,
 ): Promise<string> {
   let title = unformattedTitle;
   if (!title) {
-    if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
+    if (projectId) title = PROJECT_TITLE_FORMAT_STRING_KEY;
     else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
   }
   if (isLocalizeKey(title)) {
@@ -968,16 +980,15 @@ export async function formatEditorTitle(
       localizeKeys: [EDITABLE_KEY, READONLY_KEY, title],
     });
     const localizedTitleFormatStr = localizedStrings[title];
-    const localizedEditable = localizedStrings[EDITABLE_KEY];
-    const localizedReadonly = localizedStrings[READONLY_KEY];
+    const editable = isReadOnly ? localizedStrings[READONLY_KEY] : localizedStrings[EDITABLE_KEY];
 
-    let projectName = projectId;
-    if (projectId) projectName = await getProjectName(projectId);
-
-    title = formatReplacementString(localizedTitleFormatStr, {
-      projectId: projectName,
-      editable: isReadOnly ? localizedReadonly : localizedEditable,
-    });
+    if (projectId) {
+      const projectName = getProjectDisplayName(projectId, await getProjectName(projectId));
+      title = formatProjectTitle(localizedTitleFormatStr, projectId, projectName, {
+        projectId: projectName,
+        editable,
+      });
+    } else title = formatReplacementString(localizedTitleFormatStr, { projectId, editable });
   }
 
   return title;
@@ -997,21 +1008,27 @@ export async function formatEditorTitle(
  * setting feeds them; without this seam, a swap to `platform.fullName` changes every tab title and
  * no test notices.
  *
- * The project-id fallback is defensive rather than reachable in production: the C# data provider
- * special-cases `platform.name` to `scrText.Name`, and the setting carries a contribution default,
- * so a project served by it always answers. It guards a third-party project data provider that does
- * not, and an unavailable provider.
+ * The id fallback covers a provider with no `platform.name` (for example a third-party provider)
+ * and a failed lookup, such as a project removed while the app was closed. It uses
+ * `getProjectDisplayName`'s rule, so the tab agrees with every other per-project title.
  *
  * @param papi The PAPI backend.
  * @param projectId The project whose name the tab shows.
- * @returns The project's short name, or the project id when it has none.
+ * @returns The project's short name, or the project id when it has none or the lookup fails.
  */
 export async function getTabTitleProjectName(
   papi: typeof PapiBackend,
   projectId: string,
 ): Promise<string> {
-  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  return (await pdp.getSetting('platform.name')) ?? projectId;
+  try {
+    const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+    return getProjectDisplayName(projectId, await pdp.getSetting('platform.name'));
+  } catch (e) {
+    papi.logger.warn(
+      `Error getting the name of project ${projectId} for its title: ${getErrorMessage(e)}`,
+    );
+    return projectId;
+  }
 }
 
 // #endregion Editor Title Formatting
@@ -2024,15 +2041,51 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 // #region Project-Switch Sync
 
 /**
+ * Asks the Send/Receive extension's sync queue to sync `projectIds` as an automatic sync. A request
+ * that was taken out of the queue before it ran (the user removed it, or it was dropped at quit) is
+ * not a failure and only logs at info. Any other rejection is rethrown for the caller to report.
+ *
+ * The queue skips an automatic request for a project whose sync is already running or waiting with
+ * at least the same scope (a request that includes connected resources is not covered by a waiting
+ * one that does not), so edits made during that run go out with the project's next sync.
+ *
+ * The mode, the first-run consent and `suppressNotification` are decided by the caller when it
+ * requests, and a queued request runs later under that decision. If a sync is already running, the
+ * request can wait behind it, and the user can switch interface mode before it starts: a queued
+ * switch-to-Power sync then still runs after the switch back to Simple, and a queued Simple
+ * project-switch sync still runs, without notifications, after a switch to Power. The window needs
+ * a running sync plus a mode change before the queued run starts, and the sync only sends or
+ * receives what the project had pending, so it is accepted. The queue itself re-checks only the
+ * scheduled-sync engine's own "still wanted" condition at run start.
+ */
+async function requestAutoSync(
+  papi: typeof PapiBackend,
+  projectIds: string[],
+  options: SyncRequestOptions,
+): Promise<void> {
+  try {
+    await papi.commands.sendCommand(REQUEST_SYNC_COMMAND, projectIds, 'autoSync', options);
+  } catch (e) {
+    if (isSyncRequestRemovedError(e)) {
+      papi.logger.info(
+        `Automatic sync of ${projectIds.join(', ')} was removed from the sync queue`,
+      );
+      return;
+    }
+    throw e;
+  }
+}
+
+/**
  * Fire-and-forget helper that flushes the outgoing project, then syncs the incoming one. Each sync
  * is independently error-isolated so a failure in one doesn't block the other. Called after a
  * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
  * mode switch — by which time the user may be back in Power mode.
  *
- * Uses `paratextBibleSendReceive.syncProjects` for the incoming project because it also pulls
- * connected resources and translation partners (deep sync). Uses the shallower
- * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
- * flush any local edits — a full deep sync is unnecessary on the way out.
+ * Both syncs request through `paratextBibleSendReceive.requestSync` (the sync queue). The incoming
+ * project asks for a deep sync (it also pulls connected resources and translation partners). The
+ * outgoing project asks for the shallower plain sync because we only need to flush any local edits
+ * — a full deep sync is unnecessary on the way out.
  *
  * The incoming project syncs LAST because these are two separate backend runs and the sync
  * indicator reports the most recent one. Whichever runs last is the verdict the user is shown, and
@@ -2053,11 +2106,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * `interfaceMode` is the caller's read of `platform.interfaceMode` (`undefined` when that read
  * failed). The incoming sync suppresses the dotnet progress toast only for a known `'simple'`,
  * where the toolbar sync indicator is its surface; any other value keeps the toast, since the
- * indicator may not be mounted. The flag is sent only when it is `true`: a dotnet `SyncProjects`
- * that predates the parameter rejects a two-argument call, so omitting it keeps the toast-keeping
- * cases working against that backend. The outgoing `sendReceiveProjects` keeps its toast: its
- * `suppressNotification` would also hide the failure toast, which is this claimless sync's only
- * failure surface.
+ * indicator may not be mounted. The outgoing request keeps its toast: `suppressNotification` would
+ * also hide the failure toast, which is this claimless sync's only failure surface.
  *
  * Gated on first-run sync consent: neither Send/Receive command runs unless the
  * `platform.getAutomaticSyncConsent` command answers `granted`. That command is the main process's
@@ -2096,9 +2146,9 @@ export async function syncOnProjectSwitch(
 
   if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
     try {
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
-        outgoingProjectId,
-      ]);
+      // Skipped when the outgoing project's sync is already running or waiting; edits made during
+      // that run go out with the project's next sync.
+      await requestAutoSync(papi, [outgoingProjectId], { includeConnected: false });
     } catch (e) {
       papi.logger.warn(
         `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
@@ -2111,12 +2161,10 @@ export async function syncOnProjectSwitch(
     // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
     // runs leaves it with no progress surface until it ends. Accepted in
     // `adr-sync-surface-per-interface-mode`.
-    const flag: [true] | [] = interfaceMode === 'simple' ? [true] : [];
-    await papi.commands.sendCommand(
-      'paratextBibleSendReceive.syncProjects',
-      [incomingProjectId],
-      ...flag,
-    );
+    await requestAutoSync(papi, [incomingProjectId], {
+      includeConnected: true,
+      ...(interfaceMode === 'simple' ? { suppressNotification: true } : {}),
+    });
   } catch (e) {
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
@@ -2284,8 +2332,9 @@ const projectIdsDecidingSyncOnSwitchToPower = new Set<string>();
  *   user who started in Power mode never sees the wizard that records consent. Nor does
  *   `notYetSynced`: the switch is the user's own act, and the unsent changes are what it sends. See
  *   `adr-switch-to-power-sends-unsent-changes`.
- * - The mode no longer reads `'power'` when the sync would start: the switch back to Simple makes its
- *   own (consent-gated) sync decision, and anything still unsent goes on the next switch to Power.
+ * - The mode no longer reads `'power'` when the sync is requested: the switch back to Simple makes
+ *   its own (consent-gated) sync decision, and anything still unsent goes on the next switch to
+ *   Power.
  * - The saved internet setting turns Send/Receive off (`VpnRequired` or `Disabled`). Whether the
  *   machine is actually online cannot be known without trying, so offline is left to the sync's own
  *   failure notification.
@@ -2321,7 +2370,7 @@ export async function syncOnSwitchToPower(
   if (!shouldSync) return;
 
   try {
-    await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+    await requestAutoSync(papi, [projectId], { includeConnected: false });
   } catch (e) {
     papi.logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`);
   }
@@ -2750,14 +2799,15 @@ export async function openOrUpdateRelatedPanels(
  * change reaches the provider. Declared as a named type rather than passed as an object literal
  * because an inline literal would trip TypeScript's excess-property check.
  *
- * Exported so `scriptureTextGridWebViewProvider` in `main.ts` types its `openWebViewOptions` with
- * this same type, which catches a _rename_ of `projectId` on either side via the object literal's
- * excess-property check. It does NOT catch an omission: `projectId` has to stay optional, so `{
- * bringToFront: false }` still typechecks and the provider's `openWebViewOptions.projectId ??
- * savedWebView.projectId` would quietly fall back to the stale saved id, leaving the panel on the
- * outgoing project with `typecheck` green. `resolveGridProviderProjectId` pins that precedence and
- * `buildScriptureTextGridWebView` is what the provider calls, so both the rule and its use are
- * covered. (Mirrors `FindWebViewOptions`, which Find exports once and uses on both sides.)
+ * Exported so `ScriptureTextGridWebViewFactory` in `scripture-text-grid-web-view.factory.ts` types
+ * its `openWebViewOptions` with this same type, which catches a _rename_ of `projectId` on either
+ * side via the object literal's excess-property check. It does NOT catch an omission: `projectId`
+ * has to stay optional, so `{ bringToFront: false }` still typechecks and the provider's
+ * `openWebViewOptions.projectId ?? savedWebView.projectId` would quietly fall back to the stale
+ * saved id, leaving the panel on the outgoing project with `typecheck` green.
+ * `resolveGridProviderProjectId` pins that precedence and `buildScriptureTextGridWebView` is what
+ * the provider calls, so both the rule and its use are covered. (Mirrors `FindWebViewOptions`,
+ * which Find exports once and uses on both sides.)
  */
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
 

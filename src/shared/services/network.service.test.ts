@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
+import { isPlatformError } from 'platform-bible-utils';
 
 vi.mock('@shared/services/rpc-handler.factory', () => ({
   createRpcHandler: vi.fn(),
@@ -151,5 +152,51 @@ describe('onDidLoseConnection', () => {
     fireFromHandler?.(undefined);
 
     expect(goodListener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('request error responses', () => {
+  it("throws a PlatformError with the code the .NET data provider put in the error's data", async () => {
+    const networkService = await importNetworkService();
+    vi.mocked(mockRpcHandler.request).mockResolvedValue({
+      jsonrpc: '2.0',
+      id: 1,
+      error: {
+        code: -32000,
+        message: 'Une synchronisation est déjà en cours',
+        data: {
+          type: 'System.InvalidOperationException',
+          message: 'Une synchronisation est déjà en cours',
+          stack: '   at Somewhere()',
+          code: -2146233079,
+          data: { platformErrorCode: 'FAILED_PRECONDITION' },
+        },
+      },
+    });
+    await networkService.initialize();
+
+    const error = await networkService
+      .requestNoRetry('command:test.command')
+      .catch((e: unknown) => e);
+
+    expect(isPlatformError(error)).toBe(true);
+    expect(error).toMatchObject({ code: 'FAILED_PRECONDITION' });
+  });
+
+  it('throws a PlatformError without a code when the error carries none', async () => {
+    const networkService = await importNetworkService();
+    vi.mocked(mockRpcHandler.request).mockResolvedValue({
+      jsonrpc: '2.0',
+      id: 1,
+      error: { code: -32000, message: 'Plain failure' },
+    });
+    await networkService.initialize();
+
+    const error = await networkService
+      .requestNoRetry('command:test.command')
+      .catch((e: unknown) => e);
+
+    expect(isPlatformError(error)).toBe(true);
+    expect(error).not.toHaveProperty('code');
   });
 });

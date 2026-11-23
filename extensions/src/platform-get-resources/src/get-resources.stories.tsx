@@ -194,6 +194,10 @@ type DecoratorConfig = {
   isResourcesError?: boolean;
   onRetryResources?: GetResourcesProps['onRetryResources'];
   onInstallOrRemoveResource?: GetResourcesProps['onInstallOrRemoveResource'];
+  /** Rows already busy when the story opens, e.g. to show the "Waiting for sync…" state */
+  initialIdsBeingHandled?: string[];
+  /** Rows among the busy ones that are waiting for the running sync */
+  idsWaitingForSync?: string[];
 };
 
 /** How long the in-memory "service" pretends an install/remove takes, so the spinner is visible. */
@@ -215,7 +219,9 @@ function createDecorator(config: DecoratorConfig) {
     const [resources, setResources] = useState<DblResourceData[]>(
       config.resources ?? staticResources,
     );
-    const [idsBeingHandled, setIdsBeingHandled] = useState<string[]>([]);
+    const [idsBeingHandled, setIdsBeingHandled] = useState<string[]>(
+      config.initialIdsBeingHandled ?? [],
+    );
 
     // Default install/remove: show the spinner, then flip the resource's installed state after a
     // short delay so the table updates (get → installing → installed, and the reverse for remove).
@@ -248,6 +254,7 @@ function createDecorator(config: DecoratorConfig) {
           isResourcesError: config.isResourcesError ?? false,
           onRetryResources: config.onRetryResources,
           idsBeingHandled,
+          idsWaitingForSync: config.idsWaitingForSync,
           selectedTypes,
           selectedLanguages,
           onSelectedTypesChange: setSelectedTypes,
@@ -272,6 +279,16 @@ export const Default: Story = {
  */
 export const ManyLanguages: Story = {
   decorators: [createDecorator({ resources: manyLanguageResources })],
+};
+
+/**
+ * A row whose Get or update is waiting for the running sync to finish (`idsBeingHandled` plus
+ * `idsWaitingForSync`): its action shows "Waiting for sync…" instead of a spinner.
+ */
+export const WaitingForSync: Story = {
+  decorators: [
+    createDecorator({ initialIdsBeingHandled: ['uid-1'], idsWaitingForSync: ['uid-1'] }),
+  ],
 };
 
 export const Loading: Story = {

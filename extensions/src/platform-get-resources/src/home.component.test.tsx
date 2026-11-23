@@ -61,7 +61,11 @@ function renderHome(onSendReceiveProject: (projectId: string) => Promise<void>) 
       sharedProjectsInfo={SHARED_PROJECTS}
       onSendReceiveProject={onSendReceiveProject}
       localizedStringsWithLoadingState={[
-        { '%resources_get%': 'Get', '%resources_syncFailed_title%': 'Sync failed' },
+        {
+          '%resources_get%': 'Get',
+          '%resources_syncFailed_title%': 'Sync failed',
+          '%resources_syncFailedProject_format%': '{name}: {message}',
+        },
         false,
       ]}
     />,
@@ -207,7 +211,7 @@ describe('Home send/receive failures', () => {
     clickSendReceive();
 
     await waitFor(() => {
-      expect(screen.queryByText('Project is locked by another user')).not.toBeNull();
+      expect(screen.queryByText('SHR: Project is locked by another user')).not.toBeNull();
     });
     expect(screen.queryByText('Sync failed')).not.toBeNull();
   });
@@ -225,9 +229,170 @@ describe('Home send/receive failures', () => {
     await waitFor(() => {
       expect(
         screen.queryByText(
-          'A sync is already in progress. Please wait for it to finish and try again.',
+          'SHR: A sync is already in progress. Please wait for it to finish and try again.',
         ),
       ).not.toBeNull();
+    });
+  });
+
+  it.each([
+    ['doubly prefixed', 'JSON-RPC Request error (-32000): JSON-RPC Request error (-32000): Locked'],
+    ['singly prefixed', 'JSON-RPC Request error (-32000): Locked'],
+    ['unprefixed', 'Locked'],
+  ])('shows the same message when it is %s', async (_label, thrown) => {
+    renderHome(
+      vi.fn(async () => {
+        throw new Error(thrown);
+      }),
+    );
+
+    clickSendReceive();
+
+    await waitFor(() => {
+      expect(screen.queryByText('SHR: Locked')).not.toBeNull();
+    });
+  });
+
+  it('shows a busy refusal without its marker', async () => {
+    renderHome(
+      vi.fn(async () => {
+        throw new Error(
+          'JSON-RPC Request error (-32000): A sync is already running. Try again later. (SYNC_BUSY)',
+        );
+      }),
+    );
+
+    clickSendReceive();
+
+    await waitFor(() => {
+      expect(screen.queryByText('SHR: A sync is already running. Try again later.')).not.toBeNull();
+    });
+  });
+
+  describe('with several projects', () => {
+    const rejections = new Map<string, Error>();
+    const onSendReceiveProject = vi.fn(async (projectId: string) => {
+      const rejection = rejections.get(projectId);
+      if (rejection) throw rejection;
+    });
+    const project = (name: string): SharedProjectsInfo[string] => ({
+      id: name,
+      name,
+      fullName: `${name} full name`,
+      language: 'en',
+      editedStatus: '',
+      lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+    });
+    const renderThree = () =>
+      render(
+        <Home
+          headerContent={undefined}
+          sharedProjectsInfo={{
+            projectOne: project('ONE'),
+            projectTwo: project('TWO'),
+            projectThree: project('THREE'),
+          }}
+          remoteProjectsState="loaded"
+          onSendReceiveProject={onSendReceiveProject}
+          localizedStringsWithLoadingState={[EN_STRINGS, false]}
+        />,
+      );
+    const clickGetOf = (name: string) => {
+      const row = screen.getByText(name).closest('tr');
+      if (!row) throw new Error(`no row for ${name}`);
+      fireEvent.click(within(row).getByRole('button', { name: 'Get' }));
+    };
+
+    beforeEach(() => {
+      rejections.clear();
+      onSendReceiveProject.mockReset();
+      onSendReceiveProject.mockImplementation(async (projectId: string) => {
+        const rejection = rejections.get(projectId);
+        if (rejection) throw rejection;
+      });
+    });
+
+    it('shows each project failure separately, named', async () => {
+      rejections.set('projectOne', new Error('Locked'));
+      rejections.set('projectTwo', new Error('Disk full'));
+      renderThree();
+
+      clickGetOf('ONE');
+      clickGetOf('TWO');
+
+      await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+      expect(screen.getByText('ONE: Locked')).toBeInTheDocument();
+      expect(screen.getByText('TWO: Disk full')).toBeInTheDocument();
+    });
+
+    it('keeps the earlier failures when another project is clicked', async () => {
+      rejections.set('projectOne', new Error('Locked'));
+      rejections.set('projectTwo', new Error('Disk full'));
+      renderThree();
+      clickGetOf('ONE');
+      clickGetOf('TWO');
+      await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+
+      clickGetOf('THREE');
+      await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('projectThree'));
+
+      expect(screen.getAllByRole('alert')).toHaveLength(2);
+      expect(screen.getByText('ONE: Locked')).toBeInTheDocument();
+      expect(screen.getByText('TWO: Disk full')).toBeInTheDocument();
+    });
+
+    it("clears only a project's own failure when that project is clicked again", async () => {
+      rejections.set('projectOne', new Error('Locked'));
+      rejections.set('projectTwo', new Error('Disk full'));
+      renderThree();
+      clickGetOf('ONE');
+      clickGetOf('TWO');
+      await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+
+      rejections.delete('projectOne');
+      clickGetOf('ONE');
+
+      await waitFor(() => expect(screen.queryByText('ONE: Locked')).toBeNull());
+      expect(screen.getByText('TWO: Disk full')).toBeInTheDocument();
+    });
+
+    it("drops a project's failure when another request for it resolves", async () => {
+      // Two requests for one project overlap; the first fails after the second was sent.
+      const settlers: { resolve: () => void; reject: (reason: Error) => void }[] = [];
+      onSendReceiveProject.mockImplementation(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            settlers.push({ resolve, reject });
+          }),
+      );
+      renderThree();
+      clickGetOf('ONE');
+      clickGetOf('ONE');
+      expect(settlers).toHaveLength(2);
+
+      await act(async () => {
+        settlers[0].reject(new Error('Locked'));
+      });
+      await waitFor(() => expect(screen.getByText('ONE: Locked')).toBeInTheDocument());
+
+      await act(async () => {
+        settlers[1].resolve();
+      });
+
+      expect(screen.queryByText('ONE: Locked')).toBeNull();
+    });
+
+    it('shows only the latest failure of a project', async () => {
+      rejections.set('projectOne', new Error('Locked'));
+      renderThree();
+      clickGetOf('ONE');
+      await waitFor(() => expect(screen.getByText('ONE: Locked')).toBeInTheDocument());
+
+      rejections.set('projectOne', new Error('Disk full'));
+      clickGetOf('ONE');
+
+      await waitFor(() => expect(screen.getByText('ONE: Disk full')).toBeInTheDocument());
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
     });
   });
 
@@ -1829,6 +1994,12 @@ describe('Home while a sync runs', () => {
     lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
   });
 
+  const WAITING_LABEL = enString('%resources_syncWaiting_label%');
+  const CLICK_TO_REMOVE = enString('%resources_syncWaiting_clickToRemove%');
+  /** The accessible name of a waiting row's action, which says which project it takes out. */
+  const waitingName = (name: string) =>
+    formatReplacementString(enString('%resources_syncWaiting_remove_format%'), { name });
+
   /**
    * Renders two shared projects that are not downloaded, so each row's action is a "Get" button.
    * With `withLocalProject`, a downloaded, unedited shared project is listed too; its Sync action
@@ -1837,11 +2008,17 @@ describe('Home while a sync runs', () => {
   function renderHomeDuringSync({
     isSendReceiveInProgress = true,
     activeSendReceiveProjects,
+    waitingProjectIds,
     withLocalProject = false,
+    onSendReceiveProject = () => {},
+    onRemoveFromQueue = () => {},
   }: {
     isSendReceiveInProgress?: boolean;
     activeSendReceiveProjects: string[];
+    waitingProjectIds?: string[];
     withLocalProject?: boolean;
+    onSendReceiveProject?: (projectId: string) => void | Promise<void>;
+    onRemoveFromQueue?: (projectId: string) => void | Promise<void>;
   }) {
     const sharedProjectsInfo: SharedProjectsInfo = {
       syncingProject: sharedProject('syncingProject', 'SYN'),
@@ -1867,71 +2044,240 @@ describe('Home while a sync runs', () => {
         remoteProjectsState="loaded"
         isSendReceiveInProgress={isSendReceiveInProgress}
         activeSendReceiveProjects={activeSendReceiveProjects}
-        onSendReceiveProject={() => {}}
+        waitingProjectIds={waitingProjectIds}
+        onSendReceiveProject={onSendReceiveProject}
+        onRemoveFromQueue={onRemoveFromQueue}
         localizedStringsWithLoadingState={[EN_STRINGS, false]}
       />,
     );
   }
 
-  it("disables the other rows' Get buttons while one project syncs", () => {
+  /** The row that lists the project with the given short name. */
+  function rowOf(name: string): HTMLElement {
+    const row = screen.getByText(name).closest('tr');
+    if (!row) throw new Error(`Home rendered no row for ${name}`);
+    return row;
+  }
+
+  async function openLocalRowMenuItem() {
+    const ellipsisTrigger = within(rowOf('LOC')).getAllByRole('button').at(-1);
+    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
+    await userEvent.click(ellipsisTrigger);
+    return screen.findByRole('menuitem');
+  }
+
+  it("keeps the other rows' Get buttons enabled while one project syncs", () => {
     renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'] });
     // The syncing row shows a spinner in place of "Get" but keeps "Get" as its accessible name.
     const getButtons = screen.getAllByRole('button', { name: 'Get' });
     expect(getButtons).toHaveLength(2);
-    getButtons.forEach((button) => expect(button).toBeDisabled());
+    getButtons.forEach((button) => expect(button).toBeEnabled());
     expect(getButtons.filter((button) => button.getAttribute('aria-busy') === 'true')).toHaveLength(
       1,
     );
-    // Only the waiting row explains why it is disabled; the syncing row needs no reason.
-    expect(screen.getAllByRole('group', { name: /: waiting$/ })).toHaveLength(1);
-    expect(screen.getByRole('group', { name: 'Get WAI: waiting' })).toBeInTheDocument();
+    expect(within(rowOf('SYN')).getByRole('button', { name: 'Get' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
   });
 
   it('matches the syncing project whatever the casing of its id', () => {
     // Paratext ids reach Home upper-cased from the backend's sync activity and as the project list
-    // spells them; a mismatch in case must not turn the syncing row into a waiting one.
+    // spells them; a mismatch in case must not leave the syncing row without its spinner.
     renderHomeDuringSync({ activeSendReceiveProjects: ['SYNCINGPROJECT'] });
-    const getButtons = screen.getAllByRole('button', { name: 'Get' });
-    expect(getButtons.filter((button) => button.getAttribute('aria-busy') === 'true')).toHaveLength(
-      1,
+    expect(within(rowOf('SYN')).getByRole('button', { name: 'Get' })).toHaveAttribute(
+      'aria-busy',
+      'true',
     );
-    expect(screen.getAllByRole('group', { name: /: waiting$/ })).toHaveLength(1);
-    expect(screen.getByRole('group', { name: 'Get WAI: waiting' })).toBeInTheDocument();
+    expect(within(rowOf('WAI')).getByRole('button', { name: 'Get' })).not.toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
   });
 
-  it('names a waiting Sync stop after the action and project, and keeps the reason as its tooltip', async () => {
-    // A downloaded project with local edits has Sync as a button of its own
-    render(
+  it('a project in waitingProjectIds shows the waiting button, not a spinner', () => {
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      // Spelled as the queue spells it, which need not match the project list.
+      waitingProjectIds: ['WAITINGPROJECT'],
+    });
+    const waitingButton = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
+    expect(waitingButton).toBeEnabled();
+    expect(waitingButton).not.toHaveAttribute('aria-busy', 'true');
+    expect(waitingButton).toHaveTextContent(WAITING_LABEL);
+    // Positive control: the running row in the same render does show the spinner.
+    expect(within(rowOf('SYN')).getByRole('button', { name: 'Get' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+  });
+
+  describe('one button for a row that is idle, running or waiting', () => {
+    const homeWith = ({
+      waitingProjectIds = [],
+      activeSendReceiveProjects = [],
+    }: {
+      waitingProjectIds?: string[];
+      activeSendReceiveProjects?: string[];
+    }) => (
       <Home
         headerContent={undefined}
-        localProjectsInfo={[
-          {
-            projectId: 'localProject',
-            isPublished: false,
-            fullName: 'LOC full name',
-            name: 'LOC',
-            language: 'en',
-          },
-        ]}
-        sharedProjectsInfo={{
-          syncingProject: sharedProject('syncingProject', 'SYN'),
-          waitingProject: sharedProject('waitingProject', 'WAI'),
-          localProject: { ...sharedProject('localProject', 'LOC'), editedStatus: 'edited' },
-        }}
+        sharedProjectsInfo={{ waitingProject: sharedProject('waitingProject', 'WAI') }}
         remoteProjectsState="loaded"
-        isSendReceiveInProgress
-        activeSendReceiveProjects={['syncingProject']}
-        onSendReceiveProject={() => {}}
+        isSendReceiveInProgress={activeSendReceiveProjects.length > 0}
+        activeSendReceiveProjects={activeSendReceiveProjects}
+        waitingProjectIds={waitingProjectIds}
         localizedStringsWithLoadingState={[EN_STRINGS, false]}
-      />,
+      />
     );
-    const stop = screen.getByRole('group', { name: 'Sync LOC: waiting' });
-    // Every waiting stop has a name of its own, so a screen reader can tell them apart
-    const names = screen.getAllByRole('group').map((group) => group.getAttribute('aria-label'));
-    expect(names).toEqual(expect.arrayContaining(['Sync LOC: waiting', 'Get WAI: waiting']));
-    expect(new Set(names).size).toBe(names.length);
-    stop.focus();
-    expect(await screen.findAllByText('Wait for the current sync to finish')).not.toHaveLength(0);
+
+    it('keeps keyboard focus on the same button when the project is queued and unqueued', () => {
+      const { rerender } = render(homeWith({}));
+      const button = within(rowOf('WAI')).getByRole('button', { name: 'Get' });
+      button.focus();
+      expect(document.activeElement).toBe(button);
+
+      rerender(homeWith({ waitingProjectIds: ['waitingProject'] }));
+      expect(document.activeElement).toBe(button);
+      expect(button).toHaveAccessibleName(waitingName('WAI'));
+      expect(button).toHaveTextContent(WAITING_LABEL);
+
+      rerender(homeWith({}));
+      expect(document.activeElement).toBe(button);
+      expect(button).toHaveAccessibleName('Get');
+    });
+
+    it('keeps keyboard focus through the running spinner as well', () => {
+      const { rerender } = render(homeWith({}));
+      const button = within(rowOf('WAI')).getByRole('button', { name: 'Get' });
+      button.focus();
+
+      rerender(homeWith({ activeSendReceiveProjects: ['waitingProject'] }));
+      expect(document.activeElement).toBe(button);
+
+      rerender(
+        homeWith({
+          activeSendReceiveProjects: ['waitingProject'],
+          waitingProjectIds: ['waitingProject'],
+        }),
+      );
+      expect(document.activeElement).toBe(button);
+    });
+
+    it('does not dim the waiting button with the muted text colour', () => {
+      // The secondary variant's own text colour has the contrast the muted one lacks on it.
+      render(homeWith({ waitingProjectIds: ['waitingProject'] }));
+      const button = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
+      expect(button).toHaveClass('tw:text-secondary-foreground');
+      expect(button).not.toHaveClass('tw:text-muted-foreground');
+    });
+
+    it('uses the foreground colour for the waiting menu item text', async () => {
+      render(
+        <Home
+          headerContent={undefined}
+          localProjectsInfo={[
+            { projectId: 'localProject', isPublished: false, name: 'LOC', language: 'en' },
+          ]}
+          sharedProjectsInfo={{ localProject: sharedProject('localProject', 'LOC') }}
+          remoteProjectsState="loaded"
+          waitingProjectIds={['localProject']}
+          localizedStringsWithLoadingState={[EN_STRINGS, false]}
+        />,
+      );
+      const item = await openLocalRowMenuItem();
+      const text = within(item).getByText(WAITING_LABEL).parentElement;
+      expect(text).toHaveClass('tw:text-foreground');
+      expect(text).not.toHaveClass('tw:text-muted-foreground');
+    });
+  });
+
+  it('shows a running project that was asked for again as waiting for the next run', () => {
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['syncingProject'],
+    });
+    const button = within(rowOf('SYN')).getByRole('button', { name: waitingName('SYN') });
+    expect(button).not.toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('clicking the waiting button asks to take the project out of the queue', async () => {
+    const onRemoveFromQueue = vi.fn();
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['waitingProject'],
+      onRemoveFromQueue,
+      onSendReceiveProject,
+    });
+    fireEvent.click(within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') }));
+    await waitFor(() => expect(onRemoveFromQueue).toHaveBeenCalledWith('waitingProject'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+  });
+
+  it('says in a tooltip that clicking the waiting button removes it from the queue', async () => {
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['waitingProject'],
+    });
+    within(rowOf('WAI'))
+      .getByRole('button', { name: waitingName('WAI') })
+      .focus();
+    expect(await screen.findAllByText(CLICK_TO_REMOVE)).not.toHaveLength(0);
+  });
+
+  it('names each waiting button after its project, starting with its visible text', () => {
+    renderHomeDuringSync({
+      activeSendReceiveProjects: [],
+      waitingProjectIds: ['syncingProject', 'waitingProject'],
+    });
+    const synButton = within(rowOf('SYN')).getByRole('button', { name: waitingName('SYN') });
+    const waiButton = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
+    expect(synButton).toHaveAccessibleName('Waiting. Remove SYN from the sync queue');
+    expect(waiButton).toHaveAccessibleName('Waiting. Remove WAI from the sync queue');
+    // The visible text stays the short label, and the name starts with its words (the ellipsis is
+    // left out of the name because screen readers read it aloud).
+    expect(waiButton).toHaveTextContent(WAITING_LABEL);
+    expect(waiButton.getAttribute('aria-label')?.startsWith(WAITING_LABEL.replace('…', ''))).toBe(
+      true,
+    );
+  });
+
+  it('requests a Get from another row while one project syncs', async () => {
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], onSendReceiveProject });
+    fireEvent.click(within(rowOf('WAI')).getByRole('button', { name: 'Get' }));
+    await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('waitingProject'));
+  });
+
+  it('lets the running row be clicked again to ask for the next run', async () => {
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], onSendReceiveProject });
+    fireEvent.click(within(rowOf('SYN')).getByRole('button', { name: 'Get' }));
+    await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('syncingProject'));
+  });
+
+  it('gets an idle row on double-click while another project syncs', async () => {
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], onSendReceiveProject });
+    fireEvent.doubleClick(rowOf('WAI'));
+    await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('waitingProject'));
+  });
+
+  it('does not ask again on double-click for a row that is running or waiting', async () => {
+    const onSendReceiveProject = vi.fn();
+    const onRemoveFromQueue = vi.fn();
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['waitingProject'],
+      onSendReceiveProject,
+      onRemoveFromQueue,
+    });
+    fireEvent.doubleClick(rowOf('SYN'));
+    fireEvent.doubleClick(rowOf('WAI'));
+    await act(async () => {});
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+    expect(onRemoveFromQueue).not.toHaveBeenCalled();
   });
 
   it('enables every Get button when no sync runs', () => {
@@ -1939,18 +2285,46 @@ describe('Home while a sync runs', () => {
     screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
   });
 
-  it('disables the Sync menu item of a project that is already syncing', async () => {
-    renderHomeDuringSync({ activeSendReceiveProjects: ['localProject'], withLocalProject: true });
-    const row = screen.getByText('LOC').closest('tr');
-    if (!row) throw new Error('Home rendered no row for the local project');
-    const ellipsisTrigger = within(row).getAllByRole('button').at(-1);
-    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
-    await userEvent.click(ellipsisTrigger);
-    const syncItem = await screen.findByRole('menuitem');
-    expect(syncItem).toHaveAttribute('aria-disabled', 'true');
+  it('keeps the Sync menu item of a syncing project usable and named', async () => {
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['localProject'],
+      withLocalProject: true,
+      onSendReceiveProject,
+    });
+    const syncItem = await openLocalRowMenuItem();
+    expect(syncItem).not.toHaveAttribute('aria-disabled', 'true');
+    expect(syncItem).toHaveAttribute('aria-busy', 'true');
+    // The spinner has no text, so the item keeps its name while it shows.
+    expect(syncItem).toHaveAccessibleName('Sync');
+    await userEvent.click(syncItem);
+    expect(onSendReceiveProject).toHaveBeenCalledWith('localProject');
   });
 
-  it('shows an unsupported project its own reason, not the wait reason, while another syncs', () => {
+  it("keeps a row's Sync menu item usable while another project syncs", async () => {
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], withLocalProject: true });
+    const syncItem = await openLocalRowMenuItem();
+    expect(syncItem).not.toHaveAttribute('aria-disabled', 'true');
+    expect(syncItem).toHaveAccessibleName('Sync');
+  });
+
+  it('offers to take a waiting project out of the queue from its menu item', async () => {
+    const onRemoveFromQueue = vi.fn();
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['localProject'],
+      withLocalProject: true,
+      onRemoveFromQueue,
+    });
+    const item = await openLocalRowMenuItem();
+    expect(item).toHaveTextContent(WAITING_LABEL);
+    expect(item).toHaveTextContent(CLICK_TO_REMOVE);
+    expect(item).toHaveAccessibleName(waitingName('LOC'));
+    await userEvent.click(item);
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('localProject');
+  });
+
+  it('shows an unsupported project its own reason while another syncs', () => {
     const unsupportedReasonKey = '%project_unsupported_studyBibleAdditions%';
     const unsupportedReasonText = "Study Bible Additions projects aren't supported yet.";
     render(
@@ -1973,41 +2347,8 @@ describe('Home while a sync runs', () => {
       />,
     );
     expect(screen.getByRole('group', { name: unsupportedReasonText })).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: /: waiting$/ })).toBeNull();
-  });
-
-  it("gives a waiting row's Sync menu item the reason while another project syncs", async () => {
-    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], withLocalProject: true });
-    const row = screen.getByText('LOC').closest('tr');
-    if (!row) throw new Error('Home rendered no row for the local project');
-    const ellipsisTrigger = within(row).getAllByRole('button').at(-1);
-    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
-    await userEvent.click(ellipsisTrigger);
-    const syncItem = await screen.findByRole('menuitem');
-    expect(syncItem).toHaveAttribute('aria-disabled', 'true');
-    expect(syncItem).toHaveTextContent('Wait for the current sync to finish');
-  });
-
-  async function openLocalRowMenuItem() {
-    const row = screen.getByText('LOC').closest('tr');
-    if (!row) throw new Error('Home rendered no row for the local project');
-    const ellipsisTrigger = within(row).getAllByRole('button').at(-1);
-    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
-    await userEvent.click(ellipsisTrigger);
-    return screen.findByRole('menuitem');
-  }
-
-  it("names the syncing row's Sync menu item, which shows only a spinner", async () => {
-    renderHomeDuringSync({ activeSendReceiveProjects: ['localProject'], withLocalProject: true });
-    const syncItem = await openLocalRowMenuItem();
-    expect(syncItem).toHaveAttribute('aria-disabled', 'true');
-    expect(syncItem).toHaveAccessibleName('Sync');
-  });
-
-  it("keeps the wait reason in a waiting row's menu item name", async () => {
-    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], withLocalProject: true });
-    const syncItem = await openLocalRowMenuItem();
-    expect(syncItem).toHaveAccessibleName(/Sync.*Wait for the current sync to finish/s);
+    expect(within(rowOf('BLK')).getByRole('button', { name: 'Get' })).toBeDisabled();
+    expect(within(rowOf('SYN')).getByRole('button', { name: 'Get' })).toBeEnabled();
   });
 });
 
@@ -2146,12 +2487,13 @@ describe('Home while a sync holds the project list', () => {
     expect(screen.queryByText(LINE)).toBeNull();
   });
 
-  it('shows no line once loaded, and keeps the Get buttons disabled during the sync', () => {
+  it('shows no line once loaded, and keeps the Get buttons enabled during the sync', () => {
     render(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loaded' }));
     expect(screen.queryByText(LINE)).toBeNull();
     const getButtons = screen.getAllByRole('button', { name: 'Get' });
     expect(getButtons).toHaveLength(2);
-    getButtons.forEach((button) => expect(button).toBeDisabled());
+    // A click while another sync runs is queued, so nothing is disabled for it.
+    getButtons.forEach((button) => expect(button).toBeEnabled());
   });
 
   it('shows no line while loading when no sync runs', () => {
@@ -2159,15 +2501,203 @@ describe('Home while a sync holds the project list', () => {
     expect(screen.queryByText(LINE)).toBeNull();
   });
 
-  it('drops the line when the list arrives and re-enables rows when the sync ends', () => {
+  it('drops the line when the list arrives and keeps the rows enabled through the sync', () => {
     const { rerender } = render(
       homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loading' }),
     );
     expect(screen.getByText(LINE)).toBeInTheDocument();
     rerender(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loaded' }));
     expect(screen.queryByText(LINE)).toBeNull();
-    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeDisabled());
+    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
     rerender(homeElement({ isSendReceiveInProgress: false, remoteProjectsState: 'loaded' }));
     screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
+  });
+});
+
+/*
+ * A double-click on a row's action sends two clicks a few milliseconds apart, and the queue reports
+ * the first one's outcome in between: the second click lands on a different button (Get becomes
+ * Waiting, Waiting becomes Get). Each row ignores clicks for a short while after its own state
+ * changes, so the pair does one thing, not a request followed by its undoing.
+ */
+describe('Home click settle window after a row changes state', () => {
+  const sharedProject = (name: string): SharedProjectsInfo[string] => ({
+    id: name,
+    name,
+    fullName: `${name} full name`,
+    language: 'en',
+    editedStatus: '',
+    lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+  });
+  const WAITING_LABEL = enString('%resources_syncWaiting_label%');
+  const waitingName = (name: string) =>
+    formatReplacementString(enString('%resources_syncWaiting_remove_format%'), { name });
+
+  const onSendReceiveProject = vi.fn();
+  const onRemoveFromQueue = vi.fn();
+  const onOpenProject = vi.fn();
+
+  const homeWith = ({
+    waitingProjectIds = [],
+    activeSendReceiveProjects = [],
+    isSyncQueueKnown = true,
+  }: {
+    waitingProjectIds?: string[];
+    activeSendReceiveProjects?: string[];
+    isSyncQueueKnown?: boolean;
+  } = {}) => (
+    <Home
+      headerContent={undefined}
+      sharedProjectsInfo={{ projectOne: sharedProject('ONE'), projectTwo: sharedProject('TWO') }}
+      remoteProjectsState="loaded"
+      isSyncQueueKnown={isSyncQueueKnown}
+      isSendReceiveInProgress={activeSendReceiveProjects.length > 0}
+      activeSendReceiveProjects={activeSendReceiveProjects}
+      waitingProjectIds={waitingProjectIds}
+      onSendReceiveProject={onSendReceiveProject}
+      onRemoveFromQueue={onRemoveFromQueue}
+      onOpenProject={onOpenProject}
+      localizedStringsWithLoadingState={[EN_STRINGS, false]}
+    />
+  );
+
+  const rowOf = (name: string): HTMLElement => {
+    const row = screen.getByText(name).closest('tr');
+    if (!row) throw new Error(`Home rendered no row for ${name}`);
+    return row;
+  };
+  const getButton = (name: string) => within(rowOf(name)).getByRole('button', { name: 'Get' });
+  const waitingButton = (name: string) =>
+    within(rowOf(name)).getByRole('button', { name: waitingName(name) });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    onSendReceiveProject.mockReset();
+    onRemoveFromQueue.mockReset();
+    onOpenProject.mockReset();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  it('ignores a click on Waiting that follows a click on Get within the window, then accepts one after it', () => {
+    const { rerender } = render(homeWith());
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).toHaveBeenCalledTimes(1);
+
+    // The queue reports the first click's outcome.
+    rerender(homeWith({ waitingProjectIds: ['projectOne'] }));
+    advance(100);
+    fireEvent.click(waitingButton('ONE'));
+    expect(onRemoveFromQueue).not.toHaveBeenCalled();
+
+    advance(500);
+    fireEvent.click(waitingButton('ONE'));
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('ignores a click on Get that follows a removal within the window, then accepts one after it', () => {
+    const { rerender } = render(homeWith({ waitingProjectIds: ['projectOne'] }));
+    fireEvent.click(waitingButton('ONE'));
+    expect(onRemoveFromQueue).toHaveBeenCalledTimes(1);
+
+    rerender(homeWith());
+    advance(100);
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+
+    advance(500);
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('accepts the first click on a row that was already waiting when Home mounted', () => {
+    render(homeWith({ waitingProjectIds: ['projectOne'] }));
+
+    fireEvent.click(waitingButton('ONE'));
+
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('accepts the first click on a row that is waiting in the queue snapshot that arrives after mount', () => {
+    // The queue's first snapshot lands asynchronously; what it reports was already true at mount.
+    const { rerender } = render(homeWith({ isSyncQueueKnown: false }));
+    rerender(homeWith({ isSyncQueueKnown: true, waitingProjectIds: ['projectOne'] }));
+
+    fireEvent.click(waitingButton('ONE'));
+
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('still settles a change that follows the first snapshot', () => {
+    const { rerender } = render(homeWith({ isSyncQueueKnown: false }));
+    rerender(homeWith({ isSyncQueueKnown: true, waitingProjectIds: ['projectOne'] }));
+    rerender(homeWith({ isSyncQueueKnown: true }));
+
+    fireEvent.click(getButton('ONE'));
+
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+  });
+
+  it('settles each row on its own: a change on one row leaves the others clickable', () => {
+    const { rerender } = render(homeWith());
+    rerender(homeWith({ waitingProjectIds: ['projectOne'] }));
+
+    fireEvent.click(getButton('TWO'));
+
+    expect(onSendReceiveProject).toHaveBeenCalledWith('projectTwo');
+  });
+
+  it('ignores a click on a row whose sync just started running', () => {
+    const { rerender } = render(homeWith());
+    rerender(homeWith({ activeSendReceiveProjects: ['projectOne'] }));
+    advance(100);
+
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+
+    advance(500);
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('ignores a double-click on a row that just changed state', () => {
+    const { rerender } = render(homeWith());
+    rerender(homeWith({ waitingProjectIds: ['projectOne'] }));
+    advance(100);
+
+    fireEvent.doubleClick(rowOf('ONE'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+    expect(onRemoveFromQueue).not.toHaveBeenCalled();
+
+    // The row then leaves the queue; a double-click right after that must not queue it again.
+    rerender(homeWith());
+    advance(100);
+    fireEvent.doubleClick(rowOf('ONE'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+
+    // Positive control: the same row accepts a double-click once idle and settled.
+    advance(600);
+    fireEvent.doubleClick(rowOf('ONE'));
+    expect(onSendReceiveProject).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('does not swallow a deliberate Enter press made after the window', async () => {
+    const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
+    const { rerender } = render(homeWith());
+    rerender(homeWith({ waitingProjectIds: ['projectOne'] }));
+    const button = waitingButton('ONE');
+    button.focus();
+    expect(button).toHaveTextContent(WAITING_LABEL);
+    advance(600);
+
+    await user.keyboard('{Enter}');
+
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('projectOne');
   });
 });

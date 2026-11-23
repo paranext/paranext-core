@@ -7,8 +7,11 @@
  *
  * The body, and what each step proves, is `runInvisibleCharacters` in
  * `e2e-tests/fixtures/no-unasked-edits.body.ts`; its sibling specs run it with the other setting
- * and in the other editable view. ONE test() per spec file on purpose (the isolated fixture is
- * test-scoped, and the setting is seeded before the app starts).
+ * and in the other editable view. One test() per spec: the setting is seeded before the app starts,
+ * so each setting and view gets its own launch.
+ *
+ * This is the only in-app check of row AI-1 (Standard view, setting on); the Simple-mode spec for
+ * the setting on is switched off (TODO(PT-5055)).
  *
  * Runs against an isolated project root: `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/no-unasked-edits-invisible-characters-on-power-standard.spec.ts`.

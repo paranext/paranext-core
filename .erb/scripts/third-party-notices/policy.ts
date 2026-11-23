@@ -135,6 +135,7 @@ export const MERGE_KINDS = {
   copiedPlatformLibraries: 'table',
   separatePrograms: 'table',
   externalExtensions: 'table',
+  externalExtensionCheckouts: 'table',
   product: 'overlay-only',
   // The `*Note` fields document the table they precede for a reader of the committed file. They
   // are read by nothing, so a downstream has nothing to add to them.
@@ -148,6 +149,7 @@ export const MERGE_KINDS = {
   copiedPlatformLibrariesNote: 'base-only',
   separateProgramsNote: 'base-only',
   externalExtensionsNote: 'base-only',
+  externalExtensionCheckoutsNote: 'base-only',
   productNote: 'base-only',
 } as const satisfies Record<keyof Policy, MergeKind>;
 
@@ -265,6 +267,12 @@ export function mergePolicies(
       'externalExtensions',
       base.externalExtensions,
       overlay.externalExtensions,
+      names,
+    ),
+    externalExtensionCheckouts: mergeTable(
+      'externalExtensionCheckouts',
+      base.externalExtensionCheckouts,
+      overlay.externalExtensionCheckouts,
       names,
     ),
     product: overlay.product,

@@ -18,6 +18,11 @@ describe('isSyncActivitySnapshot', () => {
     // A real null: the wire writes `null` for a list it cannot name
     ['projectIds null', { isSyncing: true, projectIds: null }, true],
     ['extra fields', { isSyncing: false, projectIds: [], outcome: 'failed' }, true],
+    ['resourceIds with ids', { isSyncing: true, resourceIds: ['x'] }, true],
+    ['resourceIds null', { isSyncing: true, resourceIds: null }, true],
+    ['resourceIds undefined', { isSyncing: true, resourceIds: undefined }, true],
+    ['resourceIds a string', { isSyncing: true, resourceIds: 'x' }, false],
+    ['resourceIds with a number', { isSyncing: true, resourceIds: [1] }, false],
     ['isSyncing a string', { isSyncing: 'yes' }, false],
     ['isSyncing missing', {}, false],
     ['projectIds a string', { isSyncing: true, projectIds: 'A' }, false],
@@ -41,14 +46,20 @@ describe('toSyncActivity', () => {
     expect(toSyncActivity({ isSyncing: true, projectIds: ['A'] })).toEqual({
       isSyncing: true,
       projectIds: ['A'],
+      resourceIds: [],
     });
   });
 
   test('reads an absent or null list of a running sync as empty', () => {
-    expect(toSyncActivity({ isSyncing: true })).toEqual({ isSyncing: true, projectIds: [] });
+    expect(toSyncActivity({ isSyncing: true })).toEqual({
+      isSyncing: true,
+      projectIds: [],
+      resourceIds: [],
+    });
     expect(toSyncActivity({ isSyncing: true, projectIds: null })).toEqual({
       isSyncing: true,
       projectIds: [],
+      resourceIds: [],
     });
   });
 
@@ -56,13 +67,29 @@ describe('toSyncActivity', () => {
     expect(toSyncActivity({ isSyncing: false, projectIds: ['A'] })).toEqual({
       isSyncing: false,
       projectIds: [],
+      resourceIds: [],
     });
+  });
+});
+
+describe('toSyncActivity resourceIds', () => {
+  test('defaults to an empty list', () => {
+    expect(toSyncActivity({ isSyncing: true }).resourceIds).toEqual([]);
+    expect(toSyncActivity({ isSyncing: true, resourceIds: null }).resourceIds).toEqual([]);
+  });
+
+  test('keeps the resource ids of a running sync', () => {
+    expect(toSyncActivity({ isSyncing: true, resourceIds: ['x'] }).resourceIds).toEqual(['x']);
+  });
+
+  test('blanks the resource ids of an idle snapshot', () => {
+    expect(toSyncActivity({ isSyncing: false, resourceIds: ['x'] }).resourceIds).toEqual([]);
   });
 });
 
 describe('IDLE_SYNC_ACTIVITY', () => {
   test('is idle with no projects', () => {
-    expect(IDLE_SYNC_ACTIVITY).toEqual({ isSyncing: false, projectIds: [] });
+    expect(IDLE_SYNC_ACTIVITY).toEqual({ isSyncing: false, projectIds: [], resourceIds: [] });
   });
 });
 

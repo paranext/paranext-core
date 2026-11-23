@@ -94,6 +94,66 @@ Modules must not enable:
 
 Extensions may bundle additional packages into their own code, provided they meet the security requirements above.
 
+### How the restrictions are enforced
+
+The extension host (`src/extension-host/services/extension.service.ts`) enforces these lists in
+the extension host process:
+
+- **Extension files load through the host's own wrapper, not Node's loader.** `loadExtensionModule`
+  (`extension-sandbox.util.ts`) reads the entry file named by the manifest's `main` and compiles it
+  with `vm.compileFunction`, handing it a plain `module`/`exports` and a bare `require` that calls
+  `requireForExtension`. That `require` returns an extension interface module
+  (`EXTENSION_INTERFACE_MODULE_SPECIFIERS`) or throws. Extension code gets no handle on Node's
+  module loader or cache (`require.cache`, `require.resolve`, `module.constructor`), and dynamic
+  `import()` rejects because no dynamic-import callback is given. `Module.prototype.require` is not
+  replaced: extension files never reach it, and a replacement would not stop a leaked real
+  `require`, whose `.main` and `.cache` reach Node's loader anyway.
+- **Module helpers on `process` are disabled at activation.** `blockProcessModuleAccess` replaces
+  `process.getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`, `loadEnvFile`,
+  `_getActiveHandles`, `_getActiveRequests` and `execve` with functions that throw, and sets
+  `process.mainModule` to `undefined`. It also replaces `process.stdin` with an empty stream: the
+  host's standard input is the null device (`/dev/null`, `NUL` on Windows), so Node would otherwise
+  make it a file stream carrying the whole `fs` module.
+- **Code built from strings is disabled at activation.** `blockCodeGenerationFromStrings` deletes
+  `globalThis.eval` and `globalThis.Function` and locks the `constructor` of the four function
+  prototypes (plain, async, generator, async generator) to a function that throws.
+- **Lockdowns come before any load.** The host gets its extension loader only from
+  `lockDownAndCreateExtensionLoader`, which applies both lockdowns before returning it.
+- **The logger exposes only logging methods.** `papi.logger` in the extension host is a frozen
+  object of the seven logging methods (`createExtensionLogger` in `extension-logger.util.ts`), not
+  the electron-log logger, whose `transports.file` settings could point the log file and
+  `readAllLogs` at any path.
+- **Network:** `fetch` is replaced with `papi.fetch`; `XMLHttpRequest` and `WebSocket` throw.
+- Refusals from the loader and the lockdowns contain the text `not allowed in extensions`.
+
+The regression guard is the `evil` extension's sandbox probes (`extensions/src/evil/evil.js`, which
+logs `Sandbox probes (<phase>): <refused>/<total> refused` and a `<<BAD>>` line per escape, at load,
+at activation and again 3 seconds later to catch a route the host reopens after startup) and
+`src/extension-host/services/extension-sandbox.probes.test.ts`, which runs the same probes in a
+child Node process and fails if any route is open. The running app is checked too: the smoke E2E
+test `e2e-tests/tests/smoke/extension-sandbox.spec.ts` reads every phase's results from the dev app
+through the `evil.getSandboxProbeResults` command, and CI's `check packaged extension sandbox` step
+(`e2e-tests/check-packaged-sandbox-probes.ts`) does the same against the packaged build on Linux,
+Windows and macOS (non-blocking on macOS).
+
+This is an in-process sandbox. It closes the module-loading and string-compilation routes listed
+above, and every extension still shares one JavaScript realm and one `process` with the host, so it
+is not a hard security boundary. As of 2026-11-09 these routes are known to remain open:
+
+- a `net.Socket` built from `process.stdout.constructor` or `process.stderr.constructor`;
+- the rest of the `process` surface, such as `kill`, `send`, `report.writeReport`, `chdir` and
+  `env`;
+- in dev builds, grabbing host functions from stack frames through `Error.prepareStackTrace` and
+  `CallSite.getFunction()`;
+- (added 2026-11-18) after anything in the host has called `fetch` once, Node's built-in HTTP client
+  (undici) on `globalThis[Symbol.for('undici.globalDispatcher.1')]`, whose `dispatch` makes
+  requests that skip `papi.fetch`. Harmless while `papi.fetch` passes requests through unchanged,
+  but a gap if `papi.fetch` ever enforces a policy.
+
+A follow-up audit of the `process` surface is recommended but not filed as of 2026-11-09.
+Process-level isolation (Node's permission model, a process per extension) is out of scope as of
+2026-11-09; see `adr-extensions-load-through-sandbox-loader`.
+
 For the complete and up-to-date list, see the [Module Import Restrictions wiki](https://github.com/paranext/paranext/wiki/Module-import-restrictions).
 
 ---
@@ -115,11 +175,35 @@ bridge on `window.top`. This is defence in depth rather than a boundary: main re
 do not come from the window's page frame, but a web view can drive that frame's bridge, so what
 stops a second channel is that main serves one open port per window and the page keeps the first
 port it is handed; an intercepted port gives an extension no capability it does not already hold
-through `window.papi`. The renderer itself opens no WebSocket to port 8876.
-`blockWebSocketsToPapiNetwork` stops a web view's own `window.WebSocket` (replaced with
-`papi.WebSocket`) from connecting to it, but not the native constructor on `window.top`, which the
-web view can still reach: the web view preamble's `delete window.top` can't remove a
-non-configurable property.
+through `window.papi`. The renderer itself opens no WebSocket to port 8876, so the main process
+cancels every WebSocket request to that port from the windows' session
+(`registerPapiPortRequestBlock` in `src/main/services/papi-port-request-block.util.ts`). That covers
+every frame and every constructor, including the ones a same-origin web view can borrow from the
+renderer: `window.top.WebSocket` (the web view preamble's `delete window.top` can't remove a
+non-configurable property), the `constructor` of a socket it was handed, and a fresh iframe added
+to the top document. Electron keeps one `onBeforeRequest` listener per session, so registering
+another on the default session silently removes the block. As defence in depth, the renderer also
+makes `PapiRendererWebSocket` refuse the port (`blockWebSocketsToPapiNetwork`) and puts it in place
+of the top window's `WebSocket` and the native `constructor` (`replaceTopWindowWebSocket`), so the
+first two routes fail with a clear `Invalid URL` error. See `adr-papi-port-blocked-at-the-session`.
+
+### The renderer's `createElement` guard
+
+Web views are same-origin with the renderer, so `installCreateElementGuard`
+(`renderer-create-element-guard.util.ts`, installed by `initialize` in `web-view.service-shard.ts`)
+lets only the renderer bundle and the Usersnap widget create restricted tags on the app window. To
+do that it takes over parts of the renderer realm, which constrains all renderer code:
+
+- **Do not reassign `window.Error`, or redefine or delete `Error.prepareStackTrace`.** Both are
+  locked after startup and such code throws. Assigning `Error.prepareStackTrace` still works.
+- **Do not reassign `Document.prototype.createElement` / `createElementNS`, or assign them on a
+  document.** Both are non-writable; wrap at a call site instead.
+- **Unit tests that call `initialize()` must mock `installCreateElementGuard`**, as the
+  `web-view.service-shard.*.test.ts` files do: the real installer locks the test realm and refuses
+  a second install. Its own behaviour is tested in `renderer-create-element-guard.install.test.ts`.
+
+What the guard does not stop, and why, is in `adr-create-element-guard-trusts-call-sites` in
+[Architecture-Decisions.md](./Architecture-Decisions.md).
 
 ### Paratext Registry access tokens
 
@@ -151,9 +235,10 @@ type would hand a credential that works off the machine:
 
 - A web page open in the user's browser, which can connect to `ws://localhost:8876` because
   connections are not authenticated.
-- Any installed extension's web view, privilege or not. It can open a native WebSocket to port 8876
-  through `window.top.WebSocket` (see [The renderer's PAPI port](#the-renderers-papi-port)), since
-  the window's CSP allows `ws:` connections, or drive its window's PAPI connection.
+- Any installed extension's web view, privilege or not. The main process blocks it from opening a
+  WebSocket to port 8876 (see [The renderer's PAPI port](#the-renderers-papi-port)), but it can
+  still drive its window's PAPI connection, and reach other renderer internals through
+  `window.top` (for example webpack's chunk-loading global; open work: PT-5065).
 
 The stopgap trusts a header instead of identifying the caller, so any process that leaves `Origin`
 out gets through. Don't treat it as the fix or build on it.

@@ -94,8 +94,8 @@ export class RpcClient implements IRpcMethodRegistrar {
   //
   // TODO(PT-4495): Reconnect is only needed by the extension host. The renderer connects over a
   // MessagePort (see `web-socket.factory.ts`), which survives an OS suspend and does not go through
-  // `blockWebSocketsToPapiNetwork()`. For the extension host, reconnect still needs the
-  // `AsyncVariable` problems above resolved first.
+  // the PAPI-port block in `renderer-web-socket.service.ts`. For the extension host, reconnect
+  // still needs the `AsyncVariable` problems above resolved first.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
   private readonly connectionLostEmitter = new PlatformEventEmitter<void>();
@@ -420,8 +420,9 @@ export class RpcClient implements IRpcMethodRegistrar {
       // Only a connection that was actually established can be lost, which is what
       // `IRpcMethodRegistrar.onDidLoseConnection` promises. A socket that dies during the opening
       // handshake is a failed connection ATTEMPT: `connect()` reports that through its own return
-      // value, and how the app surfaces a startup that never reached the network is owned by
-      // PT-4494 / PT-4495, not by this event.
+      // value. The renderer surfaces a failed first connect through
+      // `initializeNetworkReportingFailure`, and the extension host does not yet (PT-4495); neither
+      // goes through this event.
       //
       // Gating on the status is also what makes the two shapes of a refused startup agree. A
       // refused socket fires `error` then `close`; `onError` settles the attempt through

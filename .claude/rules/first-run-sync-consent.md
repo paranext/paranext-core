@@ -57,10 +57,14 @@ click *is* the consent.
 There is no chokepoint: `commandService.sendCommand` is generic, and gating there would suppress the
 user-initiated paths too. The gate is applied per trigger, so **a new automatic trigger that forgets
 it reintroduces the bug silently**. Reviewers should treat any new `syncProjects` /
-`sendReceiveProjects` call site as needing this gate or an explicit reason why not.
+`sendReceiveProjects` / `requestSync` call site (the sync queue runs whatever it is given; see
+`adr-sync-queue-one-run-at-a-time`) as needing this gate or an explicit reason why not. An
+automatic caller takes its mode and consent decisions when it requests; the queue re-checks only the
+interval engine's "still wanted" condition at run start.
 
 TODO(PT-4774): replace reviewer vigilance with a source-scan test that fails on an ungated
-automatic sync call site, as `SendReceiveWriteLockCoverageTests` does for the C# write gate.
+automatic sync call site (`syncProjects`, `sendReceiveProjects`, `requestSync(…, 'autoSync')`), as
+`SendReceiveWriteLockCoverageTests` does for the C# write gate.
 
 Rationale and rejected alternatives: `adr-first-run-sync-consent` in
 [`Architecture-Decisions.md`](../../.context/standards/Architecture-Decisions.md).

@@ -64,6 +64,15 @@ vi.mock('@renderer/services/web-view-state.service', () => ({
 vi.mock('@renderer/components/settings-tabs/settings-tab.component', () => ({
   TAB_TYPE_SETTINGS_TAB: 'settings-tab',
 }));
+// The real guard locks this jsdom window's `Error` and `Document.prototype`, and refuses a second
+// install, so every re-import here would reject. Its behaviour is tested in
+// `renderer-create-element-guard.install.test.ts`.
+vi.mock('@renderer/services/renderer-create-element-guard.util', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@renderer/services/renderer-create-element-guard.util')
+  >()),
+  installCreateElementGuard: vi.fn(() => ({ rendererBundleFileName: '' })),
+}));
 vi.mock('@renderer/services/usersnap.service', () => ({
   closeOpenUsersnapForm: vi.fn(),
   isUsersnapFormCurrentlyOpen: vi.fn(),

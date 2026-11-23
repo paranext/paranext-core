@@ -61,15 +61,15 @@ Set up pre-requisites, build, and run:
 
 1. Install the version of [`Node.js`](https://nodejs.org/) that matches the version specified in [`package.json`](https://github.com/paranext/paranext-core/blob/main/package.json#L249) at `volta.node` and any other necessary package managers. We strongly recommend using [Volta](#javascript-tool-manager) to detect and install all necessary JavaScript package managers automatically. If you would like to install them manually, see the [JavaScript Tool Manager](#javascript-tool-manager) section for more information on how to determine which JavaScript package managers are required and at which versions.
 
-2. Install [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0).
+2. Install [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
 
    To check if `dotnet` is installed run:
 
    ```bash
    dotnet --version
-   # 8.0.412 [/usr/local/share/dotnet/sdk] (or some other directory)
+   # 10.0.100 (or a later 10.0.* version)
    dotnet --list-sdks
-   # 8.0.412 (or similar 8.* version)
+   # 10.0.100 [/usr/local/share/dotnet/sdk] (or a later 10.0.* version, in some other directory)
    ```
 
 3. **Ruby >= 3.2 and Bundler** - only needed to regenerate `THIRD-PARTY-NOTICES.md`, which is done
@@ -604,9 +604,9 @@ All `test:e2e:*` scripts are there for running variations of the playwright end-
   that attach to an app you started live in `e2e-tests/tests/attached/` instead, so nothing under
   `tests/isolated/` needs a running app
 - `test:e2e-cdp` runs tests that require the application UI to be open already
-- `test:e2e:all` runs every project in `e2e-tests/playwright.config.ts`. It cannot currently pass:
-  `enhanced-resources` attaches to a running app, which that config's global setup refuses to start
-  alongside
+- `test:e2e:all` runs every project in `e2e-tests/playwright.config.ts`: `smoke` and `isolated`.
+  Suites that attach to an app you started (`e2e-tests/tests/attached/` and the local-only part of
+  `e2e-tests/tests/enhanced-resources/`) have no project there and run through `test:e2e-cdp`
 
 ## Storybook
 

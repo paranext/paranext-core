@@ -141,7 +141,7 @@ public sealed class ProgressCapture : ProgressDisplay
         /// <c>AllowAbort</c> stays false. That is a property of the path, not a guarantee
         /// <see cref="Progress"/> provides: a definite sub-task that set <c>AllowAbort = true</c>
         /// would make <see cref="Progress.Cancel"/> reach <c>Thread.Abort()</c>, which throws
-        /// <c>PlatformNotSupportedException</c> on .NET 8.</para>
+        /// <c>PlatformNotSupportedException</c> on .NET 5 and later.</para>
         /// </summary>
         public void Cancel()
         {
@@ -157,9 +157,9 @@ public sealed class ProgressCapture : ProgressDisplay
                 {
                     // See the remarks above: on a definite sub-task that set AllowAbort = true,
                     // Progress.Cancel() can reach Thread.Abort(), which throws
-                    // PlatformNotSupportedException on .NET 8. Cancellation here is cooperative
-                    // (it sets Progress.Cancelled, which the retry loops poll), so swallow the
-                    // abort failure rather than faulting the cross-thread caller.
+                    // PlatformNotSupportedException on .NET 5 and later. Cancellation here is
+                    // cooperative (it sets Progress.Cancelled, which the retry loops poll), so
+                    // swallow the abort failure rather than faulting the cross-thread caller.
                 }
             }
         }

@@ -10,7 +10,9 @@ import {
  * Find the Hello Rock3 WebView frame by activating its dock tab and searching child frames for
  * hello-rock3-specific content.
  *
- * Requires DEV_NOISY=true so that the helloRock3 test extension is loaded.
+ * Requires the spec to launch with `electronLaunchOptions: { envOverrides: { DEV_NOISY: 'true' } }`
+ * (as `overlay-web-view.spec.ts` does) so that the helloRock3 test extension is loaded. A
+ * `DEV_NOISY` exported in the shell is ignored.
  *
  * @returns The Frame object for the hello-rock3 iframe, usable for interactions inside the WebView.
  */
@@ -134,7 +136,8 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
         'click above did not take effect — most likely it was intercepted by an overlapping ' +
         'element, or another tab in the same stack was activated afterwards.'
       : 'Hello Rock3 WebView frame not found within 30s. ' +
-        'Ensure DEV_NOISY=true is set so the helloRock3 test extension loads.',
+        "Launch the spec with `electronLaunchOptions: { envOverrides: { DEV_NOISY: 'true' } }` so the " +
+        'helloRock3 test extension loads; a DEV_NOISY exported in the shell is ignored.',
     // Only the sawHiddenMatch branch ever attempts a recovery click, so this is the last
     // interception it hit, if any — the concrete evidence behind "most likely intercepted" above.
     lastRecoveryError ? { cause: lastRecoveryError } : undefined,

@@ -1,18 +1,21 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { getErrorMessage } from 'platform-bible-utils';
 import type { ResourceAction } from './get-resources.component';
 import { renderGetResourcesWebView } from './get-resources.web-view.test-utils';
 
 const mocks = vi.hoisted(() => {
+  const noResourceIds: string[] = [];
   /** Rejection messages the table saw, which is how the dialog reports a failure to the user. */
   const actionErrors: string[] = [];
   return {
     sendCommand: vi.fn(),
     installDblResource: vi.fn(async () => {}),
     uninstallDblResource: vi.fn(async () => {}),
+    syncActivity: { isSyncing: false, resourceIds: noResourceIds },
+    syncActivityListeners: new Set<() => void>(),
     openResourceFrom: vi.fn<(where: string, projectId: string) => Promise<void>>(async () => {}),
     actionErrors,
   };
@@ -31,6 +34,22 @@ vi.mock('@papi/frontend/react', () => ({
   }),
 }));
 
+vi.mock('./use-sync-activity.hook', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const subscribe = (listener: () => void) => {
+    mocks.syncActivityListeners.add(listener);
+    return () => mocks.syncActivityListeners.delete(listener);
+  };
+  const useMockSyncActivity = () => useSyncExternalStore(subscribe, () => mocks.syncActivity);
+  return { default: useMockSyncActivity, useSyncActivity: useMockSyncActivity };
+});
+
+/** Changes the sync activity the dialog sees, as an activity event would. */
+function setSyncActivity(resourceIds: string[]) {
+  mocks.syncActivity = { isSyncing: resourceIds.length > 0, resourceIds };
+  act(() => mocks.syncActivityListeners.forEach((listener) => listener()));
+}
+
 vi.mock('./open-home-item', () => ({ openResourceFrom: mocks.openResourceFrom }));
 
 // Stand in for the resource table: this test is about which uid the dialog reports after an action,
@@ -43,14 +62,16 @@ vi.mock('./get-resources.component', async (importOriginal) => {
       onInstallOrRemoveResource,
       onOpenResource,
       idsBeingHandled,
+      idsWaitingForSync,
     }: {
       onInstallOrRemoveResource?: (dblEntryUid: string, action: ResourceAction) => unknown;
       onOpenResource?: (projectId: string) => unknown;
       idsBeingHandled?: string[];
+      idsWaitingForSync?: string[];
     }) => {
       // The real table awaits this call and renders whatever it rejects with; ignoring the promise
       // here would drop the outcome and leave the rejection unhandled.
-      const act = (action: ResourceAction) => {
+      const run = (action: ResourceAction) => {
         Promise.resolve(onInstallOrRemoveResource?.('uid-1', action)).catch((error: unknown) => {
           // `getErrorMessage` as the real table does: a `PlatformError` is a plain object, so
           // reading `.message` off an `instanceof Error` check misses it entirely.
@@ -59,10 +80,10 @@ vi.mock('./get-resources.component', async (importOriginal) => {
       };
       return (
         <div>
-          <button type="button" onClick={() => act('install')}>
+          <button type="button" onClick={() => run('install')}>
             install
           </button>
-          <button type="button" onClick={() => act('remove')}>
+          <button type="button" onClick={() => run('remove')}>
             remove
           </button>
           <button type="button" onClick={() => onOpenResource?.('proj-1')}>
@@ -70,6 +91,7 @@ vi.mock('./get-resources.component', async (importOriginal) => {
           </button>
           {/* The rows showing a spinner: the real table renders one per id in this list. */}
           <span data-testid="handling">{(idsBeingHandled ?? []).join(',')}</span>
+          <span data-testid="waiting">{(idsWaitingForSync ?? []).join(',')}</span>
         </div>
       );
     },
@@ -215,5 +237,48 @@ describe('GetResourcesDialog opening a resource', () => {
 
     expect(mocks.openResourceFrom).toHaveBeenCalledTimes(2);
     expect(mocks.openResourceFrom).toHaveBeenCalledWith('Get Resources', 'proj-1');
+  });
+});
+
+describe('GetResourcesDialog waiting for the running sync', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setSyncActivity([]);
+    // An action that stays in flight, so its row keeps showing progress.
+    mocks.installDblResource.mockImplementation(() => new Promise<void>(() => {}));
+    mocks.sendCommand.mockImplementation(async (command: string) =>
+      command === 'platformGetResources.getCachedResources'
+        ? { status: 'available', resources: [] }
+        : undefined,
+    );
+  });
+
+  it('marks a clicked resource the sync holds as waiting, and still calls the provider', async () => {
+    setSyncActivity(['uid-1']);
+    renderGetResourcesWebView();
+
+    fireEvent.click(screen.getByRole('button', { name: 'install' }));
+
+    await waitFor(() => expect(screen.getByTestId('waiting')).toHaveTextContent('uid-1'));
+    expect(mocks.installDblResource).toHaveBeenCalledWith('uid-1');
+  });
+
+  it('marks nothing for a resource the sync holds that the user did not click', () => {
+    setSyncActivity(['uid-1']);
+    renderGetResourcesWebView();
+
+    expect(screen.getByTestId('waiting')).toBeEmptyDOMElement();
+  });
+
+  it('falls back to the in-progress state when the sync releases the resource', async () => {
+    setSyncActivity(['uid-1']);
+    renderGetResourcesWebView();
+    fireEvent.click(screen.getByRole('button', { name: 'install' }));
+    await waitFor(() => expect(screen.getByTestId('waiting')).toHaveTextContent('uid-1'));
+
+    setSyncActivity([]);
+
+    await waitFor(() => expect(screen.getByTestId('waiting')).toBeEmptyDOMElement());
+    expect(screen.getByTestId('handling')).toHaveTextContent('uid-1');
   });
 });

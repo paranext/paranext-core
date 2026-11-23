@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { PARKED_ENHANCED_RESOURCES_SPECS } from './parked-enhanced-resources';
 
 /**
  * Playwright configuration for running E2E tests against an already-running Platform.Bible instance
@@ -14,26 +15,26 @@ const config = defineConfig({
   // both here — run the isolated suite (which includes the find tests under isolated/find) via
   // `npm run test:e2e:isolated`.
   // _example/ contains reference templates, not runnable tests.
-  // manage-books is excluded because a bare `npm run test:e2e-cdp` would otherwise run it against
-  // whatever app is live, and all four of its specs can mutate real projects with no restore.
-  // Cited by symbol rather than line, per .claude/rules/docs-durability.md:
-  // - manage-books-journey.spec.ts bulk-selects every visible book and clicks "Replace entire
-  //   books" in its "Journey 4: Copy from source project" test, against the rotation pool in
-  //   `switchToProjectMissingBook` — zzz7, wgPIDGIN, zzz6, MP1, RH2, ROT.
-  // - manage-books-functional-WP-001.spec.ts deletes GEN in its "should fire onDeleteBooks when
-  //   destructive-confirm Delete is accepted" test.
-  // - manage-books-functional-WP-002.spec.ts creates books through `manageBooks.createBooks`,
-  //   writing USFM stubs that survive a restart; see `ROTATION_FIXTURES_REQUIRING_MISSING_BOOK`
-  //   for the manual cleanup it requires.
-  // - manage-books-commands.spec.ts is safe only by environment. Its `BOGUS_PROJECT_ID` half
-  //   cannot mutate, but `copyCustomVersification` takes whatever real project is not the source as
-  //   its destination, `createBooks` runs against real ESVUS16 relying on the book already being
-  //   present, and `copyBooks` relies on the user not being an administrator on the destination.
-  // Those projects exist on developer machines under ~/.platform.bible/projects, so this is data
-  // loss, not test noise.
-  // Re-enable per-spec once the suite owns a throwaway project root (isolatedProjectRoot), the way
-  // find.fixture does.
-  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**', '**/manage-books/**'],
+  // manage-books is parked and excluded: a bare `npm run test:e2e-cdp` would otherwise run it
+  // against whatever app is live, and its journey and functional specs (and the second `describe`
+  // of `manage-books-commands.spec.ts`) change real projects with no restore. Those projects live
+  // on developer machines under ~/.platform.bible/projects, so that is data loss, not test noise.
+  // Re-enable per spec once the suite owns a throwaway project root (the `isolatedProjectRoot`
+  // launch option, or a temp projects folder as `find.fixture` makes); see
+  // `tests/manage-books/README.md`.
+  // markers-checklist is parked and excluded: its specs are the written scenarios for the Markers
+  // checklist, have never run to completion and need the `wgPIDGIN` project and an app in Power
+  // mode; see `tests/markers-checklist/README.md`.
+  // The parked Enhanced Resources specs are excluded too (`PARKED_ENHANCED_RESOURCES_SPECS`); the
+  // local-only specs in that directory are collected. See `parked-enhanced-resources.ts`.
+  testIgnore: [
+    '**/smoke/**',
+    '**/isolated/**',
+    '**/_example/**',
+    '**/manage-books/**',
+    '**/markers-checklist/**',
+    ...PARKED_ENHANCED_RESOURCES_SPECS,
+  ],
   fullyParallel: false,
   workers: 1,
   reporter: [

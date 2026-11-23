@@ -82,8 +82,8 @@ describe('selected paragraph marker glyph contrast', () => {
   });
 
   it('paints muted text in a selected row with the same swept token', () => {
-    // `--muted-foreground` (the \s1-\s3 headings, the empty-verse placeholder) falls short of
-    // 4.5:1 on `--accent` in the light themes; the row redefines it to the glyph's token instead.
+    // `--muted-foreground` (the empty-verse placeholder) falls short of 4.5:1 on `--accent` in the
+    // light themes; the row redefines it to the glyph's token instead.
     expect(block('.psc-gutter-markers .para.psc-para-marker-selected')).toMatch(
       /--muted-foreground:\s*var\(--accent-foreground\)\s*;/,
     );

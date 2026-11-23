@@ -13,11 +13,11 @@ function editedRef(): MutableRefObject<number | undefined> {
 
 function renderForget(
   initialShouldForget: boolean | undefined,
-  ...refs: MutableRefObject<number | undefined>[]
+  lastEditAt: MutableRefObject<number | undefined>,
 ) {
   return renderHook(
     ({ shouldForget }: { shouldForget: boolean | undefined }) =>
-      useForgetEditsWhen(shouldForget, ...refs),
+      useForgetEditsWhen(shouldForget, lastEditAt),
     { initialProps: { shouldForget: initialShouldForget } },
   );
 }
@@ -62,16 +62,5 @@ describe('useForgetEditsWhen', () => {
     renderForget(true, lastEditAt);
 
     expect(lastEditAt.current).toBeUndefined();
-  });
-
-  it('forgets every edit it is given', () => {
-    const lastEditAt = editedRef();
-    const lastPaneEditAt = editedRef();
-    const { rerender } = renderForget(false, lastEditAt, lastPaneEditAt);
-
-    rerender({ shouldForget: true });
-
-    expect(lastEditAt.current).toBeUndefined();
-    expect(lastPaneEditAt.current).toBeUndefined();
   });
 });
