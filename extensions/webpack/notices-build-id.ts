@@ -1,3 +1,7 @@
+// paranext-core: unused here, kept so template updates merge cleanly. Core's build uses
+// `.erb/scripts/notices-build-id.ts` (run by the root `prebuild`), which is why
+// `extensions/package.json` leaves out the template's `prebuild` scripts.
+
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/notices-build-id.ts
 
 // The code matches paranext-core's `.erb/scripts/notices-build-id.ts` apart from how it finds the
