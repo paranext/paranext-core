@@ -10,8 +10,10 @@
  * which is why this sweeps the column from its opened width down to the Simple column floor rather
  * than measuring once. The stylesheet-level guard for the same mechanism is
  * `usj-nodes-scss-coverage.test.ts` in the extension; this spec is the rendered half, and is what
- * catches a regression that comes from anywhere other than those two custom properties (a gutter
- * width change, a padding change in `_simple-mode.scss`, an engine DOM change).
+ * catches a regression that comes from anywhere other than those two custom properties (a marker
+ * gap change, a padding change in `_simple-mode.scss`, an engine DOM change). It does not catch a
+ * marker clipped at the editor's edge by a narrower gutter: the glyph is anchored to the text
+ * column, so its measured width and gap stay the same.
  *
  * The sample WEB project lacks most of these markers, so the spec rewrites Obadiah 1 through PAPI
  * before opening it. Together they cover margins of 10–20vw and hanging indents from −7.5vw to

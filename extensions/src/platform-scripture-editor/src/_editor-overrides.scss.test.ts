@@ -88,15 +88,13 @@ describe('selected paragraph marker row', () => {
   it('measures the reach in a gutter width registered as a length, not in the paragraph’s own font size', () => {
     // An unregistered `4em` resolves where it is used, so a `\mt1` (166%) would push the bar past
     // the editor's edge, where it is clipped, and a `\cd` (91%) would stop it inside the gutter.
-    // usj-nodes-styles.test.ts pins the registration's syntax in both copies; this pins that the
-    // gutter the reach reads is registered at all, outside a comment.
+    // usj-nodes-styles.test.ts pins the registration and the gutter's value in both copies; this
+    // pins only that the gutter the reach reads is registered and set, outside a comment.
     const usjNodes = readFileSync(USJ_NODES_SCSS_PATH, 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
-    expect(usjNodes).toMatch(
-      /@property --psc-gutter-width\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true[^}]*initial-value:/,
-    );
-    expect(usjNodes).toMatch(/(?:^|\})\s*\.psc-gutter-markers\s*\{[^}]*--psc-gutter-width: 4em;/);
+    expect(usjNodes).toMatch(/@property --psc-gutter-width\s*\{/);
+    expect(usjNodes).toMatch(/(?:^|\})\s*\.psc-gutter-markers\s*\{[^}]*--psc-gutter-width:/);
     const reach = block(SELECTED_ROW)?.match(/--psc-para-marker-selection-reach:([^;]*);/)?.[1];
     expect(reach).toContain('var(--psc-gutter-width)');
   });

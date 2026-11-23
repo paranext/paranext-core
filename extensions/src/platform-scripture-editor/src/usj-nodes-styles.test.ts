@@ -257,10 +257,19 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // different upstream commits, and nothing structural keeps their rule sets in agreement —
     // with each suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation,
     // the ::after outline) can land in one copy and silently miss the other. The demo suite
-    // carries the same four pins, so a fix landing in one copy fails the other's suite until it
+    // carries the same pins, so a fix landing in one copy fails the other's suite until it
     // is forwarded. The gutter indent-compensation block is covered structurally instead:
     // usj-nodes-scss-coverage.test.ts derives it from each copy's base rules and compares the two
     // copies' results, so no pin is needed for it here.
+    const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const ruleBody = (selectors: string[]) => {
+      const match = new RegExp(
+        `(?:^|\\}|;)\\s*${selectors.map(escapeRegExp).join(',\\s*')}\\s*\\{([^}]*)\\}`,
+      ).exec(code);
+      return match?.[1] ?? '';
+    };
+
     it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
       expect(scss).toMatch(
         /\.psc-gutter-markers \.para > \.marker:not\(\.verse\):not\(\.chapter\):first-child,\s*\.psc-gutter-markers \.book > \.marker:first-child \{[^}]*unicode-bidi: isolate;/,
@@ -272,49 +281,66 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
         /\.psc-active-focus \.psc-active-text::before/,
       );
     });
-    it("right-aligns every gutter marker to a gap measured in the editor's own font size", () => {
+    describe('gutter marker geometry', () => {
       // Each length is registered so it computes once, on `.psc-gutter-markers`; unregistered, a
-      // large-font paragraph (`\mt1`) would get a wider gutter than a `\p`.
-      // The marker drops the paragraph's inherited text-indent, which would otherwise collapse or
-      // widen its shrink-to-fit box (a hanging-indent `\q2`'s box would be 0px wide).
-      const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
-      for (const name of ['gutter-width', 'gutter-marker-gap']) {
-        expect(code).toMatch(
-          new RegExp(
-            `@property --psc-${name}\\s*\\{[^}]*syntax:\\s*'<length>'[^}]*inherits:\\s*true[^}]*initial-value:`,
-          ),
-        );
-      }
-      const gutterRoot = /(?:^|\})\s*\.psc-gutter-markers\s*\{([^}]*)\}/.exec(code)?.[1] ?? '';
-      expect(gutterRoot).toContain('--psc-gutter-width: 4em;');
-      expect(gutterRoot).toContain('--psc-gutter-marker-gap: 0.825em;');
-      const marker =
-        /(?:^|\})\s*\.psc-gutter-markers \.para > \.marker:not\(\.verse\):not\(\.chapter\):first-child,\s*\.psc-gutter-markers \.book > \.marker:first-child\s*\{([^}]*)\}/.exec(
-          code,
-        )?.[1] ?? '';
-      expect(marker).toContain('text-indent: 0;');
-      expect(marker).toContain(
-        'right: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap) - 1ch);',
+      // large-font paragraph (`\mt1`) would get a wider gutter than a `\p`. A browser discards a
+      // registration whose initial value is not computationally independent (`4em`), so the value
+      // is pinned as well.
+      it.each(['--psc-gutter-width', '--psc-gutter-marker-gap'])(
+        'registers %s as a length',
+        (name) => {
+          expect(code).toMatch(
+            new RegExp(
+              `@property ${escapeRegExp(name)}\\s*\\{[^}]*syntax:\\s*'<length>'[^}]*inherits:\\s*true[^}]*initial-value:\\s*0px`,
+            ),
+          );
+        },
       );
+      it("sizes the gutter and the marker gap in the editor's own font size", () => {
+        const root = ruleBody(['.psc-gutter-markers']);
+        expect(root).toContain('--psc-gutter-width: 4em;');
+        expect(root).toContain('--psc-gutter-marker-gap: 0.825em;');
+      });
+      it("ends each marker's visible text the marker gap before the text column", () => {
+        const marker = ruleBody([
+          '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child',
+          '.psc-gutter-markers .book > .marker:first-child',
+        ]);
+        // `1ch` is the width of the marker's trailing no-break space only in a monospace font.
+        expect(marker).toContain(
+          'right: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap) - 1ch);',
+        );
+        expect(marker).toContain('font-family: monospace;');
+        // The paragraph's inherited text-indent would collapse or widen this shrink-to-fit box (a
+        // hanging-indent `\q2`'s box would be 0px wide) and shift the glyph in RTL.
+        expect(marker).toContain('text-indent: 0;');
+      });
+      it('anchors the marker by its text-facing edge in RTL', () => {
+        const rtl = ruleBody([
+          ".psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child",
+          ".psc-gutter-markers[dir='rtl'] .book > .marker:first-child",
+        ]);
+        // Without `right: auto` the base rule's `right` still applies, and the marker is painted
+        // over the paragraph's text.
+        expect(rtl).toContain('right: auto;');
+        expect(rtl).toContain(
+          'left: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap));',
+        );
+      });
+      it('draws the active text box 3px past the end of the text column', () => {
+        expect(ruleBody(['.psc-active-focus .psc-active-text::after'])).toContain(
+          'inset-inline-end: -3px;',
+        );
+      });
     });
     it('defines the project-font fallback chain for the footnotes pane too', () => {
       // The pane's read-only rows get project font rules but sit outside `.usfm`, so without this
       // a missing project font would fall to bare `serif` there.
-      const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
       expect(code).toMatch(
         /(?:^|\})\s*\.usfm,\s*\[data-footnotes-pane\]\s*\{\s*--usj-font-fallback:/,
       );
     });
     describe('Simple-mode text sizes follow the project font size', () => {
-      const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
-      const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const ruleBody = (selectors: string[]) => {
-        const match = new RegExp(
-          `(?:^|\\}|;)\\s*${selectors.map(escapeRegExp).join(',\\s*')}\\s*\\{([^}]*)\\}`,
-        ).exec(code);
-        return match?.[1] ?? '';
-      };
-
       it('registers --psc-base-font-size as an inherited length defaulting to 16px', () => {
         expect(code).toMatch(
           /@property --psc-base-font-size\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true[^}]*initial-value:\s*16px/,
@@ -329,7 +355,6 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       // declaration stays on exactly the selector list the editor renders for. A rule is matched
       // from its start, so a declaration in some other rule ending in the same selector can't pass.
       const rules = scss.replace(/\/\*[\s\S]*?\*\//g, '');
-      const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const exactRule = (selectors: string[], declaration: string) =>
         new RegExp(
           `(?:^|\\}|;)\\s*${selectors.map(escapeRegExp).join(',\\s*')}\\s*\\{[^}]*${escapeRegExp(declaration)}`,
@@ -397,13 +422,6 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
           exactRule([".psc-gutter-markers[dir='rtl'] .verse.marker"], 'direction: ltr;'),
         );
       });
-    });
-    it('does not override text-align in the RTL gutter rule (Chrome/Firefox bidi paint quirk)', () => {
-      const rtlGutter = scss
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .match(/\.psc-gutter-markers\[dir='rtl'\] \.para[^{]*\{([^}]*)\}/);
-      expect(rtlGutter).not.toBeNull();
-      expect(rtlGutter?.[1]).not.toContain('text-align');
     });
   });
 });

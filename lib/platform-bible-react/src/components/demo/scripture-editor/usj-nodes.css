@@ -16,7 +16,9 @@
      literal black, so it stays visible against a dark app theme.
    - The source's four `local()`-only Charis SIL `@font-face` rules are dropped.
    The empty-verse caret rules (`.psc-empty-text-active`, `[data-caret-host]`) come from
-   scripture-editors#34, unmerged when copied. */
+   scripture-editors#34, unmerged when copied. The gutter-marker geometry (right-aligned markers,
+   `--psc-gutter-marker-gap`, `text-indent: 0`) and the active text box's `inset-inline-end: -3px`
+   come from paranext/scripture-editors#59, unmerged when copied. */
 
 /* stylelint-disable */
 
@@ -2937,7 +2939,6 @@ span.read img {
   top: 0;
   direction: ltr;
   unicode-bidi: isolate;
-  text-align: right;
   white-space: nowrap;
   /* The paragraph's own text-indent (negative for hanging indents, positive for \p) is inherited,
      and would widen or collapse this shrink-to-fit box and shift the glyph inside it. */
@@ -2952,8 +2953,9 @@ span.read img {
    properties. var(--para-indent) is inherited from the paragraph element (the same variable the
    LTR `right` calc uses), so indented para types get the correct gutter column without per-type
    overrides. The marker's text stays LTR, so its trailing no-break space is on the outer side
-   here and needs no 1ch correction. text-align is not overridden: with `text-indent: 0` the box
-   is exactly as wide as its text, so alignment inside it does not move the glyph. */
+   here and needs no 1ch correction. No text-align is set in either direction: with
+   `text-indent: 0` the box is exactly as wide as its text, so alignment inside it would not move
+   the glyph. */
 .psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child,
 .psc-gutter-markers[dir='rtl'] .book > .marker:first-child {
   right: auto;
@@ -3177,8 +3179,10 @@ span.read img {
   position: absolute;
   inset-inline-start: var(--verse-text-start, 0px);
   /* A little past the text column's end, so a glyph or the caret at the end of a line clears the
-     stroke. No further: in Simple mode the inline-end padding is the character-marker bar, whose
-     trigger starts 4px past the column and would cover a stroke drawn there. */
+     stroke. Platform.Bible's Simple mode replaces this with the same offset divided by the content
+     zoom (_simple-mode.scss), keeping the stroke clear of its character-marker bar's trigger 4px
+     past the column; the extension's simple-mode.scss.test.ts holds that offset equal to its
+     copy's, and the cross-copy pins hold this copy to the same value. */
   inset-inline-end: -3px;
   top: -2px;
   bottom: -2px;

@@ -2,8 +2,8 @@
    https://github.com/paranext/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
    (originally synced from commit ba0e846b3f1:
    https://github.com/paranext/scripture-editors/commit/ba0e846b3f1,
-   with the RTL/bidi gutter-marker fixes and the ::after active-text outline forwarded from the
-   demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
+   with the gutter marker's `unicode-bidi: isolate` and the ::after active-text outline forwarded
+   from the demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
    When re-syncing, see the "Indent compensation" comment in the gutter section below for the
    invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy.
    The empty-verse caret rules (`.psc-empty-text-active`, `[data-caret-host]`) come from
@@ -16,7 +16,10 @@
    no project stylesheet is injected.
    The gutter `\s`-`\s3` rule matches eten-tech-foundation/scripture-editors#486; that PR's
    empty-verse ellipsis changes (`font-weight: normal`, `cursor: text`) are not copied.
-   The source's four `local()`-only Charis SIL @font-face rules are dropped. */
+   The source's four `local()`-only Charis SIL @font-face rules are dropped.
+   The gutter-marker geometry (right-aligned markers, `--psc-gutter-marker-gap`, `text-indent: 0`)
+   and the active text box's `inset-inline-end: -3px` come from paranext/scripture-editors#59,
+   unmerged when copied. */
 
 /* stylelint-disable */
 
@@ -2606,9 +2609,9 @@ $armed-marker-padding: 3px;
 
 /* Gutter marker of a paragraph armed for the two-step merge: the same destructive colour, tint and
    blink as an armed verse marker. Only the marker goes, so the paragraph's text is left untinted.
-   The marker's text does not sit inside its box (the paragraph's first-line indent carries over to
-   it), so the tint is a box drawn behind the text from the bounds StructureKeyboardPlugin measures
-   and publishes; without them it covers the marker's whole box. Either way it gets the armed verse
+   The tint is a box drawn behind the marker's text from the bounds StructureKeyboardPlugin measures
+   and publishes, which leave out the text's trailing no-break space; without them it covers the
+   marker's whole box, space included. Either way it gets the armed verse
    marker's padding. Unlike that blink, this one needs no `verse-delete-armed` gate: the editor puts
    `para-merge-armed` on the marker only while the merge is armed. The selector out-ranks the gutter
    marker's own rule. */
@@ -2946,7 +2949,6 @@ span.read img {
   top: 0;
   direction: ltr;
   unicode-bidi: isolate;
-  text-align: right;
   white-space: nowrap;
   /* The paragraph's own text-indent (negative for hanging indents, positive for \p) is inherited,
      and would widen or collapse this shrink-to-fit box and shift the glyph inside it. */
@@ -3162,8 +3164,9 @@ span.read img {
    properties. var(--para-indent) is inherited from the paragraph element (the same variable the
    LTR `right` calc uses), so indented para types get the correct gutter column without per-type
    overrides. The marker's text stays LTR, so its trailing no-break space is on the outer side
-   here and needs no 1ch correction. text-align is not overridden: with `text-indent: 0` the box
-   is exactly as wide as its text, so alignment inside it does not move the glyph. */
+   here and needs no 1ch correction. No text-align is set in either direction: with
+   `text-indent: 0` the box is exactly as wide as its text, so alignment inside it would not move
+   the glyph. */
 .psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child,
 .psc-gutter-markers[dir='rtl'] .book > .marker:first-child {
   right: auto;
@@ -3196,8 +3199,9 @@ span.read img {
   position: absolute;
   inset-inline-start: var(--verse-text-start, 0px);
   /* A little past the text column's end, so a glyph or the caret at the end of a line clears the
-     stroke. No further: in Simple mode the inline-end padding is the character-marker bar, whose
-     trigger starts 4px past the column and would cover a stroke drawn there. */
+     stroke. Platform.Bible's Simple mode replaces this with the same offset divided by the content
+     zoom (_simple-mode.scss), keeping the stroke clear of its character-marker bar's trigger 4px
+     past the column; simple-mode.scss.test.ts holds the two offsets equal. */
   inset-inline-end: -3px;
   top: -2px;
   bottom: -2px;
