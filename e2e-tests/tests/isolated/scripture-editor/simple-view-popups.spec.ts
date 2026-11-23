@@ -4,9 +4,9 @@
  * no such view: Standard view opens the platform's command palette on `\`, and its formatted
  * rendering is the read-only Preview, where `\` opens nothing.
  *
- * - With the editor's right-click menu open, the menu's own document-capture listener claims `\`
- *   before it can reach the web view's guard (`isEditorContextMenuOpen` inside `handleKeyDown`), so
- *   no inline marker menu opens over it. A positive control (the same key with the menu closed)
+ * - With the right-click menu open, `\` neither opens the inline marker menu nor changes the text.
+ *   The menu is the platform's own, in the app window's top document, and holds the keyboard while
+ *   it is open, so the key goes to the menu. A positive control (the same key with the menu closed)
  *   shows the check is falsifiable.
  * - The inline marker menu stays at interface scale and beside the text it was opened on while the
  *   text is zoomed and scrolled.
@@ -32,6 +32,7 @@ import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
+  platformContextMenu,
   SAMPLE_WEB_PROJECT_ID,
 } from '../../../fixtures/scripture-editor-helpers';
 
@@ -79,8 +80,8 @@ test.describe('scripture editor pop-ups in the Simple-mode view', () => {
     // Standard view (`marker-editable`), whose `\` opens the platform's command palette instead.
     await expect(mainInput).toHaveClass(/\bmarker-hidden\b/, { timeout: 20_000 });
 
-    await test.step('the backslash does not open the inline markers menu while the context menu is open', async () => {
-      const contextMenu = editorFrame.locator('.typeahead-popover.auto-embed-menu');
+    await test.step('the backslash neither opens the inline markers menu nor changes the text while the right-click menu is open', async () => {
+      const contextMenu = platformContextMenu(mainPage);
       // A body paragraph that holds a verse and no note: a click at its centre moves the caret
       // rather than landing on a note caller, which would select that note in the footnotes pane.
       const versePara = editorContainer
@@ -88,10 +89,13 @@ test.describe('scripture editor pop-ups in the Simple-mode view', () => {
         .first();
       await expect(versePara).toBeVisible({ timeout: 30_000 });
       await versePara.click();
-      // ContextMenuPlugin suppresses the menu when the right-click target IS the content-editable
-      // root, so aim at a paragraph inside it.
+      const textBefore = await mainInput.evaluate((element) => element.textContent);
       await versePara.click({ button: 'right' });
-      await expect(contextMenu).toBeAttached({ timeout: 15_000 });
+      await expect(contextMenu).toBeVisible({ timeout: 15_000 });
+      // The menu holds the keyboard once focus is inside it.
+      await expect
+        .poll(() => contextMenu.evaluate((element) => element.contains(document.activeElement)))
+        .toBe(true);
 
       // The inline markers menu's search input (`.marker-menu-search`, the one class unique to this
       // popover's `CommandInput`) is the DOM signal to watch for: its `Popover` has no
@@ -150,13 +154,14 @@ test.describe('scripture editor pop-ups in the Simple-mode view', () => {
         return result;
       });
       expect(strayMarkerMenuSeen).toBe(false);
-      await expect(contextMenu).toBeAttached();
+      await expect(contextMenu).toBeVisible();
+      expect(await mainInput.evaluate((element) => element.textContent)).toBe(textBefore);
 
       // Positive control: the same backslash DOES open the inline markers menu once the context
       // menu is out of the way — proof the check above is falsifiable rather than vacuously true
       // because this view never opens that menu at all.
       await mainPage.keyboard.press('Escape');
-      await expect(contextMenu).not.toBeAttached({ timeout: 15_000 });
+      await expect(contextMenu).toHaveCount(0, { timeout: 15_000 });
       await versePara.click();
       await mainPage.keyboard.press('\\');
       const markerMenuSearch = editorFrame.locator('.marker-menu-search');

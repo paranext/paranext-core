@@ -16,7 +16,7 @@ export interface UseMarkerPaletteFocusOutCaptureOptions {
   /** Whether a marker-palette session is open right now. Read at event time, never captured. */
   isSessionOpen: () => boolean;
   /**
-   * Where to listen. The main editor's web view listens on its `window`; the footnote popover
+   * Where to listen. The main editor's web view listens on its `window`; the footnote editor
    * listens on its `document`. Defaults to `document`, the narrower of the two.
    */
   target?: Window | Document;

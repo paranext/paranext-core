@@ -12714,7 +12714,11 @@ declare module 'shared/services/context-keys.service' {
   export const papiContextKeysService: IContextKeysService;
 }
 declare module 'shared/utils/evaluate-menu-recording-reads.util' {
-  import { EvaluatableMenu, WhenExpressionErrorHandler } from 'platform-bible-utils';
+  import {
+    ContextKeyValue,
+    EvaluatableMenu,
+    WhenExpressionErrorHandler,
+  } from 'platform-bible-utils';
   /**
    * A menu evaluated against the current context keys, with the keys the evaluation actually read
    *
@@ -12743,6 +12747,10 @@ declare module 'shared/utils/evaluate-menu-recording-reads.util' {
    * @param menu The menu document to evaluate
    * @param templateVars Values for `{placeholder}` segments in expression property references
    * @param onError Called for each expression that fails to evaluate
+   * @param requestContextKeys Context keys supplied by the caller for this evaluation. A key present
+   *   here (own property) is answered from it and shadows a shared key of the same name; every other
+   *   key comes from the context keys service. Read keys are recorded either way. (Experimental: this
+   *   parameter is unstable and may change or disappear without notice)
    * @returns The evaluated menu and the set of keys it read
    * @experimental This function is unstable and may change or disappear without notice
    */
@@ -12750,6 +12758,7 @@ declare module 'shared/utils/evaluate-menu-recording-reads.util' {
     menu: T,
     templateVars: Record<string, string | undefined>,
     onError: WhenExpressionErrorHandler,
+    requestContextKeys?: Readonly<Record<string, ContextKeyValue>>,
   ): MenuEvaluationWithReads<T>;
 }
 declare module 'renderer/hooks/papi-hooks/use-evaluated-menu.hook' {
@@ -13003,7 +13012,19 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
         type: 'item';
         id: string;
         label: string | LocalizeKey;
-        icon?: PlatformIconName;
+        /**
+         * Name of a curated icon drawn before the label. Wins over `iconPath` when it names a known
+         * icon.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
+         */
+        iconName?: PlatformIconName;
+        /**
+         * URL of an image drawn before the label, used when `iconName` is absent or not a known icon.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
+         */
+        iconPath?: string;
         shortcut?: string;
         disabled?: boolean;
       }
@@ -13101,7 +13122,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * so this service provides a way for them to request overlays that the renderer hosts on their
    * behalf.
    */
-  import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+  import { ContextKeyValue, LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
   import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
   import type { PaletteFilterMode } from 'platform-bible-react/experimental';
   import type { ReactElement } from 'react';
@@ -13353,6 +13374,39 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    */
   export type { PaletteFilterMode };
   /**
+   * Options of {@link IOverlayService.showContextMenu}
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ShowContextMenuOptions = {
+    /**
+     * Where to draw the menu, relative to the requesting WebView's iframe
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    position?: {
+      x: number;
+      y: number;
+    };
+    /**
+     * Whether the service runs the picked command. Defaults to `true`. With `false` the pick only
+     * resolves the promise, so the caller decides what to do with it. A caller that runs the command
+     * itself should note that an item whose command duplicates another visible item's command cannot
+     * be told apart by the resolved value.
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    shouldRunCommand?: boolean;
+    /**
+     * Context keys for this request only, evaluated by the menu's `when` and `enabledWhen`
+     * expressions as if they were shared context keys. A request key shadows a shared key of the same
+     * name and is never written to the shared context key service.
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    contextKeys?: Record<string, ContextKeyValue>;
+  };
+  /**
    *
    * Service for showing overlays (context menus, popovers, command palettes) that render outside
    * iframe boundaries in the renderer's top-level document. Renderer-only service.
@@ -13370,8 +13424,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
   export interface IOverlayService {
     /**
      * Shows a context menu from menu.json contributions registered for the given webViewType. Fetches
-     * menu data, renders the menu, and auto-executes the selected command. Returns the command string
-     * that was executed, or undefined if dismissed.
+     * menu data, renders the menu, and runs the selected command unless `shouldRunCommand` is
+     * `false`. Returns the picked command string, or undefined if dismissed.
      *
      * The menu is drawn at interface scale, whatever content zoom the requesting WebView's pane is
      * at.
@@ -13380,19 +13434,15 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
      *   from within a WebView iframe.
      * @param options Optional context including the position for the menu
-     * @returns The command string that was executed, or `undefined` if dismissed
+     * @returns The command string that was picked (and run, unless `shouldRunCommand` is `false`), or
+     *   `undefined` if dismissed
      * @throws PlatformError with code ABORTED if replaced by another context menu from the same
      *   WebView
      */
     showContextMenu(
       webViewType: string,
       webViewId: string,
-      options?: {
-        position?: {
-          x: number;
-          y: number;
-        };
-      },
+      options?: ShowContextMenuOptions,
     ): Promise<string | undefined>;
     /**
      * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
@@ -13508,6 +13558,18 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * @param webViewId The ID of the WebView whose command palette should be dismissed
      */
     dismissCommandPalette(webViewId: string): Promise<void>;
+    /**
+     * Dismisses the open context menu for the given WebView, resolving its `showContextMenu` promise
+     * with `undefined`; no command runs. It also cancels a context menu of that WebView that is still
+     * being prepared, so that menu never opens. No-op if the WebView has no context menu open or
+     * being prepared.
+     *
+     * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+     *
+     * @param webViewId The ID of the WebView whose context menu should be dismissed
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    dismissContextMenu(webViewId: string): Promise<void>;
   }
   /**
    * Internal representation of an active overlay stored in the overlay store. Each entry holds the
@@ -15773,6 +15835,17 @@ declare module 'extension-host/extension-types/extension.interface' {
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
 }
+declare module 'renderer/components/web-view-iframe.util' {
+  /**
+   * Finds a WebView's iframe element by its `data-web-view-id` attribute. Only an `iframe` counts:
+   * other elements carry the same attribute (a WebView tab's header does, for tests to find it) and
+   * can come first in the document.
+   *
+   * @param webViewId The webViewId to search for
+   * @returns The iframe element, or null if not found
+   */
+  export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
+}
 declare module 'renderer/services/overlays/overlay-palette-filter.util' {
   /**
    * Renderer-side palette filtering for the overlay service — the IMPLEMENTATION half that
@@ -15921,18 +15994,6 @@ declare module 'renderer/services/overlays/overlay-validation' {
   export function validateCommandPaletteRequest(request: CommandPaletteRequest): void;
 }
 declare module 'renderer/services/overlays/overlay-coordinates' {
-  /**
-   * Coordinate translation utilities for the overlay service. Translates iframe-relative coordinates
-   * to document-relative coordinates, clamps positions to the viewport, and checks WebView
-   * visibility.
-   */
-  /**
-   * Finds a WebView iframe element by its data-web-view-id attribute.
-   *
-   * @param webViewId The webViewId to search for
-   * @returns The iframe element, or null if not found
-   */
-  export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
   /**
    * Translates iframe-relative coordinates to document-relative coordinates using
    * getBoundingClientRect of the WebView iframe. The platform never scales the iframe element itself

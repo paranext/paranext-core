@@ -53,7 +53,7 @@ export interface MarkerPaletteOpenSession<TItem extends { marker: string }>
 
 /**
  * The per-consumer half of a marker-palette session — everything the shared spine cannot own
- * because it differs between the web view and the footnote popover, plus the consumer-owned session
+ * because it differs between the web view and the footnote editor, plus the consumer-owned session
  * bookkeeping the spine drives through narrow callbacks.
  */
 export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }> {

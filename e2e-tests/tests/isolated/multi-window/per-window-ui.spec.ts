@@ -8,16 +8,16 @@
  * included, which cannot name one — to the focused window. Nothing pinned any of that behaviour —
  * this spec is the regression guard that does.
  *
- * Two tests. The first runs in one Electron instance (each launch costs 30+ seconds, so the
- * scenarios share two windows), asserting in order:
+ * One test, in one Electron instance (each launch costs 30+ seconds, so the scenarios share two
+ * windows), asserting in order:
  *
  * 1. Per-window navigation target: a window's toolbar BCV control enables only when THAT window holds
  *    a scripture-navigable web view — window 1 opening an editor must not enable window 2's
  *    control, and each window's control follows its own window's tabs.
  * 2. Web-view placement: opening an editor through the generic command lands in the FOCUSED window
  *    (its iframe attaches in that window's document and in no other).
- * 3. Overlays: a popover raised from INSIDE window 2's web view iframe (through the iframe's inherited
- *    papi) renders in window 2's document and nowhere else.
+ * 3. Overlays: a popover and a context menu raised from INSIDE window 2's web view iframe (through the
+ *    iframe's inherited papi) render in window 2's document and nowhere else.
  * 4. Dialogs: a modal dialog requested through the generic `dialog:showDialog` renders in the focused
  *    window only, and dismissing it resolves the pending request.
  * 5. Scroll groups: deliberately app-global — one group's reference drives the toolbars of BOTH
@@ -26,10 +26,6 @@
  *    in the focused window, not in a minimized background window.
  * 7. Probe: a notification sent while the routing-target window is MINIMIZED (no window focused) —
  *    documents the observed behaviour (see the probe section comment) rather than assuming one.
- *
- * The second, in an instance of its own, asserts that a context menu raised from INSIDE window 2's
- * web view renders in window 2's document and nowhere else. It is an expected failure until PT-5009
- * is fixed, and is kept apart so that marker cannot hide a failure in the first test.
  *
  * ## App configuration
  *
@@ -394,7 +390,29 @@ test.describe('per-window UI isolation', () => {
     await dismissPopoverFromWebView(editorFrame2, overlayId);
     await expect(popover2).toHaveCount(0, { timeout: 15_000 });
     logStep('popover from window 2 web view rendered in window 2 only');
-    // The context menu, the other overlay kind raised through the inherited papi, is the next test.
+
+    // The context menu takes a different path from the popover — the menu is fetched from the web
+    // view type's contributions before anything renders, so a regression that resolved
+    // contributions against the wrong window would surface here and not above. showContextMenu
+    // stays pending until the menu is dismissed, so the promise is held un-awaited while the DOM is
+    // asserted.
+    const contextMenuPromise = showContextMenuFromWebView(
+      editorFrame2,
+      SCRIPTURE_EDITOR_WEB_VIEW_TYPE,
+    );
+    // The request stays pending when the menu never renders; its rejection at teardown must not
+    // surface as an unhandled rejection.
+    contextMenuPromise.catch(() => undefined);
+    // The rendered menu, not `[data-overlay-context-menu]`: that marks the trigger, which is a
+    // zero-size, opacity-0, aria-hidden anchor button and so is never visible by design.
+    const contextMenu2 = page2.locator('.overlay-context-menu-content');
+    await expect(contextMenu2).toBeVisible({ timeout: 15_000 });
+    await expect(mainPage.locator('.overlay-context-menu-content')).toHaveCount(0);
+    // Escape dismisses it, which resolves the pending request with undefined (no command chosen).
+    await page2.keyboard.press('Escape');
+    expect(await contextMenuPromise).toBeUndefined();
+    await expect(contextMenu2).toHaveCount(0, { timeout: 15_000 });
+    logStep('context menu from window 2 web view rendered in window 2 only');
 
     // ── Modal dialog through the generic request lands in the FOCUSED window ───────────────────
     // Window 2 still holds focus. The pending request resolves only when the dialog is answered
@@ -529,59 +547,5 @@ test.describe('per-window UI isolation', () => {
     expect(wholeLog).toContain(RENDERER_STARTING_LOG);
     FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
     expect(wholeLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
-  });
-
-  test("a context menu raised from window 2's web view renders only in window 2", async ({
-    electronApp,
-    mainPage,
-  }) => {
-    // A test of its own rather than a section of the one above, at the cost of a second launch:
-    // `test.fail` is satisfied by ANY failure, so marking the test above would also hide a
-    // regression in every scenario after this one. The window and editor setup below is the same
-    // as the test above's, which is what asserts it; the marker sits just before the one
-    // assertion that is expected to fail, so a failure in that setup is not hidden by it.
-    await waitForAppReady(mainPage, { timeout: 180_000 });
-    await expect(homeTabTitle(mainPage)).toBeAttached({ timeout: 60_000 });
-    const page2 = await createSecondWindow(electronApp);
-    const window2Id = getWindowIdOfPage(page2);
-    await waitForRendererRegistered(window2Id, 120_000);
-    // Proves window 2's initial loadLayout finished, which is why the editor open below can skip
-    // its own guard for that race (see the test above).
-    await expectWindowDockHasOnlyHomeTab(page2);
-    await waitForProjectMetadata(
-      (project) => project.id?.toLowerCase() === SAMPLE_WEB_PROJECT_ID,
-      'the bundled sample WEB project',
-      WEBSOCKET_PORT,
-      60_000,
-    );
-    await focusWindowAndWaitForRouting(electronApp, window2Id);
-    const editorId2 = await openScriptureEditorForProject(page2, SAMPLE_WEB_PROJECT_ID, {
-      skipInitialLayoutGuard: true,
-    });
-    await expect(mainPage.locator(`iframe[data-web-view-id="${editorId2}"]`)).toHaveCount(0);
-    const editorFrame2 = await getWebViewFrame(page2, editorId2);
-
-    // The popover proof in the test above covers one overlay kind through the inherited papi; the
-    // context menu takes a different path — the menu is fetched from the web view type's
-    // contributions before anything renders, so a regression that resolved contributions against
-    // the wrong window would surface here and not there. showContextMenu stays pending until the
-    // menu is dismissed, so the promise is held un-awaited while the DOM is asserted.
-    const contextMenuPromise = showContextMenuFromWebView(
-      editorFrame2,
-      SCRIPTURE_EDITOR_WEB_VIEW_TYPE,
-    );
-    // The request stays pending when the menu never renders; its rejection at teardown must not
-    // surface as an unhandled rejection.
-    contextMenuPromise.catch(() => undefined);
-    // The rendered menu, not `[data-overlay-context-menu]`: that marks the trigger, which is a
-    // zero-size, opacity-0, aria-hidden anchor button and so is never visible by design.
-    const contextMenu2 = page2.locator('.overlay-context-menu-content');
-    test.fail(true, "PT-5009: a context menu raised from a second window's web view never renders");
-    await expect(contextMenu2).toBeVisible({ timeout: 15_000 });
-    await expect(mainPage.locator('.overlay-context-menu-content')).toHaveCount(0);
-    // Escape dismisses it, which resolves the pending request with undefined (no command chosen).
-    await page2.keyboard.press('Escape');
-    expect(await contextMenuPromise).toBeUndefined();
-    await expect(contextMenu2).toHaveCount(0, { timeout: 15_000 });
   });
 });

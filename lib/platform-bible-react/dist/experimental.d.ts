@@ -88,6 +88,50 @@ export declare function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem):
 type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 /** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
 export type ScopeWithRange = Scope | "range";
+/**
+ * Whether a menu list reserves a leading icon slot, so every label in the list lines up. The slot
+ * is 16px, the size of a named icon; an image icon is capped to it.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type LeadingIconSlot = "none" | "icon";
+/**
+ * The fields of a menu item that decide whether it shows a leading icon
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ItemWithLeadingIcon = {
+	/**
+	 * Name of the item's leading icon
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconNameBefore?: string;
+	/**
+	 * Image path of the item's leading icon
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconPathBefore?: string;
+	/**
+	 * Defined on a checkbox item, whose check indicator takes the leading slot
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	checked?: boolean;
+};
+/**
+ * Picks the leading icon slot for one rendered list of menu items (one dropdown content, one
+ * submenu content, or one menubar menu). Items without a leading icon reserve the same slot as the
+ * items that have one, so all labels in the list start at the same position.
+ *
+ * @param items The items rendered in the list, including submenu trigger items
+ * @returns `'icon'` if any item has a leading icon — a known named icon or an image path — or is a
+ *   checkbox item (`checked` is defined), and `'none'` otherwise. An unknown icon name counts only
+ *   through the image path beside it, if any
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export declare function getLeadingIconSlot(items: ItemWithLeadingIcon[]): LeadingIconSlot;
 /** Visual layout variant for the scope options. */
 export type ScopeSelectorVariant = "radio" | "dropdown";
 /**
@@ -1417,7 +1461,7 @@ export interface MarkerPaletteOpenSession<TItem extends {
 }
 /**
  * The per-consumer half of a marker-palette session — everything the shared spine cannot own
- * because it differs between the web view and the footnote popover, plus the consumer-owned session
+ * because it differs between the web view and the footnote editor, plus the consumer-owned session
  * bookkeeping the spine drives through narrow callbacks.
  */
 export interface RunMarkerPaletteSessionOptions<TItem extends {
@@ -1543,7 +1587,7 @@ export declare function stripMarkerNestingPrefix(markerText: string): string;
  * {@link MarkerPaletteSessionState.isNoteMarker}, so its Space branch can apply PT9's note rule. The
  * table cannot answer this from its own `items`: a note marker a palette does not offer is missing
  * from that list precisely in the cases the rule exists for — the Enter palette, whose source is
- * paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote popover,
+ * paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote editor,
  * which offers note-INTERNAL markers. The stylesheet knows `f` is a note either way.
  *
  * Normalization matches the visible list's: case-folded, with the `+` nesting prefix stripped from
@@ -1633,7 +1677,7 @@ export interface UseMarkerPaletteCompositionCloseOptions {
 	/** Closes the open palette. */
 	dismiss: () => void;
 	/**
-	 * Where to listen. The main editor's web view listens on its `window`; the footnote popover
+	 * Where to listen. The main editor's web view listens on its `window`; the footnote editor
 	 * listens on its `document`. Defaults to `document`, which is the narrower of the two.
 	 */
 	target?: Window | Document;
@@ -1720,7 +1764,7 @@ export interface UseMarkerPaletteFocusOutCaptureOptions {
 	/** Whether a marker-palette session is open right now. Read at event time, never captured. */
 	isSessionOpen: () => boolean;
 	/**
-	 * Where to listen. The main editor's web view listens on its `window`; the footnote popover
+	 * Where to listen. The main editor's web view listens on its `window`; the footnote editor
 	 * listens on its `document`. Defaults to `document`, the narrower of the two.
 	 */
 	target?: Window | Document;
@@ -1754,12 +1798,12 @@ export declare function useMarkerPaletteFocusOutCapture({ containerRef, editorRe
  * editor rather than to the document as a whole.
  *
  * The menu itself renders through a `ReactDOM.createPortal` to `document.body`, and every
- * `ContextMenuPlugin` instance on the page — the main Standard-view editor and the footnote-editor
- * popover each mount their own — shares the same portal classes
- * (`.typeahead-popover.auto-embed-menu`), so a bare `document.querySelector` for that class cannot
- * tell whose menu is open. The editor package instead marks the FOCUSED editor's own root with
- * `aria-controls="editor-context-menu"` for exactly as long as its menu stays open (removed again
- * on close), which is the one signal that is genuinely per-editor.
+ * `ContextMenuPlugin` instance on the page — each editor that shows the built-in menu mounts its
+ * own — shares the same portal classes (`.typeahead-popover.auto-embed-menu`), so a bare
+ * `document.querySelector` for that class cannot tell whose menu is open. The editor package
+ * instead marks the FOCUSED editor's own root with `aria-controls="editor-context-menu"` for
+ * exactly as long as its menu stays open (removed again on close), which is the one signal that is
+ * genuinely per-editor.
  */
 /**
  * @param editorRoot The editor's own DOM root (the `.editor-input` element the menu marks), or a
@@ -1941,6 +1985,52 @@ export type DeveloperSectionProps = {
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare function DeveloperSection({ localizedStrings, selectedServer, onServerChange, disabled, }: DeveloperSectionProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Props for {@link MenuItemIcon}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type MenuItemIconProps = {
+	/**
+	 * Uri path of the image to display. Ignored when `iconName` names a known icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	icon?: string;
+	/**
+	 * Lucide icon name to display. Wins over `icon` when both are set, unless the name is not one of
+	 * the known icons: then `icon` is shown, and with no `icon` the slot counts as having no icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconName?: string;
+	/**
+	 * The label of the menu item
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	menuLabel: string;
+	/**
+	 * Whether the icon is leading or trailing
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	leading?: boolean;
+	/**
+	 * For a leading icon: the slot its list reserves. An item without an icon renders an empty spacer
+	 * the size of that slot so its label lines up with the labels of the items that have an icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	leadingSlot?: LeadingIconSlot;
+};
+/**
+ * Draws a menu item's icon: a named icon, an image, or (for a leading icon in a list that reserves
+ * a slot) an empty spacer so labels line up.
+ *
+ * @experimental This component is unstable and may change or disappear without notice
+ */
+export declare function MenuItemIcon({ icon, iconName, menuLabel, leading, leadingSlot }: MenuItemIconProps): import("react/jsx-runtime").JSX.Element | undefined;
+/**
  * Props for {@link ShortcutKeys}.
  *
  * @experimental This type is unstable and may change or disappear without notice
@@ -1968,6 +2058,179 @@ export type ShortcutKeysProps = {
  * @experimental This component is unstable and may change or disappear without notice
  */
 export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * What the platform context menu needs to know about one right-click (or keyboard-raised context
+ * menu) in an editor.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export type EditorContextMenuRequest = {
+	/**
+	 * Frame-relative position the menu opens at, in the coordinates `showContextMenu` expects.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	position: {
+		x: number;
+		y: number;
+	};
+	/**
+	 * Whether the browser selection is non-collapsed and inside the container, or the host reports a
+	 * non-text selection.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	hasSelection: boolean;
+	/**
+	 * Text of the browser selection when it is inside the container, `''` otherwise.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	selectedText: string;
+	/**
+	 * Whether the context menu came from the keyboard (Shift+F10, the Menu key) rather than a mouse
+	 * click.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	isKeyboardInvoked: boolean;
+};
+/**
+ * Options for {@link useEditorContextMenu}.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export type UseEditorContextMenuOptions = {
+	/**
+	 * The editor's own element. Never a wrapper that holds other editors: a right-click anywhere
+	 * inside it is claimed.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	containerRef: React$1.RefObject<HTMLElement | null>;
+	/**
+	 * Whether right-clicks are claimed. Defaults to `true`.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	isEnabled?: boolean;
+	/**
+	 * Reports a selection that is not a browser range (for example a selected paragraph marker), so
+	 * Copy stays enabled for it.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	hasNonTextSelection?: () => boolean;
+	/**
+	 * Opens the platform menu and resolves with the picked command, or `undefined` when the menu
+	 * closed without a pick.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	requestMenu: (request: EditorContextMenuRequest) => Promise<string | undefined>;
+	/**
+	 * Closes the open platform menu.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	dismissMenu: () => void | Promise<void>;
+	/**
+	 * Runs synchronously in the continuation of `requestMenu` when the user picked a command.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	onPick: (command: string, request: EditorContextMenuRequest) => void;
+	/**
+	 * Receives any rejection of `requestMenu` or `dismissMenu` other than the expected ones (a newer
+	 * menu replaced this one, debounce, tab not visible), and anything `onPick` throws. The hook
+	 * swallows an unexpected failure only when this is absent, and never lets a throwing `onError`
+	 * escape.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	onError?: (error: unknown) => void;
+};
+/**
+ * What {@link useEditorContextMenu} hands back.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export type UseEditorContextMenuResult = {
+	/**
+	 * Closes the pending menu, if any. For the host's own reasons (a book or chapter change).
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	dismiss: () => void;
+	/**
+	 * Whether a request is open: true from the right-click until the request settles, is dismissed or
+	 * dropped (the user clicks back into the frame), or the hook unmounts.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	isPending: () => boolean;
+};
+/**
+ * Claims the right-click inside one editor, samples what the menu needs to know, asks the host to
+ * open the platform context menu, and hands the picked command back. The library cannot reach PAPI,
+ * so the host passes the two platform calls in.
+ *
+ * The listeners sit on the frame's own document and window and resolve `containerRef.current` when
+ * an event arrives, so a container that mounts late or is rebuilt is still served. The container
+ * must be the editor's own element, never a wrapper that holds other editors, and must live in the
+ * document the hook runs in.
+ *
+ * A `wheel`, `touchmove` or a `pointerdown` in the frame closes the open menu (a `pointerdown` also
+ * drops the request, so a late pick never reaches `onPick`, except the right-click the hook itself
+ * claims). Not a `scroll` listener: opening the menu blurs the editor, which can scroll the frame
+ * by itself and would close the menu the moment it opens.
+ *
+ * A pick that resolves after `dismiss()`, after the pointer-down drop, or after unmount is ignored.
+ *
+ * One instance per editor.
+ *
+ * @param options See {@link UseEditorContextMenuOptions}
+ * @returns `dismiss` and `isPending`, see {@link UseEditorContextMenuResult}
+ * @experimental This hook is unstable and may change shape or disappear without notice
+ */
+export declare function useEditorContextMenu(options: UseEditorContextMenuOptions): UseEditorContextMenuResult;
+/**
+ * Runs `action`, then puts the browser selection back where it was if `action` moved it.
+ *
+ * The Scripture editor's copy (with no clipboard event to write to) selects a hidden element it
+ * appends at the end of the document, copies that way, and removes the element, which leaves the
+ * browser selection at the end of the document. The `selectionchange` that follows makes a
+ * read-only editor take that as its own selection, and anything that follows the caret (the
+ * scroll-group reference) moves there. Putting the selection back in the same turn means that event
+ * finds the user's selection again.
+ *
+ * A selection whose nodes the action removed is not put back: the browser ignores a selection on
+ * nodes outside the document. Nothing is kept when there is no browser selection to begin with, for
+ * example while a paragraph marker is the editor's selection.
+ *
+ * @param action What to run
+ * @param doc The document whose selection to keep; without one, `action` just runs
+ * @experimental This function is unstable and may change shape or disappear without notice
+ */
+export declare function runKeepingBrowserSelection(action: () => void, doc?: Document | undefined): void;
+/**
+ * Gives keyboard focus back to an editor without moving its selection.
+ *
+ * The editor's `focus()` re-asserts the selection the editor holds, and with none it selects the
+ * end of the document. It also re-reads the browser selection, which the editor's own copy leaves
+ * at the end of the document (it copies by selecting a hidden element appended there). So `focus()`
+ * is called only when the editor is editable and holds a selection to land on. Otherwise the
+ * frame's window is focused instead: that lets keyboard shortcuts such as Ctrl+C reach the frame
+ * again and leaves the selection, and the reference it drives, where they are. A read-only editor's
+ * text cannot take focus in any case.
+ *
+ * @param editor The live editor handle (e.g. `editorRef.current`); only the frame is focused when
+ *   it is not mounted
+ * @param isEditable Whether the editor accepts edits (its `isReadonly` option is `false`)
+ * @param frameWindow The window of the frame the editor is in; defaults to the current window
+ * @experimental This function is unstable and may change shape or disappear without notice
+ */
+export declare function focusEditorKeepingSelection(editor: Pick<EditorRef, "focus" | "getSelection" | "getSelectedParaMarker"> | null | undefined, isEditable: boolean, frameWindow?: Pick<Window, "focus">): void;
 /**
  * Names (lucide kebab-case) of the icons `LucideIcon` can render
  *

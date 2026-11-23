@@ -156,28 +156,20 @@ consequences worth knowing here:
   line instead of retagging it. In a book with no chapters that list also offers `\c`, which the
   host must not filter out: it is the only way to start chapter 1 in Standard view.
 
-**The editor's right-click menu outranks both palettes, and the hand-off rests on listener order
-across the two repos.** While `ContextMenuPlugin`'s menu is open it is the only keyboard mode on
-screen: the `\` trigger is claimed and does nothing, the Enter trigger stands down so the menu gets
-the press, and the insert shortcuts are swallowed. `isEditorContextMenuOpen` in
-`platform-scripture-editor.web-view.utils.ts` is the gate, and it depends on two facts owned by the
-editor package:
+**Keys typed between the right-click and the menu taking focus reach the editor.** The editor's
+right-click menu is the platform's context menu, opened by `useEditorContextMenu`
+(`lib/platform-bible-react`). It opens in the app window, not in the tab's frame; once it is open it
+holds focus there and no key reaches the editor. The gap before that is one round trip for the menu
+data, tens of milliseconds, and nothing holds the keyboard in it: a key typed then is an ordinary
+key, so the `\` and Enter palettes, the inline markers menu and the editor chords run as with no
+menu. A hold would drop typing whenever a menu is slow. Tests that pin it:
+`use-editor-context-menu.hook.test.tsx` ("keys typed while a request is open") and "the keys the
+editor acts on" in `platform-scripture-editor.web-view.test.tsx`.
 
-- **The menu claims its keys from a capture-phase listener on the iframe's `document`, and this web
-  view claims its own from one on `window`.** Capture runs window → document, so the web view always
-  sees a key first, and handing Enter down means returning *without* `stopPropagation` — a
-  `stopPropagation` there ends the press before the menu's listener runs. Were the menu's listener
-  ever moved onto `window` too, the two would run in registration order, and neither side could
-  count on seeing a key first.
-- **The menu is found by the FOCUSED editor's `aria-controls="editor-context-menu"` attribute**,
-  which the editor package sets on that editor's own root for exactly as long as its menu stays
-  open (`isEditorContextMenuOpenFor` in `editor-context-menu.util.ts` reads it). Only
-  scripture-editors#14 sets it — an earlier `platform-editor` build never marks the root, so every
-  gate keyed on `isEditorContextMenuOpen` silently evaluates "menu closed" against it, all at once:
-  the `\` trigger, the Enter hand-down, and the insert-shortcut swallow all fall through together,
-  with no local signal that anything broke. `footnote-editor.context-menu-gate.test.tsx` and
-  `editor-context-menu-merge-order-contract.test.tsx` both mount the real editor rather than a mock,
-  so they exercise the actual attribute instead of assuming its shape.
+A `FootnoteEditor` that shows the editor package's own right-click menu (`hasBuiltInContextMenu`,
+on by default; the app turns it off) gates on that menu instead: `isEditorContextMenuOpenFor`
+(`editor-context-menu.util.ts`) reads the `aria-controls` mark the menu puts on the editor's root
+while it is open.
 
 Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.
@@ -201,8 +193,8 @@ palette is open — the palette holds focus — but the caret it had is captured
 restored on every way the session ends, so the user lands back where they were. An earlier design
 made the content element non-editable instead; that worked, but it blurred the editor, so keys
 landed on the page body, the caret was lost for good, focus did not come back after a `\` palette
-closed, and the popover and the footnote pane each needed their own copy. Routing is now simply
-"the editor has focus", in both consumers.
+closed, and the main editor and the footnote editor each needed their own copy. Routing is now
+simply "the editor has focus", in both consumers.
 
 **The editor's own settles are suspended while a palette is open.** Three clocks would otherwise
 close one: the blur settle as focus moves to the palette, the idle settle a second later, and the
@@ -236,7 +228,7 @@ than a marker landing somewhere they never chose. The drop itself still lands; t
 for the commit, not for the content.
 
 If the editor turns read-only mid-session (an automatic Send/Receive), the web view ends the
-session — including palettes it opened for the footnote popover's editor — because the editor's
+session — including palettes it opened for the footnote row editor — because the editor's
 commit methods throw in read-only mode.
 
 ### 3.3 Nothing may change the editor under an open palette
@@ -269,11 +261,6 @@ The refusal itself is asked on BOTH commit routes, which is what makes it the ba
 - a TYPED commit (Space on the typed marker, `*`, the `\` commit-and-reopen, and the selection-wrap
   Space) applies straight from the key router, which asks the same function before each one.
 
-**Known gap:** the footnote popover has no live close — nothing there closes its palette when the
-note changes. It therefore relies entirely on the refusal, which is what protects the data: a note
-that changes under an open palette (a mouse drop, say) refuses the next commit rather than applying
-it at a caret pointing into different content. Closing at change time there is still worth adding.
-
 ### 3.4 Every way a session ends restores the caret
 
 A mouse click on the palette blurs the editor (the overlay renders outside its document) and
@@ -296,6 +283,10 @@ check sees a marker selected then.
 ## 4. The footnote editor
 
 `lib/platform-bible-react/src/components/advanced/footnote-editor/`.
+
+The app edits every note in the footnotes pane's row editor (the component's `inline` mode). The
+component's non-inline mode, a Save/Cancel editor meant for a popover, remains in the library for
+other hosts; no view in the app opens it, and the popover notes below describe that mode.
 
 - **The editor owns the note.** The popover's note type and caller are applied to its own editor
   (`applyUpdate`) and read back from it; they are not re-derived from React state on the way out.
@@ -353,8 +344,8 @@ check sees a marker selected then.
   renders as a glyph) has to change the other side too, or clicks land off by the difference.
 - **In a pane-model view (Standard view, or Simple's Formatted view, where the pane and its row
   editor get Standard's view options), the same component runs `inline` inside the footnotes pane
-  — there is no popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply
-  unchanged. Its live-apply re-keys the note in the parent editor, so the host must re-sync its
+  — there is no popover in the app.** The note-shell, caret-guard, and `updateCaller` invariants
+  above apply unchanged. Its live-apply re-keys the note in the parent editor, so the host must re-sync its
   session key from `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new
   `noteOps` identity for its own live-apply — that reloads the editor mid-typing. An unclosed note
   (the one kind the text shows the content of) is edited in place in the text as well, as PT9 does,

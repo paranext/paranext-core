@@ -92,7 +92,7 @@ test.describe('scripture editor typing during a chapter move', () => {
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
-    // `.first()` because the footnote-editor popover renders its own `.editor-input.marker-editable`.
+    // `.first()` because the footnotes pane's row editor renders its own `.editor-input.marker-editable`.
     const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
     const chapterMarker = editorFrame.locator('p.chapter[data-marker="c"]');
     const editorEvalFrame = await findScriptureEditorFrame(mainPage);

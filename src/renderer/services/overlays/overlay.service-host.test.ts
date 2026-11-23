@@ -7,6 +7,7 @@ import {
   FAILED_PRECONDITION,
   LanguageStrings,
 } from 'platform-bible-utils';
+import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -19,7 +20,7 @@ import {
   PopoverRequest,
 } from './overlay.service-model';
 import { getOverlays, getOverlayById, clearAllOverlays, subscribe } from './overlay-store';
-import { getWebViewIframe, isWebViewVisible } from './overlay-coordinates';
+import { isWebViewVisible } from './overlay-coordinates';
 import { markOverlayFocusReturnIfFocusInside } from './overlay-focus-return.util';
 import { WINDOW_BLUR_PRESS_MARKER } from './window-blur-press.util';
 
@@ -53,11 +54,15 @@ vi.mock('./overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_, pos) => pos),
   clampToViewport: vi.fn((pos) => pos),
   isWebViewVisible: vi.fn(() => true),
+}));
+
+vi.mock('@renderer/components/web-view-iframe.util', () => ({
   getWebViewIframe: vi.fn(() => undefined),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: {
+    debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
@@ -251,6 +256,55 @@ describe('overlay.service-host', () => {
       menus[0].resolve(undefined);
       vi.useRealTimers();
       return promise2;
+    });
+
+    describe('debounce clock', () => {
+      let wallClock: number;
+      let monotonicClock: number;
+
+      beforeEach(() => {
+        wallClock = 1_000_000;
+        monotonicClock = 5_000;
+        vi.spyOn(Date, 'now').mockImplementation(() => wallClock);
+        vi.spyOn(performance, 'now').mockImplementation(() => monotonicClock);
+      });
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      it('does not reject a request when the wall clock steps back between requests', async () => {
+        const promise1 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        await Promise.resolve();
+        monotonicClock += 100;
+        wallClock -= 2000;
+
+        const promise2 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        await Promise.resolve();
+
+        await expect(promise1).rejects.toSatisfy(
+          (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+        );
+        const menus = getOverlays().filter((o) => o.type === 'contextMenu');
+        expect(menus).toHaveLength(1);
+        menus[0].resolve(undefined);
+        await promise2;
+      });
+
+      it('still debounces two requests 10 ms apart on the monotonic clock', async () => {
+        const promise1 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        await Promise.resolve();
+        monotonicClock += 10;
+        wallClock -= 2000;
+
+        await expect(
+          overlayService.showContextMenu('ext.testWebView', 'test-webview'),
+        ).rejects.toSatisfy(
+          (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
+        );
+        getOverlays()[0].resolve(undefined);
+        await promise1;
+      });
     });
 
     it('should reject with RESOURCE_EXHAUSTED within debounce cooldown', async () => {
@@ -2566,7 +2620,285 @@ describe('overlay.service-host', () => {
       });
     });
 
+    describe("when the opener's own dismiss closes a context menu", () => {
+      it('returns focus after dismissContextMenu with focus inside the menu', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent(getOverlays()[0].id);
+
+        await overlayService.dismissContextMenu('test-webview');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('does not return focus after dismissContextMenu with focus outside the menu', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusFrame();
+
+        await overlayService.dismissContextMenu('test-webview');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+    });
+
+    /**
+     * Focusing a web view's tab focuses its panel, not its frame, so text that never had a focused
+     * element (read-only Scripture) would be left without keyboard focus after its context menu
+     * closed. A context menu that returns focus therefore focuses the requester's frame as well,
+     * once `setFocus` has finished.
+     */
+    describe("focusing the requester's frame after a context menu returns focus", () => {
+      let frame: HTMLIFrameElement;
+      let frameFocus: ReturnType<typeof vi.fn>;
+      let panelFirstChild: HTMLDivElement;
+      /** Runs inside the mocked `setFocus`, after it has moved focus to the tab's panel */
+      let duringSetFocus: () => void;
+
+      beforeEach(() => {
+        const panel = addToBody(document.createElement('div'));
+        panel.setAttribute('data-tab-id', 'test-webview');
+        panelFirstChild = document.createElement('div');
+        panelFirstChild.tabIndex = -1;
+        panel.appendChild(panelFirstChild);
+        frame = document.createElement('iframe');
+        panel.appendChild(frame);
+        frameFocus = vi.fn();
+        if (!frame.contentWindow) throw new Error('An attached iframe should have a window');
+        frame.contentWindow.focus = frameFocus;
+        vi.mocked(getWebViewIframe).mockImplementation((id) =>
+          id === 'test-webview' ? frame : NO_FRAME,
+        );
+        duringSetFocus = () => {};
+        // Focusing a web view's tab leaves focus on the tab's panel, as `setDocumentFocusToTab` does
+        vi.mocked(windowService.setFocus).mockImplementation(async () => {
+          panelFirstChild.focus();
+          duringSetFocus();
+          return true;
+        });
+        vi.mocked(logger.debug).mockClear();
+        setAppFocused(true);
+      });
+
+      afterEach(() => {
+        vi.mocked(windowService.setFocus).mockImplementation(() => Promise.resolve(true));
+        vi.mocked(isWebViewVisible).mockReturnValue(true);
+      });
+
+      /** Lets the `setFocus` promise and everything chained on it settle */
+      async function settleFocusReturn(): Promise<void> {
+        await vi.advanceTimersByTimeAsync(0);
+      }
+
+      function expectFrameFocusedAfterSetFocus(): void {
+        expect(windowService.setFocus).toHaveBeenCalledTimes(1);
+        expect(frameFocus).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(windowService.setFocus).mock.invocationCallOrder[0]).toBeLessThan(
+          frameFocus.mock.invocationCallOrder[0],
+        );
+      }
+
+      it('focuses the frame after setFocus when an item is picked', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent(getOverlays()[0].id);
+
+        getOverlays()[0].resolve('ext.cut');
+        await expect(dismissed).resolves.toBe('ext.cut');
+        await settleFocusReturn();
+
+        expectFrameFocusedAfterSetFocus();
+      });
+
+      it('focuses the frame after setFocus on Escape with focus inside the menu', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent(getOverlays()[0].id);
+
+        emitInput('escape');
+        await expect(dismissed).resolves.toBeUndefined();
+        await settleFocusReturn();
+
+        expectFrameFocusedAfterSetFocus();
+      });
+
+      it('focuses the frame when setFocus left focus on the frame itself', async () => {
+        // A tab with a remembered element inside its frame: focusing it makes the frame the
+        // document's active element, which is still where setFocus left it
+        duringSetFocus = () => frame.focus();
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+        await dismissed;
+        await settleFocusReturn();
+
+        expect(document.activeElement).toBe(frame);
+        expectFrameFocusedAfterSetFocus();
+      });
+
+      /** Moves focus to the page body, where a click on something unfocusable leaves it */
+      function blurToBody(): void {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        expect(document.activeElement).toBe(document.body);
+      }
+
+      it('leaves the frame alone after a click elsewhere closes the menu', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent(getOverlays()[0].id);
+        // The click landed on the page itself, where focusing the frame would not be overriding
+        // anything, so only the click not returning focus keeps the frame alone
+        blurToBody();
+
+        emitInput('mouseDown');
+        await expect(dismissed).resolves.toBeUndefined();
+        await settleFocusReturn();
+
+        expect(frameFocus).not.toHaveBeenCalled();
+      });
+
+      it('leaves the frame alone when a newer menu replaces this one', async () => {
+        const { dismissed: first } = await openContextMenuPastGrace();
+        first.catch(() => {});
+        blurToBody();
+        resetDebounceState();
+        const second = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        second.catch(() => {});
+        await vi.advanceTimersByTimeAsync(0);
+
+        await expect(first).rejects.toMatchObject({ code: ABORTED });
+        await settleFocusReturn();
+
+        expect(frameFocus).not.toHaveBeenCalled();
+        getOverlays()[0].resolve(undefined);
+      });
+
+      it('leaves the frame alone when a popover or a command palette returns focus', async () => {
+        const popoverId = await openPopoverPastGrace();
+        getOverlays()
+          .find((o) => o.id === popoverId)
+          ?.resolve('action');
+        await settleFocusReturn();
+        resetDebounceState();
+        const { dismissed: palettePicked } = await openPaletteBeyondGrace();
+        getOverlays()
+          .find((o) => o.type === 'commandPalette')
+          ?.resolve('ft');
+        await palettePicked;
+        await settleFocusReturn();
+
+        // Both returned focus to the web view, so the frame was not left alone for lack of a return
+        expect(windowService.setFocus).toHaveBeenCalledTimes(2);
+        expect(frameFocus).not.toHaveBeenCalled();
+      });
+
+      it('leaves the frame alone when the user focused something else while setFocus ran', async () => {
+        const toolbarButton = addToBody(document.createElement('button'));
+        duringSetFocus = () => toolbarButton.focus();
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+        await dismissed;
+        await settleFocusReturn();
+
+        expect(windowService.setFocus).toHaveBeenCalledTimes(1);
+        expect(frameFocus).not.toHaveBeenCalled();
+      });
+
+      it('leaves the frame alone when the app window lost focus while setFocus ran', async () => {
+        duringSetFocus = () => setAppFocused(false);
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+        await dismissed;
+        await settleFocusReturn();
+
+        expect(windowService.setFocus).toHaveBeenCalledTimes(1);
+        expect(frameFocus).not.toHaveBeenCalled();
+      });
+
+      it('leaves the frame alone when it is hidden by the time setFocus finishes', async () => {
+        duringSetFocus = () => vi.mocked(isWebViewVisible).mockReturnValue(false);
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+        await dismissed;
+        await settleFocusReturn();
+
+        expect(windowService.setFocus).toHaveBeenCalledTimes(1);
+        expect(frameFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not throw when the frame is gone by the time setFocus finishes', async () => {
+        // The tab closed: its frame left the document, so the lookup no longer finds it
+        duringSetFocus = () => {
+          frame.remove();
+          vi.mocked(getWebViewIframe).mockReturnValue(NO_FRAME);
+        };
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+
+        await expect(dismissed).resolves.toBe('ext.cut');
+        await settleFocusReturn();
+        expect(windowService.setFocus).toHaveBeenCalledTimes(1);
+        expect(frameFocus).not.toHaveBeenCalled();
+        // A closed tab is an ordinary outcome, not a failure to report
+        expect(logger.debug).not.toHaveBeenCalled();
+      });
+
+      it('leaves another web view alone when its frame took focus while setFocus ran', async () => {
+        const otherFrame = addToBody(document.createElement('iframe'));
+        duringSetFocus = () => otherFrame.focus();
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+        await dismissed;
+        await settleFocusReturn();
+
+        expect(document.activeElement).toBe(otherFrame);
+        expect(frameFocus).not.toHaveBeenCalled();
+      });
+
+      it('logs at debug, and does not throw, when focusing the frame fails', async () => {
+        frameFocus.mockImplementation(() => {
+          throw new Error('frame focus failed');
+        });
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+
+        await expect(dismissed).resolves.toBe('ext.cut');
+        await settleFocusReturn();
+        expect(frameFocus).toHaveBeenCalledTimes(1);
+        expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('frame focus failed'));
+      });
+    });
+
     describe('when the app loses focus', () => {
+      it('ends the creation grace on the monotonic clock when the wall clock steps back', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        vi.setSystemTime(Date.now() - 2000);
+
+        window.dispatchEvent(new Event('blur'));
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(getOverlays()).toHaveLength(0);
+      });
+
+      it('keeps the creation grace for a blur right after a menu opened, even if the wall clock steps forward', async () => {
+        vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+        const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        await vi.advanceTimersByTimeAsync(0);
+        vi.setSystemTime(Date.now() + 10_000);
+
+        window.dispatchEvent(new Event('blur'));
+
+        expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);
+        getOverlays()[0].resolve(undefined);
+        await promise;
+      });
+
       it('returns focus on a parent window blur with the app deactivated and focus inside', async () => {
         const { dismissed } = await openContextMenuPastGrace();
         focusInsideOverlayContent(getOverlays()[0].id);

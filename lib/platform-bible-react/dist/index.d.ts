@@ -1414,13 +1414,56 @@ export interface FootnoteEditorHandle {
 	 * or the note is unchanged.
 	 */
 	flushPendingEdits: () => void;
-	/** Puts DOM focus back in the note text, on the caret the editor last held. */
+	/**
+	 * Puts DOM focus back in the note text, on the caret the editor last held. When the editor has
+	 * lost its selection (a menu or toolbar took focus), the selection captured as focus left is put
+	 * back first, so focus does not land at the end of the document. With nothing to put back, the
+	 * caret goes to the end of the note. Does nothing while the inner editor is not mounted.
+	 */
 	focus: () => void;
 	/**
 	 * Whether DOM focus is anywhere in this editor - its note text or its own controls. Reads the
 	 * document's active element, so it stays true while the window itself is not focused.
 	 */
 	containsFocus: () => boolean;
+	/**
+	 * Cuts the selected note text to the clipboard. Puts the selection captured when focus last left
+	 * the editor back first, if the editor has none now (a menu or toolbar took focus), then focuses
+	 * the note text, or only the frame when there is no selection to land on or the editor is
+	 * read-only. Does nothing while the inner editor is not mounted. Throws when the inner editor is
+	 * read-only; the host handles that.
+	 *
+	 * @experimental This method is unstable and may change shape or disappear without notice
+	 */
+	cut: () => void;
+	/**
+	 * Copies the selected note text to the clipboard. Puts the selection captured when focus last
+	 * left the editor back first, if the editor has none now, then focuses the note text, or only the
+	 * frame when there is no selection to land on or the editor is read-only. Does nothing while the
+	 * inner editor is not mounted.
+	 *
+	 * @experimental This method is unstable and may change shape or disappear without notice
+	 */
+	copy: () => void;
+	/**
+	 * Pastes the clipboard's contents at the selection. Puts the selection captured when focus last
+	 * left the editor back first, if the editor has none now, then focuses the note text, or only the
+	 * frame when there is no selection to land on or the editor is read-only. Does nothing while the
+	 * inner editor is not mounted. Throws when the inner editor is read-only; the host handles that.
+	 *
+	 * @experimental This method is unstable and may change shape or disappear without notice
+	 */
+	paste: () => void;
+	/**
+	 * Pastes the clipboard's contents at the selection as plain text. Puts the selection captured
+	 * when focus last left the editor back first, if the editor has none now, then focuses the note
+	 * text, or only the frame when there is no selection to land on or the editor is read-only. Does
+	 * nothing while the inner editor is not mounted. Throws when the inner editor is read-only; the
+	 * host handles that.
+	 *
+	 * @experimental This method is unstable and may change shape or disappear without notice
+	 */
+	pastePlainText: () => void;
 }
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
@@ -1511,6 +1554,15 @@ export interface FootnoteEditorProps {
 	 * a long live edit is never treated as an abandoned session).
 	 */
 	onNoteEdit?: () => void;
+	/**
+	 * Whether the inner editor shows the editor package's own right-click menu. A host that serves
+	 * the right-click itself (a platform context menu) passes `false`; the inner editor then opens
+	 * nothing on a right-click and this component stops reading the built-in menu's open state.
+	 *
+	 * @default true
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	hasBuiltInContextMenu?: boolean;
 }
 interface FootnoteEditorMarkerPalette extends PaletteDriver {
 	/**
@@ -1546,7 +1598,7 @@ export declare const INLINE_APPLY_DEBOUNCE_MS = 300;
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, ref, initialCaretPosition, markerPalette, onNoteEdit, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, ref, initialCaretPosition, markerPalette, onNoteEdit, hasBuiltInContextMenu, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the MarkerMenu component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -4771,12 +4823,11 @@ export type LivePopoverAnchor = {
  * is open) re-reads the rect on scroll of the text's scroll container, on resize, and when the text
  * reflows under a zoom change, so the popover stays beside its caller or selection.
  *
- * Hidden case: handled by holding the last usable rect. A popover can be open while its pane is
- * hidden — the Scripture editor's footnote popover survives Escape and an outside click — and a
- * hidden pane has no layout, so a source measures nothing there. The anchor keeps the last rect it
- * had rather than collapsing to the pane's corner, and the next frame after the tab is shown
- * measures again and catches up. Sources report "no measurement" by returning `undefined`; see
- * {@link measureBox}.
+ * Hidden case: handled by holding the last usable rect. A popover that survives Escape and an
+ * outside click can be open while its pane is hidden, and a hidden pane has no layout, so a source
+ * measures nothing there. The anchor keeps the last rect it had rather than collapsing to the
+ * pane's corner, and the next frame after the tab is shown measures again and catches up. Sources
+ * report "no measurement" by returning `undefined`; see {@link measureBox}.
  *
  * @example
  *

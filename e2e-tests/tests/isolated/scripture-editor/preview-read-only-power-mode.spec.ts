@@ -2,7 +2,7 @@
  * Power mode's two views: Ctrl+E toggles the editable Standard view and Preview, the formatted
  * view, which is read-only in Power. Preview's tab title carries "(Read-only)", and entering it in
  * an editable project shows a notice saying how to edit. In Preview a footnote caller jumps to its
- * note in the footnotes pane instead of opening a popover, and comments can still be added. Ctrl+E
+ * note in the footnotes pane without opening a row editor, and comments can still be added. Ctrl+E
  * also ends an open footnote row edit, keeping what was typed in it, and the editor's Preview menu
  * item (`platformScriptureEditor.setViewPreview`) shows the same read-only Preview. A round trip
  * through Preview clears the text's undo history, which the undo step pins.
@@ -116,10 +116,6 @@ test.describe('Power-mode Standard view and Preview', () => {
     const tabTitle = mainPage.locator(`.platform-tab-title[data-web-view-id="${editorId}"]`);
     const pane = editorFrame.locator(FOOTNOTES_PANE_SELECTOR);
     const editingRow = pane.locator('li[data-state="editing"]');
-    // The footnote editor popover is the one pop-up that holds an editor of its own.
-    const footnotePopover = editorFrame.locator('[data-slot="popover-content"]').filter({
-      has: editorFrame.locator('.editor-input'),
-    });
 
     const expectStandardView = async () => {
       await expect(mainInput).toHaveClass(/\bmarker-editable\b/, { timeout: 20_000 });
@@ -194,8 +190,6 @@ test.describe('Power-mode Standard view and Preview', () => {
         'true',
       );
       await expectFocusInPane();
-      // Checked once the pane has answered the click, so a popover the click opened would be up.
-      await expect(footnotePopover).toHaveCount(0);
       await expect(editingRow).toHaveCount(0);
     });
 

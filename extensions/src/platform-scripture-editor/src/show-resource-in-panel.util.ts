@@ -19,8 +19,8 @@ import type { ResourcePanelType } from './resource-selection-state.utils';
 import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
-  warnTabCouldNotOpen,
-} from './show-panel.util';
+} from './resource-text-panel.const';
+import { warnTabCouldNotOpen } from './show-panel.util';
 
 /**
  * Options the Bible texts and Commentaries providers accept. `reloadWebView` types its options as

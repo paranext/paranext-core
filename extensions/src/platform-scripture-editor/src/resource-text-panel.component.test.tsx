@@ -16,6 +16,14 @@ import {
   ResourceTextPanelProps,
 } from './resource-text-panel.component';
 import { RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID } from './resource-book-not-available.component';
+import {
+  COPY_COMMAND,
+  FIND_COMMAND,
+  flushMenuRequest,
+  makeContextMenuCallbacks,
+  rightClick,
+  selectTextIn,
+} from './read-only-panel-context-menu.test-utils';
 
 /**
  * Records every `setUsj` the panel pushes into the editor, across editor instances.
@@ -29,6 +37,12 @@ const setUsjSpy = vi.fn();
 
 /** Collects the `options` prop passed to each Editorial render. */
 const capturedEditorOptions = vi.fn();
+
+/** The editor handle's `copy` and `focus`, which a picked Copy must and must not call. */
+const editorCopySpy = vi.fn();
+const editorFocusSpy = vi.fn();
+/** What the mocked editor reports as its selection: a real read-only editor holds one. */
+const editorState: { selection: unknown } = { selection: undefined };
 
 /**
  * Drives `useViewVisibility` from the tests.
@@ -72,8 +86,14 @@ beforeAll(() => {
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
   Editorial: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
     capturedEditorOptions(props.options);
-    React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
-    return <div data-testid="editorial" />;
+    React.useImperativeHandle(ref, () => ({
+      setUsj: setUsjSpy,
+      copy: editorCopySpy,
+      focus: editorFocusSpy,
+      getSelection: () => editorState.selection,
+      getSelectedParaMarker: () => undefined,
+    }));
+    return <div data-testid="editorial">Some scripture text</div>;
   }),
   getDefaultViewOptions: () => ({ viewOptionsFor: 'default' }),
 }));
@@ -249,6 +269,7 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     // it — a harness that omits it swallows a failed pick and a failed chapter read in the one
     // suite that could otherwise catch them.
     logger: { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+    contextMenu: makeContextMenuCallbacks(),
     ...overrides,
   };
 }
@@ -305,6 +326,7 @@ const WAITING_FOR_CONTENT = {
 
 afterEach(() => {
   setUsjSpy.mockClear();
+  editorState.selection = undefined;
   // `restoreAllMocks` would also undo the `document.body` height spy installed in `beforeAll`,
   // which every test depends on to start out visible.
   vi.clearAllMocks();
@@ -1105,5 +1127,202 @@ describe('ResourceTextPanel copyright notice', () => {
 
     expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
     expect(screen.getByTestId('copyright-notice')).toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel right-click menu', () => {
+  const EDITOR_TEXT = 'Some scripture text';
+
+  /** A menu request that stays open until the test settles it. */
+  function pendingRequest() {
+    let settle: (command: string | undefined) => void = () => {};
+    const requestMenu = vi.fn(
+      () =>
+        new Promise<string | undefined>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    return { requestMenu, settle: (command: string | undefined) => settle(command) };
+  }
+
+  it('turns the editor built-in context menu off, with one options object across renders', () => {
+    const { rerenderWith } = renderPanel();
+    rerenderWith();
+    rerenderWith();
+
+    const optionsSeen = capturedEditorOptions.mock.calls.map(([options]) => options);
+    expect(optionsSeen.length).toBeGreaterThan(1);
+    optionsSeen.forEach((options) =>
+      expect(options).toEqual(expect.objectContaining({ hasBuiltInContextMenu: false })),
+    );
+    // A new options object per render would reset the editor's state
+    expect(new Set(optionsSeen).size).toBe(1);
+  });
+
+  it('asks for one platform menu for a right-click in the text, reporting the selection', () => {
+    const contextMenu = makeContextMenuCallbacks();
+    renderPanel({ contextMenu });
+    selectTextIn(screen.getByTestId('editorial'));
+
+    rightClick(screen.getByText(EDITOR_TEXT));
+
+    expect(contextMenu.requestMenu).toHaveBeenCalledTimes(1);
+    expect(contextMenu.requestMenu).toHaveBeenCalledWith(
+      expect.objectContaining({
+        position: { x: 12, y: 34 },
+        hasSelection: true,
+        selectedText: EDITOR_TEXT,
+      }),
+    );
+  });
+
+  it('reports no selection when nothing is selected', () => {
+    const contextMenu = makeContextMenuCallbacks();
+    renderPanel({ contextMenu });
+    window.getSelection()?.removeAllRanges();
+
+    rightClick(screen.getByText(EDITOR_TEXT));
+
+    expect(contextMenu.requestMenu).toHaveBeenCalledWith(
+      expect.objectContaining({ hasSelection: false, selectedText: '' }),
+    );
+  });
+
+  it('asks for no menu while a spinner is shown instead of the editor, and does once the editor is back', () => {
+    const contextMenu = makeContextMenuCallbacks();
+    const { rerenderWith } = renderPanel({
+      contextMenu,
+      usjPossiblyError: undefined,
+      isUsjLoading: true,
+    });
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+
+    rightClick(screen.getByTestId(RESOURCE_TEXT_WAITING_TEST_ID));
+
+    expect(contextMenu.requestMenu).not.toHaveBeenCalled();
+
+    // Control: the same panel with its editor shown does ask
+    rerenderWith({ contextMenu, usjPossiblyError: SAMPLE_USJ, isUsjLoading: false });
+    rightClick(screen.getByText(EDITOR_TEXT));
+    expect(contextMenu.requestMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for no menu for a right-click in the resource selector', () => {
+    const contextMenu = makeContextMenuCallbacks();
+    renderPanel({ contextMenu });
+
+    rightClick(screen.getByRole('button', { name: /WEB/ }));
+
+    expect(contextMenu.requestMenu).not.toHaveBeenCalled();
+  });
+
+  it('runs a picked Copy on the editor after focusing the frame, never the read-only editor itself', async () => {
+    const windowFocus = vi.spyOn(window, 'focus').mockImplementation(() => {});
+    const contextMenu = makeContextMenuCallbacks({
+      requestMenu: vi.fn(async () => COPY_COMMAND),
+    });
+    renderPanel({ contextMenu });
+    // Counted from here on: only the frames the pick asks for matter
+    const frames: FrameRequestCallback[] = [];
+    const frameSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    selectTextIn(screen.getByTestId('editorial'));
+    // A real read-only editor holds the selection the user made: its own `focus()` would then land
+    // a caret at the end of the chapter and move the reference.
+    editorState.selection = { start: { offset: 0 }, end: { offset: 4 } };
+
+    rightClick(screen.getByText(EDITOR_TEXT));
+    await flushMenuRequest();
+
+    expect(editorCopySpy).toHaveBeenCalledTimes(1);
+    expect(editorFocusSpy).not.toHaveBeenCalled();
+    expect(windowFocus).toHaveBeenCalledTimes(1);
+    expect(windowFocus.mock.invocationCallOrder[0]).toBeLessThan(
+      editorCopySpy.mock.invocationCallOrder[0],
+    );
+    expect(contextMenu.openFind).not.toHaveBeenCalled();
+    expect(contextMenu.sendCommand).not.toHaveBeenCalled();
+
+    // The menu hands focus back to its tab as it closes; the next frame returns it to this frame
+    act(() => [...frames].forEach((frame) => frame(0)));
+    expect(windowFocus).toHaveBeenCalledTimes(2);
+    expect(windowFocus.mock.invocationCallOrder[1]).toBeGreaterThan(
+      editorCopySpy.mock.invocationCallOrder[0],
+    );
+    expect(editorFocusSpy).not.toHaveBeenCalled();
+    windowFocus.mockRestore();
+    frameSpy.mockRestore();
+  });
+
+  it('hands a picked Find the text that was selected when the menu opened', async () => {
+    const contextMenu = makeContextMenuCallbacks({
+      requestMenu: vi.fn(async () => FIND_COMMAND),
+    });
+    renderPanel({ contextMenu });
+    selectTextIn(screen.getByTestId('editorial'));
+
+    rightClick(screen.getByText(EDITOR_TEXT));
+    await flushMenuRequest();
+
+    expect(contextMenu.openFind).toHaveBeenCalledWith(EDITOR_TEXT);
+    expect(editorCopySpy).not.toHaveBeenCalled();
+  });
+
+  it("sends another extension's picked command on", async () => {
+    const contextMenu = makeContextMenuCallbacks({
+      requestMenu: vi.fn(async () => 'someExtension.doSomething'),
+    });
+    renderPanel({ contextMenu });
+
+    rightClick(screen.getByText(EDITOR_TEXT));
+    await flushMenuRequest();
+
+    expect(contextMenu.sendCommand).toHaveBeenCalledWith('someExtension.doSomething');
+    expect(editorCopySpy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['chapter', { scrRef: { book: 'MAT', chapterNum: 2, verseNum: 1 } }],
+    ['book', { scrRef: { book: 'MRK', chapterNum: 1, verseNum: 1 } }],
+  ])('closes an open menu when the %s changes, and not when only the verse does', (_name, next) => {
+    const { requestMenu } = pendingRequest();
+    const contextMenu = makeContextMenuCallbacks({ requestMenu });
+    const { rerenderWith } = renderPanel({ contextMenu });
+    rightClick(screen.getByText(EDITOR_TEXT));
+    expect(requestMenu).toHaveBeenCalledTimes(1);
+
+    rerenderWith({ contextMenu, scrRef: { book: 'MAT', chapterNum: 1, verseNum: 5 } });
+    expect(contextMenu.dismissMenu).not.toHaveBeenCalled();
+
+    rerenderWith({ contextMenu, ...next });
+    expect(contextMenu.dismissMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes an open menu when a different resource is shown', () => {
+    const { requestMenu } = pendingRequest();
+    const contextMenu = makeContextMenuCallbacks({ requestMenu });
+    const { rerenderWith } = renderPanel({ contextMenu });
+    rightClick(screen.getByText(EDITOR_TEXT));
+
+    rerenderWith({
+      contextMenu,
+      selectedRef: { ...WEB_ROW, projectId: 'project-other' },
+    });
+
+    expect(contextMenu.dismissMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes an open menu when the panel goes away', () => {
+    const { requestMenu } = pendingRequest();
+    const contextMenu = makeContextMenuCallbacks({ requestMenu });
+    const { unmount } = renderPanel({ contextMenu });
+    rightClick(screen.getByText(EDITOR_TEXT));
+    expect(contextMenu.dismissMenu).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(contextMenu.dismissMenu).toHaveBeenCalledTimes(1);
   });
 });

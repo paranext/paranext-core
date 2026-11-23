@@ -921,19 +921,19 @@ describe('useEditorPdpSync', () => {
   });
 
   it('defers to the editor when a note/palette editing session is active even though the editor is BLURRED', () => {
-    // The popover flow: focus sits in the footnote editor (main editor blurred) while its edits
+    // The row editor flow: focus sits in the footnote row editor (main editor blurred) while its edits
     // have not reached the PDP yet. A differing same-document echo replacing the main editor
-    // would regenerate every Lexical node key — killing the popover session mid-edit (its Save
-    // then targets a dead key and silently no-ops). The session predicate extends the SAME
+    // would regenerate every Lexical node key — killing the row editor session mid-edit (its next
+    // apply then targets a dead key and silently no-ops). The session predicate extends the SAME
     // "the editor owns the freshest content" deferral that isFocused() drives for live typing.
     const normalizedEcho = makeChapterUsj('14', 'This is the law of the leper. \\q1');
     const newerEditorContent = makeChapterUsj(
       '14',
-      'This is the law of the leper. edited in popover',
+      'This is the law of the leper. edited in row editor',
       { paraMarker: 'q1' },
     );
 
-    // The popover edit advances the main editor's content across the round-trip.
+    // The row editor edit advances the main editor's content across the round-trip.
     const evenNewerEditorContent: Usj = {
       ...levUsj,
       content: [
@@ -943,7 +943,7 @@ describe('useEditorPdpSync', () => {
           marker: 'q1',
           content: [
             { type: 'verse', marker: 'v', number: '2' },
-            'This is the law of the leper. edited more in popover',
+            'This is the law of the leper. edited more in row editor',
           ],
         },
       ],
@@ -958,7 +958,7 @@ describe('useEditorPdpSync', () => {
       current: {
         setUsj: setUsjSpy,
         getUsj: () => liveEditorUsj,
-        isFocused: () => false, // main editor blurred — focus is in the popover
+        isFocused: () => false, // main editor blurred — focus is in the row editor
       } as unknown as EditorRef,
     };
     const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
@@ -985,12 +985,12 @@ describe('useEditorPdpSync', () => {
     liveEditorUsj = evenNewerEditorContent;
     act(() => rerender({ usjFromPdp: normalizedEcho }));
 
-    expect(setUsjSpy).not.toHaveBeenCalled(); // popover session survives — no key regeneration
+    expect(setUsjSpy).not.toHaveBeenCalled(); // row editor session survives — no key regeneration
     expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // newer local content pushed up instead
   });
 
-  //   (b) A DIFFERENT editor's `.editor-input` holds focus (e.g. the footnote-editor popover, which
-  //       renders its own `.editor-input`). The old query grabbed the first `.editor-input` and saw
+  //   (b) A DIFFERENT editor's `.editor-input` holds focus (e.g. the footnotes pane's row editor,
+  //       which renders its own `.editor-input`). The old query grabbed the first `.editor-input` and saw
   //       it focused, wrongly treating THIS editor as actively edited and deferring a real change.
   it('replaces the editor when editorRef.isFocused() is false even if another .editor-input holds focus', () => {
     const externalChange = makeChapterUsj('14', 'Externally edited text.');
@@ -1009,7 +1009,7 @@ describe('useEditorPdpSync', () => {
     const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
 
-    // A different editor's `.editor-input` (the footnote popover's own root) holds DOM focus.
+    // A different editor's `.editor-input` (the footnote row editor's own root) holds DOM focus.
     // This focused DOM node exists to prove the hook does NOT consult the DOM: with a focused
     // `.editor-input` present, only an editorRef.isFocused()-driven decision can still replace.
     const otherEditorInput = document.createElement('div');

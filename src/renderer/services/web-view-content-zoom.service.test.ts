@@ -6,7 +6,7 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 vi.mock('@shared/services/settings.service', () => ({ settingsService: {} }));
 vi.mock('@shared/services/localization.service', () => ({ localizationService: {} }));
-vi.mock('@renderer/services/overlays/overlay-coordinates', () => ({ getWebViewIframe: vi.fn() }));
+vi.mock('@renderer/components/web-view-iframe.util', () => ({ getWebViewIframe: vi.fn() }));
 
 // Import types and the service under test after the mocks above are established.
 // eslint-disable-next-line import/first

@@ -3,7 +3,6 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
-import { INSERT_CONTEXT_MENU_STRING_KEYS } from './platform-scripture-editor.web-view.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
@@ -790,14 +789,18 @@ function allKeys(locale: 'en' | 'es'): Set<string> {
 }
 
 /**
- * Every localize key the editor's top menu shows: column and item labels, plus item tooltips, which
- * resolve through the same `%key%` mechanism as labels.
+ * Every localize key the editor's top menu and right-click menu show: column and item labels, plus
+ * item tooltips, which resolve through the same `%key%` mechanism as labels.
  */
 function menuLocalizeKeys(): string[] {
-  const { topMenu } = editorMenus.webViewMenus['platformScriptureEditor.react'];
+  const { topMenu, contextMenu } = editorMenus.webViewMenus['platformScriptureEditor.react'];
   const keys: unknown[] = [
     ...Object.values(topMenu.columns).map((column) => column.label),
     ...topMenu.items.flatMap((item) => [item.label, 'tooltip' in item ? item.tooltip : undefined]),
+    ...contextMenu.items.flatMap((item) => [
+      item.label,
+      'tooltip' in item ? item.tooltip : undefined,
+    ]),
   ];
   return [
     ...new Set(keys.filter((key): key is string => typeof key === 'string' && /^%.*%$/.test(key))),
@@ -816,22 +819,39 @@ describe.each(['en', 'es'] as const)('editor Project menu labels in %s', (locale
   });
 });
 
-// The editor context menu's insert items, driven off createInsertContextMenuItems's own exported
-// key list so a title it can produce is always covered here, in both directions: a key the builder
-// asks for and this file drops would render a blank row with the parity test in
-// platform-scripture-editor.web-view.utils.test.ts still green (it only ever sees the STUB strings
-// it builds its own titles from), and a Spanish value left equal to English would pass every other
-// check silently.
-describe.each([...INSERT_CONTEXT_MENU_STRING_KEYS])('insert context-menu label %s', (key) => {
-  it('has an English label', () => {
-    expect(localizedStrings.en[key]).toBeTruthy();
+// The right-click menu's Insert items and Paste as plain text carry labels this extension owns. Each
+// needs a Spanish value that is not just the English one copied (nothing else catches that), and the
+// keys are read from the contributed items so an item added or relabelled stays covered.
+const CONTEXT_MENU_OWN_LABEL_COMMANDS = [
+  'platformScriptureEditor.insertCommentAtSelection',
+  'platformScriptureEditor.insertFootnoteAtSelection',
+  'platformScriptureEditor.insertCrossReferenceAtSelection',
+  'platformScriptureEditor.insertEndnoteAtSelection',
+  'platformScriptureEditor.pasteAsPlainTextAtSelection',
+];
+const contextMenuOwnLabelKeys = editorMenus.webViewMenus[
+  'platformScriptureEditor.react'
+].contextMenu.items
+  .filter((item) => CONTEXT_MENU_OWN_LABEL_COMMANDS.includes(item.command))
+  .map((item) => item.label);
+
+describe('right-click menu own labels', () => {
+  it('covers one label for each of the four Insert items and Paste as plain text', () => {
+    expect(contextMenuOwnLabelKeys).toHaveLength(CONTEXT_MENU_OWN_LABEL_COMMANDS.length);
+    expect(contextMenuOwnLabelKeys).toContain('%webView_platformScriptureEditor_pasteAsPlainText%');
   });
 
-  it('has a Spanish label', () => {
-    expect(localizedStrings.es[key]).toBeTruthy();
-  });
+  describe.each(contextMenuOwnLabelKeys)('%s', (key) => {
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
 
-  it('Spanish label differs from English', () => {
-    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label that differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
   });
 });

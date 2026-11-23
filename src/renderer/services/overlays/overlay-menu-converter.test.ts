@@ -302,5 +302,93 @@ describe('overlay-menu-converter', () => {
       expect(find).toEqual({ type: 'item', id: 'ext.find', label: 'Find', shortcut: 'Ctrl+F' });
       expect(other).not.toHaveProperty('shortcut');
     });
+
+    it('carries the leading icon name and image path onto a command item', () => {
+      const menu: Localized<SingleColumnMenu> = {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.find',
+            group: 'ext.group1',
+            label: 'Find',
+            order: 1,
+            localizeNotes: '',
+            iconNameBefore: 'search',
+            iconPathBefore: 'papi-extension://ext/assets/find.svg',
+          },
+        ],
+      };
+
+      expect(convertContributionToContextMenuItems(menu)).toStrictEqual([
+        {
+          type: 'item',
+          id: 'ext.find',
+          label: 'Find',
+          iconName: 'search',
+          iconPath: 'papi-extension://ext/assets/find.svg',
+        },
+      ]);
+    });
+
+    it('adds neither icon field to a command item whose contribution has none', () => {
+      const menu: Localized<SingleColumnMenu> = {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.plain',
+            group: 'ext.group1',
+            label: 'Plain',
+            order: 1,
+            localizeNotes: '',
+          },
+        ],
+      };
+
+      const [plain] = convertContributionToContextMenuItems(menu);
+
+      expect(plain).not.toHaveProperty('iconName');
+      expect(plain).not.toHaveProperty('iconPath');
+    });
+
+    describe('separators between groups', () => {
+      function itemIn(group: string, command: string) {
+        return { command, group, label: command, order: 1, localizeNotes: '' };
+      }
+
+      it('adds no leading separator when the groups before the first item are empty', () => {
+        const menu: Localized<SingleColumnMenu> = {
+          groups: {
+            'ext.empty1': { order: 1 },
+            'ext.empty2': { order: 2 },
+            'ext.a': { order: 3 },
+            'ext.b': { order: 4 },
+          },
+          items: [itemIn('ext.a', 'ext.cmdA'), itemIn('ext.b', 'ext.cmdB')],
+        };
+
+        expect(convertContributionToContextMenuItems(menu).map((entry) => entry.type)).toEqual([
+          'item',
+          'separator',
+          'item',
+        ]);
+      });
+
+      it('adds exactly one separator when an empty group sits between two groups with items', () => {
+        const menu: Localized<SingleColumnMenu> = {
+          groups: {
+            'ext.a': { order: 1 },
+            'ext.empty': { order: 2 },
+            'ext.b': { order: 3 },
+          },
+          items: [itemIn('ext.a', 'ext.cmdA'), itemIn('ext.b', 'ext.cmdB')],
+        };
+
+        expect(convertContributionToContextMenuItems(menu).map((entry) => entry.type)).toEqual([
+          'item',
+          'separator',
+          'item',
+        ]);
+      });
+    });
   });
 });

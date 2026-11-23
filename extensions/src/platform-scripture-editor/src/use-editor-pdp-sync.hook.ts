@@ -197,10 +197,10 @@ export function useEditorPdpSync({
   /**
    * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing SESSION
    * owns the editor's content even though the editor itself is blurred — a marker-palette session
-   * (the palette overlay outside the iframe holds focus) or an open footnote-editor popover (its
-   * own inner editor holds focus while its edits haven't reached the PDP yet). Replacing the editor
-   * mid-session would regenerate every Lexical node key, killing the session (the popover's Save
-   * then targets a dead key and silently no-ops). Same-document deferral only — a
+   * (the palette overlay outside the iframe holds focus) or an open footnote row editor (its own
+   * inner editor holds focus while its edits haven't reached the PDP yet). Replacing the editor
+   * mid-session would regenerate every Lexical node key, killing the session (the row editor's next
+   * apply then targets a dead key and silently no-ops). Same-document deferral only — a
    * different-document update (navigation) always replaces, exactly as for live typing.
    */
   isEditingSessionActive?: () => boolean;
@@ -251,11 +251,11 @@ export function useEditorPdpSync({
   /**
    * True while a Send/Receive blocks this editor. When it turns true the editor gives up its claim
    * to the chapter (the last edit in this view is forgotten), so the merge is applied unless the
-   * user has typed again since the block ended or a footnote popover is still open. While it is
-   * true, a pending debounced save is not flushed before an incoming update replaces the editor: it
-   * holds pre-merge text. The write gate would reject it, and the save-failure path would put that
-   * text back on screen; in the moment the block outlasts the gate, it would be written over the
-   * merge.
+   * user has typed again since the block ended or a footnote row editor session is still open.
+   * While it is true, a pending debounced save is not flushed before an incoming update replaces
+   * the editor: it holds pre-merge text. The write gate would reject it, and the save-failure path
+   * would put that text back on screen; in the moment the block outlasts the gate, it would be
+   * written over the merge.
    */
   isSyncBlocked?: boolean;
 }): void {
@@ -326,10 +326,10 @@ export function useEditorPdpSync({
 
   // A Send/Receive replaces the chapter on disk with its merge. Forget the last edit in this view
   // as soon as it starts, so the merge is applied during the block or after it. Two exceptions push
-  // the pre-merge text over the merge once writes are accepted again: a footnote popover still open
-  // (`isEditingSessionActive`), and a merge delivered after the user has typed again. The block
-  // outlasts the write gate by the store's `HIDE_GRACE_MS` to make the second unlikely, but nothing
-  // here rules it out. Called before the sync effect so a block and a delivery in the same render
+  // the pre-merge text over the merge once writes are accepted again: a footnote row editor session
+  // still open (`isEditingSessionActive`), and a merge delivered after the user has typed again.
+  // The block outlasts the write gate by the store's `HIDE_GRACE_MS` to make the second unlikely,
+  // but nothing here rules it out. Called before the sync effect so a block and a delivery in the same render
   // are handled in that order.
   useForgetEditsWhen(isSyncBlocked, lastLocalEditTimestamp);
   // Leaving for another web view ends the claim for good, rather than only while focus is away:
@@ -469,7 +469,7 @@ export function useEditorPdpSync({
       // Focus is asked of the editor instance itself via `editorRef.current.isFocused()`, so the
       // answer is scoped to THIS editor's own content-editable root rather than a global
       // `document.querySelector('.editor-input')` that couples to the CSS class name and to DOM
-      // order (a footnote-editor popover renders its own `.editor-input`).
+      // order (a footnote row editor renders its own `.editor-input`).
       //
       // `isFocused()` alone overstates the claim: each web view's iframe keeps its own focused
       // element, so the editor still reports focus after the user clicks into Find.
@@ -485,13 +485,14 @@ export function useEditorPdpSync({
       // back. A parked caret must never defer external writes indefinitely: a Send/Receive merge
       // or another app's concurrent write has to land — not be overwritten by the focused editor's
       // pre-merge content — however long ago the user last typed, and the window is what bounds
-      // the deferral. An active editing SESSION (marker palette, footnote
-      // popover — `isEditingSessionActive`) still defers regardless of the window: typing inside
-      // the popover's own editor never stamps the main editor's local-edit timestamp, and
-      // replacing the main editor mid-session regenerates every Lexical key and kills the session.
-      // The predicate bounds only the footnote-popover session web-view-side (a wedged note session
-      // stops deferring once stale). A marker-palette session has no bound: while one stays open,
-      // every differing same-document update is deferred and the editor's content pushed over it,
+      // the deferral. An open marker-palette session (`isEditingSessionActive`) still defers
+      // regardless of the window, because replacing the main editor mid-session regenerates every
+      // Lexical key and kills the session. A footnote row session does not: it defers only on the
+      // Scripture editor's terms above (focus in the pane, an edit within the window), and is
+      // never reported stale; once that claim lapses, the update replaces the document and ends
+      // the session. A note session with no row editor behind it is bounded web-view-side (a
+      // wedged one stops deferring once stale). A marker-palette session has no bound: while one
+      // stays open, every differing same-document update is deferred and the editor's content pushed over it,
       // including a genuine external merge — a known gap documented on
       // `resolveEditingSessionActivity`.
       //

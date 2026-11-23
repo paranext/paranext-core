@@ -47,7 +47,7 @@ test.describe('scripture editor marker palette typed through', () => {
       const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
       await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
       await navigateToolbarBcv(mainPage, 'Jonah 1:1');
-      // `.first()` because the footnote-editor popover renders its own `.editor-input.marker-editable`.
+      // `.first()` because the footnotes pane's row editor renders its own `.editor-input.marker-editable`.
       const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
       await expect(editorInput).toContainText('word came to Jonah the son of Amittai', {
         timeout: 60_000,

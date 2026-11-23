@@ -1,4 +1,4 @@
-import { getWebViewIframe } from '@renderer/services/overlays/overlay-coordinates';
+import { getWebViewIframe } from '@renderer/components/web-view-iframe.util';
 import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_IDENTITY_STATE_KEY,

@@ -1556,7 +1556,7 @@ export async function runNoUnaskedEdits(
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
-    // `.first()`: a footnote popover renders an editor input of its own.
+    // `.first()`: a footnote row editor renders an editor input of its own.
     const editorInput = editorFrame.locator('.editor-input').first();
     const context: GestureContext = { mainPage, electronApp, editorInput };
 
@@ -1849,10 +1849,8 @@ export async function runPreviewWritesNothing({
     // `data-web-view-id` is on `.platform-tab-title` (`platform-tab-title.component.tsx`).
     const tabTitle = mainPage.locator(`.platform-tab-title[data-web-view-id="${editorId}"]`);
     const footnotesPane = editorFrame.locator('[data-footnotes-pane]');
-    // The footnote editor popover is the one pop-up that holds an editor of its own.
-    const footnotePopover = editorFrame
-      .locator('[data-slot="popover-content"]')
-      .filter({ has: editorFrame.locator('.editor-input') });
+    // The footnotes pane's row editor is the one surface that holds a note editor of its own.
+    const editingRow = footnotesPane.locator('li[data-state="editing"]');
 
     /** The positive view check: the run is measuring Preview, read-only, and not some other view. */
     const expectPreview = async () => {
@@ -1911,7 +1909,7 @@ export async function runPreviewWritesNothing({
             1,
             { timeout: 20_000 },
           );
-          await expect(footnotePopover).toHaveCount(0);
+          await expect(editingRow).toHaveCount(0);
           await sendCommandWithId(mainPage, 'platformScriptureEditor.toggleFootnotes', editorId);
           await expect(footnotesPane).toHaveCount(0, { timeout: 20_000 });
         });

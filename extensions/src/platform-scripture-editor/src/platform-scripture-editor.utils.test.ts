@@ -4918,13 +4918,11 @@ describe('resolveAddChapterNumberClick', () => {
 describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   const base = {
     isCollapsed: true,
-    editingNoteKey: undefined,
-    popoverShown: false,
     paneVisible: false,
     paneRendered: false,
     isPowerMode: true,
-    surface: 'popover' as const,
-    usesPaneModel: false,
+    surface: 'pane' as const,
+    usesPaneModel: true,
   };
 
   it('navigates a read-only Preview caller to the pane and shows a hidden pane in Power', () => {
@@ -4952,94 +4950,24 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     expect(d.action).toBe('ignore-read-only');
   });
 
-  it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
-    expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
-      clearStaleEditingSession: false,
-      action: 'open-popover',
-      sendPaneFocusRequest: false,
-      showPane: false,
-    });
-  });
-
   it('ignores clicks on expanded notes', () => {
     expect(decideNoteCallerClickAction({ ...base, isCollapsed: false })).toEqual({
-      clearStaleEditingSession: false,
       action: 'ignore-expanded',
       sendPaneFocusRequest: false,
       showPane: false,
     });
   });
 
-  it('ignores clicks while a popover session is really shown (one at a time)', () => {
-    expect(
-      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: true }),
-    ).toEqual({
-      clearStaleEditingSession: false,
-      action: 'ignore-popover-open',
-      sendPaneFocusRequest: false,
-      showPane: false,
-    });
-  });
-
-  it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
-    // A leftover editingNoteKey must not silently swallow every future caller click.
-    expect(
-      decideNoteCallerClickAction({
-        ...base,
-        editingNoteKey: 'note-1',
-        popoverShown: false,
-        isPowerMode: false,
-      }),
-    ).toEqual({
-      clearStaleEditingSession: true,
-      action: 'open-popover',
-      sendPaneFocusRequest: false,
-      showPane: false,
-    });
-  });
-
-  it('still opens the popover when the pane is rendered — the pane highlight rides alongside', () => {
-    // On the popover surface (every view but a pane-model one), a routed click opens the popover; the
-    // rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
+  it('opens the row editor and highlights the note when the pane is already rendered', () => {
+    // The rendered pane additionally highlights the clicked note (PT9 navigate-to-note); nothing
+    // needs revealing.
     expect(decideNoteCallerClickAction({ ...base, paneVisible: true, paneRendered: true })).toEqual(
       {
-        clearStaleEditingSession: false,
-        action: 'open-popover',
+        action: 'open-pane-editor',
         sendPaneFocusRequest: true,
         showPane: false,
       },
     );
-  });
-
-  it('Power Formatted reveals a hidden pane alongside the popover, and highlights the note once it mounts', () => {
-    expect(decideNoteCallerClickAction({ ...base, isPowerMode: true })).toEqual({
-      clearStaleEditingSession: false,
-      action: 'open-popover',
-      sendPaneFocusRequest: true,
-      showPane: true,
-    });
-  });
-
-  it('a pane-model view ignores clicks while a popover opened before switching to it is still shown', () => {
-    // The popover applies its text only on Save, so opening the row editor (which closes the
-    // popover) would discard what was typed. The popover is finished through its own Save or X.
-    expect(
-      decideNoteCallerClickAction({
-        ...base,
-        isPowerMode: false,
-        surface: 'pane',
-        usesPaneModel: true,
-        editingNoteKey: 'note-1',
-        popoverShown: true,
-        paneVisible: true,
-        paneRendered: true,
-      }),
-    ).toEqual({
-      clearStaleEditingSession: false,
-      action: 'ignore-popover-open',
-      sendPaneFocusRequest: false,
-      showPane: false,
-    });
   });
 
   it('Simple pane-model view: opens the row editor and reveals a hidden pane', () => {
@@ -5047,11 +4975,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       decideNoteCallerClickAction({
         ...base,
         isPowerMode: false,
-        surface: 'pane',
-        usesPaneModel: true,
       }),
     ).toEqual({
-      clearStaleEditingSession: false,
       action: 'open-pane-editor',
       sendPaneFocusRequest: true,
       showPane: true,
@@ -5064,7 +4989,6 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
         ...base,
         isPowerMode: false,
         surface: 'none',
-        usesPaneModel: true,
       }),
     ).toMatchObject({ action: 'navigate-only', showPane: true, sendPaneFocusRequest: true });
   });
@@ -5073,54 +4997,23 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     // paneVisible without paneRendered: the toggle is on but the data has not loaded — nothing to
     // show and nothing to highlight yet.
     expect(decideNoteCallerClickAction({ ...base, paneVisible: true, isPowerMode: true })).toEqual({
-      clearStaleEditingSession: false,
-      action: 'open-popover',
+      action: 'open-pane-editor',
       sendPaneFocusRequest: false,
       showPane: false,
     });
   });
 
-  it('clears a stale session while still doing the pane work', () => {
-    expect(
-      decideNoteCallerClickAction({
-        ...base,
-        editingNoteKey: 'note-1',
-        paneVisible: true,
-        paneRendered: true,
-      }),
-    ).toEqual({
-      clearStaleEditingSession: true,
-      action: 'open-popover',
-      sendPaneFocusRequest: true,
-      showPane: false,
-    });
-  });
-
   it('Standard view: opens the pane editor and reveals a hidden pane', () => {
-    const d = decideNoteCallerClickAction({ ...base, surface: 'pane', usesPaneModel: true });
+    const d = decideNoteCallerClickAction(base);
     expect(d).toEqual({
-      clearStaleEditingSession: false,
       action: 'open-pane-editor',
       showPane: true,
       sendPaneFocusRequest: true,
     });
   });
 
-  it('Standard view: an open pane session is not stale bookkeeping', () => {
-    const d = decideNoteCallerClickAction({
-      ...base,
-      surface: 'pane',
-      usesPaneModel: true,
-      editingNoteKey: 'k1',
-      paneVisible: true,
-      paneRendered: true,
-    });
-    expect(d.clearStaleEditingSession).toBe(false);
-    expect(d.action).toBe('open-pane-editor');
-  });
-
   it('read-only Standard view: navigates only, still revealing the pane in Power mode', () => {
-    const d = decideNoteCallerClickAction({ ...base, surface: 'none', usesPaneModel: true });
+    const d = decideNoteCallerClickAction({ ...base, surface: 'none' });
     expect(d.action).toBe('navigate-only');
     expect(d.showPane).toBe(true);
     expect(d.sendPaneFocusRequest).toBe(true);
@@ -5139,7 +5032,6 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
           paneRendered: true,
         }),
       ).toEqual({
-        clearStaleEditingSession: false,
         action: 'ignore-read-only',
         sendPaneFocusRequest: false,
         showPane: false,
@@ -5156,25 +5048,6 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
         isCollapsed: false,
       }).action,
     ).toBe('ignore-expanded');
-  });
-
-  it('popover surface keeps ignoring a click while the popover is open', () => {
-    expect(
-      decideNoteCallerClickAction({ ...base, popoverShown: true, editingNoteKey: 'k' }).action,
-    ).toBe('ignore-popover-open');
-  });
-
-  it('popover shown without a tracked key still blocks the click (never open a second popover)', () => {
-    // popoverShown alone is enough to block a routed click, even without editingNoteKey: opening a
-    // second popover while one is already on screen would be the bug, not the safe outcome.
-    const d = decideNoteCallerClickAction({
-      ...base,
-      surface: 'popover',
-      popoverShown: true,
-      editingNoteKey: undefined,
-    });
-    expect(d.action).toBe('ignore-popover-open');
-    expect(d.clearStaleEditingSession).toBe(false);
   });
 });
 
@@ -5304,8 +5177,8 @@ describe('resolveNoteEditingSurface', () => {
     expect(resolveNoteEditingSurface({ usesPaneModel: true, isReadOnly: false })).toBe('pane');
   });
 
-  it('routes every other view to the popover', () => {
-    expect(resolveNoteEditingSurface({ usesPaneModel: false, isReadOnly: false })).toBe('popover');
+  it('has no editing surface in a view that does not use the pane note model', () => {
+    expect(resolveNoteEditingSurface({ usesPaneModel: false, isReadOnly: false })).toBe('none');
   });
 
   it('has no editing surface when read-only, in any view', () => {

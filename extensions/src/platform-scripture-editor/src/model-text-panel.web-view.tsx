@@ -20,6 +20,7 @@ import { useEffectiveResourceReferenceList } from './use-effective-resource-refe
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { getModelResourceProjectId, isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
+import { useReadOnlyPanelContextMenuCallbacks } from './use-read-only-panel-context-menu-callbacks.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { useAllowInvisibleCharacters } from './use-allow-invisible-characters.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
@@ -52,6 +53,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
  */
 globalThis.webViewComponent = function ModelTextPanelWebView({
   id: webViewId,
+  webViewType,
   projectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
@@ -126,6 +128,11 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // Ctrl+F opens Find for the displayed model resource.
   useOpenFindShortcut(webViewId, modelResourceProjectId);
+  const contextMenuCallbacks = useReadOnlyPanelContextMenuCallbacks(
+    webViewId,
+    webViewType,
+    modelResourceProjectId,
+  );
 
   // This web view's definition `projectId` is the editable project whose model-text setting is
   // read, so the displayed resource is invisible to global navigation UI unless declared here.
@@ -244,6 +251,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       resourceCopyLimit={resourceCopyLimit}
       allowInvisibleCharacters={allowInvisibleCharacters}
       logger={logger}
+      contextMenu={contextMenuCallbacks}
       copyrightNotice={
         <ProjectCopyrightNotice
           projectId={displayedProjectId}

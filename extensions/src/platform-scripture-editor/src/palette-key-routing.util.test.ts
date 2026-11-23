@@ -21,7 +21,7 @@ describe('shouldRoutePaletteKey', () => {
   it('does not route when the editor does not hold focus', () => {
     // Focus is the whole rule. Once the palette has focus its keys come back through key
     // forwarding, not through here; anything else focused in the web view — the footnote
-    // popover's editor, a comment box — keeps its own keys. Claiming those would feed the
+    // row editor, a comment box — keeps its own keys. Claiming those would feed the
     // palette's filter, or commit a marker, while the user types somewhere else entirely.
     expect(shouldRoutePaletteKey({ ...base, isEditorFocused: false })).toBe(false);
   });

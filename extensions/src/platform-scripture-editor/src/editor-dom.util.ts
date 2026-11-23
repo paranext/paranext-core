@@ -883,40 +883,6 @@ export function createPendingCommentAnchorSource(
 }
 
 /**
- * Builds the anchor source for the footnote/cross-reference editor popover, in the shape
- * `useLivePopoverAnchor`'s `setSource` takes. Anchors on the note caller's left edge, spanning its
- * height, so the popover shows below (or above) the caller's line.
- *
- * The caller element the click handler captured can go missing from under it — the editor
- * re-renders note callers as notes are added, moved or removed elsewhere in the chapter — so this
- * re-resolves by key through `getElementByKey` once the captured element is no longer connected, on
- * every measurement rather than once, so the anchor keeps following the note across any number of
- * re-renders while the popover stays open.
- *
- * @param element The note caller element as it was when the popover opened.
- * @param noteKey The editor's node key for the note, used to re-resolve `element` once it detaches.
- * @param getElementByKey Resolves a node key to its current rendered element, or `undefined` if the
- *   note no longer exists in the document. Passed as a callback rather than an editor reference so
- *   this module stays free of the editor's own types.
- * @returns The anchor source for `useLivePopoverAnchor().setSource`.
- */
-export function createNoteAnchorSource(
-  element: Element,
-  noteKey: string,
-  getElementByKey: (nodeKey: string) => HTMLElement | undefined,
-): LivePopoverAnchorSource {
-  return {
-    measure: () => {
-      const target = element.isConnected ? element : getElementByKey(noteKey);
-      if (!target) return undefined;
-      const rect = measureBox(target);
-      return rect && leftEdgeRect(rect);
-    },
-    contextElement: element.closest('.editor-input') ?? element,
-  };
-}
-
-/**
  * Builds the fallback anchor source for the pending-comment popover, used when there is no live DOM
  * selection to anchor {@link createPendingCommentAnchorSource} to — the popover then centers on the
  * editor's own viewport instead of tracking any particular text.
@@ -974,7 +940,7 @@ export function scrollToAnnotation(getRanges: AnnotationRangesSource): HTMLEleme
  *
  * @param noteElement The note's element in the Scripture editor (`EditorRef.getElementByKey` of the
  *   note's key) - resolved by key rather than by a document query, since every mounted editor (the
- *   footnotes pane's row editor, the note popover's) renders note elements of its own
+ *   footnotes pane's row editor) renders note elements of its own
  */
 export function scrollToNoteCaller(noteElement: HTMLElement): void {
   scrollElementIntoScrollContainer(noteElement);
@@ -1075,6 +1041,12 @@ export function keepScrollPositionAcross(
  * reach another list in the document (a portalled menu's options are `role="option"` too).
  */
 export const FOOTNOTES_PANE_ATTRIBUTE = 'data-footnotes-pane';
+
+/**
+ * Attribute that marks the footnotes pane's list of rows (the row editor and the read-only rows),
+ * not the pane's header or close button, so a selection can be told apart as inside the rows.
+ */
+export const FOOTNOTES_ROWS_ATTRIBUTE = 'data-footnotes-rows';
 
 /**
  * Puts DOM focus on the footnotes pane's selected row, which is where a row-editing session was

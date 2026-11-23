@@ -160,7 +160,24 @@ export {
   DEVELOPER_SECTION_STRING_KEYS,
 } from './components/advanced/developer-section/developer-section.component';
 export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
+export {
+  default as MenuItemIcon,
+  type MenuItemIconProps,
+} from './components/advanced/menus/menu-icon.component';
+export {
+  getLeadingIconSlot,
+  type ItemWithLeadingIcon,
+  type LeadingIconSlot,
+} from './components/advanced/menus/menu.util';
 export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';
+export {
+  useEditorContextMenu,
+  type EditorContextMenuRequest,
+  type UseEditorContextMenuOptions,
+  type UseEditorContextMenuResult,
+} from './hooks/use-editor-context-menu.hook';
+export { runKeepingBrowserSelection } from './utils/browser-selection.util';
+export { focusEditorKeepingSelection } from './utils/focus-editor-keeping-selection.util';
 export {
   LucideIcon,
   LUCIDE_ICON_NAMES,
