@@ -7,9 +7,8 @@ import { describe, expect, it } from 'vitest';
  * enforced there by crashing.
  *
  * `main.ts` is this extension's entry point (`manifest.json` → `"main"`), so everything it reaches
- * is loaded in the extension host. The host loads it with its own extension `require` (and
- * replaces `Module.prototype.require` with the same function as a shim), which allows a short list
- * of modules and throws "Requiring other than papi is not allowed in extensions!" for anything else
+ * is loaded in the extension host. The host loads it with its own extension `require`, which
+ * allows a short list of modules and throws "Requiring other than papi is not allowed in extensions!" for anything else
  * (`requireForExtension` in `src/extension-host/services/extension.service.ts`). Webpack bundles
  * most dependencies, so most bare imports never reach that `require` — but the modules in
  * `extensions/webpack/webpack.config.base.ts` → `externals` stay as `require` calls, and `react`,
@@ -32,11 +31,11 @@ const ENTRY_POINT = path.join(SRC_DIR, 'main.ts');
  * Bare module specifiers a host-reachable file may value-import.
  *
  * Deliberately an allowlist rather than a denylist of UI packages: a denylist silently misses the
- * next UI package someone adds. Keep this in sync with the shim's allowed modules in
+ * next UI package someone adds. Keep this in sync with the extension `require`'s allowed modules in
  * `src/extension-host/services/extension.service.ts`.
  */
 const ALLOWED_MODULES = new Set([
-  // Supplied by the extension host's `require` shim
+  // Supplied by the extension host's extension `require`
   '@papi/backend',
   '@papi/core',
   '@sillsdev/scripture',
@@ -165,7 +164,7 @@ describe('extension host import boundary', () => {
 
   it('value-imports only modules the extension host supplies', () => {
     // If this fails, do NOT add the module to `ALLOWED_MODULES` to make it pass unless it is one the
-    // host's `require` shim actually supplies. The fix is normally one of:
+    // host's extension `require` actually supplies. The fix is normally one of:
     //   1. make the import type-only (`import type { … }`) if you only need its types;
     //   2. move the code that needs the runtime value into a module the host never reaches — see
     //      `find/extra-material.utils.ts`, which exists for exactly this reason;
@@ -176,7 +175,7 @@ describe('extension host import boundary', () => {
 
   it('pulls in no .tsx file, which would emit a react/jsx-runtime require', () => {
     // A `.tsx` file compiles JSX to `react/jsx-runtime` calls, and `react/jsx-runtime` is a webpack
-    // external the shim rejects — so a host-reachable `.tsx` file fails activation even when none of
+    // external the extension `require` rejects — so a host-reachable `.tsx` file fails activation even when none of
     // its own imports are UI modules.
     expect(filesInGraph.filter((file) => file.endsWith('.tsx'))).toEqual([]);
   });

@@ -1175,7 +1175,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
 /**
  * Loads an extension and runs its activate function.
  *
- * WARNING: This does not shim functionality out of extensions! Do not run this alone. Only run
+ * WARNING: This does not apply the extension sandbox's lockdowns! Do not run this alone. Only run
  * wrapped in activateExtensions().
  *
  * @param extension - Extension info for the extension to activate.
@@ -1337,8 +1337,8 @@ async function callActivateOnExtension(
  * The modules the extension host supplies to an extension at run time, by the specifier that
  * reaches them.
  *
- * A DATA table rather than a chain of comparisons inside the shim, so the set an extension may link
- * against is something a guard can compare by VALUE. `Record` over
+ * A DATA table rather than a chain of comparisons inside `requireForExtension`, so the set an
+ * extension may link against is something a guard can compare by VALUE. `Record` over
  * `ExtensionInterfaceModuleSpecifier` and not `string`: the type has no index signature, so a
  * module supplied here without a specifier in
  * `@extension-host/data/extension-interface-modules.data` - or a specifier there with nothing

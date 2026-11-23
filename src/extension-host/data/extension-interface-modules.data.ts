@@ -12,9 +12,9 @@
  * Kept in a module of its own, importing nothing, for one reason: the guard that has to notice a
  * change to it (`extension.service.module-allowlist.test.ts`) must be able to read it as a VALUE.
  * `extension.service.ts` cannot be imported from a test - it creates directories at module scope,
- * and installing the shim is a side effect of `activateExtensions`, which also deletes
- * `globalThis.eval` and replaces `fetch` - so a guard that reached for the list there would have to
- * scrape source text and would only recognize the one syntax it was written against.
+ * and `activateExtensions` applies the lockdowns, which delete `globalThis.eval`, and replaces
+ * `fetch` - so a guard that reached for the list there would have to scrape source text and would
+ * only recognize the one syntax it was written against.
  *
  * `EXTENSION_INTERFACE_MODULES` in `extension.service.ts` is typed as a `Record` over this union,
  * so the two cannot drift: a module supplied without a specifier here, or a specifier here with no

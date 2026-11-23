@@ -5816,9 +5816,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the relicense code review; PAPI question raised in the review of #2654.
 - **Amended 2026-11-09 (PT-1566):** superseded in part by
   `adr-extensions-load-through-sandbox-loader`. The host now supplies the `@papi/*` modules
-  through the `require` it hands each extension file when it loads it (`requireForExtension`),
-  with the `Module.prototype.require` shim kept as defense in depth. The licensing decision and
-  the Extension Interface it relies on are unchanged.
+  through the `require` it hands each extension file when it loads it (`requireForExtension`);
+  the `Module.prototype.require` shim is removed. The licensing decision and the Extension
+  Interface it relies on are unchanged.
 
 ## adr-lightweight-decision-log: Keep a lightweight, gate-free architecture-decisions log
 
