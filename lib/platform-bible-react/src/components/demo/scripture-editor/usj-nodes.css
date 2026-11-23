@@ -16,7 +16,8 @@
      literal black, so it stays visible against a dark app theme.
    - The source's four `local()`-only Charis SIL `@font-face` rules are dropped.
    The empty-verse caret rules (`.psc-empty-text-active`, `[data-caret-host]`) come from
-   scripture-editors#34, unmerged when copied. */
+   scripture-editors#34, unmerged when copied. The `.marker-editable .unknown-block`
+   `text-indent: 0` comes from scripture-editors#57, unmerged when copied. */
 
 /* stylelint-disable */
 

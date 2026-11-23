@@ -11,6 +11,8 @@
    (`--psc-empty-verse-ellipsis-width`) is the verse number size (`--psc-verse-number-size`, 13/16
    of the base size, so 13px at the default) rather than 18px, closer to this copy's previous
    ellipsis, which had no padding around the glyph.
+   The `.marker-editable .unknown-block` `text-indent: 0` comes from scripture-editors#57,
+   unmerged when copied.
    The Simple-mode verse, heading and ellipsis sizes are base-relative here
    (`--psc-base-font-size`, in the gutter section) and intentionally not in the demo copy, where
    no project stylesheet is injected.
