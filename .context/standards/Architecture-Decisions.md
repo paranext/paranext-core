@@ -7745,6 +7745,60 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   trip to the extension host. A hidden panel needs no catch-up: the switch reloads it like a visible
   one, and picking the selection is data, not layout.
 
+## adr-papi-connection-identity-and-access-table: Main identifies each PAPI connection by a per-launch secret and restricts a short list of request types by identity
+
+- **Date:** 2026-11-13
+- **Status:** Accepted
+- **Context:** The PAPI WebSocket on `localhost:8876` checked nothing at connect, so any local
+  process and any page open in the user's browser could call every request type and register any
+  unclaimed one, including a sensitive one before its real handler started. A sweep found a
+  browser page could change the proxy and DBL server addresses while the saved passwords stayed in
+  use, delete or switch the registration, decrypt anything protected with `papi.dataProtection`,
+  and read the whole main log. The only guard was an `Origin`-header check on
+  `requestRegistryTokens:getAccessToken`, which trusted a header the caller supplies.
+- **Decision:** Main issues two secrets (`crypto.randomBytes(32)`, base64url) to each child each
+  time it launches it: over fork IPC to the extension host, before any extension loads; on standard
+  input to packaged .NET; in an environment variable set only in the spawn options to .NET in
+  development, where `dotnet watch` passes it to each restart. The child presents the client secret
+  in the `x-papi-client-secret` handshake header and closes unless main's reply carries the server
+  secret in `x-papi-server-secret`; it uses them once and drops them. Main keeps only a SHA-256
+  digest of each client secret and tags every connection `main`, `renderer` (port broker),
+  `extensionHost`, `dotnetDataProvider` or `unidentified`; a wrong secret is refused with 401, a
+  second connection of an open launch with 409, and an earlier launch's connection is closed when
+  the next launch connects. A frozen table in `src/shared/data/request-access.data.ts` names, for a
+  short list of request types, who may call (main always may) and the one identity that may
+  register. Registrants can restrict their own handlers with `allowedCallers` on
+  `NetworkMethodHandlerOptions`, ignored for a request type the table restricts. `RpcServer` enforces both on every
+  remote call (before the event branch, per request in a batch) and registration;
+  `RpcClient.request` enforces them on the in-process shortcut, and .NET's `PapiClient` calls its own
+  handlers directly. The `Origin` check is removed.
+- **Alternatives:** Deny by default: closes the browser-page hole, but every external client would
+  need a credential route, and it reverses the position that browser clients (the OpenRPC
+  playground, browser-based testing) are legitimate. Read-only unless identified: needs every
+  request type classified. Presenting the secret in a grown `network:announcePeer`: the connection
+  would exist unidentified until it arrived, so a registration could come first. Hard-coding
+  extension commands in core's table: core would have to know other repos' command names;
+  extensions declare `allowedCallers` instead. A shared secret between a WebViewController and its
+  WebView: same-origin WebViews can read each other and share one connection. Encrypting the socket
+  (`wss`): loopback traffic never leaves the machine, the server secret already proves main to its
+  children, `wss` identifies no client, and it would need a per-launch certificate, pinning in `ws`
+  and C#, and a user-installed trusted certificate for browsers, which breaks the playground. A C#
+  copy of the table: no third-party code runs in .NET, and a second copy would drift.
+- **Consequences:** The guarantee for a restricted request type is "only the extension host
+  process", not "only the extensions that hold the privilege": every extension shares the host's
+  realm and connection, so a malicious installed extension can still send anything on it (PT-5072
+  decides how to separate extensions). A WebView can drive its window's connection, so rows that
+  allow `renderer` allow a WebView. Unidentified clients keep everything not on the list, including
+  writes to project data and settings. A child started without main (`npm run start:data`, VS Code's
+  "Debug .NET Core", `npm run start:extension-host`, "Debug Extension Host") has no secret, connects
+  unidentified, and loses the restricted features; if that ever matters while debugging, the route
+  to add is dev-only: in unpackaged builds main writes both children's secrets to a user-only file,
+  and a standalone child reads it when it was handed nothing. No child reconnects today; reconnect
+  work (PT-4495) will need a way to obtain a fresh secret. The secret-delivery channel is the one a
+  dynamic port (PT-4109) can reuse. Event ownership is unchanged (PT-5073). A new sensitive request
+  type goes in the table, with a test that its string matches the constant its handler registers.
+- **Source:** PT-2893; the Marketplace's use of `allowedCallers` is PT-5074.
+
 ## adr-papi-port-blocked-at-the-session: Renderer windows are kept off the PAPI port by the main process's session, not by the renderer alone
 
 - **Date:** 2026-11-12
@@ -9589,6 +9643,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   follow-up above, previously tracked as PT-4750, is retargeted to PT-4884 (throw codes instead of
   returning them); revisit it together with the WebSocket-authentication and consent-prompt
   conditions above.
+- **Amended 2026-11-13:** Main now identifies each connection by a per-launch secret, and only the
+  extension host process may call `requestRegistryTokens:` request types and only the data
+  provider main launched may register them (`adr-papi-connection-identity-and-access-table`). The
+  `Origin`-header stopgap described above is removed. A web page or WebView can no longer send the
+  request type, because it is not the extension host's connection. The public PAPI surface gives
+  extensions no way to send this request type, so an honest extension reaches it only through the
+  privilege getter, which checks the allowlist; a malicious extension sharing the host's connection
+  can still send it directly. This meets the WebSocket-authentication revisit
+  condition the 2026-11-03 amendment refers to; the consent-prompt and PT-4884 conditions remain.
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
 
