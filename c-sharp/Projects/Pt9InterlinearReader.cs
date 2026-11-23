@@ -208,10 +208,12 @@ internal static class Pt9InterlinearReader
     ///
     /// The attributes are the same ones the parsed payload's <c>GlossLanguage</c> and <c>BookId</c>
     /// come from, so a caller reading the probe and a caller reading the data name the same book
-    /// the same way. Anything that goes wrong reading them - a malformed file, an unexpected root,
-    /// an absent attribute - answers null rather than throwing: the probe's contract is the hash,
-    /// and a file whose identity cannot be established is exactly one a caller most wants listed
-    /// rather than one that should fail the whole probe.
+    /// the same way. <see cref="FindPt9InterlinearFiles"/> already excludes well-formed files whose
+    /// root is not <c>InterlinearData</c> (<see cref="IsForeignPt9BookFile"/>), so a null identity
+    /// comes from a malformed file, an absent attribute, or a file replaced after the scan. Each
+    /// answers null rather than throwing: the probe's contract is the hash, and a file whose
+    /// identity cannot be established is exactly one a caller most wants listed rather than one
+    /// that should fail the whole probe.
     /// </summary>
     private static (string? GlossLanguage, string? BookId) ReadPt9BookIdentity(Stream stream)
     {
@@ -219,10 +221,11 @@ internal static class Pt9InterlinearReader
         {
             // The payload parse decodes these files the same way, so the probe and the payload
             // read identical text.
-            using var xmlReader = CreatePt9RootElementReader(stream);
+            using var xmlReader = CreatePt9RootElementReader(stream, DtdProcessing.Prohibit);
             // The root element only: the payload parse binds the root, so matching an
-            // InterlinearData at any other depth would name a different book. MoveToContent stops
-            // at the first content node, so a file with no such root costs nothing to reject.
+            // InterlinearData at any other depth would name a different book. The scan has
+            // already dropped files with another root; this check guards against a file replaced
+            // after the scan.
             if (
                 xmlReader.MoveToContent() != XmlNodeType.Element
                 || xmlReader.Name != "InterlinearData"
@@ -410,7 +413,14 @@ internal static class Pt9InterlinearReader
         try
         {
             using var reader = fileManager.OpenFileForByteRead(relativePath);
-            using var xmlReader = CreatePt9RootElementReader(reader.BaseStream);
+            // Ignore, not Prohibit: a foreign document may lead with a DOCTYPE (an XHTML export,
+            // say), and only its root element matters here. Ignore skips the DTD without
+            // expanding entities. A DOCTYPE-led InterlinearData file is still rejected by the
+            // payload parse, which prohibits DTDs.
+            using var xmlReader = CreatePt9RootElementReader(
+                reader.BaseStream,
+                DtdProcessing.Ignore
+            );
             return xmlReader.MoveToContent() == XmlNodeType.Element
                 && xmlReader.Name != "InterlinearData";
         }
@@ -428,11 +438,15 @@ internal static class Pt9InterlinearReader
 
     /// <summary>
     /// Creates an XML reader that probes the root element of an open PT9 interlinear file. It
-    /// decodes as UTF-8 with byte-order-mark detection and prohibits DTDs, as the payload parse
-    /// does. It stops after <see cref="Pt9IdentityScanCharLimit"/> characters. Disposing the
-    /// reader neither closes nor rewinds the stream; the caller owns both.
+    /// decodes as UTF-8 with byte-order-mark detection, as the payload parse does, and handles a
+    /// DTD as <paramref name="dtdProcessing"/> says. It stops after
+    /// <see cref="Pt9IdentityScanCharLimit"/> characters. Disposing the reader neither closes nor
+    /// rewinds the stream; the caller owns both.
     /// </summary>
-    private static XmlReader CreatePt9RootElementReader(Stream stream) =>
+    private static XmlReader CreatePt9RootElementReader(
+        Stream stream,
+        DtdProcessing dtdProcessing
+    ) =>
         XmlReader.Create(
             new StreamReader(
                 stream,
@@ -443,7 +457,7 @@ internal static class Pt9InterlinearReader
             ),
             new XmlReaderSettings
             {
-                DtdProcessing = DtdProcessing.Prohibit,
+                DtdProcessing = dtdProcessing,
                 CloseInput = true,
                 MaxCharactersInDocument = Pt9IdentityScanCharLimit,
             }
