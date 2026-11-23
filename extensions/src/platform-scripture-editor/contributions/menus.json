@@ -128,7 +128,7 @@
           {
             "label": "%webView_platformScriptureEditor_showBooks%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > Project > Show books (resources only; opens Manage Books for the resource so its books can be viewed). Other projects have Manage books… in the same place",
+            "localizeNotes": "Scripture editor top menu (Power) > resource short name (e.g. NBV21) > Show books (resources only; opens Manage Books for the resource so its books can be viewed). Other projects have Manage books in the same place, under the Project heading",
             "iconNameBefore": "book-copy",
             "group": "platform.projectTop",
             "order": 2.5,

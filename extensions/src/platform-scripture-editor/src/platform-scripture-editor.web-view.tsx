@@ -1211,9 +1211,9 @@ function PlatformScriptureEditor({
     [viewType, isPowerMode],
   );
 
-  // Whether the editor's own selection is a range. Only a selection the editor reports changes it:
-  // an `undefined` report is a blur (opening a menu blurs the editor, whose selection stays and is
-  // what Copy copies), so it leaves the value alone. A chapter change or a Scripture view switch
+  // Whether the main editor's own selection is a range. Only a selection the editor reports changes
+  // it: an `undefined` report is a blur (opening a menu blurs the editor, whose selection stays and
+  // is what Copy copies), so it leaves the value alone. A chapter change or a Scripture view switch
   // replaces the editor's content and drops its selection without reporting one, so each clears it.
   const [hasSelection, setHasSelection] = useState(false);
 

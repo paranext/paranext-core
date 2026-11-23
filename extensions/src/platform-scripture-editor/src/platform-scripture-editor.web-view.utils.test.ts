@@ -1404,14 +1404,17 @@ describe('menus.json dynamic conditions', () => {
   };
 
   /**
-   * Whether a command's item is disabled. Undo and Redo are served as one item per interface mode
-   * (with and without an icon), so every copy must agree; every other command has exactly one
-   * item.
+   * Commands served as one item per interface mode (with and without an icon). Every other command
+   * has exactly one item.
    */
   const COMMANDS_WITH_PER_MODE_VARIANTS = [
     'platformScriptureEditor.undo',
     'platformScriptureEditor.redo',
   ];
+  /**
+   * Whether a command's item is disabled. For a command in {@link COMMANDS_WITH_PER_MODE_VARIANTS},
+   * every copy must agree.
+   */
   const isDisabledFn = (menu: { items: { command?: string; disabled?: boolean }[] }) => {
     return (command: string) => {
       const matches = menu.items.filter((item) => item.command === command);

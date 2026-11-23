@@ -442,7 +442,8 @@ declare module 'platform-scripture-editor' {
      *   its id when the name is unavailable
      * - `{projectId}`: Same as `{projectName}`. Prefer `{projectName}`.
      * - `{editable}`: The localized editable or read-only indicator (in English, `(Editable)` or
-     *   `(Read-only)`), or empty for a resource, so its title shows the short name alone.
+     *   `(Read-only)`), or nothing for a resource (the placeholder and the space next to it are
+     *   removed).
      */
     title?: string | LocalizeKey;
     /** Tooltip that is shown when hovering over the webview title */
