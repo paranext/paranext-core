@@ -5683,9 +5683,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   commit status API (a same-named check run would make GitHub require both, and a pending status
   would never clear). A separate workflow posts the status from default-branch code, and the check
   itself runs PR code with a read-only token (`library-dist-check.yml`, `library-dist-report.yml`).
-  (4) After a library change lands on a base branch, open library PRs into it are marked pending and
-  re-checked (`library-dist-recheck.yml`), and the final check on the branch itself goes red if its
-  `dist/` is stale. (5) `dist/` is marked `linguist-generated`, and a background workflow builds on
+  (4) After a library change lands on a base branch, each open library PR into it is marked pending
+  and its own check run is re-run (`library-dist-recheck.yml`; the check re-resolves the base tip
+  when it starts), so PR code only ever runs in the PR's own `pull_request` run and never in the base
+  branch's context. A run still in progress is cancelled first. The final check on the branch itself
+  goes red if its `dist/` is stale. (5) `dist/` is marked `linguist-generated`, and a background workflow builds on
   Windows, macOS and Linux and compares (`library-dist-determinism.yml`). Local check:
   `npm run verify:library-dist`.
 - **Alternatives:** A pushing bot that rebuilds and commits `dist/` on PRs: deferred, since it needs
@@ -5701,9 +5703,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (adjacent export names, the same component) still conflict and are resolved by deleting `dist/`,
   rebuilding and committing. A race of a few seconds remains between a library merge and the re-check
   marking open PRs pending; a PR can merge in that window, the final check on `main` goes red, and
-  it is fixed by hand with a rebuild PR. A dispatched re-check runs the merged PR's code, which could
-  rewrite its result to name another PR's current head and set that PR's status; GitHub's
-  `workflow_run` payload carries no dispatch inputs to bind it. Builds must be byte-identical on
+  it is fixed by hand with a rebuild PR. A PR whose check run is still running when a library change
+  lands has that run cancelled and re-run. A PR with no check run for its head commit is skipped
+  with a warning. Builds must be byte-identical on
   every OS, or the check fails for developers on another OS; the determinism workflow watches this.
   Transition: landing the new output rewrote every file in both `dist/` folders, so a branch open at
   that moment with `dist/` changes conflicts once; its author deletes `dist/`, runs

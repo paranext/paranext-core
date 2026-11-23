@@ -22,6 +22,7 @@ describe('isLibraryPath', () => {
     'lib/platform-bible-utils/vite.config.ts',
     'lib/platform-bible-react/dist/index.js',
     'package-lock.json',
+    'package.json',
   ])('treats %s as a library path', (filePath) => expect(isLibraryPath(filePath)).toBe(true));
 
   it.each([
@@ -29,6 +30,8 @@ describe('isLibraryPath', () => {
     'lib/papi-dts/papi.d.ts',
     'lib/platform-bible-react-extra/file.ts',
     'extensions/package-lock.json',
+    'extensions/package.json',
+    'lib/papi-dts/package.json',
   ])('does not treat %s as a library path', (filePath) =>
     expect(isLibraryPath(filePath)).toBe(false),
   );
@@ -106,10 +109,8 @@ describe('isTargetForRun', () => {
     expect(isTargetForRun(push, 'pull_request', SHA_A)).toBe(false));
   it('rejects a pull request target for another commit', () =>
     expect(isTargetForRun(pull, 'pull_request', SHA_B)).toBe(false));
-  it('accepts a manual run target with a pull request number', () =>
-    expect(isTargetForRun(pull, 'workflow_dispatch', SHA_B)).toBe(true));
-  it('rejects a manual run target without a pull request number', () =>
-    expect(isTargetForRun(push, 'workflow_dispatch', SHA_A)).toBe(false));
+  it('rejects a manual run target', () =>
+    expect(isTargetForRun(pull, 'workflow_dispatch', SHA_A)).toBe(false));
   it('rejects any other event', () => expect(isTargetForRun(pull, 'schedule', SHA_A)).toBe(false));
 });
 

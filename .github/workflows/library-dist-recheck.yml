@@ -1,15 +1,15 @@
 name: Library dist recheck
 
 # After a library change lands on a base branch, open library pull requests into it may no longer
-# merge into a current dist. Mark them pending so none merges on an old success, then re-check each.
-# Runs only base-branch code; it never builds or executes pull request code.
+# merge into a current dist. Mark each pending so none merges on an old success, then re-run that
+# pull request's own check run: it re-resolves the base tip when it starts. A run still in progress
+# is cancelled first. Runs only base-branch code; it never builds or executes pull request code, and
+# the pull request code only ever runs in the pull request's own check run.
+# No concurrency group: a duplicate re-run is harmless, because the check's per-pull-request group
+# cancels the older run.
 on:
   push:
-    branches: ['main', 'release-prep', 'hotfix-*']
-
-concurrency:
-  group: library-dist-recheck-${{ github.ref }}
-  cancel-in-progress: false
+    branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
 
 permissions:
   contents: read
@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: package.json
-      - name: Re-check open library pull requests
+      - name: Re-run the check of each open library pull request
         env:
           GH_TOKEN: ${{ github.token }}
           BEFORE_SHA: ${{ github.event.before }}
@@ -39,12 +39,38 @@ jobs:
           fi
           PULL_REQUESTS=$(gh pr list --base "$GITHUB_REF_NAME" --state open --limit 200 --json number,headRefOid,files \
             | node .erb/scripts/library-dist/select-library-prs.ts)
+
+          # Re-runs the latest pull_request check run of one pull request head commit.
+          recheck() {
+            local pr="$1" sha="$2" run_id run_status waited=0
+            read -r run_id run_status < <(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/library-dist-check.yml/runs?event=pull_request&head_sha=$sha&per_page=1" \
+              --jq '(.workflow_runs[0] // empty) | "\(.id) \(.status)"') || return 1
+            if [ -z "$run_id" ]; then
+              echo "::warning::No check run found for pull request #$pr at $sha; skipping"
+              return 0
+            fi
+            if [ "$run_status" != completed ]; then
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" || return 1
+              while [ "$run_status" != completed ]; do
+                if [ "$waited" -ge 120 ]; then
+                  echo "::warning::Check run $run_id for pull request #$pr did not finish cancelling; skipping"
+                  return 0
+                fi
+                sleep 10
+                waited=$((waited + 10))
+                run_status=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status) || return 1
+              done
+            fi
+            gh api "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=pending \
+              -f context="Library dist current" -f description="Re-checking after a library change on the base branch" \
+              && gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/rerun"
+          }
+
           FAILED=0
           while read -r PR SHA; do
             [ -n "$PR" ] || continue
-            if ! { gh api "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state=pending \
-                     -f context="Library dist current" -f description="Re-checking after a library change on the base branch" \
-                   && gh workflow run library-dist-check.yml --ref "$GITHUB_REF_NAME" -f pr="$PR"; }; then
+            if ! recheck "$PR" "$SHA"; then
               echo "::warning::Could not re-check pull request #$PR"
               FAILED=1
             fi

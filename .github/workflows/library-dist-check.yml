@@ -3,20 +3,14 @@ name: Library dist check
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: ['main', 'release-prep', 'hotfix-*']
+    branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
   push:
-    branches: ['main', 'release-prep', 'hotfix-*']
-  workflow_dispatch:
-    inputs:
-      pr:
-        description: Pull request number to re-check
-        required: true
-        type: string
+    branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
 
-# One run per pull request (or per base branch for pushes); a newer run cancels an older one so
-# only the newest result is reported.
+# One run per pull request, and one per pushed commit, so a newer push to a pull request cancels an
+# older run but back-to-back pushes to a base branch each keep their own check.
 concurrency:
-  group: library-dist-${{ github.event.pull_request.number || inputs.pr || github.ref }}
+  group: library-dist-${{ github.event_name == 'push' && github.sha || github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -36,7 +30,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_PR: ${{ github.event.pull_request.number }}
-          INPUT_PR: ${{ inputs.pr }}
           BEFORE_SHA: ${{ github.event.before }}
         run: |
           # The target file lives outside the workspace because actions/checkout cleans untracked
@@ -51,9 +44,13 @@ jobs:
             echo "diff_from=$BEFORE_SHA" >> "$GITHUB_OUTPUT"
             printf '{"sha":"%s","description":"Checking"}' "$GITHUB_SHA" > "$TARGET_FILE"
           else
-            PR="${EVENT_PR:-$INPUT_PR}"
-            [[ "$PR" =~ ^[0-9]+$ ]] || { echo "Invalid pull request number"; exit 1; }
-            read -r HEAD_SHA BASE_REF < <(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '"\(.head.sha) \(.base.ref)"')
+            PR="$EVENT_PR"
+            # Looked up at run time, so a re-run checks the pull request's current head and base.
+            # One retry covers a transient API error.
+            PR_FIELDS='"\(.head.sha) \(.base.ref)"'
+            read -r HEAD_SHA BASE_REF < <(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq "$PR_FIELDS" \
+              || { sleep 5; gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq "$PR_FIELDS"; })
+            [ -n "$HEAD_SHA" ] && [ -n "$BASE_REF" ] || { echo "Could not look up pull request #$PR"; exit 1; }
             echo "pr=$PR" >> "$GITHUB_OUTPUT"
             echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
             echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
@@ -77,7 +74,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: package.json
-          cache: npm
 
       - name: Merge the pull request into its base
         if: steps.target.outputs.pr != ''
