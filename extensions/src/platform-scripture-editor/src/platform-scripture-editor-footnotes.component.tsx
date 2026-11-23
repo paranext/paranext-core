@@ -704,10 +704,10 @@ export function FootnotesLayout({
     footnotesPanePositionRef.current = footnotesPanePosition;
   }, [footnotesPanePosition]);
 
-  // listen to messages from the web view controller. Only while the pane is shown: moving a pane
-  // nobody can see would change where it opens next without any visible effect.
+  // listen to messages from the web view controller. Switches position even while the pane is
+  // closed: the editor web view opens the pane on the same request, so it opens in the new
+  // position.
   useEffect(() => {
-    if (!isPaneVisible) return undefined;
     const webViewMessageListener = ({
       data: editorMessage,
     }: MessageEvent<EditorWebViewMessage>) => {
@@ -728,7 +728,7 @@ export function FootnotesLayout({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [isPaneVisible, setFootnotesPanePosition]);
+  }, [setFootnotesPanePosition]);
 
   const [footnotesPaneSizePercent, setFootnotesPaneSizePercent] = useWebViewState<number>(
     'footnotesPaneSizePercent',

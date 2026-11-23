@@ -1996,6 +1996,16 @@ declare module 'shared/models/openrpc.model' {
   export function withNotificationPrefix(entry: OpenRpcNotification): OpenRpcNotification;
 }
 declare module 'shared/services/shared-store.service' {
+  import { ContextKeyValue, PlatformEvent } from 'platform-bible-utils';
+  /**
+   * Prefix of the request method every non-main process registers, suffixed with its shared store
+   * process ID. The method exists exactly as long as the process is connected, so main learns which
+   * process died from the disconnect event's removed method names and can release that process's
+   * keys.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const SHARED_STORE_OWNER_METHOD_PREFIX = 'shared-store:owner:';
   type LamportClock = {
     counter: number;
     processId: string;
@@ -2004,10 +2014,28 @@ declare module 'shared/services/shared-store.service' {
     value?: unknown;
     clock: LamportClock;
     deleted?: boolean;
+    released?: boolean;
   };
   export type StoreChangeEvent = StoreEntry & {
     key: string;
   };
+  /**
+   * Event describing a change to a value in the shared store
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type SharedStoreChangeEvent = {
+    key: string;
+    value: unknown;
+  };
+  /**
+   * Event that fires whenever any value in the shared store changes, whether the change was made in
+   * this process or applied from another process. Platform-internal. Not intended for use by
+   * extensions — extensions should use settings and other data providers for sharing data.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const onDidChangeSharedStore: PlatformEvent<SharedStoreChangeEvent>;
   type NetworkService = typeof import('shared/services/network.service');
   /**
    * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
@@ -2055,6 +2083,10 @@ declare module 'shared/services/shared-store.service' {
    * key already exists, it can only be set again by the process that created it. This is to prevent
    * race conditions between processes setting values that don't incorporate each others' updates.
    *
+   * A set refused because another process owns the key is held (the latest one per key) and applied
+   * if that owner later removes the key or disconnects. Setting or removing the key from this process
+   * drops the held set.
+   *
    * This runs synchronously and throws if the shared store service has not started initializing (it
    * must be able to broadcast the change). Use {@link setAsync} if you need to wait for initialization
    * before setting.
@@ -2067,6 +2099,12 @@ declare module 'shared/services/shared-store.service' {
   function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void;
   /**
    * Remove a value from the shared store and notify other processes of the change.
+   *
+   * Removing a key releases it: any process may set it afterwards, and a set another process had
+   * refused while this one owned the key is applied. This holds for every shared-store caller
+   * (context keys, the network request timeouts in `network.service.ts`, `dialog.service-router.ts`).
+   * The .NET `SharedStore.Remove` writes a live default value (for example `null`, or `false` for a
+   * bool), never a released tombstone, so release semantics do not apply to keys written from C#.
    *
    * After removal the key is treated as absent — reads return no value (a removed key is distinct
    * from a key whose value is `undefined`). The entry and its Lamport clock are retained internally
@@ -2144,12 +2182,21 @@ declare module 'shared/services/shared-store.service' {
    */
   export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${string}`;
   /**
+   * Keys for context key values (see `context-keys.service.ts`). Keys are dynamically constructed by
+   * adding this prefix to the context key name.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ContextKeySharedStoreKey = `contextKeys.${string}`;
+  /**
    * Defines the keys and types of values held in key-value pairs within the shared store service.
    * Since this service is not part of the public API, the keys and types are not included in
    * `papi-shared-types.ts`. If the platform needs more key-value pairs, they should be added here.
    */
   export interface SharedStoreValues {
     [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
+    /** @experimental This field is unstable and may change or disappear without notice */
+    [contextKey: ContextKeySharedStoreKey]: ContextKeyValue | undefined;
   }
   export type SharedStoreKeys = keyof SharedStoreValues;
   /**
@@ -2404,9 +2451,9 @@ declare module 'shared/models/rpc.interface' {
      * close code, and a close the app asked for is not a loss.
      *
      * Nor does a connection that was never established. A socket that dies during the opening
-     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
-     * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
-     * event is only for losing a connection that was up.
+     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value.
+     * The renderer surfaces a failed first connect itself (`initializeNetworkReportingFailure`); the
+     * extension host does not yet (PT-4495). This event is only for losing a connection that was up.
      *
      * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
      * to react to the loss rather than to classify it.
@@ -2867,11 +2914,20 @@ declare module 'renderer/services/electron-papi-port-provider' {
 }
 declare module 'renderer/services/renderer-web-socket.service' {
   /**
-   * Once our network is running, run this so `PapiRendererWebSocket` (the `WebSocket` web views get)
-   * refuses connections to it. Web views can still reach the native `WebSocket` on `window.top`; see
-   * "The renderer's PAPI port" in `.context/standards/Security-Guide.md`.
+   * Runs `initialize`, then blocks web views from the PAPI network whether it resolved or rejected,
+   * so a renderer that failed to connect does not keep running with extension sandboxing off.
+   *
+   * The block cannot run before `initialize` settles: without an Electron bridge, the renderer's own
+   * connection to main is a `PapiRendererWebSocket` to the PAPI port (see `web-socket.factory.ts`).
+   * Until it settles (at most about 10 s, the connect timeout) web views are not blocked; none can
+   * exist yet, because the web view service starts only after this call in `index.tsx`.
+   *
+   * @param initialize Starts the renderer's network service
+   * @throws Whatever `initialize` threw or rejected with, after blocking
    */
-  export const blockWebSocketsToPapiNetwork: () => void;
+  export function initializeNetworkThenBlockPapiWebSockets(
+    initialize: () => Promise<void>,
+  ): Promise<void>;
   /** This wraps the browser's WebSocket implementation to provide
    * better control over internet access. It is isomorphic with the standard WebSocket, so it should
    * act as a drop-in replacement.
@@ -2879,6 +2935,10 @@ declare module 'renderer/services/renderer-web-socket.service' {
    * Note that the Node WebSocket implementation is different and not wrapped here.
    */
   export class PapiRendererWebSocket implements WebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
     readonly CONNECTING: 0;
     readonly OPEN: 1;
     readonly CLOSING: 2;
@@ -2907,7 +2967,24 @@ declare module 'renderer/services/renderer-web-socket.service' {
     send: (data: string | ArrayBufferLike | Blob | ArrayBufferView) => void;
     url: string;
     constructor(url: string | URL, protocols?: string | string[]);
+    /**
+     * Sockets this class returns are native `WebSocket` instances, so `socket instanceof WebSocket`
+     * keeps working for code that sees this class as its `WebSocket`
+     */
+    static [Symbol.hasInstance](instance: unknown): boolean;
   }
+  /**
+   * Puts `PapiRendererWebSocket` in place of the native `WebSocket` on `target` (the top window), and
+   * makes it the `constructor` of every native socket, so a same-origin web view that borrows the
+   * constructor through `window.top` or through a socket it was handed gets the PAPI-port check too.
+   *
+   * This is defence in depth that gives a clear `Invalid URL` error: a fresh iframe in the top
+   * document still gets its own native `WebSocket`, so the main process's `onBeforeRequest` block
+   * (`papi-port-request-block.util.ts`) is what actually closes the port.
+   *
+   * @param target The window whose `WebSocket` to replace
+   */
+  export function replaceTopWindowWebSocket(target: { WebSocket: unknown }): void;
   export default PapiRendererWebSocket;
 }
 declare module 'extension-host/services/extension-host-web-socket.model' {
@@ -5050,28 +5127,40 @@ declare module 'shared/models/docking-framework.model' {
     | 'active'
     | 'update';
   /**
-   * Information about a panel: a tab opened beside the tab group holding `targetTabId`. When no
-   * `targetTabId` is given (or it is not in this window), the tab opens beside the tab group of the
-   * tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it.
+   * Information about a panel: a tab opened beside the tab group holding `targetTabId`, or beside
+   * that tab itself. When no `targetTabId` is given (or it is not in this window), the target is the
+   * tab most recently opened as a `'tab'` or re-opened in this window, else the first tab in it.
    *
-   * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
-   * directly on the `direction` side instead of a new group being created, if that group can take it:
-   * it sits beside the target's group (a group touching it only at a corner does not count), has at
-   * least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at
-   * least as wide (as tall for `top` and `bottom`) as a new group beside the target would be.
-   * Otherwise the tab opens as a new group beside the target's group.
+   * `before-tab` and `after-tab` add the tab, as the active tab, to the target's own tab group, just
+   * before or after the target. This holds whether that group is docked, floating, or maximized. A
+   * group that cannot take the tab gets it beside the group instead, as `left` would for
+   * `before-tab`, or `right` for `after-tab`. Such a group is one of Simple mode's fixed columns, or
+   * a group that holds another kind of tab. Either way, `before-tab` lands on the target's
+   * reading-start side and `after-tab` on its reading-end side.
    *
-   * When the target's tab group is floating or maximized, the tab opens as a new group at the
-   * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
-   * `direction` was asked for, and a floating target that would cover that group is moved aside.
-   * `left` and `right` are mirrored in a right-to-left UI. A target in another application window is
-   * placed by these same rules in the window that holds it.
+   * For `left`, `right`, `top`, or `bottom`, when the target's tab group is docked, the tab is added,
+   * as its active tab, to the tab group directly on the `direction` side instead of a new group being
+   * created, if that group can take it: it sits beside the target's group (a group touching it only
+   * at a corner does not count), has at least one tab, holds the same kind of tab, is not one of
+   * Simple mode's fixed columns, and is at least as wide (as tall for `top` and `bottom`) as a new
+   * group beside the target would be. Otherwise the tab opens as a new group beside the target's
+   * group.
+   *
+   * For `left`, `right`, `top`, or `bottom`, when the target's tab group is floating or maximized,
+   * the tab opens as a new group at the reading-end edge of the dock area (the right, or the left in
+   * a right-to-left UI), whichever side was asked for, and a floating target that would cover that
+   * group is moved aside. `left` and `right` are mirrored in a right-to-left UI.
+   *
+   * A target in another application window is placed by these same rules in the window that holds it.
    */
   interface PanelLayout {
     type: 'panel';
     /**
-     * The side of the target's tab group to open on, in reading order: `right` is the reading-end
-     * side, which is the left in a right-to-left UI
+     * Where to open, in reading order. A side opens beside the target's tab group: `right` is the
+     * reading-end side, which is the left in a right-to-left UI. `before-tab` and `after-tab` open in
+     * the target's own tab group, just before or after the target in its tab order, which is reading
+     * order as for {@link DirectionFromTab}: `after-tab` puts the tab where `nextTab` from the target
+     * goes.
      */
     direction?: PanelDirection;
     /**
@@ -11718,7 +11807,59 @@ declare module 'shared/services/localization.service-model' {
        * the book so that the book name can be displayed in the UI language within the UI
        */
       getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+      /**
+       * Builds a localized title for something scoped to one project, such as a WebView's tab: looks
+       * up the localized format for `localizeKey` and the project's short name (its `platform.name`
+       * setting), then replaces `{projectName}` in the format with that name. Use it in a WebView
+       * provider's `getWebView` so the tab opens with its final title; in the WebView itself, use the
+       * `useLocalizedProjectTitle` hook to keep the title up to date.
+       *
+       * Never rejects, so a failed lookup cannot keep a WebView from opening:
+       *
+       * - If the short name cannot be read, or is blank, the project id is shown in its place.
+       * - If the format lookup fails, the title is just the project's name (or id).
+       *
+       * Both failures are logged as warnings. A key with no localization is not a failure: as with
+       * `getLocalizedString`, the title is the key itself, so the missing string is noticed.
+       *
+       * @example
+       *
+       * ```typescript
+       * // With `"%myExtension_tabTitle%": "My Tool: {projectName}"` contributed
+       * const title = await papi.localization.getLocalizedProjectTitle({
+       *   localizeKey: '%myExtension_tabTitle%',
+       *   projectId,
+       * });
+       * // 'My Tool: WEB'
+       * ```
+       *
+       * @param options What to title; see {@link LocalizedProjectTitleOptions}.
+       * @returns The formatted title
+       */
+      getLocalizedProjectTitle(options: LocalizedProjectTitleOptions): Promise<string>;
     } & IDataProvider<LocalizationDataDataTypes>;
+  /** Options for `papi.localization.getLocalizedProjectTitle`. */
+  export type LocalizedProjectTitleOptions = {
+    /**
+     * Key of the localized title format. The format should contain a `{projectName}` placeholder,
+     * which is replaced with the project's short name (or its id when the name is unavailable).
+     */
+    localizeKey: LocalizeKey;
+    /** Id of the project the title is for */
+    projectId: string;
+    /**
+     * Values for any other `{key}` placeholders in the format. A `projectName` entry is ignored in
+     * favor of the project's name.
+     */
+    replacements?: {
+      [key: string]: unknown;
+    };
+    /**
+     * BCP 47 language codes to look the format up in, as for `getLocalizedString`. Defaults to the
+     * interface languages.
+     */
+    locales?: string[];
+  };
 }
 declare module 'shared/services/localization.service' {
   import { ILocalizationService } from 'shared/services/localization.service-model';
@@ -12345,6 +12486,48 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
   ) => [localizedStrings: LocalizationData, isLoading: boolean];
   export default useLocalizedStrings;
 }
+declare module 'renderer/hooks/papi-hooks/use-localized-project-title.hook' {
+  import type { LocalizedProjectTitleOptions } from 'shared/services/localization.service-model';
+  /**
+   * Builds a localized title for something scoped to one project, such as a WebView's tab, and keeps
+   * it up to date as the project's short name (its `platform.name` setting) or the interface language
+   * changes. `{projectName}` in the localized format is replaced with the project's short name, or
+   * with the project id when the name cannot be read or is blank.
+   *
+   * This is the WebView counterpart of `papi.localization.getLocalizedProjectTitle`, which a WebView
+   * provider uses to give the tab its title on open. It takes the same options, except `locales` (the
+   * title follows the interface languages) and a `projectId` that may be `undefined`. When their
+   * lookups succeed, both produce the same title, so the tab does not change when the WebView takes
+   * over.
+   *
+   * @example
+   *
+   * ```tsx
+   * // With `"%myExtension_tabTitle%": "My Tool: {projectName}"` contributed
+   * const tabTitle = useLocalizedProjectTitle({
+   *   localizeKey: '%myExtension_tabTitle%',
+   *   projectId,
+   * });
+   * useEffect(() => {
+   *   if (tabTitle === undefined) return;
+   *   updateWebViewDefinition({ title: hasUnsavedChanges ? `${tabTitle} ●` : tabTitle });
+   * }, [tabTitle, hasUnsavedChanges, updateWebViewDefinition]);
+   * ```
+   *
+   * @param options What to title; see `LocalizedProjectTitleOptions`. With no `projectId` there is no
+   *   title. The options need not be stable: changing `replacements` triggers no lookups.
+   * @returns The formatted title, or `undefined` while loading or with no `projectId`; keep the
+   *   current title until it is defined.
+   */
+  export function useLocalizedProjectTitle({
+    localizeKey,
+    projectId,
+    replacements,
+  }: Omit<LocalizedProjectTitleOptions, 'projectId' | 'locales'> & {
+    projectId: string | undefined;
+  }): string | undefined;
+  export default useLocalizedProjectTitle;
+}
 declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
   import { NetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
@@ -12383,6 +12566,214 @@ declare module 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook' {
     addRecentScriptureRef: (newRef: SerializedVerseRef) => void;
   };
 }
+declare module 'shared/services/context-keys.service-model' {
+  import { ContextKeyValue } from 'platform-bible-utils';
+  /**
+   * Event emitted when a context key's value changes; platform-internal, not part of PAPI
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ContextKeyChangeEvent = {
+    /**
+     * The context key that changed (without any internal storage prefix)
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    key: string;
+    /**
+     * The new value, or `undefined` if the key was removed
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    value: ContextKeyValue | undefined;
+  };
+  /**
+   *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export interface IContextKeysService {
+    /**
+     * Sets or updates a context key.
+     *
+     * Throws if the key is not structurally valid (at least two dot-separated segments of word
+     * characters or hyphens) or the value is not a string, number, or boolean.
+     *
+     * Conventions: prefix keys with your extension's name (`platform.` is reserved); give each key
+     * exactly one producer. A key first set in one process can only be updated from that same process
+     * until that process removes the key or disconnects, which releases the key for any process to
+     * claim (ownership violations are logged, not thrown). A set refused for ownership is held and
+     * applied when the owner releases the key, so a producer hands a key over by removing it: a moved
+     * tab's new process wins once the old one removes.
+     *
+     * @param key The context key to set, e.g. `myExtension.project.<projectId>.isEditable`
+     * @param value The value to set (string, number, or boolean)
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    set(key: string, value: ContextKeyValue): void;
+    /**
+     * Gets the current value of a context key synchronously from the in-process store copy — no
+     * network call.
+     *
+     * @param key The context key to read
+     * @returns The current value, or `undefined` if the key has never been set, was removed, or is
+     *   not a valid context key (unlike {@link IContextKeysService.set}, this does not throw)
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    get(key: string): ContextKeyValue | undefined;
+    /**
+     * Sets a context key's value to `undefined`. A subsequent {@link IContextKeysService.get} for the
+     * key returns `undefined`.
+     *
+     * Throws if the key is not structurally valid. Like {@link IContextKeysService.set}, a key first
+     * set in one process can only be removed from that same process (ownership violations are logged,
+     * not thrown). Removing a key releases it: any process may set it afterwards, and a set another
+     * process had refused while this one owned the key is applied.
+     *
+     * @param key The context key to remove
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    remove(key: string): void;
+  }
+}
+declare module 'shared/services/context-keys.service' {
+  import { ContextKeyValue } from 'platform-bible-utils';
+  import {
+    ContextKeyChangeEvent,
+    IContextKeysService,
+  } from 'shared/services/context-keys.service-model';
+  function set(key: string, value: ContextKeyValue): void;
+  function get(key: string): ContextKeyValue | undefined;
+  function remove(key: string): void;
+  function getChangeSequence(): number;
+  /**
+   *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const contextKeysService: {
+    set: typeof set;
+    get: typeof get;
+    remove: typeof remove;
+    /**
+     * Event that fires when any context key changes (whether changed locally or in another process).
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    onDidChange: import('platform-bible-utils').PlatformEvent<ContextKeyChangeEvent>;
+    /**
+     * Number of context key changes forwarded so far in this process; a changed value between two
+     * reads means at least one key changed in between. Intended for platform-internal use (the
+     * renderer's useEvaluatedMenu); not part of papi.contextKeys.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    getChangeSequence: typeof getChangeSequence;
+  };
+  /**
+   * Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`)
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const papiContextKeysService: IContextKeysService;
+}
+declare module 'shared/utils/evaluate-menu-recording-reads.util' {
+  import { EvaluatableMenu, WhenExpressionErrorHandler } from 'platform-bible-utils';
+  /**
+   * A menu evaluated against the current context keys, with the keys the evaluation actually read
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type MenuEvaluationWithReads<T extends EvaluatableMenu> = {
+    /**
+     * The evaluated menu, as {@link evaluateMenu} returns it
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    evaluatedMenu: T;
+    /**
+     * Every context key the evaluation looked up. A key outside this set cannot change the result
+     * until a key inside it changes: unresolved template variables return before any lookup, and
+     * `&&`/`||` short-circuit.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    readKeys: ReadonlySet<string>;
+  };
+  /**
+   * Evaluates a menu like {@link evaluateMenu} against the current context keys and reports which keys
+   * the evaluation read, so a surface can skip re-evaluating when an unrelated key changes.
+   *
+   * @param menu The menu document to evaluate
+   * @param templateVars Values for `{placeholder}` segments in expression property references
+   * @param onError Called for each expression that fails to evaluate
+   * @returns The evaluated menu and the set of keys it read
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function evaluateMenuRecordingReads<T extends EvaluatableMenu>(
+    menu: T,
+    templateVars: Record<string, string | undefined>,
+    onError: WhenExpressionErrorHandler,
+  ): MenuEvaluationWithReads<T>;
+}
+declare module 'renderer/hooks/papi-hooks/use-evaluated-menu.hook' {
+  import { EvaluatableMenu } from 'platform-bible-utils';
+  /**
+   * Evaluates the when-expressions (`when`, `enabledWhen`, `checkedWhen`) in a menu document against
+   * the current context keys and re-evaluates when a context key it read changes, local or remote.
+   * Use it in a web view that renders its own menu and must react to keys it does not own.
+   *
+   * @param menuData The menu document to evaluate (pass a referentially stable object, e.g. state or
+   *   memoized data)
+   * @param templateVars Values for `{placeholder}` segments in expression property references.
+   *   `templateVars` MUST be referentially stable (memoize in the caller) or the menu re-evaluates on
+   *   every render
+   * @returns The evaluated menu document (hidden items removed, `disabled`/`checked` decorated), or
+   *   `undefined` if `menuData` is `undefined`
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function useEvaluatedMenu<T extends EvaluatableMenu>(
+    menuData: T | undefined,
+    templateVars: Record<string, string | undefined>,
+  ): T | undefined;
+  export default useEvaluatedMenu;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -12394,9 +12785,11 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
+  export { default as useLocalizedProjectTitle } from 'renderer/hooks/papi-hooks/use-localized-project-title.hook';
   export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
   export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
+  export { default as useEvaluatedMenu } from 'renderer/hooks/papi-hooks/use-evaluated-menu.hook';
 }
 declare module 'renderer/services/overlays/window-blur-press.util' {
   /**
@@ -12420,6 +12813,7 @@ declare module 'renderer/services/overlays/overlay-store' {
    * menus, modal dialogs, popovers) and notifies subscribers on changes.
    */
   import type { PlatformError } from 'platform-bible-utils';
+  import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   import {
     OverlayEntry,
     OverlayResolveType,
@@ -12501,6 +12895,15 @@ declare module 'renderer/services/overlays/overlay-store' {
    * @returns True if the overlay was found and updated, false otherwise
    */
   export function updateOverlayContent(id: string, content: PopoverContent): boolean;
+  /**
+   * Replaces the items of an open context menu and notifies subscribers.
+   *
+   * @param id The overlay id to update
+   * @param items The new menu items
+   * @returns True if the overlay was found and is a context menu, false otherwise
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function updateContextMenuItems(id: string, items: OverlayContextMenuItem[]): boolean;
   /**
    * Updates the mutable `filterText`/`selectedIndex` state of a command palette overlay and notifies
    * subscribers. `selectedIndex` is always clamped to `[0, itemCount - 1]` (or `0` when `itemCount`
@@ -13130,6 +13533,13 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         webViewId: string;
         /** Menu items to render */
         items: OverlayContextMenuItem[];
+        /**
+         * Keys for every item the menu can show, collected from the unevaluated menu so that an item
+         * that appears while the menu is open already has its label localized.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
+         */
+        localizeKeys?: LocalizeKey[];
         /** Document-relative position (already translated from iframe coordinates and clamped) */
         position: {
           x: number;
@@ -13995,6 +14405,7 @@ declare module '@papi/core' {
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
   export type { AppInfo } from 'shared/services/app.service-model';
+  export type { IContextKeysService } from 'shared/services/context-keys.service-model';
   export type {
     NamedSqlParameters,
     SqlOutputRow,
@@ -14004,6 +14415,7 @@ declare module '@papi/core' {
     LocalizationData,
     LocalizationSelector,
     LocalizationSelectors,
+    LocalizedProjectTitleOptions,
   } from 'shared/services/localization.service-model';
   export type {
     SimultaneousProjectSettingsChanges,
@@ -14740,6 +15152,7 @@ declare module '@papi/backend' {
   import { DialogService } from 'shared/services/dialog.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
   import { IDatabaseService } from 'shared/services/database.service-model';
+  import { IContextKeysService } from 'shared/services/context-keys.service-model';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
   import { BackendNetworkObjectService } from 'shared/services/network-object.service';
@@ -14840,6 +15253,30 @@ declare module '@papi/backend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
+    /**
+     *
+     * Service for reading and writing context keys: named properties that drive dynamic UI state such
+     * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+     * declared in menus.json contributions.
+     *
+     * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+     * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+     * producers must re-publish after a restart.
+     *
+     * Conventions:
+     *
+     * - Key format: at least two dot-separated segments of word characters or hyphens
+     * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+     * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+     *   reference these with template variables like `{projectId}`
+     * - Each key should have exactly one producer. A key first set in one process can only be updated
+     *   from that same process until that process removes the key or disconnects
+     * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+     *   refused while another process owned the key is applied once the owner removes it
+     *
+     * @experimental This constant is unstable and may change or disappear without notice
+     */
+    contextKeys: IContextKeysService;
     /**
      *
      * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
@@ -15109,6 +15546,30 @@ declare module '@papi/backend' {
    * other services and extensions that have registered commands.
    */
   export const commands: typeof commandService;
+  /**
+   *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const contextKeys: IContextKeysService;
   /**
    *
    * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
@@ -15745,6 +16206,7 @@ declare module '@papi/frontend' {
   import { INotificationService } from 'shared/models/notification.service-model';
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
   import * as commandService from 'shared/services/command.service';
+  import { IContextKeysService } from 'shared/services/context-keys.service-model';
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { InternetService } from 'shared/services/internet.service';
@@ -15790,6 +16252,30 @@ declare module '@papi/frontend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
+    /**
+     *
+     * Service for reading and writing context keys: named properties that drive dynamic UI state such
+     * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+     * declared in menus.json contributions.
+     *
+     * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+     * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+     * producers must re-publish after a restart.
+     *
+     * Conventions:
+     *
+     * - Key format: at least two dot-separated segments of word characters or hyphens
+     * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+     * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+     *   reference these with template variables like `{projectId}`
+     * - Each key should have exactly one producer. A key first set in one process can only be updated
+     *   from that same process until that process removes the key or disconnects
+     * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+     *   refused while another process owned the key is applied once the owner removes it
+     *
+     * @experimental This constant is unstable and may change or disappear without notice
+     */
+    contextKeys: IContextKeysService;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -15970,6 +16456,30 @@ declare module '@papi/frontend' {
    * other services and extensions that have registered commands.
    */
   export const commands: typeof commandService;
+  /**
+   *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const contextKeys: IContextKeysService;
   /**
    *
    * Service exposing various functions related to using webViews

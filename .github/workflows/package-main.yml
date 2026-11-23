@@ -4,13 +4,6 @@ name: Package
 # run on record, so a slow service still passes, but a stall fails with its diagnostics. The job's
 # 180-minute cap only catches what the step caps miss; a job timeout cancels, skipping diagnostics.
 
-# Make sure these match with the matrix.os values below
-env:
-  OS_WINDOWS: windows-latest
-  OS_MACOS: macos-15
-  # The Ubuntu version must align with the "core" version in electron-builder.json5
-  OS_LINUX: ubuntu-22.04
-
 on:
   push:
     branches: [main, release-prep, hotfix-*, ai/main]
@@ -21,47 +14,61 @@ on:
         description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
         required: false
         default: false
+      macos_runner:
+        type: string
+        description: 'macOS runner label to try, e.g. macos-26. Must be a macOS label. Leave empty for the default image.'
+        required: false
 
 jobs:
   publish:
-    name: Main on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
+    name: Main on ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
 
     strategy:
       matrix:
-        # Make sure these match with the env values above
-        os: [windows-latest, macos-15, ubuntu-22.04]
-        dotnet_version: [8.0.x]
+        # Steps pick their OS with `runner.os`, so changing a runner label here is the whole change.
+        os:
+          - windows-latest
+          # The label after `||` is the default image: push runs have no inputs, and a dispatch
+          # with `macos_runner` left empty falls through to it too.
+          - ${{ inputs.macos_runner || 'macos-15' }}
+          # The Ubuntu version must align with the "core" version in electron-builder.json5
+          - ubuntu-22.04
 
     steps:
-      - name: Install MacPorts
-        if: ${{ matrix.os == env.OS_MACOS }}
-        timeout-minutes: 90
-        uses: paranext/setup-macports@v0.2.0
-
-      - name: Update MacPorts ports tree
-        if: ${{ matrix.os == env.OS_MACOS }}
-        timeout-minutes: 90
-        # Not using `-v` for verbose because it is very slow and does not add much value
+      - name: Check the dispatched macOS runner label
+        # `macos_runner` is free text; a label for another OS would skip every macOS step and still
+        # produce this leg's artifacts.
+        if: ${{ inputs.macos_runner && matrix.os == inputs.macos_runner && runner.os != 'macOS' }}
+        # The Windows default shell is pwsh, which would read `$MACOS_RUNNER` as an empty pwsh variable.
+        shell: bash
+        env:
+          MACOS_RUNNER: ${{ inputs.macos_runner }}
         run: |
-          sudo port sync
+          echo "::error::macos_runner '$MACOS_RUNNER' started a $RUNNER_OS runner; it must be a macOS label."
+          exit 1
+
+      - name: Install MacPorts
+        if: ${{ runner.os == 'macOS' }}
+        timeout-minutes: 90
+        uses: paranext/setup-macports@v0.3.0
 
       - name: Install loader tools on macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         run: |
           sudo port -v install ld64
 
       - name: Install icu4c on macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         run: |
           sudo port -v install icu @78.3_1 +universal
 
       - name: Fixup loader paths for icu4c
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         # LIB_DEPENDENCIES are of the form "<ICU lib short name> <dependency as ICU lib short name>"
         # For example, libicuuc (shortened to "uc") depends on libicudata (shortened to "data")
         # Dependencies can be seen by running "dyld_info -dependents /path/to/something.dylib"
@@ -82,7 +89,7 @@ jobs:
           done <<< "$LIB_DEPENDENCIES"
 
       - name: Install snap tools on Linux
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ runner.os == 'Linux' }}
         timeout-minutes: 90
         run: |
           # apt is safe to kill mid-download; snap is not (snapd keeps the change running), so only
@@ -133,7 +140,7 @@ jobs:
         timeout-minutes: 90
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet_version }}
+          global-json-file: global.json
 
       - name: Read package.json
         id: package_json
@@ -172,20 +179,20 @@ jobs:
         run: npm run verify:third-party-notices:shipping-set
 
       - name: Publish releases - Windows
-        if: ${{ matrix.os == env.OS_WINDOWS }}
+        if: ${{ runner.os == 'Windows' }}
         timeout-minutes: 90
         run: |
           npx electron-builder build --publish never --win
 
       - name: Publish releases - macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         run: |
           npx electron-builder build --publish never --mac
 
       - name: Publish releases - Linux
         id: linux-build
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ runner.os == 'Linux' }}
         timeout-minutes: 90
         env:
           # no hardlinks so dependencies are copied
@@ -201,7 +208,7 @@ jobs:
       # "mksquashfs call failed:" that reaches the console, and if the kernel ever kills
       # the build for memory it names the process it chose only in dmesg.
       - name: Capture Linux failure diagnostics
-        if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        if: ${{ failure() && runner.os == 'Linux' }}
         run: |
           echo "=== kernel OOM activity ==="
           sudo dmesg --ctime 2>/dev/null | grep -iE "out of memory|oom-kill|killed process" || echo "(no OOM entries in dmesg)"
@@ -213,7 +220,7 @@ jobs:
           ps -eo pid,etime,rss,args --sort=-rss | head -25
 
       - name: Upload snapcraft logs (Linux)
-        if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        if: ${{ failure() && runner.os == 'Linux' }}
         timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
@@ -223,7 +230,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Rename Windows exe to include GitHub Action Run ID
-        if: ${{ matrix.os == env.OS_WINDOWS }}
+        if: ${{ runner.os == 'Windows' }}
         run: |
           Get-ChildItem -Path ./release/build/*.exe | ForEach-Object {
             if (-not ($_.Name -like "*Setup*.exe")) {
@@ -234,7 +241,7 @@ jobs:
           }
 
       - name: Upload Windows artifacts
-        if: ${{ matrix.os == env.OS_WINDOWS }}
+        if: ${{ runner.os == 'Windows' }}
         timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
@@ -244,7 +251,7 @@ jobs:
             !./release/build/*Setup*.exe
 
       - name: Rename macOS dmg to include GitHub Action Run ID
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         run: |
           for file in ./release/build/*.dmg; do
             newName="${file%.dmg}-${{ github.run_id }}.dmg"
@@ -253,7 +260,7 @@ jobs:
           done
 
       - name: Upload macOS artifacts
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
@@ -269,7 +276,7 @@ jobs:
       # step failing skips the build entirely. Without it the unmatched glob survives as a literal,
       # `mv` fails on it, and the real failure gains a second red step blaming the wrong thing.
       - name: Rename Linux snap to include GitHub Action Run ID
-        if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: |
           shopt -s nullglob
           for file in ./release/build/*.snap; do
@@ -283,7 +290,7 @@ jobs:
       # investigate. Named for the step rather than the check because that step both builds and
       # checks, so it can also fail before a snap exists — in which case the artifact is empty.
       - name: Upload Linux artifacts
-        if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:

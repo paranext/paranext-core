@@ -9,9 +9,18 @@
  * real content — though the assertions below never depend on that: the footnotes `ContentZoomRoot`
  * exists once the pane is toggled visible regardless of whether the list is empty.
  *
+ * The keyboard chords (Ctrl+`=`, Ctrl+`-`, Ctrl+`0`) are handled by the in-iframe `keydown`
+ * listener in `web-view-content-zoom.bootstrap-script.ts`; `main.ts`'s `before-input-event` handler
+ * does not claim them. CDP's `Input.dispatchKeyEvent` (`mainPage.keyboard.press`) is OS-level input
+ * that lands on whatever holds focus, including inside an iframe, so it reaches that listener — see
+ * `marker-palette-typed-commit.spec.ts` for the same in-iframe CDP precedent. The handler picks the
+ * area from the caret's position. The rule that the area the user last pointed at wins after the
+ * view itself moves focus in answer to a pointer gesture is not driven here; it is unit-tested in
+ * `web-view-content-zoom.bootstrap-script.test.ts`.
+ *
  * The sub-scenarios below are test.step()s sharing one Electron instance rather than separate
- * test()s, because each test() launches its own instance and this file has no reason to pay for
- * three.
+ * test()s, because each test() launches its own instance and the scenarios start from the same
+ * launch state.
  *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated scripture-editor`.
@@ -21,6 +30,7 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   areaBox,
   boxOf,
+  CONTENT_ZOOM_MEMORY_SETTING,
   ctrlWheel,
   expectPopupBesideTriggerAndInsideFrame,
   expectSettledBeside,
@@ -51,8 +61,53 @@ import {
 
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
+  seedSettings: {
+    'platform.webViewContentZoom': 1,
+    [CONTENT_ZOOM_MEMORY_SETTING]: {},
+  },
 });
+
+/**
+ * A cold first launch installs the sample project into an empty isolated root and starts the .NET
+ * data provider before the editor renders any text, so the container stays hidden well past the 60s
+ * the warm case needs.
+ */
+const EDITOR_CONTAINER_TIMEOUT_MS = 120_000;
+
+/** The config's per-test default (`e2e-tests/playwright.config.ts`), `test.slow()` triples it. */
+const DEFAULT_TEST_TIMEOUT_MS = 120_000;
+
+/** The cold-start budget: Playwright's 3x "slow" allowance on the config's default. */
+const COLD_START_TIMEOUT_MS = 3 * DEFAULT_TEST_TIMEOUT_MS;
+
+/** The budget of one step after the first: the app is already up, so the config's default. */
+const WARM_STEP_TIMEOUT_MS = DEFAULT_TEST_TIMEOUT_MS;
+
+/** How many steps run after the app is up that the cold-start budget does not already cover. */
+const KEYBOARD_CHORD_STEP_COUNT = 3;
+
+/**
+ * The zoom area the pane's focused element sits in — the same `closest()` lookup the in-iframe
+ * chord handler runs on `document.activeElement` (`targetFor` in
+ * `src/renderer/services/web-view-content-zoom.bootstrap-script.ts`). `undefined` when focus is
+ * outside every marked area; `'main'` for the marker a view writes with an empty value.
+ */
+async function readFocusedAreaId(frame: Frame): Promise<string | undefined> {
+  return frame.evaluate(() => {
+    const root = document.activeElement?.closest('[data-platform-content-zoom-root]');
+    if (!root) return undefined;
+    return root.getAttribute('data-platform-content-zoom-root') || 'main';
+  });
+}
+
+/** Whether the pane's focused element is an editable surface (a note's row editor, not a list row) */
+async function isFocusEditable(frame: Frame): Promise<boolean> {
+  return frame.evaluate(() => {
+    const focused = document.activeElement;
+    return focused instanceof HTMLElement && focused.isContentEditable;
+  });
+}
 
 /**
  * The bootstrap's own idea of the pane's active area (its `window.__platformContentZoom.activeArea`
@@ -170,15 +225,17 @@ test.describe('scripture editor content zoom', () => {
   test('Ctrl+wheel and the zoom commands scale the text and footnotes areas independently and remember each level', async ({
     mainPage,
   }) => {
-    // Heavy isolated test (own Electron instance, several zoom gestures each waiting on a
-    // debounced write). Give it Playwright's 3x "slow" budget for headroom.
-    test.slow();
+    // Heavy isolated test (several zoom gestures each waiting on a debounced write). Only the
+    // first steps pay the cold start; the keyboard-chord steps run on the app they started.
+    test.setTimeout(COLD_START_TIMEOUT_MS + KEYBOARD_CHORD_STEP_COUNT * WARM_STEP_TIMEOUT_MS);
 
     await waitForHomeTab(mainPage);
     await makeSampleProjectEditable();
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = await getEditorFrame(mainPage, editorId);
-    await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+    await editorFrame
+      .locator('.editor-container')
+      .waitFor({ timeout: EDITOR_CONTAINER_TIMEOUT_MS });
 
     await navigateToolbarBcv(mainPage, 'Jonah 1:1');
     const verseLocator = editorFrame
@@ -314,12 +371,14 @@ test.describe('scripture editor content zoom', () => {
     });
 
     await test.step('reset with no area id targets the area the user last clicked in', async () => {
-      // Click a REAL footnote row (`.note-caller`, `footnote-item.component.tsx`), not empty pane
-      // background: the pointerdown listener resolves the clicked element's closest marked
-      // ancestor, and only an actual descendant of the footnotes ContentZoomRoot is guaranteed to
-      // register as the click target under a CSS-zoomed layout. Selecting a row also sends the
-      // caret back into the editor text (`selectNote`), so this click is exactly the case where the
-      // pointer and the resulting focus name different areas and the pointer has to win.
+      // Click the caller inside a REAL footnote row (`.note-caller`, `footnote-item.component.tsx`),
+      // not empty pane background: the pointerdown listener resolves the clicked element's closest
+      // marked ancestor, and only an actual descendant of the footnotes ContentZoomRoot is
+      // guaranteed to register as the click target under a CSS-zoomed layout. The click bubbles to the
+      // row's `onClick` (`handleFootnoteClick`), which calls `onFootnoteEditRequested` whenever the
+      // editor passes it (an editable view whose notes are edited in the pane, as here). That opens
+      // the row editor and keeps focus in the pane, so the pointer and the focus both name the
+      // footnotes area.
       await editorFrame.locator('.note-caller').first().click({ force: true });
       // Wait for the click's effect (the bootstrap's active-area tracking crosses a realm boundary
       // to reach the renderer's resolver) rather than assuming it lands within the click's own tick.
@@ -542,6 +601,83 @@ test.describe('scripture editor content zoom', () => {
       await expect(toolbarMenu).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
       await mainPage.keyboard.press('Escape');
       await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
+    });
+
+    await test.step('Ctrl+= zooms the text area in two steps, Ctrl+- zooms out, Ctrl+0 resets', async () => {
+      await verseLocator.click();
+
+      await mainPage.keyboard.press('Control+=');
+      await expect.poll(() => readFactor(editorFrame, '')).toBe(1.1);
+
+      await mainPage.keyboard.press('Control+=');
+      await expect.poll(() => readFactor(editorFrame, '')).toBe(1.2);
+
+      await mainPage.keyboard.press('Control+-');
+      await expect.poll(() => readFactor(editorFrame, '')).toBe(1.1);
+
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(editorFrame, '')).toBe(1);
+    });
+
+    await test.step('the same chords affect only the footnotes area when focus is in the footnotes pane', async () => {
+      // The footnotes area holds the level the earlier steps left it at; the chord cases below
+      // measure steps from the default.
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'footnotes', 1);
+
+      await ensureFootnotesVisible(mainPage, editorFrame, editorId);
+      // Jonah 1 carries footnote callers at verses 1, 6 (twice) and 9
+      // (`c-sharp/assets/WEB/32JONengWEBUS.SFM`), so the pane has real rows to put focus on.
+      const footnotesList = editorFrame.locator(
+        '[data-platform-content-zoom-root="footnotes"] [role="listbox"]',
+      );
+      await expect(footnotesList).toBeVisible({ timeout: 20_000 });
+      // This covers the keyboard route onto a row: arrowing moves focus into the pane without
+      // selecting a note, so the caret never leaves the pane and the chord resolves the area from
+      // focus alone. The click route, which opens the note in the pane's row editor, is covered
+      // by the next step.
+      await footnotesList.focus();
+      await mainPage.keyboard.press('ArrowDown');
+      await expect.poll(() => readFocusedAreaId(editorFrame)).toBe('footnotes');
+      // The row list holds focus here, which the click case below tells apart from its row editor
+      expect(await isFocusEditable(editorFrame)).toBe(false);
+
+      await mainPage.keyboard.press('Control+=');
+      await expect.poll(() => readFactor(editorFrame, 'footnotes')).toBe(1.1);
+      expect(await readFactor(editorFrame, '')).toBe(1);
+
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(editorFrame, 'footnotes')).toBe(1);
+    });
+
+    await test.step('the chords follow a clicked footnote row into the row editor it opens', async () => {
+      const footnotesList = editorFrame.locator(
+        '[data-platform-content-zoom-root="footnotes"] [role="listbox"]',
+      );
+      await expect(footnotesList).toBeVisible({ timeout: 20_000 });
+
+      // In an editable Power-mode view the pane is the note-editing surface, so clicking a row (the
+      // `[role="option"]` element in the footnotes list) opens that note in the pane's row editor
+      // and moves the text to the note without taking focus out of the pane
+      // (`handleFootnoteEditRequested` -> `navigateToNote` in
+      // `platform-scripture-editor.web-view.tsx`). Focus is then in an editable surface inside the
+      // footnotes area rather than on the row list, which is what this case adds to the keyboard one
+      // above: the chords must act on the footnotes area, not on the text the caret was moved to.
+      await footnotesList.locator('[role="option"]').first().click();
+      await expect.poll(() => readFocusedAreaId(editorFrame)).toBe('footnotes');
+      // A row that merely took focus would also read as the footnotes area; the row editor has to
+      // have it, or this case proves nothing the keyboard one does not
+      await expect.poll(() => isFocusEditable(editorFrame)).toBe(true);
+
+      await mainPage.keyboard.press('Control+=');
+      await expect.poll(() => readFactor(editorFrame, 'footnotes')).toBe(1.1);
+      expect(await readFactor(editorFrame, '')).toBe(1);
+
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(editorFrame, 'footnotes')).toBe(1);
+
+      // The next step reads the footnotes level the memory holds for the project: put back the
+      // level it expects.
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'footnotes', 1.1);
     });
 
     await test.step('a read-only editor of the same project shares the same memory identity', async () => {

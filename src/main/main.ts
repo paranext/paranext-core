@@ -55,7 +55,9 @@ import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { registerDisplayMediaRequestHandler } from '@main/services/display-media-request.util';
-import { registerLeakedCertificateCheck } from '@main/services/leaked-certificate-check.util';
+import { registerUsersnapNetworkErrorLogging } from '@main/services/usersnap-network-error-log.util';
+import { registerPapiPortRequestBlock } from '@main/services/papi-port-request-block.util';
+import { registerAppUriScheme } from '@main/services/app-uri-scheme-registration.util';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
@@ -226,7 +228,6 @@ import {
   getCommandLineArgument,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
-import { distrustLeakedCertificateRootsInNode } from '@node/utils/leaked-certificates.util';
 import { resolveHtmlPath } from '@node/utils/util';
 import {
   DEV_MODE_QUERY_PARAMETER,
@@ -271,11 +272,6 @@ import {
   wait,
   waitForDuration,
 } from 'platform-bible-utils';
-
-// Before this process opens any TLS connection. The modules imported above open none when they
-// load.
-// TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
-distrustLeakedCertificateRootsInNode();
 
 // #region Helper functions
 
@@ -752,11 +748,9 @@ async function main() {
   // Note that this condition (`process.defaultApp`) is not quite the same as whether we're
   // packaged, so we're not using `globalThis.isPackaged` here.
   if (process.defaultApp && args.length > 2) args[2] = path.resolve(args[2]);
-  if (!app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args)) {
-    logger.error(
-      `Could not register ${launchPath} (arguments: ${args}) as the ${APP_URI_SCHEME}:// URI handler. Electron reported the failure without a cause, so links using this scheme will not open the app.`,
-    );
-  }
+  registerAppUriScheme(APP_URI_SCHEME, launchPath, args, (protocol, executablePath, protocolArgs) =>
+    app.setAsDefaultProtocolClient(protocol, executablePath, protocolArgs),
+  );
   if (process.platform === 'darwin') {
     // Use OSX's event to handle navigation
     app.on('open-url', (_event, url) => handleUri(url));
@@ -2445,9 +2439,15 @@ async function main() {
       // web views with `allowSameOrigin: false` and any other iframe are denied (see
       // `selectDisplayMediaSource`).
       registerDisplayMediaRequestHandler(session.defaultSession, USERSNAP_SPACE_API_KEY);
+      // Logs why Usersnap requests failed, which the renderer cannot see. This takes defaultSession's
+      // only onCompleted and onErrorOccurred listeners (Electron keeps one per event), so route any
+      // other use of those events through it rather than registering another.
+      registerUsersnapNetworkErrorLogging(session.defaultSession, USERSNAP_SPACE_API_KEY);
 
-      // TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
-      registerLeakedCertificateCheck(session.defaultSession);
+      // Web views can borrow the renderer's native WebSocket, so the PAPI port is closed to every
+      // renderer window here. This owns the default session's only `onBeforeRequest` listener;
+      // registering another would replace it and silently reopen the port.
+      registerPapiPortRequestBlock(session.defaultSession);
 
       // Install Chromium devtools extensions once (not per-window)
       if (isDebug) {

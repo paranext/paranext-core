@@ -1,5 +1,6 @@
 /** Helpers shared by the e2e specs that read rc-dock's tab bars and drag its tabs in a real window. */
 import { type Locator, type Page, expect } from '@playwright/test';
+import { sendCommandFromPageWithoutWaiting, waitForDockLayoutLoaded } from './helpers';
 
 /** The global overlay rc-dock positions over whatever drop target the pointer is on. */
 export const DROP_INDICATOR = '.dock-layout > .dock-drop-indicator';
@@ -38,6 +39,46 @@ export function panelSelector(panelId: string): string {
 /** The dock panel with rc-dock id `panelId`. */
 export function panelLocator(page: Page, panelId: string): Locator {
   return page.locator(panelSelector(panelId));
+}
+
+/**
+ * Waits until the window's first layout load has finished and its tab titles have been localized:
+ * the dock is marked loaded (see {@link waitForDockLayoutLoaded}), and some tab shows a title with
+ * no `%key%` left in it — or the load left the dock with no tab at all.
+ *
+ * The first half is what `waitForAppReady` already waits for: that load replaces the whole dock
+ * when it lands, closing what the test opened in the meantime (a floating panel, a drag in
+ * progress). The product side of this is PT-4755 (tabs opened while a window starts up can be
+ * silently lost). The second half matters to a test that reads tab geometry: a `%key%` placeholder
+ * is wider than the title that replaces it, so a tab bar measured before then shifts under the
+ * pointer. A toolbar popover needs more than this: later re-renders can still close it, so reopen
+ * it until it reads right, as `openInternetSettings` in `tests/isolated/internet-settings.page.ts`
+ * does.
+ *
+ * A floating panel's tabs count too, so call it before the test opens one.
+ *
+ * An empty dock returns with no tab present, so a caller that needs a tab must wait for that tab
+ * itself.
+ */
+export async function waitForFirstLayoutLoad(page: Page, timeout = 60_000): Promise<void> {
+  const start = Date.now();
+  await waitForDockLayoutLoaded(page, timeout);
+  await expect
+    .poll(
+      () =>
+        page
+          .locator('.dock-tab')
+          .evaluateAll(
+            (tabs) =>
+              tabs.length === 0 ||
+              tabs.some((tab) => !!tab.textContent?.trim() && !tab.textContent.includes('%')),
+          ),
+      {
+        message: 'a docked tab with a localized title, or no tab at all',
+        timeout: Math.max(1000, timeout - (Date.now() - start)),
+      },
+    )
+    .toBe(true);
 }
 
 /** The tab header button of the tab showing `webViewId`. */
@@ -175,16 +216,7 @@ export async function floatPanelIds(page: Page): Promise<string[]> {
  */
 export async function openFloat(page: Page, command: string): Promise<string> {
   const before = await floatPanelIds(page);
-  await page.evaluate((commandName) => {
-    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const { papi } = window as unknown as {
-      papi: { commands: { sendCommand: (name: string) => Promise<unknown> } };
-    };
-    papi.commands
-      .sendCommand(commandName)
-      .catch((error) => console.error(`${commandName} failed: ${error}`));
-  }, command);
+  await sendCommandFromPageWithoutWaiting(page, command);
   let added: string | undefined;
   await expect(async () => {
     added = (await floatPanelIds(page)).find((id) => !before.includes(id));

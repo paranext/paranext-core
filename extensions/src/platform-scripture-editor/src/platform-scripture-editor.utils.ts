@@ -25,8 +25,10 @@ import type PapiFrontend from '@papi/frontend';
 import type { MarkerContent, MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
+  formatProjectTitle,
   formatReplacementString,
   getErrorMessage,
+  getProjectDisplayName,
   isLocalizeKey,
   isString,
   isWhiteSpace,
@@ -946,22 +948,31 @@ export function resolveNoteVerseRef(
 
 // #region Editor Title Formatting
 
-const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
+const PROJECT_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format_2%';
 const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
 const READONLY_KEY = '%webView_platformScriptureEditor_title_readonly_indicator%';
 const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
 const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
+/**
+ * Builds the editor's tab title. A localize key title is localized, then `{projectName}` is
+ * replaced with the project's short name (or its id when the name is unavailable) and `{editable}`
+ * with the editable or read-only indicator. `{projectId}` is replaced with the short name too, for
+ * titles written before `{projectName}` existed.
+ *
+ * @param getProjectName Gets the project's `platform.name` setting. When it resolves to something
+ *   missing, blank, or not a string, the title shows the project id instead.
+ */
 export async function formatEditorTitle(
   unformattedTitle: string | undefined,
   projectId: string | undefined,
   isReadOnly: boolean,
-  getProjectName: (projectId: string) => Promise<string>,
+  getProjectName: (projectId: string) => Promise<unknown>,
   getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LanguageStrings>,
 ): Promise<string> {
   let title = unformattedTitle;
   if (!title) {
-    if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
+    if (projectId) title = PROJECT_TITLE_FORMAT_STRING_KEY;
     else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
   }
   if (isLocalizeKey(title)) {
@@ -969,16 +980,15 @@ export async function formatEditorTitle(
       localizeKeys: [EDITABLE_KEY, READONLY_KEY, title],
     });
     const localizedTitleFormatStr = localizedStrings[title];
-    const localizedEditable = localizedStrings[EDITABLE_KEY];
-    const localizedReadonly = localizedStrings[READONLY_KEY];
+    const editable = isReadOnly ? localizedStrings[READONLY_KEY] : localizedStrings[EDITABLE_KEY];
 
-    let projectName = projectId;
-    if (projectId) projectName = await getProjectName(projectId);
-
-    title = formatReplacementString(localizedTitleFormatStr, {
-      projectId: projectName,
-      editable: isReadOnly ? localizedReadonly : localizedEditable,
-    });
+    if (projectId) {
+      const projectName = getProjectDisplayName(projectId, await getProjectName(projectId));
+      title = formatProjectTitle(localizedTitleFormatStr, projectId, projectName, {
+        projectId: projectName,
+        editable,
+      });
+    } else title = formatReplacementString(localizedTitleFormatStr, { projectId, editable });
   }
 
   return title;
@@ -998,21 +1008,27 @@ export async function formatEditorTitle(
  * setting feeds them; without this seam, a swap to `platform.fullName` changes every tab title and
  * no test notices.
  *
- * The project-id fallback is defensive rather than reachable in production: the C# data provider
- * special-cases `platform.name` to `scrText.Name`, and the setting carries a contribution default,
- * so a project served by it always answers. It guards a third-party project data provider that does
- * not, and an unavailable provider.
+ * The id fallback covers a provider with no `platform.name` (for example a third-party provider)
+ * and a failed lookup, such as a project removed while the app was closed. It uses
+ * `getProjectDisplayName`'s rule, so the tab agrees with every other per-project title.
  *
  * @param papi The PAPI backend.
  * @param projectId The project whose name the tab shows.
- * @returns The project's short name, or the project id when it has none.
+ * @returns The project's short name, or the project id when it has none or the lookup fails.
  */
 export async function getTabTitleProjectName(
   papi: typeof PapiBackend,
   projectId: string,
 ): Promise<string> {
-  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  return (await pdp.getSetting('platform.name')) ?? projectId;
+  try {
+    const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+    return getProjectDisplayName(projectId, await pdp.getSetting('platform.name'));
+  } catch (e) {
+    papi.logger.warn(
+      `Error getting the name of project ${projectId} for its title: ${getErrorMessage(e)}`,
+    );
+    return projectId;
+  }
 }
 
 // #endregion Editor Title Formatting
@@ -2783,14 +2799,15 @@ export async function openOrUpdateRelatedPanels(
  * change reaches the provider. Declared as a named type rather than passed as an object literal
  * because an inline literal would trip TypeScript's excess-property check.
  *
- * Exported so `scriptureTextGridWebViewProvider` in `main.ts` types its `openWebViewOptions` with
- * this same type, which catches a _rename_ of `projectId` on either side via the object literal's
- * excess-property check. It does NOT catch an omission: `projectId` has to stay optional, so `{
- * bringToFront: false }` still typechecks and the provider's `openWebViewOptions.projectId ??
- * savedWebView.projectId` would quietly fall back to the stale saved id, leaving the panel on the
- * outgoing project with `typecheck` green. `resolveGridProviderProjectId` pins that precedence and
- * `buildScriptureTextGridWebView` is what the provider calls, so both the rule and its use are
- * covered. (Mirrors `FindWebViewOptions`, which Find exports once and uses on both sides.)
+ * Exported so `ScriptureTextGridWebViewFactory` in `scripture-text-grid-web-view.factory.ts` types
+ * its `openWebViewOptions` with this same type, which catches a _rename_ of `projectId` on either
+ * side via the object literal's excess-property check. It does NOT catch an omission: `projectId`
+ * has to stay optional, so `{ bringToFront: false }` still typechecks and the provider's
+ * `openWebViewOptions.projectId ?? savedWebView.projectId` would quietly fall back to the stale
+ * saved id, leaving the panel on the outgoing project with `typecheck` green.
+ * `resolveGridProviderProjectId` pins that precedence and `buildScriptureTextGridWebView` is what
+ * the provider calls, so both the rule and its use are covered. (Mirrors `FindWebViewOptions`,
+ * which Find exports once and uses on both sides.)
  */
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
 

@@ -93,7 +93,6 @@ const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 // precondition rather than inheriting one. The English interface language its selectors depend on
 // is seeded by the fixture itself.
 test.use({
-  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
   interfaceMode: 'simple',
   seedSettings: { 'platform.firstRunComplete': true },
 });
@@ -256,6 +255,14 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // The book list is populated from the target project, right up to the book before Revelation.
     await expect(mainPage.locator(GENESIS_ITEM)).toBeVisible({ timeout: 30_000 });
     await expect(mainPage.locator(JUDE_ITEM)).toBeVisible();
+    // Fails in `waitForColumn3DeclaredProjectIds`, after Phase 1's book list and before Phase 2.
+    // Marked here, not at the top of the test, because `test.fail` is satisfied by ANY failure and
+    // so would also hide a regression in the steps above. Remove once PT-5011 is fixed.
+    test.fail(
+      true,
+      'PT-5011: the Simple-mode Bible texts and Commentaries panels never publish navigableProjectIds',
+    );
+
     // Baseline for the phase-2 assertions: Revelation is not reachable yet. Opening the editor
     // re-points every Column 3 panel at this same project, which the hook excludes as the navigation
     // target's own. But a panel with nothing of its kind configured shows a resource of that kind

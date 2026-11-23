@@ -6,8 +6,8 @@
  * again restores the book byte for byte.
  *
  * The body, and what each step proves, is `runFootnotesPaneRowEdits` in
- * `e2e-tests/fixtures/no-unasked-edits.body.ts`; its Power-mode sibling runs the same body. ONE
- * test() per spec file on purpose (the isolated fixture is test-scoped).
+ * `e2e-tests/fixtures/no-unasked-edits.body.ts`; its Power-mode sibling runs the same body. One
+ * test() on its own launch (the isolated fixture starts a new app for every test()).
  *
  * Runs against an isolated project root: `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/no-unasked-edits-footnotes-pane-simple.spec.ts`.
