@@ -118,7 +118,7 @@
           {
             "label": "%manageBooks_openMenuItem%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; sits between Sync and Project settings in the Project section)",
+            "localizeNotes": "Scripture editor top menu > Project > Manage books (opens Manage Books targeting the editor's active project; sits between Sync and Project settings in the Project section)",
             "iconNameBefore": "book-copy",
             "group": "platform.projectTop",
             "order": 2,
