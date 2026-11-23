@@ -356,8 +356,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   // Paste and Paste as plain text are handled inside the editor library that ships as the
   // `@eten-tech-foundation/platform-editor` package (its `ClipboardPlugin` reads the clipboard and
   // dispatches the paste), so there is no handler file in this repo to link. `locations` names the
-  // web view and the footnotes component that mount that editor, because a path in another repo would not resolve. No
-  // `command`: the chord is the editor's own, not a PAPI command a menu item runs.
+  // web view and the footnotes component that mount that editor, because a path in another repo
+  // would not resolve. No `command`: the chord is the editor's own, not a PAPI command a menu item
+  // runs.
   {
     id: 'scripture-editor-paste',
     purpose: 'Paste the clipboard into the editor, keeping any markers and formatting it holds',
@@ -377,8 +378,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Editing',
     context:
       'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
-    // The editor's right-click menu has the same "Paste as Plain Text" item. macOS’s own
-    // ⌥⇧⌘V ("Paste and Match Style") is not handled by the editor, so it keeps the unconverted paste.
+    // The editor's right-click menu has the same "Paste as Plain Text" item. macOS’s own ⌥⇧⌘V
+    // ("Paste and Match Style") is not handled by the editor, so it keeps the unconverted paste.
     keys: { macOS: '⇧⌘V', windows: 'Ctrl+Shift+V', linux: 'Ctrl+Shift+V' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
