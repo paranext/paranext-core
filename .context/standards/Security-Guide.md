@@ -94,6 +94,66 @@ Modules must not enable:
 
 Extensions may bundle additional packages into their own code, provided they meet the security requirements above.
 
+### How the restrictions are enforced
+
+The extension host (`src/extension-host/services/extension.service.ts`) enforces these lists in
+the extension host process:
+
+- **Extension files load through the host's own wrapper, not Node's loader.** `loadExtensionModule`
+  (`extension-sandbox.util.ts`) reads the entry file named by the manifest's `main` and compiles it
+  with `vm.compileFunction`, handing it a plain `module`/`exports` and a bare `require` that calls
+  `requireForExtension`. That `require` returns an extension interface module
+  (`EXTENSION_INTERFACE_MODULE_SPECIFIERS`) or throws. Extension code gets no handle on Node's
+  module loader or cache (`require.cache`, `require.resolve`, `module.constructor`), and dynamic
+  `import()` rejects because no dynamic-import callback is given. `Module.prototype.require` is not
+  replaced: extension files never reach it, and a replacement would not stop a leaked real
+  `require`, whose `.main` and `.cache` reach Node's loader anyway.
+- **Module helpers on `process` are disabled at activation.** `blockProcessModuleAccess` replaces
+  `process.getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`, `loadEnvFile`,
+  `_getActiveHandles`, `_getActiveRequests` and `execve` with functions that throw, and sets
+  `process.mainModule` to `undefined`. It also replaces `process.stdin` with an empty stream: the
+  host's standard input is the null device (`/dev/null`, `NUL` on Windows), so Node would otherwise
+  make it a file stream carrying the whole `fs` module.
+- **Code built from strings is disabled at activation.** `blockCodeGenerationFromStrings` deletes
+  `globalThis.eval` and `globalThis.Function` and locks the `constructor` of the four function
+  prototypes (plain, async, generator, async generator) to a function that throws.
+- **Lockdowns come before any load.** The host gets its extension loader only from
+  `lockDownAndCreateExtensionLoader`, which applies both lockdowns before returning it.
+- **The logger exposes only logging methods.** `papi.logger` in the extension host is a frozen
+  object of the seven logging methods (`createExtensionLogger` in `extension-logger.util.ts`), not
+  the electron-log logger, whose `transports.file` settings could point the log file and
+  `readAllLogs` at any path.
+- **Network:** `fetch` is replaced with `papi.fetch`; `XMLHttpRequest` and `WebSocket` throw.
+- Refusals from the loader and the lockdowns contain the text `not allowed in extensions`.
+
+The regression guard is the `evil` extension's sandbox probes (`extensions/src/evil/evil.js`, which
+logs `Sandbox probes (<phase>): <refused>/<total> refused` and a `<<BAD>>` line per escape, at load,
+at activation and again 3 seconds later to catch a route the host reopens after startup) and
+`src/extension-host/services/extension-sandbox.probes.test.ts`, which runs the same probes in a
+child Node process and fails if any route is open. The running app is checked too: the smoke E2E
+test `e2e-tests/tests/smoke/extension-sandbox.spec.ts` reads every phase's results from the dev app
+through the `evil.getSandboxProbeResults` command, and CI's `check packaged extension sandbox` step
+(`e2e-tests/check-packaged-sandbox-probes.ts`) does the same against the packaged build on Linux,
+Windows and macOS (non-blocking on macOS).
+
+This is an in-process sandbox. It closes the module-loading and string-compilation routes listed
+above, and every extension still shares one JavaScript realm and one `process` with the host, so it
+is not a hard security boundary. As of 2026-11-09 these routes are known to remain open:
+
+- a `net.Socket` built from `process.stdout.constructor` or `process.stderr.constructor`;
+- the rest of the `process` surface, such as `kill`, `send`, `report.writeReport`, `chdir` and
+  `env`;
+- in dev builds, grabbing host functions from stack frames through `Error.prepareStackTrace` and
+  `CallSite.getFunction()`;
+- (added 2026-11-18) after anything in the host has called `fetch` once, Node's built-in HTTP client
+  (undici) on `globalThis[Symbol.for('undici.globalDispatcher.1')]`, whose `dispatch` makes
+  requests that skip `papi.fetch`. Harmless while `papi.fetch` passes requests through unchanged,
+  but a gap if `papi.fetch` ever enforces a policy.
+
+A follow-up audit of the `process` surface is recommended but not filed as of 2026-11-09.
+Process-level isolation (Node's permission model, a process per extension) is out of scope as of
+2026-11-09; see `adr-extensions-load-through-sandbox-loader`.
+
 For the complete and up-to-date list, see the [Module Import Restrictions wiki](https://github.com/paranext/paranext/wiki/Module-import-restrictions).
 
 ---
