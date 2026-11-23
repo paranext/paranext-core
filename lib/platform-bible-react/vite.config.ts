@@ -26,13 +26,17 @@ const config = defineConfig({
     }),
   ],
   build: {
+    // Source maps are generated on every build but gitignored: they are single-line files that
+    // would conflict on every change. Never toggle this by environment; the committed scripts must
+    // end with the same `sourceMappingURL` comment whether or not a map exists.
     sourcemap: true,
+    // Unminified output keeps `dist/` line-based, so git can merge unrelated library changes.
+    minify: false,
     lib: {
       entry: {
         index: path.resolve(__dirname, 'src/index.ts'),
         experimental: path.resolve(__dirname, 'src/experimental.ts'),
       },
-      formats: ['es', 'cjs'],
       fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : format}`,
     },
     rollupOptions: {
@@ -44,12 +48,20 @@ const config = defineConfig({
         ...Object.keys(rootPackageInfoFull.peerDependencies ?? {}),
         ...Object.keys(rootPackageInfoFull.dependencies ?? {}),
       ],
-      output: {
-        globals: {
-          react: 'React',
-          'react-dom': 'ReactDOM',
+      // Chunk names carry no content hash, so a changed chunk keeps its file name instead of two
+      // branches adding different files. CommonJS needs `.cjs` because the package is ESM.
+      output: [
+        {
+          format: 'es',
+          chunkFileNames: '[name].js',
+          globals: { react: 'React', 'react-dom': 'ReactDOM' },
         },
-      },
+        {
+          format: 'cjs',
+          chunkFileNames: '[name].cjs',
+          globals: { react: 'React', 'react-dom': 'ReactDOM' },
+        },
+      ],
     },
   },
   test: {

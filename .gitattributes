@@ -12,3 +12,7 @@
 *.woff2 binary
 *.ldml  binary
 *.zip  binary
+
+# Built library output: collapsed in GitHub diffs. Rebuild it rather than editing or hand-merging it.
+lib/platform-bible-react/dist/** linguist-generated=true
+lib/platform-bible-utils/dist/** linguist-generated=true
