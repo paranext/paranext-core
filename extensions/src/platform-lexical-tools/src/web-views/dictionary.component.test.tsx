@@ -283,9 +283,73 @@ describe('Dictionary entry links', () => {
     expect(screen.queryByRole('button', { name: 'Ruth 4:11' })).not.toBeInTheDocument();
   });
 
+  it.each([
+    { layout: 'the list', othersInRuth4: [ELIMELECH, BOAZ] },
+    { layout: 'the single-entry view', othersInRuth4: [] },
+  ])(
+    'keeps the sense and All view of a linked entry after going to its occurrence in another chapter, in $layout',
+    async ({ othersInRuth4 }) => {
+      const RUTH_4_12 = { ...RUTH_4_11, verseNum: 12 };
+      const ephrathah = entry('000555', 'אֶפְרָתָה', [
+        { gloss: 'Ephrathah', definition: 'the town', verseRefs: [RUTH_4_11] },
+        {
+          gloss: 'Ephrathite',
+          definition: 'its people',
+          verseRefs: [RUTH_4_12, { book: 'GEN', chapterNum: 35, verseNum: 16 }],
+        },
+      ]);
+      render(
+        <DictionaryInScrollGroup
+          getEntries={async (_scope, scrRef) => ({
+            entriesById: Object.fromEntries(
+              (scrRef.chapterNum === 4 ? [...othersInRuth4, ephrathah] : [ELIMELECH]).map((e) => [
+                e.id,
+                [e],
+              ]),
+            ),
+          })}
+          getEntryByLemma={async () => ephrathah}
+        />,
+      );
+      fireEvent.click(await screen.findByRole('link', { name: 'Bethlehem' }));
+      // Neither sense occurs in Ruth 1, so none is selected until the reader picks the second
+      fireEvent.click(await screen.findByText('its people'));
+      fireEvent.click(screen.getByRole('button', { name: 'All (2)' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ruth 4:12' }));
+
+      // Both senses occur in Ruth 4, and the second is still selected, with All still chosen
+      expect(await screen.findByText('Occurrences for 2')).toBeInTheDocument();
+      expect(screen.getByText('its people').closest('button')).toHaveAttribute('data-state', 'on');
+      expect(screen.getByRole('button', { name: 'Genesis 35:16' })).toBeInTheDocument();
+    },
+  );
+
+  it('reads the full entry again on the next reload when reading it failed', async () => {
+    const bethlehemInRuth = entry(BETHLEHEM.id, BETHLEHEM.lemma, [
+      { gloss: 'Bethlehem', definition: 'a town; see {S:00800400300000}', verseRefs: [SCR_REF] },
+    ]);
+    const getFullEntry = vi.fn(async (): Promise<Entry | undefined> => BETHLEHEM);
+    getFullEntry.mockResolvedValueOnce(undefined);
+    render(
+      <DictionaryInScrollGroup
+        getEntries={async () => ({ entriesById: { [BETHLEHEM.id]: [bethlehemInRuth] } })}
+        getFullEntry={getFullEntry}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('link', { name: 'Ruth 4:3' }));
+    expect(await screen.findByText('the old name of the town')).toBeInTheDocument();
+    expect(getFullEntry).toHaveBeenCalledTimes(2);
+  });
+
   it('reads the full entry once while the list reloads around it', async () => {
     const getFullEntry = vi.fn(async (e: Entry) => e);
-    render(<DictionaryInScrollGroup getFullEntry={getFullEntry} />);
+    render(
+      <DictionaryInScrollGroup
+        // Each read returns new objects, as the data provider does
+        getEntries={async (scope, scrRef) => structuredClone(await getEntries(scope, scrRef))}
+        getFullEntry={getFullEntry}
+      />,
+    );
     fireEvent.click(await screen.findByRole('link', { name: 'Ruth 4:3' }));
     // Ruth 4 lists Elimelech again, as a new object, and it stays open
     expect(await screen.findByText('Boaz')).toBeInTheDocument();

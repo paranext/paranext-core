@@ -107,6 +107,8 @@ export function Dictionary({
   const pendingSelectionRef = useRef<{ entry: Entry; scrRef: SerializedVerseRef } | undefined>(
     undefined,
   );
+  // The same entry, as state for rendering, so that no other entry is shown while it waits
+  const [pendingEntry, setPendingEntry] = useState<Entry | undefined>(undefined);
 
   const scrollToTop = () => {
     dictionaryEntryRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -140,7 +142,9 @@ export function Dictionary({
     // entry that starts waiting while this load is under way waits for the list after it.
     const pendingSelection = pendingSelectionRef.current;
     const endPendingSelection = () => {
-      if (pendingSelectionRef.current === pendingSelection) pendingSelectionRef.current = undefined;
+      if (pendingSelectionRef.current !== pendingSelection) return;
+      pendingSelectionRef.current = undefined;
+      setPendingEntry(undefined);
     };
     const load = async () => {
       const result = await getEntries(scope, scopeReference);
@@ -211,14 +215,24 @@ export function Dictionary({
     (entry: Entry, scrRefOfOccurrence: SerializedVerseRef) => {
       if (isReferenceInScope(scrRefOfOccurrence, scrRef, scope)) setSelectedEntry(entry);
       // The list for the occurrence has yet to load, so the entry is selected once it has
-      else pendingSelectionRef.current = { entry, scrRef: scrRefOfOccurrence };
+      else {
+        pendingSelectionRef.current = { entry, scrRef: scrRefOfOccurrence };
+        setPendingEntry(entry);
+      }
       onSelectOccurrence(scrRefOfOccurrence);
     },
     [onSelectOccurrence, scrRef, scope],
   );
 
-  // Entry displayed in DictionaryEntryDisplay: always the single entry, or whatever is selected in the list
-  const displayedEntry = entriesFiltered.length === 1 ? entriesFiltered[0] : selectedEntry;
+  // Entry displayed in DictionaryEntryDisplay: always the single entry, or whatever is selected in
+  // the list. While the reader follows a different entry to another chapter, such as one opened from
+  // a link, none is: the old list would otherwise show its own entry until the new one loads, and
+  // that entry would take over the selected sense and the Chapter/All choice.
+  const listedEntry = entriesFiltered.length === 1 ? entriesFiltered[0] : selectedEntry;
+  const displayedEntry =
+    pendingEntry && !(listedEntry && isSameEntry(listedEntry, pendingEntry))
+      ? undefined
+      : listedEntry;
 
   // Fetch the full (unfiltered) data for the displayed entry. Until it arrives, or if it cannot be
   // fetched, the entry is shown with only its senses in scope, and they are not numbered.
@@ -228,20 +242,29 @@ export function Dictionary({
 
   // The entry whose full data is read. A list reload hides the entry for a moment and then lists it
   // again as a new object, so this changes only when a different entry is displayed, and each entry
-  // is read once.
+  // is read once. A read that fails is tried again the next time the entry is hidden and shown, such
+  // as by the next list reload.
   const [entryToReadInFull, setEntryToReadInFull] = useState<Entry | undefined>(undefined);
-  if (displayedEntry && !(entryToReadInFull && isSameEntry(entryToReadInFull, displayedEntry)))
+  const [hasFullReadFailed, setHasFullReadFailed] = useState(false);
+  if (displayedEntry && !(entryToReadInFull && isSameEntry(entryToReadInFull, displayedEntry))) {
     setEntryToReadInFull(displayedEntry);
+    setHasFullReadFailed(false);
+  } else if (!displayedEntry && hasFullReadFailed) {
+    setEntryToReadInFull(undefined);
+    setHasFullReadFailed(false);
+  }
 
   useEffect(() => {
     if (!entryToReadInFull) return undefined;
     let isActive = true;
     const load = async () => {
       const entry = await getFullEntry(entryToReadInFull);
-      if (isActive) setFullEntry(entry);
+      if (!isActive) return;
+      if (entry) setFullEntry(entry);
+      else setHasFullReadFailed(true);
     };
     load().catch(() => {
-      if (isActive) setFullEntry(undefined);
+      if (isActive) setHasFullReadFailed(true);
     });
     return () => {
       isActive = false;
@@ -261,8 +284,9 @@ export function Dictionary({
   }, [linkedEntry]);
 
   // Whether the shown entry's occurrences are those in the chapter or all of them, and which of its
-  // senses is selected. They are kept here, where a list reload does not reset them, but each entry
-  // the reader opens starts on the chapter with no sense chosen.
+  // senses is selected. They are kept here, where a list reload does not reset them, but each
+  // different entry the reader opens starts on the chapter with no sense chosen. Closing an entry
+  // and opening it again keeps them.
   const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
   const [selectedSenseId, setSelectedSenseId] = useState<string | undefined>(undefined);
   const shownEntry = linkedEntry ?? displayedEntry;
@@ -405,14 +429,14 @@ export function Dictionary({
           <Label>{localizedStrings['%platformLexicalTools_dictionary_noResults%']}</Label>
         </div>
       )}
-      {entriesFiltered.length === 1 && (
+      {entriesFiltered.length === 1 && displayedEntry && (
         <div ref={dictionaryEntryRef} className="tw:overflow-y-auto tw:p-4">
           <DictionaryEntryDisplay
             localizedStrings={localizedStrings}
             scriptureReferenceToFilterBy={scrRef}
             scope={scope}
             isDrawer={false}
-            dictionaryEntry={fullDisplayedEntry ?? entriesFiltered[0]}
+            dictionaryEntry={fullDisplayedEntry ?? displayedEntry}
             hasAllSenses={!!fullDisplayedEntry}
             areLessRelevantSensesHidden={areLessRelevantSensesHidden}
             onAreLessRelevantSensesHiddenChange={onAreLessRelevantSensesHiddenChange}
@@ -421,7 +445,7 @@ export function Dictionary({
             selectedSenseId={selectedSenseId}
             onSelectedSenseIdChange={setSelectedSenseId}
             onSelectOccurrence={(scrRefOfOccurrence) =>
-              selectOccurrenceKeepingEntry(entriesFiltered[0], scrRefOfOccurrence)
+              selectOccurrenceKeepingEntry(displayedEntry, scrRefOfOccurrence)
             }
             onClickScrollToTop={scrollToTop}
             onEntryLinkClick={handleEntryLinkClick}
@@ -434,7 +458,7 @@ export function Dictionary({
           dictionaryData={entriesFiltered}
           scriptureReferenceToFilterBy={scrRef}
           scope={scope}
-          selectedEntry={selectedEntry}
+          selectedEntry={displayedEntry}
           onSelectOccurrence={(scrRefOfOccurrence) =>
             selectedEntry
               ? selectOccurrenceKeepingEntry(selectedEntry, scrRefOfOccurrence)

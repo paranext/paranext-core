@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import path from 'path';
 import { DatabaseSync, SQLInputValue } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
@@ -34,7 +34,35 @@ vi.mock('@papi/backend', () => ({
 import { LexicalReferenceTextManager } from './lexical-reference-text-manager.model';
 /* eslint-enable import/first */
 
-const SCHEMA = readFileSync(path.join(__dirname, 'test-fixtures', 'lexical-db-schema.sql'), 'utf8');
+/**
+ * The schema of the lexical.db that ships, which `npm install` downloads. Copying it, rather than
+ * keeping a copy of it here, means a change to the schema in marble-tools fails these tests instead
+ * of drifting from them.
+ */
+function readShippedSchema(): string {
+  const shippedDatabasePath = path.join(__dirname, '..', 'assets', 'lexical-db', 'lexical.db');
+  if (!existsSync(shippedDatabasePath))
+    throw new Error(
+      `${shippedDatabasePath} is missing. Run \`npm install\`, whose postinstall step downloads it.`,
+    );
+  const shippedDatabase = new DatabaseSync(shippedDatabasePath, { readOnly: true });
+  try {
+    return (
+      shippedDatabase
+        // SQLite's own tables, such as `ANALYZE`'s sqlite_stat1, cannot be created by name
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY rowid",
+        )
+        .all()
+        .map(({ sql }) => `${sql};`)
+        .join('\n')
+    );
+  } finally {
+    shippedDatabase.close();
+  }
+}
+
+const SCHEMA = readShippedSchema();
 
 /**
  * Builds an entry whose senses were imported (SenseKey order) in a different order than their IDs
