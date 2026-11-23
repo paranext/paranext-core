@@ -226,14 +226,17 @@ describe('_simple-mode.scss', () => {
     );
   });
 
-  it('keeps the active text box’s end stroke short of the bar trigger at every zoom level', () => {
+  it('keeps the active text box’s end stroke between the caret and the bar trigger at every zoom level', () => {
     // The trigger starts 4px past the text column and does not zoom; the box's reach past the
-    // column does, unless it is divided by the area's factor. The offset is the same one
-    // `_usj-nodes.scss` gives the box everywhere else, so the two cannot drift apart.
-    const baseOffset =
-      /\.psc-active-focus \.psc-active-text::after\s*\{[^}]*?inset-inline-end:\s*([^;]+);/
-        .exec(readFileSync(USJ_NODES_SCSS_PATH, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''))?.[1]
-        ?.trim();
+    // column and its stroke do, unless both are divided by the area's factor. Zoomed, the stroke
+    // grows back over the column's last pixels and hides the caret at a line's end from about
+    // 170 %. The offset and the width are the ones `_usj-nodes.scss` gives the box everywhere
+    // else, so the two cannot drift apart.
+    const baseBox = /\.psc-active-focus \.psc-active-text::after\s*\{([^}]*)\}/.exec(
+      readFileSync(USJ_NODES_SCSS_PATH, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''),
+    )?.[1];
+    const baseOffset = /inset-inline-end:\s*([^;]+);/.exec(baseBox ?? '')?.[1]?.trim();
+    const baseStroke = /border:\s*(\S+)\s/.exec(baseBox ?? '')?.[1];
     const code = compiledSimpleModeRules()
       .filter(
         (rule) =>
@@ -243,8 +246,10 @@ describe('_simple-mode.scss', () => {
       .map((decl) => `${decl.prop}: ${decl.value}`);
 
     expect(baseOffset).toBe('-3px');
+    expect(baseStroke).toBe('2.5px');
     expect(code).toEqual([
       `inset-inline-end: calc(${baseOffset} / var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1)))`,
+      `border-width: calc(${baseStroke} / var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1)))`,
     ]);
   });
 

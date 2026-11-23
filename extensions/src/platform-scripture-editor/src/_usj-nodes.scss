@@ -2946,6 +2946,9 @@ span.read img {
      (monospace), so the box reaches 1ch into the gap and the space, not the text, sits there. The
      box is as wide as the marker, so a longer one grows away from the text. */
   right: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap) - 1ch);
+  /* Padding on the gutter side makes the rest of the marker's gutter row part of its click target
+     without moving the glyph; the editor clips the box at the gutter's edge. */
+  padding-left: var(--psc-gutter-width);
   top: 0;
   direction: ltr;
   unicode-bidi: isolate;
@@ -3165,12 +3168,14 @@ span.read img {
    LTR `right` calc uses), so indented para types get the correct gutter column without per-type
    overrides. The marker's text stays LTR, so its trailing no-break space is on the outer side
    here and needs no 1ch correction. No text-align is set in either direction: with
-   `text-indent: 0` the box is exactly as wide as its text, so alignment inside it would not move
-   the glyph. */
+   `text-indent: 0` the box's content is exactly as wide as its text, and its padding is on the
+   gutter side, so alignment inside it would not move the glyph. */
 .psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child,
 .psc-gutter-markers[dir='rtl'] .book > .marker:first-child {
   right: auto;
   left: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap));
+  padding-left: 0;
+  padding-right: var(--psc-gutter-width);
 }
 
 /* ── Active text focus box ────────────────────────────────────────────────────

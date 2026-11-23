@@ -412,6 +412,22 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
           'left: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap));',
         );
       });
+      it("makes the marker's gutter row clickable out to the gutter's edge", () => {
+        const marker = ruleBody([
+          '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child',
+          '.psc-gutter-markers .book > .marker:first-child',
+        ]);
+        const rtl = ruleBody([
+          ".psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child",
+          ".psc-gutter-markers[dir='rtl'] .book > .marker:first-child",
+        ]);
+        // The box is only as wide as its text, so a `\p` would be a small target; the padding
+        // grows it away from the text, and the editor clips it at the gutter's edge.
+        expect(marker).toContain('padding-left: var(--psc-gutter-width);');
+        // In RTL the gutter is on the other side, and the LTR padding would push the glyph out.
+        expect(rtl).toContain('padding-left: 0;');
+        expect(rtl).toContain('padding-right: var(--psc-gutter-width);');
+      });
       it('draws the active text box 3px past the end of the text column', () => {
         expect(ruleBody(['.psc-active-focus .psc-active-text::after'])).toContain(
           'inset-inline-end: -3px;',

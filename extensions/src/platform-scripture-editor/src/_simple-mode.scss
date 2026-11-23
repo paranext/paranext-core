@@ -122,10 +122,15 @@
 // The active text box reaches 3px past the text column (`_usj-nodes.scss`), toward the bar, whose
 // trigger starts 4px past it at a fixed size. The box is inside the content-zoom area and the
 // trigger is not, so the offset is divided by the area's factor, as the padding above is: zoomed,
-// it would run the stroke under the trigger from about 140 %.
+// it would run the stroke under the trigger from about 140 %. The stroke's width is divided too:
+// zoomed, it grows inward from that fixed offset and covers the caret at a line's end from about
+// 170 %.
 .editor-container-simple .psc-active-focus .psc-active-text::after {
   inset-inline-end: calc(
     -3px / var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))
+  );
+  border-width: calc(
+    2.5px / var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))
   );
 }
 

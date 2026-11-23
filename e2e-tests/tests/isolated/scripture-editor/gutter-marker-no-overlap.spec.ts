@@ -201,11 +201,17 @@ test.describe('gutter marker glyphs versus paragraph text', () => {
                 ? Math.max(textRect.right, verseRect?.right ?? -Infinity)
                 : Math.min(textRect.left, verseRect?.left ?? Infinity);
               const glyphRect = glyph.getBoundingClientRect();
+              const glyphStyle = getComputedStyle(glyph);
               const style = getComputedStyle(para);
               results.push({
                 marker,
                 glyphText: glyph.textContent?.trim() ?? '',
-                glyphWidthPx: glyphRect.width,
+                // Without the gutter-side padding, which widens the click target whether or not
+                // there is text to show.
+                glyphWidthPx:
+                  glyphRect.width -
+                  parseFloat(glyphStyle.paddingLeft) -
+                  parseFloat(glyphStyle.paddingRight),
                 gapPx: isRtl ? glyphRect.left - lineStart : lineStart - glyphRect.right,
                 paraIndent: style.getPropertyValue('--para-indent').trim(),
                 verseTextStart: style.getPropertyValue('--verse-text-start').trim(),
