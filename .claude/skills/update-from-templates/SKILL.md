@@ -44,7 +44,12 @@ The script also `git rm`s each extension's `package-lock.json` when the template
   ```
 
 - **Which core it builds against:** an extension repo installs core from `../paranext-core`, so it is the folder named `paranext-core` beside the worktree that counts, whatever other core checkouts sit nearby. It can be on any branch: what counts is that its `lib/` matches core `main` (`git -C ../paranext-core diff origin/main -- lib` is empty) and that it is built. Check the build with `test -d ../paranext-core/lib/platform-bible-utils/dist && test -d ../paranext-core/lib/platform-bible-react/dist`; listing a `dist/` folder is denied by core's permission rules (see step 5).
-- **Install under the repo's current pin** so `tsx` is available: `volta run --node <volta.node from package.json> npm ci --ignore-scripts`. The pin may change during the update (for example when the template moves Node.js); from then on use the new one. The script itself only needs `tsx`, so it does not need a reinstall when the pin changes; step 5's fresh `npm ci` does that before verifying.
+- **Install under the repo's current pin** so the script can run:
+  - **Extension repos:** `volta run --node <volta.node from package.json> npm ci --ignore-scripts`. Their script needs only `tsx`.
+  - **paranext-core:** core's normal install, `npm ci` without `--ignore-scripts` (or work in a core checkout that is already installed). Core's script imports `platform-bible-utils`, which needs the dev packages that core's `preinstall` stages; skipping scripts leaves them out, and the script fails before fetching anything.
+
+  The pin may change during the update (for example when the template moves Node.js); from then on use the new one. The script does not need a reinstall when the pin changes; step 5's fresh `npm ci` does that before verifying.
+- **Check both template remotes exist:** `git remote` must list `paranext-multi-extension-template` and `paranext-extension-template`. The `postinstall` hook that adds them (`lib/add-remotes.ts`; in core, `extensions/lib/add-remotes.ts`) does not run under `--ignore-scripts`, so a fresh clone has neither. Add them with `npx tsx lib/add-remotes.ts` (in core, from `extensions/`), or by hand as `extensions/README.md`'s "Adding remotes manually" describes. A worktree of a clone that already has them shares them.
 - **Use the skill's helper from the core checkout that holds this skill** (its absolute path), not a path relative to the extension repo: `node <core>/.claude/skills/update-from-templates/scripts/conflict-sides.mjs`.
 
 ### 0. How far behind is the repo, and what is coming in?
