@@ -19,6 +19,7 @@
  *
  * - Paranext/no-hardcoded-tailwind-colors: Disallow hardcoded colors; use theme tokens
  * - Paranext/no-tailwind-shadows: Disallow shadow classes in Tailwind
+ * - Paranext/tooltip-content-single-child: Keep TooltipContent content to one piece plus keycaps
  *
  * Localization:
  *
@@ -42,6 +43,7 @@ import serviceFileNaming from './rules/service-file-naming';
 import registrationStructure from './rules/registration-structure';
 import noHardcodedTailwindColors from './rules/no-hardcoded-tailwind-colors';
 import noTailwindShadows from './rules/no-tailwind-shadows';
+import tooltipContentSingleChild from './rules/tooltip-content-single-child';
 import requireLocalizedAria from './rules/require-localized-aria';
 import noHardcodedJsxStrings from './rules/no-hardcoded-jsx-strings';
 import requireLocalizedStringsArray from './rules/require-localized-strings-array';
@@ -64,6 +66,7 @@ const plugin = {
     'registration-structure': registrationStructure,
     'no-hardcoded-tailwind-colors': noHardcodedTailwindColors,
     'no-tailwind-shadows': noTailwindShadows,
+    'tooltip-content-single-child': tooltipContentSingleChild,
     'require-localized-aria': requireLocalizedAria,
     'no-hardcoded-jsx-strings': noHardcodedJsxStrings,
     'require-localized-strings-array': requireLocalizedStringsArray,
@@ -84,6 +87,7 @@ const plugin = {
         'paranext/registration-structure': 'warn',
         'paranext/no-hardcoded-tailwind-colors': 'error',
         'paranext/no-tailwind-shadows': 'error',
+        'paranext/tooltip-content-single-child': 'error',
         'paranext/require-localized-aria': 'warn',
         'paranext/no-hardcoded-jsx-strings': 'warn',
         'paranext/require-localized-strings-array': 'warn',
@@ -104,6 +108,7 @@ const plugin = {
         'paranext/registration-structure': 'error',
         'paranext/no-hardcoded-tailwind-colors': 'error',
         'paranext/no-tailwind-shadows': 'error',
+        'paranext/tooltip-content-single-child': 'error',
         'paranext/require-localized-aria': 'error',
         'paranext/no-hardcoded-jsx-strings': 'error',
         'paranext/require-localized-strings-array': 'error',

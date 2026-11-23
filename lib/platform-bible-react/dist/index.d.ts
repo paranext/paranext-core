@@ -4026,7 +4026,15 @@ export declare const TooltipPortalContainerProvider: ({ container, children, }: 
 	container: HTMLElement | null;
 	children: React$1.ReactNode;
 }) => import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Tooltip */
+/**
+ * @inheritdoc Tooltip
+ *
+ * Lays out its children side by side (a flex row), so a label sits next to its keycaps: `Save
+ * <Kbd>⌘S</Kbd>`. Any other content with more than one piece — two paragraphs, or text next to a
+ * `<strong>` — renders as narrow columns once it wraps. Wrap such content in one element (for
+ * example `<p>` or `<div>`), or pass a `className` that changes the layout, such as `tw:flex-col`.
+ * The `paranext/tooltip-content-single-child` lint rule checks this in paranext-core.
+ */
 export declare function TooltipContent({ className, sideOffset, style, showArrow, arrowClassName, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
 	showArrow?: boolean;
 	arrowClassName?: string;

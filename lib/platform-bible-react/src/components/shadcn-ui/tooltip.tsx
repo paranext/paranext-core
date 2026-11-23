@@ -99,8 +99,17 @@ const { PortalContainerProvider, usePortalContainer: useTooltipPortalContainer }
 const TooltipPortalContainerProvider = PortalContainerProvider;
 /* #endregion CUSTOM */
 
-// CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
-/** @inheritdoc Tooltip */
+// CUSTOM: Added TSDoc pointing to Tooltip for documentation inheritance, plus a note on the stock
+// side-by-side layout, because content with several pieces silently renders as columns
+/**
+ * @inheritdoc Tooltip
+ *
+ * Lays out its children side by side (a flex row), so a label sits next to its keycaps: `Save
+ * <Kbd>⌘S</Kbd>`. Any other content with more than one piece — two paragraphs, or text next to a
+ * `<strong>` — renders as narrow columns once it wraps. Wrap such content in one element (for
+ * example `<p>` or `<div>`), or pass a `className` that changes the layout, such as `tw:flex-col`.
+ * The `paranext/tooltip-content-single-child` lint rule checks this in paranext-core.
+ */
 // CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
 // scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function TooltipContent({
