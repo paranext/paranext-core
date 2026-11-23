@@ -6102,7 +6102,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     whether a menu may change under the pointer while it is open, and with it whether the authoring
     rule below stands. TODO(PT-5037): settle or change D3 per that review, then drop this note.
     Every surface updates while open: toolbar, web view top menus, self-rendered menus, tab menus
-    and overlay context menus. The exception is a web view top menu opened in the overlay with
+    and overlay context menus. The exception is a tab menu opened in the overlay with
     `openMenuInOverlay`, which shows the menu as it was when it opened
     (`adr-tab-menus-open-in-the-overlay`). On the macOS menubar, enabled/checked update in place on the
     existing native items; a visibility or structure change rebuilds the menubar, because

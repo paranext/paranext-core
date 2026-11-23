@@ -5,6 +5,7 @@ import {
   ABORTED,
   RESOURCE_EXHAUSTED,
   FAILED_PRECONDITION,
+  INVALID_ARGUMENT,
   LanguageStrings,
   Localized,
   MenuItemContainingCommand,
@@ -24,6 +25,7 @@ import {
 import { getOverlays, getOverlayById, clearAllOverlays, subscribe } from './overlay-store';
 import { getWebViewIframe, isWebViewVisible, translateCoordinates } from './overlay-coordinates';
 import { markOverlayFocusReturnIfFocusInside } from './overlay-focus-return.util';
+import { validateTabMenu } from './overlay-validation';
 import { WINDOW_BLUR_PRESS_MARKER } from './window-blur-press.util';
 
 /** Must match DEBOUNCE_COOLDOWN_MS in overlay.service-host.ts */
@@ -310,6 +312,7 @@ describe('overlay.service-host', () => {
 
     afterEach(() => {
       vi.mocked(getWebViewIframe).mockReset();
+      vi.mocked(validateTabMenu).mockReset();
     });
 
     it('opens the menu below the trigger, translated into the window', async () => {
@@ -385,6 +388,35 @@ describe('overlay.service-host', () => {
 
       getTabMenuOverlay().resolve(undefined);
       await second;
+    });
+
+    it('rejects an invalid menu or anchor without closing the menu already open', async () => {
+      const actualValidation =
+        await vi.importActual<typeof import('./overlay-validation')>('./overlay-validation');
+      vi.mocked(validateTabMenu).mockImplementation(actualValidation.validateTabMenu);
+      const open = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+      const openMenuId = getTabMenuOverlay().id;
+      vi.mocked(windowService.getFocus).mockClear();
+      const isInvalidArgument = (error: unknown) =>
+        isPlatformError(error) && error.code === INVALID_ARGUMENT;
+
+      resetDebounceState();
+      await expect(
+        overlayService.showTabMenu({ ...TAB_MENU, items: [] }, 'tab-webview', { anchor: ANCHOR }),
+      ).rejects.toSatisfy(isInvalidArgument);
+      resetDebounceState();
+      await expect(
+        overlayService.showTabMenu(TAB_MENU, 'tab-webview', {
+          anchor: { ...ANCHOR, x: Number.NaN },
+        }),
+      ).rejects.toSatisfy(isInvalidArgument);
+
+      expect(getOverlays().map((o) => o.id)).toEqual([openMenuId]);
+      // No focus record was started for the refused requests
+      expect(windowService.getFocus).not.toHaveBeenCalled();
+
+      getTabMenuOverlay().resolve(undefined);
+      await expect(open).resolves.toBeUndefined();
     });
 
     it('refuses a request from a web view that is not visible', async () => {

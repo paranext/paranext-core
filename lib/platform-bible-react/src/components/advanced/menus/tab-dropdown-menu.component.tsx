@@ -559,6 +559,10 @@ export default function TabDropdownMenu({
         onClick={(event) => {
           // A click that Enter or Space produced carries no click count, and no pointer-down
           const isFromKeyboard = event.detail === 0;
+          // Known limitation: a quick double-click leaves the menu open. The overlay service ignores
+          // closes for a short grace period after a menu opens (OVERLAY_CREATION_GRACE_MS), so the
+          // second press does not dismiss it, and this check then skips the click. The next click
+          // anywhere closes the menu.
           if (!isFromKeyboard && wasOverlayOpenAtPointerDownRef.current) return;
           openOverlay(isFromKeyboard);
         }}
