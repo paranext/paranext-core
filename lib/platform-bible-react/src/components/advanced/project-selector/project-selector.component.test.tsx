@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { useState } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -11,6 +11,7 @@ import {
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
 import { PROJECT_SELECTOR_STRING_KEYS } from '@/components/advanced/project-selector/project-selector.groupings';
+import { persistDirection } from '@/utils/dir-helper.util';
 
 // jsdom doesn't ship ResizeObserver or `Element.prototype.scrollTo`. cmdk (the
 // Command primitive used inside the popover) instantiates a ResizeObserver on
@@ -1532,5 +1533,80 @@ describe('disabled rows', () => {
 
     expect(await openButtonsIn('ESVUS16')).toHaveLength(1);
     expect(await openButtonsIn('WEB')).toHaveLength(0);
+  });
+});
+
+describe('ProjectSelector — row tooltip placement and layout', () => {
+  // jsdom does no layout: the viewport measures 0 × 0 and every element sits at its origin, so
+  // Radix's collision handling flips any side it is given. Give the viewport a size and put the row
+  // in the middle of it, so both sides fit and `data-side` reports the side the row asked for.
+  beforeEach(() => {
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(1024);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(768);
+    const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function getRowRect(
+      this: Element,
+    ) {
+      if (this.getAttribute('role') !== 'option') return originalGetBoundingClientRect.call(this);
+      return DOMRect.fromRect({ x: 412, y: 368, width: 200, height: 32 });
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    persistDirection('ltr');
+  });
+
+  async function openRowTooltip() {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={[
+          {
+            id: 'locked',
+            shortName: 'LOCKED',
+            fullName: 'A locked project',
+            // The disabled reason is what opens the tooltip on hover — jsdom reports no overflow,
+            // so the truncation path never fires.
+            isDisabled: true,
+            disabledReason: 'Cannot be opened here',
+          },
+        ]}
+        openTabs={[]}
+        selection={{ projectId: undefined }}
+        onChangeSelection={() => {}}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+    await user.hover(screen.getByText('A locked project'));
+    await screen.findByRole('tooltip');
+    // The `tooltip` role sits on a visually hidden copy of the content; the bubble is the content
+    // element itself.
+    const bubble = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]');
+    if (!bubble) throw new Error('The row tooltip bubble did not render');
+    return bubble;
+  }
+
+  it('opens beside the row on the right in a left-to-right layout', async () => {
+    persistDirection('ltr');
+    const bubble = await openRowTooltip();
+    expect(bubble).toHaveAttribute('data-side', 'right');
+  });
+
+  it('opens beside the row on the left in a right-to-left layout', async () => {
+    persistDirection('rtl');
+    const bubble = await openRowTooltip();
+    expect(bubble).toHaveAttribute('data-side', 'left');
+  });
+
+  it('stacks its lines instead of laying them out side by side as columns', async () => {
+    const bubble = await openRowTooltip();
+    // `TooltipContent` is a flex row by default; the row tooltip's name, reference, and reason
+    // lines must stack.
+    expect(bubble).toHaveClass('tw:flex-col');
+    expect(bubble).toHaveTextContent('LOCKED - A locked project');
+    expect(bubble).toHaveTextContent('Cannot be opened here');
   });
 });

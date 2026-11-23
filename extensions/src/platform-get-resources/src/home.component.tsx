@@ -172,13 +172,6 @@ export type SortConfig = {
 };
 
 /**
- * The shared tooltip nudges its arrow flush against the content only for top and bottom tooltips;
- * on a side tooltip the arrow is otherwise a whole diamond whose tip pokes into the trigger's
- * text.
- */
-const SIDE_TOOLTIP_ARROW_CLASS = 'tw:translate-y-[calc(-50%-1px)]';
-
-/**
  * A tooltip trigger that is a button only so the keyboard can reach it: it looks like the text it
  * wraps, and shows the standard focus ring when focused from the keyboard.
  */
@@ -963,11 +956,7 @@ export function Home({
           </span>
         </TooltipTrigger>
         {/* Capped to the room beside the trigger, so a long full name wraps rather than clipping. */}
-        <TooltipContent
-          side="right"
-          className="tw:max-w-(--radix-tooltip-content-available-width)"
-          arrowClassName={SIDE_TOOLTIP_ARROW_CLASS}
-        >
+        <TooltipContent side="right" className="tw:max-w-(--radix-tooltip-content-available-width)">
           <div className="tw:flex tw:flex-col tw:gap-0.5">
             {hasDistinctFullName({ shortName: project.name, fullName: project.fullName }) && (
               <div className="tw:wrap-anywhere tw:font-bold">{project.fullName}</div>
@@ -996,7 +985,7 @@ export function Home({
         <TooltipTrigger className={TOOLTIP_TRIGGER_BUTTON_CLASS}>
           {formatTimeSpan(relativeTimeFormatter, new Date(time))}
         </TooltipTrigger>
-        <TooltipContent side="left" arrowClassName={SIDE_TOOLTIP_ARROW_CLASS}>
+        <TooltipContent side="left">
           <div className="tw:flex tw:flex-col tw:gap-0.5">
             <div className="tw:text-background/80">{activityTooltipText}</div>
             <div className="tw:font-bold">{exactDateTimeFormatter.format(new Date(time))}</div>

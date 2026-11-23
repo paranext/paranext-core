@@ -99,8 +99,17 @@ const { PortalContainerProvider, usePortalContainer: useTooltipPortalContainer }
 const TooltipPortalContainerProvider = PortalContainerProvider;
 /* #endregion CUSTOM */
 
-// CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
-/** @inheritdoc Tooltip */
+// CUSTOM: Added TSDoc pointing to Tooltip for documentation inheritance, plus a note on the stock
+// side-by-side layout, because content with several pieces silently renders as columns
+/**
+ * @inheritdoc Tooltip
+ *
+ * Lays out its children side by side (a flex row), so a label sits next to its keycaps: `Save
+ * <Kbd>⌘S</Kbd>`. Any other content with more than one piece — two paragraphs, or text next to a
+ * `<strong>` — renders as narrow columns once it wraps. Wrap such content in one element (for
+ * example `<p>` or `<div>`), or pass a `className` that changes the layout, such as `tw:flex-col`.
+ * The `paranext/tooltip-content-single-child` lint rule checks this in paranext-core.
+ */
 // CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
 // scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function TooltipContent({
@@ -158,28 +167,18 @@ function TooltipContent({
             // caller that adds a border via arrowClassName (e.g. the destructive confirmation hint)
             // doesn't get a doubled/crossing border line — or, without clipping the fill too, a
             // mismatched-color fill bleeding into the content — where the unclipped "back" half of the
-            // diamond overlaps the content's own border.
+            // diamond overlaps the content's own border. Clipping is a no-op for the default
+            // borderless/same-fill arrow.
             //
-            // Empirically (verified via getBoundingClientRect straddle measurements, not just visual
-            // inspection — see PT-4236 investigation) side="top" needs the exact same translate/clip as
-            // side="bottom", NOT the mirrored values symmetry would suggest — this falls out of Radix
-            // computing the arrow's base position from its declared height prop (5), while we override
-            // the *rendered* height to 10 via CSS (tw:size-2.5), and that mismatch isn't direction-
-            // specific. Keyed off the ancestor Content's own data-side via in-data-*, since Radix
-            // doesn't put data-side on the Arrow itself. Clipping is a no-op for the default
-            // borderless/same-fill arrow, so this is safe generally.
-            //
-            // side="left"/"right" deliberately get NO translate-x/clip-path here: mirroring the
-            // top/bottom axis-not-direction logic for left/right was tried and found very buggy
-            // (arrow polygon positioned and clipped incorrectly), and no consumer today needs a
-            // bordered left/right arrow (`destructive-key-confirmation.component.tsx` only borders
-            // top/bottom). Left/right therefore keep the plain unclipped default diamond. Work out
-            // the correct left/right math and add the classes back if/when a bordered left/right
-            // arrow consumer shows up.
+            // The same classes are correct on every side because Radix's PopperArrow wraps the arrow
+            // in a span that it rotates per placed side (none for top, 90deg for right, 180deg for
+            // bottom, -90deg for left). Inside that frame "up" (-y) always points into the content
+            // box and "down" (+y) always points away from it, so translate-y and a clip that keeps
+            // the bottom-right half of the 45deg-rotated square never need mirroring or translate-x.
+            // The -50% puts the square's centre (the visible triangle's base) on the content edge; the
+            // extra -1px tucks the base 1px under the content so no hairline seam shows between them.
             className={cn(
-              'tw:z-50 tw:size-2.5 tw:rotate-45 tw:rounded-xs tw:bg-foreground tw:fill-foreground',
-              'tw:in-data-[side=bottom]:translate-y-[calc(-50%-1px)] tw:in-data-[side=top]:translate-y-[calc(-50%-1px)]',
-              'tw:in-data-[side=bottom]:[clip-path:polygon(100%_0,100%_100%,0_100%)] tw:in-data-[side=top]:[clip-path:polygon(100%_0,100%_100%,0_100%)]',
+              'tw:z-50 tw:size-2.5 tw:translate-y-[calc(-50%-1px)] tw:rotate-45 tw:rounded-xs tw:bg-foreground tw:fill-foreground tw:[clip-path:polygon(100%_0,100%_100%,0_100%)]',
               arrowClassName,
             )}
           />

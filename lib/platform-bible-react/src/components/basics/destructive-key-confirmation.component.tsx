@@ -146,7 +146,7 @@ export function DestructiveKeyConfirmation({
           // The arrow's polygon paints via the SVG `fill` property, and opacity-modified fill-*
           // classes (fill-destructive/10) don't generate real CSS here — bake the same tint as an
           // explicit color-mix() instead, which also avoids depending on whatever is behind the
-          // arrow (tooltip.tsx's side-aware clip-path/translate keeps only the outward-facing half
+          // arrow (tooltip.tsx's clip-path/translate keeps only the outward-facing half
           // visible, so the un-clipped half's fill never gets a chance to mismatch the content box).
           //
           // The border is unconditional here because `side` only ever admits 'top'/'bottom' (see the

@@ -140,6 +140,9 @@ module.exports = {
     // Disable directives (eslint-disable, prettier-ignore, stylelint-disable) require an
     // explanatory comment on the immediately preceding line
     'paranext/require-disable-comment': 'error',
+    // TooltipContent lays its children out side by side; anything but text plus keycaps renders as
+    // columns once it wraps
+    'paranext/tooltip-content-single-child': 'error',
 
     // #endregion
   },

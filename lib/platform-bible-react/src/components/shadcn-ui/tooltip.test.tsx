@@ -87,3 +87,27 @@ describe('TooltipContent portal target', () => {
     expect(screen.getByTestId('host')).toContainElement(tooltip);
   });
 });
+
+describe('TooltipContent arrow', () => {
+  // Radix rotates the arrow's wrapper per placed side, so the same flush-nudge and outward-half
+  // clip must apply on every side. Keying them to particular sides leaves the others with a whole
+  // diamond that sits detached from the bubble.
+  test.each(['top', 'right', 'bottom', 'left'] as const)(
+    'nudges and clips the arrow on side="%s"',
+    async (side) => {
+      render(
+        <TooltipProvider delayDuration={0}>
+          <Tooltip>
+            <TooltipTrigger>Trigger</TooltipTrigger>
+            <TooltipContent side={side}>Tooltip body</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>,
+      );
+      const tooltip = await openTooltip();
+      const arrow = tooltip.querySelector('svg');
+
+      expect(arrow).toHaveClass('tw:translate-y-[calc(-50%-1px)]');
+      expect(arrow).toHaveClass('tw:[clip-path:polygon(100%_0,100%_100%,0_100%)]');
+    },
+  );
+});

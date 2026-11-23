@@ -28,6 +28,7 @@ import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/exp
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
 import { resolveLocalizedString } from '@/utils/localization.util';
+import { readDirection } from '@/utils/dir-helper.util';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -789,7 +790,11 @@ function ProjectRowView({
     <Tooltip open={isHovered} delayDuration={400}>
       <TooltipTrigger asChild>{rowNode}</TooltipTrigger>
       <TooltipContent
-        side="top"
+        // Beside the row rather than above it, so the tooltip does not cover the neighbouring rows
+        // the user is scanning. On the row's inline-end side — the side away from the check mark
+        // and name the user reads first — so right in left-to-right layouts and left in
+        // right-to-left ones. Radix flips it to the other side when this one lacks the room.
+        side={readDirection() === 'rtl' ? 'left' : 'right'}
         align="center"
         sideOffset={8}
         collisionPadding={16}
@@ -800,8 +805,10 @@ function ProjectRowView({
         // lines — full name, indicator meaning, scroll-group reference, disabled reason — and a
         // cap matching the popover's own width wraps every one of them. At this width only a long
         // full name wraps. Start-aligned rather than centred because centring lines of very
-        // different lengths reads as ragged once there are more than two of them.
-        className="tw:max-w-md tw:text-start"
+        // different lengths reads as ragged once there are more than two of them. `tw:flex-col`
+        // because `TooltipContent` lays its children out side by side by default, which would put
+        // these lines next to each other as columns; `tw:items-start` keeps them start-aligned.
+        className="tw:max-w-md tw:flex-col tw:items-start tw:text-start"
       >
         {/* The whole label, not the full name alone: this tooltip doubles as the row's
             truncation disclosure (`useTruncationTooltip` opens it when EITHER line is clipped), so
