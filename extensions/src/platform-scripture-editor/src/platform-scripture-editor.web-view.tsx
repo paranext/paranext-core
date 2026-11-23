@@ -1214,7 +1214,8 @@ function PlatformScriptureEditor({
   // Whether the main editor's own selection is a range. Only a selection the editor reports changes
   // it: an `undefined` report is a blur (opening a menu blurs the editor, whose selection stays and
   // is what Copy copies), so it leaves the value alone. A chapter change or a Scripture view switch
-  // replaces the editor's content and drops its selection without reporting one, so each clears it.
+  // replaces the editor's content and drops its selection without reporting one, so each clears it,
+  // as does new text from outside replacing the open chapter (`setEditorUsj`).
   const [hasSelection, setHasSelection] = useState(false);
 
   useEffect(() => {
@@ -1903,6 +1904,9 @@ function PlatformScriptureEditor({
     // An external apply never reaches `onUsjChange`, so a pending comment is checked here too.
     discardPendingCommentIfAnchorChanged.current(usj);
     editorRef.current?.setUsj(usj, options);
+    // Replacing the document drops the editor's selection without reporting it, so Copy has nothing
+    // to copy until the user selects again.
+    setHasSelection(false);
     // A hidden pane is left without a document; showing it fetches the editor's, which is this one
     // from here on (`getUsj()` returns what `setUsj` was just handed).
     if (footnotesPaneRenderedRef.current) replacePaneDocument(usj);

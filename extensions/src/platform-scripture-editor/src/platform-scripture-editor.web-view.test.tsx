@@ -775,6 +775,47 @@ describe('Scripture editor hasSelection context key', () => {
 
     expect(publishedValues()).toEqual([false, true, false]);
   });
+
+  it('publishes hasSelection false when new text from outside replaces the open chapter', async () => {
+    // A mounted editor, so incoming text is applied to it; every method is a no-op.
+    const setUsj = vi.fn();
+    editorHandle.current = new Proxy(
+      {},
+      { get: (_target, property) => (property === 'setUsj' ? setUsj : vi.fn()) },
+    );
+    chapterUsjValue.current = chapterWithText;
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(webViewElement(1));
+    });
+    await selectInEditor(selectionRange);
+    // Positive control: the same chapter re-rendered with the same text keeps the key on.
+    await act(async () => {
+      result?.rerender(webViewElement(1));
+    });
+    expect(publishedValues()).toEqual([false, true]);
+    const setUsjCallsBeforeUpdate = setUsj.mock.calls.length;
+
+    // A background update of the same chapter, such as an in-place resource update.
+    chapterUsjValue.current = {
+      ...chapterWithText,
+      content: [
+        ...chapterWithText.content,
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'More'],
+        },
+      ],
+    };
+    await act(async () => {
+      result?.rerender(webViewElement(1));
+    });
+
+    // The update really replaced the editor's content.
+    expect(setUsj.mock.calls.length).toBeGreaterThan(setUsjCallsBeforeUpdate);
+    expect(publishedValues()).toEqual([false, true, false]);
+  });
 });
 
 describe('Scripture editor hasSelection context key across a view switch', () => {
