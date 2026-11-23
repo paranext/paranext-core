@@ -219,6 +219,24 @@ describe('ToolbarCompoundLabel', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
   });
 
+  test('reveals the full text when a focusable container around the label takes keyboard focus', async () => {
+    // Hover ignores a focusable container, but keyboard focus on one still asks to read the label.
+    render(
+      <div role="row" data-testid="container" tabIndex={0}>
+        <ToolbarCompoundLabel
+          primary="GEN"
+          secondary="1:1"
+          showSecondary={false}
+          fullText="Genesis 1:1"
+        />
+      </div>,
+    );
+
+    screen.getByTestId('container').focus();
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+  });
+
   test('hides the revealed text again when focus leaves', async () => {
     render(
       <button type="button">
@@ -504,26 +522,31 @@ describe('ToolbarCompoundLabel', () => {
       });
     });
 
-    test('does not take a container focused only from code as the control', async () => {
-      render(
-        <div tabIndex={-1}>
-          <ToolbarCompoundLabel
-            primary="GEN"
-            secondary="1:1"
-            showSecondary={false}
-            fullText="Genesis 1:1"
-          />
-          <span>elsewhere in the container</span>
-        </div>,
-      );
+    test.each([0, -1])(
+      'does not take a container with tabIndex=%i as the control',
+      async (tabIndex) => {
+        // A focusable card or list row is not a control: hover over the rest of it must not open
+        // the tooltip, while the label itself still opens it when it is incomplete.
+        render(
+          <div tabIndex={tabIndex}>
+            <ToolbarCompoundLabel
+              primary="GEN"
+              secondary="1:1"
+              showSecondary={false}
+              fullText="Genesis 1:1"
+            />
+            <span>elsewhere in the container</span>
+          </div>,
+        );
 
-      await userEvent.hover(screen.getByText('elsewhere in the container'));
-      await waitForTimers();
-      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-      await userEvent.hover(screen.getByText('GEN'));
+        await userEvent.hover(screen.getByText('elsewhere in the container'));
+        await waitForTimers();
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        await userEvent.hover(screen.getByText('GEN'));
 
-      expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
-    });
+        expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+      },
+    );
 
     test('closes when the pointer leaves the control', async () => {
       renderInButton();

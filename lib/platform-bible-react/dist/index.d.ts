@@ -2703,9 +2703,10 @@ export type ToolbarCompoundLabelProps = {
  * primary keeps an ellipsis of its own rather than being cut mid-glyph by the trigger's
  * `overflow-hidden`. Only the abbreviation and dropped steps need the caller to say so.
  *
- * Hover and keyboard focus are read from the control the label sits in (the nearest `button`,
- * `combobox` or focusable ancestor), and the tooltip opens clear of that whole control rather than
- * of the text alone.
+ * Hover is read from the control the label sits in (the nearest `button` or `combobox` ancestor, or
+ * the label itself when there is none), and the tooltip opens clear of that whole control rather
+ * than of the text alone. Keyboard focus is read from the nearest button, combobox or element with
+ * a `tabindex`.
  */
 export declare function ToolbarCompoundLabel({ primary, secondary, separator, secondaryFirst, showSecondary, isPartial, fullText, className, }: ToolbarCompoundLabelProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [

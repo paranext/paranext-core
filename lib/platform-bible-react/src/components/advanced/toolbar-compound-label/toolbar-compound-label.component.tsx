@@ -11,11 +11,18 @@ import { getLastInteractionModality } from '@/utils/focus.util';
 import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 
 /**
- * What counts as the control the label sits in. Hover and keyboard focus are both read from it.
- * `tabindex="-1"` is left out: it marks a container focused from code, not a control a user
- * reaches, and taking one as the host would spread hover over the whole container.
+ * What counts as the control the label sits in for hover: a real control only. Any focusable
+ * ancestor is deliberately not enough — a label inside a focusable card or list row would otherwise
+ * open its tooltip on hover anywhere in that box, and point it at the whole box.
  */
-const HOST_SELECTOR = 'button, [role="combobox"], [tabindex]:not([tabindex="-1"])';
+const HOVER_HOST_SELECTOR = 'button, [role="combobox"]';
+
+/**
+ * What the keyboard reveal listens on for focus. Wider than {@link HOVER_HOST_SELECTOR}: keyboard
+ * focus landing on any focusable ancestor is a legitimate request to read the label, and being
+ * focused does not spread across a box the way hover does.
+ */
+const FOCUS_HOST_SELECTOR = 'button, [role="combobox"], [tabindex]';
 
 export type ToolbarCompoundLabelProps = {
   /** The field that identifies the item — a book abbreviation, project short name, marker code. */
@@ -59,9 +66,10 @@ export type ToolbarCompoundLabelProps = {
  * primary keeps an ellipsis of its own rather than being cut mid-glyph by the trigger's
  * `overflow-hidden`. Only the abbreviation and dropped steps need the caller to say so.
  *
- * Hover and keyboard focus are read from the control the label sits in (the nearest `button`,
- * `combobox` or focusable ancestor), and the tooltip opens clear of that whole control rather than
- * of the text alone.
+ * Hover is read from the control the label sits in (the nearest `button` or `combobox` ancestor, or
+ * the label itself when there is none), and the tooltip opens clear of that whole control rather
+ * than of the text alone. Keyboard focus is read from the nearest button, combobox or element with
+ * a `tabindex`.
  */
 export function ToolbarCompoundLabel({
   primary,
@@ -116,7 +124,8 @@ export function ToolbarCompoundLabel({
 
   // The control the label sits in, or the label itself when it stands alone.
   const getHost = useCallback(
-    () => rootRef.current?.closest<HTMLElement>(HOST_SELECTOR) ?? rootRef.current ?? undefined,
+    () =>
+      rootRef.current?.closest<HTMLElement>(HOVER_HOST_SELECTOR) ?? rootRef.current ?? undefined,
     [],
   );
 
@@ -195,8 +204,8 @@ export function ToolbarCompoundLabel({
 
   useEffect(() => {
     // Not `getHost()`: it falls back to the label itself, which cannot take focus, so with no
-    // focusable host there is nothing to listen on.
-    const focusable = rootRef.current?.closest(HOST_SELECTOR);
+    // focusable host there is nothing to listen on. It also uses the wider focus selector.
+    const focusable = rootRef.current?.closest(FOCUS_HOST_SELECTOR);
     if (!focusable) return undefined;
 
     const isClipped = (element: HTMLSpanElement | null) =>
