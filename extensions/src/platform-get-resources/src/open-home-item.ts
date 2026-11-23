@@ -5,7 +5,7 @@ import { getErrorMessage } from 'platform-bible-utils';
  * Whether the app is in Simple mode, read when it is needed so a mode switch is never missed. An
  * unreadable setting counts as Power mode, which opens the resource the way Home always has.
  */
-export async function isSimpleMode(): Promise<boolean> {
+async function isSimpleMode(): Promise<boolean> {
   try {
     return (await papi.settings.get('platform.interfaceMode')) === 'simple';
   } catch (e) {
@@ -48,14 +48,22 @@ async function openResource(projectId: string): Promise<void> {
  * the title bar's route to a project that is not in that list yet, so a project opened here has to
  * join it — otherwise the escape hatch for finding a non-recent project never makes it recent.
  *
+ * In Simple mode the editor closes the view named by `webViewIdToClose` once the project has
+ * opened, and records the project itself; the recording below then never runs, as the view is
+ * gone.
+ *
  * @param projectId The project's id
+ * @param webViewIdToClose The view the project is being opened from
  * @throws If the project did not open, including when the editor answered with no web view: it
  *   gives no reason then, so it is reported like any other failed open.
  */
-async function openProject(projectId: string): Promise<void> {
+async function openProject(projectId: string, webViewIdToClose?: string): Promise<void> {
   const webViewId = await papi.commands.sendCommand(
     'platformScriptureEditor.openScriptureEditor',
     projectId,
+    undefined,
+    undefined,
+    webViewIdToClose,
   );
   if (webViewId === undefined) throw new Error('the editor opened nothing for it');
   try {
@@ -77,19 +85,19 @@ async function openProject(projectId: string): Promise<void> {
  *
  * @param projectId The row's project id
  * @param isPublished Whether the row is a resource
- * @returns Whether a project opened in the editor. Always `false` for a resource.
+ * @param homeWebViewId Home's own web view id. In Simple mode, opening a project closes Home; a
+ *   resource never does.
  */
-export async function openHomeItem(projectId: string, isPublished: boolean): Promise<boolean> {
+export async function openHomeItem(
+  projectId: string,
+  isPublished: boolean,
+  homeWebViewId?: string,
+): Promise<void> {
   try {
-    if (isPublished) {
-      await openResource(projectId);
-      return false;
-    }
-    await openProject(projectId);
-    return true;
+    if (isPublished) await openResource(projectId);
+    else await openProject(projectId, homeWebViewId);
   } catch (e) {
     await reportCouldNotOpen('Home', projectId, e);
-    return false;
   }
 }
 

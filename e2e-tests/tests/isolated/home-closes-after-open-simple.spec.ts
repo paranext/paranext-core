@@ -2,9 +2,11 @@
  * In Simple mode, Home closes once a project opened from it has opened: Simple shows one project at
  * a time, so leaving Home in front of it only hides what the user asked for.
  *
- * Home closes itself with `papi.webViews.closeWebView`, once the editor's open command has
- * returned. Unit tests cover each half on its own; this spec covers the chain end to end: the
- * open's answer reaching Home, and the close reaching the dock of the window Home is in.
+ * Home passes its own id to the editor's open command, and the editor closes it with
+ * `papi.webViews.closeWebView` before its "Updating project view" cover lifts, so Home is never
+ * seen in front of the project. Unit tests cover each half on its own; this spec covers the chain
+ * end to end: Home's id reaching the editor, the close reaching the dock of the window Home is in,
+ * and the order of that close and the cover lifting, as the user sees it.
  *
  * ## How to run
  *
@@ -93,8 +95,68 @@ async function waitForHomeToSettle(page: Page, homeId: string, openButton: Locat
   }).toPass({ timeout: OPEN_TIMEOUT_MS });
 }
 
-/** Opens Home, clicks Open on `project`'s row, and waits for Home to close. */
-async function openFromHome(page: Page, project: CommentTestProject) {
+/** What {@link watchCoverAndHome} saw, frame by frame, while it ran. */
+type CoverAndHomeFrames = {
+  /** Whether the "Updating project view" cover showed in any frame. */
+  sawCover: boolean;
+  /** Whether any frame after the cover had shown had no cover and Home's tab still in the dock. */
+  sawHomeAfterCover: boolean;
+};
+
+/** The "Updating project view" cover's spinner, as `waitForOverlayGone` finds it. */
+const COVER_SELECTOR = '.pr-twp [role="status"]';
+
+/**
+ * The sampler's state, kept as attributes on the main window's root element so the spec can read it
+ * back without reaching into `window`. Each holds `'true'` once set.
+ */
+const SAMPLER_ATTRIBUTES = {
+  sawCover: 'data-e2e-saw-cover',
+  sawHomeAfterCover: 'data-e2e-saw-home-after-cover',
+  stop: 'data-e2e-stop-sampling',
+} as const;
+
+/**
+ * Starts sampling, on every animation frame of the main window, whether the cover shows and whether
+ * Home's tab is still in the dock. Returns a function that stops sampling and reports what it saw.
+ */
+async function watchCoverAndHome(
+  page: Page,
+  homeId: string,
+): Promise<() => Promise<CoverAndHomeFrames>> {
+  const homeSelector = `.platform-tab-title[data-web-view-id="${homeId}"]`;
+  await page.evaluate(
+    ([coverSelector, homeTabSelector, attributes]) => {
+      const root = document.documentElement;
+      Object.values(attributes).forEach((attribute) => root.removeAttribute(attribute));
+      const sample = () => {
+        if (root.hasAttribute(attributes.stop)) return;
+        if (document.querySelector(coverSelector)) root.setAttribute(attributes.sawCover, 'true');
+        else if (root.hasAttribute(attributes.sawCover) && document.querySelector(homeTabSelector))
+          root.setAttribute(attributes.sawHomeAfterCover, 'true');
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    },
+    [COVER_SELECTOR, homeSelector, SAMPLER_ATTRIBUTES] as const,
+  );
+  return () =>
+    page.evaluate((attributes) => {
+      const root = document.documentElement;
+      root.setAttribute(attributes.stop, 'true');
+      return {
+        sawCover: root.hasAttribute(attributes.sawCover),
+        sawHomeAfterCover: root.hasAttribute(attributes.sawHomeAfterCover),
+      };
+    }, SAMPLER_ATTRIBUTES);
+}
+
+/**
+ * Opens Home, clicks Open on `project`'s row, and waits for Home to close.
+ *
+ * @returns What the main window showed, frame by frame, from the click until Home had closed
+ */
+async function openFromHome(page: Page, project: CommentTestProject): Promise<CoverAndHomeFrames> {
   await sendPapiCommandWhenRegistered('platformGetResources.openHome');
   const homeId = await waitForOpenWebViewIdByType(page, HOME_WEBVIEW_TYPE);
   const openButton = webViewFrame(page, homeId)
@@ -102,10 +164,13 @@ async function openFromHome(page: Page, project: CommentTestProject) {
     .filter({ hasText: project.shortName })
     .getByRole('button', { name: 'Open', exact: true });
   await waitForHomeToSettle(page, homeId, openButton);
+  const stopWatching = await watchCoverAndHome(page, homeId);
   await openButton.click();
 
   await expect.poll(() => isHomeOpen(page), { timeout: OPEN_TIMEOUT_MS }).toBe(false);
   await expect(page.locator(`.platform-tab-title[data-web-view-id="${homeId}"]`)).toHaveCount(0);
+  await waitForOverlayGone(page, OPEN_TIMEOUT_MS);
+  return stopWatching();
 }
 
 test.describe('Simple mode: Home closes after a project opens', () => {
@@ -146,12 +211,14 @@ test.describe('Simple mode: Home closes after a project opens', () => {
     // The "Updating project view" overlay intercepts pointer events.
     await waitForOverlayGone(mainPage, OPEN_TIMEOUT_MS);
 
-    await test.step('opening another project closes Home and shows that project', async () => {
-      await openFromHome(mainPage, secondProject);
+    await test.step('opening another project closes Home before the project shows', async () => {
+      const frames = await openFromHome(mainPage, secondProject);
       await expect
         .poll(() => projectInEditor(mainPage), { timeout: OPEN_TIMEOUT_MS })
         .toBe(secondProject.projectId.toUpperCase());
-      await waitForOverlayGone(mainPage, OPEN_TIMEOUT_MS);
+      // The switch did put the cover up, so the next check had a moment it could have failed in.
+      expect(frames.sawCover).toBe(true);
+      expect(frames.sawHomeAfterCover).toBe(false);
     });
 
     await test.step('opening the project already showing closes Home too', async () => {

@@ -23,7 +23,7 @@ import { useUnsupportedReasonStrings } from './use-unsupported-reason-strings.ho
 import { useLocalProjects } from './use-local-projects.hook';
 import { useSyncActivity } from './use-sync-activity.hook';
 import { useSyncQueue } from './use-sync-queue.hook';
-import { isSimpleMode, openHomeItem } from './open-home-item';
+import { openHomeItem } from './open-home-item';
 
 const defaultInterfaceLanguages: string[] = ['en'];
 
@@ -444,46 +444,17 @@ globalThis.webViewComponent = function HomeWebView({
     }
   };
 
-  // Opens from Home's list still waiting for their answer, and whether any project has opened since
-  // Home last decided whether to close. Refs, because both are read after an `await`.
-  const pendingOpenCountRef = useRef(0);
-  const hasProjectOpenedRef = useRef(false);
-
   /**
-   * Opens an item from Home's list. In Simple mode, which shows one project at a time, Home then
-   * closes once a project has opened, so the user lands in it.
+   * Opens an item from Home's list. In Simple mode, which shows one project at a time, the editor
+   * closes Home once a project has opened, before its "Updating project view" cover lifts, so the
+   * user lands in the project without seeing Home again. It closes Home even while a Get or Sync
+   * Home started is still running: the request goes on, but most of its failures show only in this
+   * Home's alert, so they go unseen; see `adr-home-closes-after-opening-a-project`.
    */
   const openItem = useCallback(
-    async (projectId: string, isPublished: boolean): Promise<void> => {
-      // Read alongside the open rather than after it: the editor lifts its "Updating project view"
-      // overlay just before the open returns, and every round trip after that is time Home shows in
-      // front of the project. Never rejects, so an open that fails leaves nothing unhandled.
-      const isSimpleModePromise = isSimpleMode();
-      pendingOpenCountRef.current += 1;
-      const didProjectOpen = await openHomeItem(projectId, isPublished);
-      pendingOpenCountRef.current -= 1;
-      // A resource opens beside the project, so a resource alone leaves Home open for the user to
-      // keep choosing.
-      if (didProjectOpen && !isPublished) hasProjectOpenedRef.current = true;
-      if (!hasProjectOpenedRef.current) return;
-      const isSimple = await isSimpleModePromise;
-      // The last open to finish decides for all of them. Closing tears down this web view, and with
-      // it any open still waiting for its answer here, which would then neither record its project
-      // as recent nor tell the user it failed.
-      if (!isMounted.current || pendingOpenCountRef.current > 0) return;
-      hasProjectOpenedRef.current = false;
-      if (!isSimple) return;
-      // Home closes even while a Get or Sync it started is still running. The request goes on, but
-      // most of its failures show only in this Home's alert, so they go unseen; see
-      // `adr-home-closes-itself-after-opening-a-project`.
-      try {
-        // Last: closing tears down this web view, so nothing after it can be relied on to run.
-        const didClose = await papi.webViews.closeWebView(webViewId);
-        if (!didClose) logger.warn('Home could not find itself to close after opening a project');
-      } catch (e) {
-        logger.warn(`Home could not close after opening a project: ${getErrorMessage(e)}`);
-      }
-    },
+    // Never rejects, so an open that fails leaves nothing unhandled.
+    async (projectId: string, isPublished: boolean) =>
+      openHomeItem(projectId, isPublished, webViewId),
     [webViewId],
   );
 

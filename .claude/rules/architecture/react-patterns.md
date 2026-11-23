@@ -39,11 +39,12 @@ Terse decisions (choice → what to avoid → one-line why). Add only the net-ne
 
 ### Web view self-close
 
-- **A web view closes itself with `papi.webViews.closeWebView`**, passing its own id (`WebViewProps.id`), as the last thing it does. Consumer: Home (`extensions/src/platform-get-resources/src/home.web-view.tsx`).
+- **A web view is closed with `papi.webViews.closeWebView`**, given its id (`WebViewProps.id`). A web view that closes once something it started has finished passes its id to whatever finishes the work, so the close lands before that work shows its result — Home passes its id to `platformScriptureEditor.openScriptureEditor` as `webViewIdToCloseOnOpen`, and the editor closes Home before its "Updating project view" cover lifts (`finishOpenFromView`, `extensions/src/platform-scripture-editor/src/close-view-opened-from.util.ts`). A web view that calls it on itself does so as the last thing it does.
   - Avoid:
     - clicking the tab's close button in `window.top.document` — it breaks silently with rc-dock's markup, and extensions should not reach into the host page.
-    - code after the call — the close can tear down the caller's iframe before the promise settles.
-  - Why: the router closes it in whichever window holds it, the same way the user's close does, so `onDidCloseWebView` fires. See `adr-home-closes-itself-after-opening-a-project`.
+    - closing itself after the work's answer arrives when the work shows its own result first — the view is seen in front of that result for the round trips in between.
+    - code after a call that closes the caller — the close can tear down the caller's iframe before the promise settles.
+  - Why: the router closes it in whichever window holds it, the same way the user's close does, so `onDidCloseWebView` fires. See `adr-home-closes-after-opening-a-project`.
 
 ### Single-instance web views
 

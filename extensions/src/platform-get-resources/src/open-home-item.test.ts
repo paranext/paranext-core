@@ -128,7 +128,7 @@ describe('openHomeItem', () => {
       throw new Error('editor unavailable');
     });
 
-    await expect(openHomeItem('project-1', false)).resolves.toBe(false);
+    await expect(openHomeItem('project-1', false)).resolves.toBeUndefined();
   });
 
   it('opens a resource in its viewer in Power mode', async () => {
@@ -165,28 +165,45 @@ describe('openHomeItem', () => {
 });
 
 /*
- * Home closes itself after a project opens in Simple mode, so it has to know whether one did. A
- * resource never closes Home, so its result is always `false`.
+ * In Simple mode the editor closes Home once a project opened from it has opened, before the
+ * "Updating project view" cover lifts, so Home is never seen in front of the project. Home only
+ * names itself; the editor decides, and Home records the project itself only while it is still open.
  */
-describe('openHomeItem result', () => {
+describe('openHomeItem closing the view it was opened from', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getSetting.mockImplementation(async () => 'simple');
     mocks.recordProjectOpened.mockImplementation(async () => undefined);
   });
 
-  it('resolves true when the project opens', async () => {
+  it('names the view to close when it opens a project', async () => {
     mocks.sendCommand.mockImplementation(async () => 'editor-1');
 
-    await expect(openHomeItem('project-1', false)).resolves.toBe(true);
+    await openHomeItem('project-1', false, 'home-1');
+
+    expect(mocks.sendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'project-1',
+      undefined,
+      undefined,
+      'home-1',
+    );
   });
 
-  it('resolves false when the project could not be opened', async () => {
+  it('names no view to close for a resource', async () => {
+    mocks.sendCommand.mockImplementation(async () => ({ status: 'shown', webViewId: 'tab-1' }));
+
+    await openHomeItem('resource-1', true, 'home-1');
+
+    expect(mocks.sendCommand.mock.calls.flat()).not.toContain('home-1');
+  });
+
+  it('warns the user when the project could not be opened', async () => {
     mocks.sendCommand.mockImplementation(async () => {
       throw new Error('editor unavailable');
     });
 
-    await expect(openHomeItem('project-1', false)).resolves.toBe(false);
+    await expect(openHomeItem('project-1', false, 'home-1')).resolves.toBeUndefined();
     expect(mocks.notify).toHaveBeenCalledTimes(1);
     expect(mocks.notify).toHaveBeenCalledWith(
       expect.objectContaining({ message: '%resources_couldNotOpen%' }),
@@ -196,7 +213,8 @@ describe('openHomeItem result', () => {
   it('treats an open that showed nothing as a failed open', async () => {
     mocks.sendCommand.mockImplementation(async () => undefined);
 
-    await expect(openHomeItem('project-1', false)).resolves.toBe(false);
+    await openHomeItem('project-1', false, 'home-1');
+
     expect(mocks.notify).toHaveBeenCalledTimes(1);
     expect(mocks.notify).toHaveBeenCalledWith(
       expect.objectContaining({ message: '%resources_couldNotOpen%' }),
@@ -205,21 +223,14 @@ describe('openHomeItem result', () => {
     expect(mocks.recordProjectOpened).not.toHaveBeenCalled();
   });
 
-  it('resolves true when the project opened but could not be recorded as recent', async () => {
+  it('does not reject when the project opened but could not be recorded as recent', async () => {
     mocks.sendCommand.mockImplementation(async () => 'editor-1');
     mocks.recordProjectOpened.mockImplementation(async () => {
       throw new Error('recent list unavailable');
     });
 
-    await expect(openHomeItem('project-1', false)).resolves.toBe(true);
-  });
-
-  it('resolves false for a resource that opened', async () => {
-    mocks.getSetting.mockImplementation(async () => 'power');
-    mocks.sendCommand.mockImplementation(async () => 'viewer-1');
-
-    await expect(openHomeItem('resource-1', true)).resolves.toBe(false);
-    expect(commandsSent()).toEqual(['platformScriptureEditor.openResourceViewer']);
+    await expect(openHomeItem('project-1', false, 'home-1')).resolves.toBeUndefined();
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 });
 

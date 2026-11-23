@@ -25,6 +25,7 @@ import {
   ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
+import { finishOpenFromView } from './close-view-opened-from.util';
 import { mergeDecorations } from './decorations.util';
 import { createSelectionTracker } from './selection-tracker.utils';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
@@ -155,9 +156,10 @@ async function openPlatformScriptureEditor(
   projectId: string | undefined,
   options?: OpenEditorOptions,
   existingTabIdToReplace?: string,
+  webViewIdToCloseOnOpen?: string,
 ): Promise<string | undefined> {
   // The first argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
-  return open(false, projectId, existingTabIdToReplace, options);
+  return open(false, projectId, existingTabIdToReplace, options, webViewIdToCloseOnOpen);
 }
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
@@ -217,6 +219,7 @@ async function open(
   projectId?: string,
   existingTabIdToReplace?: string,
   options?: OpenEditorOptions,
+  webViewIdToCloseOnOpen?: string,
 ): Promise<string | undefined> {
   const projectForWebView = { projectId, isEditable: !isReadOnly };
   if (!projectForWebView.projectId) {
@@ -303,15 +306,23 @@ async function open(
       existingTabIdToReplace,
     );
 
+    // Simple mode shows one project at a time, so the view the user opened it from has done its
+    // job; Power mode keeps it open for the user to carry on with.
+    const webViewIdToClose = interfaceMode === 'simple' ? webViewIdToCloseOnOpen : undefined;
+
     // Focus path: the requested project is already open. Bring the existing tab to the front
     // without tearing down the editor or re-running its WebView provider. No project swap
     // occurs, so neither the transition overlay nor a sync is needed.
     if (dispatch.kind === 'focus-existing') {
-      return papi.webViews.openWebView(SCRIPTURE_EDITOR_WEBVIEW_TYPE, undefined, {
-        existingId: dispatch.existingId,
-        createNewIfNotFound: false,
-        bringToFront: true,
-      });
+      return finishOpenFromView(
+        papi,
+        papi.webViews.openWebView(SCRIPTURE_EDITOR_WEBVIEW_TYPE, undefined, {
+          existingId: dispatch.existingId,
+          createNewIfNotFound: false,
+          bringToFront: true,
+        }),
+        { projectId: projectForWebView.projectId, webViewIdToClose, reveal: () => {} },
+      );
     }
 
     // The transition overlay and project-switch sync only apply in simple mode when the tab
@@ -435,23 +446,26 @@ async function open(
       }
     }
 
-    const openedWebViewId = await papi.webViews
-      .openWebView(
+    // The view to close goes before the overlay lifts, so it is never seen in front of the project.
+    const openedWebViewId = await finishOpenFromView(
+      papi,
+      papi.webViews.openWebView(
         SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         finalDispatch.kind === 'replace-tab'
           ? { type: 'replace-tab', targetTabId: finalDispatch.targetTabId }
           : undefined,
         openWebViewOptions,
-      )
-      .finally(emitDidFinish);
+      ),
+      { projectId: projectForWebView.projectId, webViewIdToClose, reveal: emitDidFinish },
+    );
 
     // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find and Checks
     // wait until here because they are the panels that need the id of the editor this call just
     // created. No Simple-mode or project-kind checks here — each helper owns its own guards.
     //
     // Not awaited: the overlay has already lifted, and a caller acting on this command's answer
-    // (Home closes itself on it) would otherwise wait the second or so these take. Nothing reads
-    // Find or Checks from that answer, and neither helper throws.
+    // would otherwise wait the second or so these take. Nothing reads Find or Checks from that
+    // answer, and neither helper throws.
     updateRelatedFindAndChecksPanels(papi, projectForWebView.projectId, openedWebViewId);
 
     return openedWebViewId;
@@ -1182,6 +1196,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             name: 'existingTabIdToReplace',
             required: false,
             summary: 'The ID of the tab that should be replaced by the scripture editor',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'webViewIdToCloseOnOpen',
+            required: false,
+            summary:
+              'In Simple mode, the ID of a web view to close once the project has opened, before the project shows',
             schema: { type: 'string' },
           },
         ],
