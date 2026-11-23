@@ -12,5 +12,6 @@ internal class CheckJobStatusReport
     public int TotalResultsCount { get; set; } = 0;
     public IList<CheckRunResult>? NextResults { get; set; } = null;
     public string? Error { get; set; } = null;
+    public IList<CheckJobError>? CheckErrors { get; set; } = null;
     public double TotalExecutionTimeMs { get; set; } = 0;
 }

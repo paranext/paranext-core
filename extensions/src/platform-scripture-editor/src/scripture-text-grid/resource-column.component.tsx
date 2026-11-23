@@ -1,0 +1,134 @@
+import { type DragEvent, type KeyboardEvent, useRef } from 'react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { DROP_TARGET_RING_CLASSES, REVEALED_COLUMN_OUTLINE_CLASSES } from './aligned-grid.styles';
+import type { GridResource } from './grid-resources.utils';
+import { ResourceCell } from './resource-cell.component';
+import type { ZoomMenuLabels } from './resource-cell-view.component';
+import { resourceZoomAreaOf } from './resource-zoom-area.utils';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import { useRevealOutlineInsets } from './use-reveal-outline-insets.hook';
+import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
+
+/**
+ * Drag-and-keyboard reorder wiring for one column; omit to render a column that cannot move.
+ *
+ * The column is the drop target, but only its header is the drag source — see `headerDrag` on
+ * `ResourceCellView` for why the whole column must not be draggable.
+ */
+export type ResourceColumnReorder = {
+  /** True while a dragged column is hovering this one, which shows the drop-target ring. */
+  isDropTarget: boolean;
+  onDragStart: (event: DragEvent) => void;
+  onDragEnd: () => void;
+  onDragOver: (event: DragEvent) => void;
+  onDrop: (event: DragEvent) => void;
+  /** Accessible name for the grip (e.g. "Reorder Genesis"). */
+  handleLabel?: string;
+  /** Tooltip shown on grip hover/focus. */
+  hint?: string;
+  /** Arrow-key handler; the parent owns which direction moves which way. */
+  onKeyDown: (event: KeyboardEvent) => void;
+};
+
+export type ResourceColumnProps = {
+  resource: GridResource;
+  scrRef: SerializedVerseRef;
+  setScrRef: (scrRef: SerializedVerseRef) => void;
+  /** Whether this web view is rendered; passed through to the cell's reference scroll. */
+  isViewVisible: boolean;
+  /** This column's position in the row; see `ResourceCell`'s `orderIndex`. */
+  orderIndex?: number;
+  /** How the cell renders its text: a whole chapter, or block verses the aligned grid can place. */
+  cellViewMode: Exclude<ResourceCollectionViewMode, 'verse'>;
+  /**
+   * Sizing for this column, owned by the layout: a flex child in the chapter row, a grid track in
+   * the aligned grid. The aligned grid's column must NOT be a flex box, or it stops passing the
+   * grid's rows through to the verse blocks.
+   */
+  className: string;
+  reorder?: ResourceColumnReorder;
+  /** Whether this column is the one a reveal brought into view, which shows the outline. */
+  isRevealed?: boolean;
+  zoom?: ResourceZoomController;
+  zoomMenuLabels?: ZoomMenuLabels;
+};
+
+/**
+ * One resource as a full-height column: its own labeled region, the drag source and drop target for
+ * reorder, and the cell that renders the text. Shared by the chapter row and the aligned grid,
+ * which differ only in `className` and `cellViewMode`.
+ */
+export function ResourceColumn({
+  resource,
+  scrRef,
+  setScrRef,
+  isViewVisible,
+  orderIndex,
+  cellViewMode,
+  className,
+  reorder,
+  isRevealed,
+  zoom,
+  zoomMenuLabels,
+}: ResourceColumnProps) {
+  const dropTargetRing = reorder?.isDropTarget ? ` ${DROP_TARGET_RING_CLASSES}` : '';
+  // The drop-target ring wins when both apply.
+  const revealRing =
+    isRevealed && !reorder?.isDropTarget ? ` ${REVEALED_COLUMN_OUTLINE_CLASSES}` : '';
+  const zoomArea = resourceZoomAreaOf(resource.resourceId);
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const columnRef = useRef<HTMLDivElement>(null);
+  // In the chapter view the cell scrolls itself, so the outline is kept off its scrollbar. In the
+  // aligned view the grid root scrolls every column at once, and the outline frames the whole column.
+  const revealOutlineStyle = useRevealOutlineInsets(
+    columnRef,
+    !!revealRing && cellViewMode === 'chapter',
+  );
+
+  return (
+    <div
+      ref={columnRef}
+      role="region"
+      aria-label={resource.label}
+      data-project-id={resource.projectId}
+      data-resource-id={resource.resourceId}
+      // Spelled out because JSX cannot take a computed attribute name without spreading; this is the
+      // value of TEXT_COLLECTION_CELL_ATTRIBUTE, which the reveal lookup searches for.
+      data-text-collection-cell=""
+      data-revealed={isRevealed ? 'true' : undefined}
+      // The header band and padding are unscaled, so a click or the wheel there has no marked
+      // text to resolve its zoom area from; the scope names this resource's area for them.
+      data-platform-content-zoom-scope={zoomArea}
+      // Only when the column IS one: the drop handlers and the ring below are gated on `reorder`
+      // too, so the name never claims more than the element does.
+      data-testid={reorder ? 'scripture-text-grid-column-drop-target' : undefined}
+      // No onDragLeave — it fires on child elements; the parent clears on drop/dragEnd instead.
+      onDragOver={reorder?.onDragOver}
+      onDrop={reorder?.onDrop}
+      className={`${className}${dropTargetRing}${revealRing}`}
+      style={revealOutlineStyle}
+    >
+      <ResourceCell
+        resourceRef={resource}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        isViewVisible={isViewVisible}
+        orderIndex={orderIndex}
+        viewMode={cellViewMode}
+        zoomArea={zoomArea}
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+        showDragHandle={reorder ? true : undefined}
+        reorderHandleLabel={reorder?.handleLabel}
+        reorderHint={reorder?.hint}
+        onReorderKeyDown={reorder?.onKeyDown}
+        headerDrag={
+          reorder ? { onDragStart: reorder.onDragStart, onDragEnd: reorder.onDragEnd } : undefined
+        }
+      />
+    </div>
+  );
+}
+
+export default ResourceColumn;

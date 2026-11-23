@@ -1,6 +1,9 @@
 import { createUseNetworkObjectHook } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
 import { IDataProvider } from '@shared/models/data-provider.interface';
-import { dataProviderService } from '@shared/services/data-provider.service';
+import {
+  dataProviderService,
+  getDataProviderObjectId,
+} from '@shared/services/data-provider.service';
 import { DataProviderNames, DataProviders } from 'papi-shared-types';
 
 /**
@@ -21,6 +24,14 @@ export const useDataProvider = createUseNetworkObjectHook(
   // This is fine in this case since we're also casting the hook itself to the correct specific type
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   dataProviderService.get as (providerName: string) => Promise<IDataProvider | undefined>,
+  undefined,
+  // This hook is handed a provider NAME; the provider is registered on the network under the id
+  // derived from that name. This is the hook that most needs the re-lookup to work:
+  // `networkObjectService.get` does not wait for an object that is not there yet, so the one lookup
+  // a disposal drives is the whole safety net, and it lands in the gap whenever the process taking
+  // the provider over has not re-registered it yet.
+  (networkObjectDetails, providerName) =>
+    networkObjectDetails.id === getDataProviderObjectId(providerName),
 ) as <DataProviderName extends DataProviderNames>(
   dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
 ) => DataProviders[DataProviderName] | undefined;

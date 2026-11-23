@@ -1,0 +1,51 @@
+name: Bump Versions
+run-name: Bump versions on ${{ github.head_ref || github.ref_name }} to ${{ github.event.inputs.newVersion }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      newVersion:
+        description: "Version to bump all the repo's versions to on a new branch (called `bump-versions-<version>`), e.g. 0.3.0-alpha.0."
+        required: true
+
+jobs:
+  bump-versions:
+    name: Bump versions on ${{ matrix.os }}
+
+    runs-on: ${{ matrix.os }}
+
+    permissions:
+      contents: write
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Output Workflow Dispatch Inputs
+        run: echo "${{ toJSON(github.event.inputs) }}"
+
+      - name: Checkout git repo
+        uses: actions/checkout@v4
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Install Node and NPM
+        uses: actions/setup-node@v4
+        with:
+          cache: npm
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+
+      - name: Install packages
+        run: |
+          npm ci
+
+      - name: Bump repo versions
+        if: ${{ inputs.newVersion != '' }}
+        uses: ./.github/actions/bump-versions-action
+        with:
+          newVersion: ${{ inputs.newVersion }}

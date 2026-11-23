@@ -1,0 +1,1109 @@
+// @vitest-environment jsdom
+import { afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
+import * as React from 'react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import '@testing-library/jest-dom';
+import type { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { Canon } from '@sillsdev/scripture';
+import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
+import type { DblResourceData } from 'platform-bible-utils';
+import type { PickerResource } from './downloaded-resources.utils';
+import {
+  RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID,
+  RESOURCE_TEXT_WAITING_TEST_ID,
+  ResourceTextPanel,
+  ResourceTextPanelProps,
+} from './resource-text-panel.component';
+import { RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID } from './resource-book-not-available.component';
+
+/**
+ * Records every `setUsj` the panel pushes into the editor, across editor instances.
+ *
+ * Shared rather than created per instance because the panel UNMOUNTS `Editorial` to show a message
+ * and remounts it on the way back to content — a fresh editor holds nothing, so what the tests
+ * below need to see is whether the panel re-fed it. A per-instance spy nobody captures makes "the
+ * editor is on screen" the only observable fact, which a permanently blank editor also satisfies.
+ */
+const setUsjSpy = vi.fn();
+
+/** Collects the `options` prop passed to each Editorial render. */
+const capturedEditorOptions = vi.fn();
+
+/**
+ * Drives `useViewVisibility` from the tests.
+ *
+ * Two things have to be faked together, because the hook reads visibility twice. Its initial value
+ * is a synchronous `document.body` height check, which is 0 in jsdom — so WITHOUT the height stub
+ * below every test here would run as though the panel's tab were inactive, quietly exercising the
+ * hidden branch of anything gated on visibility and leaving the visible branch uncovered. Its
+ * updates come from an `IntersectionObserver`, which jsdom does not implement at all.
+ *
+ * Defaults to visible, matching the tab a reader is actually looking at.
+ */
+const intersectionCallbacks: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
+
+/** Reports the web view as shown or hidden, the way rc-dock activating a tab pane would. */
+function setViewVisible(isVisible: boolean) {
+  act(() => {
+    intersectionCallbacks.forEach((callback) => callback([{ isIntersecting: isVisible }]));
+  });
+}
+
+beforeAll(() => {
+  vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue({
+    ...new DOMRect(),
+    height: 800,
+  });
+  vi.stubGlobal(
+    'IntersectionObserver',
+    vi.fn((callback: (entries: { isIntersecting: boolean }[]) => void) => {
+      intersectionCallbacks.push(callback);
+      return {
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn(),
+        takeRecords: vi.fn(() => []),
+      };
+    }),
+  );
+});
+
+vi.mock('@eten-tech-foundation/platform-editor', () => ({
+  Editorial: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+    capturedEditorOptions(props.options);
+    React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
+    return <div data-testid="editorial" />;
+  }),
+  getDefaultViewOptions: () => ({ viewOptionsFor: 'default' }),
+}));
+
+const BIBLE_TEXT_MISSING_BOOK = 'This book does not exist in this Bible text.';
+const COMMENTARY_MISSING_BOOK = 'This book does not exist in this commentary.';
+const BLANK_CHAPTER = 'This chapter is empty in this resource.';
+const TEXT_UNAVAILABLE = 'This text could not be loaded.';
+const RETRY = 'Try again';
+const PICK_BIBLE_TEXTS = 'Pick Bible texts…';
+const SELECTING = 'Selecting resource…';
+const TEAM_RESOURCES = 'Team resources';
+const USER_RESOURCES = 'User resources';
+const OTHER_RESOURCES = 'Other resources';
+const TEAM_RESOURCE_LOCK = 'Shared by your team';
+const TEAM_RESOURCES_CAPTION = 'Only a project administrator can remove these.';
+
+const STRINGS = {
+  '%webView_platformScriptureEditor_emptyChapter_messageResource%': BLANK_CHAPTER,
+  '%webView_resourcePanel_noProject%': 'No project.',
+  '%webView_resourcePanel_installing%': 'Installing resource…',
+  '%webView_resourcePanel_installFailed%': "The resource couldn't be installed.",
+  '%webView_resourcePanel_installFailedOffline%':
+    "The resource couldn't be installed. Check your connection and try again.",
+  '%webView_resourcePanel_installedButUnavailable%':
+    "The resource is installed but couldn't be opened.",
+  '%webView_resourcePanel_retry%': RETRY,
+  '%webView_resourcePanel_settingsUnavailable%': "Couldn't load your resources.",
+  '%webView_resourcePanel_loading%': 'Loading…',
+  '%webView_resourcePanel_loadingResources%': 'Loading resources',
+  '%webView_resourcePanel_catalogUnavailable%': "Couldn't load the list of available resources.",
+  '%webView_resourcePanel_downloadResources%': 'Download resources…',
+  '%webView_resourcePanel_bibleTexts_emptyState_prompt%':
+    'No Bible texts selected. Pick one to display a reference translation alongside your project.',
+  '%webView_resourcePanel_bibleTexts_pick%': PICK_BIBLE_TEXTS,
+  '%webView_resourcePanel_selecting%': SELECTING,
+  '%webView_resourcePanel_textUnavailable%': TEXT_UNAVAILABLE,
+  '%webView_resourcePanel_bibleTexts_bookNotAvailable%': BIBLE_TEXT_MISSING_BOOK,
+  '%webView_resourcePanel_commentaries_bookNotAvailable%': COMMENTARY_MISSING_BOOK,
+  '%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%': TEAM_RESOURCES,
+  '%webView_scriptureTextGrid_viewOptions_userResourcesHeader%': USER_RESOURCES,
+  '%webView_resourcePanel_otherResources%': OTHER_RESOURCES,
+  '%webView_scriptureTextGrid_viewOptions_teamSharedLock%': TEAM_RESOURCE_LOCK,
+  '%webView_resourcePanel_teamResourcesCaption%': TEAM_RESOURCES_CAPTION,
+};
+
+const RESOURCE_PROJECT_ID = 'project-web';
+
+const INSTALLED_RESOURCE: DblResourceData = {
+  dblEntryUid: 'uid-web',
+  displayName: 'WEB',
+  fullName: 'World English Bible',
+  bestLanguageName: 'English',
+  type: 'ScriptureResource',
+  size: 1200,
+  installed: true,
+  updateAvailable: false,
+  projectId: RESOURCE_PROJECT_ID,
+};
+
+const INSTALLED_COMMENTARY: DblResourceData = {
+  ...INSTALLED_RESOURCE,
+  dblEntryUid: 'uid-hbk',
+  displayName: 'HBKENG',
+  type: 'CommentaryResource',
+  projectId: 'project-hbk',
+};
+
+/**
+ * The row the panel is handed for an installed, referenced DBL resource. Defaults to the user's own
+ * row, so a test reaches the team-grouped dropdown only by asking for an `'admin'` row.
+ */
+function dblRow(
+  resource: DblResourceData,
+  source: PickerResource['source'] = 'user',
+): PickerResource {
+  return {
+    reference: { type: 'dblResource', id: resource.dblEntryUid, name: resource.displayName },
+    source,
+    isAdminLocked: false,
+    type: resource.type,
+    installed: true,
+    projectId: resource.projectId,
+  };
+}
+
+const WEB_ROW = dblRow(INSTALLED_RESOURCE);
+const COMMENTARY_ROW = dblRow(INSTALLED_COMMENTARY);
+
+/**
+ * A chapter with content. It carries a chapter marker and a verse because the panel distinguishes a
+ * populated chapter from a blank one by those nodes — USJ with an empty `content` array is a
+ * _blank_ chapter, not a generic stand-in.
+ */
+const SAMPLE_USJ: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    { type: 'chapter', marker: 'c', number: '1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
+    },
+  ],
+};
+
+/** A chapter the resource has, but with nothing in it — no chapter marker and no verses. */
+const BLANK_USJ: Usj = { type: 'USJ', version: '3.1', content: [] };
+
+/**
+ * A second chapter with content, for asserting WHICH chapter reached the editor. `BLANK_USJ` cannot
+ * stand in: a blank chapter unmounts `Editorial` for the message, so there would be no editor to
+ * feed and the assertion would pass against a feed that never happened.
+ */
+const OTHER_USJ: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    { type: 'chapter', marker: 'c', number: '2' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [{ type: 'verse', marker: 'v', number: '1' }, 'And the earth was without form'],
+    },
+  ],
+};
+
+/**
+ * The exact message the C# `MissingBookException` produces. `parseMissingBookError` reads the book
+ * number and project id back out of it positionally, so a differently-worded rejection lands on the
+ * generic failure state instead — build the fixture from the real shape, never an approximation.
+ */
+function missingBookError(book: string, projectId = RESOURCE_PROJECT_ID) {
+  return {
+    platformErrorVersion: 1,
+    message: `Book number ${Canon.bookIdToNumber(book)} not found in project ${projectId}.`,
+  };
+}
+
+const MAT_1_1 = { book: 'MAT', chapterNum: 1, verseNum: 1 };
+
+function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTextPanelProps {
+  return {
+    localizedStrings: STRINGS,
+    hasProject: true,
+    resourceType: 'ScriptureResource',
+    filteredResources: [WEB_ROW],
+    selectedRef: WEB_ROW,
+    readiness: 'configured',
+    dblResources: [INSTALLED_RESOURCE],
+    isCatalogUnavailable: false,
+    isGrouped: true,
+    onRetryCatalog: vi.fn(),
+    scrRef: MAT_1_1,
+    onScrRefChange: vi.fn(),
+    onSelectResource: vi.fn(),
+    usjPossiblyError: SAMPLE_USJ,
+    isUsjLoading: false,
+    onRetryChapter: vi.fn(),
+    textDirection: 'ltr',
+    copyLimit: undefined,
+    allowInvisibleCharacters: false,
+    isSelecting: false,
+    isInstalling: false,
+    installFailed: false,
+    installFailureReason: undefined,
+    retryInstall: vi.fn(),
+    isOnline: true,
+    // The panel's whole picker surface: it reports the activation and the web view owns the pick.
+    onShowResourcePicker: vi.fn(),
+    // Supplied by default because `logger` is optional and every diagnostic in the panel is behind
+    // it — a harness that omits it swallows a failed pick and a failed chapter read in the one
+    // suite that could otherwise catch them.
+    logger: { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+    ...overrides,
+  };
+}
+
+function renderPanel(overrides: Partial<ResourceTextPanelProps> = {}) {
+  const props = makeProps(overrides);
+  const utils = render(<ResourceTextPanel {...props} />);
+  return {
+    ...utils,
+    rerenderWith: (next: Partial<ResourceTextPanelProps> = {}) =>
+      utils.rerender(<ResourceTextPanel {...makeProps({ ...overrides, ...next })} />),
+  };
+}
+
+/** The editor is on screen AND holding scripture — the two halves of "the reader can read". */
+function expectEditorShowing() {
+  expect(screen.getByTestId(RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID)).toBeInTheDocument();
+  expect(screen.getByTestId('editorial')).toBeInTheDocument();
+}
+
+/**
+ * Everything the content area can put on screen, plus the selector as a positive control. Asserted
+ * as one object so that "the panel is waiting" is a claim about ALL of them at once — checking only
+ * the message the test has in mind would pass just as happily on a panel showing a different one.
+ *
+ * `spinner` is what makes the waiting assertions falsifiable, and it has to be the SPINNER rather
+ * than anything outside the content area. Each waiting assertion is otherwise purely negative, and
+ * a negative assertion passes just as well against a content area that rendered nothing at all —
+ * deleting both spinner branches from `renderContent` leaves such tests green. `selector` cannot
+ * stand in for it: the selector renders OUTSIDE `renderContent`, so it is invariant across every
+ * content branch and cannot tell "spinner" from "nothing". It is kept as a second control, for the
+ * whole-panel early returns, which do replace it.
+ */
+function contentOnScreen() {
+  return {
+    selector: !!screen.queryByRole('button', { name: /WEB|HBKENG/ }),
+    spinner: !!screen.queryByTestId(RESOURCE_TEXT_WAITING_TEST_ID),
+    editor: !!screen.queryByTestId('editorial'),
+    missingBook: !!screen.queryByText(BIBLE_TEXT_MISSING_BOOK),
+    blankChapter: !!screen.queryByText(BLANK_CHAPTER),
+    unavailable: !!screen.queryByText(TEXT_UNAVAILABLE),
+  };
+}
+
+/** The panel is alive and its content area is showing the spinner rather than any outcome. */
+const WAITING_FOR_CONTENT = {
+  selector: true,
+  spinner: true,
+  editor: false,
+  missingBook: false,
+  blankChapter: false,
+  unavailable: false,
+};
+
+afterEach(() => {
+  setUsjSpy.mockClear();
+  // `restoreAllMocks` would also undo the `document.body` height spy installed in `beforeAll`,
+  // which every test depends on to start out visible.
+  vi.clearAllMocks();
+  intersectionCallbacks.length = 0;
+});
+
+describe('ResourceTextPanel copy spelling', () => {
+  it.each([true, false])(
+    "gives the editor the project's allowInvisibleCharacters (%s) in its view options",
+    (allowInvisibleCharacters) => {
+      renderPanel({ allowInvisibleCharacters });
+
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          view: { viewOptionsFor: 'default', allowInvisibleCharacters },
+        }),
+      );
+    },
+  );
+});
+
+describe('ResourceTextPanel book not in this resource', () => {
+  it('explains that the Bible text does not contain the book, instead of showing a blank editor', () => {
+    renderPanel({ usjPossiblyError: missingBookError('MAT') });
+
+    expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('offers no button in the message, since the selector above it is the remedy', () => {
+    renderPanel({ usjPossiblyError: missingBookError('MAT') });
+
+    const message = screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID);
+    expect(message).toHaveTextContent(BIBLE_TEXT_MISSING_BOOK);
+    expect(within(message).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('uses the commentary wording when the panel is showing a commentary', () => {
+    renderPanel({
+      resourceType: 'CommentaryResource',
+      filteredResources: [COMMENTARY_ROW],
+      selectedRef: COMMENTARY_ROW,
+      dblResources: [INSTALLED_COMMENTARY],
+      usjPossiblyError: missingBookError('MAT', INSTALLED_COMMENTARY.projectId),
+    });
+
+    expect(screen.getByText(COMMENTARY_MISSING_BOOK)).toBeInTheDocument();
+    expect(screen.queryByText(BIBLE_TEXT_MISSING_BOOK)).not.toBeInTheDocument();
+  });
+
+  it('keeps the resource selector on screen, because switching texts is the only remedy', () => {
+    renderPanel({ usjPossiblyError: missingBookError('MAT') });
+
+    expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
+    // The selector renders the resolved resource's label; losing it would strip the one control
+    // that can get the reader to a text containing this book.
+    expect(screen.getByRole('button', { name: /WEB/ })).toBeInTheDocument();
+  });
+
+  it('re-feeds the editor when the user navigates to a book the resource does contain', () => {
+    const { rerenderWith } = renderPanel({ usjPossiblyError: missingBookError('MAT') });
+    expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
+    // `toHaveBeenLastCalledWith` below matches the whole call history on a spy this file clears only
+    // in `afterEach`, so clear it here to pin the transition rather than any earlier feed.
+    setUsjSpy.mockClear();
+
+    rerenderWith({
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      usjPossiblyError: SAMPLE_USJ,
+    });
+
+    expect(screen.queryByText(BIBLE_TEXT_MISSING_BOOK)).not.toBeInTheDocument();
+    expectEditorShowing();
+    // The message arm unmounted the editor, so the remount holds nothing until this effect refills
+    // it. Without the feed the reader gets Lexical's "Enter some Scripture…" placeholder — an edit
+    // invitation in a text they cannot edit.
+    expect(setUsjSpy).toHaveBeenLastCalledWith(SAMPLE_USJ);
+  });
+
+  it('keeps waiting when the failure names the book the user just left', () => {
+    renderPanel({ scrRef: MAT_1_1, usjPossiblyError: missingBookError('GEN') });
+
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+  });
+
+  it('keeps waiting when the failure names a resource the panel has switched away from', () => {
+    renderPanel({ usjPossiblyError: missingBookError('MAT', 'some-other-project') });
+
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+  });
+});
+
+describe('ResourceTextPanel blank chapter', () => {
+  it('says the chapter is empty when the resource has the book but nothing in the chapter', () => {
+    renderPanel({ usjPossiblyError: BLANK_USJ });
+
+    expect(screen.getByText(BLANK_CHAPTER)).toBeInTheDocument();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('does not call a chapter empty while it is still arriving', () => {
+    // The data layer keeps serving the previous reference's USJ until the new subscription's first
+    // update lands, and its default is itself blank — so a blank value in hand means nothing until
+    // the read has settled. This is the state every navigation passes through.
+    renderPanel({ usjPossiblyError: BLANK_USJ, isUsjLoading: true });
+
+    // Asserted as the whole content area rather than just the absent message: what should be on
+    // screen is the EDITOR, and a bare `not.toBeInTheDocument()` would pass against a panel that
+    // rendered nothing at all.
+    expect(contentOnScreen()).toEqual({
+      selector: true,
+      spinner: false,
+      editor: true,
+      missingBook: false,
+      blankChapter: false,
+      unavailable: false,
+    });
+  });
+
+  it('re-feeds the editor when the message gives way to it with the same chapter in hand', () => {
+    const { rerenderWith } = renderPanel({ usjPossiblyError: BLANK_USJ, isUsjLoading: false });
+    expect(screen.getByText(BLANK_CHAPTER)).toBeInTheDocument();
+    setUsjSpy.mockClear();
+
+    // A new read starts, so the blank USJ in hand is no longer a trustworthy "empty": the message
+    // goes and the editor returns — holding the very same USJ object, which is exactly why the feed
+    // cannot be keyed on the USJ alone.
+    rerenderWith({ usjPossiblyError: BLANK_USJ, isUsjLoading: true });
+
+    expectEditorShowing();
+    expect(setUsjSpy).toHaveBeenCalledWith(BLANK_USJ);
+  });
+
+  it('re-feeds the editor when the resource resolves with the same chapter already in hand', () => {
+    // The row is picked but not yet resolved to a project, so the chapter in hand cannot be
+    // attributed to it: a spinner, not content. The USJ object never changes across this
+    // transition, which is why the feed cannot be keyed on the USJ alone.
+    const unresolvedRow: PickerResource = { ...WEB_ROW, projectId: undefined };
+    const { rerenderWith } = renderPanel({
+      selectedRef: unresolvedRow,
+      usjPossiblyError: SAMPLE_USJ,
+    });
+    expect(screen.getByTestId(RESOURCE_TEXT_WAITING_TEST_ID)).toBeInTheDocument();
+    setUsjSpy.mockClear();
+
+    rerenderWith({ selectedRef: WEB_ROW, usjPossiblyError: SAMPLE_USJ });
+
+    expectEditorShowing();
+    expect(setUsjSpy).toHaveBeenCalledWith(SAMPLE_USJ);
+  });
+
+  it('calls a book the resource lacks missing, not empty', () => {
+    // Both conditions hold at once: the read failed AND the USJ in hand is blank. The missing book
+    // is the more specific claim, so it wins.
+    renderPanel({ usjPossiblyError: missingBookError('MAT') });
+
+    expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
+    expect(screen.queryByText(BLANK_CHAPTER)).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel content that cannot be shown', () => {
+  it('names an unrelated failure instead of spinning forever', () => {
+    // Terminal: the value in hand is an error rather than USJ, and nothing re-emits until the data
+    // provider does — so a spinner here would claim progress that never arrives.
+    renderPanel({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+    });
+
+    expect(screen.getByText(TEXT_UNAVAILABLE)).toBeInTheDocument();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('waits while the chapter is still on its way, rather than mounting an empty editor', () => {
+    // `Editorial` with nothing set paints its "Enter some Scripture…" placeholder, which invites an
+    // edit in a text the reader cannot edit.
+    //
+    // `isUsjLoading` is what makes this "on its way" rather than "arrived as nothing": the panel is
+    // seeded with `undefined` instead of a blank USJ, so `undefined` alone no longer distinguishes
+    // the two — only the in-flight flag does. See `resolveResourceContentState`.
+    renderPanel({ usjPossiblyError: undefined, isUsjLoading: true });
+
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+  });
+
+  it('calls a settled read that delivered nothing an empty chapter, not a failure', () => {
+    // The other half of the `undefined`-seed distinction. Once the read has settled, `undefined` is
+    // the delivered answer rather than a value still on its way — and it is a deterministic one:
+    // the extender PDP returns `undefined` for a falsy USX, so a retry would produce `undefined`
+    // again. Calling it a failure would name a fault that is really an empty chapter, and offer a
+    // control that cannot change the outcome.
+    renderPanel({ usjPossiblyError: undefined, isUsjLoading: false });
+
+    expect(contentOnScreen()).toEqual({
+      selector: true,
+      spinner: false,
+      editor: false,
+      missingBook: false,
+      blankChapter: true,
+      unavailable: false,
+    });
+    expect(screen.queryByRole('button', { name: RETRY })).not.toBeInTheDocument();
+  });
+
+  it('still names a failure that arrived as an error, and offers the retry', () => {
+    // The distinction the blank-chapter branch must not swallow: an error leaves no USJ in hand
+    // either, so keying the empty-chapter claim on the USJ alone would report a genuine failure as
+    // an empty chapter and hide the one control that can recover it.
+    renderPanel({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+      isUsjLoading: false,
+    });
+
+    expect(contentOnScreen()).toEqual({
+      selector: true,
+      spinner: false,
+      editor: false,
+      missingBook: false,
+      blankChapter: false,
+      unavailable: true,
+    });
+    expect(screen.getByRole('button', { name: RETRY })).toBeInTheDocument();
+  });
+
+  it('re-drives the chapter read when the reader asks for another attempt', async () => {
+    const onRetryChapter = vi.fn();
+    renderPanel({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+      isUsjLoading: false,
+      onRetryChapter,
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: RETRY }));
+
+    expect(onRetryChapter).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the attempt in progress rather than leaving the failure on screen', () => {
+    // What makes the retry legible. The data layer keeps serving the failed read's error across the
+    // resubscription, so without withholding it the panel renders the identical message for the
+    // whole round trip and the button reads as inert.
+    const { rerenderWith } = renderPanel({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+      isUsjLoading: false,
+    });
+    expect(screen.getByText(TEXT_UNAVAILABLE)).toBeInTheDocument();
+
+    // The retry is in flight: same stale error still in hand, but a read is running for it.
+    rerenderWith({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+      isUsjLoading: true,
+    });
+
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+  });
+});
+
+describe('ResourceTextPanel selector before a resource resolves', () => {
+  it('names the trigger while no row is selected yet', () => {
+    // The trigger's only other content is a chevron, which contributes no text — so without a label
+    // this button renders blank AND has no accessible name at all, leaving a screen-reader user the
+    // panel's one control with nothing to identify it by.
+    renderPanel({ selectedRef: undefined });
+
+    expect(screen.getByRole('button', { name: 'Loading resources' })).toBeInTheDocument();
+  });
+
+  it("does not label the trigger with the content area's status string", () => {
+    // A status region's sentence and a control's label are different jobs; one key answering to
+    // both is a string translators cannot phrase for either.
+    renderPanel({ selectedRef: undefined });
+
+    expect(screen.queryByRole('button', { name: 'Loading…' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel content-area waiting state', () => {
+  it('re-announces when the reader moves to a chapter that is also still arriving', () => {
+    // Paging through a slow resource goes wait → wait, and the label is byte-identical each time.
+    // A live region that SURVIVES that change reports nothing, so the reader gets no confirmation
+    // their navigation applied at all. Node identity is the assertion that matters: asserting the
+    // text or the region's presence passes either way.
+    const { rerenderWith } = renderPanel({ usjPossiblyError: undefined, isUsjLoading: true });
+    const firstRegion = screen.getByRole('status');
+
+    rerenderWith({
+      scrRef: { book: 'MAT', chapterNum: 2, verseNum: 1 },
+      usjPossiblyError: undefined,
+      isUsjLoading: true,
+    });
+
+    expect(screen.getByRole('status')).not.toBe(firstRegion);
+  });
+
+  it('keeps the selector mounted above the wait', () => {
+    // The content area is what is waiting, not the panel. The selector is the reader's only way to
+    // a different text, so a full-panel wait would strip the one control that could get them out.
+    renderPanel({ usjPossiblyError: undefined, isUsjLoading: true });
+
+    expect(screen.getByTestId(RESOURCE_TEXT_WAITING_TEST_ID)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /WEB/ })).toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel editor feed while the tab is hidden', () => {
+  // rc-dock keeps an inactive tab's pane mounted under `display: none`, so this panel keeps
+  // receiving chapters for a view nobody can see. See `.claude/rules/cross-view-sync-hidden-views.md`.
+
+  it('does not feed the editor while the tab is inactive', () => {
+    const { rerenderWith } = renderPanel({ usjPossiblyError: SAMPLE_USJ });
+    setViewVisible(false);
+    setUsjSpy.mockClear();
+
+    rerenderWith({ usjPossiblyError: OTHER_USJ });
+
+    // Pushing a whole chapter into Lexical to beat a paint that is not going to happen is work
+    // spent on a view nobody can see.
+    expect(setUsjSpy).not.toHaveBeenCalled();
+  });
+
+  it('catches up with the current chapter when the tab is shown again', () => {
+    const { rerenderWith } = renderPanel({ usjPossiblyError: SAMPLE_USJ });
+    setViewVisible(false);
+    rerenderWith({ usjPossiblyError: OTHER_USJ });
+    setUsjSpy.mockClear();
+
+    setViewVisible(true);
+
+    // The chapter that is current NOW, not a replay of the ones missed while hidden — without this
+    // the reader activates the tab onto whatever the editor was last given.
+    expect(setUsjSpy).toHaveBeenLastCalledWith(OTHER_USJ);
+  });
+
+  it('collapses chapters missed while hidden into a single feed', () => {
+    const { rerenderWith } = renderPanel({ usjPossiblyError: SAMPLE_USJ });
+    setViewVisible(false);
+    rerenderWith({ usjPossiblyError: OTHER_USJ });
+    rerenderWith({ usjPossiblyError: SAMPLE_USJ });
+    rerenderWith({ usjPossiblyError: OTHER_USJ });
+    setUsjSpy.mockClear();
+
+    setViewVisible(true);
+
+    // Only the last one could have survived anyway, so a queue would just re-do superseded work.
+    expect(setUsjSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ResourceTextPanel content zoom placement', () => {
+  it('marks the text inside the scroll box, so scrolling to a verse measures unzoomed pixels', () => {
+    // `scrollToVerse` adds a `getBoundingClientRect()` distance to the scroll box's `scrollTop`. A
+    // rect read under a zoomed ancestor is in zoomed pixels while `scrollTop` is not, so a marker on
+    // the scroll box or above it makes every scroll overshoot by the zoom factor.
+    renderPanel();
+    expectEditorShowing();
+
+    const scrollBox = screen.getByTestId(RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID);
+    const marker = screen.getByTestId('editorial').closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`);
+    expect(marker).not.toBeNull();
+    expect(marker).not.toBe(scrollBox);
+    expect(scrollBox.contains(marker)).toBe(true);
+    expect(scrollBox.closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toBeNull();
+  });
+});
+
+describe('ResourceTextPanel logging', () => {
+  it('logs a missing book at debug and any other failure at error', () => {
+    // A named, terminal message looks the same whatever went wrong, so the log is the only place
+    // the cause survives. A missing book is ordinary navigation rather than a fault, so it goes to
+    // `debug`, which packaged builds drop.
+    const logger = { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() };
+    const { rerenderWith } = renderPanel({ usjPossiblyError: missingBookError('MAT'), logger });
+
+    expect(logger.debug).toHaveBeenCalledTimes(1);
+    expect(logger.error).not.toHaveBeenCalled();
+
+    rerenderWith({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+      logger,
+    });
+
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ResourceTextPanel resource selection', () => {
+  it('reports the row the user chose from the dropdown', async () => {
+    // The dropdown is the only way a user changes which text the panel displays, so this is its
+    // primary control — and like the picker below, stubbing it to a no-op leaves every other test
+    // in this file green.
+    const onSelectResource = vi.fn();
+    renderPanel({
+      filteredResources: [WEB_ROW, COMMENTARY_ROW],
+      selectedRef: WEB_ROW,
+      dblResources: [INSTALLED_RESOURCE, INSTALLED_COMMENTARY],
+      onSelectResource,
+    });
+
+    // `userEvent` rather than `fireEvent`: the Radix trigger opens on a real pointer sequence, and
+    // this is the pattern the repo's other Radix dropdown tests use.
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /WEB/ }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: /HBKENG/ }));
+
+    // The namespaced row id, not the bare DBL entry uid — `resolveResourceSelection` compares row
+    // ids, so reporting the bare id would never match the list.
+    expect(onSelectResource).toHaveBeenCalledWith('dbl:uid-hbk');
+  });
+});
+
+describe("ResourceTextPanel team resources and the user's own", () => {
+  const KJV: DblResourceData = {
+    ...INSTALLED_RESOURCE,
+    dblEntryUid: 'uid-kjv',
+    displayName: 'KJV',
+    fullName: 'King James Version',
+    projectId: 'project-kjv',
+  };
+  const ASV: DblResourceData = {
+    ...INSTALLED_RESOURCE,
+    dblEntryUid: 'uid-asv',
+    displayName: 'ASV',
+    fullName: 'American Standard Version',
+    projectId: 'project-asv',
+  };
+  const TEAM_WEB = dblRow(INSTALLED_RESOURCE, 'admin');
+  const USER_KJV = dblRow(KJV, 'user');
+  const DOWNLOADED_ASV = dblRow(ASV, 'downloaded');
+  const ALL_TEXTS = [INSTALLED_RESOURCE, KJV, ASV];
+
+  async function openSelector(selectedName: RegExp) {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: selectedName }));
+    await screen.findByRole('menu');
+    return user;
+  }
+
+  /** The names of the rows in `group`, in order. */
+  function rowNames(group: HTMLElement) {
+    return within(group)
+      .getAllByRole('menuitemcheckbox')
+      .map((item) => item.textContent);
+  }
+
+  it("groups the team's resources, then the user's own, then other installed ones", async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    const teamGroup = screen.getByRole('group', { name: TEAM_RESOURCES });
+    const userGroup = screen.getByRole('group', { name: USER_RESOURCES });
+    const otherGroup = screen.getByRole('group', { name: OTHER_RESOURCES });
+    expect(rowNames(teamGroup)).toEqual([expect.stringMatching(/^WEB/)]);
+    expect(rowNames(userGroup)).toEqual([expect.stringMatching(/^KJV/)]);
+    expect(rowNames(otherGroup)).toEqual([expect.stringMatching(/^ASV/)]);
+    expect(comesAfter(teamGroup, userGroup)).toBe(true);
+    expect(comesAfter(userGroup, otherGroup)).toBe(true);
+  });
+
+  it('lists every row as one plain list when ungrouped, with no headings, caption or locks', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+      isGrouped: false,
+    });
+    await openSelector(/KJV/);
+
+    // Positive control: every row is on screen, in order, so the absences are real answers.
+    expect(rowNames(screen.getByRole('menu'))).toEqual([
+      expect.stringMatching(/^WEB/),
+      expect.stringMatching(/^KJV/),
+      expect.stringMatching(/^ASV/),
+    ]);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+    expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
+  });
+
+  it.each([
+    ["the user's own", [USER_KJV]],
+    ['other installed', [DOWNLOADED_ASV]],
+  ])('keeps a single unlabeled list when every row is %s', async (_, filteredResources) => {
+    renderPanel({ filteredResources, selectedRef: filteredResources[0], dblResources: ALL_TEXTS });
+    await openSelector(/KJV|ASV/);
+
+    // Positive control: the rows themselves are on screen, so the absent headings are a real answer.
+    expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(1);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+  });
+
+  it("labels the user's own and other installed resources apart when the team shared nothing", async () => {
+    renderPanel({
+      filteredResources: [USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    expect(rowNames(screen.getByRole('group', { name: USER_RESOURCES }))).toEqual([
+      expect.stringMatching(/^KJV/),
+    ]);
+    expect(rowNames(screen.getByRole('group', { name: OTHER_RESOURCES }))).toEqual([
+      expect.stringMatching(/^ASV/),
+    ]);
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+    // One between the two groups and one above "Download resources…": none above the first group.
+    expect(screen.getAllByRole('separator')).toHaveLength(2);
+  });
+
+  it('labels no group that has no rows', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, DOWNLOADED_ASV],
+      selectedRef: TEAM_WEB,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/WEB/);
+
+    // Positive controls: the groups that do have rows are labeled.
+    expect(screen.getByRole('group', { name: TEAM_RESOURCES })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: OTHER_RESOURCES })).toBeInTheDocument();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+  });
+
+  describe('while the catalog is unavailable', () => {
+    it("lists the user's own and other installed resources as one unlabeled list", async () => {
+      renderPanel({
+        filteredResources: [USER_KJV, DOWNLOADED_ASV],
+        selectedRef: USER_KJV,
+        dblResources: ALL_TEXTS,
+        isCatalogUnavailable: true,
+      });
+      await openSelector(/KJV/);
+
+      // Positive control: both rows are on screen, so the absent headings are a real answer.
+      expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(2);
+      expect(screen.queryByRole('group')).toBeNull();
+      expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+      expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    });
+
+    it("lists them together under the user's heading below the team's", async () => {
+      renderPanel({
+        filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+        selectedRef: USER_KJV,
+        dblResources: ALL_TEXTS,
+        isCatalogUnavailable: true,
+      });
+      await openSelector(/KJV/);
+
+      expect(rowNames(screen.getByRole('group', { name: TEAM_RESOURCES }))).toEqual([
+        expect.stringMatching(/^WEB/),
+      ]);
+      expect(rowNames(screen.getByRole('group', { name: USER_RESOURCES }))).toEqual([
+        expect.stringMatching(/^KJV/),
+        expect.stringMatching(/^ASV/),
+      ]);
+      expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    });
+  });
+
+  it("labels only the team group when every row is the team's", async () => {
+    renderPanel({ filteredResources: [TEAM_WEB], selectedRef: TEAM_WEB });
+    await openSelector(/WEB/);
+
+    expect(screen.getByRole('group', { name: TEAM_RESOURCES })).toBeInTheDocument();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    // Only the one above "Download resources…": no separator for groups that aren't there.
+    expect(screen.getAllByRole('separator')).toHaveLength(1);
+  });
+
+  it('marks each team resource, and only those, as one the user cannot remove', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    const teamItem = within(screen.getByRole('group', { name: TEAM_RESOURCES })).getByRole(
+      'menuitemcheckbox',
+    );
+    expect(within(teamItem).getByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeInTheDocument();
+    [USER_RESOURCES, OTHER_RESOURCES].forEach((groupName) => {
+      const items = within(screen.getByRole('group', { name: groupName })).getAllByRole(
+        'menuitemcheckbox',
+      );
+      expect(items).toHaveLength(1);
+      items.forEach((item) => expect(within(item).queryByRole('img')).toBeNull());
+    });
+  });
+
+  it('says once, under the team heading, that only an administrator can remove those rows', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, dblRow(KJV, 'admin'), DOWNLOADED_ASV],
+      selectedRef: TEAM_WEB,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/WEB/);
+
+    const teamGroup = screen.getByRole('group', { name: TEAM_RESOURCES });
+    // Once for the group, not once per row: two team rows here, one caption.
+    expect(screen.getAllByText(TEAM_RESOURCES_CAPTION)).toHaveLength(1);
+    expect(within(teamGroup).getByText(TEAM_RESOURCES_CAPTION)).toBeInTheDocument();
+    expect(teamGroup).toHaveAccessibleDescription(TEAM_RESOURCES_CAPTION);
+  });
+
+  it('keeps a long name whole in its hover title, since the menu ellipsizes it', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    const name = within(screen.getByRole('menuitemcheckbox', { name: /WEB/ })).getByText(
+      'WEB - World English Bible',
+    );
+    expect(name).toHaveAttribute('title', 'WEB - World English Bible');
+    // jsdom computes no layout, so the class is the only observable stand-in for the ellipsis.
+    expect(name).toHaveClass('tw:truncate');
+  });
+
+  it('reports a team resource the user chose', async () => {
+    const onSelectResource = vi.fn();
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+      onSelectResource,
+    });
+    const user = await openSelector(/KJV/);
+
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /WEB/ }));
+
+    expect(onSelectResource).toHaveBeenCalledWith('dbl:uid-web');
+  });
+
+  it('groups commentaries the same way', async () => {
+    const teamCommentary = dblRow(INSTALLED_COMMENTARY, 'admin');
+    const userCommentary = dblRow({
+      ...INSTALLED_COMMENTARY,
+      dblEntryUid: 'uid-tnn',
+      displayName: 'TNN',
+    });
+    renderPanel({
+      resourceType: 'CommentaryResource',
+      filteredResources: [teamCommentary, userCommentary],
+      selectedRef: teamCommentary,
+      dblResources: [INSTALLED_COMMENTARY],
+    });
+    await openSelector(/HBKENG/);
+
+    expect(
+      within(screen.getByRole('group', { name: TEAM_RESOURCES })).getByRole('menuitemcheckbox', {
+        name: /HBKENG/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('group', { name: USER_RESOURCES })).getByRole('menuitemcheckbox', {
+        name: /TNN/,
+      }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel resource picker', () => {
+  it('opens the picker from the empty-state prompt', () => {
+    // The panel's own state machine hides this button behind `readiness`, so nothing else in this
+    // suite reaches it. Without a case here the picker prop is unverified: stubbing it to a no-op
+    // leaves every other test green, which makes it the one prop a refactor can quietly break.
+    const onShowResourcePicker = vi.fn();
+    renderPanel({ readiness: 'empty', onShowResourcePicker });
+
+    fireEvent.click(screen.getByRole('button', { name: PICK_BIBLE_TEXTS }));
+
+    expect(onShowResourcePicker).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ResourceTextPanel pick in flight', () => {
+  it('reports progress during a first pick, when nothing is configured yet', () => {
+    // A first pick cannot show up in the reference list until `selectTextConnection` has installed
+    // the resource and the write has propagated back, so readiness is still `empty` for the whole
+    // download. If the readiness branch were tested first the reader would sit on "no texts
+    // selected" — with an enabled pick button and no progress — until it finished.
+    renderPanel({
+      readiness: 'empty',
+      filteredResources: [],
+      selectedRef: undefined,
+      isSelecting: true,
+    });
+
+    expect(screen.getByText(SELECTING)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PICK_BIBLE_TEXTS })).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel install failure', () => {
+  it('hints at the connection when an install was rejected while offline', () => {
+    renderPanel({ installFailed: true, installFailureReason: 'installRejected', isOnline: false });
+
+    expect(
+      screen.getByText(STRINGS['%webView_resourcePanel_installFailedOffline%']),
+    ).toBeInTheDocument();
+  });
+
+  it('says the resource is installed, with no connection hint, when the catalog has not caught up', () => {
+    // The download worked, so "couldn't be installed, check your connection" would be wrong twice.
+    renderPanel({
+      installFailed: true,
+      installFailureReason: 'listNotConverging',
+      isOnline: false,
+    });
+
+    expect(
+      screen.getByText(STRINGS['%webView_resourcePanel_installedButUnavailable%']),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't be installed/)).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * Resources never open in Simple mode's middle column, so with no project open a resource opened
+ * from Home still shows here. With no project there is no list to download into.
+ */
+describe('ResourceTextPanel with no project open', () => {
+  it('shows a resource it was asked to show', () => {
+    renderPanel({ hasProject: false });
+
+    expectEditorShowing();
+    expect(screen.queryByText('No project.')).toBeNull();
+  });
+
+  it('asks for a project when it has nothing to show', () => {
+    renderPanel({ hasProject: false, selectedRef: undefined });
+
+    expect(screen.queryByText('No project.')).not.toBeNull();
+  });
+
+  it('offers no download, which needs a project to add to', async () => {
+    renderPanel({ hasProject: false });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /WEB/ }));
+    await screen.findByRole('menuitemcheckbox', { name: /WEB/ });
+
+    expect(screen.queryByRole('menuitem', { name: 'Download resources…' })).toBeNull();
+  });
+
+  it('offers the download with a project open', async () => {
+    renderPanel();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /WEB/ }));
+
+    expect(
+      await screen.findByRole('menuitem', { name: 'Download resources…' }),
+    ).toBeInTheDocument();
+  });
+});
+
+/** Whether `later` comes after `earlier` in document order */
+function comesAfter(earlier: Node, later: Node) {
+  // compareDocumentPosition reports its answer as bit flags
+  // eslint-disable-next-line no-bitwise
+  return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+describe('ResourceTextPanel copyright notice', () => {
+  const NOTICE = <div data-testid="copyright-notice">Notice</div>;
+
+  it('shows the notice between the resource selector and the text', () => {
+    renderPanel({ copyrightNotice: NOTICE });
+
+    const notice = screen.getByTestId('copyright-notice');
+    const selector = screen.getByRole('button', { name: /WEB/ });
+    const editor = screen.getByTestId(RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID);
+    expect(comesAfter(selector, notice)).toBe(true);
+    expect(comesAfter(notice, editor)).toBe(true);
+  });
+
+  it('keeps the notice on screen when the resource lacks the book', () => {
+    renderPanel({ copyrightNotice: NOTICE, usjPossiblyError: missingBookError('MAT') });
+
+    expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
+    expect(screen.getByTestId('copyright-notice')).toBeInTheDocument();
+  });
+});

@@ -1,0 +1,57 @@
+/* Hand-authored overrides for the commentary marker stylesheets — NOT generated.
+ *
+ * Stopgap (PT-3086): the editor does not yet wire up navigation for commentary
+ * link markers, so `\jmp` (glossary / internal section jumps) and `\xtSee` /
+ * `\xtSeeAlso` (cross-reference "See …" links) render as clickable-looking links
+ * that do nothing when clicked. Until real jump navigation lands, render them as
+ * plain prose so users are not misled into clicking dead links.
+ *
+ * This file is imported `?inline` and appended AFTER the generated commentary
+ * stylesheet in use-commentary-marker-styles.hook.ts, and keeping it here (rather
+ * than editing the generated `hbkeng/tnn/tnd.scss`) means it survives every
+ * regeneration of those files by the CSS→SCSS pipeline.
+ *
+ * Scope: matches the `.formatted-font .usfm_<marker>` selectors the generated
+ * sheets emit for these markers, so the link appearance (color, weight, style,
+ * underline) is neutralized to look like the surrounding body text.
+ *
+ * The doubled marker class (e.g. `.usfm_jmp.usfm_jmp`) raises specificity to
+ * (0,3,0) so this neutralizer wins over BOTH the generated sheet's own rule and
+ * the editor's base `_usj-nodes.scss` link rule — `.formatted-font .usfm_jmp {
+ * color: #003380; text-decoration: underline }` at (0,2,0) — regardless of the
+ * source order in which the base sheet and this injected stylesheet load. Without
+ * the bump it would win only by source order, which is fragile.
+ */
+.formatted-font .usfm_jmp.usfm_jmp,
+.formatted-font .usfm_xtSee.usfm_xtSee,
+.formatted-font .usfm_xtSeeAlso.usfm_xtSeeAlso {
+  color: inherit;
+  font-style: normal;
+  font-weight: normal;
+  text-decoration: none;
+  cursor: default;
+}
+
+/* Handbook tables render boxed like PT9 Desktop. In PT9 the boxed section
+   headings came from the generic `td` border (PT9's per-marker CSS carries no
+   border), so we re-scope that exact border here. The base `_usj-nodes.scss`
+   now carries the same PT9-parity box for EVERY surface that loads it (see its
+   own table-box comment), so this copy — injected only in HBKENG/TNN/TND
+   iframes — simply re-asserts those values there. `th` is included because the
+   editor now emits real <th> for th* markers (PT9's td-only rule predates
+   that). Applies to every handbook table cell: a single-cell section heading
+   becomes one box; a multi-column table becomes a grid of boxes. .markercell
+   keeps its PT9 borderless exception. */
+.usfm table {
+  border-collapse: collapse;
+}
+.usfm td,
+.usfm th {
+  border: 1px solid #000000;
+  page-break-inside: avoid;
+  padding-right: 0.28em;
+  padding-left: 0.28em;
+}
+.usfm td.markercell {
+  border-style: none;
+}

@@ -10,9 +10,11 @@
     ".erb/configs",
     ".erb/mocks",
     ".erb/scripts",
-    ".storybook/*.ts",
+    ".storybook/**/*.ts",
+    ".storybook/**/*.tsx",
     "src",
     "assets",
-    "e2e-tests"
+    "e2e-tests",
+    "tools/pt9-css-converter"
   ]
 }

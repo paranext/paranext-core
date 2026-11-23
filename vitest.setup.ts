@@ -1,0 +1,204 @@
+// Vitest global setup runs once per worker before any test in the file executes.
+
+import { vi } from 'vitest';
+// Import @testing-library/react first so its module-level configure() call runs before ours.
+// Importing it here ensures our subsequent configure() call in this file wins — module-level code
+// only runs once (on first import); any later `import ... from '@testing-library/react'` in a test
+// file is just a cache lookup and won't re-run the configure() override.
+import { act } from '@testing-library/react';
+import { configure } from '@testing-library/dom';
+
+// ─── ICU warm-up ─────────────────────────────────────────────────────────────
+//
+// The first construction of each Intl formatter type in a worker process loads that formatter's
+// ICU dataset. Measured cold first-use cost is ~8-20ms per type (Intl.DisplayNames with
+// type:'language' is the worst at ~20ms) versus ~0.03ms once warm - a ~500x difference. On a cold,
+// memory-pressured CI worker that first-touch initialization can spike into the seconds, and when it
+// happens to run inside a test's timeout window it flakes that test.
+//
+// This is exactly what made src/renderer/hooks/use-project-picker-data.hook.test.ts time out only on
+// its "first open Scripture Editor web view" case: that was the sole test whose code path constructs
+// Intl.DisplayNames (via resolveLanguage), so it alone paid the one-time init inside its timed
+// window while every sibling ran warm.
+//
+// Paying the init here - once per worker, before any timed test - moves the cost out of every test
+// window and removes the whole class of flake. We warm exactly the Intl constructors the codebase
+// uses. Each statement is a construct-and-use call so the formatter's dataset actually loads.
+const locale = typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en';
+
+new Intl.DisplayNames([locale], { type: 'language' }).of('en');
+new Intl.NumberFormat(locale).format(1);
+new Intl.DateTimeFormat(locale).format(0);
+new Intl.Collator(locale).compare('a', 'b');
+new Intl.RelativeTimeFormat(locale).format(1, 'day');
+new Intl.ListFormat(locale).format(['a', 'b']);
+
+// ─── asyncWrapper patch for Vitest fake timers + userEvent ───────────────────
+//
+// @testing-library/react sets asyncWrapper to an implementation that drains the microtask queue by
+// creating a setTimeout(resolve, 0) and then calling jest.advanceTimersByTime(0) to fire it. That
+// jest.* call only works when `jest` is available as a global — but Vitest only injects `jest` as a
+// global in *test* files (src/), not in node_modules code. So @testing-library/react's asyncWrapper
+// cannot detect Vitest fake timers and never fires its own drain timer, causing every
+// `await user.type(...)` or `await user.click(...)` call to hang when vi.useFakeTimers() is active.
+//
+// The fix: after @testing-library/react has configured asyncWrapper (it ran at module-load time when
+// the `configure` import resolved), replace it with a version that uses vi.advanceTimersByTime(0)
+// directly. The `vi` imported above refers to the same Vitest instance that test files use, so it
+// correctly controls the current test's fake clock.
+//
+// When fake timers are NOT active, @sinonjs/fake-timers does NOT set a `.clock` property on
+// `setTimeout`, so the fake-timer branch is skipped. We still wrap the drain in act() so
+// React flushes any pending state updates (e.g., from resolved Promises in usePromise hooks)
+// that were queued while cb() ran — a bare Promise.resolve() only drains one microtask level
+// and misses multi-await async chains (e.g., two sequential sendCommand() awaits in a hook).
+configure({
+  // Testing-library's own budget, which is separate from vitest's `testTimeout` and is NOT raised by
+  // it: a bare `waitFor` gives up after this long and fails the test while vitest is still content.
+  // Timing-sensitive component tests here spend it waiting for React state to settle, and on a
+  // contended windows-latest runner that wait crosses 1 s while the assertion is sound — the same
+  // class as the per-test budget, one level down. Five seconds absorbs the contention and still
+  // bounds a wait that is never going to succeed.
+  asyncUtilTimeout: 5000,
+  asyncWrapper: async (cb) => {
+    // Temporarily clear the React act environment flag so that `waitFor` polling intervals don't
+    // produce "not wrapped in act" warnings (mirrors the intent of @testing-library/react's original
+    // asyncWrapper, which set IS_REACT_ACT_ENVIRONMENT = false before calling cb()).
+    const prevActEnv = Reflect.get(globalThis, 'IS_REACT_ACT_ENVIRONMENT');
+    Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', false);
+    try {
+      const result = await cb();
+      // Drain pending work after cb() completes:
+      //
+      // When fake timers are active (@sinonjs marks `setTimeout` with a `.clock` property),
+      // we need two things:
+      //   1. Fire any 0-ms fake timers that userEvent's internal wait() scheduled.
+      //   2. Flush any pending React state updates triggered by async operations in the
+      //      handler (e.g., a rejected Promise in an async onClick handler). React
+      //      schedules these via the real `setImmediate` (captured before fake timers
+      //      replaced the global), so they won't fire from vi.advanceTimersByTime alone.
+      //      Wrapping in act() flushes React's internal work queue directly.
+      //
+      // @sinonjs/fake-timers marks the fake `setTimeout` with a `.clock` property when installed.
+      if (Object.prototype.hasOwnProperty.call(setTimeout, 'clock')) {
+        // @testing-library/react's built-in asyncWrapper calls jest.advanceTimersByTime(0),
+        // which silently no-ops in Vitest (jest is undefined in node_modules). Override it
+        // to use vi.advanceTimersByTime(0) so waitFor's polling ticks fire when fake timers
+        // are active.
+        await act(async () => {
+          await Promise.resolve(); // drain JS microtask queue (Promise continuations)
+          vi.advanceTimersByTime(0);
+        });
+      } else {
+        await act(async () => {
+          await Promise.resolve(); // real timers: flush pending microtasks inside act()
+        });
+      }
+      return result;
+    } finally {
+      Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', prevActEnv);
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Suppress jsdom's "Could not parse CSS stylesheet" errors.
+//
+// jsdom's CSS engine (rrweb-cssom) cannot parse Tailwind v4's modern syntax
+// (@layer, @property, @supports with oklch()/color-mix(), ...). Whenever a
+// component under test injects a <style> containing the Tailwind stylesheet
+// (e.g. the experimental scripture/footnote editor), jsdom fails to parse it
+// and reports a jsdomError whose `detail` property is the ENTIRE ~192 KB
+// stylesheet. jsdom's VirtualConsole forwards that to console.error, so every
+// such render dumps ~192 KB to the test output - roughly 50x per full run
+// (~9.6 MB, ~89% of the CI log).
+//
+// Beyond the log bloat, the sheer volume of these giant writes intermittently
+// deadlocked the vitest worker->main->runner output pipeline on the Linux CI
+// runner, hanging the "npm unit tests" step for hours (it froze mid-write of
+// the ~32nd dump every time). Windows and macOS drained the same output fine.
+//
+// jsdom cannot parse this CSS regardless, and no test relies on its computed
+// styles, so we drop these specific errors at the source - in the worker,
+// before vitest formats and serializes them - which removes both the log spam
+// and the writes that caused the hang. All other console.error output passes
+// through untouched. jsdom's VirtualConsole does a live property lookup on the
+// console object at emit time, so reassigning console.error here is honored.
+const CSS_PARSE_ERROR_MESSAGE = 'Could not parse CSS stylesheet';
+function isJsdomCssParseError(arg: unknown): boolean {
+  if (arg instanceof Error) {
+    if (arg.message.includes(CSS_PARSE_ERROR_MESSAGE)) return true;
+    return 'type' in arg && arg.type === 'css parsing';
+  }
+  return typeof arg === 'string' && arg.includes(CSS_PARSE_ERROR_MESSAGE);
+}
+// The no-console rule guards against stray logging in production code. This is a test-only
+// setup file that must wrap the global console.error to drop jsdom's CSS-parse noise (see the
+// block comment above), so the rule does not apply to the two references below.
+/* eslint-disable no-console */
+const originalConsoleError = console.error.bind(console);
+console.error = (...args: unknown[]) => {
+  if (args.some(isJsdomCssParseError)) return;
+  originalConsoleError(...args);
+};
+/* eslint-enable no-console */
+
+// ─── window.matchMedia stub ──────────────────────────────────────────────────
+//
+// jsdom does not implement window.matchMedia, and several modules call it at module-init time
+// (theme.service-host.ts does, reached via papi-frontend.service.ts and the dock-layout import
+// chain). Any test file that transitively imports one of those throws on import without a stub.
+//
+// Setup files run before the test file's own imports are evaluated, so defining it here covers
+// every jsdom test in the repo — which is what this file is for. It stays writable so a test that
+// needs real media-query behaviour can still redefine it.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: undefined,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+// ─── Radix layout-measurement shims ──────────────────────────────────────────
+//
+// Radix primitives (dropdown menu, context menu, menubar, select, popover) measure their content on
+// mount. jsdom ships neither these Element methods nor (see the note below) a ResizeObserver, so any
+// test that opens one of these overlays throws or hangs waiting on layout it can never produce.
+// Guarded on `Element` itself, not just its members: this file is shared by the repo's
+// node-environment test projects, where `Element` does not exist at all and `typeof
+// Element.prototype.x` would throw before the `typeof` could help.
+if (typeof Element !== 'undefined') {
+  if (typeof Element.prototype.hasPointerCapture !== 'function') {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => {};
+  }
+}
+
+// `ResizeObserver` is deliberately NOT shimmed here — tests opt in with `installNoopResizeObserver()`.
+// Why: lib/platform-bible-react/src/test-utils/resize-observer.util.ts.
+
+// ─── NOTICES_POLICY_OVERLAY ──────────────────────────────────────────────────
+//
+// `loadPolicy` defaults its overlay from this variable at call time, so several notices suites that
+// read "the shipped policy" as DATA would read a merged one instead — and that variable is exported
+// in exactly one place: the shell of a downstream-product developer, who is also the person most
+// likely to run this suite. Pointed at a missing file it fails those files at COLLECTION; pointed at
+// a real overlay it is worse, because the inclusion-based assertions pass against determinations the
+// committed policy does not carry.
+//
+// Deleted here rather than guarded at each call site: the suites' subject is the committed file, and
+// `degradation.test.ts` and `verify-shipping-set.test.ts` spawn the generator with `{...process.env}`,
+// so only removing it from this process covers the children too. A test that wants an overlay passes
+// the path explicitly.
+delete process.env.NOTICES_POLICY_OVERLAY;

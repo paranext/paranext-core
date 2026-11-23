@@ -1,9 +1,47 @@
 import { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
+import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { ProjectInterfaces } from 'papi-shared-types';
 import { escapeStringRegexp, getErrorMessage } from 'platform-bible-utils';
+
+/**
+ * Envelope that {@link IProjectDataProviderEngineFactory.createProjectDataProviderEngine} may return
+ * instead of the engine directly, carrying per-PDP network object metadata alongside the engine.
+ *
+ * WARNING: `projectDataProviderEngine` is a reserved discriminating property — do not expose a
+ * property by that name on a raw engine, or the platform will treat the engine as an envelope.
+ */
+export interface ProjectDataProviderEngineEnvelope<
+  SupportedProjectInterfaces extends ProjectInterfaces[],
+> {
+  projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>;
+  attributes?: { [property: string]: unknown };
+  documentation?: NetworkObjectDocumentation;
+}
+
+/**
+ * Type guard: whether a `createProjectDataProviderEngine` return value is a
+ * {@link ProjectDataProviderEngineEnvelope} rather than a raw engine. Guards against `typeof null
+ * === 'object'` and against a raw engine that merely exposes a `projectDataProviderEngine` property
+ * of a non-object type. Written as a user-defined type guard so the value check doesn't defeat the
+ * narrowing at call sites.
+ */
+export function isProjectDataProviderEngineEnvelope<
+  SupportedProjectInterfaces extends ProjectInterfaces[],
+>(
+  value:
+    | IProjectDataProviderEngine<SupportedProjectInterfaces>
+    | ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>,
+): value is ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces> {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'projectDataProviderEngine' in value &&
+    typeof value.projectDataProviderEngine === 'object'
+  );
+}
 
 /**
  * A factory object registered with the papi that creates a Project Data Provider Engine for each
@@ -41,17 +79,25 @@ export interface IProjectDataProviderEngineFactory<
     layeringFilters?: ProjectMetadataFilterOptions,
   ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
   /**
-   * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
-   * {@link IProjectDataProvider} for the project. This project will have the same
-   * `projectInterface`s as this Project Data Provider Engine Factory
+   * Create an {@link IProjectDataProviderEngine} for the project requested so the papi can create an
+   * {@link IProjectDataProvider} for the project.
    *
-   * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-   * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
-   *   in
+   * The return value may be either the engine directly, or an envelope containing the engine and
+   * PDP network metadata (per-PDP attributes and documentation).
+   *
+   * The platform overwrites `projectId` and `projectInterfaces` in any supplied per-PDP attributes
+   * — those fields are always the platform-canonical values.
+   *
+   * @param projectId Id of the project for which to create an {@link IProjectDataProviderEngine}
+   * @returns Either the {@link IProjectDataProviderEngine} or an envelope containing the engine and
+   *   per-PDP network object metadata (attributes and documentation).
    */
   createProjectDataProviderEngine(
     projectId: string,
-  ): Promise<IProjectDataProviderEngine<SupportedProjectInterfaces>>;
+  ): Promise<
+    | IProjectDataProviderEngine<SupportedProjectInterfaces>
+    | ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>
+  >;
 }
 
 /**

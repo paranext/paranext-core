@@ -1,9 +1,891 @@
+import type { Scope } from 'platform-bible-react';
 import {
+  charAt,
   escapeStringRegexp,
+  formatReplacementString,
+  isPlatformError,
   isSelectableInvisibleCharOrWhiteSpace,
+  LanguageStrings,
+  LocalizeKey,
+  normalizeProjectId,
+  PlatformError,
+  ScrollGroupId,
+  SEARCH_WHITESPACE_GROUP_PREFIX,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
+  substring,
 } from 'platform-bible-utils';
-import { FindOptions } from 'platform-scripture';
+import {
+  FindJobStatus,
+  FindJobStatusReport,
+  FindOptions,
+  FindResult,
+  ReplaceOutcome,
+} from 'platform-scripture';
+import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
+import { isExtraMaterialBookId } from './extra-material.utils';
+import type { LocalizedBookData } from './find-types';
+import type { MarkerReplaceAction } from './structure-protection.util';
+import { transformUsfmText } from './usfm-tokens.util';
+
+/** Maps invisible/whitespace code points to visible stand-in symbols */
+const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
+  '\u0020': '·', // regular space → middle dot
+  '\u00a0': '[Nbsp]', // non-breaking space — distinguished from regular space
+  '\u200b': '‹ZW›', // zero-width space
+  '\u200c': '‹ZWN›', // zero-width non-joiner
+  '\u200d': '‹ZWJ›', // zero-width joiner
+  '\u200e': '‹LRM›', // left-to-right mark
+  '\u200f': '‹RLM›', // right-to-left mark
+  '\u2060': '‹WJ›', // word joiner
+  '\u202f': '·', // narrow no-break space
+  '\u2009': '·', // thin space
+  '\u200a': '·', // hair space
+  '\u2002': '·', // en space
+  '\u2003': '·', // em space
+  '\u3000': '·', // ideographic space
+  // ~ is intentionally omitted here; it is added dynamically when allowInvisibleCharacters is false,
+  // because in that mode ~ represents NBSP in USFM and should render as [Nbsp]. When
+  // allowInvisibleCharacters is true, ~ is a literal tilde in the text and must not be substituted.
+};
+
+// The regex intentionally mixes regular spaces and Unicode zero-width/whitespace code points in one
+// character class. ESLint flags this as "misleading" because some of these code points (e.g.
+// \u200d ZERO WIDTH JOINER) are normally combiners that modify adjacent characters rather than
+// standing alone, so grouping them with ordinary characters in `[...]` can look unintentional.
+// Here it is intentional: we want a single pass that catches every invisible/whitespace variant.
+/* eslint-disable no-misleading-character-class */
+/** Matches all handled invisible/whitespace chars, including the USFM tilde NBSP escape. */
+const INVISIBLE_CHAR_REGEX_WITH_TILDE =
+  /[ \u00a0\u200b\u200c\u200d\u200e\u200f\u2060\u202f\u2009\u200a\u2002\u2003\u3000~]/g;
+/** Matches all handled invisible/whitespace chars, excluding tilde (for AllowInvisibleChars=true). */
+const INVISIBLE_CHAR_REGEX_WITHOUT_TILDE =
+  /[ \u00a0\u200b\u200c\u200d\u200e\u200f\u2060\u202f\u2009\u200a\u2002\u2003\u3000]/g;
+/* eslint-enable no-misleading-character-class */
+
+/**
+ * Replaces invisible/whitespace characters with visible stand-in symbols. Regular visible
+ * characters pass through unchanged.
+ *
+ * @param text The text to process
+ * @param allowInvisibleCharacters Whether the project has AllowInvisibleChars enabled. When `false`
+ *   (the default), the USFM tilde `~` is treated as a NBSP escape and rendered as `[Nbsp]`. When
+ *   `true`, `~` is a literal tilde in the project's USFM and is left unchanged.
+ */
+export function renderWithInvisibleChars(
+  text: string,
+  allowInvisibleCharacters: boolean = false,
+): string {
+  if (allowInvisibleCharacters) {
+    return text.replace(
+      INVISIBLE_CHAR_REGEX_WITHOUT_TILDE,
+      (ch) => INVISIBLE_CHAR_SYMBOLS[ch] ?? ch,
+    );
+  }
+  // In legacy mode ~ represents NBSP — render it the same as U+00A0
+  return text.replace(INVISIBLE_CHAR_REGEX_WITH_TILDE, (ch) =>
+    ch === '~' ? '[Nbsp]' : (INVISIBLE_CHAR_SYMBOLS[ch] ?? ch),
+  );
+}
+
+/**
+ * Replaces trailing spaces with non-breaking spaces so they receive background-color and
+ * text-decoration styling inside the highlighted find span. Since `\u00a0` is in
+ * {@link INVISIBLE_CHAR_SYMBOLS}, `renderWithInvisibleChars` will render it as `[Nbsp]` when
+ * `showInvisible` is enabled. Note: trailing spaces that were originally U+0020 will appear as
+ * `[Nbsp]` rather than `·` due to this substitution, which is acceptable since the key information
+ * (the match ends in whitespace) is still conveyed.
+ */
+export function preserveTrailingSpaces(text: string): string {
+  return text.replace(/ +$/, (spaces) => '\u00a0'.repeat(spaces.length));
+}
+
+/**
+ * Applies preserve-case transformation to the replacement text based on the casing of the matched
+ * text:
+ *
+ * - ALL CAPS match → ALL CAPS replacement
+ * - Title Case match (first letter capital) → Title Case replacement
+ * - Otherwise → replacement as-is
+ *
+ * Only the replacement's text changes case. Its markers, verse and chapter numbers, and attributes
+ * are left as typed, since upper-casing `\v` would write a marker that does not exist.
+ */
+export function applyPreserveCase(matchedText: string, replacementText: string): string {
+  if (!replacementText || !matchedText) return replacementText;
+  if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
+    return transformUsfmText(replacementText, (text) => text.toUpperCase());
+  }
+  // By character, not UTF-16 code unit: a cased letter outside the Basic Multilingual Plane, such
+  // as Adlam's, is two code units, and neither half has a case of its own.
+  const firstChar = charAt(matchedText, 0);
+  if (firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase()) {
+    let isFirstText = true;
+    return transformUsfmText(replacementText, (text) => {
+      if (!isFirstText) return text;
+      isFirstText = false;
+      return charAt(text, 0).toUpperCase() + substring(text, 1);
+    });
+  }
+  return replacementText;
+}
+
+/**
+ * The USFM that replacing `result` writes: the replace term, after any preserve-case change. The
+ * marker decision and the write must both use this, or the user could agree to one text and get
+ * another.
+ */
+export function getUsfmToInsert(
+  result: Pick<FindResult, 'text'>,
+  replaceTerm: string,
+  preserveCase: boolean,
+): string {
+  return preserveCase ? applyPreserveCase(result.text ?? '', replaceTerm) : replaceTerm;
+}
+
+/**
+ * Builds the toast Replace All shows when it finishes, given how many results it replaced and how
+ * many it skipped because replacing them would have deleted a marker.
+ *
+ * There is one whole-sentence template per outcome rather than a replaced-clause and a
+ * skipped-clause joined with a space. A translation has to be free to punctuate between the two
+ * clauses, reorder them, or merge them, and each count needs its own singular form — one skipped
+ * result is the ordinary case, and "Skipped 1 results" is what a shared plural template produces.
+ *
+ * `changedCount` is how many results were not written because their text changed after the search.
+ * When it is nonzero the message reports "N of M" with M covering all three counts; M is at least 2
+ * there, so "of 1 results" cannot occur.
+ */
+export function buildReplacedAllMessage(
+  localizedStrings: LanguageStrings,
+  replacedCount: number,
+  skippedCount: number,
+  changedCount = 0,
+): string {
+  if (changedCount > 0) {
+    if (replacedCount === 0) {
+      return skippedCount === 0
+        ? localizedStrings['%webView_find_replace_textChangedAllResults%']
+        : localizedStrings['%webView_find_replace_textChangedOrMarkerAllResults%'];
+    }
+    return formatReplacementString(
+      skippedCount === 0
+        ? localizedStrings['%webView_find_replacedNOfMResultsTextChanged%']
+        : localizedStrings['%webView_find_replacedNOfMResultsTextChangedOrMarker%'],
+      {
+        replacedCount: replacedCount.toString(),
+        totalCount: (replacedCount + skippedCount + changedCount).toString(),
+      },
+    );
+  }
+  if (skippedCount === 0) {
+    return replacedCount === 1
+      ? localizedStrings['%webView_find_replacedOneOccurrence%']
+      : formatReplacementString(localizedStrings['%webView_find_replacedNOccurrences%'], {
+          count: replacedCount.toString(),
+        });
+  }
+  if (replacedCount === 1) {
+    return skippedCount === 1
+      ? localizedStrings['%webView_find_replacedOneOccurrenceSkippedOneResult%']
+      : formatReplacementString(
+          localizedStrings['%webView_find_replacedOneOccurrenceSkippedNResults%'],
+          { skippedCount: skippedCount.toString() },
+        );
+  }
+  return skippedCount === 1
+    ? formatReplacementString(
+        localizedStrings['%webView_find_replacedNOccurrencesSkippedOneResult%'],
+        { replacedCount: replacedCount.toString() },
+      )
+    : formatReplacementString(
+        localizedStrings['%webView_find_replacedNOccurrencesSkippedNResults%'],
+        { replacedCount: replacedCount.toString(), skippedCount: skippedCount.toString() },
+      );
+}
+
+/** The reference of a result as Find writes it for the user: `GEN 1:3`. */
+export function formatResultReference(
+  result: Pick<FindResult, 'start'>,
+  bookName = result.start.verseRef.book,
+): string {
+  const { chapterNum, verse, verseNum } = result.start.verseRef;
+  return `${bookName} ${chapterNum}:${verse || verseNum}`;
+}
+
+/**
+ * The book of a result as a result card names it: the localized name, else the localized ID, else
+ * the book ID.
+ */
+export function getResultBookName(
+  result: Pick<FindResult, 'start'>,
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>,
+): string {
+  const { book } = result.start.verseRef;
+  const bookData = localizedBookData.get(book);
+  return bookData?.localizedName ?? bookData?.localizedId ?? book;
+}
+
+/** The message for each reason a single Replace skips a match. */
+export const SKIPPED_MATCH_MESSAGE_KEYS: Record<
+  Exclude<MarkerReplaceAction, 'replace' | 'confirm'>,
+  LocalizeKey
+> = {
+  chapterMarker: '%webView_find_replace_skippedChapterMarker%',
+  oneEndedMarker: '%webView_find_replace_skippedOneEndedMarker%',
+  structureProtected: '%webView_find_replace_skippedStructureProtected%',
+};
+
+/**
+ * Builds the message telling the user that a match Replace may not touch is being skipped. The
+ * reference names the book as the result card does.
+ */
+export function buildSkippedMatchMessage(
+  action: keyof typeof SKIPPED_MATCH_MESSAGE_KEYS,
+  result: Pick<FindResult, 'start' | 'text'>,
+  localizedStrings: LanguageStrings,
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>,
+): string {
+  return formatReplacementString(localizedStrings[SKIPPED_MATCH_MESSAGE_KEYS[action]], {
+    reference: formatResultReference(result, getResultBookName(result, localizedBookData)),
+    text: result.text,
+  });
+}
+
+/**
+ * Collects the results `replace()` declined to write because their text changed after the search.
+ * `outcomes[i]` belongs to `groups[i]`, and each changed index addresses that group's `results`,
+ * which are in the same order as the ranges sent.
+ */
+export function getChangedResults<T>(
+  groups: Array<{ results: T[] }>,
+  outcomes: ReplaceOutcome[],
+): Set<T> {
+  const changed = new Set<T>();
+  outcomes.forEach((outcome, groupIndex) => {
+    outcome.changedIndexes.forEach((changedIndex) => {
+      const skipped = groups[groupIndex]?.results[changedIndex];
+      if (skipped !== undefined) changed.add(skipped);
+    });
+  });
+  return changed;
+}
+
+/**
+ * Narrows the snapshots Replace All took before writing to only the books whose `replace()` call
+ * actually committed, given the outcomes in the order the calls were issued.
+ *
+ * Replace All issues one `replace()` per book and settles them all, so a partial failure leaves
+ * some books written and some untouched. `replace()` is all-or-nothing per book, so a book whose
+ * call rejected still holds exactly what it held before — rolling it back would write a snapshot
+ * over whatever changed in it since, and the likeliest non-sentinel rejection is the PDP exhausting
+ * its cache-invalidation retries, which is precisely the case where someone else was editing.
+ *
+ * The written books come from the outcomes, not from the snapshots, so a book that wrote but whose
+ * snapshot could not be read is reported in `writtenBookIdsWithoutSnapshot` rather than dropped:
+ * nothing can roll it back, and the caller has to tell the user it still holds its replacements.
+ *
+ * @param rangeCountsInReplaceOrder How many ranges each call sent, in the order the calls were
+ *   issued. When given, a fulfilled book whose every range came back in
+ *   {@link ReplaceOutcome.changedIndexes} counts as unwritten too: it was skipped whole, so it still
+ *   holds whatever someone else put there. When omitted, every fulfilled book counts as written.
+ */
+export function selectWrittenBookSnapshots(
+  bookSnapshots: Map<string, string>,
+  bookIdsInReplaceOrder: string[],
+  replaceOutcomes: PromiseSettledResult<ReplaceOutcome | undefined>[],
+  rangeCountsInReplaceOrder?: number[],
+): { writtenBookSnapshots: Map<string, string>; writtenBookIdsWithoutSnapshot: string[] } {
+  const writtenBookSnapshots = new Map<string, string>();
+  const writtenBookIdsWithoutSnapshot: string[] = [];
+  bookIdsInReplaceOrder.forEach((bookId, outcomeIndex) => {
+    const outcome = replaceOutcomes[outcomeIndex];
+    if (outcome?.status !== 'fulfilled') return;
+    const rangeCount = rangeCountsInReplaceOrder?.[outcomeIndex];
+    if (rangeCount !== undefined && (outcome.value?.changedIndexes.length ?? 0) >= rangeCount)
+      return;
+    const snapshot = bookSnapshots.get(bookId);
+    if (snapshot === undefined) writtenBookIdsWithoutSnapshot.push(bookId);
+    else writtenBookSnapshots.set(bookId, snapshot);
+  });
+  return { writtenBookSnapshots, writtenBookIdsWithoutSnapshot };
+}
+
+/**
+ * Whether Replace All has to search again once its cancel window closes. A revert puts back every
+ * book Replace All wrote, so after a successful one the list is still valid — unless some results
+ * were skipped because their text changed after the search: those already point at text that has
+ * moved, which no revert undoes, so the list is stale either way.
+ */
+export function shouldSearchAgainAfterReplaceAll({
+  isCancelled,
+  isRevertSuccessful,
+  changedCount,
+}: {
+  isCancelled: boolean;
+  isRevertSuccessful: boolean;
+  changedCount: number;
+}): boolean {
+  return !(isCancelled && isRevertSuccessful) || changedCount > 0;
+}
+
+/**
+ * How often the find-job poll loop checks for an update. Exported so the give-up window below is
+ * computed from (and can't silently drift from) the actual poll cadence.
+ */
+export const POLL_INTERVAL_MS = 100;
+
+/**
+ * How long to tolerate a stalled find-job poll (the PDP/connection blipping and returning no
+ * update) or a search that can't start because the data provider isn't ready, before giving up and
+ * surfacing an error. Expressed as wall-clock time — not a raw retry count — so it keeps meaning
+ * the same thing if `POLL_INTERVAL_MS` ever changes, and so it's long enough to survive a slow
+ * backend call (a large project, a Send/Receive in progress) without a false failure.
+ */
+export const GIVE_UP_AFTER_MS = 5000;
+
+/** How many consecutive poll misses {@link GIVE_UP_AFTER_MS} allows before giving up. */
+export const MAX_CONSECUTIVE_POLL_MISSES = Math.ceil(GIVE_UP_AFTER_MS / POLL_INTERVAL_MS);
+
+/**
+ * Decides whether the find-job poll loop should keep retrying after a poll comes back with no
+ * update, given how many consecutive misses have already happened. A single miss is treated as a
+ * transient blip and retried; only a sustained run of misses (see {@link GIVE_UP_AFTER_MS}) is
+ * treated as a real failure.
+ *
+ * @param consecutiveMisses The number of consecutive misses before this one.
+ * @returns The updated miss count, and whether it has now reached
+ *   {@link MAX_CONSECUTIVE_POLL_MISSES}.
+ */
+export function nextPollMissState(consecutiveMisses: number): {
+  consecutiveMisses: number;
+  hasExceededRetryLimit: boolean;
+} {
+  const nextConsecutiveMisses = consecutiveMisses + 1;
+  return {
+    consecutiveMisses: nextConsecutiveMisses,
+    hasExceededRetryLimit: nextConsecutiveMisses >= MAX_CONSECUTIVE_POLL_MISSES,
+  };
+}
+
+/** What a single find-job poll attempt found, and what the poll loop should do about it. */
+export type PollAttemptOutcome =
+  | { kind: 'noActiveJob' }
+  | { kind: 'update'; update: FindJobStatusReport }
+  | { kind: 'miss'; consecutiveMisses: number; hasExceededRetryLimit: boolean };
+
+/**
+ * Classifies a single find-job poll attempt, distinguishing "there is no job to poll for right now"
+ * from "there is an active job but the poll came back empty" — the exact distinction a prior
+ * version of the poll loop collapsed, which caused a false "search interrupted" error on every
+ * ordinary new search: `abandonFindJob` clears the active-job tracking synchronously, before its
+ * own PDP round-trip resolves, so the poll loop for the _previous_ search would see "no update"
+ * during that window and (wrongly) count it as a connection miss instead of recognizing there was
+ * simply no job left to ask about.
+ *
+ * @param params.hasActiveJob Whether the caller currently believes a find job is active.
+ * @param params.getUpdate Retrieves the latest job-status update; only called when `hasActiveJob`.
+ * @param params.consecutiveMisses The number of consecutive misses before this attempt.
+ */
+export async function classifyPollAttempt(params: {
+  hasActiveJob: boolean;
+  getUpdate: () => Promise<FindJobStatusReport | undefined>;
+  consecutiveMisses: number;
+}): Promise<PollAttemptOutcome> {
+  if (!params.hasActiveJob) return { kind: 'noActiveJob' };
+  const update = await params.getUpdate();
+  if (!update) return { kind: 'miss', ...nextPollMissState(params.consecutiveMisses) };
+  return { kind: 'update', update };
+}
+
+/**
+ * The scopes Find offers, in the order its scope picker lists them.
+ *
+ * The single list behind the picker's `availableScopes`, the disabled-explanation map, and
+ * {@link isFindQueryValid}'s rejection of everything else. `find.web-view.tsx`'s `findScope` can map
+ * exactly these three to a `FindScope` and throws on any other, so a scope that passed the gate
+ * without being here would fail during render rather than being refused as a query.
+ */
+export const FIND_AVAILABLE_SCOPES: Scope[] = ['chapter', 'book', 'selectedBooks'];
+
+/**
+ * Whether `scope` searches a book that Find cannot address — the `book` and `chapter` scopes
+ * resolve to the current scripture reference's book, and that book being extra material is what
+ * makes them unsearchable. Only those two scopes are gated: `selectedBooks` searches an explicit
+ * list, which {@link isFindQueryValid} checks for searchable books directly rather than through this
+ * rule, and `verse`/`selectedText` are not among {@link FIND_AVAILABLE_SCOPES}.
+ *
+ * Exported so the query gate ({@link isFindQueryValid}) and the results-area placeholder that
+ * explains it decide from one rule rather than two copies of it.
+ *
+ * TODO(PT-4414): Drop this rule once extra material can be opened and addressed.
+ */
+export function isScopeBlockedByExtraMaterial(scope: Scope, currentBookId: string): boolean {
+  if (scope !== 'book' && scope !== 'chapter') return false;
+  return isExtraMaterialBookId(currentBookId);
+}
+
+/**
+ * Whether the current search term + scope/filters combination would actually run a search: false
+ * for an empty term, false for a scope outside {@link FIND_AVAILABLE_SCOPES}, false for the
+ * `selectedBooks` scope with no SEARCHABLE book selected, and false for the `book`/`chapter` scopes
+ * while the current reference sits in extra material. Shared between `find.web-view.tsx` (the
+ * source of truth) and `find.stories.tsx`'s harness so the two can't silently diverge: a harness
+ * that hand-rolls the rule can pass a story while testing a different one.
+ *
+ * The extra-material rule (see {@link isScopeBlockedByExtraMaterial}) is the enforcement point for
+ * the `book`/`chapter` scopes, not merely a mirror of the disabled scope options in the UI. `scope`
+ * is persisted per web view and the current reference moves independently of it, so a user who
+ * chose `book` in a scripture book and then navigated into extra material never touches a disabled
+ * control on the way into this state.
+ */
+export function isFindQueryValid(params: {
+  searchTerm: string;
+  scope: Scope;
+  selectedBookIds: string[];
+  /** Book id of the current scripture reference — what the `book`/`chapter` scopes resolve to. */
+  currentBookId: string;
+}): boolean {
+  if (params.searchTerm.trim() === '') return false;
+  if (!FIND_AVAILABLE_SCOPES.includes(params.scope)) return false;
+  // Not "any book selected": a selection restored from a persisted tab is checked against the
+  // project's book list only once that list resolves, so until then it can still hold extra
+  // material. Asking whether anything searchable remains closes that window here, where the answer
+  // cannot arrive late.
+  if (params.scope === 'selectedBooks')
+    return params.selectedBookIds.some((bookId) => !isExtraMaterialBookId(bookId));
+  return !isScopeBlockedByExtraMaterial(params.scope, params.currentBookId);
+}
+
+/** The decision {@link gateStartSearch} makes for a given attempt to start a search. */
+export type StartSearchGate =
+  | { action: 'run' }
+  | { action: 'skip'; shouldRetryWhenPdpReady: boolean };
+
+/**
+ * Decides whether an attempt to start a find-job search should actually run, and — if not — whether
+ * it is worth automatically retrying once the data provider becomes available. Only a missing data
+ * provider is retryable: it is a temporary condition (mount-time race, or the provider dropping
+ * during a long idle period) that resolves on its own once the provider reconnects. An invalid
+ * query or a search already in flight are not retryable — retrying them would either loop forever
+ * (the query stays invalid until the user changes it) or duplicate work.
+ */
+export function gateStartSearch(params: {
+  isSearchQueryValid: boolean;
+  hasPdp: boolean;
+  isAlreadyStarting: boolean;
+}): StartSearchGate {
+  if (!params.isSearchQueryValid || params.isAlreadyStarting) {
+    return { action: 'skip', shouldRetryWhenPdpReady: false };
+  }
+  if (!params.hasPdp) {
+    return { action: 'skip', shouldRetryWhenPdpReady: true };
+  }
+  return { action: 'run' };
+}
+
+/**
+ * Whether the query becoming invalid should clear the results area and abandon the find job. Making
+ * the query invalid is a request to stop searching, but it is not one the {@link gateStartSearch}
+ * path can express: the search an invalid query would start is gated off, so nothing on that path
+ * ever stops the job.
+ *
+ * Requires something to actually clear so mounting with an empty box (the common first-open case)
+ * does not abandon a job that was never started.
+ */
+export function shouldClearResultsForInvalidQuery(params: {
+  isSearchQueryValid: boolean;
+  hasResults: boolean;
+  searchStatus: FindJobStatus | undefined;
+}): boolean {
+  if (params.isSearchQueryValid) return false;
+  return params.hasResults || params.searchStatus !== undefined;
+}
+
+/**
+ * Arms a single bounded wait: `onTimeout` fires once after `delayMs` unless `clear()` is called
+ * first. Used to bound how long a search can sit waiting for the find data provider before giving
+ * up — without this, a valid term with the provider never arriving would leave the pending/loading
+ * state showing forever with no error, the same class of silently-stuck-forever bug the poll loop's
+ * own give-up handling (see {@link nextPollMissState}) prevents one step later.
+ */
+export function armBoundedWait(onTimeout: () => void, delayMs: number): { clear: () => void } {
+  const timeoutId = setTimeout(onTimeout, delayMs);
+  return { clear: () => clearTimeout(timeoutId) };
+}
+
+/**
+ * Whether the Find panel should treat the given `platform.interfaceMode` value as "simple" — i.e.
+ * hide the find/replace toggle and stay in find mode. Replace is a power-mode-only capability, so
+ * this returns `false` ONLY when the mode is definitively `'power'`; a {@link PlatformError} (the
+ * setting is still loading or failed to read) or any non-`'power'` value fails safe to simple.
+ *
+ * @param interfaceMode The `platform.interfaceMode` value (or a PlatformError) from `useSetting`.
+ * @returns `true` when the replace toggle should be hidden (simple mode), `false` when it should be
+ *   shown (power mode).
+ */
+export function isSimpleInterfaceMode(interfaceMode: 'simple' | 'power' | PlatformError): boolean {
+  return isPlatformError(interfaceMode) || interfaceMode !== 'power';
+}
+
+/**
+ * A currently open scripture-editor tab, as tracked by `useOpenProjectTabs`.
+ *
+ * Derived from the hook's own type rather than restated, so the two cannot drift. The import is
+ * `import type`, which TypeScript erases entirely — so this module stays free of the runtime
+ * `@papi/frontend` import `use-open-project-tabs.ts` performs, and remains importable by the
+ * presentational component, its story, and this file's unit tests.
+ */
+export type OpenScrollGroupTab = OpenProjectTabWithWebView;
+
+/**
+ * Runs a web-view-controller call, containing BOTH ways a controller for a CLOSED editor tab fails.
+ *
+ * A controller is a network object: disposing it revokes its proxy. After that, even READING a
+ * method off it (`controller.runAnnotationAction`) throws `TypeError: Cannot perform 'get' on a
+ * proxy that has been revoked` — **synchronously**, before any promise exists. So the
+ * natural-looking `controller?.method(...).catch(() => {})` cannot contain it: `?.` only guards
+ * nullish, and `.catch` only sees rejections. The escaping TypeError crashed the whole Find web
+ * view whenever the selected project's editor tab closed while an annotation-cleanup ran against
+ * the disposed controller.
+ *
+ * Wrapping the call in a thunk lets this helper own the property read too, so the sync throw and
+ * the async rejection funnel into one place.
+ *
+ * @param call Thunk that reads the method off the controller and invokes it. May return `undefined`
+ *   when there is no controller to call.
+ * @param onError Optional handler for either failure mode. Omit to swallow silently (correct for
+ *   best-effort cleanup, where the editor is already gone and there is nothing to report).
+ */
+export function callControllerSafely(
+  call: () => Promise<unknown> | undefined,
+  onError?: (error: unknown) => void,
+): void {
+  try {
+    call()?.catch((error: unknown) => onError?.(error));
+  } catch (error) {
+    // Synchronous throw from a revoked proxy (see above) — the editor tab is gone, so there is
+    // nothing to act on beyond reporting it.
+    onError?.(error);
+  }
+}
+
+/** A `(projectId, scrollGroupId)` pair Find's project selector has selected. */
+export type SelectedProjectScrollGroup = {
+  projectId: string;
+  scrollGroupId: ScrollGroupId;
+};
+
+/**
+ * Whether selecting `newProjectId` moves Find to a DIFFERENT project — the decision that gates
+ * abandoning the running find job, clearing results, and re-running the search.
+ *
+ * Compared case-INSENSITIVELY on purpose. `useOpenProjectTabs` reports lowercased project ids while
+ * canonical ids are UPPERCASE, so the selection can legitimately be corrected from `web` to `WEB`
+ * for the very same project. Treating that casing-only correction as a switch would abandon the
+ * job, wipe the results the user is reading, and start a second identical search.
+ *
+ * @param newProjectId The project id being selected.
+ * @param currentProjectId The project Find currently operates on, or `undefined` before any initial
+ *   selection has been made.
+ * @returns `true` when this is a move to a different project (including the initial selection,
+ *   where there is no current project); `false` for the same project, whatever its casing.
+ */
+export function isDifferentProjectSelection(
+  newProjectId: string,
+  currentProjectId: string | undefined,
+): boolean {
+  if (!currentProjectId) return true;
+  return normalizeProjectId(newProjectId) !== normalizeProjectId(currentProjectId);
+}
+
+/**
+ * Narrows a persisted book selection to the books the currently selected project actually has.
+ *
+ * `selectedBookIds` is persisted per web view, so switching projects can leave it naming books the
+ * new project doesn't contain. The finder engine skips absent books gracefully, so this is not a
+ * crash — but with the `selectedBooks` scope the search would silently cover fewer books than the
+ * checkbox list shows.
+ *
+ * Pass `undefined` for `availableBookIds` while the project's book list is still being read, and
+ * the selection is returned untouched: pruning against a not-yet-known list would wipe the whole
+ * selection instead of narrowing it. An EMPTY array is a real answer — a project with no searchable
+ * books — and does empty the selection. The distinction matters because Find excludes extra
+ * material, so a project holding nothing else genuinely has nothing to search, and treating that as
+ * "not known yet" would leave a stale selection live.
+ *
+ * @param availableBookIds Book ids the selected project has, or `undefined` when not yet known.
+ * @param selectedBookIds The currently selected book ids.
+ * @returns The pruned ids, or the ORIGINAL `selectedBookIds` array reference when nothing needed
+ *   removing — so a caller such as `useFindBookScope`'s `useMemo` hands its consumers the same
+ *   array, and effects keyed on that identity do not re-fire.
+ */
+export function prunePresentBookIds(
+  availableBookIds: readonly string[] | undefined,
+  selectedBookIds: string[],
+): string[] {
+  if (!availableBookIds) return selectedBookIds;
+  const availableBookIdSet = new Set(availableBookIds);
+  const prunedBookIds = selectedBookIds.filter((bookId) => availableBookIdSet.has(bookId));
+  return prunedBookIds.length === selectedBookIds.length ? selectedBookIds : prunedBookIds;
+}
+
+/**
+ * Resolves which `(project, scroll group)` pair Find's project selector should have selected, given
+ * the currently open scripture-editor tabs. Restricting the picker to only open projects means the
+ * selection can go stale the moment a tab closes, so this is re-run whenever the set of open tabs
+ * changes.
+ *
+ * - Returns the current selection unchanged when its tab is still open.
+ * - Otherwise prefers another open tab of the SAME project — trying `preferredWebViewId` (the tab
+ *   that originally opened Find, so a reload/first mount resumes exactly where it was) before any
+ *   other tab of that project — since the project itself hasn't changed, only which tab a result
+ *   click targets.
+ * - Falls back to the first remaining open tab of any project once the current project has no open
+ *   tabs left at all.
+ * - Returns `undefined` when no tabs are open anywhere.
+ *
+ * Wherever several tabs qualify, an EDITOR wins over a reference panel or the Text Collection. Find
+ * drives results through the Scripture editor's web view controller, and
+ * `resolveTargetEditorWebViewId` matches on (project, scroll group) — so landing on a panel's group
+ * while the project also has an editor open in another group leaves that resolver with no match,
+ * silently dropping the editor's select and highlight. Panels became candidates here once the
+ * picker started listing resources shown only in a reference panel, and they sort ahead of editors
+ * by default because they sit in group 0.
+ *
+ * @param currentProjectId Find's current project id.
+ * @param currentScrollGroupId The currently selected scroll group, or `undefined` before an initial
+ *   selection has been made.
+ * @param openTabs Currently open scripture-editor tabs.
+ * @param preferredWebViewId A tab id to prefer when resolving a same-project fallback (typically
+ *   the tab that originally opened Find).
+ */
+export function resolveSelectedProjectScrollGroup(
+  currentProjectId: string,
+  currentScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+  scriptureEditorWebViewType: string,
+): SelectedProjectScrollGroup | undefined {
+  const normalizedCurrentProjectId = normalizeProjectId(currentProjectId);
+  const matchesCurrentProject = (tab: OpenScrollGroupTab) =>
+    normalizeProjectId(tab.projectId) === normalizedCurrentProjectId;
+  const isEditor = (tab: OpenScrollGroupTab) => tab.webViewType === scriptureEditorWebViewType;
+  /** Editors first, original order preserved within each group. */
+  const editorsFirst = (tabs: readonly OpenScrollGroupTab[]) => [
+    ...tabs.filter(isEditor),
+    ...tabs.filter((tab) => !isEditor(tab)),
+  ];
+
+  if (
+    currentScrollGroupId !== undefined &&
+    openTabs.some((tab) => matchesCurrentProject(tab) && tab.scrollGroupId === currentScrollGroupId)
+  ) {
+    return { projectId: currentProjectId, scrollGroupId: currentScrollGroupId };
+  }
+
+  // `preferredWebViewId` names the tab that opened Find, but it does not override the editor
+  // preference: when the same project also has an editor open, resolving to the panel that
+  // triggered Find would cost the editor's select and highlight on every subsequent result click.
+  const sameProjectTabs = editorsFirst(openTabs.filter(matchesCurrentProject));
+  const preferredTab =
+    preferredWebViewId !== undefined
+      ? sameProjectTabs.find((tab) => tab.webViewId === preferredWebViewId)
+      : undefined;
+  const sameProjectTab =
+    preferredTab && (isEditor(preferredTab) || !sameProjectTabs.some(isEditor))
+      ? preferredTab
+      : sameProjectTabs[0];
+  if (sameProjectTab) {
+    return { projectId: currentProjectId, scrollGroupId: sameProjectTab.scrollGroupId };
+  }
+
+  // Cross-project fallback: the current project has no open tab left, so Find moves to another open
+  // project (and re-runs the search there — see the rerun hook). Which project that is must be
+  // DETERMINISTIC: `openTabs` arrives as `[...tabsMap.values()]`, i.e. in the order the web-view
+  // events happened to land, so taking `openTabs[0]` made the landing project depend on event timing
+  // and differ between otherwise identical sessions. Order by scroll group, then project id, so the
+  // same set of open tabs always resolves to the same fallback.
+  // Editors sort ahead of panels here too: panels are pinned to group 0, so ordering by scroll
+  // group alone would systematically land on a panel over an editor in any higher group.
+  const fallbackTab = [...openTabs].sort(
+    (a, b) =>
+      Number(isEditor(b)) - Number(isEditor(a)) ||
+      a.scrollGroupId - b.scrollGroupId ||
+      normalizeProjectId(a.projectId).localeCompare(normalizeProjectId(b.projectId)),
+  )[0];
+  if (!fallbackTab) return undefined;
+  return { projectId: fallbackTab.projectId, scrollGroupId: fallbackTab.scrollGroupId };
+}
+
+/**
+ * Resolve which open tab a Find result click should drive through the Scripture editor's web view
+ * controller — the tab matching the selected `(project, scroll group)` pair, but ONLY when it is a
+ * real Scripture editor.
+ *
+ * The read-only reference panels (model text, Bible texts, commentaries) and the Text Collection
+ * are searchable and so are listed in the project picker, but they register no Scripture editor web
+ * view controller. Handing one of their ids to `useWebViewController(SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+ * ...)` leaves it waiting on a controller that never arrives (~20s, then an unhandled rejection) —
+ * the same trap `resolveFindInvocation` avoids for the Ctrl+F path.
+ *
+ * `undefined` is a correct, expected answer whenever the selected scripture is only open in a
+ * reference panel or the Text Collection: both result handlers navigate via `setVerseRefSetting`
+ * before consulting the controller, so results still navigate — only the editor-side
+ * select/highlight is skipped, which is right when no editor is showing that scripture.
+ *
+ * @param projectId Find's currently selected project id, or `undefined` when none is selected.
+ * @param selectedScrollGroupId The selected scroll group, or `undefined` before an initial
+ *   selection.
+ * @param openTabs Currently open searchable tabs, editors, reference panels and the Text Collection
+ *   alike.
+ * @param scriptureEditorWebViewType The Scripture editor's web view type.
+ * @returns The editor tab's web view id, or `undefined` when no editor tab matches.
+ */
+export function resolveTargetEditorWebViewId(
+  projectId: string | undefined,
+  selectedScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenProjectTabWithWebView[],
+  scriptureEditorWebViewType: string,
+): string | undefined {
+  if (!projectId || selectedScrollGroupId === undefined) return undefined;
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return openTabs.find(
+    (tab) =>
+      tab.webViewType === scriptureEditorWebViewType &&
+      normalizeProjectId(tab.projectId) === normalizedProjectId &&
+      tab.scrollGroupId === selectedScrollGroupId,
+  )?.webViewId;
+}
+
+/**
+ * Resolve which open tab of the given types is displaying the selected scripture: the first tab
+ * whose type is in `webViewTypes` and whose project is `projectId`, in any scroll group.
+ *
+ * It only finds the tab; whether that tab is activated, and what else is asked of it, is the
+ * caller's choice (see {@link resolveGoToResultTarget}). A tab following a scroll group shows that
+ * group's reference. A tab detached from every scroll group does not, yet `useOpenProjectTabs`
+ * reports it as group 0 regardless, so it can still be returned here while showing an unrelated
+ * reference.
+ *
+ * Deliberately does NOT match on scroll group, unlike the editor resolver. That resolver's group
+ * match picks _which_ of several editor tabs a result click drives; here the only action is
+ * activating a tab showing this scripture, and the tab's own group membership is what moves its
+ * content.
+ *
+ * When the same resource is open in more than one matching tab (Bible texts and Commentaries, or
+ * two panels in Power mode), the first match wins. Tab order comes from `useOpenProjectTabs`' `Map`
+ * iteration, so which tab is revealed is arbitrary — accepted deliberately, because every candidate
+ * is showing the same resource at the same reference, so any of them is a correct destination.
+ *
+ * @param projectId Find's currently selected project id, or `undefined` when none is selected.
+ * @param openTabs Currently open searchable tabs, of every type.
+ * @param webViewTypes The web view types to match.
+ * @returns The matching tab's web view id, or `undefined` when no tab of those types shows this
+ *   project.
+ */
+export function resolveTargetTabWebViewId(
+  projectId: string | undefined,
+  openTabs: readonly OpenProjectTabWithWebView[],
+  webViewTypes: ReadonlySet<string>,
+): string | undefined {
+  if (!projectId) return undefined;
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return openTabs.find(
+    (tab) =>
+      webViewTypes.has(tab.webViewType) &&
+      normalizeProjectId(tab.projectId) === normalizedProjectId,
+  )?.webViewId;
+}
+
+/** Which tab a Find "go to result" activation drives, from {@link resolveGoToResultTarget}. */
+export type GoToResultTarget =
+  | { kind: 'editor'; webViewId: string }
+  | { kind: 'referencePanel'; webViewId: string }
+  | { kind: 'textCollection'; webViewId: string; projectId: string }
+  | { kind: 'none' };
+
+/**
+ * Chooses the tab a "go to result" activation (double-click or reference click) drives, in this
+ * order:
+ *
+ * 1. The Scripture editor showing the scripture, once its web view controller is ready. While it is
+ *    not, nothing is targeted, even if another tab shows the scripture too.
+ * 2. A revealable reference panel (Bible texts, Commentaries) showing it.
+ * 3. Nothing when only Model text shows it: never revealed, it already follows the scroll group.
+ * 4. The Text Collection, when it shows it and there is a project to reveal.
+ *
+ * @param targets The tabs Find resolved for the selected scripture: `targetEditorWebViewId` from
+ *   {@link resolveTargetEditorWebViewId}; `hasEditorController` whether that editor's controller is
+ *   available; `targetReferencePanelWebViewId` a revealable reference panel showing it;
+ *   `isShownInReferencePanel` whether any reference panel, Model text included, shows it;
+ *   `targetTextCollectionWebViewId` a Text Collection showing it; `projectId` the selected
+ *   project.
+ * @returns The target, or `{ kind: 'none' }` when the activation only moves the scroll group.
+ */
+export function resolveGoToResultTarget({
+  targetEditorWebViewId,
+  hasEditorController,
+  targetReferencePanelWebViewId,
+  isShownInReferencePanel,
+  targetTextCollectionWebViewId,
+  projectId,
+}: {
+  targetEditorWebViewId: string | undefined;
+  hasEditorController: boolean;
+  targetReferencePanelWebViewId: string | undefined;
+  isShownInReferencePanel: boolean;
+  targetTextCollectionWebViewId: string | undefined;
+  projectId: string | undefined;
+}): GoToResultTarget {
+  if (targetEditorWebViewId)
+    return hasEditorController
+      ? { kind: 'editor', webViewId: targetEditorWebViewId }
+      : { kind: 'none' };
+  if (targetReferencePanelWebViewId)
+    return { kind: 'referencePanel', webViewId: targetReferencePanelWebViewId };
+  if (isShownInReferencePanel) return { kind: 'none' };
+  if (targetTextCollectionWebViewId && projectId)
+    return { kind: 'textCollection', webViewId: targetTextCollectionWebViewId, projectId };
+  return { kind: 'none' };
+}
+
+/**
+ * Resolve which open tab Find should target when the user picks a project from a picker that does
+ * not surface scroll groups (simple interface mode, where `ScrollGroupSelector` is hidden from both
+ * toolbars and the picker reports a project id alone).
+ *
+ * Wraps {@link resolveSelectedProjectScrollGroup} and rejects its cross-project fallback. That
+ * fallback is correct for the reassignment effect that runs when tabs close, but wrong for a click:
+ * it would retarget Find at a project the user did not pick — reachable if the picked project's
+ * last tab closes between render and click. Returning `undefined` leaves the choice to the
+ * reassignment effect.
+ *
+ * Pass the CURRENT selection through rather than `undefined`, which is what makes re-picking the
+ * already-selected project keep the tab Find is already on instead of snapping to that project's
+ * first tab — and keeps the result independent of the order `openTabs` happened to arrive in.
+ *
+ * @returns The project and scroll group to select, or `undefined` if the picked project has no open
+ *   tab and the selection should be ignored.
+ */
+export function resolveScrollGroupForPickedProject(
+  pickedProjectId: string,
+  currentScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+  scriptureEditorWebViewType: string,
+): SelectedProjectScrollGroup | undefined {
+  const resolved = resolveSelectedProjectScrollGroup(
+    pickedProjectId,
+    currentScrollGroupId,
+    openTabs,
+    preferredWebViewId,
+    scriptureEditorWebViewType,
+  );
+  if (!resolved) return undefined;
+  if (normalizeProjectId(resolved.projectId) !== normalizeProjectId(pickedProjectId))
+    return undefined;
+  return resolved;
+}
 
 /**
  * Character categorizer settings fetched from the project's `platformScripture.*` settings, used to
@@ -63,6 +945,94 @@ function isSingleCharacterWord(codePoint: number): boolean {
   );
 }
 
+/** Zero-width regex source asserting that a match starts or ends on a word boundary. */
+type WordBoundaryAssertions = { start: string; end: string };
+
+/**
+ * Builds the assertions that keep a search to whole words, or `undefined` when `searchString` has a
+ * single-character-word character (CJK ideograph, Hiragana, Katakana, etc.): those scripts do not
+ * delimit words with spaces, so the standard non-word-char lookaround logic does not apply. Similar
+ * to Paratext 9's `IsSingleCharacterWord` check in `CreateSearchRegex`.
+ */
+function buildWordBoundaryAssertions(
+  searchString: string,
+  characterCategorizer: CharacterCategorizer,
+): WordBoundaryAssertions | undefined {
+  const containsSingleCharacterWord = [...searchString].some((char) => {
+    const cp = char.codePointAt(0);
+    return cp !== undefined && isSingleCharacterWord(cp);
+  });
+  if (containsSingleCharacterWord) return undefined;
+
+  const {
+    baseCharacterClassRegex: baseClass,
+    diacriticCharacterClassRegex: diacriticClass,
+    wordMedialCharacterRegex: wordMedial,
+    wordBreakRegex,
+  } = characterCategorizer;
+
+  // Detect if the search string contains supplementary-plane characters (code points > U+FFFF). In
+  // UTF-16 these are encoded as surrogate pairs, so a high surrogate in the string is the
+  // reliable indicator. Mirrors P9's `isSurrogatePairSearch = searchFor.Any(char.IsHighSurrogate)`
+  // in `ScrLanguage.CreateSearchRegex`. When true, word boundaries use the positive-lookaround
+  // surrogate path rather than the negative-lookaround non-surrogate path: surrogate code units
+  // are not word characters, so the standard negative-lookahead/lookbehind boundary logic would
+  // misfire on them; the positive path avoids this by anchoring to whitespace/punctuation instead.
+  if (/[\uD800-\uDBFF]/.test(searchString)) {
+    // Punctuation/symbol class mirroring P9's `punctRegex` in `ScrLanguage.CreateSearchRegex`.
+    // Uses the same explicit category list: all Punctuation (Pc Pd Ps Pe Pi Pf Po) and Symbol
+    // (Sm Sc Sk So) general categories, with + to match runs — identical to P9's regex literal.
+    const punctuationRegex = `[\\p{Pc}\\p{Pd}\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}\\p{Po}\\p{Sm}\\p{Sc}\\p{Sk}\\p{So}]+`;
+    // Surrogate-path word boundaries mirror P9's regex.AppendFormat calls inside isSurrogatePairSearch:
+    //   start: (?<=^|WordBreakRegex|punctuationRegex)
+    //   end:   (?=$|WordBreakRegex|punctuationRegex)
+    return {
+      start: `(?<=^|${wordBreakRegex}|${punctuationRegex})`,
+      end: `(?=$|${wordBreakRegex}|${punctuationRegex})`,
+    };
+  }
+
+  // Non-surrogate-path word boundaries: negative lookbehind/lookahead asserting the adjacent
+  // character is not a word-forming character (or word-medial if applicable).
+  const wordFormingClass = `[${baseClass}${diacriticClass}]`;
+  return wordMedial
+    ? {
+        start: `(?<!${wordFormingClass}|${wordMedial})`,
+        end: `(?!${wordFormingClass}|${wordMedial})`,
+      }
+    : { start: `(?<!${wordFormingClass})`, end: `(?!${wordFormingClass})` };
+}
+
+/** Whether a word restriction limits where a match may start. */
+function restrictsWordStart(wordRestriction: FindOptions['wordRestriction']): boolean {
+  return wordRestriction === 'wholeWord' || wordRestriction === 'startOfWord';
+}
+
+/** Whether a word restriction limits where a match may end. */
+function restrictsWordEnd(wordRestriction: FindOptions['wordRestriction']): boolean {
+  return wordRestriction === 'wholeWord' || wordRestriction === 'endOfWord';
+}
+
+/**
+ * Builds the word restriction of `options` as the tests `UsjReaderWriter.search` applies to each
+ * match's ends, for use with a regex built with `shouldAssertWordBoundaries` set to `false`.
+ *
+ * The regex's own lookarounds can only see the joined text, where `Isaac` at a paragraph's end runs
+ * into the next paragraph's `And`. `search` knows where the blocks change.
+ */
+export function buildWordEdgeTests(
+  options: Pick<FindOptions, 'searchString' | 'wordRestriction'>,
+  characterCategorizer: CharacterCategorizer,
+): { start?: RegExp; end?: RegExp } {
+  const { searchString, wordRestriction } = options;
+  const assertions = buildWordBoundaryAssertions(searchString, characterCategorizer);
+  if (!assertions) return {};
+  return {
+    ...(restrictsWordStart(wordRestriction) ? { start: new RegExp(assertions.start, 'u') } : {}),
+    ...(restrictsWordEnd(wordRestriction) ? { end: new RegExp(assertions.end, 'u') } : {}),
+  };
+}
+
 /**
  * Builds a JavaScript RegExp that mirrors Paratext 9's find/replace search logic in
  * `ScrLanguage.CreateSearchRegex`
@@ -84,14 +1054,29 @@ function isSingleCharacterWord(codePoint: number): boolean {
  * applied over content strings in USJ generated by UsjReaderWriter and therefore doesn't have
  * markers in it.
  *
+ * **The returned regex is not correct on its own.** For a non-regex query it compiles each interior
+ * whitespace run as an _optional_ named group (`ws0`, `ws1`, …), so `'a b'` matches `'ab'`. It is
+ * only correct when paired with `UsjReaderWriter.search`'s `flexibleWhitespaceAtBlockBoundaries`
+ * option, which discards any match whose whitespace group matched zero characters away from a block
+ * boundary. Use the two together or neither; running this regex standalone over-matches.
+ *
+ * The `d` flag is emitted whenever such a group is present, because `search` needs group offsets to
+ * apply that filter. In regex mode no groups are emitted and no `d` flag is added, so the user's
+ * pattern is compiled exactly as written.
+ *
  * @param options The find options controlling search behavior
  * @param characterCategorizer The character categorizer settings for the project, used to build
  *   character classes in the regex
- * @returns A compiled RegExp ready for use in UsjReaderWriter.search
+ * @param shouldAssertWordBoundaries Whether the regex itself enforces `options.wordRestriction`.
+ *   Pass `false` when {@link buildWordEdgeTests} will enforce it through `UsjReaderWriter.search`;
+ *   the regex then still prefers, for a trailing whitespace run, a length that ends the word.
+ * @returns A compiled RegExp for use in `UsjReaderWriter.search`, paired with
+ *   `flexibleWhitespaceAtBlockBoundaries` when the query is not a regex
  */
 export function buildSearchRegex(
   options: FindOptions,
   characterCategorizer: CharacterCategorizer,
+  shouldAssertWordBoundaries = true,
 ): RegExp {
   const {
     searchString,
@@ -102,70 +1087,34 @@ export function buildSearchRegex(
     ignoreWhitespaceDifferences: ignoreWhitespace,
   } = options;
 
-  const {
-    baseCharacterClassRegex: baseClass,
-    diacriticCharacterClassRegex: diacriticClass,
-    wordMedialCharacterRegex: wordMedial,
-    wordBreakRegex,
-    allowInvisibleCharacters,
-  } = characterCategorizer;
+  const { diacriticCharacterClassRegex: diacriticClass, allowInvisibleCharacters } =
+    characterCategorizer;
 
-  // Detect if the search string contains supplementary-plane characters (code points > U+FFFF). In
-  // UTF-16 these are encoded as surrogate pairs, so a high surrogate in the string is the
-  // reliable indicator. Mirrors P9's `isSurrogatePairSearch = searchFor.Any(char.IsHighSurrogate)`
-  // in `ScrLanguage.CreateSearchRegex`. When true, word boundaries use the positive-lookaround
-  // surrogate path rather than the negative-lookaround non-surrogate path: surrogate code units
-  // are not word characters, so the standard negative-lookahead/lookbehind boundary logic would
-  // misfire on them; the positive path avoids this by anchoring to whitespace/punctuation instead.
-  const isSurrogatePairSearch = /[\uD800-\uDBFF]/.test(searchString);
-
-  // Build the word-forming character class used in non-surrogate-path boundaries.
-  const wordFormingClass = `[${baseClass}${diacriticClass}]`;
-
-  // Punctuation/symbol class mirroring P9's `punctRegex` in `ScrLanguage.CreateSearchRegex`.
-  // Uses the same explicit category list: all Punctuation (Pc Pd Ps Pe Pi Pf Po) and Symbol
-  // (Sm Sc Sk So) general categories, with + to match runs — identical to P9's regex literal.
-  const punctuationRegex = `[\\p{Pc}\\p{Pd}\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}\\p{Po}\\p{Sm}\\p{Sc}\\p{Sk}\\p{So}]+`;
-
-  // Surrogate-path word boundaries mirror P9's regex.AppendFormat calls inside isSurrogatePairSearch:
-  //   start: (?<=^|WordBreakRegex|punctuationRegex)
-  //   end:   (?=$|WordBreakRegex|punctuationRegex)
-  const surrogateWordLookbehind = `(?<=^|${wordBreakRegex}|${punctuationRegex})`;
-  const surrogateWordLookahead = `(?=$|${wordBreakRegex}|${punctuationRegex})`;
-
-  // Non-surrogate-path word boundaries: negative lookbehind/lookahead asserting the adjacent
-  // character is not a word-forming character (or word-medial if applicable).
-  const wordBoundaryNegLookbehind = wordMedial
-    ? `(?<!${wordFormingClass}|${wordMedial})`
-    : `(?<!${wordFormingClass})`;
-  const wordBoundaryNegLookahead = wordMedial
-    ? `(?!${wordFormingClass}|${wordMedial})`
-    : `(?!${wordFormingClass})`;
+  const wordBoundaries = buildWordBoundaryAssertions(searchString, characterCategorizer);
+  // The end-of-word lookahead a trailing whitespace run must satisfy when it can, for a regex whose
+  // word edges `UsjReaderWriter.search` tests instead. See where the run is built.
+  const trailingRunEndAssertion =
+    !shouldAssertWordBoundaries && restrictsWordEnd(wordRestriction)
+      ? wordBoundaries?.end
+      : undefined;
 
   // Build a RegExp to test individual code points for diacritics (used in ignoreDiacritics loop).
   const isDiacritic = new RegExp(`^[${diacriticClass}]$`, 'u');
-
-  // If any code point in the search string is a single-character-word character (CJK ideograph,
-  // Hiragana, Katakana, etc.), word-boundary assertions are skipped. These scripts do not delimit
-  // words with spaces, so the standard non-word-char lookaround logic does not apply.
-  // Similar to Paratext 9's `IsSingleCharacterWord` check in `CreateSearchRegex`.
-  const containsSingleCharacterWord = [...searchString].some((char) => {
-    const cp = char.codePointAt(0);
-    return cp !== undefined && isSingleCharacterWord(cp);
-  });
 
   let regexStr = '';
 
   // MatchAtBeginningOfWord: use positive lookaround (surrogate path) or negative lookbehind
   // (non-surrogate path) to assert we are at a word boundary.
-  if (
-    !containsSingleCharacterWord &&
-    (wordRestriction === 'wholeWord' || wordRestriction === 'startOfWord')
-  ) {
-    regexStr += isSurrogatePairSearch ? surrogateWordLookbehind : wordBoundaryNegLookbehind;
+  if (shouldAssertWordBoundaries && wordBoundaries && restrictsWordStart(wordRestriction)) {
+    regexStr += wordBoundaries.start;
   }
 
   regexStr += '(';
+
+  // Counts the interior whitespace runs that get their own named capture group. Declared here so
+  // it is still 0 (and thus omits the `d` flag) on the useRegex path, where the pattern is used
+  // as-is and must compile exactly as the user wrote it.
+  let whitespaceGroupCount = 0;
 
   if (useRegex) {
     // When using the search string as a regex pattern, it is assumed the user who created the regex
@@ -181,44 +1130,106 @@ export function buildSearchRegex(
     // Spread to iterate over Unicode code points (handles surrogate pairs correctly in JS,
     // equivalent to C#'s UString / UCodepoint iteration).
     const chars = [...normSearch];
-    let prevWasWhiteSpace = false;
 
-    for (let i = 0; i < chars.length; i++) {
-      const char = chars[i];
+    // When AllowInvisibleChars is false (the default), NBSP is stored as ~ in USFM, so ~ is
+    // treated as whitespace. When true, ~ is a literal tilde, not a whitespace substitute.
+    const isWhiteSpaceChar = (candidate: string) =>
+      isSelectableInvisibleCharOrWhiteSpace(candidate) ||
+      (!allowInvisibleCharacters && candidate === '~');
+    const isSkippedDiacritic = (candidate: string) =>
+      ignoreDiacritics && isDiacritic.test(candidate);
 
-      // Skip combining marks in the search string when ignoreDiacritics is set.
-      if (!ignoreDiacritics || !isDiacritic.test(char)) {
-        // Determine whether this code point is whitespace / invisible.
-        // When AllowInvisibleChars is false (the default), NBSP is stored as ~ in USFM, so ~ is
-        // treated as whitespace. When true, ~ is a literal tilde, not a whitespace substitute.
-        const isTildeWhitespace = !allowInvisibleCharacters;
-        const isWhiteSpace =
-          isSelectableInvisibleCharOrWhiteSpace(char) || (isTildeWhitespace && char === '~');
+    // Tracks whether any query character has actually reached the pattern yet. A skipped
+    // diacritic never sets this, so a run preceded only by a stripped combining mark is still a
+    // leading run, not an interior one — a code-point index alone can't tell the two apart.
+    let hasEmittedContent = false;
 
-        // Skip consecutive whitespace code points when ignoreWhitespaceDifferences is set.
-        if (!(ignoreWhitespace && prevWasWhiteSpace && isWhiteSpace)) {
-          let charPattern: string;
-          if (ignoreWhitespace && isWhiteSpace) {
-            // Collapse any whitespace run to a single lazy multi-whitespace pattern (including ~
-            // when it represents NBSP, i.e., when AllowInvisibleChars is false).
-            charPattern = isTildeWhitespace
-              ? `([${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]|~)+?`
-              : `[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]+?`;
+    let index = 0;
+    while (index < chars.length) {
+      const char = chars[index];
+
+      if (isSkippedDiacritic(char)) {
+        index += 1;
+      } else if (isWhiteSpaceChar(char)) {
+        const run: string[] = [];
+        let scanningRun = true;
+        while (scanningRun && index < chars.length) {
+          const runChar = chars[index];
+          if (isSkippedDiacritic(runChar)) {
+            index += 1;
+          } else if (isWhiteSpaceChar(runChar)) {
+            run.push(runChar);
+            index += 1;
           } else {
-            charPattern = escapeStringRegexp(char);
+            scanningRun = false;
           }
-
-          regexStr += charPattern;
-
-          // Allow diacritics after each base character when ignoreDiacritics is set.
-          // C# assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so no leading [M]*
-          // is emitted — only a trailing [M]* after each processed code point.
-          if (ignoreDiacritics) {
-            regexStr += `[${diacriticClass}]*`;
-          }
-
-          prevWasWhiteSpace = isWhiteSpace;
         }
+
+        // Only a run with query characters on both sides can sit at a block boundary. A leading,
+        // trailing, or whitespace-only run has no gap to bridge, and making it optional would stop
+        // a whitespace-only query from matching whitespace at all — it would prefer to match
+        // nothing, producing an empty overall match that gets skipped. That is true of both forms
+        // an optional interior run takes: the lazy `*?` when whitespace is collapsed, and the
+        // `(?:…)?` around the literal run when it is not.
+        const isInteriorRun = hasEmittedContent && index < chars.length;
+        const whitespaceClass = allowInvisibleCharacters
+          ? `[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]`
+          : `(?:[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]|~)`;
+
+        // Allow diacritics after each code point the run emits when ignoreDiacritics is set. C#
+        // assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so only a trailing class
+        // is emitted. It must be per code point, not once per run: a single class after the whole
+        // run would require the run's code points to be adjacent, so query `a  b` would stop
+        // matching text `a␣◌́␣b`. It also has to sit *inside* the optional group, or the group's
+        // zero-width case would still be followed by a mandatory suffix.
+        const diacriticSuffix = ignoreDiacritics ? `[${diacriticClass}]*` : '';
+
+        let runPattern: string;
+        if (ignoreWhitespace) {
+          // Collapse the run to a lazy multi-whitespace pattern (including ~ when it represents
+          // NBSP, i.e., when AllowInvisibleChars is false). The diacritic class goes inside the
+          // repetition for the same reason it is emitted per code point above: a mark sitting
+          // between two whitespace characters must not stop the run from matching. Without that,
+          // collapsing whitespace would match strictly *less* than matching it exactly, which
+          // inverts what the option means.
+          const runUnit = `${whitespaceClass}${diacriticSuffix}`;
+          if (isInteriorRun) {
+            runPattern = `(?:${runUnit})*?`;
+          } else if (trailingRunEndAssertion && index >= chars.length) {
+            // `search` tests a match's end only after the regex has chosen it, and cannot make it
+            // try another length, so a lazy run that stops inside a word (a space followed by a
+            // zero-width joiner, which is word-forming and also in the whitespace class) would
+            // lose the match. The first branch tries each longer run against the lookahead, as an
+            // in-regex word boundary would. The second keeps the shortest run for `search` to
+            // judge, which is how a run ending a block, where this regex sees the next block's
+            // word, is still found.
+            runPattern = `(?:(?:${runUnit})+?${trailingRunEndAssertion}|${runUnit})`;
+          } else {
+            runPattern = `(?:${runUnit})+?`;
+          }
+        } else {
+          runPattern = run
+            .map((runChar) => `${escapeStringRegexp(runChar)}${diacriticSuffix}`)
+            .join('');
+        }
+
+        if (isInteriorRun) {
+          regexStr += `(?<${SEARCH_WHITESPACE_GROUP_PREFIX}${whitespaceGroupCount}>${
+            ignoreWhitespace ? runPattern : `(?:${runPattern})?`
+          })`;
+          whitespaceGroupCount += 1;
+        } else {
+          regexStr += runPattern;
+        }
+      } else {
+        regexStr += escapeStringRegexp(char);
+        hasEmittedContent = true;
+
+        // Allow diacritics after each base character when ignoreDiacritics is set.
+        // C# assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so no leading [M]*
+        // is emitted — only a trailing [M]* after each processed code point.
+        if (ignoreDiacritics) regexStr += `[${diacriticClass}]*`;
+        index += 1;
       }
     }
   }
@@ -227,22 +1238,29 @@ export function buildSearchRegex(
 
   // MatchAtEndOfWord: use positive lookahead (surrogate path) or negative lookahead (non-surrogate
   // path) to assert the match does not continue into a word.
-  if (
-    !containsSingleCharacterWord &&
-    (wordRestriction === 'wholeWord' || wordRestriction === 'endOfWord')
-  ) {
-    regexStr += isSurrogatePairSearch ? surrogateWordLookahead : wordBoundaryNegLookahead;
+  if (shouldAssertWordBoundaries && wordBoundaries && restrictsWordEnd(wordRestriction)) {
+    regexStr += wordBoundaries.end;
   }
 
   // The `u` flag enables \p{} Unicode property escapes, which are used in word-boundary patterns
   // (for letter/diacritic classes like \p{Lu}, \p{Mn}) and diacritic-ignore suffixes. It is NOT
   // needed for the whitespace class (SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS), since that is
-  // just a literal list of BMP characters with no \p{} escapes. Skipped in the useRegex path to
-  // avoid silently breaking user-supplied patterns that may not be u-mode compatible.
+  // just a literal list of BMP characters with no \p{} escapes.
+  //
+  // The diacritic disjunct is skipped in the useRegex path, so a user-supplied pattern that is not
+  // u-mode compatible is not silently broken. The word-restriction disjunct is NOT: a word
+  // restriction appends the \p{}-bearing lookarounds above to whatever the user wrote, and without
+  // `u` those escapes degrade to literals and the restriction stops working. Regex mode plus a word
+  // restriction therefore does compile the user's pattern under `u`, by necessity.
   const needsUnicodeFlag =
-    (!containsSingleCharacterWord && !!(wordRestriction && wordRestriction !== 'none')) ||
+    (!!wordBoundaries && !!(wordRestriction && wordRestriction !== 'none')) ||
     (!!ignoreDiacritics && !useRegex);
-  const flags = `${caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}`;
+  // `d` exposes capture group offsets, which UsjReaderWriter.search needs to tell a whitespace
+  // group that matched real whitespace from one that matched nothing. Emitted only when there is
+  // such a group, so a regex-mode pattern is compiled exactly as the user wrote it.
+  const flags = `${caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}${
+    whitespaceGroupCount > 0 ? 'd' : ''
+  }`;
 
   return new RegExp(regexStr, flags);
 }

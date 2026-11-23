@@ -1,0 +1,635 @@
+// @vitest-environment jsdom
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import type {
+  ResourceReferenceList,
+  TextCollectionOverlay,
+  ITextConnectionSettingsProjectDataProvider,
+} from 'platform-scripture';
+import { useProjectSetting, useProjectDataProviderState } from '@papi/frontend/react';
+import { logger } from '@papi/frontend';
+import { useTextCollectionSources } from './use-text-collection-sources.hook';
+
+vi.mock('@papi/frontend/react', () => ({
+  useProjectSetting: vi.fn(),
+  useProjectDataProviderState: vi.fn(),
+}));
+
+vi.mock('@papi/frontend', () => ({
+  default: { network: { getNetworkEvent: vi.fn(() => 'event-token') } },
+  logger: { warn: vi.fn() },
+}));
+
+// The admin layer is read through `useBufferedLayoutSetting`, which re-arms on a captured
+// `useEvent` handler. Capture it here so a test can drive the re-arm.
+let capturedApplyHandler: ((payload: { projectId: string }) => void) | undefined;
+vi.mock('platform-bible-react', () => ({
+  useEvent: vi.fn((_event, handler) => {
+    capturedApplyHandler = handler;
+  }),
+}));
+
+const mockUseProjectSetting = vi.mocked(useProjectSetting);
+const mockUseProjectDataProviderState = vi.mocked(useProjectDataProviderState);
+
+/**
+ * Serves a provider as the `ready` state, or `undefined` as `loading` — the two statuses these
+ * hooks branch on. Keeps each test saying "this provider is available now" rather than restating
+ * the state shape.
+ */
+function serveProvider(pdp: unknown) {
+  mockUseProjectDataProviderState.mockReturnValue(
+    // The mock only needs the discriminant and payload the hook reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (pdp ? { status: 'ready', networkObject: pdp } : { status: 'loading' }) as never,
+  );
+}
+
+// #region fixtures
+
+/** Minimal PlatformError shape — matches the `isPlatformError` runtime check. */
+function makePlatformError(): object {
+  return { platformErrorVersion: 1, message: 'test error' };
+}
+
+const list = (dataVersion = '1.0.0'): ResourceReferenceList => ({ dataVersion, items: [] });
+
+/**
+ * A settings return-tuple as produced by `useProjectSetting`: `[value, setter, reset, isLoading]`.
+ * We only read index 0 (value) and index 3 (isLoading) in the hook under test.
+ */
+function settingTuple(
+  value: ResourceReferenceList | object,
+  isLoading: boolean,
+): ReturnType<typeof useProjectSetting> {
+  // The 2nd/3rd tuple slots (setter/reset) are unused by the hook; a no-op stands in for them.
+  // Cast is required because the value may be a PlatformError in the error-path tests.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return [value, vi.fn(), vi.fn(), isLoading] as unknown as ReturnType<typeof useProjectSetting>;
+}
+
+/**
+ * Configures `useProjectSetting` to answer with the admin `referencedProjectsAndResources` tuple.
+ * That is the only project setting the hook reads (model texts are decoupled from the
+ * text-collection feature, so they are no longer a source).
+ */
+function mockSettings(referenced: ReturnType<typeof useProjectSetting>) {
+  mockUseProjectSetting.mockImplementation(() => referenced);
+}
+
+/**
+ * Builds a mock PDP whose two subscribe methods capture their callbacks so tests can drive
+ * deliveries manually, and whose returned unsubscribe promise resolves to a spy so cleanup and the
+ * dispose-before-subscribe race can be asserted.
+ */
+function makeControllablePdp() {
+  const unsubUserReferenced = vi.fn(() => Promise.resolve(true));
+  const unsubOverlay = vi.fn(() => Promise.resolve(true));
+  const unsubCellOrder = vi.fn(() => Promise.resolve(true));
+
+  let deliverUserReferenced: (value: ResourceReferenceList | object) => void = () => {};
+  let deliverOverlay: (value: TextCollectionOverlay | object) => void = () => {};
+  let deliverCellOrder: (value: string[] | object) => void = () => {};
+
+  // Resolvers for the subscribe promises themselves — left pending until a test resolves them,
+  // which is what lets us simulate the dispose-before-subscribe race.
+  let resolveUserReferencedSub: (unsub: () => Promise<boolean>) => void = () => {};
+  let resolveOverlaySub: (unsub: () => Promise<boolean>) => void = () => {};
+  let resolveCellOrderSub: (unsub: () => Promise<boolean>) => void = () => {};
+
+  const subscribeUserReferencedProjectsAndResources = vi.fn(
+    (_selector: undefined, callback: (value: ResourceReferenceList | object) => void) => {
+      deliverUserReferenced = callback;
+      return new Promise<() => Promise<boolean>>((resolve) => {
+        resolveUserReferencedSub = resolve;
+      });
+    },
+  );
+  const subscribeTextCollectionOverlay = vi.fn(
+    (_selector: undefined, callback: (value: TextCollectionOverlay | object) => void) => {
+      deliverOverlay = callback;
+      return new Promise<() => Promise<boolean>>((resolve) => {
+        resolveOverlaySub = resolve;
+      });
+    },
+  );
+  const subscribeCellOrder = vi.fn(
+    (_selector: undefined, callback: (value: string[] | object) => void) => {
+      deliverCellOrder = callback;
+      return new Promise<() => Promise<boolean>>((resolve) => {
+        resolveCellOrderSub = resolve;
+      });
+    },
+  );
+
+  // Mock object literal cannot satisfy the full PDP interface — cast is required for test isolation.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const pdp = {
+    subscribeUserReferencedProjectsAndResources,
+    subscribeTextCollectionOverlay,
+    subscribeCellOrder,
+  } as unknown as ITextConnectionSettingsProjectDataProvider;
+
+  return {
+    pdp,
+    unsubUserReferenced,
+    unsubOverlay,
+    unsubCellOrder,
+    /** Resolve all three subscribe promises with their unsubscribe spies. */
+    resolveSubscriptions: () =>
+      act(() => {
+        resolveUserReferencedSub(unsubUserReferenced);
+        resolveOverlaySub(unsubOverlay);
+        resolveCellOrderSub(unsubCellOrder);
+        // Let the .then handlers that push/dispose unsubscribers run.
+        return Promise.resolve();
+      }),
+    /**
+     * Fire the two gating subscription callbacks (userReferenced + overlay); CellOrder is
+     * non-gating.
+     */
+    deliver: (userReferenced: ResourceReferenceList | object, overlay: TextCollectionOverlay) =>
+      act(() => {
+        deliverUserReferenced(userReferenced);
+        deliverOverlay(overlay);
+      }),
+    deliverUserReferencedOnly: (userReferenced: ResourceReferenceList | object) =>
+      act(() => {
+        deliverUserReferenced(userReferenced);
+      }),
+    deliverOverlayOnly: (overlay: TextCollectionOverlay) =>
+      act(() => {
+        deliverOverlay(overlay);
+      }),
+    deliverCellOrderOnly: (order: string[] | object) =>
+      act(() => {
+        deliverCellOrder(order);
+      }),
+  };
+}
+
+// #endregion
+
+describe('useTextCollectionSources', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedApplyHandler = undefined;
+  });
+
+  it('returns sources undefined while the admin setting is still loading', () => {
+    mockSettings(settingTuple(list(), true));
+    serveProvider(makeControllablePdp().pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    expect(result.current.sources).toBeUndefined();
+  });
+
+  it('returns sources undefined when settings are loaded but subscriptions have not delivered', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    await controller.resolveSubscriptions();
+
+    // Subscriptions are wired up but no callback has fired yet.
+    expect(result.current.sources).toBeUndefined();
+  });
+
+  it('assembles all three fields once the setting is loaded and both subscriptions deliver', async () => {
+    const adminReferenced = list('ref-v');
+    mockSettings(settingTuple(adminReferenced, false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    await controller.resolveSubscriptions();
+    const userReferenced = list('user-v');
+    const overlay: TextCollectionOverlay = { 'res-1': true };
+    await controller.deliver(userReferenced, overlay);
+
+    expect(result.current.sources).toEqual({
+      adminReferenced,
+      userReferenced,
+      overlay,
+      order: [],
+    });
+  });
+
+  it('buffers the admin layer: holds an admin change until the shared-layout re-arm fires', async () => {
+    const adminV1 = list('admin-v1');
+    mockSettings(settingTuple(adminV1, false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { result, rerender } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), { 'res-1': true });
+    expect(result.current.sources?.adminReferenced).toEqual(adminV1);
+
+    // The admin setting changes (as if a manual sync landed) — it must be HELD, not applied.
+    const adminV2 = list('admin-v2');
+    mockSettings(settingTuple(adminV2, false));
+    rerender();
+    expect(result.current.sources?.adminReferenced).toEqual(adminV1);
+
+    // A shared-layout re-arm for this project applies the new admin layout.
+    act(() => capturedApplyHandler?.({ projectId: 'proj-1' }));
+    expect(result.current.sources?.adminReferenced).toEqual(adminV2);
+  });
+
+  it('reflects a delivered cell order in sources.order', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), {});
+    await controller.deliverCellOrderOnly(['b', 'a']);
+    expect(result.current.sources?.order).toEqual(['b', 'a']);
+  });
+
+  it('keeps the last delivered order when a later cell-order read fails', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), {});
+    // A real order arrives first, then a PlatformError. The order already in hand is known to be
+    // good, so dropping it would withhold reordering for no reason.
+    await controller.deliverCellOrderOnly(['b', 'a']);
+    await controller.deliverCellOrderOnly(makePlatformError());
+    expect(result.current.sources?.order).toEqual(['b', 'a']);
+    expect(result.current.isOrderPending).toBe(false);
+  });
+
+  it('never assembles sources from the placeholder admin list while the held copy catches up', async () => {
+    // The held admin copy is filled by an effect, so on the commit where the setting finishes
+    // loading the held value is still the empty placeholder. Sources built on that commit omit the
+    // admin items, and the grid's reconcile effect would prune them from the saved order and save
+    // that. Recorded per commit because the held copy catches up on the very next one.
+    const adminList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'Admin Text', id: 'admin-001' }],
+    };
+    mockSettings(settingTuple(list(), true));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const observed: Array<ReturnType<typeof useTextCollectionSources>['sources']> = [];
+    const { rerender } = renderHook(() => {
+      const hookResult = useTextCollectionSources('proj-1');
+      observed.push(hookResult.sources);
+      return hookResult;
+    });
+    // Everything per-user arrives before the admin setting does.
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), {});
+    await controller.deliverCellOrderOnly(['admin-001']);
+
+    mockSettings(settingTuple(adminList, false));
+    rerender();
+
+    expect(observed.at(-1)?.adminReferenced).toEqual(adminList);
+    expect(observed.filter((sources) => sources && sources.adminReferenced !== adminList)).toEqual(
+      [],
+    );
+  });
+
+  it('reports a settings error, not endless loading, when a required subscription is rejected', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider({
+      ...controller.pdp,
+      subscribeUserReferencedProjectsAndResources: vi.fn(() =>
+        Promise.reject(new Error('subscribe failed')),
+      ),
+    });
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliverOverlayOnly({});
+
+    // No default list is filled in: an empty user list would read as "every user resource was
+    // removed", and the grid would prune them from the saved order and save that.
+    expect(result.current.sources).toBeUndefined();
+    expect(result.current.hasSettingsError).toBe(true);
+  });
+
+  it('does not report a settings error when only the cell-order subscription is rejected', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider({
+      ...controller.pdp,
+      subscribeCellOrder: vi.fn(() => Promise.reject(new Error('subscribe failed'))),
+    });
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), {});
+
+    // The sources assemble without an order; reordering stays withheld while it is pending.
+    expect(result.current.sources).toBeDefined();
+    expect(result.current.isOrderPending).toBe(true);
+    expect(result.current.hasSettingsError).toBe(false);
+  });
+
+  it('logs a failed unsubscribe after unmount as an unsubscribe failure, not a subscribe failure', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+    controller.unsubUserReferenced.mockRejectedValue(new Error('provider already disposed'));
+
+    const { unmount } = renderHook(() => useTextCollectionSources('proj-1'));
+    unmount();
+    await controller.resolveSubscriptions();
+    await act(() => Promise.resolve());
+
+    const warnings = vi.mocked(logger.warn).mock.calls.map(([message]) => String(message));
+    expect(warnings.some((message) => message.includes('unsubscribe from'))).toBe(true);
+    expect(warnings.some((message) => message.includes('subscribe to'))).toBe(false);
+  });
+
+  it('keeps sources undefined until BOTH subscriptions have delivered', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    await controller.resolveSubscriptions();
+    // Only the user-referenced subscription has delivered; overlay is still undefined.
+    await controller.deliverUserReferencedOnly(list('user-v'));
+    expect(result.current.sources).toBeUndefined();
+
+    // Now the overlay delivers too.
+    await controller.deliverOverlayOnly({ 'res-1': false });
+    expect(result.current.sources).toBeDefined();
+  });
+
+  it('keeps sources undefined when the admin referenced setting is a PlatformError', async () => {
+    mockSettings(settingTuple(makePlatformError(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), { 'res-1': true });
+
+    expect(result.current.sources).toBeUndefined();
+  });
+
+  it('keeps sources undefined when the admin referenced setting fails after the loading window', async () => {
+    // Mount while the setting is still loading, so the buffered copy holds the placeholder rather
+    // than the error. `useBufferedLayoutSetting` deliberately does not apply a PlatformError (it
+    // stays armed so a transient failure can self-heal), which means the held value alone can no
+    // longer distinguish "unreadable" from "configured with nothing".
+    mockSettings(settingTuple(list(), true));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { result, rerender } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), { 'res-1': true });
+
+    mockSettings(settingTuple(makePlatformError(), false));
+    rerender();
+
+    // Assembling sources here would show the Text Collection grid an empty admin list, i.e. the
+    // same "unreadable setting rendered as nothing configured" bug this branch fixes elsewhere.
+    expect(result.current.sources).toBeUndefined();
+  });
+
+  it('reflects updated subscription values in a later memo pass', async () => {
+    mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    await controller.resolveSubscriptions();
+    const firstUser = list('user-v1');
+    await controller.deliver(firstUser, { a: true });
+    expect(result.current.sources?.userReferenced).toBe(firstUser);
+    expect(result.current.sources?.overlay).toEqual({ a: true });
+
+    // A subsequent delivery flows through to the memoized result.
+    const secondUser = list('user-v2');
+    await controller.deliverUserReferencedOnly(secondUser);
+    await controller.deliverOverlayOnly({ a: false, b: true });
+    expect(result.current.sources?.userReferenced).toBe(secondUser);
+    expect(result.current.sources?.overlay).toEqual({ a: false, b: true });
+  });
+
+  it('substitutes the default list when a subscription delivers a PlatformError value', async () => {
+    mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    await controller.resolveSubscriptions();
+    // A PlatformError from the user subscription is swapped for the default (empty) list, and the
+    // overlay delivers a real value — so sources still assembles.
+    await controller.deliver(makePlatformError(), { a: true });
+
+    expect(result.current.sources).toBeDefined();
+    expect(result.current.sources?.userReferenced.items).toEqual([]);
+  });
+
+  it('unsubscribes both subscriptions on unmount', async () => {
+    mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { unmount } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    await controller.resolveSubscriptions();
+
+    expect(controller.unsubUserReferenced).not.toHaveBeenCalled();
+    expect(controller.unsubOverlay).not.toHaveBeenCalled();
+    expect(controller.unsubCellOrder).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(controller.unsubUserReferenced).toHaveBeenCalledTimes(1);
+    expect(controller.unsubOverlay).toHaveBeenCalledTimes(1);
+    expect(controller.unsubCellOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it('immediately unsubscribes a subscription whose promise resolves after unmount (no leak)', async () => {
+    mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { unmount } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    // Unmount BEFORE the subscribe promises resolve — the dispose-before-subscribe race.
+    unmount();
+
+    // The unsubscribers do not exist yet, so cleanup could not have called them.
+    expect(controller.unsubUserReferenced).not.toHaveBeenCalled();
+    expect(controller.unsubOverlay).not.toHaveBeenCalled();
+    expect(controller.unsubCellOrder).not.toHaveBeenCalled();
+
+    // Now the subscribe promises resolve — since the effect already disposed, the resolved
+    // unsubscribe functions must be invoked immediately rather than stored.
+    await controller.resolveSubscriptions();
+
+    expect(controller.unsubUserReferenced).toHaveBeenCalledTimes(1);
+    expect(controller.unsubOverlay).toHaveBeenCalledTimes(1);
+    expect(controller.unsubCellOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the same textConnectionPdp object that useProjectDataProvider yields', () => {
+    mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    serveProvider(controller.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    expect(result.current.textConnectionPdp).toBe(controller.pdp);
+  });
+
+  it('returns sources undefined and no subscriptions when there is no PDP yet', () => {
+    mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
+    serveProvider(undefined);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    expect(result.current.sources).toBeUndefined();
+    expect(result.current.textConnectionPdp).toBeUndefined();
+  });
+
+  // #region project-switch isolation
+
+  it('clears every source when the project switches, before anything for the new one arrives', async () => {
+    const projectOne = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(projectOne.pdp);
+
+    const { result, rerender } = renderHook(
+      ({ pid }: { pid: string }) => useTextCollectionSources(pid),
+      { initialProps: { pid: 'proj-1' } },
+    );
+    await projectOne.resolveSubscriptions();
+    projectOne.deliver(list('user-v1'), { 'resource-from-project-one': true });
+    expect(result.current.sources).toBeDefined();
+
+    // The switch: the provider for the incoming project has not resolved, so the state hook reports
+    // `loading`. Nothing from project one may still be readable — or writable — under project two.
+    serveProvider(undefined);
+    rerender({ pid: 'proj-2' });
+
+    expect(result.current.sources).toBeUndefined();
+    expect(result.current.textConnectionPdp).toBeUndefined();
+  });
+
+  it('assembles sources for the new project only from the new project’s deliveries', async () => {
+    // A project switch REMOUNTS this hook: the Simple-mode switch re-points the panel through
+    // `reloadWebView`, which rebuilds the web view, and the grid otherwise latches its project
+    // rather than changing it in place. That matters here because `useBufferedLayoutSetting` is
+    // remount-only by contract — its tripwire says so — so driving this with an in-place `rerender`
+    // would assert a re-arm no consumer performs.
+    const projectOne = makeControllablePdp();
+    const projectTwo = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(projectOne.pdp);
+
+    const first = renderHook(() => useTextCollectionSources('proj-1'));
+    await projectOne.resolveSubscriptions();
+    projectOne.deliver(list('user-v1'), { 'resource-from-project-one': true });
+    projectOne.deliverCellOrderOnly(['order-from-project-one']);
+    first.unmount();
+
+    serveProvider(projectTwo.pdp);
+    mockSettings(settingTuple(list('admin-v2'), false));
+    const second = renderHook(() => useTextCollectionSources('proj-2'));
+    await projectTwo.resolveSubscriptions();
+    expect(second.result.current.sources).toBeUndefined();
+
+    projectTwo.deliver(list('user-v2'), { 'resource-from-project-two': true });
+
+    expect(second.result.current.sources).toEqual({
+      adminReferenced: list('admin-v2'),
+      userReferenced: list('user-v2'),
+      overlay: { 'resource-from-project-two': true },
+      // Project one's saved order must not carry over; project two has delivered none yet.
+      order: [],
+    });
+  });
+
+  it('ignores a late delivery from the project that was switched away from', async () => {
+    const projectOne = makeControllablePdp();
+    const projectTwo = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(projectOne.pdp);
+
+    const { result, rerender } = renderHook(
+      ({ pid }: { pid: string }) => useTextCollectionSources(pid),
+      { initialProps: { pid: 'proj-1' } },
+    );
+    await projectOne.resolveSubscriptions();
+    projectOne.deliver(list('user-v1'), {});
+
+    serveProvider(undefined);
+    rerender({ pid: 'proj-2' });
+    serveProvider(projectTwo.pdp);
+    mockSettings(settingTuple(list('admin-v2'), false));
+    rerender({ pid: 'proj-2' });
+    await projectTwo.resolveSubscriptions();
+
+    // Unsubscribing is async, so project one's subscription can still fire after cleanup. It must
+    // not repopulate state the switch cleared.
+    projectOne.deliverUserReferencedOnly(list('stale-from-project-one'));
+    projectOne.deliverCellOrderOnly(['stale-order']);
+    expect(result.current.sources).toBeUndefined();
+
+    projectTwo.deliver(list('user-v2'), {});
+    expect(result.current.sources?.userReferenced).toEqual(list('user-v2'));
+    expect(result.current.sources?.order).toEqual([]);
+  });
+
+  it('reports the cell order as pending until it is delivered', async () => {
+    const pdp = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(pdp.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await pdp.resolveSubscriptions();
+    pdp.deliver(list('user-v1'), {});
+
+    // The grid may paint against the empty stand-in, but must not persist an order derived from it.
+    expect(result.current.isOrderPending).toBe(true);
+    expect(result.current.sources?.order).toEqual([]);
+
+    pdp.deliverCellOrderOnly(['a', 'b']);
+    expect(result.current.isOrderPending).toBe(false);
+    expect(result.current.sources?.order).toEqual(['a', 'b']);
+  });
+
+  it('keeps the cell order pending when it cannot be read', async () => {
+    const pdp = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(pdp.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await pdp.resolveSubscriptions();
+    pdp.deliver(list('user-v1'), {});
+    pdp.deliverCellOrderOnly(makePlatformError());
+
+    // "Could not read" must not collapse to "empty": the saved slots are unknown, and treating
+    // them as absent is what would let a reorder erase them.
+    expect(result.current.isOrderPending).toBe(true);
+    expect(result.current.sources?.order).toEqual([]);
+  });
+
+  // #endregion
+});

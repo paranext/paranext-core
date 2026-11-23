@@ -1,5 +1,8 @@
 using System.Diagnostics;
+using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checks;
+using Paranext.DataProvider.EnhancedResources;
+using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
@@ -19,6 +22,7 @@ public static class Program
     public static async Task Main()
     {
         Console.WriteLine("Paranext data provider starting up");
+        StartupTiming.Mark("process-start");
         Thread.CurrentThread.Name = "Main";
 
         var listener = new ConsoleTraceListener
@@ -27,15 +31,33 @@ public static class Program
             // Ignore trace for every S/R-able project https://github.com/ubsicap/Paratext/blob/master/ParatextData/Repository/SharingLogic.cs#L450
             Filter = new TraceExclusionFilter("CreateSharedProject for {0} ({1})"),
         };
+        // PNX001 bans `System.Diagnostics.Trace` for app logging (use `Console.WriteLine`),
+        // but here we legitimately need to configure the Trace subsystem itself so that
+        // ParatextData.dll's internal Trace output is redirected to Console (the app's
+        // single logging sink). This is a bootstrap responsibility — the whole purpose
+        // of this block is to bridge Trace → Console — so rewriting these three lines to
+        // use Console.WriteLine would defeat the intent. Scope the suppression to just
+        // the bootstrap lines.
+#pragma warning disable PNX001
         // Clear the default listeners to stop Debug.Assert from crashing the app
         Trace.Listeners.Clear();
         // Log all trace messages to the console
         Trace.Listeners.Add(listener);
         Trace.AutoFlush = true;
+#pragma warning restore PNX001
 
         // Tell `ProgressUtils` to run "UI" code and "run later" code immediately as a simple
         // implementation so we don't miss `ParatextData` code that needs to run.
         ProgressUtils.Implementation = new ProgressUtilsRunImmediately();
+
+        // Pin ParatextData's per-user folder (registration, internet settings) before anything can
+        // read it: ParatextData caches the folder on first access, and its own choice would follow
+        // the app version and could land in Paratext 9's folder. See PlatformParatextInfo.
+        var platformParatextInfo = new PlatformParatextInfo(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+        );
+        PlatformParatextInfo.Install(platformParatextInfo);
+        Console.WriteLine($"ParatextData app-data folder: {ParatextInfo.AppDataFolder}");
 
         using PapiClient papi = new();
         try
@@ -45,12 +67,14 @@ public static class Program
                 Console.WriteLine("Paranext data provider could not connect");
                 return;
             }
+            StartupTiming.Mark("papi-connected");
 
             // Initialize the shared store early since papi uses it
             await SharedStoreService.InitializeAsync(papi);
             papi.SetSharedStore(SharedStoreService.GetSharedStore());
 
-            // Log the ParatextData.dll assembly version then change it to 10.<our semver>
+            // Log the ParatextData.dll assembly version then change it to 10.<our semver>. The
+            // app-data folder does not follow this version; PlatformParatextInfo pins it.
             var appInfo = AppService.GetAppInfo(papi);
             var appVersion = SemVerUtils.ConvertSemVerToVersion(appInfo.Version);
             Console.WriteLine(
@@ -58,7 +82,41 @@ public static class Program
             );
             ParatextInfo.ParatextVersion = appVersion;
 
-            var paratextProjects = new LocalParatextProjects();
+            var paratextProjects = new LocalParatextProjects(papi);
+
+            // The persisted settings below read from the settings service, which the extension host
+            // can still be starting. Reading too soon throws and ends this process. Starting with
+            // empty values instead would let the next save wipe what is stored. Both settings have
+            // contributed defaults, so any answer is non-null. Each is waited for: a stored setting
+            // is answered as soon as the service registers, but an unstored one only after the
+            // extension host's contributions load.
+            var settingsWaitTimeout = TimeSpan.FromSeconds(60);
+            var settingsRetryDelay = TimeSpan.FromMilliseconds(250);
+            StartupTiming.Mark("settings-wait-start");
+            using var settingsWaitDeadline = new CancellationTokenSource(settingsWaitTimeout);
+            var settingsServiceAnswered =
+                await SettingsService.WaitForSettingAsync<SerializableStringDictionary>(
+                    papi,
+                    Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+                    settingsRetryDelay,
+                    settingsWaitDeadline.Token
+                )
+                && await SettingsService.WaitForSettingAsync<SerializableStringDictionary>(
+                    papi,
+                    Settings.PTX_UTILS_MEMENTO_DATA,
+                    settingsRetryDelay,
+                    settingsWaitDeadline.Token
+                );
+            if (papi.DisconnectTask.IsCompleted)
+                return;
+            if (!settingsServiceAnswered)
+            {
+                Console.Error.WriteLine(
+                    $"The settings service did not answer within {settingsWaitTimeout.TotalSeconds}s; "
+                        + "continuing startup, so reading the persisted settings will likely fail"
+                );
+            }
+            StartupTiming.Mark("settings-wait-end");
 
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
@@ -67,25 +125,133 @@ public static class Program
             // Initializes the versioning manager
             VersioningManager.Initialize();
 
+            // Before the project scan below reads the effective internet status
+            InternetSettingsDataProvider.MigrateVpnRequiredToDisabled();
+
             SettingsService.Initialize(papi);
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
+            var paratextPublishedFactory = new ParatextPublishedProjectDataProviderFactory(
+                papi,
+                paratextProjects
+            );
             var paratextSendReceiveService = new ParatextProjectSendReceiveService(
                 papi,
                 paratextFactory,
-                appInfo
+                appInfo,
+                paratextProjects
             );
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
-            var dblResources = new DblResourcesDataProvider(papi);
-            var paratextRegistrationService = new ParatextRegistrationService(papi);
+            var internetSettingsDataProvider = new InternetSettingsDataProvider(papi);
+            var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
+            // Initialized in the critical barrier below. Extension activation doesn't wait for that
+            // barrier, so a token request sent from an extension's activate() before this handler
+            // registers relies on the caller's requestWithRetry (about 10 seconds).
+            var registryAccessTokenService = new RegistryAccessTokenService(
+                papi,
+                new ParatextDataRegistryUserContext(),
+                new RestClientRegistryTokenClient(),
+                () => DateTimeOffset.UtcNow
+            );
+            var paratextRegistrationService = new ParatextRegistrationService(
+                papi,
+                internetSettingsDataProvider
+            );
+            var checklistNetworkObject = new ChecklistNetworkObject(papi);
+            var manageBooksService = new ManageBooksService(
+                papi,
+                paratextProjects,
+                paratextFactory
+            );
+            var enhancedResourceFactory = new EnhancedResourceFactory(
+                papi,
+                paratextProjects,
+                new MarbleDataLoader()
+            );
+            var versificationConversionService = new VersificationConversionService(papi);
+
+            // Non-critical: register in the background - started BEFORE the critical barrier is
+            // awaited so these services run concurrently with it without gating "ready". Starting
+            // them after the barrier would shrink the head start TS consumers with bounded one-shot
+            // acquisition (e.g. the checklist and manage-books web views) rely on.
+            // Wrap EACH registration in its own Task.Run so a synchronous throw (e.g. from the
+            // non-async ManageBooksService.RegisterNetworkObjectAsync before its first await) is
+            // captured into that service's task rather than escaping unobserved AND without
+            // orphaning the siblings: Task.WhenAll evaluates its arguments left-to-right, so a bare
+            // Task.Run(() => Task.WhenAll(a(), b(), ...)) that threw synchronously partway through
+            // would leave the already-started tasks unobserved and never start the later ones. Each
+            // Task.Run returns an already-scheduled task, so all five always start and every fault
+            // (sync or async) flows into the WhenAll. Log faults to stderr so they surface at error
+            // level in the main process log - a fault here means these features are missing for the
+            // whole session.
+            ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
+                Task.WhenAll(
+                    Task.Run(() => inventoryDataProvider.RegisterDataProviderAsync()),
+                    Task.Run(() => checkRunner.RegisterDataProviderAsync()),
+                    Task.Run(() => checklistNetworkObject.InitializeAsync()),
+                    Task.Run(() => manageBooksService.RegisterNetworkObjectAsync()),
+                    Task.Run(() => enhancedResourceFactory.InitializeAsync()),
+                    Task.Run(() => internetSettingsDataProvider.RegisterDataProviderAsync())
+                ),
+                "Background service registration"
+            );
+
+            // Bridge the S/R write gate to the PAPI (event + getAutoSyncBlocking). Initialized in the
+            // critical barrier below so it is serving before extension activation.
+            var sendReceiveBlockNotifierService = new SendReceiveBlockNotifierService(papi);
+
+            // Bridge sync-run activity to the PAPI (event + getSyncActivity). Initialized in the
+            // critical barrier below so it is serving before extension activation.
+            var syncActivityNotifierService = new SyncActivityNotifierService(
+                papi,
+                paratextSendReceiveService
+            );
+
+            // Track and announce the projects with changes waiting in each sync direction (event +
+            // getUnsyncedChanges).
+            var unsyncedChangesTracker = new UnsyncedChangesTracker(
+                paratextSendReceiveService,
+                paratextProjects
+            );
+            unsyncedChangesTracker.Start();
+
+            // Record the first successful sync so the first-run wizard's Sync step stops coming back.
+            new FirstSyncRecorder(papi, paratextSendReceiveService).Start();
+            var remoteChangesPoller = new RemoteChangesPoller(
+                paratextSendReceiveService,
+                paratextProjects
+            );
+            var unsyncedChangesNotifierService = new UnsyncedChangesNotifierService(
+                papi,
+                unsyncedChangesTracker,
+                remoteChangesPoller
+            );
+
+            StartupTiming.Mark("init-barrier-start");
+            // Critical path: everything the renderer needs to list projects and open an editor, plus
+            // the Registry token handler, so it registers early for extensions that call it from
+            // activate().
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
-                inventoryDataProvider.RegisterDataProviderAsync(),
-                checkRunner.RegisterDataProviderAsync(),
-                dblResources.RegisterDataProviderAsync(),
+                paratextPublishedFactory.InitializeAsync(),
+                versificationConversionService.InitializeAsync(),
                 paratextRegistrationService.InitializeAsync(),
-                paratextSendReceiveService.InitializeAsync()
+                registryAccessTokenService.InitializeAsync(),
+                paratextSendReceiveService.InitializeAsync(),
+                dblResources.RegisterDataProviderAsync(),
+                sendReceiveBlockNotifierService.InitializeAsync(),
+                syncActivityNotifierService.InitializeAsync(),
+                unsyncedChangesNotifierService.InitializeAsync()
             );
+            StartupTiming.Mark("init-barrier-end");
+
+            // Off the barrier: one `hg status` per local project, in the background; the result
+            // arrives as an onUnsyncedChangesChanged event when it differs from the empty baseline.
+            unsyncedChangesTracker.StartBaselineScan();
+
+            // Off the barrier: the first server lookup runs after a short delay, then every few
+            // minutes; its result arrives as an onUnsyncedChangesChanged event when toReceive changes.
+            remoteChangesPoller.Start();
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");

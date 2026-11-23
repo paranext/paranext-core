@@ -319,6 +319,143 @@ export const WithSubmenus: Story = {
   },
 };
 
+export const WithShortcutHints: Story = {
+  tags: ['test'],
+  render: () => {
+    const [lastCommand, setLastCommand] = useState<string>('');
+
+    const sampleMenuData = createSampleMenuData();
+    const menuDataWithShortcutHints: Localized<MultiColumnMenu> = {
+      ...sampleMenuData,
+      items: [
+        ...sampleMenuData.items,
+        {
+          label: 'Find',
+          tooltip: 'Find text in the project',
+          localizeNotes: 'Application main menu > Project > Find',
+          group: 'platform.projectSettings',
+          order: 2,
+          command: 'platform.find',
+          shortcut: 'Ctrl+F',
+        },
+      ],
+    };
+
+    const handleSelectMenuItem = (item: MenuItemContainingCommand) => {
+      setLastCommand(item.command);
+    };
+
+    return (
+      <div className="tw:space-y-4">
+        <PlatformMenubar
+          menuData={menuDataWithShortcutHints}
+          onSelectMenuItem={handleSelectMenuItem}
+        />
+
+        <div className="tw:rounded tw:border tw:bg-muted tw:p-4">
+          <div className="tw:text-sm">
+            <strong>Last Command:</strong> {lastCommand || 'None'}
+          </div>
+          <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
+            Open the &quot;Project&quot; menu: &quot;Find&quot; shows its shortcut at the end of the
+            row.
+          </p>
+        </div>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Menubar with a command item that shows its keyboard shortcut hint.',
+      },
+    },
+  },
+};
+
+export const DynamicItemStates: Story = {
+  render: () => {
+    const [lastCommand, setLastCommand] = useState<string>('');
+
+    const dynamicMenuData: Localized<MultiColumnMenu> = {
+      columns: { 'story.dynamic': { label: 'Dynamic', order: 1 } },
+      groups: { 'story.dynamicGroup': { column: 'story.dynamic', order: 1 } },
+      items: [
+        {
+          label: 'Always enabled',
+          localizeNotes: '',
+          group: 'story.dynamicGroup',
+          order: 1,
+          command: 'story.enabled',
+        },
+        {
+          label: 'Disabled (enabledWhen was falsy)',
+          localizeNotes: '',
+          group: 'story.dynamicGroup',
+          order: 2,
+          command: 'story.disabled',
+          disabled: true,
+        },
+        {
+          label: 'Checked toggle (checkedWhen was truthy)',
+          localizeNotes: '',
+          group: 'story.dynamicGroup',
+          order: 3,
+          command: 'story.checked',
+          checked: true,
+        },
+        {
+          label: 'Unchecked toggle',
+          localizeNotes: '',
+          group: 'story.dynamicGroup',
+          order: 4,
+          command: 'story.unchecked',
+          checked: false,
+        },
+        {
+          label: 'Plain item with a leading icon',
+          localizeNotes: '',
+          group: 'story.dynamicGroup',
+          order: 5,
+          command: 'story.withIcon',
+          iconNameBefore: 'settings',
+        },
+      ],
+    };
+
+    const handleSelectMenuItem = (item: MenuItemContainingCommand) => {
+      setLastCommand(item.command);
+      // Stories use console.log to log action results since storybook actions are unavailable here
+      // eslint-disable-next-line no-console
+      console.log('selected', item);
+    };
+
+    return (
+      <div className="tw:space-y-4">
+        <PlatformMenubar menuData={dynamicMenuData} onSelectMenuItem={handleSelectMenuItem} />
+
+        <div className="tw:rounded tw:border tw:bg-gray-50 tw:p-4">
+          <div className="tw:text-sm">
+            <strong>Last Command:</strong> {lastCommand || 'None'}
+          </div>
+          <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
+            Open &quot;Dynamic&quot; to see disabled and checkbox item states. Labels of checkbox
+            items and the icon item start at the same position.
+          </p>
+        </div>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Demonstrates runtime-computed disabled and checked states on menu items. Disabled items are grayed out and unclickable. Checkbox items show a checkmark when checked.',
+      },
+    },
+  },
+};
+
 export const MinimalMenu: Story = {
   render: () => {
     const [lastCommand, setLastCommand] = useState<string>('');

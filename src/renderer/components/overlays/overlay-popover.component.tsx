@@ -9,11 +9,13 @@
 
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { markOverlayFocusReturnIfFocusInside } from '@renderer/services/overlays/overlay-focus-return.util';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import {
   OverlayEntry,
   PopoverContent as PopoverContentModel,
 } from '@renderer/services/overlays/overlay.service-model';
+import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
 import {
   Button,
   MarkdownRenderer,
@@ -39,12 +41,32 @@ export type OverlayPopoverPresentationalProps = {
   side?: 'top' | 'bottom' | 'left' | 'right';
   /** Maximum width in pixels. Defaults to 320. */
   maxWidth?: number;
+  /**
+   * Maximum height in pixels. Defaults to 400. Content taller than this scrolls inside the popover
+   * (`overflow-y: auto`); pass a larger value to lift the cap for callers whose content is vetted
+   * to fit on screen.
+   */
+  maxHeight?: number;
   /** Whether to display an arrow pointing toward the anchor. Defaults to true. */
   showArrow?: boolean;
   /** Called when the user clicks an action button (card content) */
   onAction?: (actionId: string) => void;
   /** Called when the popover is dismissed */
   onDismiss: () => void;
+  /**
+   * Called when the user presses Escape in the popover, just before {@link onDismiss}. Lets the
+   * owner tell an Escape close apart from a click away.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  onEscape?: () => void;
+  /**
+   * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+   * service can tell whether focus is inside this overlay's own content rather than another's.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  overlayId?: string;
 };
 
 // ── Constants ──
@@ -52,8 +74,8 @@ export type OverlayPopoverPresentationalProps = {
 /** Default max width for popovers */
 const DEFAULT_MAX_WIDTH = 320;
 
-/** Default max height for popovers */
-const MAX_HEIGHT = 400;
+/** Default max height for popovers — content beyond this scrolls inside the popover. */
+const DEFAULT_MAX_HEIGHT = 400;
 
 // ── Internal Components ──
 
@@ -150,11 +172,18 @@ export function OverlayPopoverPresentational({
   position,
   anchor,
   side = 'bottom',
-  maxWidth = DEFAULT_MAX_WIDTH,
+  maxWidth,
+  maxHeight,
   showArrow = true,
   onAction,
   onDismiss,
+  onEscape,
+  overlayId,
 }: OverlayPopoverPresentationalProps) {
+  // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied.
+  const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
+  const resolvedMaxHeight = maxHeight ?? DEFAULT_MAX_HEIGHT;
+
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) onDismiss();
@@ -166,10 +195,11 @@ export function OverlayPopoverPresentational({
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        onEscape?.();
         onDismiss();
       }
     },
-    [onDismiss],
+    [onDismiss, onEscape],
   );
 
   const handleAction = useCallback(
@@ -196,19 +226,40 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
-        className="tw:overflow-y-auto"
+        data-overlay-id={overlayId}
+        // PopoverContent must not carry a fixed width or padding, so the inner wrapper below owns
+        // width, padding and layout instead. `tw:p-0` strips the shared class's `tw:p-2.5` padding
+        // only; the shared `tw:w-72` survives the class merge and is overridden by the inline
+        // `width: 'auto'` in `style` below — removing that would bring the fixed width back.
+        className="tw:p-0"
         side={side}
         align="start"
         sideOffset={showArrow ? 8 : 4}
         style={{
           zIndex: Z_INDEX_OVERLAY,
-          maxWidth,
-          maxHeight: MAX_HEIGHT,
+          // PopoverContent holds only the inner wrapper and the arrow. Radix requires Popover.Arrow
+          // to be a descendant of PopoverContent; keeping it beside the wrapper, which owns sizing,
+          // the caps and the scrolling, leaves the arrow outside the scrolled box.
+          width: 'auto',
         }}
         onKeyDown={handleKeyDown}
+        onEscapeKeyDown={() => onEscape?.()}
+        // The shared wrappers turn a window blur into an outside press. The overlay
+        // service owns blur dismissal for this surface (creation grace period,
+        // `dismissOnClickOutside`), so that press is ignored here.
+        onPointerDownOutside={(event) => {
+          if (isWindowBlurPress(event.detail.originalEvent)) event.preventDefault();
+        }}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
+        <div
+          data-overlay-popover-zoom
+          className="tw:flex tw:w-72 tw:flex-col tw:gap-2.5 tw:overflow-y-auto tw:p-2.5"
+          style={{ maxWidth: resolvedMaxWidth, maxHeight: resolvedMaxHeight }}
+        >
+          <PopoverBody content={content} onAction={handleAction} />
+        </div>
         {showArrow && (
           <PopoverPrimitive.Arrow
             style={{
@@ -218,7 +269,6 @@ export function OverlayPopoverPresentational({
             }}
           />
         )}
-        <PopoverBody content={content} onAction={handleAction} />
       </PopoverContent>
     </Popover>
   );
@@ -335,6 +385,13 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
     resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
   }, [overlay]);
 
+  const handleEscape = useCallback(() => {
+    // Radix reports Escape first and the dismissal settles the overlay; a later report from the
+    // key handler must not leave a mark behind
+    if (hasResolved.current) return;
+    markOverlayFocusReturnIfFocusInside(overlay.id);
+  }, [overlay]);
+
   return (
     <OverlayPopoverPresentational
       content={localizedContent}
@@ -345,9 +402,12 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
       }}
       side={overlay.request.side}
       maxWidth={overlay.request.maxWidth}
+      maxHeight={overlay.request.maxHeight}
       showArrow={overlay.request.showArrow}
       onAction={handleAction}
       onDismiss={handleDismiss}
+      onEscape={handleEscape}
+      overlayId={overlay.id}
     />
   );
 }

@@ -5,6 +5,7 @@ export { default as BookChapterControl } from './components/advanced/book-chapte
 export type { BookChapterControlProps } from './components/advanced/book-chapter-control/book-chapter-control.types';
 export {
   BOOK_CHAPTER_CONTROL_STRING_KEYS,
+  type BookChapterControlHandle,
   type BookChapterControlLocalizedStrings,
 } from './components/advanced/book-chapter-control/book-chapter-control.types';
 export { default as BookSelector } from './components/advanced/book-selector.component';
@@ -28,10 +29,62 @@ export {
 } from './components/advanced/comment-editor/comment-editor.types';
 export type {
   CommentListProps,
+  CommentListLocalizedStrings,
   AddCommentToThreadOptions,
+  CommentDraft,
 } from './components/advanced/comment-list/comment-list.types';
-export { COMMENT_LIST_STRING_KEYS } from './components/advanced/comment-list/comment-list.types';
+export {
+  COMMENT_LIST_STRING_KEYS,
+  COMMENT_LIST_ELEMENT_ID,
+  getCommentThreadElementId,
+} from './components/advanced/comment-list/comment-list.types';
 export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
+/**
+ * Resolves a localize key against `localizedStrings`, falling back when the key has not actually
+ * resolved to translated text. `useLocalizedStrings` seeds every requested key to itself and
+ * returns that seed both before the subscription delivers and permanently on a `PlatformError`, so
+ * `localizedStrings[key] ?? fallback` can never catch that case — the value is a truthy string
+ * equal to the key, not `undefined`. Any consumer that renders a `CommentList` localize key
+ * directly (e.g. a filter dropdown built from `COMMENT_LIST_STRING_KEYS`) needs this instead of a
+ * bare `??` lookup, or an unresolved key renders as visible text like
+ * `%comment_filter_preset_all%`.
+ *
+ * @param key The localize key to look up.
+ * @param localizedStrings The localized strings to resolve `key` against.
+ * @param fallback English text to show while `key` has not resolved to anything else.
+ * @returns The resolved string, or `fallback` when `key` is missing or still unresolved.
+ */
+export { localizeOrFallback } from './components/advanced/comment-list/comment-list.utils';
+/**
+ * Whether a `CommentDraft` counts as empty: no unsent reply, no pending assignee, and no
+ * in-progress edit to an existing comment. `CommentThread` uses this rule to decide when to report
+ * `undefined` (instead of the draft object) through `onDraftChange`. Any consumer that stores
+ * drafts outside `CommentThread` — to persist them, prune stale entries, or decide whether a thread
+ * has unsaved content — must use this same rule rather than a separately-maintained equivalent, or
+ * the two silently disagree the moment `CommentDraft` gains a field.
+ *
+ * @param draft The draft to check.
+ * @returns `true` when none of the draft's three parts carry anything.
+ */
+export { isCommentDraftEmpty } from './components/advanced/comment-list/comment-list.utils';
+export type {
+  ConflictNoteCardProps,
+  ConflictResolution,
+  ConflictResolutionOptions,
+  ConflictResolutionOutcome,
+} from './components/advanced/comment-list/conflict-note-card.types';
+export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
+export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
+export { ContentZoomRoot } from './components/advanced/content-zoom-root.component';
+export type { ContentZoomRootProps } from './components/advanced/content-zoom-root.component';
+export {
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
+  ContentZoomTextProvider,
+  useContentZoomTextProps,
+} from './context/content-zoom-text.context';
+export type { ContentZoomTextProviderProps } from './context/content-zoom-text.context';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
@@ -56,19 +109,28 @@ export type { VersionHistoryType } from './components/advanced/extension-marketp
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 export { default as Filter } from './components/advanced/filter.component';
 export type {
+  FootnoteCaretPosition,
   FootnoteItemProps,
   FootnoteLayout,
   FootnoteListProps,
 } from './components/advanced/footnotes/footnotes.types';
+export { getCaretPositionFromClick } from './components/advanced/footnotes/footnote-caret.utils';
 export {
   default as FootnoteEditor,
+  INLINE_APPLY_DEBOUNCE_MS,
+  type FootnoteEditorHandle,
   type FootnoteEditorProps,
 } from './components/advanced/footnote-editor/footnote-editor.component';
+// The marker-palette session/keydown/filter utilities are exported from `./experimental.ts` —
+// they are new, still-moving API surface. `FootnoteEditorMarkerPalette` and
+// `markerMenuItemToPaletteItem` are there for the same reason: they arrived with the Standard View
+// port and are still moving, so they do not belong in this stable entry point.
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,
   type FootnoteCallerType,
 } from './components/advanced/footnote-editor/footnote-editor.types';
+export { isUnclosedNoteOp } from './components/advanced/footnote-editor/footnote-editor.utils';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
 export {
@@ -105,12 +167,7 @@ export {
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
-export {
-  default as ResourcePickerDialog,
-  type ResourcePickerDialogProps,
-  type ResourcePickerDialogLocalizedStrings,
-  RESOURCE_PICKER_DIALOG_STRING_KEYS,
-} from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
+export { isGroupUnderColumnOrSubMenu } from './components/advanced/menus/menu.util';
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
@@ -156,10 +213,20 @@ export {
 export { default as Toolbar } from './components/advanced/toolbar.component';
 export type { ToolbarProps } from './components/advanced/toolbar.component';
 export {
+  ToolbarCompoundLabel,
+  type ToolbarCompoundLabelProps,
+} from './components/advanced/toolbar-compound-label/toolbar-compound-label.component';
+export {
   default as UiLanguageSelector,
   type LanguageInfo,
   type UiLanguageSelectorProps,
 } from './components/advanced/ui-language-selector.component';
+export {
+  default as InterfaceLanguagePicker,
+  INTERFACE_LANGUAGE_PICKER_STRING_KEYS,
+  type InterfaceLanguagePickerLocalizedStrings,
+  type InterfaceLanguagePickerProps,
+} from './components/advanced/interface-language-picker/interface-language-picker.component';
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
@@ -190,6 +257,12 @@ export type {
   CancelAcceptButtonsLocalizedStrings,
   CancelAcceptButtonsProps,
 } from './components/basics/cancel-accept-buttons.component';
+export { default as DestructiveKeyConfirmation } from './components/basics/destructive-key-confirmation.component';
+export type { DestructiveKeyConfirmationProps } from './components/basics/destructive-key-confirmation.component';
+export { default as DisabledActionTooltip } from './components/basics/disabled-action-tooltip.component';
+export type { DisabledActionTooltipProps } from './components/basics/disabled-action-tooltip.component';
+export { DisabledTooltipWrapper } from './components/basics/disabled-tooltip-wrapper.component';
+export type { DisabledTooltipWrapperProps } from './components/basics/disabled-tooltip-wrapper.component';
 export { default as UndoRedoButtons } from './components/basics/undo-redo-buttons.component';
 export { UNDO_REDO_BUTTONS_STRING_KEYS } from './components/basics/undo-redo-buttons.component';
 export type {
@@ -197,12 +270,18 @@ export type {
   UndoRedoButtonsProps,
 } from './components/basics/undo-redo-buttons.component';
 export { default as ResultsCard } from './components/basics/results-card.component';
+export { EmptyState } from './components/basics/empty-state.component';
+export type { EmptyStateProps } from './components/basics/empty-state.component';
+export { RetryableErrorView } from './components/basics/retryable-error-view.component';
+export type { RetryableErrorViewProps } from './components/basics/retryable-error-view.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
 export type { SpinnerProps } from './components/basics/spinner.component';
 export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
+export { default as WizardStepper } from './components/basics/wizard-stepper/wizard-stepper.component';
+export type { WizardStepperProps } from './components/basics/wizard-stepper/wizard-stepper.component';
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
 export { Avatar, AvatarFallback, AvatarImage } from './components/shadcn-ui/avatar';
 export { Badge, type BadgeProps, badgeVariants } from './components/shadcn-ui/badge';
@@ -240,8 +319,16 @@ export {
 export * from './components/shadcn-ui/button-group';
 export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
+export {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from './components/shadcn-ui/empty';
 export { Input } from './components/shadcn-ui/input';
-export { Kbd } from './components/shadcn-ui/kbd';
+export { Kbd, KbdGroup } from './components/shadcn-ui/kbd';
 export { Label } from './components/shadcn-ui/label';
 export * from './components/shadcn-ui/popover';
 export { Progress } from './components/shadcn-ui/progress';
@@ -267,32 +354,92 @@ export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-grou
 export {
   Tooltip,
   TooltipContent,
+  TooltipPortalContainerProvider,
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export type { Scope } from './components/utils/scripture.util';
+export type { Scope, ScopeWithRange } from './components/utils/scripture.util';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
+export { default as useRetryablePromise } from './hooks/use-retryable-promise.hook';
+export type { RetryablePromiseState } from './hooks/use-retryable-promise.hook';
+export { default as useEventSeededState } from './hooks/use-event-seeded-state.hook';
+export type {
+  EventSeededState,
+  EventSeededStateOptions,
+} from './hooks/use-event-seeded-state.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
+export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
+export { useViewVisibility } from './hooks/use-view-visibility.hook';
+export { useRunWhenVisible } from './hooks/use-run-when-visible.hook';
+export {
+  isRunningInWebView,
+  shouldSuppressFocusReturn,
+  useDismissOnWindowBlur,
+} from './hooks/use-dismiss-on-window-blur.hook';
+export { useHasContentBelow } from './hooks/use-has-content-below.hook';
+export {
+  useLivePopoverAnchor,
+  measureBox,
+  leftEdgeRect,
+  type LivePopoverAnchor,
+  type LivePopoverAnchorSource,
+} from './hooks/use-live-popover-anchor.hook';
+export {
+  pickTabIconUrl,
+  useTabIconSelection,
+  type TabIconUrls,
+} from './hooks/use-tab-icon-selection.hook';
+export {
+  useTruncationTooltip,
+  type UseTruncationTooltipResult,
+} from './hooks/use-truncation-tooltip.hook';
 export {
   useListbox,
   type UseListboxProps,
   type ListboxOption,
 } from './hooks/listbox-keyboard-navigation.hook';
+// `getShrinkStep` and `SHRINK_STEP_HYSTERESIS_PX` are deliberately NOT re-exported: they are the
+// hook's internals, and the per-toolbar threshold constants are tuning values the ADR expects to
+// move. Exporting either would make changing them a consumer-visible change. Tests import them by
+// module path instead.
+export { useShrinkStep } from './hooks/use-shrink-step.hook';
+
+// Contexts
+export {
+  ShrinkStepContext,
+  ShrinkStepOverrideContext,
+  useShrinkStepValue,
+  useShrinkStepOverride,
+  SHRINK_STEP,
+} from './context/shrink-step.context';
+export {
+  ShrinkStepOverride,
+  type ShrinkStepOverrideProps,
+} from './context/shrink-step-override.component';
 
 // Z-index scale
 export {
   Z_INDEX_ABOVE_DOCK,
-  Z_INDEX_FOOTNOTE_EDITOR,
+  Z_INDEX_CONNECTION_LOST,
+  Z_INDEX_FIRST_RUN,
+  Z_INDEX_ABOVE_POPOVER,
+  Z_INDEX_ONBOARDING_TOUR,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
+  Z_INDEX_NESTED_MODAL,
 } from './components/z-index';
+
+// Tooltip delay
+export { TOOLTIP_DELAY_MS } from './components/tooltip-delay';
 
 // Utils
 export { cn } from './utils/shadcn-ui/utils';
 export { getToolbarOSReservedSpaceClassName } from './components/advanced/toolbar.component';
+export { isMacOs, isWindows } from './utils/platform.util';

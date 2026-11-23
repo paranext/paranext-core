@@ -107,17 +107,37 @@ export interface WebViewServiceType {
    * @param webViewId The ID of the WebView whose saved properties to get
    * @returns Saved properties of the WebView definition with the specified ID or undefined if not
    *   found
+   * @throws If no window claimed the WebView and some window could not be asked. The WebView may be
+   *   in the window that did not answer, so `undefined` there would be indistinguishable from the
+   *   WebView genuinely not existing.
    */
   getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
 
   /**
-   * Gets the saved properties on all currently open WebView definitions
+   * Get the saved properties on every currently-open WebView definition. Returns the same
+   * representation `getOpenWebViewDefinition` does, just for every open WebView in one call.
+   *
+   * Use this at mount time to seed initial state for subscribers of `onDidOpenWebView` /
+   * `onDidUpdateWebView` / `onDidCloseWebView` — those events do not replay for tabs already open
+   * at subscription time. Combined with the live event stream, this gives a complete picture of the
+   * WebView landscape from any point in the app's lifetime.
    *
    * Note: this only returns a representation of the current WebView definitions, not the actual web
-   * view definitions themselves. Changing properties on the returned definitions does not affect
-   * the actual WebView definitions.
+   * view definitions themselves. Changing properties on returned definitions does not affect the
+   * actual WebView definitions.
    *
-   * @returns Promise that resolves to an array of saved properties for all open WebView definitions
+   * @returns Saved properties of every open WebView, each listed once under the id it was minted
+   *   with — a web view keeps that id for its whole life, across any number of moves. Empty array
+   *   if no WebViews are open. A WebView being moved between windows is included even though it is
+   *   docked in neither of them for the length of the move, so it is not left out of the result
+   *   while a move is open; treat the result as what is open in the app, not as what is docked in
+   *   some window right now.
+   *
+   *   Do not deduplicate this list by web view type plus project: two open WebViews can genuinely
+   *   share both, and collapsing them would lose one.
+   * @throws If any window could not be asked what it has open. Callers read this as the complete
+   *   picture, and a window that could not answer is indistinguishable in the result from one with
+   *   nothing open, so a short list is refused rather than passed off as the whole landscape.
    */
   getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
 
@@ -209,16 +229,24 @@ export async function getWebViewController<WebViewType extends WebViewController
 }
 
 /** @deprecated 13 November 2024. Renamed to {@link EVENT_NAME_ON_DID_OPEN_WEB_VIEW} */
+// serializeRequestType returns SerializedRequestType (an opaque branded string), but we know the
+// actual value matches this NetworkEvents key. Cast to the literal so consumers can use this
+// constant directly without re-casting at every usage site.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_ADD_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidAddWebView',
-);
+) as 'webView:onDidAddWebView';
 
 /** Name to use when creating a network event that is fired when webViews are created */
+// serializeRequestType returns SerializedRequestType (an opaque branded string), but we know the
+// actual value matches this NetworkEvents key. Cast to the literal so consumers can use this
+// constant directly without re-casting at every usage site.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidOpenWebView',
-);
+) as 'webView:onDidOpenWebView';
 
 /** Event emitted when webViews are created */
 export type OpenWebViewEvent = {
@@ -227,10 +255,14 @@ export type OpenWebViewEvent = {
 };
 
 /** Name to use when creating a network event that is fired when webViews are updated */
+// serializeRequestType returns SerializedRequestType (an opaque branded string), but we know the
+// actual value matches this NetworkEvents key. Cast to the literal so consumers can use this
+// constant directly without re-casting at every usage site.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidUpdateWebView',
-);
+) as 'webView:onDidUpdateWebView';
 
 /** Event emitted when webViews are updated */
 export type UpdateWebViewEvent = {
@@ -238,10 +270,14 @@ export type UpdateWebViewEvent = {
 };
 
 /** Name to use when creating a network event that is fired when webViews are closed */
+// serializeRequestType returns SerializedRequestType (an opaque branded string), but we know the
+// actual value matches this NetworkEvents key. Cast to the literal so consumers can use this
+// constant directly without re-casting at every usage site.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidCloseWebView',
-);
+) as 'webView:onDidCloseWebView';
 
 /** Event emitted when webViews are closed */
 export type CloseWebViewEvent = {

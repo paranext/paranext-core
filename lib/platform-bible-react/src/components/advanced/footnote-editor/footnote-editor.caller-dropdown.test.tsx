@@ -1,0 +1,206 @@
+// @vitest-environment jsdom
+/**
+ * The caller dropdown, driven against the REAL `Editorial` rather than the mocked one used by
+ * footnote-editor.component.test.tsx.
+ *
+ * The mock cannot see what these pin. A caller change is applied to the popover's editor and the
+ * SAVE is what the resulting editor change produces, so with `applyUpdate` stubbed out the chain
+ * stops at the first link and every assertion below passes vacuously.
+ */
+import { describe, it, expect, vi, type MockedFunction } from 'vitest';
+import '@testing-library/jest-dom';
+import userEvent from '@testing-library/user-event';
+import { screen } from '@testing-library/react';
+import type { DeltaOpInsertNoteEmbed } from '@eten-tech-foundation/platform-editor';
+import {
+  CARET_IN_NOTE_TEXT,
+  caretAncestry,
+  editableView,
+  installPopoverJsdomStubs,
+  REAL_EDITOR_TEST_TIMEOUT_MS,
+  renderPopoverAndWaitForInit,
+  settle,
+} from './footnote-editor.test-harness';
+
+installPopoverJsdomStubs();
+vi.setConfig({ testTimeout: REAL_EDITOR_TEST_TIMEOUT_MS });
+
+type OnChange = (noteOps: DeltaOpInsertNoteEmbed[]) => void;
+
+/** Every caller the popover reported to the host, in the order it reported them. */
+function reportedCallers(onChange: MockedFunction<OnChange>): (string | undefined)[] {
+  return onChange.mock.calls.map(([ops]) => ops[0]?.insert?.note?.caller);
+}
+
+async function pickHiddenCaller() {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const onChange: MockedFunction<OnChange> = vi.fn();
+  await renderPopoverAndWaitForInit(editableView, { onChange });
+  onChange.mockClear();
+
+  await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+  // Choosing an item also CLOSES the menu, and the close is what commits the selection.
+  await user.click(screen.getByRole('menuitemcheckbox', { name: /hidden/i }));
+  await settle();
+  return { onChange };
+}
+
+describe('footnote caller dropdown', () => {
+  it('reports the caller the user picked, exactly once', async () => {
+    // Two separate defects met here. The commit runs from the menu's close handler and picking an
+    // item closes the menu, so the state update and the close landed in one React batch and the
+    // handler's closure still held the PREVIOUS selection — every pick committed the value it was
+    // replacing. And the save re-derived the caller from this component's React state on the way
+    // out, so even a corrected pick could be written back stale by a save triggered from inside
+    // the same batch. The caller now lives in the editor and is read back from it, which is why
+    // one pick produces one report and it carries the picked value.
+    const { onChange } = await pickHiddenCaller();
+
+    expect(reportedCallers(onChange)).toEqual(['-']);
+  });
+
+  it('shows the new caller in the note the popover is editing', async () => {
+    // In editable marker mode the caller is TEXT rendered from the note node's own caller state,
+    // so a change the editor never sees is invisible however correctly it reaches the host.
+    await pickHiddenCaller();
+
+    const editorInput = document.querySelector('.editor-input');
+    expect(editorInput?.textContent).toContain('-');
+    expect(editorInput?.textContent).not.toContain('+');
+  });
+
+  it('leaves the caret in the note text and the editor focused after a caller change', async () => {
+    // A caller is applied by replacing the note, which discards the editor's selection — the same
+    // shape as a note-type change. Without the caret restore the caret lands on the note itself,
+    // outside the character runs; without the close-focus hand-off Radix returns focus to this
+    // dropdown's own trigger, so typing goes nowhere even when the caret is right.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {});
+    editorInput.focus();
+
+    await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /hidden/i }));
+    await settle();
+
+    expect(caretAncestry(lexical)).toEqual(CARET_IN_NOTE_TEXT);
+    expect(document.activeElement).toBe(editorInput);
+  });
+
+  it('returns focus to the dropdown when it is dismissed without changing the caller', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { editorInput } = await renderPopoverAndWaitForInit(editableView, {});
+    editorInput.focus();
+    const trigger = screen.getByRole('button', { name: /callerDropdown/i });
+
+    await user.click(trigger);
+    await user.keyboard('{Escape}');
+    await settle();
+
+    // Nothing was committed, so the user keeps their place in the toolbar.
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
+/**
+ * Arm the Custom row, type `caller` into its field, then click the row again — the gesture that
+ * lands on its check, since the check's own indicator is `pointer-events-none` and a click there
+ * reaches the row beneath it.
+ */
+async function commitCustomCallerByClickingTheCheck(caller: string) {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const onChange: MockedFunction<OnChange> = vi.fn();
+  await renderPopoverAndWaitForInit(editableView, { onChange });
+  onChange.mockClear();
+
+  await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+  const customRow = screen.getByRole('menuitemcheckbox', { name: /custom/i });
+  // The first click only ARMS the row: it selects Custom and focuses the field to type into.
+  await user.click(customRow);
+  // The field holds a default caller and caps at one character, so it has to be emptied before
+  // the new one will land.
+  await user.clear(screen.getByRole('textbox'));
+  await user.type(screen.getByRole('textbox'), caller);
+  // The second click is on the check of an already-selected row — the confirmation.
+  await user.click(customRow);
+  await settle();
+  return { onChange, user };
+}
+
+describe('footnote caller dropdown, custom caller', () => {
+  it('applies the typed caller and closes when the row check is clicked', async () => {
+    // Unlike the fixed callers, choosing Custom deliberately keeps the menu open so a caller can
+    // be typed, which leaves the row's own check as the confirmation. Enter already commits this
+    // way (see the dropdown's key handling), so the check performing the same commit is the
+    // gesture that was missing rather than a new one.
+    const { onChange } = await commitCustomCallerByClickingTheCheck('%');
+
+    expect(reportedCallers(onChange)).toEqual(['%']);
+    expect(screen.queryByRole('menuitemcheckbox', { name: /custom/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the typed caller in the note the popover is editing', async () => {
+    await commitCustomCallerByClickingTheCheck('%');
+
+    const editorInput = document.querySelector('.editor-input');
+    expect(editorInput?.textContent).toContain('%');
+    expect(editorInput?.textContent).not.toContain('+');
+  });
+
+  it('keeps the menu open while the field is being used', async () => {
+    // Clicking INTO the field is the user reaching for the text, never a confirmation — closing
+    // there would make the caller impossible to type.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await renderPopoverAndWaitForInit(editableView, {});
+
+    await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /custom/i }));
+    await user.click(screen.getByRole('textbox'));
+
+    expect(screen.getByRole('menuitemcheckbox', { name: /custom/i })).toBeInTheDocument();
+  });
+
+  it('applies the typed caller on Enter, the keyboard form of the same commit', async () => {
+    // Enter has always been the way to confirm a custom caller, and it runs the same close
+    // handler the check now does — so it carries the same requirement: switching to Custom and
+    // typing its caller in ONE visit must write that caller, not the type it replaced.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onChange: MockedFunction<OnChange> = vi.fn();
+    await renderPopoverAndWaitForInit(editableView, { onChange });
+    onChange.mockClear();
+
+    await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /custom/i }));
+    await user.clear(screen.getByRole('textbox'));
+    await user.type(screen.getByRole('textbox'), '#');
+    await user.keyboard('{Enter}');
+    await settle();
+
+    expect(reportedCallers(onChange)).toEqual(['#']);
+  });
+
+  it('discards the typed caller on Escape, leaving the note and the menu as they were', async () => {
+    // Escape is a cancel. Unlike Enter and the row check it must not apply what was typed, and the
+    // abandoned choice must not linger to be committed by the next close.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onChange: MockedFunction<OnChange> = vi.fn();
+    await renderPopoverAndWaitForInit(editableView, { onChange });
+    onChange.mockClear();
+    const trigger = screen.getByRole('button', { name: /callerDropdown/i });
+
+    await user.click(trigger);
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /custom/i }));
+    await user.clear(screen.getByRole('textbox'));
+    await user.type(screen.getByRole('textbox'), '%');
+    await user.keyboard('{Escape}');
+    await settle();
+
+    expect(reportedCallers(onChange)).toEqual([]);
+    expect(document.activeElement).toBe(trigger);
+
+    await user.click(trigger);
+    expect(screen.getByRole('menuitemcheckbox', { name: /generated/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+});

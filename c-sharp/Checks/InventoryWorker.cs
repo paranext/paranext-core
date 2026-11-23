@@ -45,7 +45,9 @@ internal sealed class InventoryWorker
         InventoryId = inventoryId;
         ProjectId = inputRanges[0].ProjectId;
         _inputRanges = inputRanges;
-        _dataSource = new ChecksDataSource(LocalParatextProjects.GetParatextProject(ProjectId))
+        ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectId);
+        scrText.ThrowIfOpenBlocked();
+        _dataSource = new ChecksDataSource(scrText)
         {
             SelectedPassageSet = new SelectedPassages(
                 new BookSet(inputRanges.Select(range => range.Start.BookNum).Distinct())
@@ -53,7 +55,11 @@ internal sealed class InventoryWorker
         };
         // It is possible for ChecksDataSource to change the ScrText
         _scrText = _dataSource.ScrText;
-        _inventory = InventoryFactory.CreateInventory(inventoryId, _dataSource);
+        _inventory = InventoryFactory.CreateInventoryInItsOwnWriteScope(
+            ProjectId,
+            inventoryId,
+            _dataSource
+        );
         _inputRangesFilter = new InputRangesFilter<TextInventoryItem>(
             inputRanges,
             item =>
@@ -259,6 +265,7 @@ internal sealed class InventoryWorker
                     chapterToTokenize = range.Start.ChapterNum;
 
                 // Now tokenize
+                // open-block: exempt — _dataSource is built in the constructor, which refuses the project
                 _dataSource.GetText(range.Start.BookNum, chapterToTokenize, requiredFormat);
                 var textTokens = _dataSource.TextTokens.ToList();
 

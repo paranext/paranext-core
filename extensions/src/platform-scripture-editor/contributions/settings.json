@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "label": "%settings_platformScriptureEditor_group_label%",
+    "description": "%settings_platformScriptureEditor_group_description%",
+    "properties": {
+      "platformScriptureEditor.enableScriptureTextGrid": {
+        "label": "%settings_platformScriptureEditor_enableScriptureTextGrid_label%",
+        "description": "%settings_platformScriptureEditor_enableScriptureTextGrid_description%",
+        "isHidden": true,
+        "default": true
+      },
+      "platformScriptureEditor.markerSettleDelayMs": {
+        "label": "%settings_platformScriptureEditor_markerSettleDelayMs_label%",
+        "description": "%settings_platformScriptureEditor_markerSettleDelayMs_description%",
+        "isHidden": true,
+        "default": 1000
+      },
+      "platformScriptureEditor.resourceSelectionByProjectId": {
+        "label": "%settings_platformScriptureEditor_resourceSelectionByProjectId_label%",
+        "description": "%settings_platformScriptureEditor_resourceSelectionByProjectId_description%",
+        "isHidden": true,
+        "default": {}
+      }
+    }
+  }
+]

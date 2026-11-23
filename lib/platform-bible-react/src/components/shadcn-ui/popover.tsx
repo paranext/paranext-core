@@ -4,6 +4,10 @@ import React from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
+// CUSTOM: Dismiss the popover when the window blurs (a click into another iframe)
+import { useDismissOnWindowBlur } from '@/hooks/use-dismiss-on-window-blur.hook';
+// CUSTOM: Shared portal-container factory (also used by tooltip.tsx) so this workaround is defined once
+import { createPortalContainerContext } from '@/context/portal-container.context';
 // CUSTOM: Import direction helper for RTL support
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 // CUSTOM: Import shared z-index constant to ensure popovers stack above the dock
@@ -25,21 +29,86 @@ function PopoverTrigger({ ...props }: React.ComponentProps<typeof PopoverPrimiti
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
 }
 
+/* #region CUSTOM PopoverPortalContainerProvider — let descendant PopoverContent portal into a custom container instead of document.body */
+const { PortalContainerProvider, usePortalContainer: usePopoverPortalContainer } =
+  createPortalContainerContext();
+
+// CUSTOM: expand JSDoc — state the provider's contract and give a usage example. The shared factory
+// carries the general rationale, so this keeps only what a popover caller needs.
+/**
+ * Keeps descendant {@link PopoverContent} inside `container` instead of `document.body`. Use it
+ * whenever a popover's trigger sits inside an ancestor that owns a focus trap or a
+ * dismiss-on-outside-click layer (`DialogContent`, `DropdownMenuContent`, …), which would otherwise
+ * pull focus out of the popover or treat a click inside it as an outside click.
+ *
+ * Contract:
+ *
+ * - Pass `null` for `container` until the ancestor element exists (the initial state of a
+ *   ref-callback `useState`) to keep Radix's `document.body` default; once it exists, later opens
+ *   portal into it.
+ * - The ancestor must wrap this provider, not the other way round, so only its own descendants are
+ *   redirected.
+ * - Only affects popovers mounted as React descendants; already-open popovers are not re-portalled.
+ *
+ * `TooltipPortalContainerProvider` in `tooltip.tsx` does the same for tooltips.
+ *
+ * @example
+ *
+ * ```tsx
+ * const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+ *
+ * <Dialog open={isOpen} onOpenChange={setIsOpen}>
+ *   <DialogContent ref={setDialogEl}>
+ *     <PopoverPortalContainerProvider container={dialogEl}>
+ *       <BookChapterControl ... />
+ *     </PopoverPortalContainerProvider>
+ *   </DialogContent>
+ * </Dialog>;
+ * ```
+ */
+const PopoverPortalContainerProvider = PortalContainerProvider;
+/* #endregion CUSTOM */
+
 /** @inheritdoc Popover */
+// CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
+// scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function PopoverContent({
   className,
   align = 'center',
   sideOffset = 4,
   // CUSTOM: Destructure style so we can merge the shared z-index constant into it
   style,
+  // CUSTOM: Destructure ref (a regular prop in React 19) and onCloseAutoFocus so
+  // useDismissOnWindowBlur can compose them with its own
+  ref,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   // CUSTOM: Read document direction to support RTL layouts
   const dir: Direction = readDirection();
+  // CUSTOM: Read portal container override (see PopoverPortalContainerProvider above) so nested
+  // popovers stay inside modal dialogs. The hook already resolves "no provider in scope" to
+  // undefined, which is what Radix's Portal wants for its document.body default, so nothing here
+  // has to coalesce it.
+  const portalContainer = usePopoverPortalContainer();
+  // CUSTOM: Added useDismissOnWindowBlur so the popover closes when the window loses focus. A click
+  // into another iframe never reaches this document, so the window's blur stands in for the outside
+  // press; see the hook's TSDoc. The press targets the content's parent, so a dialog hosting this
+  // popover (via PopoverPortalContainerProvider) sees an inside press and stays open. The returned
+  // ref callback also forwards the caller's ref, and the returned onCloseAutoFocus also keeps focus
+  // out of another frame on close and, after the OS window was deactivated, returns focus to the
+  // trigger itself, while still calling the caller's handler.
+  const blurDismissProps = useDismissOnWindowBlur({ ref, onCloseAutoFocus });
   return (
-    <PopoverPrimitive.Portal>
+    // CUSTOM: When a PopoverPortalContainerProvider is in scope, portal into its container
+    // instead of the default document.body so nested popovers stay inside modal dialogs.
+    <PopoverPrimitive.Portal container={portalContainer}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
+        // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's
+        // parent, keeps focus out of another frame on close and restores the trigger after the OS
+        // window was deactivated)
+        {...blurDismissProps}
         align={align}
         sideOffset={sideOffset}
         className={cn(
@@ -104,6 +173,8 @@ export {
   PopoverContent,
   PopoverDescription,
   PopoverHeader,
+  // CUSTOM: export `PopoverPortalContainerProvider` alongside the standard shadcn exports
+  PopoverPortalContainerProvider,
   PopoverTitle,
   PopoverTrigger,
 };

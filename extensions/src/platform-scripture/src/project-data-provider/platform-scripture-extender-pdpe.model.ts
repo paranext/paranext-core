@@ -12,7 +12,6 @@ import {
   USJVerseProjectInterfaceDataTypes,
 } from 'platform-scripture';
 import { Usj, usjToUsxString, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
-import { correctUsjVersion, correctUsxStringVersion } from './scripture.util';
 
 /** The `projectInterface`s the Scripture Extender PDPF serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
@@ -127,6 +126,13 @@ export class ScriptureExtenderProjectDataProviderEngine
     });
   }
 
+  // A read-modify-write round-trips through `usxStringToUsj` in the getters below and back out
+  // through the two setters here. On the extension host that parse runs on `@xmldom/xmldom` (see
+  // `adr-node-dom-globals-polyfill`), which silently repairs recoverable USX defects rather than
+  // rejecting them — the renderer's native `DOMParser` rejects the same input — so what these
+  // setters persist is the repaired form, not what was on disk.
+  // TODO(PT-4444): make the two processes agree on what USX is valid, then drop this note.
+
   // Do not emit update events when running this method because we are subscribing to data updates
   // and sending out update events in the constructor
   @papi.dataProviders.decorators.doNotNotify
@@ -136,7 +142,7 @@ export class ScriptureExtenderProjectDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<USJBookProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Book'].setBookUSX(
       verseRef,
-      correctUsxStringVersion(usjToUsxString(bookUsj)),
+      usjToUsxString(bookUsj),
     );
     if (didSucceed) return true;
     return false;
@@ -151,7 +157,7 @@ export class ScriptureExtenderProjectDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Chapter'].setChapterUSX(
       verseRef,
-      correctUsxStringVersion(usjToUsxString(chapterUsj)),
+      usjToUsxString(chapterUsj),
     );
     if (didSucceed) return true;
     return false;
@@ -166,17 +172,17 @@ export class ScriptureExtenderProjectDataProviderEngine
 
   async getBookUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
-    return usx ? correctUsjVersion(usxStringToUsj(usx)) : undefined;
+    return usx ? usxStringToUsj(usx) : undefined;
   }
 
   async getChapterUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef);
-    return usx ? correctUsjVersion(usxStringToUsj(usx)) : undefined;
+    return usx ? usxStringToUsj(usx) : undefined;
   }
 
   async getVerseUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Verse'].getVerseUSX(verseRef);
-    return usx ? correctUsjVersion(usxStringToUsj(usx)) : undefined;
+    return usx ? usxStringToUsj(usx) : undefined;
   }
 
   /**

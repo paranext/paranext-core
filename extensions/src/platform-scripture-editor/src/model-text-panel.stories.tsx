@@ -1,33 +1,34 @@
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { Dialog, DialogContent } from 'platform-bible-react';
 import {
-  Dialog,
-  DialogContent,
   ResourcePickerDialog,
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import type { DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
   EffectiveResourceReferenceList,
 } from 'platform-scripture';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
-// The editor's nodes/context menu + USJ node styling. The real app loads these globally; Storybook
-// doesn't, so without them the editor's context menu is unstyled and its read-only marker toolbar
-// renders as a stray inline label. We import the same icon-free subset the editorial layout stories
-// use (editor.css/editor-overrides.css are skipped — they reference toolbar icon SVGs by absolute
-// URL that the css-loader can't resolve; the minimal wrapper styles are inlined in
-// EDITOR_WRAPPER_STYLE below).
+// The editor's USJ node styling. The real app loads these globally; Storybook doesn't, so without
+// them the editor's context menu is unstyled and its read-only marker toolbar renders as a stray
+// inline label. We import the same icon-free subset the editorial layout stories used
+// (editor.css/editor-overrides.css were skipped because they previously referenced toolbar icon
+// SVGs by absolute URL that the css-loader couldn't resolve but have now been cleaned up and can be
+// used; the minimal wrapper styles are inlined in EDITOR_WRAPPER_STYLE below).
 /* eslint-disable import/no-relative-packages -- these editor demo CSS files are not part of
    platform-bible-react's package exports (only `.` → dist is exported), so they can only be pulled
    in by relative path; this mirrors src/stories/platform/ten-layout-shared.tsx. */
 import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
-import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/nodes-menu.css';
 /* eslint-enable import/no-relative-packages */
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
+import { CopyrightNoticeBanner } from './copyright-notice/copyright-notice-banner.component';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 
 /**
  * Icon-free subset of the editor's wrapper styles (from the platform scripture-editor
@@ -103,15 +104,51 @@ const dblRef = (resource: DblResourceData): DblResourceReference => ({
 type DecoratorConfig = {
   /** Initially-configured model text refs (admin-level). */
   initialAdmin?: DblResourceReference[];
+  /** Model text refs the user picked themselves (user-level), newest first. */
+  initialUser?: DblResourceReference[];
+  /**
+   * A project that lacks Genesis, so the missing-book message shows while it is the model text.
+   * Other texts still load, so picking one from the message shows its content.
+   */
+  missingBookProjectId?: string;
   /** Resource list seed. */
   resources?: DblResourceData[];
   /** Whether the panel has a project. */
   hasProject?: boolean;
   /** Whether the user can write admin settings. */
   canWriteProjectSettings?: boolean;
-  /** Disable install so the Installing state is observable (otherwise it auto-completes). */
+  /** Disable install so the Selecting state is observable (otherwise it auto-completes). */
   disableInstall?: boolean;
+  /** Make install reject so the recoverable install-failed state is observable. */
+  failInstall?: boolean;
+  /**
+   * Let install succeed while the list keeps reporting the resource uninstalled, so the
+   * installed-but-unavailable state is observable. Distinct from `failInstall`: the install worked,
+   * so the panel must not blame the network.
+   */
+  installNeverConverges?: boolean;
+  /** Hold the configured list in its loading state so the resolving spinner is observable. */
+  isListLoading?: boolean;
+  /** Make the configured-list read fail so the settings-error state is observable. */
+  hasSettingsError?: boolean;
+  /** Hold the DBL catalog as not-yet-arrived so the pre-catalog spinner is observable. */
+  isCatalogReady?: boolean;
+  /** Fail the DBL catalog fetch so the recoverable catalog-error state is observable. */
+  hasCatalogError?: boolean;
+  /** The model text's copyright notice, which the web view supplies in the app. */
+  copyrightNotice?: ReactNode;
 };
+
+/** Maps the story's flags to the discriminated list state the panel consumes. */
+function modelTextsStateFor(
+  config: DecoratorConfig,
+  list: EffectiveResourceReferenceList,
+): EffectiveResourceReferenceListState {
+  if (config.hasSettingsError) return { status: 'error' };
+  if (config.isListLoading) return { status: 'loading' };
+
+  return { status: 'ready', list };
+}
 
 /**
  * Thin in-memory service container: holds the resources + the admin/user model-text lists, derives
@@ -120,8 +157,11 @@ type DecoratorConfig = {
  */
 function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
   const [resources, setResources] = useState<DblResourceData[]>(config.resources ?? seedResources);
-  const [adminItems, setAdminItems] = useState<DblResourceReference[]>(config.initialAdmin ?? []);
-  const [userItems, setUserItems] = useState<DblResourceReference[]>([]);
+  // No setter needed: the admin-level list is only used to seed `effectiveModelTexts` for these
+  // stories now that `ModelTextPanel` no longer writes admin-level settings itself (that write path
+  // moved to the Share Layout dialog).
+  const [adminItems] = useState<DblResourceReference[]>(config.initialAdmin ?? []);
+  const [userItems, setUserItems] = useState<DblResourceReference[]>(config.initialUser ?? []);
   const [scrRef, setScrRef] = useState<SerializedVerseRef>({
     book: 'GEN',
     chapterNum: 1,
@@ -154,6 +194,19 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
     });
   }, []);
 
+  // Stable, as the web view's is: the panel refetches the chapter whenever this changes, so a new
+  // function on every harness render would flicker the content each time the picker opens.
+  const { missingBookProjectId } = config;
+  const getResourceChapter = useCallback(
+    async (resourceProjectId: string) => {
+      // The data provider's wording for a missing book, which the panel recognizes
+      if (resourceProjectId === missingBookProjectId)
+        throw new Error(`Book number 1 not found in project ${resourceProjectId}.`);
+      return { usj: sampleUsj, textDirection: 'ltr' };
+    },
+    [missingBookProjectId],
+  );
+
   const resolvePicker = useCallback((resource?: DblResourceData) => {
     setPickerOpen(false);
     pickerResolveRef.current?.(resource);
@@ -166,28 +219,40 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
       <ModelTextPanel
         localizedStrings={localizedStrings}
         hasProject={config.hasProject ?? true}
-        effectiveModelTexts={effectiveModelTexts}
-        isEffectiveModelTextsLoading={false}
+        modelTextsState={modelTextsStateFor(config, effectiveModelTexts)}
         dblResources={resources}
-        adminModelTexts={{ dataVersion: DATA_VERSION, items: adminItems }}
-        canWriteProjectSettings={config.canWriteProjectSettings ?? true}
+        isCatalogReady={config.isCatalogReady ?? true}
+        hasCatalogError={config.hasCatalogError ?? false}
+        onRetryCatalog={() => {
+          // Catalog re-fetch — logged; these stories pin the state so the control stays observable.
+          // eslint-disable-next-line no-console
+          console.log('onRetryCatalog');
+        }}
+        // The stored user list, as in the app, so picks accumulate and an earlier one can be
+        // picked again
+        getUserModelTexts={async () => ({ dataVersion: DATA_VERSION, items: userItems })}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
-        installResource={(uid) => {
+        installResource={async (uid) => {
+          if (config.failInstall) throw new Error('Simulated install failure');
+          if (config.installNeverConverges) {
+            // Install resolves without the resource ever appearing installed. Blanking the list and
+            // restoring it is how the panel's own catalog refetch presents itself, and it is what
+            // lets the panel re-evaluate a uid it has already attempted; the timeout is needed so
+            // the two updates land in separate commits rather than batching into no change at all.
+            setResources([]);
+            await new Promise((resolve) => {
+              setTimeout(resolve, 0);
+            });
+            setResources(config.resources ?? seedResources);
+            return;
+          }
           if (config.disableInstall) return;
           setResources((rs) =>
             rs.map((r) => (r.dblEntryUid === uid ? { ...r, installed: true } : r)),
           );
         }}
-        setAdminModelTexts={(list) => {
-          // Settings write — log it, then reflect it so the panel updates (thin CRUD).
-          // eslint-disable-next-line no-console
-          console.log('setAdminModelTexts', list);
-          setAdminItems(
-            list.items.filter((i): i is DblResourceReference => i.type === 'dblResource'),
-          );
-        }}
-        setUserModelTexts={(list) => {
+        setUserModelTexts={async (list) => {
           // Settings write — log it, then reflect it so the panel updates (thin CRUD).
           // eslint-disable-next-line no-console
           console.log('setUserModelTexts', list);
@@ -196,7 +261,10 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
           );
         }}
         showResourcePicker={showResourcePicker}
-        getResourceChapter={async () => ({ usj: sampleUsj, textDirection: 'ltr' })}
+        getResourceChapter={getResourceChapter}
+        resourceCopyLimit={undefined}
+        allowInvisibleCharacters={false}
+        copyrightNotice={config.copyrightNotice}
       />
       <Dialog
         open={pickerOpen}
@@ -239,23 +307,61 @@ export const Active: Story = {
 };
 
 /**
- * No model text configured. Click "pick model text" to open the REAL resource picker; choosing the
- * uninstalled ASV installs it and then renders it — fully interactive.
+ * No model text configured. Click "Pick a text…" to open the REAL resource picker; choosing the
+ * uninstalled ASV installs it and then renders it — fully interactive. "More info", above the
+ * button, expands the Base/Model explanation ("Less info" collapses it). The empty-state strings
+ * (the prompt, the button, `_moreInfo%`, `_lessInfo%` and the `_baseOrModel_*%` explanation)
+ * resolve from this extension's `localizedStrings.json` via `MODEL_TEXT_PANEL_STRING_KEYS`, so it
+ * shows real copy.
  */
 export const NoModelText: Story = {
   decorators: [createDecorator({})],
 };
 
-/** A configured resource that is still installing (install disabled so the state is observable). */
-export const Installing: Story = {
+/** A configured resource that is still being selected (install disabled so the state is observable). */
+export const Selecting: Story = {
   decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], disableInstall: true })],
 };
 
-/** The configured model text id isn't present in the DBL list. */
+/**
+ * A configured resource whose install fails — shows the recoverable state (message + "Try again"
+ * button) instead of an endless spinner. The retry re-attempts the same resource.
+ */
+export const InstallFailed: Story = {
+  decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], failInstall: true })],
+};
+
+/**
+ * The install succeeded, but the list still reports the resource as not installed — the catalog and
+ * the disk disagree. The panel says the model text is installed and could not be opened, rather
+ * than blaming the install or the network, and offers a retry that re-reads the list.
+ */
+export const InstalledButUnavailable: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[1])], installNeverConverges: true }),
+  ],
+};
+
+/**
+ * The admin's model text id isn't present in the DBL list. A pick could never replace the admin's
+ * text, so the message points to the team layout and offers no button.
+ */
 export const UnknownResource: Story = {
   decorators: [
     createDecorator({
       initialAdmin: [{ type: 'dblResource', id: 'uid-missing', name: 'Missing' }],
+    }),
+  ],
+};
+
+/**
+ * The model text the user picked isn't present in the DBL list. It is theirs to change, so the
+ * message offers "Pick model text…".
+ */
+export const UserChosenUnknownResource: Story = {
+  decorators: [
+    createDecorator({
+      initialUser: [{ type: 'dblResource', id: 'uid-missing', name: 'Missing' }],
     }),
   ],
 };
@@ -265,7 +371,109 @@ export const NoProject: Story = {
   decorators: [createDecorator({ hasProject: false })],
 };
 
-/** A non-admin user picks a model text — it persists at the user level (logged to console). */
+/**
+ * A non-admin user picks a first model text from the empty state — it persists at the user level
+ * (logged to console). `UserChosen` starts from a text they already picked.
+ */
 export const NonAdminPick: Story = {
   decorators: [createDecorator({ canWriteProjectSettings: false })],
+};
+
+/**
+ * The admin has chosen nothing and the user picked WEB themselves, so the header is a button that
+ * reopens the picker. Pick ASV, then pick WEB again from the header: each earlier pick stays
+ * selectable.
+ */
+export const UserChosen: Story = {
+  decorators: [createDecorator({ initialUser: [dblRef(seedResources[0])] })],
+};
+
+/**
+ * The text the user picked lacks this book. The message offers "Pick model text…", which opens the
+ * same picker as the header; picking ASV shows its text.
+ */
+export const UserChosenMissingBook: Story = {
+  decorators: [
+    createDecorator({
+      initialUser: [dblRef(seedResources[0])],
+      missingBookProjectId: seedResources[0].projectId,
+    }),
+  ],
+};
+
+/**
+ * The admin's text lacks this book. The user cannot change it from here, so the header stays a
+ * label, the message offers no button, and it says a project admin can change it in the team
+ * layout.
+ */
+export const AdminChosenMissingBook: Story = {
+  decorators: [
+    createDecorator({
+      initialAdmin: [dblRef(seedResources[0])],
+      missingBookProjectId: seedResources[0].projectId,
+    }),
+  ],
+};
+
+/** The configured list is still resolving — the panel must not guess at an empty state. */
+export const Loading: Story = {
+  decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[0])], isListLoading: true })],
+};
+
+/**
+ * The configured-model-text setting can't be read. Deliberately offers no control: nothing in the
+ * panel can re-drive that read, so the message carries the recovery expectation instead.
+ */
+export const SettingsError: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], hasSettingsError: true }),
+  ],
+};
+
+/**
+ * A model text is configured but the DBL catalog hasn't arrived. It must spin rather than claim the
+ * resource could not be found.
+ */
+export const ResolvingCatalog: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], isCatalogReady: false }),
+  ],
+};
+
+/**
+ * The DBL resource catalog failed to load, so a configured model text can't be resolved. Unlike the
+ * settings error this is recoverable, so it offers a retry that re-runs the fetch.
+ */
+export const CatalogError: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], hasCatalogError: true }),
+  ],
+};
+
+/**
+ * A model text that carries a copyright notice: the banner sits below the header, so the header
+ * keeps the height that lines it up with Column 3's tab bar.
+ */
+export const WithCopyrightNotice: Story = {
+  decorators: [
+    createDecorator({
+      initialAdmin: [dblRef(seedResources[0])],
+      copyrightNotice: (
+        <CopyrightNoticeBanner
+          notice={{
+            kind: 'restrictedLicense',
+            name: 'WEB',
+            fullName: 'World English Bible',
+            copyrightYears: '2011',
+          }}
+          localizedStrings={getLocalizedStrings([...COPYRIGHT_NOTICE_STRING_KEYS])}
+          onDismiss={() => {
+            // Dismissal is kept by the web view in the app; logged here
+            // eslint-disable-next-line no-console
+            console.log('onDismiss');
+          }}
+        />
+      ),
+    }),
+  ],
 };

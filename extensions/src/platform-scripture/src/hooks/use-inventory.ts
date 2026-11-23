@@ -23,6 +23,8 @@ interface UseInventoryResult {
   getItemOccurrences: (itemKey: string) => Promise<ItemizedInventoryItem[]>;
   /** Function to manually clean up inventory resources */
   cleanup: () => Promise<void>;
+  /** Loads the inventory again for the current range, e.g. after a refused load can succeed */
+  reload: () => void;
 }
 
 /**
@@ -51,6 +53,8 @@ export function useInventory(
   const [inventoryItems, setInventoryItems] = useState<SummarizedInventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
   // Resource tracking for cleanup - using refs to avoid stale closures
   const currentSummaryRef = useRef<SummarizedInventory | undefined>(undefined);
@@ -178,7 +182,7 @@ export function useInventory(
 
   useEffect(() => {
     debouncedLoadInventoryItems(inputRange);
-  }, [debouncedLoadInventoryItems, inputRange]);
+  }, [debouncedLoadInventoryItems, inputRange, reloadKey]);
 
   const jobHandlers = useMemo(() => {
     if (!inventoryDataProvider) {
@@ -248,5 +252,6 @@ export function useInventory(
     error,
     getItemOccurrences,
     cleanup,
+    reload,
   };
 }

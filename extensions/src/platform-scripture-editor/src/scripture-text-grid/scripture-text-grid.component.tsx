@@ -1,0 +1,766 @@
+import { logger } from '@papi/frontend';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
+import { formatReplacementString, formatScrRef, MODIFIER_KEYS } from 'platform-bible-utils';
+import { X } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type SyntheticEvent,
+} from 'react';
+import type { GridResource } from './grid-resources.utils';
+import { ResourceCell } from './resource-cell.component';
+import type { ZoomMenuLabels } from './resource-cell-view.component';
+import { AlignedGrid } from './aligned-grid.component';
+import { DROP_TARGET_RING_CLASSES, REVEALED_ROW_RING_CLASSES } from './aligned-grid.styles';
+import { ResourceColumn, type ResourceColumnReorder } from './resource-column.component';
+import {
+  resourceZoomAreaOf,
+  TEXT_COLLECTION_ZOOM_AREA,
+  toResourceZoomAreaId,
+} from './resource-zoom-area.utils';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import { resolveDisplayVerseNum } from './verse-display.utils';
+import {
+  findRevealFocusTarget,
+  findRevealTargetCell,
+  type RevealRequest,
+} from './reveal-resource.utils';
+import { moveId } from '../scripture-text-grid-order.utils';
+import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
+
+/**
+ * Controls inside a verse row act on their own: the name control, the reorder grip, and the
+ * footnote and cross-reference callers inside the verse.
+ */
+const ROW_INTERACTIVE_SELECTOR = 'button, a[href], [role="button"]';
+
+export type ChapterContextResource = GridResource;
+
+/** Resource ids already logged as yielding no zoom area id, so each one is logged once. */
+const resourceIdsWarnedWithoutZoomArea = new Set<string>();
+
+/**
+ * Whether an event happened inside the element handling it. A window opened from a cell (its
+ * copyright details) renders outside the grid, but React still delivers its events to the cell's
+ * ancestors, so a handler that acts on its own element checks this first.
+ */
+function isFromWithinHandlingElement(event: SyntheticEvent): boolean {
+  return event.target instanceof Node && event.currentTarget.contains(event.target);
+}
+
+/**
+ * Whether a click on a verse row landed on the row itself rather than on something with its own
+ * click behavior: a control inside the row, or content opened from the row that renders outside it
+ * (the right-click menu, a cell's copyright details).
+ *
+ * @param event The click as the row receives it.
+ * @returns True when the click should toggle the row's chapter-context split.
+ */
+function isClickOnRowItself(event: MouseEvent<HTMLElement>): boolean {
+  if (!isFromWithinHandlingElement(event) || !(event.target instanceof Element)) return false;
+  const control = event.target.closest(ROW_INTERACTIVE_SELECTOR);
+  return !control || !event.currentTarget.contains(control);
+}
+
+/**
+ * A visually hidden polite live region. Each announcement renders as a new node (keyed by its
+ * `id`), so a repeat of the same words is read again.
+ */
+function LiveAnnouncementRegion({ announcement }: { announcement: { text: string; id: number } }) {
+  return (
+    <div role="status" aria-live="polite" className="tw:sr-only">
+      {announcement.text ? <span key={announcement.id}>{announcement.text}</span> : undefined}
+    </div>
+  );
+}
+
+type ScriptureTextGridProps = {
+  resources: GridResource[];
+  scrRef: SerializedVerseRef;
+  setScrRef: (scrRef: SerializedVerseRef) => void;
+  /** Whether this web view is showing; owned by the web view, which explains why. */
+  isViewVisible: boolean;
+  /** Accessible name for the list/group region (the web view passes the localized tab title). */
+  ariaLabel?: string;
+  /**
+   * Selects the layout: `'verse'` → vertical column of stacked verse-cell rows (with the
+   * chapter-context split); `'chapter'` → horizontal row of side-by-side full-chapter columns;
+   * `'aligned'` → the verse-aligned grid, where verse N of every resource shares a row. Defaults to
+   * `'verse'` (the product default); `ResourceCell` defaults to `'chapter'` because it is the
+   * generic cell reused by the chapter-context panel and the chapter columns. The two defaults
+   * intentionally differ — every caller here passes `viewMode` explicitly, so the defaults only
+   * document each component's own primary use.
+   */
+  viewMode?: ResourceCollectionViewMode;
+  /** When set, the chapter-context split is open for this resource. */
+  chapterContext?: ChapterContextResource;
+  /** Opens or switches the chapter-context panel to the given resource. */
+  onChapterContextChange?: (context: ChapterContextResource) => void;
+  /** Closes the chapter-context panel. */
+  onChapterContextClose?: () => void;
+  /** Localized accessible name for the chapter-context close button. */
+  closeChapterContextLabel?: string;
+  /**
+   * Localized `"{resourceName}, {reference}"` template for each verse listitem's accessible name.
+   * When omitted, the accessible name falls back to the resource label alone.
+   */
+  cellAccessibleNameTemplate?: string;
+  /** The resource zoom controller; when omitted the cells render without zoom surfaces. */
+  zoom?: ResourceZoomController;
+  /** Localized labels for the zoom menus; passed through to each ResourceCell. */
+  zoomMenuLabels?: ZoomMenuLabels;
+  /**
+   * Fired after a drag-and-drop or keyboard move with the new visible id sequence; omit to disable
+   * reorder. Columns move sideways in the chapter row and the aligned grid, and verse listitems
+   * move up and down. Drag and the keyboard path work in all three: `ResourceCellView` renders the
+   * grip that carries the keyboard path in both its header-band and its inline-name layout.
+   */
+  onReorder?: (newShownIdSequence: string[]) => void;
+  /** Builds the reorder grip's accessible name for a resource (e.g. "Reorder Genesis"). */
+  getReorderHandleLabel?: (resourceName: string) => string;
+  /** Tooltip text shown on grip hover/focus (e.g. "Drag or press arrow keys to reorder"). */
+  reorderHint?: string;
+  /**
+   * Builds the live-region announcement after a keyboard move (e.g. "Moved Genesis to position 2 of
+   * 3").
+   */
+  getReorderAnnouncement?: (resourceName: string, position: number, total: number) => string;
+  /**
+   * Builds the live-region announcement for a reveal whose focus lands outside the revealed cell
+   * (the aligned view's shared root), e.g. "Result shown in KJV". In the verse and chapter views
+   * focus lands inside the cell, which a screen reader already names, so nothing is announced.
+   */
+  getRevealAnnouncement?: (resourceName: string) => string;
+  /**
+   * Asks the grid to scroll one resource's cell into view and outline it; a verse-list row is also
+   * focused, while a chapter or aligned column focuses its scroll area instead. Each request
+   * carries its own `requestId`, so asking for the same resource again reveals it again.
+   */
+  revealRequest?: RevealRequest;
+  /**
+   * Called with the request's id after each reveal attempt, whether or not a cell was found, so the
+   * owner can clear the request and a remount does not replay it.
+   */
+  onRevealHandled?: (requestId: number) => void;
+  /**
+   * Called with the revealed cell's project id after a reveal that found a cell, so the owner can
+   * track it as the active resource where focus cannot say which one it is (the aligned view).
+   */
+  onRevealed?: (projectId: string) => void;
+};
+
+/**
+ * Renders the effective-list resources in one of three layouts (selected by `viewMode`), all synced
+ * to the active scrRef: `verse` → a vertical list of stacked verse listitems (described below);
+ * `chapter` → a horizontal group of side-by-side full-chapter regions, each scrolling independently
+ * and with no split; `aligned` → {@link AlignedGrid}, where verse N of every resource shares a row.
+ * The active scrRef is owned by the web-view root (via `WebViewProps.useWebViewScrollGroupScrRef`)
+ * and passed in — this component is presentational and calls no scroll-group hook.
+ *
+ * In verse mode each row discloses a resizable chapter-context panel beside the list showing that
+ * resource's full chapter, and activating the open row again closes it. The keyboard-accessible
+ * control is the row's name button (rendered by the cell); the row itself toggles on click as a
+ * pointer convenience, so the row contributes no second tab stop. When the split closes and focus
+ * was lost to `<body>` (the panel's X button or Escape unmounted the focused control), focus
+ * returns to the opening row's name control (WCAG 2.4.3); otherwise it stays where the user put
+ * it.
+ *
+ * Each resource container carries `data-resource-id`, so an element inside a cell can be traced
+ * back to its resource, and `data-platform-content-zoom-scope` with the resource's zoom area, so a
+ * click, a focus or Ctrl/⌘+wheel anywhere in the resource's row or column targets that area. The
+ * outer container carries `gridRef`, which focus restoration searches.
+ */
+export function ScriptureTextGrid({
+  resources,
+  scrRef,
+  setScrRef,
+  isViewVisible,
+  ariaLabel,
+  viewMode = 'verse',
+  chapterContext,
+  onChapterContextChange,
+  onChapterContextClose,
+  closeChapterContextLabel,
+  cellAccessibleNameTemplate,
+  zoom,
+  zoomMenuLabels,
+  onReorder,
+  getReorderHandleLabel,
+  reorderHint,
+  getReorderAnnouncement,
+  getRevealAnnouncement,
+  revealRequest,
+  onRevealHandled,
+  onRevealed,
+}: ScriptureTextGridProps) {
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const gridRef = useRef<HTMLDivElement>(null);
+  // Ties each verse row's aria-controls to the chapter-context panel it discloses.
+  const chapterContextPanelId = useId();
+  // resourceId of the row last activated, kept while the split is open, so focus can return to that
+  // row's name control if closing the split drops focus to <body>. Cleared when the split closes.
+  const focusRestoreResourceIdRef = useRef<string | undefined>(undefined);
+  const draggedIdRef = useRef<string | undefined>(undefined);
+  const [dragOverId, setDragOverId] = useState<string | undefined>(undefined);
+  // Resource id whose grip should regain focus after a keyboard move re-renders the row.
+  const keyboardMovedIdRef = useRef<string | undefined>(undefined);
+  // What `LiveAnnouncementRegion` announces after a keyboard move or a reveal; a new `id` per
+  // announcement makes each one a new node.
+  const [liveAnnouncement, setLiveAnnouncement] = useState({ text: '', id: 0 });
+  const announce = useCallback(
+    (text: string) => setLiveAnnouncement((previous) => ({ text, id: previous.id + 1 })),
+    [],
+  );
+
+  // Resource id of the cell last revealed, which is outlined; the effect below says when it ends.
+  const [revealedResourceId, setRevealedResourceId] = useState<string | undefined>(undefined);
+  // The reveal effect runs once per request id, so it reads the request, its callbacks and the
+  // resources through a ref instead of listing them: a new identity must not reveal again.
+  const latestRevealRef = useRef({
+    revealRequest,
+    onRevealHandled,
+    onRevealed,
+    getRevealAnnouncement,
+    resources,
+  });
+  latestRevealRef.current = {
+    revealRequest,
+    onRevealHandled,
+    onRevealed,
+    getRevealAnnouncement,
+    resources,
+  };
+  const revealRequestId = revealRequest?.requestId;
+
+  // Reveals the requested resource's cell (the single-resource layout has none): scroll it to the
+  // nearest edge, then focus without scrolling again (see `findRevealFocusTarget`). Focus inside
+  // the cell is already named for the resource; focus on the aligned view's shared root is not, so
+  // that reveal is announced, and reported through `onRevealed` since focus cannot say which one.
+  useEffect(() => {
+    const {
+      revealRequest: request,
+      onRevealHandled: handled,
+      onRevealed: reportRevealed,
+      getRevealAnnouncement: buildAnnouncement,
+      resources: latestResources,
+    } = latestRevealRef.current;
+    if (!request || request.requestId !== revealRequestId) return;
+    const cell = gridRef.current
+      ? findRevealTargetCell(gridRef.current, request.projectId)
+      : undefined;
+    if (cell) {
+      cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const revealedId = cell.getAttribute('data-resource-id') ?? undefined;
+      const focusTarget = findRevealFocusTarget(cell);
+      focusTarget?.focus({ preventScroll: true });
+      const isFocusNamedForResource = focusTarget !== undefined && cell.contains(focusTarget);
+      if (!isFocusNamedForResource && buildAnnouncement) {
+        const label = latestResources.find((resource) => resource.resourceId === revealedId)?.label;
+        if (label !== undefined) announce(buildAnnouncement(label));
+      }
+      setRevealedResourceId(revealedId);
+      const { projectId: revealedProjectId } = cell.dataset;
+      if (revealedProjectId !== undefined) reportRevealed?.(revealedProjectId);
+    }
+    handled?.(request.requestId);
+  }, [revealRequestId, announce]);
+
+  // The outline ends at: a pointer press in the grid; a key press anywhere in the grid's document
+  // other than a bare modifier; the next reveal; the revealed resource leaving the grid; focus
+  // leaving a revealed verse-list row; or the view becoming hidden. A reference change does not end
+  // it: Find moves the reference just before it reveals.
+  // Blur alone cannot end it for a column, whose scroll area keeps focus until something else moves
+  // it. Keys are heard on the whole document because focus can sit outside the grid, for example
+  // restored to the surrounding chrome. A bare modifier does not count: Control alone is how a
+  // screen-reader user silences speech.
+  // Pointer presses are heard on the grid's own element, so a click in the chrome keeps it.
+  // `viewMode` and the single-resource layout pick which element carries `gridRef`, so a change to
+  // either rebinds the listeners to the current root.
+  const isSingleResourceLayout = resources.length === 1;
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || revealedResourceId === undefined) return undefined;
+    const { ownerDocument } = grid;
+    const clearReveal = () => setRevealedResourceId(undefined);
+    const clearRevealOnKey = (event: globalThis.KeyboardEvent) => {
+      if (MODIFIER_KEYS.has(event.key)) return;
+      clearReveal();
+    };
+    grid.addEventListener('pointerdown', clearReveal);
+    ownerDocument.addEventListener('keydown', clearRevealOnKey);
+    return () => {
+      grid.removeEventListener('pointerdown', clearReveal);
+      ownerDocument.removeEventListener('keydown', clearRevealOnKey);
+    };
+  }, [revealedResourceId, viewMode, isSingleResourceLayout]);
+
+  // The web view withholds reveal requests while hidden (`revealRequestForGrid`), so this never
+  // erases a reveal that has just been applied.
+  useEffect(() => {
+    if (isViewVisible === false) setRevealedResourceId(undefined);
+  }, [isViewVisible]);
+
+  // Cleared rather than derived, so a resource removed and added back is not outlined again.
+  useEffect(() => {
+    if (revealedResourceId === undefined) return;
+    if (!resources.some((resource) => resource.resourceId === revealedResourceId))
+      setRevealedResourceId(undefined);
+  }, [resources, revealedResourceId]);
+
+  /** Clears the outline once focus leaves the revealed cell for somewhere outside it. */
+  const handleRevealBlur = useCallback((event: FocusEvent<HTMLElement>) => {
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    setRevealedResourceId(undefined);
+  }, []);
+
+  const handleReorderDrop = useCallback(
+    (targetId: string) => {
+      const draggedId = draggedIdRef.current;
+      draggedIdRef.current = undefined;
+      setDragOverId(undefined);
+      // Dropping a cell on itself is a no-op; skip it so it does not trigger a redundant persist.
+      if (!onReorder || draggedId === undefined || draggedId === targetId) return;
+      onReorder(
+        moveId(
+          resources.map((resource) => resource.resourceId),
+          draggedId,
+          targetId,
+        ),
+      );
+    },
+    [onReorder, resources],
+  );
+
+  // Keyboard reorder, orientation-agnostic (one handler serves both views): ArrowUp/ArrowLeft move
+  // the cell one slot toward the START (logical index − 1) — Up for the vertical verse list, Left
+  // for the horizontal chapter row; ArrowDown/ArrowRight move toward the END (index + 1).
+  // Operates on logical order, not flipped for RTL. Boundaries no-op.
+  const handleReorderKeyDown = useCallback(
+    (event: KeyboardEvent, resource: GridResource) => {
+      if (!onReorder) return;
+      const towardStart = event.key === 'ArrowUp' || event.key === 'ArrowLeft';
+      const towardEnd = event.key === 'ArrowDown' || event.key === 'ArrowRight';
+      if (!towardStart && !towardEnd) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const index = resources.findIndex(
+        (currentResource) => currentResource.resourceId === resource.resourceId,
+      );
+      if (index < 0) return;
+      const targetIndex = towardStart ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= resources.length) return; // boundary: no-op
+      const neighbor = resources[targetIndex];
+      keyboardMovedIdRef.current = resource.resourceId;
+      onReorder(
+        moveId(
+          resources.map((currentResource) => currentResource.resourceId),
+          resource.resourceId,
+          neighbor.resourceId,
+        ),
+      );
+      if (getReorderAnnouncement) {
+        announce(getReorderAnnouncement(resource.label, targetIndex + 1, resources.length));
+      }
+    },
+    [onReorder, resources, getReorderAnnouncement, announce],
+  );
+
+  // After a keyboard move the row re-renders with the cell in its new DOM slot; keys are stable by
+  // resource id but DOM order changed, so restore focus to the moved cell's grip by its id.
+  useEffect(() => {
+    const movedId = keyboardMovedIdRef.current;
+    if (!movedId) return;
+    keyboardMovedIdRef.current = undefined;
+    gridRef.current?.querySelector<HTMLElement>(`[data-reorder-handle-id="${movedId}"]`)?.focus();
+  }, [resources]);
+
+  // Return focus to the row that opened the split once it closes (WCAG 2.4.3). Closing from the
+  // panel's X button or Escape unmounts the control that had focus, which would otherwise drop focus
+  // to <body>. Only that lost focus is restored: a toggle from the row, or Escape pressed while focus
+  // sits on another row, leaves focus where the user put it, and moving it would scroll the list to
+  // the opener's name. Restore by identity (resourceId) rather than an element reference. Uses
+  // data-resource-id (always present) rather than data-project-id (absent for unavailable resources
+  // whose projectId is undefined).
+  useEffect(() => {
+    if (chapterContext) return;
+    const resourceId = focusRestoreResourceIdRef.current;
+    if (!resourceId) return;
+    focusRestoreResourceIdRef.current = undefined;
+    const { activeElement } = document;
+    if (activeElement && activeElement !== document.body) return;
+    gridRef.current
+      ?.querySelector<HTMLElement>(`[data-resource-id="${resourceId}"] [data-disclosure-control]`)
+      ?.focus();
+  }, [chapterContext]);
+
+  // A resource whose id yields no area id still zooms, with every other such resource, in the
+  // shared fallback area; say so once per id rather than let it look like a resource that ignores zoom.
+  useEffect(() => {
+    resources.forEach(({ resourceId }) => {
+      if (toResourceZoomAreaId(resourceId) !== undefined) return;
+      if (resourceIdsWarnedWithoutZoomArea.has(resourceId)) return;
+      resourceIdsWarnedWithoutZoomArea.add(resourceId);
+      logger.warn(
+        `ScriptureTextGrid: resource id "${resourceId}" yields no zoom area id, so it zooms with the shared fallback "${TEXT_COLLECTION_ZOOM_AREA}" area`,
+      );
+    });
+  }, [resources]);
+
+  // Reorder wiring for one column, shared by the chapter row and the aligned grid. `undefined` when
+  // the host did not enable reorder, which renders a column with no drag affordances. A drag in a
+  // window opened from the cell is not a reorder; ending one still clears, whatever its source.
+  const buildReorder = (resource: GridResource): ResourceColumnReorder | undefined =>
+    onReorder
+      ? {
+          isDropTarget:
+            dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId,
+          onDragStart: (event) => {
+            if (!isFromWithinHandlingElement(event)) return;
+            draggedIdRef.current = resource.resourceId;
+          },
+          onDragEnd: () => {
+            draggedIdRef.current = undefined;
+            setDragOverId(undefined);
+          },
+          onDragOver: (event) => {
+            if (!isFromWithinHandlingElement(event)) return;
+            event.preventDefault();
+            setDragOverId(resource.resourceId);
+          },
+          onDrop: (event) => {
+            if (!isFromWithinHandlingElement(event)) return;
+            handleReorderDrop(resource.resourceId);
+          },
+          handleLabel: getReorderHandleLabel?.(resource.label),
+          hint: reorderHint,
+          onKeyDown: (event) => handleReorderKeyDown(event, resource),
+        }
+      : undefined;
+
+  // Aligned grid: columns are resources, rows are verses. Checked before the single-resource branch
+  // below so one resource renders a degenerate single-column aligned grid rather than falling
+  // through to a chapter view. No chapter-context split and no per-cell activation — both are
+  // verse-view concerns. Reorder works as it does in the chapter row, moving a column sideways.
+  if (viewMode === 'aligned') {
+    return (
+      <div ref={gridRef} className="tw:flex tw:h-full tw:min-h-0 tw:flex-col">
+        {/* Kept outside the grid root so it never lands in a grid track. */}
+        <LiveAnnouncementRegion announcement={liveAnnouncement} />
+        <AlignedGrid scrRef={scrRef} isViewVisible={isViewVisible} ariaLabel={ariaLabel}>
+          {resources.map((resource) => (
+            <ResourceColumn
+              key={resource.resourceId}
+              resource={resource}
+              scrRef={scrRef}
+              isViewVisible={isViewVisible}
+              setScrRef={setScrRef}
+              cellViewMode="aligned"
+              className="tw:min-w-0"
+              isRevealed={revealedResourceId === resource.resourceId}
+              reorder={buildReorder(resource)}
+              zoom={zoom}
+              zoomMenuLabels={zoomMenuLabels}
+            />
+          ))}
+        </AlignedGrid>
+      </div>
+    );
+  }
+
+  // Single resource: render it as a full-width whole chapter — almost the standalone resource
+  // viewer, minus its resource-selector dropdown (the web view header's View Options button covers
+  // adding more texts). No verse-cell list chrome and no chapter-context split; the whole chapter is
+  // already shown.
+  //
+  // `data-resource-id` identifies the resource from any element inside the cell, and
+  // `data-project-id` lets a focused element be traced back to the resource holding the caret.
+  //
+  // This wrapper deliberately does NOT scroll, and the flex chain down to the cell is load-bearing.
+  // The reference scroll drives the CELL's content box (`contentRef` in `ResourceCell`), and that
+  // box only becomes a scroll port when an ancestor constrains the cell's height:
+  // `ResourceCellView`'s root is `flex flex-col` with no height of its own, so it takes one only as
+  // a stretched flex item. Scrolling here instead would leave that box unable to overflow, and a
+  // scroll-group move would silently do nothing on this surface alone. The inner wrapper must stay a
+  // row for the same reason: stretching on its cross axis is what gives the cell its height. The
+  // chapter-context split below uses the same height chain; the chapter row reaches the same end
+  // with `overflow-y-hidden`.
+  const [onlyResource] = resources;
+  if (resources.length === 1 && onlyResource) {
+    const onlyZoomArea = resourceZoomAreaOf(onlyResource.resourceId);
+    return (
+      <div
+        ref={gridRef}
+        role="region"
+        aria-label={ariaLabel}
+        data-project-id={onlyResource.projectId}
+        data-resource-id={onlyResource.resourceId}
+        data-platform-content-zoom-scope={onlyZoomArea}
+        className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:overflow-hidden"
+      >
+        {/* `[&>*]:flex-1` reaches the cell's own root, which is a shrink-to-fit item on this row's
+            main axis and takes no `className` of its own. Without it the header band and a short
+            `[data-cell-placeholder]` hug the inline start at the message's width instead of
+            spanning the pane; prose hides it, so it shows only in the downloading/unavailable/
+            failed/empty states. */}
+        <div className="tw:flex tw:min-h-0 tw:flex-1 tw:[&>*]:flex-1">
+          <ResourceCell
+            resourceRef={onlyResource}
+            zoomArea={onlyZoomArea}
+            zoom={zoom}
+            zoomMenuLabels={zoomMenuLabels}
+            scrRef={scrRef}
+            setScrRef={setScrRef}
+            isViewVisible={isViewVisible}
+            viewMode="chapter"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Layout is derived from viewMode: verse view is a vertical column of stacked resource rows;
+  // chapter view is a horizontal row of side-by-side full-chapter columns. This mapping is
+  // hard-coded; PT-4168 (deferred single-flag orientation override) will later make it
+  // `orientation ?? deriveLayout(viewMode)` — a seam, not the feature.
+  const layout: 'row' | 'column' = viewMode === 'chapter' ? 'row' : 'column';
+
+  // Chapter view: a horizontal row of labeled regions (full-chapter columns), one per resource. Each
+  // column floors its width (`min-w-3xs`) so the row scrolls horizontally when the columns don't fit
+  // (`overflow-x-auto`) instead of collapsing into unreadable slivers; each column is full-height with
+  // its own vertical scroll (ResourceCellView's inner `overflow-auto`). Selection stays in sync across
+  // columns via the shared scrRef — each read-only Editorial reports clicks through onScrRefChange ->
+  // setScrRef and re-navigates. No chapter-context split and no per-cell activation here (that is
+  // verse-only). Each resource is its own landmark region (may be rotor-heavy at very high counts —
+  // flagged for AT validation, PT-4057).
+  //
+  // Reorder (drag + keyboard) lives here on the side-by-side columns: the grip's ArrowLeft/ArrowRight
+  // and horizontal drag map naturally to moving a column left/right in the row. The verse list below
+  // reuses the same handlers with vertical drag and ArrowUp/ArrowDown on its grips.
+  if (layout === 'row') {
+    return (
+      <div
+        ref={gridRef}
+        role="group"
+        aria-label={ariaLabel}
+        className="tw:flex tw:h-full tw:flex-row tw:divide-x tw:overflow-x-auto tw:overflow-y-hidden"
+      >
+        <LiveAnnouncementRegion announcement={liveAnnouncement} />
+        {resources.map((resource, orderIndex) => (
+          <ResourceColumn
+            key={resource.resourceId}
+            resource={resource}
+            scrRef={scrRef}
+            setScrRef={setScrRef}
+            isViewVisible={isViewVisible}
+            orderIndex={orderIndex}
+            cellViewMode="chapter"
+            className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
+            isRevealed={revealedResourceId === resource.resourceId}
+            reorder={buildReorder(resource)}
+            zoom={zoom}
+            zoomMenuLabels={zoomMenuLabels}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Verse view: a vertical column of stacked resource rows (one per resource); the column scrolls
+  // vertically (`overflow-y-auto`) when the rows don't fit. Clicking a row, or Enter/Space on its
+  // name control, toggles the chapter-context split beside the column: it opens the split for that
+  // row, closes it if that row is already open, or switches it from another row. When `onReorder`
+  // is set each listitem is also a drag source + drop target, and its grip (rendered by
+  // ResourceCell) is the keyboard reorder control (ArrowUp/ArrowDown); the row ignores clicks on
+  // controls inside it (`isClickOnRowItself`), so reordering never toggles the split. The
+  // Scripture reference is constant across rows in a render, so format it once for the accessible
+  // name (`"{name}, {ref}"`, or just the name when no template is provided). Resolved so the
+  // announcement names the verse the cells actually display: at a verse-0 reference they show verse
+  // 1. This names the row, not its contents — a resource that lacks verse 1 shows the empty state
+  // under the same label.
+  //
+  // Accepted a11y cost (`adr-single-verse-surfaces-resolve-verse-zero-to-one`): this makes
+  // verse 0 unobservable inside the grid. At MAT 5:0 the label announces "MAT 5:1" and the cells show verse 1, so a
+  // screen-reader user gets no in-grid signal that the shared reference is 5:0. Naming the row
+  // after a verse the cells demonstrably do not show would be worse. The boundary cues live outside
+  // the grid: the BCV control shows the real reference, and its previous-verse button is disabled
+  // there (an announced state, not an inert control). What that button cannot do is roll back to
+  // the previous chapter — tracked in PT-4379.
+  const reference = formatScrRef({ ...scrRef, verseNum: resolveDisplayVerseNum(scrRef.verseNum) });
+  const verseItemName = (label: string) =>
+    cellAccessibleNameTemplate
+      ? formatReplacementString(cellAccessibleNameTemplate, { resourceName: label, reference })
+      : label;
+
+  const verseColumn = (
+    <div
+      role="list"
+      aria-label={ariaLabel}
+      className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:divide-y tw:overflow-y-auto"
+    >
+      <LiveAnnouncementRegion announcement={liveAnnouncement} />
+      {resources.map((resource) => {
+        const isOpen = chapterContext?.resourceId === resource.resourceId;
+        // Activating a verse item latches the focus-restore target and toggles this resource's
+        // chapter context. Shared by the click and keyboard paths so they can never drift apart.
+        // Activating a different row switches the split rather than closing it.
+        const activate = onChapterContextChange
+          ? () => {
+              focusRestoreResourceIdRef.current = resource.resourceId;
+              if (isOpen) onChapterContextClose?.();
+              else onChapterContextChange(resource);
+            }
+          : undefined;
+        const zoomArea = resourceZoomAreaOf(resource.resourceId);
+        // Same reorder wiring the columns use. The listitem cannot be a `ResourceColumn` — it has
+        // its own role and activation — but it must not carry a second copy of the handlers.
+        const reorder = buildReorder(resource);
+        const isRevealed = revealedResourceId === resource.resourceId;
+        // The drop-target ring wins when both apply.
+        let ringClass = '';
+        if (reorder?.isDropTarget) ringClass = ` ${DROP_TARGET_RING_CLASSES}`;
+        else if (isRevealed) ringClass = ` ${REVEALED_ROW_RING_CLASSES}`;
+        return (
+          // The row's click handler is a pointer-only convenience that widens the hit area to the
+          // whole row. The keyboard-accessible control is the name button the cell renders (see
+          // ResourceNameDisclosure), which owns the tab stop, the accessible name and
+          // aria-expanded. jsx-a11y flags both the handler on a non-interactive role and the
+          // missing key listener beside it; adding either a role or a key handler here is what
+          // would be wrong, because it would make the row a second tab stop for the control it
+          // already contains.
+          /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */
+          <div
+            key={resource.resourceId}
+            role="listitem"
+            data-project-id={resource.projectId}
+            data-resource-id={resource.resourceId}
+            data-platform-content-zoom-scope={zoomArea}
+            // Spelled out because JSX cannot take a computed attribute name without spreading; this is
+            // the value of TEXT_COLLECTION_CELL_ATTRIBUTE, which the reveal lookup searches for.
+            data-text-collection-cell=""
+            data-revealed={isRevealed ? 'true' : undefined}
+            onBlur={isRevealed ? handleRevealBlur : undefined}
+            // Focusable but out of the tab order: a click on the read-only verse text then focuses
+            // the row, and a reveal can focus it, so keyboard focus sits in the resource the user is
+            // reading (which useActiveResourceProjectId reports to Find). The cell's controls own
+            // the tab stops.
+            tabIndex={-1}
+            data-testid={onReorder ? 'scripture-text-grid-cell-draggable' : undefined}
+            // Named here only when no disclosure control exists to name it: with one, the control
+            // carries the row's accessible name and labelling both would announce it twice.
+            aria-label={activate ? undefined : verseItemName(resource.label)}
+            draggable={reorder ? true : undefined}
+            onClick={
+              activate
+                ? (event) => {
+                    if (!isClickOnRowItself(event)) return;
+                    // The second click of a double-click would undo the first.
+                    if (event.detail > 1) return;
+                    activate();
+                  }
+                : undefined
+            }
+            onDragStart={reorder?.onDragStart}
+            onDragEnd={reorder?.onDragEnd}
+            // No onDragLeave — it fires on child elements; clearing on drop/dragEnd is more reliable.
+            onDragOver={reorder?.onDragOver}
+            onDrop={reorder?.onDrop}
+            // The open-row tint is driven by `isOpen` rather than an `aria-expanded:` variant: that
+            // attribute lives on the name control inside the cell, and the variant only matches the
+            // element carrying it. The focus ring lives on that control too, so the row declares
+            // none.
+            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col${activate ? ' tw:cursor-pointer tw:transition-colors tw:hover:bg-muted' : ''}${activate && isOpen ? ' tw:bg-muted/50' : ''}${ringClass}`}
+          >
+            <ResourceCell
+              resourceRef={resource}
+              zoomArea={zoomArea}
+              zoom={zoom}
+              zoomMenuLabels={zoomMenuLabels}
+              scrRef={scrRef}
+              setScrRef={setScrRef}
+              isViewVisible={isViewVisible}
+              viewMode={viewMode}
+              showDragHandle={reorder ? true : undefined}
+              reorderHandleLabel={reorder?.handleLabel}
+              reorderHint={reorder?.hint}
+              onReorderKeyDown={reorder?.onKeyDown}
+              onDisclosureActivate={activate}
+              disclosureAccessibleName={verseItemName(resource.label)}
+              isDisclosureExpanded={isOpen}
+              disclosureControlsId={chapterContextPanelId}
+            />
+          </div>
+          /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */
+        );
+      })}
+    </div>
+  );
+
+  // `gridRef` wraps the whole return (both the verse column and, when open, the chapter-context
+  // panel) so focus restoration searches both sides. The group and the verse panel render whether
+  // or not the split is open, so the column keeps its place in the tree and opening or closing the
+  // split never remounts the rows' editors; only the handle and the chapter-context panel come and
+  // go. Their ids let the group re-lay out when they do.
+  return (
+    <div ref={gridRef} className="tw:h-full tw:min-h-0">
+      <ResizablePanelGroup direction="horizontal" className="tw:h-full tw:min-h-0">
+        <ResizablePanel id="verse-column" minSize={30} className="tw:min-h-0">
+          {verseColumn}
+        </ResizablePanel>
+        {chapterContext ? (
+          <>
+            <ResizableHandle withHandle />
+            <ResizablePanel
+              id="chapter-context"
+              defaultSize={45}
+              minSize={25}
+              className="tw:min-h-0"
+            >
+              <div
+                id={chapterContextPanelId}
+                role="region"
+                aria-label={chapterContext.label}
+                data-testid="scripture-text-grid-chapter-context"
+                data-project-id={chapterContext.projectId}
+                data-resource-id={chapterContext.resourceId}
+                data-platform-content-zoom-scope={resourceZoomAreaOf(chapterContext.resourceId)}
+                className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
+              >
+                <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:px-1 tw:py-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={closeChapterContextLabel}
+                    onClick={onChapterContextClose}
+                  >
+                    <X className="tw:h-4 tw:w-4" />
+                  </Button>
+                </div>
+                <div className="tw:flex tw:min-h-0 tw:flex-1">
+                  <ResourceCell
+                    resourceRef={chapterContext}
+                    zoomArea={resourceZoomAreaOf(chapterContext.resourceId)}
+                    zoom={zoom}
+                    zoomMenuLabels={zoomMenuLabels}
+                    scrRef={scrRef}
+                    setScrRef={setScrRef}
+                    isViewVisible={isViewVisible}
+                    viewMode="chapter"
+                  />
+                </div>
+              </div>
+            </ResizablePanel>
+          </>
+        ) : undefined}
+      </ResizablePanelGroup>
+    </div>
+  );
+}

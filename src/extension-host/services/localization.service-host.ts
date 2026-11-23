@@ -18,6 +18,8 @@ import {
   StringsMetadata,
   LocalizeKey,
   getCurrentLocale,
+  getErrorMessage,
+  isPlatformError,
 } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
@@ -27,8 +29,15 @@ import {
   localizedStringsDocumentCombiner,
   waitForResyncContributions,
 } from '@extension-host/services/contribution.service';
-import { LanguageInfo } from 'platform-bible-react';
 import { Canon } from '@sillsdev/scripture';
+import { languageDetails } from '@shared/data/language-details.data';
+import { computeSetupDialogLanguages } from '@extension-host/services/setup-dialog-languages.util';
+import {
+  loadedLocales,
+  markLoadedLocalesFailed,
+  markLoadedLocalesReady,
+} from '@extension-host/services/interface-languages.service';
+import { filterToOffered } from '@shared/data/interface-languages.data';
 
 /**
  * The base language to get localized strings for if they are not present in other languages
@@ -41,21 +50,6 @@ const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localizati
 const LANGUAGE_CODE_REGEX =
   /^(?<grandfathered>(?:en-GB-oed|i-(?:ami|bnn|default|enochian|hak|klingon|lux|mingo|navajo|pwn|t(?:a[oy]|su))|sgn-(?:BE-(?:FR|NL)|CH-DE))|(?:art-lojban|cel-gaulish|no-(?:bok|nyn)|zh-(?:guoyu|hakka|min(?:-nan)?|xiang)))|(?:(?<language>(?:[A-Za-z]{2,3}(?:-(?<extlang>[A-Za-z]{3}(?:-[A-Za-z]{3}){0,2}))?)|[A-Za-z]{4}|[A-Za-z]{5,8})(?:-(?<script>[A-Za-z]{4}))?(?:-(?<region>[A-Za-z]{2}|[0-9]{3}))?(?:-(?<variant>[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*(?:-(?<extension>[0-9A-WY-Za-wy-z](?:-[A-Za-z0-9]{2,8})+))*)(?:-(?<privateUse>x(?:-[A-Za-z0-9]{1,8})+))?$/;
 
-const loadedLocales: Record<string, LanguageInfo> = {};
-
-const languageDetails: Record<string, LanguageInfo> = {
-  en: {
-    autonym: 'English',
-    uiNames: { es: 'inglés', de: 'Englisch', fr: 'Anglais', km: 'ភាសាអង់គ្លេស' },
-  },
-  es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch' } },
-  fr: { autonym: 'Français', uiNames: { en: 'French', de: 'Französisch', es: 'francés' } },
-  de: { autonym: 'Deutsch', uiNames: { en: 'German', es: 'alemán', fr: 'Allemand' } },
-  km: { autonym: 'ខ្មែរ', uiNames: { en: 'Khmer', es: 'jemer', de: 'Khmer', fr: 'Khmer' } },
-  zh: { autonym: '中文', uiNames: { en: 'Chinese', es: 'chino' } },
-  hi: { autonym: 'हिन्दी', uiNames: { en: 'Hindi', es: 'hindi' } },
-  ar: { autonym: 'العربية', uiNames: { en: 'Arabic', es: 'árabe' } },
-};
 function getFileNameFromUri(uriToMatch: string): string {
   const file = path.parse(uriToMatch);
   return file.name;
@@ -105,8 +99,21 @@ async function getLocalizedFileUris(): Promise<string[]> {
   return entries;
 }
 
-/** Load the contents of all localization files from disk */
+/**
+ * Load the contents of all localization files from disk, then signal that `loadedLocales` is
+ * complete (or that loading failed) so the interface-language validator can stop waiting.
+ */
 async function loadAllLocalizationData() {
+  try {
+    await readAllLocalizationFiles();
+    markLoadedLocalesReady();
+  } catch (error) {
+    markLoadedLocalesFailed(getErrorMessage(error));
+    throw error;
+  }
+}
+
+async function readAllLocalizationFiles() {
   const localizeFileUris = await getLocalizedFileUris();
   const baseLocalizedStringsDoc: LocalizedStringDataContribution = {
     localizedStrings: {},
@@ -167,7 +174,8 @@ async function loadAllLocalizationData() {
 
 async function getDefaultLanguages() {
   const languagesFromSetting = await settingsService.get('platform.interfaceLanguage');
-  if (languagesFromSetting) return languagesFromSetting;
+  // Copy: callers change the list they get, and the settings service returns the stored array.
+  if (languagesFromSetting) return [...languagesFromSetting];
 
   const currentLocaleLanguage = getCurrentLocale();
   return [currentLocaleLanguage];
@@ -291,6 +299,47 @@ class LocalizationDataProviderEngine
   extends DataProviderEngine<LocalizationDataDataTypes>
   implements IDataProviderEngine<LocalizationDataDataTypes>
 {
+  #lastInterfaceLanguageSerialized: string | undefined;
+
+  /**
+   * Live re-render bridge: re-emit the localized-string data types whenever the interface language
+   * changes, so every mounted `useLocalizedStrings` refetches and the UI re-renders in the new
+   * language without a restart. Call this AFTER the engine is registered so `notifyUpdate` is the
+   * real papi-layered method rather than the base-class no-op (registration replaces `notifyUpdate`
+   * asynchronously, so subscribing in the constructor could drop an in-window change).
+   * `settingsService.subscribe` fires on ANY settings write (all settings share one data type), so
+   * guard on an actual `interfaceLanguage` change to avoid redundant refetch storms.
+   */
+  subscribeToInterfaceLanguageChanges() {
+    (async () => {
+      try {
+        await settingsService.subscribe(
+          'platform.interfaceLanguage',
+          (newValue) => {
+            if (isPlatformError(newValue)) {
+              logger.warn(
+                `Localization service failed to read platform.interfaceLanguage: ${getErrorMessage(newValue)}`,
+              );
+              return;
+            }
+            const serialized = JSON.stringify(newValue);
+            if (serialized === this.#lastInterfaceLanguageSerialized) return;
+            const isSeed = this.#lastInterfaceLanguageSerialized === undefined;
+            this.#lastInterfaceLanguageSerialized = serialized;
+            // Seed the baseline on the first emit; nothing is mounted to re-render at startup.
+            if (isSeed) return;
+            this.notifyUpdate(['LocalizedString', 'LocalizedStrings']);
+          },
+          { retrieveDataImmediately: true },
+        );
+      } catch (e) {
+        logger.warn(
+          `Localization service failed to subscribe to platform.interfaceLanguage: ${getErrorMessage(e)}`,
+        );
+      }
+    })();
+  }
+
   // getLocalizedString doesn't use instance state but cannot be static because it implements the
   // IDataProviderEngine<LocalizationDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
@@ -331,8 +380,10 @@ class LocalizationDataProviderEngine
   }
 
   async getLocalizedStrings({ localizeKeys, locales = [] }: LocalizationSelectors) {
-    const languages =
-      locales.length > 0 ? locales : await settingsService.get('platform.interfaceLanguage');
+    // Copy: the list is shortened below, and the settings service returns the stored array.
+    const languages = [
+      ...(locales.length > 0 ? locales : await settingsService.get('platform.interfaceLanguage')),
+    ];
 
     // This will remove languages with no data from languages so that work only needs to be done once
     // rather than doing it for every key.
@@ -359,7 +410,7 @@ class LocalizationDataProviderEngine
   // implements the IDataProviderEngine<LocalizationDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getAvailableInterfaceLanguages() {
-    return loadedLocales;
+    return filterToOffered(loadedLocales);
   }
 
   // retrieveCurrentLocalizedStringData doesn't use instance state but cannot be static because it
@@ -391,6 +442,26 @@ class LocalizationDataProviderEngine
   > {
     throw new Error('setAvailableInterfaceLanguages disabled');
   }
+
+  async getSetupDialogLanguages() {
+    const offeredLanguages = await this.getAvailableInterfaceLanguages();
+    await waitForResyncContributions();
+    const englishData = localizedStringsDocumentCombiner.getLocalizedStringData(BACKUP_LANGUAGE);
+    return computeSetupDialogLanguages(
+      englishData,
+      (tag) => localizedStringsDocumentCombiner.getLocalizedStringData(tag),
+      offeredLanguages,
+    );
+  }
+
+  // setSetupDialogLanguages doesn't use instance state but cannot be static because it implements
+  // the IDataProviderEngine<LocalizationDataDataTypes> interface
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setSetupDialogLanguages(): Promise<
+    DataProviderUpdateInstructions<LocalizationDataDataTypes>
+  > {
+    throw new Error('setSetupDialogLanguages disabled');
+  }
 }
 
 let initializationPromise: Promise<void>;
@@ -402,10 +473,13 @@ export async function initialize(): Promise<void> {
       const executor = async () => {
         try {
           await loadAllLocalizationData();
+          const engine = new LocalizationDataProviderEngine();
           dataProvider = await dataProviderService.registerEngine(
             localizationServiceProviderName,
-            new LocalizationDataProviderEngine(),
+            engine,
           );
+          // Subscribe only after registration so `notifyUpdate` is the real papi-layered method.
+          engine.subscribeToInterfaceLanguageChanges();
           resolve();
         } catch (error) {
           reject(error);
@@ -421,7 +495,9 @@ export async function initialize(): Promise<void> {
 export const testingLocalizationService = {
   implementLocalizationDataProviderEngine: async () => {
     await loadAllLocalizationData();
-    return new LocalizationDataProviderEngine();
+    const engine = new LocalizationDataProviderEngine();
+    engine.subscribeToInterfaceLanguageChanges();
+    return engine;
   },
 };
 

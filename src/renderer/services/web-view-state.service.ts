@@ -1,6 +1,13 @@
 import { deserialize, serialize } from 'platform-bible-utils';
-
-const WEBVIEW_STATE_KEY = 'web-view-state';
+import localWindowStorage, { WEB_VIEW_STATE_KEY } from './local-storage.service';
+/**
+ * State for every web view, keyed on the id its web view was minted with.
+ *
+ * A web view keeps the same id for its whole life, including across a move to another window (see
+ * `mint-web-view-ids.util.ts`), so that minted id is also stable storage key across a restart.
+ * Storage is per window — `localWindowStorage` prefixes every key with the window id — but the id
+ * itself never changes shape depending on which window is asking.
+ */
 const stateMap = new Map<string, Record<string, unknown>>();
 const idsLookedUp = new Set<string>();
 
@@ -8,7 +15,7 @@ function loadIfNeeded(): void {
   // If we have any data or tried to look something up, we've already loaded
   if (stateMap.size > 0 || idsLookedUp.size > 0) return;
 
-  const serializedState = localStorage.getItem(WEBVIEW_STATE_KEY);
+  const serializedState = localWindowStorage.getItem(WEB_VIEW_STATE_KEY);
   if (!serializedState) return;
 
   const entries: [[string, Record<string, unknown>]] = deserialize(serializedState);
@@ -22,7 +29,7 @@ function save(): void {
   if (idsLookedUp.size <= 0) return;
 
   const stateToSave = serialize(Array.from(stateMap.entries()));
-  localStorage.setItem(WEBVIEW_STATE_KEY, stateToSave);
+  localWindowStorage.setItem(WEB_VIEW_STATE_KEY, stateToSave);
 }
 
 function getRecord(id: string): Record<string, unknown> {

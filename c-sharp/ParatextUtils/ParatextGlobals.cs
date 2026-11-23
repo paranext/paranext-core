@@ -30,8 +30,15 @@ internal static class ParatextGlobals
             // Required for the Paratext.Data.Encodings.StringEncoders static constructor
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-            // Required for non-Windows platforms
-            Alert.Implementation = new AlertStub();
+            // Required for non-Windows platforms.
+            // AlertCapture is a strict superset of AlertStub: when a caller
+            // installs an `AlertCapture.StartCapture()` scope, ParatextData's
+            // Alert.Show / Alert.ShowLater calls are recorded as AlertEntry
+            // records on that scope; out-of-scope, AlertCapture falls back to
+            // the same Console.WriteLine + Negative behavior AlertStub used.
+            // Without this assignment, AlertCapture's ShowInternal is never
+            // invoked and import/copy/create alert capture is silently empty.
+            Alert.Implementation = new AlertCapture();
             RegistryU.Implementation = new RegistryStub();
 
             // Required for ICU.NET

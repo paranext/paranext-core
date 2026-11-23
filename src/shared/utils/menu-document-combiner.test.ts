@@ -47,6 +47,10 @@ const startingDoc = {
       },
     ],
   },
+  defaultWebViewTabMenu: {
+    groups: {},
+    items: [],
+  },
   defaultWebViewContextMenu: {
     groups: {
       'platform.insert': { order: 1, isExtensible: true },
@@ -337,6 +341,10 @@ const expectedOutput = {
       },
     ],
   },
+  defaultWebViewTabMenu: {
+    groups: {},
+    items: [],
+  },
   defaultWebViewContextMenu: {
     groups: {
       'platform.insert': { order: 1, isExtensible: true },
@@ -362,6 +370,9 @@ const expectedOutput = {
   webViewMenus: {
     'videoExtension.playEditWebView': {
       includeDefaults: false,
+      // Folded in despite `includeDefaults: false` — the tab menu is not opt-out. Empty here only
+      // because this document's `defaultWebViewTabMenu` is
+      tabMenu: { groups: {}, items: [] },
       topMenu: {
         columns: {
           'videoExtension.video': { label: '%video%', order: 1 },
@@ -613,6 +624,316 @@ test('Name prefixes are verified', () => {
   ).toThrow(/Cannot add 'differentPrefix.something'. The new web view must start with test./);
 });
 
+test('hiddenInterfaceModes flag on a menu item validates and survives combination', () => {
+  const menuCombiner = new MenuDocumentCombiner(startingDoc);
+  menuCombiner.addOrUpdateContribution('test', {
+    mainMenu: {
+      items: [
+        {
+          label: '%test_hiddenItem%',
+          localizeNotes: 'Test item hidden in simple mode',
+          group: 'platform.windowGroup1',
+          order: 99,
+          command: 'test.hiddenCommand',
+          hiddenInterfaceModes: ['simple'],
+        },
+      ],
+    },
+  });
+  const hiddenItem = menuCombiner.rawOutput?.mainMenu.items.find(
+    (item) => 'command' in item && item.command === 'test.hiddenCommand',
+  );
+  expect(hiddenItem).toMatchObject({ hiddenInterfaceModes: ['simple'] });
+});
+
+describe('when expression validation', () => {
+  const baseDocument = {
+    mainMenu: {
+      columns: { 'platform.col': { label: '%col%', order: 1, isExtensible: true } },
+      groups: { 'platform.group': { column: 'platform.col', order: 1, isExtensible: true } },
+      items: [],
+    },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    webViewMenus: {},
+  };
+
+  function makeContributionWithMainMenuItem(extraItemProps: Record<string, string>) {
+    return {
+      mainMenu: {
+        columns: {},
+        groups: {},
+        items: [
+          {
+            label: '%item%',
+            localizeNotes: '',
+            group: 'platform.group',
+            order: 1,
+            command: 'ext1.doThing',
+            ...extraItemProps,
+          },
+        ],
+      },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {},
+    };
+  }
+
+  function makeContributionWithWebViewItem(extraItemProps: Record<string, string>) {
+    return {
+      mainMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {
+        'ext1.webView': {
+          includeDefaults: false,
+          topMenu: {
+            columns: { 'ext1.col': { label: '%col%', order: 1 } },
+            groups: { 'ext1.group': { column: 'ext1.col', order: 1 } },
+            items: [
+              {
+                label: '%item%',
+                localizeNotes: '',
+                group: 'ext1.group',
+                order: 1,
+                command: 'ext1.doThing',
+                ...extraItemProps,
+              },
+            ],
+          },
+        },
+      },
+    };
+  }
+
+  it('accepts a valid when expression on a main menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithMainMenuItem({ when: 'ext1.someFlag && !platform.otherFlag' }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects a syntactically invalid expression', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithMainMenuItem({ when: 'ext1.someFlag &&' }),
+      ),
+    ).toThrow(/Invalid when expression/);
+  });
+
+  it('rejects template variables in main menu expressions', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithMainMenuItem({ when: 'ext1.webView.{webViewId}.flag' }),
+      ),
+    ).toThrow(/Unknown template variable \{webViewId\}/);
+  });
+
+  it('accepts known template variables in web view menu expressions', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewItem({
+          enabledWhen: 'ext1.webView.{webViewId}.isEditable',
+          checkedWhen: 'ext1.project.{projectId}.someToggle',
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects unknown template variables in web view menu expressions', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewItem({ when: 'ext1.webView.{webviewid}.flag' }),
+      ),
+    ).toThrow(/Unknown template variable \{webviewid\}/);
+  });
+
+  function makeContributionWithSurfaceItem(
+    surface: 'defaultWebViewTabMenu' | 'defaultWebViewContextMenu',
+    extraItemProps: Record<string, string>,
+  ) {
+    return {
+      mainMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {},
+      [surface]: {
+        groups: { 'ext1.group': { order: 1 } },
+        items: [
+          {
+            label: '%item%',
+            localizeNotes: '',
+            group: 'ext1.group',
+            order: 1,
+            command: 'ext1.doThing',
+            ...extraItemProps,
+          },
+        ],
+      },
+    };
+  }
+
+  it('accepts a when expression on a tab menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithSurfaceItem('defaultWebViewTabMenu', {
+          when: 'ext1.webView.{webViewId}.flag',
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('accepts enabledWhen on a tab menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithSurfaceItem('defaultWebViewTabMenu', { enabledWhen: 'ext1.flag' }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects enabledWhen on a submenu item of a context menu', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution('ext1', {
+        mainMenu: { columns: {}, groups: {}, items: [] },
+        defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+        defaultWebViewContextMenu: {
+          groups: {
+            'ext1.group': { order: 1 },
+            'ext1.subGroup': { menuItem: 'ext1.sub', order: 1 },
+          },
+          items: [
+            {
+              label: '%item%',
+              localizeNotes: '',
+              group: 'ext1.group',
+              order: 1,
+              id: 'ext1.sub',
+              enabledWhen: 'ext1.flag',
+            },
+          ],
+        },
+        webViewMenus: {},
+      }),
+    ).toThrow(/'%item%' in defaultWebViewContextMenu uses enabledWhen on a submenu/);
+  });
+
+  it('rejects checkedWhen on a context menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithSurfaceItem('defaultWebViewContextMenu', { checkedWhen: 'ext1.flag' }),
+      ),
+    ).toThrow(/'%item%' in defaultWebViewContextMenu uses checkedWhen/);
+  });
+
+  function makeContributionWithWebViewSurfaceItem(
+    surface: 'tabMenu' | 'contextMenu',
+    extraItemProps: Record<string, string>,
+  ) {
+    return {
+      mainMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {
+        'ext1.webView': {
+          includeDefaults: false,
+          [surface]: {
+            groups: { 'ext1.group': { order: 1 } },
+            items: [
+              {
+                label: '%item%',
+                localizeNotes: '',
+                group: 'ext1.group',
+                order: 1,
+                command: 'ext1.doThing',
+                ...extraItemProps,
+              },
+            ],
+          },
+        },
+      },
+    };
+  }
+
+  it('accepts enabledWhen on a web view tab menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewSurfaceItem('tabMenu', { enabledWhen: 'ext1.flag' }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects checkedWhen on a web view context menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewSurfaceItem('contextMenu', { checkedWhen: 'ext1.flag' }),
+      ),
+    ).toThrow(/'%item%' in webViewMenus\.ext1\.webView\.contextMenu uses checkedWhen/);
+  });
+
+  it('accepts enabledWhen on a tab menu item in the base document (validateOutput path)', () => {
+    const badBaseDocument = {
+      ...baseDocument,
+      defaultWebViewTabMenu: {
+        groups: { 'platform.tabGroup': { order: 1 } },
+        items: [
+          {
+            label: '%bad%',
+            localizeNotes: '',
+            group: 'platform.tabGroup',
+            order: 1,
+            command: 'platform.bad',
+            enabledWhen: 'platform.flag',
+          },
+        ],
+      },
+    };
+    expect(() => new MenuDocumentCombiner(badBaseDocument)).not.toThrow();
+  });
+
+  it('rejects an invalid expression in the base document (validateOutput path)', () => {
+    const badBaseDocument = {
+      ...baseDocument,
+      mainMenu: {
+        ...baseDocument.mainMenu,
+        items: [
+          {
+            label: '%bad%',
+            localizeNotes: '',
+            group: 'platform.group',
+            order: 1,
+            command: 'platform.bad',
+            when: 'platform.flag &&',
+          },
+        ],
+      },
+    };
+    expect(() => new MenuDocumentCombiner(badBaseDocument)).toThrow(/Invalid when expression/);
+  });
+});
+
 test('Web view menu defaults are combined', () => {
   const menuCombiner = new MenuDocumentCombiner({
     mainMenu: {
@@ -633,6 +954,19 @@ test('Web view menu defaults are combined', () => {
           group: 'platform.topGroup',
           order: 1,
           command: 'platform.test',
+        },
+      ],
+    },
+    defaultWebViewTabMenu: {
+      groups: {
+        'platform.tabGroup': { order: 1, isExtensible: true },
+      },
+      items: [
+        {
+          label: '%test%',
+          group: 'platform.tabGroup',
+          order: 1,
+          command: 'platform.testTabItem',
         },
       ],
     },
@@ -741,6 +1075,19 @@ test('Web view menu defaults are combined', () => {
         },
       ],
     },
+    defaultWebViewTabMenu: {
+      groups: {
+        'platform.tabGroup': { order: 1, isExtensible: true },
+      },
+      items: [
+        {
+          label: '%test%',
+          group: 'platform.tabGroup',
+          order: 1,
+          command: 'platform.testTabItem',
+        },
+      ],
+    },
     defaultWebViewContextMenu: {
       groups: {
         'platform.contextGroup': { order: 1, isExtensible: true },
@@ -798,6 +1145,17 @@ test('Web view menu defaults are combined', () => {
             },
           ],
         },
+        tabMenu: {
+          groups: { 'platform.tabGroup': { order: 1, isExtensible: true } },
+          items: [
+            {
+              label: '%test%',
+              group: 'platform.tabGroup',
+              order: 1,
+              command: 'platform.testTabItem',
+            },
+          ],
+        },
       },
       'testWebView2.testWebView2': {
         includeDefaults: true,
@@ -842,8 +1200,111 @@ test('Web view menu defaults are combined', () => {
             },
           ],
         },
+        tabMenu: {
+          groups: { 'platform.tabGroup': { order: 1, isExtensible: true } },
+          items: [
+            {
+              label: '%test%',
+              group: 'platform.tabGroup',
+              order: 1,
+              command: 'platform.testTabItem',
+            },
+          ],
+        },
       },
     },
   };
   expect(deepEqual(menuCombiner.rawOutput, expectedWebViewOutput)).toBeTruthy();
+});
+
+test('Tab menu defaults reach a web view that opted out of the other defaults', () => {
+  // The tab menu's items act on the tab frame rather than the web view's contents, so
+  // `includeDefaults: false` — which almost every shipped web view leaves implied — must not take
+  // them away. Without this the tab menu would be empty on nearly every tab.
+  const menuCombiner = new MenuDocumentCombiner({
+    mainMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewTabMenu: {
+      groups: { 'platform.tabGroup': { order: 1, isExtensible: true } },
+      items: [
+        { label: '%float%', group: 'platform.tabGroup', order: 1, command: 'platform.floatTab' },
+      ],
+    },
+    defaultWebViewContextMenu: {
+      groups: { 'platform.contextGroup': { order: 1, isExtensible: true } },
+      items: [
+        {
+          label: '%note%',
+          group: 'platform.contextGroup',
+          order: 1,
+          command: 'platform.insertNote',
+        },
+      ],
+    },
+    webViewMenus: {},
+  });
+
+  menuCombiner.addOrUpdateContribution('optOut', {
+    webViewMenus: {
+      'optOut.optOut': {
+        includeDefaults: false,
+        tabMenu: {
+          groups: { 'optOut.tabGroup': { order: 2 } },
+          items: [
+            { label: '%rewind%', group: 'optOut.tabGroup', order: 1, command: 'optOut.rewind' },
+          ],
+        },
+      },
+    },
+  });
+
+  // The combiner's output type is intentionally opaque; read the one entry this asserts on
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const output = menuCombiner.rawOutput as unknown as {
+    webViewMenus: Record<
+      string,
+      { tabMenu?: { items: { command?: string }[] }; contextMenu?: unknown }
+    >;
+  };
+  const optOutMenu = output.webViewMenus['optOut.optOut'];
+
+  expect(optOutMenu.tabMenu?.items.map((item) => item.command)).toEqual(
+    expect.arrayContaining(['optOut.rewind', 'platform.floatTab']),
+  );
+  // The positive control for the opt-out itself: the context menu default is still withheld, so
+  // this is the tab channel behaving differently rather than includeDefaults being ignored
+  expect(optOutMenu.contextMenu).toBeUndefined();
+});
+
+test('a base document with no default tab menu still folds, rather than losing the contribution', () => {
+  // `defaultWebViewTabMenu` is optional in the schema, and menus.model.test.ts pins that a document
+  // omitting it is legal. When it is absent and the web view contributes no tab menu of its own,
+  // the fold has nothing on either side — and an empty tab menu is `{ groups: {}, items: [] }`,
+  // the shape menu-data.service-host.ts already falls back to. `{}` fails the output schema's
+  // `required: ['groups', 'items']`, which rolls the whole contribution back: the extension would
+  // lose its main menu and every other channel with it, and contribution.service swallows the
+  // throw, so nothing on screen would explain it.
+  const docWithoutDefaultTabMenu = {
+    mainMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    webViewMenus: {},
+  };
+
+  const menuCombiner = new MenuDocumentCombiner(docWithoutDefaultTabMenu);
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('someExtension', {
+      webViewMenus: { 'someExtension.someWebView': { includeDefaults: false } },
+    }),
+  ).not.toThrow();
+
+  // The combiner's output type is intentionally opaque; read the one entry this asserts on
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const output = menuCombiner.rawOutput as unknown as {
+    webViewMenus: Record<string, { tabMenu?: unknown }>;
+  };
+  expect(output.webViewMenus['someExtension.someWebView'].tabMenu).toEqual({
+    groups: {},
+    items: [],
+  });
 });

@@ -69,6 +69,9 @@
   --color-destructive-foreground: var(--destructive-foreground);
   /* CUSTOM: success-foreground added */
   --color-success-foreground: var(--success-foreground);
+  /* CUSTOM: diff-deleted added — text-grade red for diff <s> deletions (counterpart to
+     --success-foreground for <u> insertions); --destructive is background-grade in Platform dark. */
+  --color-diff-deleted: var(--diff-deleted);
   /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
@@ -138,6 +141,8 @@
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
   /* CUSTOM: success-foreground added */
   --success-foreground: oklch(62.7% 0.194 149.214); /* green-600 */
+  /* CUSTOM: diff-deleted — red-600 counterpart to success-foreground for diff <s> deletion text */
+  --diff-deleted: oklch(0.577 0.245 27.325); /* red-600 */
   /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
   --warning: oklch(0.84 0.16 84); /* amber-400 */
   --warning-foreground: oklch(0.28 0.07 46); /* amber-950 */
@@ -180,6 +185,8 @@
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
   /* CUSTOM: success-foreground added */
   --success-foreground: oklch(79.2% 0.209 151.711); /* green-400 */
+  /* CUSTOM: diff-deleted — red-400 counterpart to success-foreground for diff <s> deletion text */
+  --diff-deleted: oklch(0.704 0.191 22.216); /* red-400 */
   /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
   --warning: oklch(0.41 0.11 46); /* amber-900 */
   --warning-foreground: oklch(0.99 0.02 95); /* amber-50 */
@@ -220,6 +227,8 @@
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
   --success-foreground: oklch(62.7% 0.194 149.214); /* green-600 */
+  /* CUSTOM: diff-deleted — red-600 counterpart to success-foreground for diff <s> deletion text */
+  --diff-deleted: oklch(0.577 0.245 27.325); /* red-600 */
   /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
   --warning: oklch(0.84 0.16 84); /* amber-400 */
   --warning-foreground: oklch(0.28 0.07 46); /* amber-950 */
@@ -260,6 +269,8 @@
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
   --success-foreground: oklch(79.2% 0.209 151.711); /* green-400 */
+  /* CUSTOM: diff-deleted — red-400 counterpart to success-foreground for diff <s> deletion text */
+  --diff-deleted: oklch(0.704 0.191 22.216); /* red-400 */
   /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
   --warning: oklch(0.41 0.11 46); /* amber-900 */
   --warning-foreground: oklch(0.99 0.02 95); /* amber-50 */

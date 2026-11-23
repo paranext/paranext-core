@@ -191,6 +191,35 @@ export const Positioning: Story = {
   },
 };
 
+export const WithCloseButton: Story = {
+  render: () => (
+    <div className="tw:space-y-4">
+      <div className="tw:flex tw:flex-wrap tw:gap-2">
+        <Button onClick={() => sonner('Dismiss me with the close button')}>Normal Toast</Button>
+        <Button
+          onClick={() =>
+            sonner.success('Saved successfully', {
+              description: 'Hover the toast to reveal the close button.',
+            })
+          }
+        >
+          Success with Description
+        </Button>
+        <Button onClick={() => sonner.error('Something went wrong')}>Error Toast</Button>
+      </div>
+      <Sonner closeButton />
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Passes `closeButton` to `<Sonner>` so every toast renders a dismiss button (revealed on hover).',
+      },
+    },
+  },
+};
+
 export const Interactive: Story = {
   render: () => (
     <div className="tw:space-y-4">

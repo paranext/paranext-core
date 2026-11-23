@@ -1,0 +1,131 @@
+# isolated E2E Tests
+
+Feature and state-mutating E2E tests that do not share an Electron instance with other suites.
+How each subset gets its app differs — see "Subdirectories" below.
+
+## Supported platform
+
+Linux, including WSL2, is the supported platform for this suite: a green or red run is judged
+there. Native Windows and macOS are best effort — the suite is written to work on them, but a
+failure that shows only there may come from the platform and not from your change.
+
+## What belongs here
+
+- Feature-specific tests that can't share app state with other tests
+- Tests that mutate settings, projects, or layout state that would affect later tests if shared
+- Tests that need the app in a specific initial state (e.g., a particular interface mode)
+
+## How to run
+
+Run the subset for the area you changed. The full run takes about an hour, so keep it for a change
+that reaches across areas.
+
+```bash
+# One subset (a directory below). The bare form runs nothing: it lists the subsets and exits 1.
+npm run test:e2e:isolated <subset>
+
+# Every spec under tests/isolated/, the subsets and the loose specs alike: about an hour.
+# Every spec here launches its own Electron, so this runs as one command.
+npm run test:e2e:isolated all
+
+# A single file, or any path — this also reaches the specs directly under tests/isolated/, which
+# belong to no subset because run-isolated.mjs derives subsets from directories only
+npm run test:e2e:isolated tests/isolated/comments-tab.spec.ts
+npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e2e-tests/tests/isolated/<file>.spec.ts
+
+# On WSL2, wrap a subset to keep its windows off the desktop. Everything here launches its own
+# Electron, so the wrap applies to all of it.
+e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
+```
+
+A new subset directory or loose spec needs an entry in `subset-sources.json` (`main` = the source
+the group is about, `incidental` = source it only drives). What else the map's unit test checks,
+and what to change when it fails, is in "The isolated e2e map" in
+[`e2e-tests/CLAUDE.md`](../../CLAUDE.md#the-isolated-e2e-map).
+
+A file named by a spec key or prefix key inside a subset (such as
+`scripture-editor/chapter-marker-repair.spec.ts` or `scripture-editor/no-unasked-edits-`) is
+recommended for that key only: listing the same file in the subset's own `main` has no effect, so
+leave it out there. When the subset is recommended too, the key is folded into it.
+
+## Spec files directly under `tests/isolated/`
+
+These belong to no subset, but `all` includes them; to run one alone, give its path (see "How to
+run").
+
+- `bcv-open-resource-books-simple.spec.ts` (one Electron per test) — the Simple-mode
+  book/chapter/verse control offering books from an open resource
+- `comments-tab.spec.ts` (one Electron per worker)
+- `find-follows-read-only-project-simple.spec.ts` (one Electron per test) — Simple-mode Find
+  following the editor onto a project that is not editable
+- `internet-settings.spec.ts` (one Electron per test)
+- `no-projects-without-sample.spec.ts` (one Electron per test) — an empty projects folder with the
+  sample project turned off resolves to the editor's no-projects guidance and Home's empty state
+- `onboarding-tour.spec.ts` (one Electron per test) — the onboarding tour in Simple and Power mode
+
+## Subdirectories
+
+- `comment-assignment/` (one Electron per worker) — tests for assigning comments to users
+- `content-zoom-live-sharing/` (one Electron per test) — content zoom shared live between open tabs of one project, and a Settings-default change moving only the panes that follow it
+- `content-zoom-restart/` (no fixture; calls `launchElectronApp` itself to relaunch) — content zoom surviving an app restart
+- `content-zoom-tools/` (one Electron per test) — content zoom in Find, the inventories and Checks
+- `docking/` (one Electron per test) — tests for dropping dragged tabs onto a tab bar's empty space, for tab-row stability while a drag starts, for closing a tab with a middle click on its header, and for Simple mode never docking, merging or moving anything by a drag
+- `find/` (one Electron per worker) — tests for the find/replace flow
+- `first-run/` (one Electron per test) — tests for the first-run wizard
+- `menu-dismissal/` (one Electron per worker) — menus closing when a click lands in another frame
+- `multi-window/` (one Electron per test, except `window-layout-persistence.spec.ts` and two tests
+  in `window-close-rule.spec.ts`, which use no fixture and call `launchElectronApp` themselves —
+  several launches per test to exercise relaunch) — tests for multi-window lifecycle (second-window startup, focus routing, app-global scroll group and theme state reaching every window and surviving any window's close, single shutdown-task run on quit), window layout persistence (windows, layouts, and bounds surviving relaunches; a deliberately closed window staying closed; the pre-multi-window single-window upgrade path), and per-window UI isolation (overlays, dialogs, notifications, navigation targets, and web-view placement staying in their own window; scroll groups deliberately app-global)
+- `navigation-history/` (one Electron per test) — tests for back/forward reference history navigation
+- `notes-content-zoom/` (one worker-scoped Electron per Simple-mode spec via `commentAppOwner`; the Power-mode Comments panel test starts its own app on `isolated.fixture`) — tests for the Notes feature's per-pane content zoom (comment list, Simple-mode Comments panel)
+- `overlay/` (one Electron per test) — tests for dialogs and overlays opened from web views
+- `resources-content-zoom/` (one Electron per test) — content zoom in the Bible Texts panel
+- `scripture-editor/` (one Electron per test) — tests for scripture editor behaviors that need a real
+  editor in a real window: which view a project/mode opens in, marker and paragraph-style palette
+  triggers, attribute-display settle, type-through save echo, settled annotation/selection
+  positions, annotations that span verse numbers, milestones, char span openers and paragraph
+  breaks, and the Standard-view clipboard USFM round trip. The clipboard spec writes to the real
+  machine-wide OS clipboard — see "State that leaks between runs" in `e2e-tests/CLAUDE.md`
+- `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
+- `settings-zoom-stepper/` (one Electron per test) — the Settings layout and its zoom steppers
+- `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
+- `web-view-lifecycle/` (one Electron per test) — tests for a web view's React root when its iframe gets a new document: a reload, or a tab move within the window, unmounts the root of the document it replaces, and neither that nor the tab's close logs a crash or React's unmount-during-render warning. A reload runs the web view's own `pagehide` and `unload` listeners before that unmount
+
+## Running on Windows
+
+Native Windows is best effort (see "Supported platform"). Run a subset the same way as anywhere
+else, from a normal PowerShell or cmd prompt:
+
+```
+npm run test:e2e:isolated <subset>
+```
+
+Each test launches and tears down its own app window. Windows has no Xvfb equivalent to keep those
+windows off the desktop, so expect them to open and close in front of you for the whole run — leave
+the machine alone and keep the session unlocked while it runs. A locked session (Win+L), or anything
+else that steals focus, breaks the tests that assert real window focus (the `multi-window` subset).
+
+A healthy teardown prints `[teardown +<n>ms] Port 8876 is free` between tests (the log tags carry
+the milliseconds elapsed in that phase), with no `still in use` or `EBUSY` lines.
+
+### If it goes wrong
+
+- **Tests fail at their full timeout one after another, some passing only on the automatic
+  retry** — usually alongside `PAPI websocket server failed to bind: listen EADDRINUSE: address
+already in use ::1:8876` in the new app's log and `Settings service undefined` in the test
+  output. This means something is still holding port 8876 — an app instance you started
+  separately, or an orphan left by a run that crashed or was interrupted with Ctrl+C. Find and
+  clear it:
+  ```
+  netstat -ano | findstr :8876
+  tasklist /FI "IMAGENAME eq electron.exe"
+  npm run stop
+  ```
+  `npm run stop` stops every app and dotnet process on the machine by name, so use it only once
+  nothing else on the machine needs them running.
+- **Leftover `%LOCALAPPDATA%\Temp\paranext-e2e-*` folders** are safe to delete once no app is
+  running — each one is a temporary profile from a past run.
+- **A test that fails only around window focus or activation** — check whether the session was
+  locked or another window stole focus during the run.
+- **A test reported as "skipped"** means its worker died, not that it was intentionally excluded —
+  treat it as a failure and read the first failing test in that file.

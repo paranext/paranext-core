@@ -2,30 +2,31 @@ import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-util
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
-  useData,
   useDataProvider,
   useLocalizedStrings,
   useProjectDataProvider,
-  useProjectSetting,
+  useScrollGroupScrRef,
 } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { usePromise } from 'platform-bible-react';
-import {
-  formatReplacementString,
-  getErrorMessage,
-  isPlatformError,
-  LocalizeKey,
-} from 'platform-bible-utils';
+import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo } from 'react';
+import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
-import { isDblResourceReference } from './resource-reference.utils';
-import { DEFAULT_RESOURCE_REFERENCE_LIST } from './select-dbl-resource';
+import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
+import { getModelResourceProjectId, isDblResourceReference } from './resource-reference.utils';
+import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
+import { useInstallDblResource } from './use-install-dbl-resource.hook';
+import { useAllowInvisibleCharacters } from './use-allow-invisible-characters.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
+import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.utils';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -41,6 +42,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...MODEL_TEXT_PANEL_STRING_KEYS,
   '%webView_modelTextPanel_title%',
   '%webView_modelTextPanel_title_withResource%',
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
 ];
 
 /**
@@ -49,29 +51,22 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
  * resolved resource's USJ + text direction) are passed as callbacks.
  */
 globalThis.webViewComponent = function ModelTextPanelWebView({
+  id: webViewId,
   projectId,
+  scrollGroupScrRef,
   updateWebViewDefinition,
-  useWebViewScrollGroupScrRef,
+  useWebViewState,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => ALL_STRING_KEYS, []));
 
-  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
-
   // --- Raw data sources ---
 
-  const [effectiveModelTexts, isEffectiveModelTextsLoading] = useEffectiveResourceReferenceList(
+  const effectiveModelTextsState = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.modelTexts',
   );
-
-  const [adminModelTextsSetting, setAdminModelTextsSetting] = useProjectSetting(
-    projectId,
-    'platformScripture.modelTexts',
-    DEFAULT_RESOURCE_REFERENCE_LIST,
-  );
-  const adminModelTexts = isPlatformError(adminModelTextsSetting)
-    ? undefined
-    : adminModelTextsSetting;
+  const effectiveModelTexts =
+    effectiveModelTextsState.status === 'ready' ? effectiveModelTextsState.list : undefined;
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -79,19 +74,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   );
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyError] = useData(
-    'platformGetResources.dblResourcesProvider',
-  ).DblResources(undefined, []);
-  const dblResources = isPlatformError(resourcesPossiblyError) ? [] : resourcesPossiblyError;
-
-  const [canWriteProjectSettings] = usePromise(
-    useCallback(
-      async () =>
-        (await textConnectionsProvider?.canUserWriteProjectTextConnectionSettings()) ?? false,
-      [textConnectionsProvider],
-    ),
-    false,
-  );
+  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
 
   // --- Dynamic title: "Model text: {displayName}" when a resource is loaded ---
   // Computed inline (rather than in the presentational component) because updateWebViewDefinition
@@ -106,6 +89,28 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     ? dblResources.find((r) => r.dblEntryUid === dblRef.id && r.installed)
     : undefined;
   const modelTextSmallName = matchedInstalledResource?.displayName;
+
+  // Follow the scroll group in the RESOLVED MODEL RESOURCE's versification, not this panel's own
+  // (editable) project's. This web view's definition `projectId` is the editable project (it reads
+  // that project's `platformScripture.modelTexts` setting), but it renders the model resource — so
+  // passing the resource's id as the conversion project makes `scrRef` come back converted into the
+  // resource's versification and makes a verse click here stamp the resource as the scroll group's
+  // source project (other web views then convert FROM it). We call `useScrollGroupScrRef` directly
+  // (rather than the `useWebViewScrollGroupScrRef` prop) so we can pass that resource id instead of
+  // this web view's own `projectId`; the `scrollGroupScrRef` prop is kept live by the web-view host
+  // re-rendering the component on definition updates. `undefined` until a resource resolves — no
+  // conversion, and nothing is displayed yet anyway.
+  const modelResourceProjectId = matchedInstalledResource?.projectId;
+  const [scrRef, setScrRef] = useScrollGroupScrRef(
+    scrollGroupScrRef,
+    useCallback(
+      (newScrollGroupScrRef) =>
+        updateWebViewDefinition({ scrollGroupScrRef: newScrollGroupScrRef }),
+      [updateWebViewDefinition],
+    ),
+    modelResourceProjectId,
+  );
+
   useEffect(() => {
     const baseTitle = localizedStrings['%webView_modelTextPanel_title%'];
     if (!baseTitle) return;
@@ -119,87 +124,133 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     }
   }, [modelTextSmallName, localizedStrings, updateWebViewDefinition]);
 
+  // Ctrl+F opens Find for the displayed model resource.
+  useOpenFindShortcut(webViewId, modelResourceProjectId);
+
+  // This web view's definition `projectId` is the editable project whose model-text setting is
+  // read, so the displayed resource is invisible to global navigation UI unless declared here.
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    modelResourceProjectId ? [modelResourceProjectId] : [],
+    canPublishResourcePanelProjectIds(effectiveModelTextsState, isCatalogReady),
+    // These panels are re-pointed by reloading them, which reuses the web view id, so the
+    // published list must be scoped to the project it was built for.
+    projectId,
+  );
+
+  // The project on screen, whichever kind of reference chose it, for its copyright notice
+  const displayedProjectId = getModelResourceProjectId(effectiveModelText, dblResources);
+
   // --- Operation callbacks ---
 
-  const installResource = useCallback(
-    (dblEntryUid: string) => {
-      dblResourcesProvider
-        ?.installDblResource(dblEntryUid)
-        .catch((e: unknown) =>
-          logger.error(`Model text auto-install failed: ${getErrorMessage(e)}`),
-        );
-    },
-    [dblResourcesProvider],
+  // Re-resolve the cached resource list once an install completes so the resource flips to
+  // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
+  // provider resolves — its identity change then re-fires the panel's auto-install effect for the
+  // real install.
+  const installResource = useInstallDblResource(
+    dblResourcesProvider,
+    'model text panel',
+    refetchCatalog,
   );
 
-  const setAdminModelTexts = useCallback(
-    (list: ResourceReferenceList) => {
-      setAdminModelTextsSetting?.(list);
-    },
-    [setAdminModelTextsSetting],
-  );
-
+  // Rejects rather than resolving when there is no provider yet: the panel treats a resolved write
+  // as saved and waits for the new list, which would then never come.
   const setUserModelTexts = useCallback(
     async (list: ResourceReferenceList) => {
-      await textConnectionsProvider?.setUserModelTexts(list);
+      if (!textConnectionsProvider)
+        throw new Error('Text connection settings are not available yet');
+      await textConnectionsProvider.setUserModelTexts(list);
     },
     [textConnectionsProvider],
   );
 
+  const getUserModelTexts = useCallback(
+    async () => textConnectionsProvider?.getUserModelTexts(),
+    [textConnectionsProvider],
+  );
+
+  // Opened without `allowRemove`, so every pick is an add.
   const showResourcePicker = useCallback(
-    (selectedResourceIds: string[]) =>
-      papi.dialogs.showDialog('platform.resourcePicker', {
-        resourceType: 'ScriptureResource',
-        selectedResourceIds,
-      }),
+    async (selectedResourceIds: string[]) =>
+      (
+        await papi.dialogs.showDialog('platform.resourcePicker', {
+          selectedResourceIds,
+          isModal: true,
+          resourceType: 'ScriptureResource',
+          disableRestrictedModelTexts: true,
+        })
+      )?.resource,
     [],
   );
 
   const getResourceChapter = useCallback(
     async (resourceProjectId: string, ref: SerializedVerseRef) => {
-      const usjPdp = await papi.projectDataProviders.get(
-        'platformScripture.USJ_Chapter',
-        resourceProjectId,
-      );
-      const usj =
-        (await usjPdp.getChapterUSJ({
-          book: ref.book,
-          chapterNum: ref.chapterNum,
-          verseNum: 1,
-          versificationStr: ref.versificationStr,
-        })) ?? defaultUsj;
+      const getUsj = async () => {
+        const usjPdp = await papi.projectDataProviders.get(
+          'platformScripture.USJ_Chapter',
+          resourceProjectId,
+        );
+        return (
+          (await usjPdp.getChapterUSJ({
+            book: ref.book,
+            chapterNum: ref.chapterNum,
+            verseNum: 1,
+            versificationStr: ref.versificationStr,
+          })) ?? defaultUsj
+        );
+      };
 
-      let textDirection: string = DEFAULT_TEXT_DIRECTION;
-      try {
-        const basePdp = await papi.projectDataProviders.get('platform.base', resourceProjectId);
-        const td = await basePdp.getSetting('platform.textDirection');
-        if (typeof td === 'string' && td) textDirection = td;
-      } catch (e) {
-        logger.warn(`Failed to read model text direction: ${getErrorMessage(e)}`);
-      }
+      const getTextDirection = async () => {
+        try {
+          const basePdp = await papi.projectDataProviders.get('platform.base', resourceProjectId);
+          const td = await basePdp.getSetting('platform.textDirection');
+          if (typeof td === 'string' && td) return td;
+        } catch (e) {
+          logger.warn(`Failed to read model text direction: ${getErrorMessage(e)}`);
+        }
+        return DEFAULT_TEXT_DIRECTION;
+      };
 
+      const [usj, textDirection] = await Promise.all([getUsj(), getTextDirection()]);
       return { usj, textDirection };
     },
     [],
   );
 
+  // `ModelTextPanel` reads its text from the project `getModelResourceProjectId` resolves.
+  // `ModelTextPanel` blocks copying while its chapter text loads.
+  const resourceProjectId = getModelResourceProjectId(effectiveModelText, dblResources);
+  const resourceCopyLimit = useChapterCopyLimit(resourceProjectId, scrRef, 'applied-by-caller');
+  // The panel is read-only, so a pending or failed read of the setting is treated as off rather
+  // than withholding the text.
+  const allowInvisibleCharacters = useAllowInvisibleCharacters(resourceProjectId).value === true;
+
   return (
     <ModelTextPanel
       localizedStrings={localizedStrings}
       hasProject={projectId !== undefined}
-      effectiveModelTexts={effectiveModelTexts}
-      isEffectiveModelTextsLoading={isEffectiveModelTextsLoading}
+      modelTextsState={effectiveModelTextsState}
       dblResources={dblResources}
-      adminModelTexts={adminModelTexts}
-      canWriteProjectSettings={canWriteProjectSettings}
+      isCatalogReady={isCatalogReady}
+      hasCatalogError={hasCatalogError}
+      onRetryCatalog={refetchCatalog}
+      getUserModelTexts={getUserModelTexts}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
       installResource={installResource}
-      setAdminModelTexts={setAdminModelTexts}
       setUserModelTexts={setUserModelTexts}
       showResourcePicker={showResourcePicker}
       getResourceChapter={getResourceChapter}
+      resourceCopyLimit={resourceCopyLimit}
+      allowInvisibleCharacters={allowInvisibleCharacters}
       logger={logger}
+      copyrightNotice={
+        <ProjectCopyrightNotice
+          projectId={displayedProjectId}
+          localizedStrings={localizedStrings}
+          useWebViewState={useWebViewState}
+        />
+      }
     />
   );
 };

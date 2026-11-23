@@ -5,6 +5,7 @@ import {
   paratextRegistrationWebViewType,
 } from './paratext-registration.web-view-provider';
 import {
+  InternetSettingsWebViewOptions,
   InternetSettingsWebViewProvider,
   internetSettingsWebViewType,
 } from './internet-settings.web-view-provider';
@@ -17,43 +18,48 @@ async function showParatextRegistration(): Promise<string | undefined> {
   );
 }
 
+/**
+ * Open (or refocus) the Internet Settings dialog with the server-selection control locked.
+ *
+ * Takes no parameters: this command is also the click-command target of two notifications
+ * (`src/shared/utils/paratext-error-notification.util.ts` and
+ * `extensions/src/platform-get-resources/src/internet-block-notification.utils.ts`), and the
+ * notification service invokes a click command with the notification's own id string as its first
+ * argument — a parameter here could be mistaken for a request to unlock the control. See
+ * `showInternetSettingsWithServerSelection` for the deliberate-unlock counterpart.
+ *
+ * Known, accepted gap: `existingId: '?'` refocuses an already-open dialog without reloading it, so
+ * this cannot unlock an instance that `showInternetSettingsWithServerSelection` already opened
+ * locked, or vice versa; closing and reopening it works. The usual probe-then-reload pattern for
+ * one-shot launch parameters is deliberately not used here: once PT-4869 makes the dialog modal, it
+ * cannot stay open while the user goes back and re-triggers the row.
+ */
 async function showInternetSettings(): Promise<string | undefined> {
-  return papi.webViews.openWebView(
-    internetSettingsWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 450, height: 500 } },
-    { existingId: '?' },
-  );
+  return openInternetSettingsWebView(false);
 }
 
 /**
- * Shows the registration info pane if there isn't any registration info yet. Used to help people
- * get signed in at startup
- *
- * Handles its own errors. No need to await
+ * Open (or refocus) the Internet Settings dialog with the (otherwise hidden) server-selection
+ * control unlocked for this one open — the counterpart to `showInternetSettings` for the deliberate
+ * Shift-click/Shift-Entered "Internet & connectivity" gesture. See `showInternetSettings` for the
+ * known, accepted `existingId: '?'` refocus gap shared by both commands.
  */
-async function showParatextRegistrationIfNoRegistrationData(): Promise<string | undefined> {
-  try {
-    if (!(await papi.settings.get('paratextRegistration.shouldShowOnStartup'))) return undefined;
+async function showInternetSettingsWithServerSelection(): Promise<string | undefined> {
+  return openInternetSettingsWebView(true);
+}
 
-    const registrationData = await papi.commands.sendCommand(
-      'paratextRegistration.getParatextRegistrationData',
-    );
-
-    if (
-      registrationData.name ||
-      registrationData.code ||
-      registrationData.email ||
-      registrationData.supporterName
-    )
-      return undefined;
-
-    return await showParatextRegistration();
-  } catch (e) {
-    logger.warn(
-      `Error while trying to determine if we need to pull up the Paratext registration info web view on startup: ${e}`,
-    );
-  }
-  return undefined;
+async function openInternetSettingsWebView(
+  requestDeveloperSettings: boolean,
+): Promise<string | undefined> {
+  const options: InternetSettingsWebViewOptions = {
+    existingId: '?',
+    requestDeveloperSettings,
+  };
+  return papi.webViews.openWebView(
+    internetSettingsWebViewType,
+    { type: 'float', position: 'center', floatSize: { width: 450, height: 500 } },
+    options,
+  );
 }
 
 export async function activate(context: ExecutionActivationContext) {
@@ -61,11 +67,6 @@ export async function activate(context: ExecutionActivationContext) {
 
   const paratextRegistrationWebViewProvider = new ParatextRegistrationWebViewProvider();
   const internetSettingsWebViewProvider = new InternetSettingsWebViewProvider();
-
-  const shouldShowOnStartupValidatorPromise = papi.settings.registerValidator(
-    'paratextRegistration.shouldShowOnStartup',
-    async (newValue) => typeof newValue === 'boolean',
-  );
 
   const showParatextRegistrationPromise = papi.commands.registerCommand(
     'paratextRegistration.showParatextRegistration',
@@ -81,21 +82,24 @@ export async function activate(context: ExecutionActivationContext) {
     'paratextRegistration.showInternetSettings',
     showInternetSettings,
   );
+  const showInternetSettingsWithServerSelectionPromise = papi.commands.registerCommand(
+    'paratextRegistration.showInternetSettingsWithServerSelection',
+    showInternetSettingsWithServerSelection,
+  );
   const showInternetSettingsWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     internetSettingsWebViewType,
     internetSettingsWebViewProvider,
   );
 
-  // No need to wait for this; it will do its thing and handle its own errors
-  showParatextRegistrationIfNoRegistrationData();
-
   context.registrations.add(
-    await shouldShowOnStartupValidatorPromise,
     await showParatextRegistrationPromise,
     await showParatextRegistrationWebViewProviderPromise,
     await showInternetSettingsPromise,
+    await showInternetSettingsWithServerSelectionPromise,
     await showInternetSettingsWebViewProviderPromise,
   );
+  // Startup registration is handled by the renderer-side first-run overlay —
+  // opening WebViews here races WebViewService.
 }
 
 export async function deactivate() {

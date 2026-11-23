@@ -1,0 +1,335 @@
+using System.Collections.Immutable;
+using System.Diagnostics;
+
+namespace Paranext.DataProvider.Projects.SendReceive;
+
+/// <summary>
+/// Process-wide coordination between a running Send/Receive run and user-started DBL resource
+/// writes (install, uninstall), so the two never write the same resource's files at the same time.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Why it exists.</b> A sync updates the connected DBL resources of the projects it syncs, while
+/// the DBL provider installs and uninstalls resources independently of any sync, under its own lock.
+/// Two writers on one resource's files can leave it half-replaced. Writes of resources the run does
+/// not touch are unaffected and run alongside the sync.
+/// </para>
+/// <para>
+/// <b>Only a user write waits.</b> <see cref="EnterResourceWrite"/> blocks while the open run holds
+/// its uid, then marks the uid as being written until its scope is disposed. The check and the mark
+/// happen under one lock, so no run can slip in between them. The wait is bounded by
+/// <see cref="WaitTimeout"/>, measured per run: a write passed over by back-to-back runs on its
+/// resource restarts the bound with each new run, so a timeout always means one run outlived
+/// <see cref="WaitTimeout"/>. On timeout the write logs a warning and proceeds: the install or
+/// uninstall is a request the user still wants, installs are idempotent, and a run that outlived the
+/// bound is most likely one whose end was never signalled. Each waiting write blocks a thread-pool
+/// thread for up to <see cref="WaitTimeout"/>, so only user-started, one-at-a-time writes belong on
+/// this path; a bulk or automatic install loop must not route through
+/// <see cref="EnterResourceWrite"/>.
+/// </para>
+/// <para>
+/// <b>A starting run skips instead of waiting.</b> <see cref="RegisterRunSkippingOpenWrites"/>
+/// registers only the uids no user write is touching and reports the rest as skipped: a skipped
+/// resource is the user's newer intent, so the run leaves it alone and a later sync checks it
+/// again. A write scope counts from the moment <see cref="EnterResourceWrite"/> returns, which is
+/// before the DBL provider takes its own gate, so a sync also skips a resource whose install is
+/// still queued behind other DBL work; that is intended.
+/// </para>
+/// <para>
+/// <b>Lifecycle for the sync implementation</b> (nothing in open-source Platform.Bible runs a sync,
+/// so there no run is ever registered and every <see cref="EnterResourceWrite"/> returns at once):
+/// <list type="bullet">
+/// <item><description>
+/// Call <see cref="RegisterRunSkippingOpenWrites"/> with the DBL entry uids of every resource the run
+/// would update, BEFORE the run's connected-resource update loop starts, and dispose the run once it
+/// has ended — success, failure or cancel — in a <c>finally</c> or <c>using</c>. Update only the
+/// registered uids.
+/// </description></item>
+/// <item><description>
+/// The run's own resource updates must NOT go through <see cref="EnterResourceWrite"/> (or through
+/// the DBL provider's install command, which uses it): the run holds those uids, so its own writes
+/// would wait for the run itself, until the timeout.
+/// </description></item>
+/// </list>
+/// </para>
+/// <para>
+/// <b>No thread affinity.</b> All state is guarded by one private monitor, released while waiting.
+/// <see cref="RegisterRunSkippingOpenWrites"/>, <see cref="EnterResourceWrite"/> and the handles'
+/// <c>Dispose</c> may run on any threads — an <c>await</c> between opening and disposing a handle is
+/// fine.
+/// </para>
+/// <para>
+/// <b>One run at a time.</b> Send/Receive already admits one sync at a time, so a second
+/// <see cref="RegisterRunSkippingOpenWrites"/> while a run is open is a programming error and
+/// throws. Write scopes are counted per uid: writes of different resources hold scopes at once, and
+/// two writes of the same resource are already serialized by the DBL provider's own lock. Every
+/// handle's <c>Dispose</c> is idempotent, and disposing a stale run handle never ends a newer run.
+/// </para>
+/// <para>
+/// <b>Not a project-write gate.</b> This is distinct from <see cref="SendReceiveWriteLock"/>, which
+/// guards project writes and rejects them fail-fast during a sync. A resource write waits for the
+/// run instead, because the user still wants it once the run ends.
+/// </para>
+/// <para>
+/// <b>Ids</b> are DBL entry uids, matched ignoring case: ParatextData's <c>HexId</c> compares the
+/// bytes a uid encodes, so the same uid written in either case names the same resource.
+/// </para>
+/// </remarks>
+internal static class SyncRunResourceGuard
+{
+    // Declared before s_waitTimeoutTicks: static initializers run in textual order, and that
+    // field's initializer reads this.
+    private static readonly TimeSpan s_defaultWaitTimeout = TimeSpan.FromMinutes(30);
+
+    // Ticks rather than a TimeSpan so reads and writes from different threads are atomic and
+    // visible: a TimeSpan field cannot be volatile.
+    private static long s_waitTimeoutTicks = s_defaultWaitTimeout.Ticks;
+
+    /// <summary>
+    /// How long a write waits for one run before logging a warning and proceeding. Bounded so a
+    /// run handle that is never disposed (a hung sync, a bracket that skipped its <c>finally</c>)
+    /// cannot block writes for the rest of the session. Generous because a write may wait out a whole
+    /// run, and a sync that downloads its connected resources over a slow link can legitimately take
+    /// many minutes — giving up while it is still writing would let the two writers race after all.
+    /// Settable so tests can shorten it; each wait reads it once, when it starts.
+    /// </summary>
+    internal static TimeSpan WaitTimeout
+    {
+        get => TimeSpan.FromTicks(Volatile.Read(ref s_waitTimeoutTicks));
+        set => Volatile.Write(ref s_waitTimeoutTicks, value.Ticks);
+    }
+
+    /// <summary>
+    /// Guards every field below, and is the monitor waiters block on: every state change that can
+    /// release a waiter ends with <see cref="Monitor.PulseAll"/>. Nothing is logged while it is held.
+    /// </summary>
+    private static readonly object s_lock = new();
+
+    /// <summary>The open run, or null.</summary>
+    private static Run? s_activeRun;
+
+    /// <summary>Open write scopes per uid; a uid with none has no entry.</summary>
+    private static readonly Dictionary<string, int> s_writeCounts =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Bumped by <see cref="ResetForTests"/> so a write scope opened before a reset cannot decrement a
+    /// count that belongs to a later scope.
+    /// </summary>
+    private static int s_generation;
+
+    /// <summary>
+    /// The DBL entry uids the open run will update, each once; empty when no run is open.
+    /// </summary>
+    public static IReadOnlyCollection<string> CurrentResourceIds
+    {
+        get
+        {
+            lock (s_lock)
+                return s_activeRun?.ResourceIds ?? [];
+        }
+    }
+
+    /// <summary>
+    /// Opens a run that holds those of <paramref name="dblEntryUids"/> no user write is touching
+    /// right now, and reports the rest as skipped. Never waits. The split happens under one hold of
+    /// the guard's lock, so a write that races the registration is either counted before it (its
+    /// uid is skipped) or waits for the registered run (its uid is held) — never both unprotected and
+    /// unwaited. A skipped uid is not held, so later writes of it return at once; the run must not
+    /// update it, and a later sync checks it again. Blank ids are ignored and duplicates (ignoring
+    /// case) collapse to the first spelling. When every uid is skipped, or none is given, the run is
+    /// empty: dispose it as usual and register nothing further.
+    /// </summary>
+    /// <param name="dblEntryUids">The DBL entry uids of the resources the run would update.</param>
+    /// <returns>The run and the registered/skipped split.</returns>
+    /// <exception cref="InvalidOperationException">A run is already open.</exception>
+    public static RunRegistration RegisterRunSkippingOpenWrites(IEnumerable<string> dblEntryUids)
+    {
+        ArgumentNullException.ThrowIfNull(dblEntryUids);
+        var distinct = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in dblEntryUids)
+        {
+            if (!string.IsNullOrWhiteSpace(id) && seen.Add(id))
+                distinct.Add(id);
+        }
+
+        lock (s_lock)
+        {
+            if (s_activeRun != null)
+                throw new InvalidOperationException(
+                    "A sync run already holds DBL resources; end it before beginning another."
+                );
+            var registered = distinct.Where(id => !s_writeCounts.ContainsKey(id)).ToArray();
+            var skipped = distinct.Where(id => s_writeCounts.ContainsKey(id)).ToArray();
+            AfterPartitionForTests?.Invoke();
+            var run = new Run(registered.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase));
+            s_activeRun = run;
+            return new RunRegistration(run, registered, skipped);
+        }
+    }
+
+    /// <summary>
+    /// Waits while the open run holds <paramref name="dblEntryUid"/>, then marks it as being written
+    /// until the returned scope is disposed, so a run that starts meanwhile waits for this write.
+    /// Returns at once when no run holds the uid. If one run ends and the next one also holds it,
+    /// keeps waiting, and the <see cref="WaitTimeout"/> bound starts again for the new run; when one
+    /// run outlives the bound, logs a warning and proceeds. Wrap the whole write — including any
+    /// refresh of the project collection it needs — and nothing else.
+    /// </summary>
+    /// <param name="dblEntryUid">The DBL entry uid about to be installed or removed.</param>
+    /// <returns>A scope whose <c>Dispose</c> ends the write and releases a waiting run.</returns>
+    public static IDisposable EnterResourceWrite(string dblEntryUid)
+    {
+        ArgumentNullException.ThrowIfNull(dblEntryUid);
+        Run? HoldingRun() =>
+            s_activeRun?.ResourceIds.Contains(dblEntryUid) == true ? s_activeRun : null;
+
+        lock (s_lock)
+        {
+            if (HoldingRun() == null)
+                return OpenWriteScopeLocked(dblEntryUid);
+        }
+
+        Console.WriteLine(
+            $"DBL resource {dblEntryUid} is being updated by the running sync; waiting for the sync to finish."
+        );
+
+        var budget = WaitTimeout;
+        string? warning = null;
+        IDisposable scope;
+        lock (s_lock)
+        {
+            if (!WaitWhileLocked(HoldingRun, budget))
+                warning =
+                    $"Warning: gave up after {budget} waiting for the running sync to finish updating DBL resource {dblEntryUid}; writing it anyway.";
+            // Under the same lock hold as the last check, so no run can begin in between.
+            scope = OpenWriteScopeLocked(dblEntryUid);
+        }
+        if (warning != null)
+            Console.WriteLine(warning);
+        return scope;
+    }
+
+    /// <summary>
+    /// Ends any open run, forgets every open write scope, releases all waiters and restores
+    /// <see cref="WaitTimeout"/>, so a test cannot leave the process-wide state behind for the next.
+    /// </summary>
+    internal static void ResetForTests()
+    {
+        lock (s_lock)
+        {
+            s_activeRun = null;
+            s_writeCounts.Clear();
+            s_generation++;
+            AfterPartitionForTests = null;
+            WaitTimeout = s_defaultWaitTimeout;
+            Monitor.PulseAll(s_lock);
+        }
+    }
+
+    /// <summary>
+    /// Test seam: invoked by <see cref="RegisterRunSkippingOpenWrites"/> after it has split the ids
+    /// and before it installs the run, inside the same lock hold, so a test can start a competing
+    /// write at that exact point. Cleared by <see cref="ResetForTests"/>.
+    /// </summary>
+    internal static Action? AfterPartitionForTests { get; set; }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> while holding the guard's lock, so a test can make several
+    /// changes — such as ending one run and beginning the next — that no waiter can observe between.
+    /// The lock is reentrant, so the guard's own methods may be called inside.
+    /// </summary>
+    internal static void InsideGuardLockForTests(Action action)
+    {
+        lock (s_lock)
+            action();
+    }
+
+    /// <summary>Records one more open write of <paramref name="dblEntryUid"/>. Call holding the lock.</summary>
+    private static WriteScope OpenWriteScopeLocked(string dblEntryUid)
+    {
+        s_writeCounts[dblEntryUid] = s_writeCounts.GetValueOrDefault(dblEntryUid) + 1;
+        return new WriteScope(dblEntryUid, s_generation);
+    }
+
+    /// <summary>
+    /// Waits on <see cref="s_lock"/> — which the caller holds — while <paramref name="blocker"/>
+    /// names something. <see cref="Monitor.Wait(object, TimeSpan)"/> releases the lock while waiting
+    /// and retakes it before returning, so the blocker is always read under the lock.
+    /// <para>
+    /// <paramref name="budget"/> bounds the wait on ONE blocker: whenever the blocker changes to a
+    /// different object (by reference), the budget starts again. So a write passed over by
+    /// back-to-back runs on its resource times out only if one of those runs outlives the budget,
+    /// never because their durations added up.
+    /// </para>
+    /// </summary>
+    /// <param name="blocker">What the caller is waiting for, or null when it may proceed.</param>
+    /// <param name="budget">How long one blocker may hold the caller up.</param>
+    /// <returns>True when the blocker cleared; false when one blocker outlived the budget.</returns>
+    private static bool WaitWhileLocked(Func<object?> blocker, TimeSpan budget)
+    {
+        var seen = blocker();
+        var elapsed = Stopwatch.StartNew();
+        while (seen != null)
+        {
+            var remaining = budget - elapsed.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+                return false;
+            Monitor.Wait(s_lock, remaining);
+            var current = blocker();
+            if (current != null && !ReferenceEquals(current, seen))
+                elapsed.Restart();
+            seen = current;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// One registered run: the uids it holds. Returned in a <see cref="RunRegistration"/>; disposing it
+    /// ends the run.
+    /// </summary>
+    internal sealed class Run : IDisposable
+    {
+        internal Run(ImmutableHashSet<string> resourceIds) => ResourceIds = resourceIds;
+
+        /// <summary>The DBL entry uids this run holds, each once.</summary>
+        public ImmutableHashSet<string> ResourceIds { get; }
+
+        public void Dispose()
+        {
+            lock (s_lock)
+            {
+                if (!ReferenceEquals(s_activeRun, this))
+                    return;
+                s_activeRun = null;
+                Monitor.PulseAll(s_lock);
+            }
+        }
+    }
+
+    /// <summary>One open write of one uid.</summary>
+    private sealed class WriteScope(string dblEntryUid, int generation) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            lock (s_lock)
+            {
+                if (_disposed)
+                    return;
+                _disposed = true;
+                if (generation != s_generation)
+                    return;
+                if (!s_writeCounts.TryGetValue(dblEntryUid, out var count))
+                    return;
+                if (count <= 1)
+                    s_writeCounts.Remove(dblEntryUid);
+                else
+                    s_writeCounts[dblEntryUid] = count - 1;
+                Monitor.PulseAll(s_lock);
+            }
+        }
+    }
+}

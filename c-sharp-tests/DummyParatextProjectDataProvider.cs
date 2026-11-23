@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 
 namespace TestParanextDataProvider
 {
@@ -13,9 +14,23 @@ namespace TestParanextDataProvider
             string name,
             PapiClient papiClient,
             ProjectDetails projectDetails,
-            LocalParatextProjects paratextProjects
+            LocalParatextProjects paratextProjects,
+            ContextKeys? contextKeys = null
         )
-            : base(name, papiClient, projectDetails, paratextProjects) { }
+            : base(name, papiClient, projectDetails, paratextProjects, contextKeys) { }
+
+        /// <summary>
+        /// The names this PDP would register as wire methods, so tests can assert the wire surface
+        /// a given project's interface list produces.
+        /// </summary>
+        public List<string> GetRegisteredFunctionNames() =>
+            GetFunctions().Select(function => function.functionName).ToList();
+
+        /// <summary>
+        /// The stream names this PDP currently holds data for, so tests can assert which calls
+        /// create files and which do not.
+        /// </summary>
+        public List<string> GetStoredStreamNames() => [.. _inMemoryFiles.Keys];
 
         protected override IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails)
         {
@@ -40,13 +55,29 @@ namespace TestParanextDataProvider
                 // Nothing to do
             }
 
-            public string[] GetExistingDataStreamNames()
+            public string[] GetExistingDataStreamNames(string? underPath = null)
             {
-                throw new NotImplementedException();
+                // Stream names are already '/'-joined here, so a plain prefix match gives the same
+                // recursive, relative, forward-slash names the file-based manager produces
+                if (!string.IsNullOrEmpty(underPath))
+                    ProjectStreamNames.EnsureValid(underPath);
+                var prefix = string.IsNullOrEmpty(underPath) ? "" : $"{underPath}/";
+                return
+                [
+                    .. _owner
+                        ._inMemoryFiles.Keys.Where(streamName =>
+                            streamName.StartsWith(prefix, StringComparison.Ordinal)
+                        )
+                        .Select(streamName => streamName[prefix.Length..])
+                        .Where(ProjectStreamNames.IsValid)
+                        .OrderBy(streamName => streamName, StringComparer.Ordinal),
+                ];
             }
 
             public Stream? GetDataStream(string streamName, bool createIfNotExists = false)
             {
+                // The rule every real stream manager applies, so provider tests see its rejections
+                ProjectStreamNames.EnsureValid(streamName);
                 if (_owner._inMemoryFiles.TryGetValue(streamName, out byte[]? existingFile))
                     return new InMemoryFile(_owner, streamName, existingFile);
 
@@ -81,10 +112,16 @@ namespace TestParanextDataProvider
                 _streamName = streamName;
             }
 
+            /// <summary>
+            /// A new, empty stream. It is recorded at once rather than on dispose, as a file opened
+            /// with <see cref="FileMode.OpenOrCreate"/> exists before anything is written to it, so
+            /// tests see a stream that is created and then abandoned.
+            /// </summary>
             public InMemoryFile(DummyParatextProjectDataProvider owner, string streamName)
             {
                 _owner = owner;
                 _streamName = streamName;
+                _owner._inMemoryFiles[streamName] = [];
             }
 
             protected override void Dispose(bool disposing)

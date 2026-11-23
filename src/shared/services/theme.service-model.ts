@@ -16,6 +16,34 @@ import {
 /** JSDOC DESTINATION USER_THEME_FAMILY_PREFIX */
 export const USER_THEME_FAMILY_PREFIX = 'user-';
 
+/**
+ * `localStorage` key the current application theme is persisted under.
+ *
+ * Named here rather than in the host because two processes spell it: main's host, which owns the
+ * store, and the renderer, whose one-time handover reads the copy left in its own `localStorage`
+ * from when a renderer held this state. Those are two different stores under one key name, and the
+ * handover only finds anything if the name stays identical in both.
+ *
+ * @experimental
+ */
+export const CURRENT_THEME_STORAGE_KEY = 'theme.service-host.currentTheme';
+
+/**
+ * `localStorage` key the setting for matching the system-wide light/dark theme is persisted under.
+ * Spelled in two processes for the same reason as {@link CURRENT_THEME_STORAGE_KEY}.
+ *
+ * @experimental
+ */
+export const SHOULD_MATCH_SYSTEM_STORAGE_KEY = 'theme.service-host.shouldMatchSystem';
+
+/**
+ * `localStorage` key the user-defined theme families are persisted under. Spelled in two processes
+ * for the same reason as {@link CURRENT_THEME_STORAGE_KEY}.
+ *
+ * @experimental
+ */
+export const USER_THEMES_STORAGE_KEY = 'theme.service-host.userThemes';
+
 /** JSDOC DESTINATION themeServiceDataProviderName */
 export const themeServiceDataProviderName = 'platform.themeServiceDataProvider';
 export const themeServiceObjectToProxy = Object.freeze({
@@ -49,6 +77,23 @@ export type CurrentThemeSpecifier = {
    * `shouldMatchSystem` to false
    */
   type?: string;
+};
+
+/**
+ * The theme state that survives an app restart: the current theme, whether the theme type follows
+ * the system-wide light/dark setting, and the user-defined theme families. Every member is optional
+ * because this describes what a store happened to hold, and a store that predates the theme service
+ * host can be missing any of them.
+ *
+ * @experimental
+ */
+export type PersistedThemeState = {
+  /** The current application theme, or `undefined` if none was stored */
+  currentTheme?: ThemeDefinitionExpanded;
+  /** Whether the theme type follows the system-wide theme, or `undefined` if none was stored */
+  shouldMatchSystem?: boolean;
+  /** The user-defined theme families, or `undefined` if none were stored */
+  userThemes?: ThemeFamiliesById;
 };
 
 /** ThemeDataTypes handles getting and setting the application theme. */
@@ -257,3 +302,41 @@ export type IThemeServiceLocal = IThemeService & {
   /** JSDOC DESTINATION getCurrentTheme */
   getCurrentThemeSync(): ThemeDefinitionExpanded;
 };
+
+/**
+ * Theme operations that exist for the platform's own state-keeping rather than for consumers. They
+ * are deliberately kept off {@link IThemeService}, so `papi.themes` does not offer them.
+ *
+ * That is the whole guarantee, and it is a discoverability one rather than a privacy one: these
+ * ride on the same data provider as {@link IThemeService} under the same name, so any process that
+ * resolves the provider itself can call them. That reachability is why they are `@experimental` on
+ * both surfaces (TSDoc here, `x-experimental` in the registration's OpenRPC document) rather than
+ * pretending to be private.
+ *
+ * @experimental
+ */
+export interface IThemeServiceInternal {
+  /**
+   * Hand over theme state persisted somewhere the host cannot read, so the host can adopt it into
+   * its own store. Idempotent: the first offer to be adopted wins and every later one is refused,
+   * so several callers offering their own copies cannot interleave into a mixture of them.
+   *
+   * Resolving is terminal for the caller either way: `true` means the state now lives in the host's
+   * store, `false` means the host already has state that beats the offer (or the offer carried
+   * nothing usable). In both cases the caller's copy is dead and should be discarded. A rejection
+   * means neither — the offer can be made again.
+   *
+   * @param state Previously persisted theme state
+   * @returns `true` if the offer was adopted, `false` if it was refused
+   * @experimental
+   */
+  migrateStoredThemeState(state: PersistedThemeState): Promise<boolean>;
+}
+
+/**
+ * Everything the theme service host registers on its data provider: what consumers call plus the
+ * platform's own state-keeping operations.
+ *
+ * @experimental
+ */
+export type IThemeHostService = IThemeService & IThemeServiceInternal;

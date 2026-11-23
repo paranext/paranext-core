@@ -1,0 +1,1002 @@
+import {
+  Editorial,
+  EditorOptions,
+  EditorRef,
+  getDefaultViewOptions,
+} from '@eten-tech-foundation/platform-editor';
+import { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import {
+  Button,
+  ContentZoomRoot,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  useExtraValidMarkers,
+  useViewVisibility,
+} from 'platform-bible-react';
+import {
+  DblResourceData,
+  getErrorMessage,
+  isPlatformError,
+  PlatformError,
+  ResourceType,
+} from 'platform-bible-utils';
+import { ChevronDown, Lock } from 'lucide-react';
+import {
+  ComponentProps,
+  Fragment,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react';
+import {
+  hasNewScrollTarget,
+  isEchoOfPublishedScrRef,
+  SCROLL_MAX_WAIT_MS,
+  scrollToVerse,
+  waitForLayoutToSettle,
+} from './editor-dom.util';
+import { getRefLabel, getResourceReferenceRowId } from './resource-reference.utils';
+import { isTeamPickerResource, splitPickerResourcesBySource } from './resource-selection.utils';
+import type { PickerResource } from './downloaded-resources.utils';
+import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
+import { PanelReadinessView } from './panel-readiness-view.component';
+import {
+  ExpandableInfo,
+  LoadingView,
+  PanelRetryableErrorView,
+} from './panel-state-views.component';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { ResourceBlankChapter } from './resource-blank-chapter.component';
+import { ResourceTextUnavailable } from './resource-text-unavailable.component';
+import {
+  isBlankChapterOnScreen,
+  isMissingBookError,
+  resolveResourceContentState,
+} from './platform-scripture-editor.utils';
+import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
+import type {
+  ResourcePanelLocalizedStringKey,
+  ResourcePanelLocalizedStrings,
+} from './resource-text-panel.const';
+import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
+import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { RESOURCE_COLLECTION_OPTIONS_KEYS } from './resource-collection-options/resource-collection-options.types';
+import { getInstallFailureMessageKey } from './install-failure-message.utils';
+
+/**
+ * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
+ * back to `''` instead would render an empty message region — a blank panel, which is the exact
+ * failure these messages exist to remove.
+ */
+const localize = (strings: ResourcePanelLocalizedStrings, key: ResourcePanelLocalizedStringKey) =>
+  strings[key] ?? key;
+
+/**
+ * Identifies the wrapper around `Editorial`. The wrapper, not the editor, is what a message or
+ * spinner replaces, so a test asserting that the text on screen was swapped for one of them has to
+ * address this element.
+ */
+export const RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID = 'resource-text-editor-container';
+
+/**
+ * Identifies the content area's waiting state. The state announces itself (see
+ * {@link ContentLoadingView}), but its accessible name is the same localized "Loading…" string the
+ * whole-panel waiting state uses, so a name alone cannot tell the two apart. This handle is what
+ * makes "the CONTENT AREA is waiting" — header still mounted above it — a falsifiable claim rather
+ * than one a panel rendering nothing at all would also satisfy.
+ */
+export const RESOURCE_TEXT_WAITING_TEST_ID = 'resource-text-waiting';
+
+/**
+ * The panel's CONTENT-area waiting state, for a chapter that has not arrived yet.
+ *
+ * Distinct from the full-panel {@link LoadingView} the readiness and install states render: the
+ * selector header stays mounted above this one, so it sizes to the content area rather than the
+ * viewport.
+ *
+ * Labelled rather than a bare `Spinner`, matching the three message states it alternates with
+ * (`ResourceBookNotAvailable`, `ResourceBlankChapter`, `ResourceTextUnavailable`), all of which
+ * carry an accessible name. A bare spinner announces nothing at all, and this state is entered on
+ * every chapter navigation.
+ *
+ * @param label Already-localized status text, doubling as the state's accessible name.
+ * @param announcementKey Identifies WHICH chapter is being waited on. Remounts the live region on a
+ *   change so a move from one wait to the next is announced; a surviving `role="status"` holding
+ *   byte-identical text reports nothing.
+ */
+function ContentLoadingView({
+  label,
+  announcementKey,
+}: {
+  label: ReactNode;
+  announcementKey: string;
+}) {
+  return (
+    <div className="tw:flex tw:flex-1" data-testid={RESOURCE_TEXT_WAITING_TEST_ID}>
+      <LoadingView key={announcementKey} sizingClassName="tw:flex-1" label={label} />
+    </div>
+  );
+}
+
+type ResourceSelectorDropdownProps = {
+  filteredResources: PickerResource[];
+  selectedRef: PickerResource | undefined;
+  dblResources: DblResourceData[];
+  /**
+   * Whether a DBL catalog is expected but not here: still loading, or failed. See
+   * `splitPickerResourcesBySource`.
+   */
+  isCatalogUnavailable: boolean;
+  /** When `false`, the rows are one list with no headings, caption or locks */
+  isGrouped: boolean;
+  onSelectResource: (id: string) => void;
+  /** Undefined hides the option: downloading adds to the project's list, so needs a project */
+  onShowResourcePicker: (() => void) | undefined;
+  downloadResourcesLabel: string;
+  /**
+   * Already-localized text for the trigger while no row is selected yet — the window where the
+   * panel is configured but its sources have not settled enough to resolve a selection.
+   *
+   * The trigger's only other content is a chevron, which contributes no text, so without this the
+   * button renders blank AND has no accessible name at all.
+   */
+  noSelectionLabel: string;
+  /** Heading over the resources the project administrator put in the team layout */
+  teamResourcesLabel: string;
+  /** Heading over the user's own resources */
+  userResourcesLabel: string;
+  /** Heading over resources installed on this computer that neither list names */
+  otherResourcesLabel: string;
+  /** Says, once under the team heading, that only a project administrator can remove those rows */
+  teamResourcesCaption: string;
+  /** Names the lock on each team row */
+  teamResourceLockLabel: string;
+};
+
+/**
+ * The panel's resource selector. Rows are grouped as the team's, the user's own and other installed
+ * resources (see `splitPickerResourcesBySource`), each under its heading, and a group with no rows
+ * gets none. The team's come first, with a caption saying only a project administrator can remove
+ * them and a lock on each; they always get their heading, since the caption is what explains the
+ * locks. With no team rows and only one other group, the rows are one unlabeled list. Ungrouped,
+ * every row is in one unlabeled list, in the order given, with no caption or locks.
+ */
+function ResourceSelectorDropdown({
+  filteredResources,
+  selectedRef,
+  dblResources,
+  isCatalogUnavailable,
+  isGrouped,
+  onSelectResource,
+  onShowResourcePicker,
+  downloadResourcesLabel,
+  noSelectionLabel,
+  teamResourcesLabel,
+  userResourcesLabel,
+  otherResourcesLabel,
+  teamResourcesCaption,
+  teamResourceLockLabel,
+}: ResourceSelectorDropdownProps) {
+  const headingIdPrefix = useId();
+  const teamHeadingId = `${headingIdPrefix}-team`;
+  const teamCaptionId = `${headingIdPrefix}-team-caption`;
+  const selectedRowId = selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined;
+  // TODO(PT-4063): order the team's rows the way the administrator pins them.
+  const { team, user, other } = splitPickerResourcesBySource(filteredResources, {
+    isCatalogUnavailable,
+  });
+  // The groups below the team's, leaving out any with no rows.
+  const nonTeamGroups = [
+    { headingId: `${headingIdPrefix}-user`, label: userResourcesLabel, rows: user },
+    { headingId: `${headingIdPrefix}-other`, label: otherResourcesLabel, rows: other },
+  ].filter((group) => group.rows.length > 0);
+  const isUnlabeled = team.length === 0 && nonTeamGroups.length <= 1;
+
+  const renderRow = (row: PickerResource) => {
+    const rowId = getResourceReferenceRowId(row.reference);
+    const label = getRefLabel(row.reference, dblResources);
+    return (
+      <DropdownMenuCheckboxItem
+        key={rowId}
+        checked={rowId === selectedRowId}
+        onCheckedChange={() => {
+          onSelectResource(rowId);
+        }}
+      >
+        {/* `dir="auto"` on the name rather than the item: `getRefLabel` returns the joined
+            short/full name as one text node, so the name needs its own direction, while the check
+            and the lock keep to the panel's side. A long name ellipsizes rather than wrapping, and
+            `title` shows it whole. */}
+        <span className="tw:min-w-0 tw:truncate" dir="auto" title={label}>
+          {label}
+        </span>
+        {isGrouped && isTeamPickerResource(row) && (
+          <span
+            role="img"
+            aria-label={teamResourceLockLabel}
+            className="tw:ms-auto tw:flex tw:shrink-0 tw:text-muted-foreground"
+          >
+            <Lock aria-hidden />
+          </span>
+        )}
+      </DropdownMenuCheckboxItem>
+    );
+  };
+
+  return (
+    <div className="tw:px-2 tw:py-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
+          >
+            {/* `dir="auto"`: `getRefLabel` returns the joined short/full name as one text node, so
+                the label needs the name's own direction rather than the panel's. */}
+            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap" dir="auto">
+              {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : noSelectionLabel}
+            </span>
+            <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="tw:w-72">
+          {!isGrouped && filteredResources.map(renderRow)}
+          {isGrouped && isUnlabeled && nonTeamGroups[0]?.rows.map(renderRow)}
+          {isGrouped && !isUnlabeled && (
+            <>
+              {team.length > 0 && (
+                // The caption says once what the locks mean, rather than repeating it on every row.
+                <DropdownMenuGroup aria-labelledby={teamHeadingId} aria-describedby={teamCaptionId}>
+                  <DropdownMenuLabel id={teamHeadingId}>{teamResourcesLabel}</DropdownMenuLabel>
+                  <p
+                    id={teamCaptionId}
+                    className="tw:px-1.5 tw:pb-1 tw:text-xs tw:text-muted-foreground"
+                  >
+                    {teamResourcesCaption}
+                  </p>
+                  {team.map(renderRow)}
+                </DropdownMenuGroup>
+              )}
+              {nonTeamGroups.map((group, index) => (
+                <Fragment key={group.headingId}>
+                  {(team.length > 0 || index > 0) && <DropdownMenuSeparator />}
+                  <DropdownMenuGroup aria-labelledby={group.headingId}>
+                    <DropdownMenuLabel id={group.headingId}>{group.label}</DropdownMenuLabel>
+                    {group.rows.map(renderRow)}
+                  </DropdownMenuGroup>
+                </Fragment>
+              ))}
+            </>
+          )}
+          {onShowResourcePicker && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => onShowResourcePicker()}>
+                {downloadResourcesLabel}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+export type ResourceTextPanelProps = {
+  /** Localized strings; import `RESOURCE_PANEL_STRING_KEYS` to resolve them. */
+  localizedStrings: ResourcePanelLocalizedStrings;
+  /**
+   * Whether the panel has a project context (opened with a project id). Without one it shows only a
+   * resource it was asked to show, in `selectedRef`, and offers no download, which needs a
+   * project.
+   */
+  hasProject: boolean;
+  /**
+   * Which kind of resource this panel shows. `'ScriptureResource'` is the Bible texts tab; every
+   * other type is the commentaries tab. Selects the whole matched set of strings — see
+   * `resolveResourcePanelStringKeys`.
+   */
+  resourceType: ResourceType;
+  /**
+   * The rows this panel offers, already filtered to `resourceType`. Filtering needs the panel's
+   * union of referenced and locally-downloaded rows, which only the caller has.
+   */
+  filteredResources: PickerResource[];
+  /**
+   * The row being displayed, already resolved from the persisted selection — see
+   * `resolveResourceSelection`. Resolved by the caller rather than here because the caller keys its
+   * chapter subscription off this row's project id and feeds the result back in as
+   * `usjPossiblyError`: deriving it on both sides would be two answers to one question.
+   */
+  selectedRef: PickerResource | undefined;
+  /**
+   * Which of the panel's front states to render, or `configured` to continue to the content
+   * branches. Decided by the caller from whether its sources have ARRIVED — see
+   * `getResourcePanelReadiness`, and the caller's promotion of `empty` once the downloaded rows are
+   * in.
+   */
+  readiness: ResourcePanelReadiness;
+  /** All DBL resources — used to label the selector rows. */
+  dblResources: DblResourceData[];
+  /**
+   * Whether a DBL catalog is expected but not here: still loading, or failed. The selector then
+   * lists the user's own and other installed resources together, since without the catalog the
+   * user's DBL references resolve as plain downloads. An installation with no DBL credentials keeps
+   * the groups: it will never have a catalog, and merging them would leave a resource the user
+   * removed listed as one of theirs.
+   */
+  isCatalogUnavailable: boolean;
+  /**
+   * Whether the selector groups its rows as the team's, the user's own and other installed ones,
+   * with the team caption and locks. `false` in Power mode, which has no notion of team resources.
+   */
+  isGrouped: boolean;
+  /** Re-runs the DBL resource catalog fetch. */
+  onRetryCatalog: () => void;
+  /** The reference the panel is displaying. */
+  scrRef: SerializedVerseRef;
+  /** Called when the editor changes the Scripture reference. */
+  onScrRefChange: (scrRef: SerializedVerseRef) => void;
+  /** Records a new selection by row id (see `getResourceReferenceRowId`). */
+  onSelectResource: (id: string) => void;
+  /**
+   * The chapter read for `selectedRef`'s project, exactly as the data layer returned it — USJ, a
+   * `PlatformError`, or `undefined` before anything has arrived. Which message that implies is
+   * derived here rather than by the caller, so every consumer gets one answer.
+   */
+  usjPossiblyError: Usj | PlatformError | undefined;
+  /**
+   * Whether that chapter read is in flight. Gates the blank-chapter message: the data layer keeps
+   * serving the PREVIOUS reference's USJ until the new subscription's first update lands, and its
+   * default is itself blank.
+   */
+  isUsjLoading: boolean;
+  /**
+   * Re-drives the chapter read behind the `failed` content state. Owned by the caller because the
+   * subscription this re-opens is the caller's; this panel only reports that the affordance was
+   * activated.
+   */
+  onRetryChapter: () => void;
+  /** The displayed resource's text direction. Applied to the editor only, never to the messages. */
+  textDirection: EditorOptions['textDirection'];
+  /** The editor's copy limit for the chapter on screen. See `EditorOptions.copyLimit`. */
+  copyLimit: EditorOptions['copyLimit'];
+  /**
+   * Whether the displayed resource's project keeps `~` and a no-break space distinct
+   * (`platformScripture.allowInvisibleCharacters`). The editor copies a no-break space as `~`
+   * unless this is `true`. Pass `false` while the setting is loading or unreadable: the panel is
+   * read-only, so a stand-in can never be saved.
+   */
+  allowInvisibleCharacters: boolean;
+  /**
+   * Whether a user-initiated pick is in flight, which this panel renders as "Selecting…". Distinct
+   * from `isInstalling`, where the user picked nothing and a configured resource is just
+   * downloading.
+   */
+  isSelecting: boolean;
+  /** Whether an auto-install of the selected resource is in flight. */
+  isInstalling: boolean;
+  /** Whether the last install attempt for the selected resource failed. */
+  installFailed: boolean;
+  /** Why the install failed, when it did. Decides whether the connection hint applies. */
+  installFailureReason: DblResourceInstallFailureReason | undefined;
+  /** Re-reads the catalog and re-attempts the same resource. */
+  retryInstall: () => void;
+  /** Whether the machine is online. Only adds a "check your connection" hint to install failures. */
+  isOnline: boolean;
+  /**
+   * Ask the caller to open the resource picker and act on whatever the user chooses.
+   * Fire-and-forget and argument-free: the whole pick — the ids to pre-select, the install, the
+   * write, and the in-flight and unmount guards `useDialogCallback` already provides — belongs to
+   * the caller, so this panel only reports that the affordance was activated.
+   */
+  onShowResourcePicker: () => void;
+  /** Logger forwarded to the editor (the web view supplies the PAPI logger; tests may omit it). */
+  logger?: ComponentProps<typeof Editorial>['logger'];
+  /**
+   * The selected resource's copyright notice, shown under the selector whatever the content state
+   * (loading, missing book, error or text). The web view supplies it because reading the notice
+   * needs PAPI.
+   */
+  copyrightNotice?: ReactNode;
+};
+
+/**
+ * Read-only panel that displays one referenced Scripture resource or commentary. It owns the render
+ * and the content-state decisions — what a chapter read in hand means and which of the panel's
+ * states is on screen. Changing which resource is shown is dispatched to the caller.
+ *
+ * Everything upstream of that arrives already resolved, and `selectedRef` is the load-bearing case:
+ * the caller has to resolve it regardless, because that row's project id keys the chapter
+ * subscription whose result comes back down here as `usjPossiblyError`. So the resolved row flows
+ * down as a prop and this component MUST NOT re-derive it — a second derivation would be a second
+ * answer to one question, free to disagree with the subscription that produced the content on
+ * screen. Resolve it once, in the caller, and pass it (see `resolveResourceSelection`).
+ *
+ * This callback-out shape is the pattern to follow for a panel component, not merely one of two
+ * in-tree options. `ModelTextPanelProps` takes `showResourcePicker` returning the chosen resource
+ * plus the get/set/install callbacks, and owns the pick, the install and the write inside the
+ * component; this panel takes an argument-free `onShowResourcePicker` and owns none of them.
+ * Keeping that work in the caller is what keeps `@papi` out of this file — which is what makes the
+ * component renderable from a test and a story at all, since neither can serve a PAPI call.
+ * `ModelTextPanel` has not converged yet; see PT-4561, which already touches both panels.
+ */
+export function ResourceTextPanel({
+  localizedStrings,
+  hasProject,
+  resourceType,
+  filteredResources,
+  selectedRef,
+  readiness,
+  dblResources,
+  isCatalogUnavailable,
+  isGrouped,
+  onRetryCatalog,
+  scrRef,
+  onScrRefChange,
+  onSelectResource,
+  usjPossiblyError,
+  isUsjLoading,
+  onRetryChapter,
+  textDirection,
+  copyLimit,
+  allowInvisibleCharacters,
+  isSelecting,
+  isInstalling,
+  installFailed,
+  installFailureReason,
+  retryInstall,
+  isOnline,
+  onShowResourcePicker,
+  logger,
+  copyrightNotice,
+}: ResourceTextPanelProps) {
+  // #region Content state
+
+  const resourceProjectId = selectedRef?.projectId;
+
+  const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
+
+  // A chapter the resource HAS but with nothing in it. Gated on the load having finished because
+  // the data layer doesn't reset to its default when the reference changes — it keeps the PREVIOUS
+  // chapter's USJ until the new subscription's first update lands. Without the gate the panel would
+  // claim "empty" over a chapter that is still arriving, using a blank answer that belongs to the
+  // reference the reader just left.
+  //
+  // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
+  //
+  // A settled read that delivered nothing counts too, and is decided HERE rather than inside
+  // `isBlankChapterOnScreen` because what a settled `undefined` means depends on the caller's seed
+  // for its data hook. This component's `usjPossiblyError` contract makes it a delivered answer; a
+  // caller that seeds a blank USJ gives `undefined` no such meaning, so the shared helper must keep
+  // answering `false` for it.
+  //
+  // It is a real delivered answer rather than a fault: the extender PDP returns `undefined` for a
+  // falsy USX (`platform-scripture-extender-pdpe.model.ts`), deterministically, so re-reading
+  // produces `undefined` again. Naming it a failure would offer a retry that cannot change the
+  // outcome, which is the inert control the failure state exists to avoid.
+  //
+  // Keyed on `usjPossiblyError`, NOT on `usjFromPdp`: the latter is also `undefined` when the read
+  // failed, so using it would report a genuine error as an empty chapter and swallow the failure.
+  const isBlankChapter = useMemo(
+    () =>
+      !isUsjLoading &&
+      (isBlankChapterOnScreen(usjFromPdp, scrRef.chapterNum) ||
+        (usjPossiblyError === undefined && scrRef.chapterNum > 0)),
+    [usjFromPdp, usjPossiblyError, isUsjLoading, scrRef.chapterNum],
+  );
+
+  // The book-not-available message is withheld unless the failure names the book AND project on
+  // screen right now, so a result still describing the reference the user just left cannot be
+  // misattributed to this one. See `resolveResourceContentState`. Derived here rather than in the
+  // render body below so the editor-feeding effect can depend on it.
+  const contentState = useMemo(
+    () =>
+      resolveResourceContentState({
+        resourceProjectId,
+        usjPossiblyError,
+        currentBookNum: Canon.bookIdToNumber(scrRef.book),
+        isUsjSettled: !isUsjLoading,
+      }),
+    [resourceProjectId, usjPossiblyError, scrRef.book, isUsjLoading],
+  );
+
+  // A chapter read that fails is otherwise invisible outside the UI, and the state it produces — a
+  // named, terminal message — looks the same whatever went wrong, so the log is the only place the
+  // cause survives. Keyed on the error alone so paging through books on a sticky failure does not
+  // re-emit it once per book.
+  //
+  // A missing book is ordinary navigation rather than a fault and is already explained on screen, so
+  // it goes to `debug`, which packaged builds drop. If detection ever broke, the same failure would
+  // fall to `error` below and be loud in production rather than silent.
+  useEffect(() => {
+    if (!isPlatformError(usjPossiblyError)) return;
+    const message = getErrorMessage(usjPossiblyError);
+    if (isMissingBookError(usjPossiblyError))
+      logger?.debug(`Book not found in resource text: ${message}`);
+    else logger?.error(`Error getting resource chapter USJ: ${message}`);
+  }, [usjPossiblyError, logger]);
+
+  // #endregion
+
+  // #region Editor
+
+  // EditorRef requires null initial value per React ref convention
+  // eslint-disable-next-line no-null/no-null
+  const editorRef = useRef<EditorRef | null>(null);
+  // What this panel last published to its scroll group, and what it last successfully scrolled to.
+  // Both feed the guards on the reveal-scroll effect below.
+  const lastPublishedScrRefRef = useRef<SerializedVerseRef | undefined>(undefined);
+  const lastScrolledForRef = useRef<{ scrRef: SerializedVerseRef; usj: unknown } | undefined>(
+    undefined,
+  );
+  const isViewVisible = useViewVisibility();
+
+  // Record what we publish before forwarding it, so the bounce-back can be recognised as our own.
+  const handleScrRefChange = useCallback(
+    (newScrRef: SerializedVerseRef) => {
+      lastPublishedScrRefRef.current = newScrRef;
+      onScrRefChange(newScrRef);
+    },
+    [onScrRefChange],
+  );
+  // Markers this resource's content actually uses. Passed to the editor as extraValidMarkers so it
+  // doesn't warn "Unexpected <kind> marker" for handbook/commentary markers (e.g. \pn, \jmp) — scoped
+  // per-resource from the USJ being displayed, never a global list. Empty for content that needs
+  // nothing extra, so the option is omitted (opt-in, no behavior change). The returned array keeps a
+  // stable identity while the marker set is unchanged, so `options` doesn't churn on every fetch.
+  const extraValidMarkers = useExtraValidMarkers(usjFromPdp);
+
+  const options: EditorOptions = useMemo(
+    () => ({
+      isReadonly: true,
+      hasSpellCheck: false,
+      textDirection,
+      copyLimit,
+      view: { ...getDefaultViewOptions(), allowInvisibleCharacters },
+      ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
+    }),
+    [textDirection, copyLimit, allowInvisibleCharacters, extraValidMarkers],
+  );
+
+  // `contentState` and `isBlankChapter` are deps because the content-area branches below UNMOUNT
+  // `Editorial` rather than hiding it. A remounted editor holds nothing, and this effect is its only
+  // feed — so without re-running when the panel comes back to the editor, the reader gets Lexical's
+  // "Enter some Scripture…" placeholder (an edit invitation in a text they cannot edit) until the
+  // next USJ happens to arrive.
+  //
+  // TODO(PT-4517): These deps cover only the content-area branches. The four whole-panel early
+  // returns below also unmount the editor — `!hasProject`, `readiness !== 'configured'`,
+  // `installFailed`, `isSelecting || isInstalling` — and none of them is a dep here, so returning
+  // from one with the USJ and content state unchanged remounts an editor this effect never re-feeds.
+  // Picking the resource already on screen is the reachable case: `isSelecting` unmounts, the pick
+  // resolves, and nothing in the deps moved.
+  //
+  // `ModelTextPanel`'s `tw:hidden` is NOT the fix to copy here: it covers only that panel's
+  // content-area states — the half this dep list already handles — and it keeps six whole-panel
+  // early returns of its own, fed by an effect keyed on the USJ alone. In those branches the editor
+  // is not rendered in any form, so there is no element to hide.
+  //
+  // A LAYOUT effect, not a passive one, because the render that decides to mount `Editorial` is the
+  // render where the chapter arrived — and the editor holds nothing until this feed runs. A passive
+  // effect runs after the browser has already painted, so that placeholder is shown for a frame on
+  // every arrival. React flushes layout effects after the DOM is mutated but before paint, and the
+  // child's `useImperativeHandle` handle is installed before this parent effect runs, so the feed
+  // lands in the same frame the editor appears in.
+  //
+  // The cost is that `setUsj` runs before paint with a whole chapter's USJ. That is accepted: the
+  // work is the same work either way — the editor is useless until it is fed — and deferring it
+  // past paint does not remove the cost, it only guarantees that the frame the reader sees first is
+  // the wrong one. Chapters are bounded by the largest chapter in scripture, not by anything that
+  // grows.
+  //
+  // HIDDEN CASE (see `.claude/rules/cross-view-sync-hidden-views.md`). rc-dock keeps an inactive
+  // tab's pane mounted under `display: none`, so this panel keeps receiving chapters at full rate
+  // for a view nobody can see. Blocking a paint that will not happen buys nothing, so the feed is
+  // skipped entirely while hidden and `isViewVisible` is a dependency: the flip back to visible
+  // re-runs this effect, feeding whatever chapter is current by then. Repeats collapse for free —
+  // only the latest `usjFromPdp` is ever fed — which is why this does not need `useRunWhenVisible`.
+  // That hook's catch-up runs from a PASSIVE effect, which would reintroduce the post-paint
+  // placeholder frame above at every tab activation, the precise thing this effect exists to avoid.
+  //
+  // `useViewVisibility` resolves through an `IntersectionObserver`, which reports asynchronously, so
+  // between the pane being unhidden and the observer firing the reader sees the editor's previous
+  // contents rather than the current chapter. That window is bounded by one observer callback and
+  // shows stale scripture, not an edit invitation.
+  useLayoutEffect(() => {
+    if (isViewVisible && usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
+  }, [isViewVisible, usjFromPdp, contentState, isBlankChapter]);
+
+  // Scroll to the current verse when this tab is shown, and again once a chapter's content lands.
+  //
+  // `Editorial` renders the reference it is given but does not scroll to the verse — every consumer
+  // that scrolls does it by calling `scrollToVerse`, as the Scripture editor and the model text
+  // panel both do.
+  //
+  // Keyed on visibility AND on the reference: visibility covers the reveal (a tab activation carries
+  // no reference change of its own), and the reference covers "go to result" landing on a panel that
+  // is already visible.
+  useEffect(() => {
+    // The echo is consumed FIRST, and whether or not this panel is visible. A verse click inside
+    // `Editorial` publishes to scroll group 0 and bounces straight back as a prop update; scrolling
+    // on that would yank the user's own click target to the top. Leaving the latch armed because
+    // the panel happened to be hidden would be worse: a later, genuine "go to result" onto that
+    // same verse would look like an echo and be swallowed, and a panel registers no web view
+    // controller, so nothing would retry it.
+    if (isEchoOfPublishedScrRef(lastPublishedScrRefRef.current, scrRef)) {
+      lastPublishedScrRefRef.current = undefined;
+      // The clicked verse IS this panel's position now. Recording it keeps a later bare reveal from
+      // treating it as a new target and snapping away from wherever the user has since scrolled.
+      lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+      return undefined;
+    }
+    // The latch is only ever valid for the very NEXT reference, so any other reference discards it.
+    // Otherwise a publish whose echo never arrives as its own update — a Find result writing to the
+    // group before the round-trip lands — leaves the latch armed forever, and a later genuine "go to
+    // result" onto that verse would match it and be swallowed.
+    lastPublishedScrRefRef.current = undefined;
+
+    // `isUsjLoading` is the guard that keeps a scroll off the PREVIOUS chapter: `useProjectData`
+    // holds the old USJ across a selector change, and that content is fully laid out, so the settle
+    // loop below would happily accept it. `scrollToVerse` matches on verse number alone, with no
+    // book or chapter qualifier, so scrolling then lands on — and pulses — the same verse number in
+    // the wrong chapter.
+    if (!isViewVisible || !usjFromPdp || isUsjLoading) return undefined;
+
+    // Nothing new since the last scroll — this is a bare reveal, so leave the user's scroll alone.
+    if (!hasNewScrollTarget(lastScrolledForRef.current, scrRef, usjFromPdp)) return undefined;
+
+    // Wait for the revealed pane's layout to SETTLE, then scroll exactly once.
+    //
+    // Two traps here. First, the verse marker enters the DOM before the chapter has finished laying
+    // out, so an offset computed at that moment is measured against a much shorter content box and
+    // scrolls to a fraction of the real target. Second — and why a naive rAF retry does not rescue
+    // it — `scrollToVerse` scrolls with `behavior: 'smooth'`, so re-calling it every frame restarts
+    // the animation from wherever it had crept to and it never converges.
+    //
+    // Sampling the scroll container's height until it stops changing avoids both: the geometry is
+    // trustworthy by then, and the single call that follows animates uninterrupted.
+    let cancelled = false;
+    // Pulses the verse we land on, so the match is identifiable when several share a verse or a
+    // commentary entry is long. Same treatment the Scripture editor gives an arrived verse.
+    let highlightedVerseElement: HTMLElement | undefined;
+    let cancelSettleWait: (() => void) | undefined;
+
+    if (scrRef.verseNum < 1) {
+      // Chapter top: `scrollToVerse` reaches it without a verse marker and so without settled
+      // geometry to sample — but it still needs the container in the DOM, and it cannot report
+      // that, since it returns an element only when it matched a marker. This stays its own small
+      // retry rather than going through `waitForLayoutToSettle`: that helper always requires two
+      // agreeing samples before it acts, even when the very first one is already correct, and a
+      // container already in the DOM when this effect runs should scroll on the spot rather than
+      // waiting a frame for nothing. Verse 1 is NOT in this case: it has a real marker and real
+      // geometry, so it goes through the settle wait below like any other.
+      const start = Date.now();
+      const tryScrollToChapterTop = () => {
+        if (cancelled) return;
+        if (document.querySelector('.editor-container')) {
+          scrollToVerse(scrRef);
+          lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+          return;
+        }
+        if (Date.now() - start > SCROLL_MAX_WAIT_MS) return;
+        requestAnimationFrame(tryScrollToChapterTop);
+      };
+      tryScrollToChapterTop();
+    } else {
+      cancelSettleWait = waitForLayoutToSettle<number>({
+        // `.editor-container` is sampled as a CONTENT-GROWTH PROXY, not as the scroll container.
+        // Which element actually scrolls differs by host — `_editor-overrides.scss` warns that this
+        // one is auto-height in the Scripture editor and its wrapper scrolls instead — so the scroll
+        // itself is left to `scrollToVerse`, which discovers the container via `findScrollContainer`.
+        // Only the height is read here, and that tracks the chapter laying out either way. `-1`
+        // stands for "no container yet", which never counts as agreeing with itself.
+        sample: () => {
+          const contentElement = document.querySelector<HTMLElement>('.editor-container');
+          return contentElement ? contentElement.scrollHeight : -1;
+        },
+        samplesMatch: (previous, current) => current !== -1 && current === previous,
+        onSettled: () => {
+          highlightedVerseElement = scrollToVerse(scrRef);
+          // Only a scroll that actually landed is recorded. The verse marker can be genuinely
+          // absent — a `\v 16-17` range publishes no `[data-number="17"]` — so recording regardless
+          // would make `hasNewScrollTarget` answer "same target" forever and the panel would never
+          // catch up on a later reveal.
+          if (highlightedVerseElement) {
+            lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+            highlightedVerseElement.classList.add('highlighted');
+            return 'settled';
+          }
+          // Settled but no marker yet. Two consecutive equal heights are cheap to reach — an empty,
+          // flex-sized container reports the same height every frame before Lexical has reconciled
+          // the chapter — so "settled" is not "rendered". Keep waiting rather than treating one
+          // agreeing pair as the answer; `scrollToVerse` does not scroll without a marker, so
+          // re-calling it cannot restart an animation.
+          return 'keep-waiting';
+        },
+        // Out of time: give up WITHOUT recording, so a later reveal tries again instead of being
+        // told the target is unchanged.
+        onTimedOut: () => {},
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      cancelSettleWait?.();
+      highlightedVerseElement?.classList.remove('highlighted');
+    };
+    // The rule wants `scrRef` itself, but this effect is keyed on the three fields that decide where
+    // to scroll. `useScrollGroupScrRef` hands back a fresh object whenever the scroll group
+    // publishes, including for a reference that did not change, so depending on the object would
+    // restart the settle loop on updates that cannot move the target.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isViewVisible, usjFromPdp, isUsjLoading, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
+
+  // #endregion
+
+  // #region Render
+
+  // One resource type, one matched set of strings. See `resolveResourcePanelStringKeys`.
+  const { emptyStatePromptKey, bookNotAvailableKey, pickButtonKey } =
+    resolveResourcePanelStringKeys(resourceType);
+
+  // Both web-view types share this component and resolve to the same content-zoom memory identity
+  // (their container project), so each names its own area to keep its remembered level separate.
+  const contentZoomArea = resourceType === 'ScriptureResource' ? 'bible-texts' : 'commentaries';
+
+  // With no project open, a resource the panel was asked to show (one opened from Home) is still
+  // shown; only with nothing to show does it ask for a project.
+  if (!hasProject && !selectedRef) {
+    return (
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
+        <p>{localize(localizedStrings, '%webView_resourcePanel_noProject%')}</p>
+      </div>
+    );
+  }
+
+  // Ahead of the readiness branch below, because a pick in flight outranks what the reference list
+  // currently says. On a FIRST pick the list is still empty — the resource is not referenced until
+  // `selectTextConnection` has installed it and the write has propagated back — so readiness is
+  // `empty`, and testing readiness first would leave the reader on "no texts selected", with an
+  // enabled pick button and no progress, for the whole download.
+  //
+  // Distinguish the two causes so the label is accurate: a user pick (isSelecting) reads
+  // "Selecting…", while an auto-install of an already-configured resource (isInstalling) — where
+  // the user picked nothing and it is just downloading — reads "Installing…".
+  //
+  // TODO(PT-4561): Fold this into `getResourcePanelReadiness` so branch order here is not a second
+  // answer to "is this panel ready?", per `adr-panel-readiness-from-sources`. Ordering it here also
+  // makes a pick in flight outrank an unreadable settings list, which that function's own precedence
+  // argues against — PT-4561 decides that deliberately. `model-text-panel.component.tsx` still tests
+  // readiness first and so has this same first-pick defect.
+  if (isSelecting || isInstalling) {
+    return (
+      <LoadingView
+        label={localize(
+          localizedStrings,
+          isSelecting ? '%webView_resourcePanel_selecting%' : '%webView_resourcePanel_installing%',
+        )}
+      />
+    );
+  }
+
+  // Front of the state machine: still resolving, unreadable setting, or genuinely nothing
+  // configured. Driven by one readiness value so the empty prompt can only appear once emptiness is
+  // actually known — the loading branch deliberately outlasts the catalog fetch when something is
+  // configured.
+  if (readiness !== 'configured') {
+    return (
+      <PanelReadinessView
+        readiness={readiness}
+        errorMessage={localize(localizedStrings, '%webView_resourcePanel_settingsUnavailable%')}
+        emptyPrompt={localize(localizedStrings, emptyStatePromptKey)}
+        moreInfo={
+          // Only Bible Texts needs the disclosure; the Commentaries prompt says what it is asking
+          // for, so it renders the shorter empty state.
+          resourceType === 'ScriptureResource' ? (
+            <ExpandableInfo
+              moreLabel={localize(
+                localizedStrings,
+                '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%',
+              )}
+              lessLabel={localize(
+                localizedStrings,
+                '%webView_resourcePanel_bibleTexts_emptyState_lessInfo%',
+              )}
+              body={localize(
+                localizedStrings,
+                '%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%',
+              )}
+            />
+          ) : undefined
+        }
+        catalogErrorMessage={localize(
+          localizedStrings,
+          '%webView_resourcePanel_catalogUnavailable%',
+        )}
+        loadingLabel={localize(localizedStrings, '%webView_resourcePanel_loading%')}
+        pickLabel={localize(localizedStrings, pickButtonKey)}
+        retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
+        onPick={() => onShowResourcePicker()}
+        onRetryCatalog={onRetryCatalog}
+      />
+    );
+  }
+
+  // Install failed: the selected resource is in the catalog but couldn't be installed. Offer a
+  // retry rather than spinning forever; a success drops out of this state on its own. When offline
+  // (the usual first-run cause), hint at the connection.
+  if (installFailed) {
+    return (
+      <PanelRetryableErrorView
+        message={localize(
+          localizedStrings,
+          getInstallFailureMessageKey(
+            installFailureReason,
+            isOnline,
+            RESOURCE_PANEL_INSTALL_FAILURE_KEYS,
+          ),
+        )}
+        retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
+        onRetry={retryInstall}
+      />
+    );
+  }
+
+  // Scripture content, or the reason there is none: nothing has arrived yet, the resource has no
+  // such book, or it has the book but the chapter is blank. A blank chapter arrives as a successful,
+  // empty USJ rather than as an error, so it is invisible to `contentState` and needs its own check;
+  // the missing book is tested first because it is the more specific claim. Every branch beats
+  // letting `Editorial` render with no scripture set, which shows its "enter some Scripture" prompt
+  // — an edit invitation in a text the reader cannot edit.
+  //
+  // These are the panel's CONTENT area only. The selector header stays mounted above all of them,
+  // including the spinner: a resource missing a book has no remedy inside this panel, so the only
+  // thing the user can do about it is switch to a text that has the book, and taking the selector
+  // away while a chapter loads would remove that between every navigation.
+  //
+  // Only the editor gets `dir`. That is the RESOURCE's text direction, and the messages are app
+  // chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
+  // resource is RTL.
+  const renderContent = () => {
+    if (contentState === 'loading')
+      return (
+        <ContentLoadingView
+          label={localize(localizedStrings, '%webView_resourcePanel_loading%')}
+          announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+        />
+      );
+
+    if (contentState === 'bookNotAvailable')
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBookNotAvailable
+            message={localize(localizedStrings, bookNotAvailableKey)}
+            announcementKey={`${resourceProjectId}:${scrRef.book}`}
+          />
+        </div>
+      );
+
+    if (isBlankChapter)
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBlankChapter
+            message={localize(
+              localizedStrings,
+              '%webView_platformScriptureEditor_emptyChapter_messageResource%',
+            )}
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+          />
+        </div>
+      );
+
+    // A failure that is not a missing book in the text on screen. Nothing re-emits on its own, so
+    // this names the failure instead of showing a spinner that would claim progress that never
+    // arrives — and offers the reader the one thing that CAN re-emit, a fresh read.
+    if (contentState === 'failed')
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceTextUnavailable
+            message={localize(localizedStrings, '%webView_resourcePanel_textUnavailable%')}
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+            retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
+            onRetry={onRetryChapter}
+          />
+        </div>
+      );
+
+    // No USJ in hand for the reference on screen, and no failure to name: the chapter is still on
+    // its way. Keep waiting rather than mounting `Editorial` with nothing set, which paints
+    // Lexical's "Enter some Scripture…" placeholder — an edit invitation in a text the reader
+    // cannot edit.
+    if (!usjFromPdp)
+      return (
+        <ContentLoadingView
+          label={localize(localizedStrings, '%webView_resourcePanel_loading%')}
+          announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+        />
+      );
+
+    // The zoom marker sits INSIDE the scroll box, never on it or above it: `scrollToVerse` adds a
+    // `getBoundingClientRect()` distance (zoomed pixels) to the box's `scrollTop` (unzoomed pixels),
+    // which agree only while the box itself is unscaled. The messages and the spinner above are app
+    // chrome and stay unmarked; while one of them shows, the pane reports no area and its declared
+    // default area stands in.
+    return (
+      <div
+        className="tw:flex-1 tw:overflow-auto"
+        dir={options.textDirection}
+        data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID}
+      >
+        <ContentZoomRoot area={contentZoomArea}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={handleScrRefChange}
+            options={options}
+            logger={logger}
+          />
+        </ContentZoomRoot>
+      </div>
+    );
+  };
+
+  // Active state: resource is installed and USJ is available
+  // This panel (Bible Texts / Commentaries) is Simple-mode-only, so `editor-container-simple`
+  // (flattens .editor-container's rounded top corners — see _simple-mode.scss) is applied
+  // unconditionally, unlike the Scripture Editor's conditional use of the same class.
+  return (
+    <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
+      <ResourceSelectorDropdown
+        filteredResources={filteredResources}
+        selectedRef={selectedRef}
+        dblResources={dblResources}
+        isCatalogUnavailable={isCatalogUnavailable}
+        isGrouped={isGrouped}
+        onSelectResource={onSelectResource}
+        onShowResourcePicker={hasProject ? onShowResourcePicker : undefined}
+        downloadResourcesLabel={localize(
+          localizedStrings,
+          '%webView_resourcePanel_downloadResources%',
+        )}
+        noSelectionLabel={localize(localizedStrings, '%webView_resourcePanel_loadingResources%')}
+        teamResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader,
+        )}
+        userResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader,
+        )}
+        otherResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_otherResources%')}
+        teamResourcesCaption={localize(
+          localizedStrings,
+          '%webView_resourcePanel_teamResourcesCaption%',
+        )}
+        teamResourceLockLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamSharedLock,
+        )}
+      />
+
+      {copyrightNotice}
+
+      <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent()}</div>
+    </div>
+  );
+
+  // #endregion
+}
+
+export default ResourceTextPanel;

@@ -1,8 +1,13 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { cn } from '@/utils/shadcn-ui/utils';
 import React, { RefObject, useCallback, useEffect, useState } from 'react';
-import { AddCommentToThreadOptions, CommentListProps } from './comment-list.types';
+import {
+  AddCommentToThreadOptions,
+  COMMENT_LIST_ELEMENT_ID,
+  CommentListProps,
+} from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
+import { ConflictThread } from './conflict-thread.component';
 
 /**
  * Component for rendering a list of comment threads
@@ -27,6 +32,9 @@ export default function CommentList({
   selectedThreadId: externalSelectedThreadId,
   onSelectedThreadChange,
   onVerseRefClick,
+  conflictResolution,
+  drafts,
+  onDraftChange,
 }: CommentListProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const [lastInteractedThreadId, setLastInteractedThreadId] = useState<string | undefined>();
@@ -121,7 +129,7 @@ export default function CommentList({
 
   return (
     <div
-      id="comment-list"
+      id={COMMENT_LIST_ELEMENT_ID}
       role="listbox"
       tabIndex={0}
       // The listboxRef is an HTMLElement so that the keyboard navigation can be used with multiple types of elements
@@ -130,46 +138,62 @@ export default function CommentList({
       aria-activedescendant={activeId ?? undefined}
       aria-label="Comments"
       className={cn(
-        'tw:flex tw:w-full tw:flex-col tw:space-y-3 tw:outline-hidden tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
+        'tw:flex tw:w-full tw:flex-col tw:outline-hidden tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
 
         className,
       )}
       onKeyDown={handleKeyDownWithEscape}
     >
-      {activeThreads.map((thread) => (
-        <div
-          key={thread.id}
-          className={cn({
-            'tw:opacity-60': thread.status === 'Resolved',
-          })}
-        >
-          <CommentThread
-            classNameForVerseText={classNameForVerseText}
-            comments={thread.comments}
-            localizedStrings={localizedStrings}
-            verseRef={thread.verseRef}
-            handleSelectThread={handleSelectThread}
-            threadId={thread.id}
-            thread={thread}
-            isRead={thread.isRead}
-            isSelected={expandedThreadIds.has(thread.id)}
-            currentUser={currentUser}
-            assignedUser={thread.assignedUser}
-            threadStatus={thread.status}
-            handleAddCommentToThread={handleAddCommentToThreadWithTracking}
-            handleUpdateComment={handleUpdateComment}
-            handleDeleteComment={handleDeleteComment}
-            handleReadStatusChange={handleReadStatusChange}
-            assignableUsers={assignableUsers}
-            canUserAddCommentToThread={canUserAddCommentToThread}
-            canUserAssignThreadCallback={canUserAssignThreadCallback}
-            canUserResolveThreadCallback={canUserResolveThreadCallback}
-            canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
-            onVerseRefClick={onVerseRefClick}
-            initialAssignedUser={lastAssignedUser}
-          />
-        </div>
-      ))}
+      {activeThreads.map((thread) => {
+        // The generic shell props both thread variants share. Conflict threads render through
+        // ConflictThread (which owns the resolve UI and forwards these slots to the shared
+        // CommentThread shell) and additionally receive the conflict-resolution callbacks; every
+        // other thread renders CommentThread directly, keeping the shell conflict-agnostic.
+        const commonThreadProps = {
+          classNameForVerseText,
+          comments: thread.comments,
+          localizedStrings,
+          verseRef: thread.verseRef,
+          handleSelectThread,
+          threadId: thread.id,
+          thread,
+          isRead: thread.isRead,
+          isSelected: expandedThreadIds.has(thread.id),
+          currentUser,
+          assignedUser: thread.assignedUser,
+          threadStatus: thread.status,
+          handleAddCommentToThread: handleAddCommentToThreadWithTracking,
+          handleUpdateComment,
+          handleDeleteComment,
+          handleReadStatusChange,
+          assignableUsers,
+          canUserAddCommentToThread,
+          canUserAssignThreadCallback,
+          canUserResolveThreadCallback,
+          canUserEditOrDeleteCommentCallback,
+          onVerseRefClick,
+          initialAssignedUser: lastAssignedUser,
+          draft: drafts?.[thread.id],
+          onDraftChange,
+        };
+        return (
+          <div
+            key={thread.id}
+            // A 1px divider rather than a gap: every card is `bg-card`, and `--card` equals
+            // `--background` in every theme except paratext-dark, so a gap would be invisible.
+            // `last:border-b-0` keeps the list from ending on a dangling rule.
+            className={cn('tw:border-b tw:border-border tw:last:border-b-0', {
+              'tw:opacity-60': thread.status === 'Resolved',
+            })}
+          >
+            {thread.type === 'Conflict' ? (
+              <ConflictThread {...commonThreadProps} conflictResolution={conflictResolution} />
+            ) : (
+              <CommentThread {...commonThreadProps} />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

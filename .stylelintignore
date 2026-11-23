@@ -54,7 +54,10 @@ bin
 obj
 storybook-static
 
-# yalc
+
+# Left behind on any checkout that predates staged dev packages: nothing creates a `.yalc`
+# tree any more, but an existing one is still on disk and still walked by Prettier, which
+# descends into dot-directories.
 .yalc
 yalc.lock
 
@@ -65,3 +68,25 @@ dev-packages/
 e2e-tests/test-results
 e2e-tests/playwright-report
 
+# Generated/extracted PT9 CSS snapshots
+# (no sync with .prettierignore / .prettierignorerun — these files SHOULD be
+# prettier-formatted; they're only exempt from stylelint)
+# Machine output, not authored source — tripping authoring rules (block-no-empty,
+# selector-class-pattern on PT9's .usfm_* names, etc.) would force edits that
+# break their fidelity to PT9.
+data/pt9-css/
+
+
+# Embedded Claude Code profile (vendored from ai-prompts; exempt from repo format/lint)
+.claude
+.context
+.review
+.superpowers
+CLAUDE.md
+
+# Ruby gems, installed into the workspace by CI's ruby/setup-ruby step (`bundler-cache: true` sets
+# bundler's path to vendor/bundle) and by any local `bundle install` configured the same way. Third-
+# party source that this repository does not author, format or lint - and prettier reports a syntax
+# error on the HTML fixtures some gems ship.
+/.bundle/
+/vendor/bundle/

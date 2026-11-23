@@ -14,12 +14,15 @@ import {
   ICheckAggregatorService,
   ICheckRunner,
   CheckConfigurationProvider,
+  CheckSetupState,
 } from 'platform-scripture';
 import {
   CHECK_RESULTS_INVALIDATED_EVENT,
   CHECK_RUNNER_NETWORK_OBJECT_TYPE,
   CHECK_STOP_DEFAULT_TIMEOUT_MS,
+  LOOK_UP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION,
 } from './check.model';
+import { lookUpCheckSetupStatusWithFallback, mergeCheckErrors } from './check-aggregator.utils';
 
 /**
  * When a job is started, it may need to be split up and sent to multiple check runners depending on
@@ -197,6 +200,7 @@ class CheckAggregatorDataProviderEngine
         .map((r) => r.error)
         .filter((m) => m && m.length > 0)
         .join('; '),
+      checkErrors: mergeCheckErrors(jobReports),
       totalExecutionTimeMs: jobReports.reduce(
         (acc, report) => acc + (report.totalExecutionTimeMs ?? 0),
         0,
@@ -205,6 +209,7 @@ class CheckAggregatorDataProviderEngine
 
     if (combinedReport.nextResults?.length === 0) delete combinedReport.nextResults;
     if (combinedReport.error?.length === 0) delete combinedReport.error;
+    if (!combinedReport.checkErrors) delete combinedReport.checkErrors;
     return combinedReport;
   }
 
@@ -259,6 +264,12 @@ class CheckAggregatorDataProviderEngine
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
     if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
     return checkRunner.isCheckSetupForProject(checkId, projectId);
+  }
+
+  async lookUpCheckSetupStatus(checkId: string, projectId: string): Promise<CheckSetupState> {
+    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
+    if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
+    return lookUpCheckSetupStatusWithFallback(checkRunner, checkId, projectId);
   }
 
   // #endregion
@@ -386,6 +397,28 @@ const checkAggregatorServiceProviderName = 'platformScripture.checkAggregator';
 
 let initializationPromise: Promise<void> | undefined;
 let dataProvider: IDisposableDataProvider<ICheckAggregatorService>;
+/**
+ * Buffered emitter for check-results-invalidated events. Created at module load so a
+ * `platformScripture.invalidateCheckResults` command invocation (C# fires this) that arrives before
+ * `initialize()` finishes registering the emitter is queued and flushed, rather than thrown away.
+ */
+const resultsInvalidatedEventEmitter = papi.network.createBufferedNetworkEventEmitter(
+  CHECK_RESULTS_INVALIDATED_EVENT,
+  {
+    notification: {
+      summary:
+        'Emitted when check results are invalidated and subscribers should refresh their data.',
+      params: [
+        {
+          name: 'details',
+          required: true,
+          summary: 'Details describing which check results were invalidated.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+);
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
@@ -394,6 +427,9 @@ async function initialize(): Promise<void> {
           dataProvider = await papi.dataProviders.registerEngine(
             checkAggregatorServiceProviderName,
             new CheckAggregatorDataProviderEngine(),
+            undefined,
+            undefined,
+            { methods: [LOOK_UP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION] },
           );
           resolve();
         } catch (error) {
@@ -406,11 +442,10 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const resultsInvalidatedEventEmitter =
-  papi.network.createNetworkEventEmitter<CheckResultsInvalidated>(CHECK_RESULTS_INVALIDATED_EVENT);
-
 /** Notify all listeners that check results have been invalidated and should be refreshed */
 export function notifyCheckResultsInvalidated(e: CheckResultsInvalidated): void {
+  // Buffered emit — usable immediately. If the C#-invoked `invalidateCheckResults` command fires
+  // before registration completes, the event is queued and flushed rather than thrown away.
   resultsInvalidatedEventEmitter.emit(e);
 }
 
@@ -422,10 +457,8 @@ const serviceObject = createSyncProxyForAsyncObject<ICheckAggregatorService>(asy
 }, checkAggregatorServiceObjectToProxy);
 
 async function dispose(): Promise<boolean> {
-  const disposalResults: boolean[] = await Promise.all([
-    dataProvider.dispose(),
-    resultsInvalidatedEventEmitter.dispose(),
-  ]);
+  resultsInvalidatedEventEmitter.dispose();
+  const disposalResults: boolean[] = await Promise.all([dataProvider.dispose()]);
   return disposalResults.every((result) => result);
 }
 

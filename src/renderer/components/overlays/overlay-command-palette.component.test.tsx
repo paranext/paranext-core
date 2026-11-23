@@ -1,8 +1,41 @@
 import { vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayCommandPalettePresentational } from './overlay-command-palette.component';
-import { CommandPaletteItem } from '../../services/overlays/overlay.service-model';
+import {
+  getMarkerPaletteClaimedKeys,
+  handleMarkerPaletteSessionKeyDown,
+  MarkerPaletteSessionDriver,
+  MarkerPaletteSessionState,
+} from 'platform-bible-react/experimental';
+import {
+  addOverlay,
+  clearAllOverlays,
+  getOverlayById,
+  updateCommandPaletteState,
+} from '../../services/overlays/overlay-store';
+import {
+  OverlayCommandPalette,
+  OverlayCommandPalettePresentational,
+} from './overlay-command-palette.component';
+import { CommandPaletteItem, OverlayEntry } from '../../services/overlays/overlay.service-model';
+import { takeOverlayFocusReturnMark } from '../../services/overlays/overlay-focus-return.util';
+
+// The store-connected component resolves LocalizeKeys via useLocalizedStrings; an empty map makes
+// every value fall back to its raw text, so tests assert against the literal item labels.
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useLocalizedStrings: vi.fn(() => [{}, false]),
+}));
+
+// Real store behavior throughout, with updateCommandPaletteState additionally observable as a spy:
+// the filter-reset test must assert WHICH write carried the highlight reset, because cmdk's own
+// auto-highlight also lands the store on index 0 in this harness and would mask a missing reset.
+vi.mock('../../services/overlays/overlay-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/overlays/overlay-store')>();
+  return {
+    ...actual,
+    updateCommandPaletteState: vi.fn(actual.updateCommandPaletteState),
+  };
+});
 
 beforeAll(() => {
   // Radix Popover uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
@@ -64,6 +97,89 @@ describe('OverlayCommandPalettePresentational', () => {
 
       expect(onDismiss).toHaveBeenCalled();
       expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('reports Escape before it dismisses, and does not report a backdrop click as Escape', () => {
+      const calls: string[] = [];
+
+      const { container } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={() => calls.push('dismiss')}
+          onEscape={() => calls.push('escape')}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+      expect(calls).toEqual(['escape', 'dismiss']);
+
+      calls.length = 0;
+      const backdrop = container.querySelector('[data-overlay-command-palette-backdrop]');
+      expect(backdrop).toBeInTheDocument();
+      // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      fireEvent.click(backdrop as Element);
+      expect(calls).toEqual(['dismiss']);
+    });
+
+    it('reports a backdrop click before it dismisses, and does not report Escape as one', () => {
+      const calls: string[] = [];
+
+      const { container } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={() => calls.push('dismiss')}
+          onBackdropClick={() => calls.push('backdrop')}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+      expect(calls).toEqual(['dismiss']);
+
+      calls.length = 0;
+      const backdrop = container.querySelector('[data-overlay-command-palette-backdrop]');
+      expect(backdrop).toBeInTheDocument();
+      // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      fireEvent.click(backdrop as Element);
+      expect(calls).toEqual(['backdrop', 'dismiss']);
+    });
+
+    it('keeps focus where it is when the backdrop is pressed, but not when the palette is', () => {
+      const { container } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const backdrop = container.querySelector('[data-overlay-command-palette-backdrop]');
+      expect(backdrop).toBeInTheDocument();
+
+      // fireEvent returns false when a handler called preventDefault, which stops the press from
+      // moving focus off the palette or the requesting web view.
+      // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect(fireEvent.mouseDown(backdrop as Element)).toBe(false);
+      expect(fireEvent.mouseDown(screen.getByRole('combobox'))).toBe(true);
+    });
+
+    it('writes the overlay id to its content', () => {
+      const { container } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          overlayId="palette-x"
+        />,
+      );
+
+      expect(container.querySelector('[data-overlay-command-palette]')).toHaveAttribute(
+        'data-overlay-id',
+        'palette-x',
+      );
     });
 
     it('should call onDismiss when clicking the backdrop', () => {
@@ -153,6 +269,34 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(onSelect).toHaveBeenCalledWith('close');
       expect(onDismiss).not.toHaveBeenCalled();
     });
+
+    it('should ignore the outside press a window blur produces', async () => {
+      const onDismiss = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+        />,
+      );
+
+      // Radix attaches its outside-press listener on the next tick
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+
+      // The shared wrapper answers a window blur with a marked outside press
+      fireEvent.blur(window);
+      expect(onDismiss).not.toHaveBeenCalled();
+
+      // Positive control: an ordinary outside press still dismisses
+      fireEvent.pointerDown(document.body);
+      expect(onDismiss).toHaveBeenCalled();
+    });
   });
 
   describe('search filtering', () => {
@@ -190,6 +334,60 @@ describe('OverlayCommandPalettePresentational', () => {
 
       fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zzzzz' } });
 
+      expect(screen.getByText('Nothing found')).toBeInTheDocument();
+    });
+
+    it('fuzzy-matches subsequences by default (an ordinary focused palette)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // 'sf' is not CONTAINED in any label, but cmdk's scorer matches it as a subsequence of
+      // "Save File" ('S'ave 'F'ile) — the forgiving lookup general command palettes want.
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sf' } });
+
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('matches by containment only when disableFuzzyMatching is set', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          disableFuzzyMatching
+          noResultsText="Nothing found"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sf' } });
+      expect(screen.getByText('Nothing found')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Save' } });
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('forces containment matching for a key-forwarded palette regardless of the option', () => {
+      // A forwarded palette's filtered list is resolved by the HOST (commits and forwarded keys
+      // are answered from it), so cmdk's scorer must never widen what is displayed past it.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          noResultsText="Nothing found"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sf' } });
       expect(screen.getByText('Nothing found')).toBeInTheDocument();
     });
   });
@@ -231,6 +429,490 @@ describe('OverlayCommandPalettePresentational', () => {
     });
   });
 
+  describe('active-palette auto-focus', () => {
+    it('should retry across animation frames until the search input holds focus', async () => {
+      // Simulate the palette losing the initial focus fight (an editor iframe re-grabbing focus
+      // after the palette opens): while focus() is a no-op, the mount-time attempt cannot stick,
+      // so the palette must keep retrying on animation frames.
+      const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      expect(input).not.toHaveFocus();
+
+      // Focus can stick again — a later animation-frame retry must land it without a re-render
+      focusSpy.mockRestore();
+      await vi.waitFor(() => expect(input).toHaveFocus());
+    });
+
+    it('should focus the search input of an ANCHORED palette, whose input mounts after the palette', async () => {
+      // Anchored mode renders the input inside a Radix Popover portal, which mounts its content on
+      // a render AFTER the palette's own mount effects have run — so at the first attempt there is
+      // no input to focus yet. An anchored palette that fails to focus leaves every typed filter
+      // character landing in the document instead.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 10, y: 10 }}
+          anchor={{ width: 1, height: 16 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = await screen.findByRole('combobox');
+      await vi.waitFor(() => expect(input).toHaveFocus());
+    });
+
+    it('should NOT focus an anchored palette that declares keyForwarding, even once its input mounts', async () => {
+      // A selection-wrap marker palette anchors like the Enter palette above, but forwards its
+      // keys to the editor session — it must leave DOM focus in the requesting editor for the
+      // whole time it is open, or the forwarded keys never arrive and the editor selection is lost.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 10, y: 10 }}
+          anchor={{ width: 1, height: 16 }}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = await screen.findByRole('combobox');
+      // Give the retry loop, if it were still running, several animation frames to steal focus.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(input).not.toHaveFocus();
+    });
+
+    it('should NOT focus a centered palette that declares keyForwarding, even though its input mounts immediately', async () => {
+      // Centered mode (no `position`) renders its input directly, not inside a Radix Popover
+      // portal, so the input exists on the very first mount-effect attempt. A key-forwarding
+      // palette must still leave focus wherever it already was — forwarding exists precisely so a
+      // palette can be driven without ever taking DOM focus.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      // Give the retry loop, if it were still running, several animation frames to steal focus.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(input).not.toHaveFocus();
+    });
+
+    it('should not throw when the palette unmounts before focus ever sticks', async () => {
+      const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
+
+      const { unmount } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      unmount();
+      focusSpy.mockRestore();
+
+      // Let a couple of animation frames pass; unmount must have cancelled the retry loop, so no
+      // stray callback throws or focuses the removed input.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+    });
+  });
+
+  describe("focusTarget: 'list' — focus on something that cannot be edited", () => {
+    // Why this mode exists: an IME or a dead key begins composing in ANY focused text box no
+    // matter what a key handler cancels, and once a composition is under way per-key rules no
+    // longer apply to it. Focusing the list means no composition ever starts, so a dead key
+    // arrives as an ordinary keydown the requester's table can ignore.
+
+    it('focuses the LIST, not the search input', async () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const list = screen.getByRole('listbox');
+      await vi.waitFor(() => expect(list).toHaveFocus());
+      expect(screen.getByRole('combobox')).not.toHaveFocus();
+    });
+
+    it('focuses an ANCHORED list palette, whose list mounts after the first attempt', async () => {
+      // Same portal timing as the input case: Radix commits nothing on its first pass, so the
+      // retry must survive a target that does not exist yet.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      await vi.waitFor(() => expect(screen.getByRole('listbox')).toHaveFocus());
+    });
+
+    it('renders the search box read-only, out of the tab order, over the HOST filter', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          filterText="se"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      expect(input).toHaveAttribute('readonly');
+      expect(input).toHaveAttribute('tabindex', '-1');
+      expect(input).toHaveValue('se');
+    });
+
+    it('puts the focused list in the tab order and points it at the highlighted item', async () => {
+      // aria-activedescendant only speaks from a FOCUSED element. Passive mode cannot use it (it
+      // focuses nothing) and falls back to the service's live region; list mode can, which is the
+      // accessibility gain over passive.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          selectedIndex={1}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const list = screen.getByRole('listbox');
+      await vi.waitFor(() => expect(list).toHaveFocus());
+      expect(list).toHaveAttribute('tabindex', '0');
+      const activeId = list.getAttribute('aria-activedescendant');
+      expect(activeId).toBeTruthy();
+      expect(document.getElementById(activeId ?? '')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('forwards EVERY key to the session, including keys it never declared', () => {
+      // The point of list mode: one table in the requester decides what each key means, including
+      // the ones it ignores. Declaring them all would duplicate that table here.
+      const onKey = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          keyForwarding={{ keys: ['Enter'], onKey }}
+        />,
+      );
+
+      const list = screen.getByRole('listbox');
+      fireEvent.keyDown(list, { key: 'Enter' });
+      fireEvent.keyDown(list, { key: 'q' });
+      fireEvent.keyDown(list, { key: '.' });
+      fireEvent.keyDown(list, { key: 'Dead' });
+      fireEvent.keyDown(list, { key: 'ArrowDown' });
+
+      expect(onKey.mock.calls.map(([event]) => event.key)).toEqual([
+        'Enter',
+        'q',
+        '.',
+        'Dead',
+        'ArrowDown',
+      ]);
+    });
+
+    it('stops forwarded keys reaching this document\u2019s other shortcut bindings', () => {
+      // A list-focused palette holds focus in the renderer document rather than in the requesting
+      // WebView’s iframe, which puts the renderer’s `document`-level shortcut bindings in the
+      // key’s path — `PlatformMenubar` binds bare `alt` and answers it by dispatching a SYNTHETIC
+      // Escape at a menu trigger, which would close the palette the instant a user reaches for a
+      // dead key (Option is how `é` is typed on macOS).
+      const documentListener = vi.fn();
+      document.addEventListener('keydown', documentListener);
+      const onKey = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          keyForwarding={{ keys: [], onKey }}
+        />,
+      );
+
+      // A key the session IGNORES is still the palette's to own \u2014 that is the case that bit us.
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Alt', altKey: true });
+
+      expect(onKey).toHaveBeenCalledTimes(1);
+      expect(documentListener).not.toHaveBeenCalled();
+      document.removeEventListener('keydown', documentListener);
+    });
+
+    it('leaves the DEFAULT palette\u2019s keys reaching the document, as before', () => {
+      // Only list mode claims the keyboard this way; an ordinary focused palette keeps today's
+      // behaviour so other PAPI consumers are unaffected.
+      const documentListener = vi.fn();
+      document.addEventListener('keydown', documentListener);
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Alt', altKey: true });
+
+      expect(documentListener).toHaveBeenCalled();
+      document.removeEventListener('keydown', documentListener);
+    });
+
+    it('hands Escape to the session too, instead of dismissing locally', () => {
+      // Dismissal is the session's call: it has a caret to restore and a pending state to clear.
+      const onKey = vi.fn();
+      const onDismiss = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+          keyForwarding={{ keys: [], onKey }}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+
+      expect(onKey).toHaveBeenCalledTimes(1);
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('still dismisses on Escape when the requester declared no forwarding at all', () => {
+      const onDismiss = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the DEFAULT palette untouched — input focused and editable', async () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      await vi.waitFor(() => expect(input).toHaveFocus());
+      expect(input).not.toHaveAttribute('readonly');
+    });
+
+    it('does not forward undeclared keys, and dismisses locally, outside list mode', () => {
+      // A key-forwarding palette that is NOT list-focused keeps today's behaviour in both
+      // respects: only its declared keys go back to the session, and Escape is its own. (It also
+      // leaves focus alone — covered by the anchored-palette focus tests above.)
+      const onKey = vi.fn();
+      const onDismiss = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+          keyForwarding={{ keys: ['Enter'], onKey }}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      fireEvent.keyDown(input, { key: 'q' });
+      expect(onKey).not.toHaveBeenCalled();
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('active mode — store-driven selection and filter parity (single source of truth)', () => {
+    // The host's commitCommandPaletteSelection resolves filterPaletteItems(items, store.filterText)
+    // [store.selectedIndex]. These tests pin that a CONTAINMENT-mode active palette (fuzzy
+    // matching disabled — the marker palettes' regime, also forced by keyForwarding/passive)
+    // displays exactly that state: forwarded updates move the visible selection, local input
+    // mirrors back out via callbacks, and the visible list uses the same containment filter — so
+    // commit and display always agree. A default (fuzzy) palette opts out of this store-driven
+    // contract: cmdk owns its filtering and highlight, and commits go through the palette UI.
+
+    it('highlights the item at selectedIndex (a forwarded moveSelection moves the visible selection)', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          selectedIndex={1}
+          disableFuzzyMatching
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // Enter with no local navigation must select the externally-highlighted item, not item 0.
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+
+      expect(onSelect).toHaveBeenCalledWith('save');
+    });
+
+    it('filters with the same containment algorithm the host commit uses (no cmdk fuzzy drift)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          disableFuzzyMatching
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // cmdk's fuzzy scoring would keep 'Open File' for the subsequence 'onf' ('OpeN File');
+      // plain containment must not — otherwise the display would disagree with what a forwarded
+      // commit picks from the store-filtered list.
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'onf' } });
+
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Save File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('matches description text by default (general palettes search all visible text)', () => {
+      const items: CommandPaletteItem[] = [
+        { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
+        { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Normal' } });
+
+      expect(screen.getByText('Paragraph (p)')).toBeInTheDocument();
+      expect(screen.queryByText('Margin (m)')).not.toBeInTheDocument();
+    });
+
+    it("does NOT match description text under searchFields: ['label'] — marker-palette opt-in", () => {
+      // Description containment is what buried exact marker matches (the "typed w, exact match
+      // ranked 9th" report): marker palettes opt into label-only matching, identical to the
+      // editor palette; the rendered list must honor the same opt-in the host commit uses.
+      const items: CommandPaletteItem[] = [
+        { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
+        { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          searchFields={['label']}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Normal' } });
+
+      expect(screen.queryByText('Paragraph (p)')).not.toBeInTheDocument();
+      expect(screen.queryByText('Margin (m)')).not.toBeInTheDocument();
+      expect(screen.getByText('No results found')).toBeInTheDocument();
+    });
+
+    it('matches labels case-insensitively (lowercase input finds capitalized labels)', () => {
+      const items: CommandPaletteItem[] = [
+        { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
+        { id: 'q1', label: 'Poetry Line 1 (q1)', description: 'First level poetry' },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'paragraph' } });
+
+      expect(screen.getByText('Paragraph (p)')).toBeInTheDocument();
+      expect(screen.queryByText('Poetry Line 1 (q1)')).not.toBeInTheDocument();
+    });
+
+    it('reports typed filter text via onFilterTextChange so the store can mirror it', () => {
+      const onFilterTextChange = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onFilterTextChange={onFilterTextChange}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Sa' } });
+
+      expect(onFilterTextChange).toHaveBeenCalledWith('Sa');
+    });
+
+    it('reports arrow-key highlight moves via onSelectedIndexChange so the store can mirror them', () => {
+      const onSelectedIndexChange = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelectedIndexChange={onSelectedIndexChange}
+          disableFuzzyMatching
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'ArrowDown' });
+
+      expect(onSelectedIndexChange).toHaveBeenCalledWith(1);
+    });
+  });
+
   describe('grouped items', () => {
     it('should render group headings when items have group keys', () => {
       const groupedItems: CommandPaletteItem[] = [
@@ -250,5 +932,996 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(screen.getByText('File')).toBeInTheDocument();
       expect(screen.getByText('Edit')).toBeInTheDocument();
     });
+  });
+
+  describe('passive mode', () => {
+    it('should render the same search input the active mode renders', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
+    });
+
+    it('should display the externally-driven filterText as the input value', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('combobox')).toHaveValue('Sa');
+    });
+
+    it('should update the displayed input value live as filterText grows', () => {
+      const { rerender } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="S"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('combobox')).toHaveValue('S');
+
+      rerender(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('combobox')).toHaveValue('Sa');
+    });
+
+    it('should render the input as read-only and out of the tab order (the session owner types, not the input)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      expect(input).toHaveAttribute('readonly');
+      expect(input).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('should not report filter text changes from the passive input', () => {
+      const onFilterTextChange = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          onFilterTextChange={onFilterTextChange}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Sav' } });
+
+      expect(onFilterTextChange).not.toHaveBeenCalled();
+    });
+
+    it('should never steal focus on mount', () => {
+      const focusTarget = document.createElement('button');
+      document.body.appendChild(focusTarget);
+      focusTarget.focus();
+      expect(document.activeElement).toBe(focusTarget);
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(document.activeElement).toBe(focusTarget);
+      focusTarget.remove();
+    });
+
+    it('should still render all items via filterPaletteItems, grouped the same as active mode', () => {
+      const groupedItems: CommandPaletteItem[] = [
+        { id: 'open', label: 'Open File', group: 'File' },
+        { id: 'find', label: 'Find', group: 'Edit' },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={groupedItems}
+          passive
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('File')).toBeInTheDocument();
+      expect(screen.getByText('Edit')).toBeInTheDocument();
+      expect(screen.getByText('Open File')).toBeInTheDocument();
+      expect(screen.getByText('Find')).toBeInTheDocument();
+    });
+
+    it('should narrow the rendered items via the filterText prop', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('should prefix-match the filterText case-insensitively (typed lowercase marker finds capitalized label)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('should keep the session-filtered items VISIBLE, not merely mounted', () => {
+      // Regression: hoisting the search input into the passive branch fed cmdk's own `search`
+      // state, and cmdk's `Group` hides itself whenever `search` is non-empty and the group has
+      // no cmdk-registered items in `filtered.groups`. Passive mode registers NO cmdk items (it
+      // renders plain divs), so every group went `hidden` the moment anything was typed — an
+      // empty-looking list whose entries were still in the DOM. `toBeInTheDocument` cannot see
+      // that; only visibility can.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Save File')).toBeVisible();
+    });
+
+    it('should keep GROUPED session-filtered items visible too', () => {
+      // Grouping is what puts a cmdk `Group` between the list and the items, so the grouped
+      // shape is where the hiding actually bites.
+      render(
+        <OverlayCommandPalettePresentational
+          items={[
+            { id: 'nd', label: 'nd', group: 'Character' },
+            { id: 'nb', label: 'nb', group: 'Paragraph' },
+          ]}
+          passive
+          filterText="nd"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('nd')).toBeVisible();
+      expect(screen.queryByText('nb')).not.toBeInTheDocument();
+    });
+
+    it('should keep prefix semantics (a mid-label match hides the item)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="File"
+          noResultsText="Nothing found"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // 'File' appears inside 'Open File' and 'Save File' but starts neither label — the passive
+      // marker palette filters by typed prefix, so containment must not match
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Save File')).not.toBeInTheDocument();
+      expect(screen.getByText('Nothing found')).toBeInTheDocument();
+    });
+
+    it('should show noResultsText when filterText matches nothing', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="zzzzz"
+          noResultsText="Nothing found"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Nothing found')).toBeInTheDocument();
+    });
+
+    it('should highlight the item at selectedIndex', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={1}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const highlighted = screen.getByText('Save File').closest('[data-slot="command-item"]');
+      const notHighlighted = screen.getByText('Open File').closest('[data-slot="command-item"]');
+      expect(highlighted).toHaveAttribute('aria-selected', 'true');
+      expect(notHighlighted).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('should move the highlight when selectedIndex changes (rerender)', () => {
+      const { rerender } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={0}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Open File').closest('[data-slot="command-item"]')).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+
+      rerender(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={2}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Open File').closest('[data-slot="command-item"]')).toHaveAttribute(
+        'aria-selected',
+        'false',
+      );
+      expect(screen.getByText('Close Tab').closest('[data-slot="command-item"]')).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
+
+    it('should scroll the newly highlighted item into view when selectedIndex changes', () => {
+      // Passive items are plain elements, so cmdk's own scroll-to-selected never runs; without the
+      // palette doing it, a host-driven highlight can move below the fold unseen.
+      const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+      const { rerender } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={0}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      scrollIntoView.mockClear();
+
+      rerender(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={2}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const newlyHighlighted = screen.getByText('Close Tab').closest('[data-slot="command-item"]');
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+      expect(scrollIntoView.mock.contexts).toContain(newlyHighlighted);
+      scrollIntoView.mockRestore();
+    });
+
+    it('should render items with role="option" and point the listbox aria-activedescendant at the highlighted item', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={1}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const options = screen.getAllByRole('option');
+      expect(options).toHaveLength(3);
+
+      const highlighted = screen.getByText('Save File').closest('[data-slot="command-item"]');
+      expect(highlighted?.getAttribute('id')).toBeTruthy();
+      expect(screen.getByRole('listbox')).toHaveAttribute(
+        'aria-activedescendant',
+        highlighted?.getAttribute('id') ?? '',
+      );
+    });
+
+    it('should give the listbox an accessible name', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          listAriaLabel="Marcadores"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('listbox', { name: 'Marcadores' })).toBeInTheDocument();
+    });
+
+    it('should highlight the last item when selectedIndex points past the filtered list', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Save"
+          selectedIndex={2}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // One item survives the filter, so the out-of-range index clamps onto it — the same clamp
+      // the store applies, and the same one active mode uses for its own highlight
+      const options = screen.getAllByRole('option');
+      expect(options).toHaveLength(1);
+      expect(options[0]).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('listbox')).toHaveAttribute(
+        'aria-activedescendant',
+        options[0].getAttribute('id') ?? '',
+      );
+    });
+
+    it('should call onSelect when an item is clicked', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Close Tab'));
+
+      expect(onSelect).toHaveBeenCalledWith('close');
+    });
+
+    it('should not call onSelect when a disabled item is clicked', () => {
+      const onSelect = vi.fn();
+      const items: CommandPaletteItem[] = [
+        { id: 'disabled-item', label: 'Cannot Click', disabled: true },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          passive
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Cannot Click'));
+
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('mouse commits must not steal focus (mousedown default-prevented)', () => {
+    // Pressing the mouse button on a palette item is what transfers focus to the renderer
+    // document — BEFORE the click commit round-trips to the requesting editor. For the editor
+    // (main web view or footnote popover) that blur can null Lexical's live selection, and the
+    // marker apply then lands at the document tail instead of the caret. The classic
+    // toolbar-button discipline: preventDefault on mousedown so a click commits without the
+    // palette ever taking focus. The click must still select (selection fires on click, not
+    // mousedown).
+
+    it('passive mode: mousedown on an item is default-prevented and click still selects', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const item = screen.getByText('Save File');
+      // fireEvent returns false when preventDefault was called on the (cancelable) event.
+      expect(fireEvent.mouseDown(item)).toBe(false);
+      fireEvent.click(item);
+      expect(onSelect).toHaveBeenCalledWith('save');
+    });
+
+    it('active mode: mousedown on a cmdk item is default-prevented and click still selects', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const item = screen.getByText('Save File');
+      expect(fireEvent.mouseDown(item)).toBe(false);
+      // cmdk selects on click, which preventDefault-on-mousedown must not suppress.
+      fireEvent.click(item);
+      expect(onSelect).toHaveBeenCalledWith('save');
+    });
+  });
+
+  describe('muted items', () => {
+    const mutedAndNormalItems: CommandPaletteItem[] = [
+      { id: 'basic', label: 'Basic Marker' },
+      { id: 'non-basic', label: 'Non-Basic Marker', muted: true },
+    ];
+
+    /**
+     * Whether the text block inside an item carries the reduced-opacity utility. Muted dims the
+     * TEXT BLOCK, not the item container — a muted item stays highlightable and selectable, which
+     * is what separates it from `disabled`.
+     */
+    function isTextBlockMuted(label: string): boolean {
+      const textBlock = screen.getByText(label).parentElement;
+      expect(textBlock).toBeInstanceOf(HTMLElement);
+      return textBlock instanceof HTMLElement && textBlock.classList.contains('tw:opacity-60');
+    }
+
+    it('should render muted items with reduced-opacity text in active mode, normal items without', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={mutedAndNormalItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(isTextBlockMuted('Non-Basic Marker')).toBe(true);
+      expect(isTextBlockMuted('Basic Marker')).toBe(false);
+    });
+
+    it('should render muted items with reduced-opacity text in passive mode, normal items without', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={mutedAndNormalItems}
+          passive
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(isTextBlockMuted('Non-Basic Marker')).toBe(true);
+      expect(isTextBlockMuted('Basic Marker')).toBe(false);
+    });
+
+    it('should keep muted items selectable (unlike disabled)', () => {
+      const onSelect = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={mutedAndNormalItems}
+          passive
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Non-Basic Marker'));
+
+      expect(onSelect).toHaveBeenCalledWith('non-basic');
+    });
+  });
+
+  describe('sizing and anchoring (anchored mode)', () => {
+    it('sizes the inner wrapper with the default caps and leaves PopoverContent unsized', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = inner as HTMLElement;
+      // jsdom leaves an inline style property that was never assigned as `undefined` rather than the
+      // empty string a real browser reports for an unset CSS property, so the absent `zoom` is
+      // checked against both.
+      expect(style.zoom || '').toBe('');
+      // The palette's own default width/cap.
+      expect(style.maxWidth).toBe('500px');
+
+      const content = document.querySelector('[data-overlay-command-palette]');
+      expect(content).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((content as HTMLElement).style.width).toBe('auto');
+    });
+
+    it("leaves the caller's own maxWidth exactly as given at interface scale", () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          maxWidth={320}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = inner as HTMLElement;
+      expect(style.maxWidth).toBe('320px');
+    });
+
+    it('renders the arrow as a sibling of the inner wrapper, not inside it', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const content = document.querySelector('[data-overlay-command-palette]');
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(content).toBeInTheDocument();
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertions above guard null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const contentEl = content as HTMLElement;
+      // PopoverContent has exactly two direct children: the inner wrapper and the arrow. Radix
+      // requires the arrow to be a child of PopoverContent, and it must be the OTHER child — inside
+      // the wrapper it would sit in the scrolled box. Checked structurally rather than by finding an
+      // `svg` because cmdk's search-icon svg (rendered inside the wrapper, ahead of the arrow's own
+      // svg in document order) would otherwise be matched first.
+      const otherChildren = Array.from(contentEl.children).filter((child) => child !== inner);
+      expect(otherChildren).toHaveLength(1);
+      expect(inner?.contains(otherChildren[0])).toBe(false);
+    });
+
+    it('sizes the anchor to the trigger as the pane measured it', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          anchor={{ width: 40, height: 20 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const anchor = document.querySelector('[data-overlay-command-palette-anchor]');
+      expect(anchor).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = anchor as HTMLElement;
+      expect(style.width).toBe('40px');
+      expect(style.height).toBe('20px');
+    });
+  });
+});
+
+describe('OverlayCommandPalette (store-connected)', () => {
+  const paletteItems: CommandPaletteItem[] = [
+    { id: 'open', label: 'Open File' },
+    { id: 'save', label: 'Save File' },
+    { id: 'close', label: 'Close Tab' },
+  ];
+
+  type CommandPaletteEntry = Extract<OverlayEntry, { type: 'commandPalette' }>;
+
+  /**
+   * Builds a centered (no position) active-mode command palette entry backed by mock callbacks.
+   * Containment matching: this suite pins the STORE-mirroring contract (filter text, highlight
+   * index, clamping) that forwarded commits resolve against, and that contract belongs to the
+   * containment regime — a default (fuzzy) palette lets cmdk own filtering/highlight and never
+   * commits through the store.
+   */
+  function createPaletteEntry(overrides?: Partial<CommandPaletteEntry>): CommandPaletteEntry {
+    return {
+      type: 'commandPalette',
+      id: 'palette-1',
+      webViewId: 'webview-1',
+      request: { items: paletteItems, disableFuzzyMatching: true },
+      items: paletteItems,
+      selectedIndex: 0,
+      resolve: vi.fn(),
+      reject: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  /** Reads the palette entry back from the real store, asserting it exists and has the right type */
+  function getStoredPalette(id: string): CommandPaletteEntry {
+    const overlay = getOverlayById(id);
+    expect(overlay?.type).toBe('commandPalette');
+    // Type is verified by the assertion above; TS can't narrow the OverlayEntry union
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return overlay as CommandPaletteEntry;
+  }
+
+  beforeEach(() => {
+    clearAllOverlays();
+  });
+
+  it('hands the request’s anchor size to the presentational component it renders', () => {
+    // A `position` plus a sized `request.anchor` puts the palette in its anchored branch (the
+    // centered branch has no anchor).
+    const entry = createPaletteEntry({
+      position: { x: 10, y: 20 },
+      request: {
+        items: paletteItems,
+        disableFuzzyMatching: true,
+        anchor: { x: 10, y: 20, width: 40, height: 20 },
+      },
+    });
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    const anchor = document.querySelector('[data-overlay-command-palette-anchor]');
+    expect(anchor).toBeInTheDocument();
+    // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const { style: anchorStyle } = anchor as HTMLElement;
+    // request.anchor is 40x20, drawn at that size.
+    expect(anchorStyle.width).toBe('40px');
+    expect(anchorStyle.height).toBe('20px');
+  });
+
+  it('mirrors typed filter text into the store so a forwarded commit resolves against the displayed list', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Sa' } });
+
+    expect(getStoredPalette('palette-1').filterText).toBe('Sa');
+  });
+
+  it('clamps the stored selectedIndex with the FILTERED item count when typing narrows the list', () => {
+    // A filter matching nothing forces itemCount to 0 — the stale index 2 must clamp to 0. With an
+    // empty filtered list cmdk reports no highlight change, so only the filter-text mirroring path
+    // (its filterPaletteItems-derived itemCount) can produce the clamp.
+    const entry = createPaletteEntry({ selectedIndex: 2 });
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zz' } });
+
+    const stored = getStoredPalette('palette-1');
+    expect(stored.filterText).toBe('zz');
+    expect(stored.selectedIndex).toBe(0);
+  });
+
+  it('resets the stored highlight to the top match when typing changes the filter', () => {
+    // A new filter produces a newly ranked list, so the old index means nothing in it — without
+    // the reset, the store kept the stale (merely clamped) index and a forwarded Enter committed
+    // whatever item now sat at that position.
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'ArrowDown' });
+    expect(getStoredPalette('palette-1').selectedIndex).toBe(1);
+
+    // 'File' still matches two items, so a merely-clamped stale index of 1 would survive
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'File' } });
+
+    // The filter-mirroring write itself carries the reset (the same rule the host applies on its
+    // forwarded path). Asserting only the store's final value could not pin that: cmdk's own
+    // auto-highlight also reports index 0 here, while live, the store's un-reset stale index can
+    // flow back over cmdk's rescue on the next store-driven render.
+    expect(vi.mocked(updateCommandPaletteState)).toHaveBeenCalledWith(
+      'palette-1',
+      expect.objectContaining({ filterText: 'File', selectedIndex: 0 }),
+    );
+    const stored = getStoredPalette('palette-1');
+    expect(stored.filterText).toBe('File');
+    expect(stored.selectedIndex).toBe(0);
+  });
+
+  it('mirrors arrow-key highlight moves into the store as an absolute selectedIndex', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'ArrowDown' });
+
+    expect(getStoredPalette('palette-1').selectedIndex).toBe(1);
+  });
+
+  it('resolves the overlay with the clicked item id and removes it from the store', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.click(screen.getByText('Save File'));
+
+    expect(entry.resolve).toHaveBeenCalledTimes(1);
+    expect(entry.resolve).toHaveBeenCalledWith('save');
+    expect(getOverlayById('palette-1')).toBeUndefined();
+  });
+
+  it('resolves the overlay with undefined on Escape and removes it from the store', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(entry.resolve).toHaveBeenCalledTimes(1);
+    expect(entry.resolve).toHaveBeenCalledWith(undefined);
+    expect(getOverlayById('palette-1')).toBeUndefined();
+  });
+
+  it('marks the overlay for a focus return on Escape, and not on a click', () => {
+    const escaped = createPaletteEntry();
+    addOverlay(escaped);
+    const { unmount } = render(<OverlayCommandPalette overlay={escaped} />);
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+    expect(takeOverlayFocusReturnMark(escaped.id)).toBe(true);
+    // Nothing is left behind by the key handler's own Escape report after the dismissal
+    expect(takeOverlayFocusReturnMark(escaped.id)).toBe(false);
+    unmount();
+
+    const picked = createPaletteEntry();
+    addOverlay(picked);
+    render(<OverlayCommandPalette overlay={picked} />);
+    fireEvent.click(screen.getByText('Save File'));
+    expect(takeOverlayFocusReturnMark(picked.id)).toBe(false);
+  });
+
+  it('marks the overlay for a focus return on a backdrop click and resolves it with undefined', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    const { container } = render(<OverlayCommandPalette overlay={entry} />);
+    const backdrop = container.ownerDocument.querySelector(
+      '[data-overlay-command-palette-backdrop]',
+    );
+    expect(backdrop).toBeInTheDocument();
+
+    // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    fireEvent.click(backdrop as Element);
+
+    expect(entry.resolve).toHaveBeenCalledWith(undefined);
+    expect(getOverlayById(entry.id)).toBeUndefined();
+    expect(takeOverlayFocusReturnMark(entry.id)).toBe(true);
+  });
+
+  it('never settles the store again after the first resolve (later select/dismiss are no-ops)', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.click(screen.getByText('Save File'));
+    expect(entry.resolve).toHaveBeenCalledTimes(1);
+
+    // The store can later hold a different overlay under the same id; the already-settled (but
+    // still mounted) palette instance must never resolve or dismiss an entry it did not create.
+    // (Highlight/filter mirroring is intentionally not guarded — only settling is.)
+    const successor = createPaletteEntry();
+    addOverlay(successor);
+
+    fireEvent.click(screen.getByText('Open File'));
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(successor.resolve).not.toHaveBeenCalled();
+    expect(successor.reject).not.toHaveBeenCalled();
+    expect(getStoredPalette('palette-1')).toBeDefined();
+    expect(entry.resolve).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('key forwarding — the session keeps its keys even when the palette holds focus', () => {
+  // The split brain this closes: a NON-passive palette focuses its own input, so the requesting
+  // WebView stops seeing keystrokes and none of the session's ratified semantics run. Two branches
+  // were provably wrong before forwarding existed, and both are pinned here through the REAL
+  // keydown table rather than a stand-in, so a semantics change cannot pass unnoticed.
+  const markerItems: CommandPaletteItem[] = [
+    { id: 'nd', label: 'nd' },
+    { id: 'nb', label: 'nb' },
+    { id: 'w', label: 'w' },
+  ];
+
+  function makeDriver(): MarkerPaletteSessionDriver {
+    return {
+      update: vi.fn(),
+      commit: vi.fn(),
+      dismiss: vi.fn(),
+      commitTyped: vi.fn(),
+      commitTypedAndReopen: vi.fn(),
+      commitTypedCloser: vi.fn(),
+      commitItem: vi.fn(),
+    };
+  }
+
+  function renderForwardingPalette(
+    session: MarkerPaletteSessionState,
+    driver: MarkerPaletteSessionDriver,
+    onSelect = vi.fn(),
+  ) {
+    render(
+      <OverlayCommandPalettePresentational
+        items={markerItems}
+        onSelect={onSelect}
+        onDismiss={vi.fn()}
+        keyForwarding={{
+          keys: getMarkerPaletteClaimedKeys(),
+          onKey: (event) => handleMarkerPaletteSessionKeyDown(event, session, driver),
+        }}
+      />,
+    );
+    return { input: screen.getByRole('combobox'), onSelect };
+  }
+
+  it('routes typed characters into the SESSION filter, not the palette input', () => {
+    // Without this the session would commit an empty query while the screen showed a full one.
+    const session: MarkerPaletteSessionState = {
+      kind: 'selection',
+      filter: '',
+      items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
+    };
+    const driver = makeDriver();
+    const { input } = renderForwardingPalette(session, driver);
+
+    fireEvent.keyDown(input, { key: 'n' });
+    fireEvent.keyDown(input, { key: 'd' });
+
+    expect(session.filter).toBe('nd');
+    expect(driver.update).toHaveBeenLastCalledWith({ filterText: 'nd' });
+  });
+
+  it('overlay-focused + NON-EMPTY filter + Space performs the ratified selection wrap', () => {
+    // Previously: Space was an ordinary character appended to cmdk's filter, so the wrap never
+    // happened and the query stopped matching anything.
+    const session: MarkerPaletteSessionState = {
+      kind: 'selection',
+      filter: '',
+      items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
+    };
+    const driver = makeDriver();
+    const { input, onSelect } = renderForwardingPalette(session, driver);
+
+    fireEvent.keyDown(input, { key: 'n' });
+    fireEvent.keyDown(input, { key: 'd' });
+    fireEvent.keyDown(input, { key: ' ' });
+
+    // The wrap commits the marker that was literally TYPED.
+    expect(driver.commitItem).toHaveBeenCalledWith('nd');
+    // And not through the palette's own selection path.
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('overlay-focused + EMPTY filter + Space does NOT commit the highlighted entry', () => {
+    // Previously: the app-wide CommandInput patch synthesised a click on the highlighted cmdk
+    // item, committing something the user never typed and bypassing the session entirely. With
+    // the patch opt-in (a palette with key forwarding does not opt in) and Space forwarded, the
+    // session's own visible refusal runs instead.
+    const session: MarkerPaletteSessionState = {
+      kind: 'selection',
+      filter: '',
+      items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
+    };
+    const driver = makeDriver();
+    const { input, onSelect } = renderForwardingPalette(session, driver);
+
+    fireEvent.keyDown(input, { key: ' ' });
+
+    expect(driver.commitItem).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+    // Visible refusal: the palette closes and the selection is left intact.
+    expect(driver.dismiss).toHaveBeenCalled();
+  });
+
+  it('forwards Escape to the session instead of dismissing locally', () => {
+    const session: MarkerPaletteSessionState = { kind: 'backslash', filter: 'nd', items: [] };
+    const driver = makeDriver();
+    const onDismiss = vi.fn();
+    render(
+      <OverlayCommandPalettePresentational
+        items={markerItems}
+        onSelect={vi.fn()}
+        onDismiss={onDismiss}
+        keyForwarding={{
+          keys: getMarkerPaletteClaimedKeys(),
+          onKey: (event) => handleMarkerPaletteSessionKeyDown(event, session, driver),
+        }}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(driver.dismiss).toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('leaves un-declared keys to the palette (local Escape still works without forwarding)', () => {
+    const onDismiss = vi.fn();
+    render(
+      <OverlayCommandPalettePresentational
+        items={markerItems}
+        onSelect={vi.fn()}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('WITHOUT key forwarding: Space on the empty input picks the highlighted item (the Enter UX)', () => {
+    // The counterpart to the forwarded case above: a plain caller declares no keyForwarding, so
+    // nothing outside the palette owns Space and the list is the whole point — Space on the empty
+    // input selects the highlighted item instead of typing a leading space.
+    const onSelect = vi.fn();
+    render(
+      <OverlayCommandPalettePresentational
+        items={markerItems}
+        onSelect={onSelect}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: ' ' });
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith('nd');
   });
 });

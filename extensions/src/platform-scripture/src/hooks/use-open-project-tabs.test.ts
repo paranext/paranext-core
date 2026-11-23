@@ -1,0 +1,605 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { useOpenProjectTabs } from './use-open-project-tabs';
+
+interface WebViewLike {
+  id: string;
+  webViewType?: string;
+  projectId?: string;
+  scrollGroupScrRef?: unknown;
+  state?: Record<string, unknown>;
+}
+type WebViewEventHandler = (event: { webView: WebViewLike }) => void;
+
+const mockOnDidOpenWebView = vi.fn<(handler: WebViewEventHandler) => () => void>();
+const mockOnDidUpdateWebView = vi.fn<(handler: WebViewEventHandler) => () => void>();
+const mockOnDidCloseWebView = vi.fn<(handler: WebViewEventHandler) => () => void>();
+const mockGetAllOpenWebViewDefinitions = vi.fn<() => Promise<WebViewLike[]>>();
+const mockUnsubOpen = vi.fn();
+const mockUnsubUpdate = vi.fn();
+const mockUnsubClose = vi.fn();
+
+// Create a wrapper object so we can access mockLoggerWarn after initialization
+const mockState = { loggerWarn: vi.fn() };
+const mockLoggerWarn = mockState.loggerWarn;
+
+vi.mock('@papi/frontend', () => ({
+  default: {
+    webViews: {
+      onDidOpenWebView: (h: WebViewEventHandler) => {
+        mockOnDidOpenWebView(h);
+        return mockUnsubOpen;
+      },
+      onDidUpdateWebView: (h: WebViewEventHandler) => {
+        mockOnDidUpdateWebView(h);
+        return mockUnsubUpdate;
+      },
+      onDidCloseWebView: (h: WebViewEventHandler) => {
+        mockOnDidCloseWebView(h);
+        return mockUnsubClose;
+      },
+      getAllOpenWebViewDefinitions: () => mockGetAllOpenWebViewDefinitions(),
+    },
+    logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
+  },
+}));
+
+beforeEach(() => {
+  mockOnDidOpenWebView.mockClear();
+  mockOnDidUpdateWebView.mockClear();
+  mockOnDidCloseWebView.mockClear();
+  mockGetAllOpenWebViewDefinitions.mockReset();
+  mockGetAllOpenWebViewDefinitions.mockResolvedValue([]);
+  mockUnsubOpen.mockClear();
+  mockUnsubUpdate.mockClear();
+  mockUnsubClose.mockClear();
+  mockLoggerWarn.mockClear();
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('useOpenProjectTabs', () => {
+  it('subscribes on mount and unsubscribes on unmount', () => {
+    const { unmount } = renderHook(() => useOpenProjectTabs());
+    expect(mockOnDidOpenWebView).toHaveBeenCalledTimes(1);
+    expect(mockOnDidUpdateWebView).toHaveBeenCalledTimes(1);
+    expect(mockOnDidCloseWebView).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(mockUnsubOpen).toHaveBeenCalledTimes(1);
+    expect(mockUnsubUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUnsubClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('upserts tab on open event with valid project + scrollGroupScrRef', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'p-1',
+          scrollGroupScrRef: 0,
+        },
+      }),
+    );
+    expect(result.current).toEqual([
+      {
+        webViewId: 'wv-1',
+        projectId: 'p-1',
+        scrollGroupId: 0,
+        webViewType: 'platformScriptureEditor.react',
+        projectSource: 'container',
+      },
+    ]);
+  });
+
+  it('skips webView without projectId', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          scrollGroupScrRef: 0,
+        },
+      }),
+    );
+    expect(result.current).toEqual([]);
+  });
+
+  it('skips webView with non-numeric, non-undefined scrollGroupScrRef', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: { id: 'wv-1', projectId: 'p-1', scrollGroupScrRef: 'not-a-number' },
+      }),
+    );
+    expect(result.current).toEqual([]);
+    act(() =>
+      handler({
+        // Test asserts that the hook rejects null defensively (PAPI quirk: legacy WebViews can carry null scrollGroupScrRef).
+        // eslint-disable-next-line no-null/no-null
+        webView: { id: 'wv-2', projectId: 'p-2', scrollGroupScrRef: null },
+      }),
+    );
+    expect(result.current).toEqual([]);
+  });
+
+  it('treats undefined scrollGroupScrRef as scroll group 0 (default)', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'p-1',
+          // scrollGroupScrRef intentionally omitted — fresh editors don't seed it
+        },
+      }),
+    );
+    expect(result.current).toEqual([
+      {
+        webViewId: 'wv-1',
+        projectId: 'p-1',
+        scrollGroupId: 0,
+        webViewType: 'platformScriptureEditor.react',
+        projectSource: 'container',
+      },
+    ]);
+  });
+
+  it('lowercases projectId so WebView (uppercase) matches PDP (lowercase)', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'AbCdEf',
+          scrollGroupScrRef: 0,
+        },
+      }),
+    );
+    expect(result.current).toEqual([
+      {
+        webViewId: 'wv-1',
+        projectId: 'abcdef',
+        scrollGroupId: 0,
+        webViewType: 'platformScriptureEditor.react',
+        projectSource: 'container',
+      },
+    ]);
+  });
+
+  it('removes tab on close event', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const openH = mockOnDidOpenWebView.mock.calls[0][0];
+    const closeH = mockOnDidCloseWebView.mock.calls[0][0];
+    act(() =>
+      openH({
+        webView: { id: 'wv-1', webViewType: 'foo', projectId: 'p-1', scrollGroupScrRef: 0 },
+      }),
+    );
+    expect(result.current).toHaveLength(1);
+    act(() => closeH({ webView: { id: 'wv-1' } }));
+    expect(result.current).toEqual([]);
+  });
+
+  it('filter excludes manage-books and side-panel tabs from a mixed initial seed', async () => {
+    // Reproduces the manage-books bug: without the filter, every project-bound tab
+    // (Manage Books itself, Checks side panel, scripture editors) would land in the list.
+    // With a Scripture-Editor-only filter, only the editor entries should remain.
+    mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+      {
+        id: 'wv-mb',
+        webViewType: 'platformScripture.manageBooks',
+        projectId: 'p-mb-target',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-checks',
+        webViewType: 'someChecks.sidePanel',
+        projectId: 'p-checks-target',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-editor',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-editor',
+        scrollGroupScrRef: 0,
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useOpenProjectTabs((wv) => wv.webViewType === 'platformScriptureEditor.react'),
+    );
+    await waitFor(() => expect(result.current).toHaveLength(1));
+    expect(result.current[0]).toEqual({
+      webViewId: 'wv-editor',
+      projectId: 'p-editor',
+      scrollGroupId: 0,
+      webViewType: 'platformScriptureEditor.react',
+      projectSource: 'container',
+    });
+  });
+
+  it('filter excludes non-matching webViewType', () => {
+    const { result } = renderHook(() =>
+      useOpenProjectTabs((wv) => wv.webViewType === 'platformScriptureEditor.react'),
+    );
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'someOther.webViewType',
+          projectId: 'p-1',
+          scrollGroupScrRef: 0,
+        },
+      }),
+    );
+    expect(result.current).toEqual([]);
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-2',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'p-2',
+          scrollGroupScrRef: 1,
+        },
+      }),
+    );
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0].webViewId).toBe('wv-2');
+  });
+
+  it('seeds initial state from getAllOpenWebViewDefinitions on mount', async () => {
+    mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+      {
+        id: 'wv-seed-1',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-1',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-seed-2',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-2',
+        scrollGroupScrRef: 1,
+      },
+    ]);
+    const { result } = renderHook(() => useOpenProjectTabs());
+    await waitFor(() => expect(result.current).toHaveLength(2));
+    expect(result.current.map((t) => t.webViewId).sort()).toEqual(['wv-seed-1', 'wv-seed-2']);
+  });
+
+  it('does not duplicate when an open event arrives for an already-seeded id', async () => {
+    mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+      {
+        id: 'wv-1',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-1',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-2',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-2',
+        scrollGroupScrRef: 1,
+      },
+    ]);
+    const { result } = renderHook(() => useOpenProjectTabs());
+    await waitFor(() => expect(result.current).toHaveLength(2));
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'p-1',
+          scrollGroupScrRef: 0,
+        },
+      }),
+    );
+    expect(result.current).toHaveLength(2);
+  });
+
+  it('retries a failed seed and uses what the retry brings', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetAllOpenWebViewDefinitions.mockRejectedValueOnce(new Error('window 3 unreachable'));
+      mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+        {
+          id: 'wv-seeded-late',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'p-1',
+          scrollGroupScrRef: 0,
+        },
+      ]);
+      const { result } = renderHook(() => useOpenProjectTabs());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].webViewId).toBe('wv-seeded-late');
+      expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('warns and still serves live events when every seed attempt fails', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('window 3 unreachable'));
+      const { result } = renderHook(() => useOpenProjectTabs());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10000);
+      });
+      expect(result.current).toEqual([]);
+      // One warning per failed attempt — the final one marks the seed as given up
+      expect(mockLoggerWarn).toHaveBeenCalledTimes(3);
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-live',
+            webViewType: 'platformScriptureEditor.react',
+            projectId: 'p-1',
+            scrollGroupScrRef: 0,
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps retrying long enough to outlast a sibling renderer boot', async () => {
+    vi.useFakeTimers();
+    try {
+      // The failure the seed retry exists to survive is another window starting or reloading,
+      // during which the enumeration refuses to under-report — and a renderer boot takes tens of
+      // seconds on a slow machine. Here the sibling comes up about a minute in; the seed must
+      // still be trying then rather than having given up within its first few seconds.
+      let isSiblingUp = false;
+      mockGetAllOpenWebViewDefinitions.mockImplementation(async () => {
+        if (!isSiblingUp) throw new Error('window 3 unreachable');
+        return [
+          {
+            id: 'wv-after-boot',
+            webViewType: 'platformScriptureEditor.react',
+            projectId: 'p-1',
+            scrollGroupScrRef: 0,
+          },
+        ];
+      });
+      const { result } = renderHook(() => useOpenProjectTabs());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(59_000);
+      });
+      isSiblingUp = true;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].webViewId).toBe('wv-after-boot');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('spreads its retries across a startup-scale budget before giving up', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('window 3 unreachable'));
+      renderHook(() => useOpenProjectTabs());
+      // Still trying at a minute and a half: giving up inside the window a sibling renderer needs
+      // to boot would leave every already-open tab invisible for the life of the component
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(89_000);
+      });
+      expect(mockLoggerWarn).not.toHaveBeenCalledWith(expect.stringContaining('giving up'));
+      // ...but the budget is bounded: well past it, the seed has logged that it gave up
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120_000);
+      });
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('giving up'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not issue a fetch after unmount during retry delay', async () => {
+    vi.useFakeTimers();
+    try {
+      // Reject multiple times so we have retries available
+      mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('window 3 unreachable'));
+      const { unmount } = renderHook(() => useOpenProjectTabs());
+      // Flush the first attempt's rejection and let the 2000 ms delay get scheduled
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      // At this point, first attempt should have failed and retry delay scheduled
+      expect(mockGetAllOpenWebViewDefinitions).toHaveBeenCalledTimes(1);
+      // Unmount while the retry delay is pending (mid-delay)
+      unmount();
+      // Advance well past the delay
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      // Should still be exactly 1 (the initial attempt); no post-unmount retry attempt
+      expect(mockGetAllOpenWebViewDefinitions).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  describe('includeNavigableProjectIds', () => {
+    const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
+    const TEXT_COLLECTION = 'platformScriptureEditor.scriptureTextGrid';
+    const openWith = (webView: WebViewLike, includeNavigableProjectIds = true) => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeNavigableProjectIds }),
+      );
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() => handler({ webView }));
+      return result;
+    };
+
+    it('ignores declared projects unless the option is passed', () => {
+      const { result } = renderHook(() => useOpenProjectTabs());
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-panel',
+            webViewType: BIBLE_TEXTS,
+            // Simple mode's default layout opens this panel with no container project.
+            scrollGroupScrRef: 0,
+            state: { navigableProjectIds: ['RES-1'] },
+          },
+        }),
+      );
+      expect(result.current).toEqual([]);
+    });
+
+    it('surfaces a panel whose only project is the resource it declares', () => {
+      const result = openWith({
+        id: 'wv-panel',
+        webViewType: BIBLE_TEXTS,
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: ['RES-1'] },
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('res-1');
+    });
+
+    it('reports the container project and the declared resource, tagged by source', () => {
+      // The key documents the declared ids as projects displayed BEYOND the view's own, so both
+      // belong here. Narrowing to "what this tab displays" is the caller's rule, and `projectSource`
+      // is what lets it apply one — Find drops a reference panel's container project.
+      const result = openWith({
+        id: 'wv-panel',
+        webViewType: BIBLE_TEXTS,
+        projectId: 'CONTAINER-1',
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: ['RES-1'] },
+      });
+      expect(result.current.map((tab) => [tab.projectId, tab.projectSource]).sort()).toEqual([
+        ['container-1', 'container'],
+        ['res-1', 'declared'],
+      ]);
+    });
+
+    it('yields one tab per declared project for a view hosting several', () => {
+      const result = openWith({
+        id: 'wv-grid',
+        webViewType: TEXT_COLLECTION,
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: ['RES-1', 'RES-2'] },
+      });
+      expect(result.current.map((tab) => tab.projectId).sort()).toEqual(['res-1', 'res-2']);
+      expect(result.current.every((tab) => tab.webViewId === 'wv-grid')).toBe(true);
+    });
+
+    it('drops the projects a view stops declaring', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeNavigableProjectIds: true }),
+      );
+      const openHandler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        openHandler({
+          webView: {
+            id: 'wv-grid',
+            webViewType: TEXT_COLLECTION,
+            scrollGroupScrRef: 0,
+            state: { navigableProjectIds: ['RES-1', 'RES-2'] },
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(2);
+      const updateHandler = mockOnDidUpdateWebView.mock.calls[0][0];
+      act(() =>
+        updateHandler({
+          webView: {
+            id: 'wv-grid',
+            webViewType: TEXT_COLLECTION,
+            scrollGroupScrRef: 0,
+            state: { navigableProjectIds: ['RES-2'] },
+          },
+        }),
+      );
+      expect(result.current.map((tab) => tab.projectId)).toEqual(['res-2']);
+    });
+
+    it('adds nothing for a view declaring an empty list', () => {
+      // `[]` says "nothing beyond my own project", so the union is just the container. A caller
+      // that must not offer the container (Find, for a reference panel) filters it out by source.
+      const result = openWith({
+        id: 'wv-panel',
+        webViewType: BIBLE_TEXTS,
+        projectId: 'CONTAINER-1',
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: [] },
+      });
+      expect(result.current.map((tab) => [tab.projectId, tab.projectSource])).toEqual([
+        ['container-1', 'container'],
+      ]);
+    });
+
+    it('falls back to the container project when a view declares nothing at all', () => {
+      // An editor never publishes the key; it must still report its own project.
+      const result = openWith({
+        id: 'wv-editor',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'PROJ-1',
+        scrollGroupScrRef: 0,
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('proj-1');
+    });
+
+    it('rejects a malformed declaration rather than treating it as a project id', () => {
+      // Web view state is written by whoever owns the web view, so the value is guarded, not
+      // trusted. A malformed value is no declaration, so the container project answers.
+      const result = openWith({
+        id: 'wv-panel',
+        webViewType: BIBLE_TEXTS,
+        projectId: 'CONTAINER-1',
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: 'RES-1' },
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('container-1');
+    });
+
+    it('removes every tab a closed view contributed', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeNavigableProjectIds: true }),
+      );
+      const openHandler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        openHandler({
+          webView: {
+            id: 'wv-grid',
+            webViewType: TEXT_COLLECTION,
+            scrollGroupScrRef: 0,
+            state: { navigableProjectIds: ['RES-1', 'RES-2'] },
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(2);
+      const closeHandler = mockOnDidCloseWebView.mock.calls[0][0];
+      act(() => closeHandler({ webView: { id: 'wv-grid' } }));
+      expect(result.current).toEqual([]);
+    });
+  });
+});

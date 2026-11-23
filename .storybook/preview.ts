@@ -2,7 +2,16 @@ import type { Preview } from '@storybook/react-webpack5';
 import { fn } from 'storybook/test';
 import React, { useEffect } from 'react';
 import { DocsPageWithFilePath } from './blocks/DocsPageWithFilePath';
+import { withPlatformBibleThemes } from '../lib/platform-bible-react/.storybook/theme-decorator';
 import '../lib/platform-bible-react/src/index.css';
+// Provides the Shadcn Neutral palette referenced by the Theme toolbar (not shipped in index.css).
+import '../lib/platform-bible-react/.storybook/storybook-themes.css';
+// Charis SIL with real bold and italic faces. This Storybook renders the application's Scripture
+// stories — the layout demos, the model text panel, the Enhanced Resources panes — and reaches the
+// vendored `usj-nodes.css`, which declares no faces of its own. `src/renderer/styles/fonts.css` is
+// the application's source for these and is loaded only as `?raw` into a web view's srcdoc, so
+// Storybook never receives it.
+import '../lib/platform-bible-react/.storybook/scripture-fonts.css';
 
 const preview: Preview = {
   parameters: {
@@ -28,6 +37,10 @@ const preview: Preview = {
   },
 
   decorators: [
+    // Toolbar theme (Appearance + Theme family): applies theme classes on `document.documentElement`
+    // from `localStorage` + the manager channel. See `.storybook/manager.tsx` and the lib's
+    // theme-decorator for details.
+    withPlatformBibleThemes(),
     // Apply Platform.Bible Tailwind preflight wrapper to the iframe's body, and paint the body with
     // the app panel background (`bg-background`/`text-foreground`) so every story renders on the
     // same surface a web view occupies inside an app dock panel — not Storybook's default white.

@@ -34,6 +34,8 @@ export type LocalizationDataDataTypes = {
   LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
   LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
   AvailableInterfaceLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
+  /** @experimental */
+  SetupDialogLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -65,9 +67,11 @@ export type ILocalizationService = {
    */
   getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
   /**
-   * Get a collection of known user-interface languages
+   * Get the interface languages to list in language pickers: a curated subset of the languages that
+   * have a locale file. Any loaded language can still be set in `platform.interfaceLanguage` and
+   * renders; it just isn't listed here.
    *
-   * @returns All user-interface languages
+   * @returns The offered user-interface languages, keyed by raw locale tag
    */
   getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
   /**
@@ -76,6 +80,15 @@ export type ILocalizationService = {
    * @returns All localized string data from all sources formatted a single, combined contribution
    */
   retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
+  /**
+   * Get the interface languages offered in the first-run language picker. A language qualifies when
+   * it is offered (see `getAvailableInterfaceLanguages`) and has ≥90% of the English setup-dialog
+   * (`%firstRun_*%`) keys.
+   *
+   * @returns Qualifying user-interface languages, keyed by raw locale tag
+   * @experimental
+   */
+  getSetupDialogLanguages: () => Promise<Record<string, LanguageInfo>>;
   /**
    * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
    * provide localized strings in contributions
@@ -93,6 +106,13 @@ export type ILocalizationService = {
   setAvailableInterfaceLanguages(): Promise<
     DataProviderUpdateInstructions<LocalizationDataDataTypes>
   >;
+  /**
+   * This data cannot be changed. Trying to use this setter will always throw. It is derived from
+   * the loaded localization data.
+   *
+   * @experimental
+   */
+  setSetupDialogLanguages(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
 } & OnDidDispose &
   typeof localizationServiceObjectToProxy & {
     /**
@@ -100,4 +120,55 @@ export type ILocalizationService = {
      * the book so that the book name can be displayed in the UI language within the UI
      */
     getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+    /**
+     * Builds a localized title for something scoped to one project, such as a WebView's tab: looks
+     * up the localized format for `localizeKey` and the project's short name (its `platform.name`
+     * setting), then replaces `{projectName}` in the format with that name. Use it in a WebView
+     * provider's `getWebView` so the tab opens with its final title; in the WebView itself, use the
+     * `useLocalizedProjectTitle` hook to keep the title up to date.
+     *
+     * Never rejects, so a failed lookup cannot keep a WebView from opening:
+     *
+     * - If the short name cannot be read, or is blank, the project id is shown in its place.
+     * - If the format lookup fails, the title is just the project's name (or id).
+     *
+     * Both failures are logged as warnings. A key with no localization is not a failure: as with
+     * `getLocalizedString`, the title is the key itself, so the missing string is noticed.
+     *
+     * @example
+     *
+     * ```typescript
+     * // With `"%myExtension_tabTitle%": "My Tool: {projectName}"` contributed
+     * const title = await papi.localization.getLocalizedProjectTitle({
+     *   localizeKey: '%myExtension_tabTitle%',
+     *   projectId,
+     * });
+     * // 'My Tool: WEB'
+     * ```
+     *
+     * @param options What to title; see {@link LocalizedProjectTitleOptions}.
+     * @returns The formatted title
+     */
+    getLocalizedProjectTitle(options: LocalizedProjectTitleOptions): Promise<string>;
   } & IDataProvider<LocalizationDataDataTypes>;
+
+/** Options for `papi.localization.getLocalizedProjectTitle`. */
+export type LocalizedProjectTitleOptions = {
+  /**
+   * Key of the localized title format. The format should contain a `{projectName}` placeholder,
+   * which is replaced with the project's short name (or its id when the name is unavailable).
+   */
+  localizeKey: LocalizeKey;
+  /** Id of the project the title is for */
+  projectId: string;
+  /**
+   * Values for any other `{key}` placeholders in the format. A `projectName` entry is ignored in
+   * favor of the project's name.
+   */
+  replacements?: { [key: string]: unknown };
+  /**
+   * BCP 47 language codes to look the format up in, as for `getLocalizedString`. Defaults to the
+   * interface languages.
+   */
+  locales?: string[];
+};

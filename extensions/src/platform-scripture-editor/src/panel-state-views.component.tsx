@@ -1,0 +1,139 @@
+import { Button, cn, RetryableErrorView, Spinner } from 'platform-bible-react';
+import { ReactNode, useId, useState } from 'react';
+
+/**
+ * Classes for a full-panel state whose content is centered vertically. A panel can be shorter than
+ * its content (a long "More info", or a pane dragged small); `justify-center-safe` then falls back
+ * to top alignment and the panel scrolls, where plain `justify-center` would push the top above the
+ * scrollable area, out of reach. Overrides `Empty`'s own `justify-center` through `cn`.
+ */
+export const PANEL_FILL_CLASSES = 'tw:h-screen tw:justify-center-safe tw:overflow-y-auto';
+
+/**
+ * Full-panel loading state: a spinner beside a label saying what is being waited on. Shared by the
+ * Model Text and Resource (Bible Texts / Commentaries) panels, which render an identical block and
+ * differ only in the localized label they resolve.
+ *
+ * The label is required rather than optional on purpose. `Spinner` is a bare `LoaderCircle` SVG
+ * with no `role` or accessible name, so an unlabelled spinner announces nothing to assistive tech
+ * and tells a sighted user nothing either — and these panels can now wait through a whole resource
+ * catalog fetch, so that silence is not brief.
+ *
+ * @param label Already-localized status text shown next to the spinner (e.g. "Installing
+ *   resource…"). Doubles as the state's accessible name.
+ * @param sizingClassName Sizing for the block, REPLACING the default full-panel height rather than
+ *   merging with it. A panel waiting inside its own content area — below a selector header that
+ *   stays mounted — passes the height of that area instead, so the spinner centres in the region it
+ *   describes rather than pushing past the bottom of the panel. Named for sizing specifically
+ *   because the replacement is the point: a general-purpose `className` carrying, say, padding
+ *   would silently drop the full-panel height, and `cn` would not restore it — `tw:h-screen` and a
+ *   padding utility do not conflict, so a merge would keep both and size the block to the
+ *   viewport.
+ */
+export function LoadingView({
+  label,
+  sizingClassName = 'tw:h-screen',
+}: {
+  label: ReactNode;
+  sizingClassName?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'tw:flex tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center',
+        sizingClassName,
+      )}
+      role="status"
+    >
+      <Spinner aria-hidden />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/**
+ * Full-panel error state for the Model Text and Resource panels, which render an identical block
+ * and differ only in the localized strings they resolve. The inline message is the single
+ * user-facing channel for these failures (no accompanying toast), so callers own the recovery
+ * affordance here rather than duplicating it.
+ *
+ * Pass `onRetry` for a failure a retry can actually act on — a failed install, or a failed
+ * resource-catalog fetch. Omit it where nothing in the panel can re-drive the failure (an
+ * unreadable setting): the view then shows its message alone rather than an inert button.
+ *
+ * Wraps the library's `RetryableErrorView` — the same one the resource picker, Get Resources, and
+ * the Text Collection grid render for these very failures — and adds only the full-panel sizing
+ * (`PANEL_FILL_CLASSES`: full height, safe centering and its own scrolling) those surfaces do not
+ * want.
+ *
+ * @param message Already-localized failure message (callers vary it per failure and for offline).
+ * @param retryLabel Already-localized label for the retry button. Passed with `onRetry` or not at
+ *   all.
+ * @param onRetry Optional; omit together with `retryLabel`. Re-attempts whatever failed — the
+ *   install, or the catalog fetch.
+ * @param icon Overrides the default warning glyph so distinct failures stay distinguishable.
+ */
+export function PanelRetryableErrorView({
+  message,
+  retryLabel,
+  onRetry,
+  icon,
+}: {
+  message: ReactNode;
+  icon?: ReactNode;
+} & (
+  | { retryLabel: ReactNode; onRetry: () => void }
+  // No retry: both left out, so a retry button can never render without its label.
+  | { retryLabel?: undefined; onRetry?: undefined }
+)) {
+  return (
+    <RetryableErrorView
+      className={PANEL_FILL_CLASSES}
+      message={message}
+      retryLabel={retryLabel}
+      onRetry={onRetry}
+      icon={icon}
+    />
+  );
+}
+
+/**
+ * Toggle button + collapsible body for empty-state "More info / Less info" disclosures. Shared by
+ * the Model Text and Resource (Bible Texts) panels, which render an identical block and differ only
+ * in the localized labels and body they pass. Uses `Button variant="link"` rather than a raw
+ * `<button>` so it stays on the component system.
+ *
+ * @param moreLabel Already-localized label shown when the body is collapsed (e.g. "More info").
+ * @param lessLabel Already-localized label shown when the body is expanded (e.g. "Less info").
+ * @param body Already-localized body revealed when expanded. May be several paragraphs, so the
+ *   wrapper is a `<div>`: a `<p>` cannot contain `<p>`s.
+ */
+export function ExpandableInfo({
+  moreLabel,
+  lessLabel,
+  body,
+}: {
+  moreLabel: ReactNode;
+  lessLabel: ReactNode;
+  body: ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const bodyId = useId();
+
+  return (
+    <>
+      <Button
+        variant="link"
+        className="tw:h-auto tw:p-0 tw:text-sm"
+        aria-expanded={isOpen}
+        aria-controls={bodyId}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        {isOpen ? lessLabel : moreLabel}
+      </Button>
+      <div id={bodyId} hidden={!isOpen} className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
+        {body}
+      </div>
+    </>
+  );
+}

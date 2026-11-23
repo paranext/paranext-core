@@ -5,16 +5,16 @@ import { ReactElement, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../.storybook/story.utils';
 import {
-  CommentFilter,
   CommentListPanel,
   CommentListPanelProps,
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
-  FILTER_UNREAD_ASSIGNED,
-  FILTER_UNRESOLVED_ASSIGNED,
-  ScopeFilter,
-  SCOPE_FILTER_CURRENT_CHAPTER,
-  UNFILTERED,
 } from './comment-list.component';
+import {
+  ALL_BOOKS_SCOPE_FILTER,
+  CommentFilters,
+  DEFAULT_COMMENT_FILTERS,
+  ScopeFilter,
+} from './comment-list-filters.model';
 
 /**
  * `CommentListPanel` is the presentational half of the legacy comment-list web view: a comment /
@@ -116,33 +116,102 @@ const sampleThreads: LegacyCommentThread[] = [
   },
 ];
 
-/** The "current chapter" the scope filter narrows to in these stories (GEN 1). */
-const STORY_SCR_REF = { book: 'GEN', chapterNum: 1 };
+/** A long thread list (GEN 1:1–30) for the Scrollable story, enough to overflow the panel. */
+const manyThreads: LegacyCommentThread[] = Array.from({ length: 30 }, (_, index) => {
+  const verse = index + 1;
+  const id = `scroll-thread-${verse}`;
+  const verseRef = `GEN 1:${verse}`;
+  return {
+    id,
+    verseRef,
+    status: 'Todo',
+    type: 'Normal',
+    modifiedDate: '2024-01-02T10:00:00.0000000-00:00',
+    isSpellingNote: false,
+    isBTNote: false,
+    isConsultantNote: false,
+    isRead: false,
+    comments: [makeComment({ id: `${id}-c1`, thread: id, verseRef })],
+  };
+});
+
+/** The Scripture position the scope filter narrows to in these stories (GEN 1:1). */
+const STORY_SCR_REF = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+
+/** Whether `thread` falls within the Scripture range `scopeFilter` narrows the list to. */
+function threadMatchesScope(thread: LegacyCommentThread, scopeFilter: ScopeFilter): boolean {
+  switch (scopeFilter) {
+    case 'all-books':
+      return true;
+    case 'current-book':
+      return thread.verseRef?.startsWith(`${STORY_SCR_REF.book} `) ?? false;
+    case 'current-chapter':
+      return (
+        thread.verseRef?.startsWith(`${STORY_SCR_REF.book} ${STORY_SCR_REF.chapterNum}:`) ?? false
+      );
+    case 'current-verse':
+      return (
+        thread.verseRef ===
+        `${STORY_SCR_REF.book} ${STORY_SCR_REF.chapterNum}:${STORY_SCR_REF.verseNum}`
+      );
+    default: {
+      // Exhaustiveness guard: a scope added to the union without a case here fails to compile.
+      const unhandled: never = scopeFilter;
+      throw new Error(`Unhandled scope filter: ${String(unhandled)}`);
+    }
+  }
+}
+
+/** Whether `thread` matches the selected comment preset. */
+function threadMatchesPreset(
+  thread: LegacyCommentThread,
+  preset: CommentFilters['preset'],
+  currentUser: string,
+): boolean {
+  switch (preset) {
+    case 'unresolved':
+      return thread.status !== 'Resolved';
+    case 'resolved':
+      return thread.status === 'Resolved';
+    case 'unread':
+      return !thread.isRead;
+    case 'unread-and-unresolved':
+      return !thread.isRead && thread.status !== 'Resolved';
+    case 'conflict':
+      return thread.type === 'Conflict';
+    case 'unresolved-assigned-to-me':
+      return thread.status !== 'Resolved' && thread.assignedUser === currentUser;
+    case 'unread-assigned-to-me':
+      return !thread.isRead && thread.assignedUser === currentUser;
+    case 'all':
+    case 'unsaved':
+      // Neither narrows the list: `all` by definition, and `unsaved` because these sample threads
+      // carry no draft state.
+      return true;
+    default: {
+      // Exhaustiveness guard: a preset added to the union without a case here fails to compile.
+      const unhandled: never = preset;
+      throw new Error(`Unhandled comment preset: ${String(unhandled)}`);
+    }
+  }
+}
 
 /**
  * Mirrors the web view's comment-thread selector: the panel renders already-filtered threads, so
  * here we derive the visible threads from the toolbar filters the same way the web view's PDP query
- * would (unresolved/unread + assigned-to-me, and the current-chapter scope).
+ * would — the preset AND'd with the scope.
  */
 function filterThreads(
   threads: LegacyCommentThread[],
-  commentFilter: CommentFilter,
+  filters: CommentFilters,
   scopeFilter: ScopeFilter,
   currentUser: string,
 ): LegacyCommentThread[] {
-  return threads.filter((thread) => {
-    if (scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER) {
-      const chapterPrefix = `${STORY_SCR_REF.book} ${STORY_SCR_REF.chapterNum}:`;
-      if (!thread.verseRef?.startsWith(chapterPrefix)) return false;
-    }
-    if (commentFilter === FILTER_UNRESOLVED_ASSIGNED) {
-      return thread.status === 'Todo' && thread.assignedUser === currentUser;
-    }
-    if (commentFilter === FILTER_UNREAD_ASSIGNED) {
-      return !thread.isRead && thread.assignedUser === currentUser;
-    }
-    return true;
-  });
+  return threads.filter(
+    (thread) =>
+      threadMatchesScope(thread, scopeFilter) &&
+      threadMatchesPreset(thread, filters.preset, currentUser),
+  );
 }
 
 const resolveTrue = () => Promise.resolve(true);
@@ -159,7 +228,15 @@ type Story = StoryObj<typeof CommentListPanel>;
 type DecoratorConfig = {
   isLoading?: boolean;
   threads?: LegacyCommentThread[];
-  initialCommentFilter?: CommentFilter;
+  initialFilters?: Partial<CommentFilters>;
+  /**
+   * Render the panel with no bounding-height ancestor, reproducing the real web view where nothing
+   * sets a height on `html`/`body`/`#root` so `tw:h-full` collapses to `auto` and the document is
+   * the scroll container. This is the layout in which `tw:sticky` is load-bearing; a bounded
+   * ancestor (the default `tw:h-screen` wrapper) instead makes the inner list the scroller, where
+   * the toolbar is trivially always visible with or without `sticky`.
+   */
+  unbounded?: boolean;
 };
 
 /**
@@ -171,27 +248,30 @@ function createDecorator(config: DecoratorConfig) {
   return function CommentListPanelDecorator(
     Story: (update?: { args: CommentListPanelProps }) => ReactElement,
   ) {
-    const [commentFilter, setCommentFilter] = useState<CommentFilter>(
-      config.initialCommentFilter ?? UNFILTERED,
-    );
-    const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
+    const [filters, setFilters] = useState<CommentFilters>({
+      ...DEFAULT_COMMENT_FILTERS,
+      ...config.initialFilters,
+    });
+    const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(ALL_BOOKS_SCOPE_FILTER);
     const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
     const [threads, setThreads] = useState<LegacyCommentThread[]>(config.threads ?? sampleThreads);
 
     // The panel renders already-filtered threads (the web view filters via its query), so derive the
     // visible list from the toolbar filters here.
-    const displayedThreads = filterThreads(threads, commentFilter, scopeFilter, CURRENT_USER);
+    const displayedThreads = filterThreads(threads, filters, scopeFilter, CURRENT_USER);
 
     return (
-      <div className="tw:h-screen">
+      // A bounded height (default) makes the inner list the scroller; `unbounded` drops it so the
+      // document scrolls, reproducing the real web view where `tw:sticky` is what pins the toolbar.
+      <div className={config.unbounded ? undefined : 'tw:h-screen'}>
         <Story
           args={{
             localizedStrings,
             isLoading: config.isLoading ?? false,
             threads: displayedThreads,
             currentUser: CURRENT_USER,
-            commentFilter,
-            onCommentFilterChange: setCommentFilter,
+            filters,
+            onFiltersChange: setFilters,
             scopeFilter,
             onScopeFilterChange: setScopeFilter,
             assignableUsers: ['', 'Alice', 'Bob', 'Charlie', CURRENT_USER],
@@ -279,6 +359,17 @@ export const Populated: Story = {
   decorators: [createDecorator({})],
 };
 
+/**
+ * A long list that overflows the panel: the comments scroll while the filter toolbar stays pinned
+ * at the top. Rendered `unbounded` (no bounding-height ancestor) so the document scrolls — the same
+ * scroll model as the real web view, where `tw:sticky` is what keeps the toolbar visible. Delete
+ * the `tw:sticky tw:top-0 tw:z-10` classes on the toolbar and this story visibly regresses (the
+ * toolbar scrolls out of view), which is the whole point of PT-4070.
+ */
+export const Scrollable: Story = {
+  decorators: [createDecorator({ threads: manyThreads, unbounded: true })],
+};
+
 /** Threads are still loading — show skeletons. */
 export const Loading: Story = {
   decorators: [createDecorator({ isLoading: true })],
@@ -291,5 +382,5 @@ export const Empty: Story = {
 
 /** No comments match the active filter — shows the "no comments match filter" message. */
 export const EmptyFiltered: Story = {
-  decorators: [createDecorator({ threads: [], initialCommentFilter: 'unread-assigned-to-me' })],
+  decorators: [createDecorator({ threads: [], initialFilters: { preset: 'conflict' } })],
 };

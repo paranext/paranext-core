@@ -122,7 +122,7 @@ export const IconSizeExample: Story = {
         </div>
       </div>
       <p className="tw:text-xs tw:text-muted-foreground">
-        Icons are constrained to max 20px (tw:max-h-5 tw:max-w-5) for consistent sizing.
+        Images are capped at 16px (tw:max-h-4 tw:max-w-4), the size of a named icon.
       </p>
     </div>
   ),

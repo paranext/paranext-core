@@ -116,7 +116,12 @@ public class VerseRefConverter : JsonConverter<VerseRef>
         writer.WriteNumber(VERSE_NUM, value.VerseNum);
         if (!string.IsNullOrEmpty(value.Verse))
             writer.WriteString(VERSE, value.Verse);
-        if (value.Versification.Type != ScrVersType.Unknown)
+        // Versification is a reference type and may be null: Read leaves it null when the incoming
+        // SerializedVerseRef carries no versificationStr (the common wire shape), and the libpalaso
+        // VerseRef(book, chapter, verse, versification) ctor stores a null versification verbatim. A
+        // null versification is "unknown", so omit versificationStr rather than dereferencing
+        // value.Versification.Type (which would NRE).
+        if (value.Versification is not null && value.Versification.Type != ScrVersType.Unknown)
             writer.WriteString(VERSIFICATION_STR, value.VersificationStr);
         writer.WriteEndObject();
     }

@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Paranext.DataProvider.Checks;
+using Paranext.DataProvider.JsonUtils;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.Checks;
@@ -68,5 +70,35 @@ public class InputRangeTests
         }
 
         Assert.That(exceptionMessage, Does.Contain(expectedPartialMessage));
+    }
+
+    [Test]
+    public void JsonRoundTrip_PreservesFlatWireShapeAndValueEquality()
+    {
+        var options = SerializationOptions.CreateSerializationOptions();
+        var original = new InputRange("pid1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"));
+
+        string json = JsonSerializer.Serialize(original, options);
+        var roundTripped = JsonSerializer.Deserialize<InputRange>(json, options);
+
+        // CheckInputRange is the flat `ScriptureRange & { projectId }` wire shape — start, end,
+        // and projectId all sit at the top level of one JSON object.
+        Assert.That(json, Does.Contain("\"projectId\""));
+        Assert.That(json, Does.Contain("\"start\""));
+        Assert.That(json, Does.Contain("\"end\""));
+        Assert.That(roundTripped, Is.EqualTo(original));
+    }
+
+    [Test]
+    public void JsonRoundTrip_SingleVerseRangeHasNullEnd()
+    {
+        var options = SerializationOptions.CreateSerializationOptions();
+        var original = new InputRange("pid1", new VerseRef("GEN 1:1"), null);
+
+        string json = JsonSerializer.Serialize(original, options);
+        var roundTripped = JsonSerializer.Deserialize<InputRange>(json, options);
+
+        Assert.That(roundTripped, Is.EqualTo(original));
+        Assert.That(roundTripped!.End, Is.Null);
     }
 }

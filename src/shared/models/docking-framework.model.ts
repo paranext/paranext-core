@@ -48,6 +48,9 @@ export type SavedTabInfo = {
   data?: unknown;
 };
 
+/** {@link SavedTabInfo.tabType} for web view tabs. A web view tab's id matches its `WebViewId` */
+export const TAB_TYPE_WEBVIEW = 'webView';
+
 /**
  * Information that Platform.Bible uses to create a tab in the dock layout.
  *
@@ -61,6 +64,15 @@ export type TabInfo = SavedTabInfo & {
    * Defaults to the software's standard logo.
    */
   tabIconUrl?: string;
+  /**
+   * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab
+   * instead of {@link tabIconUrl}. The icons the platform can show are listed in `LUCIDE_ICON_NAMES`
+   * (exported from `platform-bible-react/experimental`). An unknown name is ignored, so
+   * {@link tabIconUrl} (and then the standard logo) is shown instead.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  tabIconName?: string;
   /**
    * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
    * tab
@@ -78,6 +90,17 @@ export type TabInfo = SavedTabInfo & {
   minHeight?: number;
   /** Last known focused element. Used for restoring focus in the tab */
   lastFocusedElement?: HTMLElement;
+  /**
+   * Whether this tab can be closed by the user (shows the tab's close button and allows closing it
+   * with a middle click anywhere on its header). Set to `false` for tabs that must always remain
+   * open, such as views that are part of the default layout.
+   *
+   * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
+   * true`), not enforced by the type.
+   *
+   * @default true
+   */
+  isClosable?: boolean;
 };
 
 /**
@@ -212,19 +235,55 @@ export type PanelDirection =
   | 'right'
   | 'bottom'
   | 'top'
-  // TODO: The following produce a panel but probably aren't useful for panels - IJH 2023-05-5
   | 'before-tab'
   | 'after-tab'
+  // TODO: The following produce a panel but probably aren't useful for panels - IJH 2023-05-5
   | 'maximize'
   | 'move'
   | 'active'
   | 'update';
 
-/** Information about a panel */
+/**
+ * Information about a panel: a tab opened beside the tab group holding `targetTabId`, or beside
+ * that tab itself. When no `targetTabId` is given (or it is not in this window), the target is the
+ * tab most recently opened as a `'tab'` or re-opened in this window, else the first tab in it.
+ *
+ * `before-tab` and `after-tab` add the tab, as the active tab, to the target's own tab group, just
+ * before or after the target. This holds whether that group is docked, floating, or maximized. A
+ * group that cannot take the tab gets it beside the group instead, as `left` would for
+ * `before-tab`, or `right` for `after-tab`. Such a group is one of Simple mode's fixed columns, or
+ * a group that holds another kind of tab. Either way, `before-tab` lands on the target's
+ * reading-start side and `after-tab` on its reading-end side.
+ *
+ * For `left`, `right`, `top`, or `bottom`, when the target's tab group is docked, the tab is added,
+ * as its active tab, to the tab group directly on the `direction` side instead of a new group being
+ * created, if that group can take it: it sits beside the target's group (a group touching it only
+ * at a corner does not count), has at least one tab, holds the same kind of tab, is not one of
+ * Simple mode's fixed columns, and is at least as wide (as tall for `top` and `bottom`) as a new
+ * group beside the target would be. Otherwise the tab opens as a new group beside the target's
+ * group.
+ *
+ * For `left`, `right`, `top`, or `bottom`, when the target's tab group is floating or maximized,
+ * the tab opens as a new group at the reading-end edge of the dock area (the right, or the left in
+ * a right-to-left UI), whichever side was asked for, and a floating target that would cover that
+ * group is moved aside. `left` and `right` are mirrored in a right-to-left UI.
+ *
+ * A target in another application window is placed by these same rules in the window that holds it.
+ */
 interface PanelLayout {
   type: 'panel';
+  /**
+   * Where to open, in reading order. A side opens beside the target's tab group: `right` is the
+   * reading-end side, which is the left in a right-to-left UI. `before-tab` and `after-tab` open in
+   * the target's own tab group, just before or after the target in its tab order, which is reading
+   * order as for {@link DirectionFromTab}: `after-tab` puts the tab where `nextTab` from the target
+   * goes.
+   */
   direction?: PanelDirection;
-  /** If undefined, it will add in the `direction` relative to the previously added tab. */
+  /**
+   * If undefined (or not in this window), the panel is placed relative to the tab most recently
+   * opened as a `'tab'` or re-opened in this window, else the first tab in it.
+   */
   targetTabId?: string;
 }
 
@@ -234,8 +293,28 @@ interface ReplaceTabLayout {
   targetTabId: string;
 }
 
+/**
+ * Information about opening a tab in its own application window.
+ *
+ * In Simple mode — which is single-window by design — this degrades to `'tab'`: the web view opens
+ * as a normal tab in the window the user is working in. An interface mode that cannot be read takes
+ * the same degraded path rather than failing the open, so a caller in Power mode can get a tab
+ * instead of a window when the mode read fails.
+ *
+ * It degrades the same way for an open that also passed `existingId: '?'` whose reuse search could
+ * not be answered because some window was unreachable. Such an open goes ahead rather than failing,
+ * accepting that it may be making a second copy of a web view that already exists somewhere — and a
+ * duplicate as a tab is one the user can see and close, where a duplicate as a window takes the
+ * screen and OS focus and can hide the original behind it.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export interface WindowLayout {
+  type: 'window';
+}
+
 /** Information about how a Platform.Bible tab fits into the dock layout */
-export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
+export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout | WindowLayout;
 
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;
@@ -274,10 +353,16 @@ export type PapiDockLayout = {
    * Find the ID of the first open web view whose `webViewType` matches the one supplied.
    *
    * @param webViewType The web view type to search for
+   * @param projectId Optionally limits the search to web views showing a given project
    * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
    *   type is open
+   * @experimental The optional `projectId` filter is new; the rest of this member is
+   *   long-established.
    */
-  findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
+  findFirstWebViewDefinitionByType: (
+    webViewType: string,
+    projectId?: string,
+  ) => WebViewDefinition | undefined;
   /**
    * Add or update a tab in the layout
    *
@@ -300,13 +385,23 @@ export type PapiDockLayout = {
    * @param layout Information about where to put a new webview
    * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
    *   tabs. Defaults to `true`
+   * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+   *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
+   *   window that does not hold OS focus sets that document's active element without activating the
+   *   window — latently, until the window is next activated — so a window opened deliberately in
+   *   the background docks its content without taking that latent focus, leaving who owns the caret
+   *   to be decided when the window is actually raised. Left unspecified, this defaults to whether
+   *   this window is still awaiting its first activation.
    * @returns If WebView added, final layout used to display the new webView. If existing webView
    *   updated, `undefined`
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
   addWebViewToDock: (
     webView: WebViewTabProps,
     layout: Layout,
     shouldBringToFront?: boolean,
+    activateWithoutDocumentFocus?: boolean,
   ) => Layout | undefined;
   /**
    * Remove a tab in the layout
@@ -321,11 +416,26 @@ export type PapiDockLayout = {
    */
   floatTabById: (tabId: string) => void;
   /**
-   * Gets all WebView definitions for all currently open web view tabs
+   * Get the WebView definitions for every open WebView tab across the dock layout.
    *
-   * @returns Array of WebView definitions for all open web view tabs
+   * Used by consumers (e.g. ProjectSelector) that need to seed initial state at mount time.
+   * `papi.webViews.onDidOpenWebView` does not replay for tabs already open at subscription time, so
+   * subscribers that mount after some tabs are already open need this enumeration to bootstrap.
+   *
+   * @returns Array of WebView definitions, one per currently-open WebView tab. Empty array when the
+   *   dock layout has no WebView tabs.
    */
   getAllWebViewDefinitions: () => WebViewDefinition[];
+  /**
+   * Counts every open tab in the dock layout, of any type — not only web views.
+   *
+   * Used to tell whether moving a tab out of a window would leave that window with nothing at all,
+   * which depends on every tab it holds, not only on its web views.
+   *
+   * @returns The number of tabs open anywhere in the layout, whatever its docking state
+   * @experimental
+   */
+  getOpenTabCount: () => number;
   /**
    * Gets the WebView definition for the web view with the specified ID
    *
@@ -363,12 +473,22 @@ export type PapiDockLayout = {
    *   doesn't always work well) or merged (so we can remove properties from `state`).
    * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
    *   tabs. Defaults to `false`
+   * @param activateWithoutDocumentFocus If true, a tab brought to the front is made active without
+   *   being given document focus. For content arriving in a window the user has not activated:
+   *   focusing the tab focuses its iframe, and a `focus()` call inside a window that does not hold
+   *   OS focus sets that document's active element without raising the window — so without this,
+   *   whichever tab's content focuses last would claim the caret the moment the window is finally
+   *   raised, rather than the tab the raise is actually showing. Left unspecified, this defaults to
+   *   whether this window is still awaiting its first activation.
    * @returns True if successfully found the WebView to update; false otherwise
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
   updateWebViewDefinition: (
     webViewId: string,
     updateInfo: WebViewDefinitionUpdateInfo,
     shouldBringToFront?: boolean,
+    activateWithoutDocumentFocus?: boolean,
   ) => boolean;
   /**
    * Gets info for a tab in a direction from the source tab.
@@ -401,13 +521,33 @@ export type PapiDockLayout = {
    */
   getTabInfoById: (tabId: string) => TabInfo | undefined;
   /**
+   * Whether this dock holds the tab or tab group with the given ID.
+   *
+   * Tabs and tab groups are looked up the same way, so one question answers for either kind of ID.
+   * Every kind of tab counts, not only WebView tabs.
+   *
+   * @param tabOrTabGroupId ID of the tab or tab group to look for
+   * @returns `true` if this dock holds it, `false` otherwise
+   * @experimental
+   */
+  containsTab: (tabOrTabGroupId: string) => boolean;
+  /**
    * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
    * tabs, and sets the document focus in that tab
    *
    * @param tabId ID of the tab to set active and focused
+   * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+   *   taking document focus. Every mounted panel and every loaded web view asks to be focused, and
+   *   a `focus()` call inside a window that does not hold OS focus only sets that document's active
+   *   element — it does not raise the window — so without this, whichever tab's content focuses
+   *   last would claim the caret the moment a window still awaiting its first activation is finally
+   *   raised. Left unspecified, this defaults to whether this window is still awaiting its first
+   *   activation.
    * @returns `true` if successfully found tab to update, `false` otherwise
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
-  focusTab: (tabId: string) => boolean;
+  focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) => boolean;
   /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *

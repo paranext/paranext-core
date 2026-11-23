@@ -1,8 +1,8 @@
+import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages.service';
 import { localization } from '@extension-host/services/papi-backend.service';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
-import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { formatZoomPercent, isValidZoomFactor } from '@shared/utils/content-zoom.util';
 import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
@@ -11,16 +11,25 @@ export const platformSettings: SettingsContribution = [
     label: '%settings_platform_group1_label_alternative%',
     description: '%settings_platform_group1_description%',
     properties: {
-      'platform.verseRef': {
-        label: '%settings_platform_verseRef_label%',
-        description: '%settings_platform_verseRef_description%',
-        default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-        isHidden: true,
-      },
       'platform.interfaceLanguage': {
         label: '%settings_platform_interfaceLanguage_label%',
         description: '%settings_platform_interfaceLanguage_description%',
         default: ['en'],
+      },
+      'platform.zoomFactor': {
+        label: '%settings_platform_zoomFactor_label_2%',
+        description: '%settings_platform_zoomFactor_description_2%',
+        default: DEFAULT_ZOOM_FACTOR,
+      },
+      'platform.webViewContentZoom': {
+        label: '%settings_platform_webViewContentZoom_label%',
+        description: '%settings_platform_webViewContentZoom_description_2%',
+        default: DEFAULT_ZOOM_FACTOR,
+      },
+      'platform.webViewContentZoomMemory': {
+        label: '%settings_platform_webViewContentZoomMemory_label%',
+        default: {},
+        isHidden: true,
       },
       'platform.ptxUtilsMementoData': {
         label: '%settings_platform_ptxUtilsMementoData_label%',
@@ -32,41 +41,56 @@ export const platformSettings: SettingsContribution = [
         default: {},
         isHidden: true,
       },
+      // Hidden because the Simple/Power toggle lives in the profile popover
+      // (user-profile-popover.component.tsx), which the toolbar renders in both modes; a
+      // Settings entry for the same value would be a second, redundant switch.
+      'platform.interfaceMode': {
+        label: '%settings_platform_interfaceMode_label%',
+        description: '%settings_platform_interfaceMode_description%',
+        default: 'simple',
+        isHidden: true,
+      },
+      'platform.firstRunComplete': {
+        label: '%settings_platform_firstRunComplete_label%',
+        default: false,
+        isHidden: true,
+      },
+      'platform.syncOnStartup': {
+        label: '%settings_platform_syncOnStartup_label%',
+        default: true,
+        isHidden: true,
+      },
+      'platform.internetUseChoiceAsked': {
+        label: '%settings_platform_internetUseChoiceAsked_label%',
+        default: false,
+        isHidden: true,
+      },
+      'platform.firstSyncState': {
+        label: '%settings_platform_firstSyncState_label%',
+        default: 'unknown',
+        isHidden: true,
+      },
+    },
+  },
+  // Settings a support person adjusts when helping a user troubleshoot, rather than settings a
+  // translator changes as part of day-to-day work.
+  {
+    label: '%settings_platform_supporter_group_label%',
+    description: '%settings_platform_supporter_group_description%',
+    properties: {
       'platform.requestTimeout': {
         label: '%settings_platform_requestTimeout_label%',
         description: '%settings_platform_requestTimeout_description%',
         default: 30,
       },
-      'platform.zoomFactor': {
-        label: '%settings_platform_zoomFactor_label%',
-        description: '%settings_platform_zoomFactor_description%',
-        default: DEFAULT_ZOOM_FACTOR,
-      },
-      'platform.interfaceMode': {
-        label: '%settings_platform_interfaceMode_label%',
-        description: '%settings_platform_interfaceMode_description%',
-        default: 'simple',
+      'platform.showRegistrationReminderOnStartup': {
+        label: '%settings_platform_showRegistrationReminderOnStartup_label_2%',
+        description: '%settings_platform_showRegistrationReminderOnStartup_description%',
+        default: true,
       },
     },
   },
 ];
-
-// TODO: Add range checking of BCV numbers given the current versification
-export const verseRefSettingsValidator: SettingValidator<'platform.verseRef'> = async (
-  newValue: SerializedVerseRef,
-): Promise<boolean> => {
-  return (
-    'book' in newValue &&
-    'chapterNum' in newValue &&
-    'verseNum' in newValue &&
-    typeof newValue.book === 'string' &&
-    typeof newValue.chapterNum === 'number' &&
-    typeof newValue.verseNum === 'number' &&
-    Canon.isBookIdValid(newValue.book) &&
-    newValue.chapterNum >= 0 &&
-    newValue.verseNum >= 0
-  );
-};
 
 // TODO: Validate that strings in the array match BCP 47 values once the i18n code is ready. Or maybe
 // now that we're validating against actual locales read in by the localization service, that check
@@ -74,12 +98,15 @@ export const verseRefSettingsValidator: SettingValidator<'platform.verseRef'> = 
 const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'> = async (
   newValue: string[],
 ): Promise<boolean> => {
-  const validLanguages = await localizationService.getAvailableInterfaceLanguages();
+  // Accept any language with a locale file, not only offered ones. Every write validates the whole
+  // list, so a user who already has a hidden language (primary or fallback) must still be able to
+  // save; and testers and translators set hidden languages on purpose.
+  const validLanguages = await getAllLoadedInterfaceLanguages();
   return (
     typeof newValue === 'object' &&
     Array.isArray(newValue) &&
     newValue.length > 0 &&
-    newValue.every((v) => typeof v === 'string' && v in validLanguages)
+    newValue.every((v) => typeof v === 'string' && Object.hasOwn(validLanguages, v))
   );
 };
 
@@ -90,9 +117,13 @@ const serializableStringDictionarySettingValidator: SettingValidator<
   return typeof newValue === 'object' && Object.values(newValue).every((value) => isString(value));
 };
 
-const booleanValidator: SettingValidator<'platform.commentsEnabled'> = async (
-  newValue: boolean,
-): Promise<boolean> => {
+const booleanValidator: SettingValidator<
+  | 'platform.commentsEnabled'
+  | 'platform.firstRunComplete'
+  | 'platform.syncOnStartup'
+  | 'platform.showRegistrationReminderOnStartup'
+  | 'platform.internetUseChoiceAsked'
+> = async (newValue): Promise<boolean> => {
   return typeof newValue === 'boolean';
 };
 
@@ -111,17 +142,45 @@ const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
     await localization.getLocalizedString({
       localizeKey: '%settings_platform_zoomFactor_errorMessage%',
     }),
+    // Settings shows every zoom as a percentage, so the range in the message is one too.
     {
-      lowerLimit: MIN_ZOOM_FACTOR,
-      upperLimit: MAX_ZOOM_FACTOR,
+      lowerLimit: formatZoomPercent(MIN_ZOOM_FACTOR),
+      upperLimit: formatZoomPercent(MAX_ZOOM_FACTOR),
     },
   );
 
-  if (typeof newValue !== 'number') return false;
+  if (typeof newValue !== 'number' || Number.isNaN(newValue)) return false;
   if (newValue < MIN_ZOOM_FACTOR || newValue > MAX_ZOOM_FACTOR) {
     throw new Error(errorMessage);
   }
   return true;
+};
+
+const webViewContentZoomValidator: SettingValidator<'platform.webViewContentZoom'> = async (
+  newValue: number,
+): Promise<boolean> => {
+  if (typeof newValue !== 'number' || Number.isNaN(newValue)) return false;
+  if (!isValidZoomFactor(newValue)) {
+    throw new Error(
+      formatReplacementString(
+        await localization.getLocalizedString({
+          localizeKey: '%settings_platform_zoomFactor_errorMessage%',
+        }),
+        {
+          lowerLimit: formatZoomPercent(MIN_ZOOM_FACTOR),
+          upperLimit: formatZoomPercent(MAX_ZOOM_FACTOR),
+        },
+      ),
+    );
+  }
+  return true;
+};
+
+const webViewContentZoomMemoryValidator: SettingValidator<
+  'platform.webViewContentZoomMemory'
+> = async (newValue): Promise<boolean> => {
+  if (typeof newValue !== 'object' || !newValue || Array.isArray(newValue)) return false;
+  return Object.values(newValue).every((value) => isValidZoomFactor(value));
 };
 
 const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async (
@@ -137,8 +196,15 @@ const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async
   return true;
 };
 
+const firstSyncStateValidator: SettingValidator<'platform.firstSyncState'> = async (
+  newValue,
+): Promise<boolean> => {
+  return newValue === 'unknown' || newValue === 'pending' || newValue === 'synced';
+};
+
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
-  'platform.verseRef': verseRefSettingsValidator,
+  'platform.webViewContentZoom': webViewContentZoomValidator,
+  'platform.webViewContentZoomMemory': webViewContentZoomMemoryValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
@@ -146,4 +212,9 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.requestTimeout': requestTimeoutValidator,
   'platform.zoomFactor': zoomFactorValidator,
   'platform.interfaceMode': interfaceModeValidator,
+  'platform.firstRunComplete': booleanValidator,
+  'platform.syncOnStartup': booleanValidator,
+  'platform.showRegistrationReminderOnStartup': booleanValidator,
+  'platform.internetUseChoiceAsked': booleanValidator,
+  'platform.firstSyncState': firstSyncStateValidator,
 };

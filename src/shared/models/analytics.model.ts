@@ -1,0 +1,54 @@
+/**
+ * Which analytics audience an event targets. Fixed when the event is fired (or when it leaves the
+ * `unresolved` queue), never re-decided when it's actually transmitted — an event queued while
+ * offline must not retarget just because the app was upgraded to a new vendor or the user has
+ * changed the S/R server configuration before it finally sends.
+ */
+export type AnalyticsEnvironment = 'test' | 'production';
+
+/** A single analytics event, tagged with the environment it should be sent to. */
+export interface AnalyticsEvent {
+  /** Event name, e.g. `'app_launch'` */
+  name: string;
+  /** Arbitrary event properties, if any */
+  properties?: Record<string, unknown>;
+  /** Milliseconds since epoch when the event was fired */
+  timestamp: number;
+  /** Which analytics audience this event targets */
+  environment: AnalyticsEnvironment;
+}
+
+/** An analytics event before its environment has been resolved. */
+export type UnresolvedAnalyticsEvent = Omit<AnalyticsEvent, 'environment'>;
+
+/**
+ * Something that can transmit a resolved analytics event. Implementations are provider-specific
+ * (console, a vendor SDK, etc). A separate instance is constructed per environment it serves, so an
+ * implementation that needs a vendor write-key gets one bound at construction time rather than
+ * passed per call.
+ */
+export interface AnalyticsProvider {
+  /**
+   * Transmits a single resolved analytics event to this provider's destination.
+   *
+   * @param event The event to send. Its `environment` was fixed when it was fired, not when `send`
+   *   is called — implementations must not re-derive or override it.
+   * @returns A promise that resolves once the event has been handled (sent, queued, or otherwise
+   *   accepted by the provider).
+   * @throws Implementations may reject. Callers are expected to catch both a rejection and a
+   *   synchronous throw and log-and-drop the event on failure — see `flushQueue` in
+   *   `src/extension-host/services/analytics.service.ts` — so an implementation does not need to
+   *   guarantee it never throws. The caller logs a rejection only at debug level, so an
+   *   implementation that wants a failure seen logs its own warning before rejecting.
+   */
+  send(event: AnalyticsEvent): Promise<void>;
+  /**
+   * Flushes anything not yet transmitted and releases resources. Optional: a provider with nothing
+   * to flush (e.g. console) omits it.
+   *
+   * @param timeoutMs What is left of the analytics service's shutdown budget. The provider must
+   *   settle within it, abandoning its flush if necessary: the service awaits this call without a
+   *   timeout of its own, and extension deactivation still has to run after it.
+   */
+  shutdown?(timeoutMs: number): Promise<void>;
+}

@@ -2,6 +2,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Section } from 'platform-bible-utils';
 import { getSectionShortName } from '@/components/shared/book.utils';
+import { DisabledActionTooltip } from '@/components/basics/disabled-action-tooltip.component';
 import { getBooksForSection, isSectionFullySelected } from './scope-selector.utils';
 import { SelectBooksLocalizedStrings } from './select-books.types';
 
@@ -16,12 +17,19 @@ function SectionButton({
   selectedBookIds,
   onToggle,
   localizedStrings,
+  disabledExplanation,
 }: {
   section: Section;
   availableBookIds: string[];
   selectedBookIds: string[];
   onToggle: (section: Section) => void;
   localizedStrings: SelectBooksLocalizedStrings;
+  /**
+   * Why this section has no available books, shown as a tooltip while the button is disabled. Worth
+   * supplying when the consumer withholds a section's books deliberately, since a bare disabled
+   * button otherwise reads as "this project has none".
+   */
+  disabledExplanation?: string;
 }) {
   const isDisabled = getBooksForSection(availableBookIds, section).length === 0;
 
@@ -30,7 +38,7 @@ function SectionButton({
   const sectionDcShortText = localizedStrings['%scripture_section_dc_short%'];
   const sectionExtraShortText = localizedStrings['%scripture_section_extra_short%'];
 
-  return (
+  const button = (
     <Button
       variant="outline"
       size="sm"
@@ -50,6 +58,22 @@ function SectionButton({
         sectionExtraShortText,
       )}
     </Button>
+  );
+
+  if (!disabledExplanation) return button;
+
+  // Wrapped whenever an explanation is supplied, not only while disabled: swapping the element type
+  // at this position on an `isDisabled` flip would remount the Button and drop keyboard focus. The
+  // wrapper is inert while `disabled` is false. `tw:flex` keeps it from breaking the button row it
+  // becomes a flex item of.
+  return (
+    <DisabledActionTooltip
+      className="tw:flex"
+      disabled={isDisabled}
+      tooltipText={disabledExplanation}
+    >
+      {button}
+    </DisabledActionTooltip>
   );
 }
 

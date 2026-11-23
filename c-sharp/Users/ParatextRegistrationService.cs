@@ -1,3 +1,4 @@
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Repository;
@@ -9,7 +10,10 @@ namespace Paranext.DataProvider.Users;
 /// <summary>
 /// Commands on the papi that handle Send/Receive-related operations
 /// </summary>
-internal class ParatextRegistrationService(PapiClient papiClient)
+internal class ParatextRegistrationService(
+    PapiClient papiClient,
+    InternetSettingsDataProvider internetSettingsDataProvider
+)
 {
     #region Constructors, consts, and fields
 
@@ -18,11 +22,6 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     /// registration code
     /// </summary>
     private const string PLACEHOLDER_CODE = "******-******-******-******-******";
-
-    /// <summary>
-    /// Placeholder to show instead of real passwords so we aren't giving out real passwords
-    /// </summary>
-    private const string PLACEHOLDER_PASSWORD = "********";
 
     #endregion
 
@@ -44,16 +43,40 @@ internal class ParatextRegistrationService(PapiClient papiClient)
             () => RegistrationInfo.DefaultUser.IsValid
         );
         await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.validateParatextRegistrationData",
+            ValidateParatextRegistrationData
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.resetForFirstRun",
+            (string mode) => ResetForFirstRun(mode)
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.isRegistrationCopiedFromParatext9",
+            IsRegistrationCopiedFromParatext9
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.getParatext9InternetUse",
+            GetParatext9InternetUse
+        );
+
+        // Deprecated: retained as thin wrappers that delegate to InternetSettingsDataProvider so
+        // out-of-repo extensions still calling these commands keep working. New code should use the
+        // paratextRegistration.internetSettingsDataProvider data provider. Remove after a deprecation
+        // period (TODO).
+        await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextRegistration.getParatextDataInternetSettings",
-            GetParatextDataInternetSettings
+            InternetSettingsDataProvider.GetInternetSettings
         );
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextRegistration.setParatextDataInternetSettings",
-            SetParatextDataInternetSettings
+            (InternetAccess.InternetSettingsMemento newInternetSettings) =>
+            {
+                InternetSettingsDataProvider.SetInternetSettings(newInternetSettings);
+            }
         );
         await PapiClient.RegisterRequestHandlerAsync(
-            "command:paratextRegistration.validateParatextRegistrationData",
-            ValidateParatextRegistrationData
+            "command:paratextRegistration.getParatextRegistryUrl",
+            GetParatextRegistryUrl
         );
 
         // Lookup localized strings where they may be needed by callers without access to PapiClient
@@ -69,6 +92,8 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     #region Private properties and methods
 
     private PapiClient PapiClient { get; } = papiClient;
+    private InternetSettingsDataProvider InternetSettingsDataProvider { get; } =
+        internetSettingsDataProvider;
 
     /// <summary>
     /// Returns information about user's current Paratext Registry user information in ParatextData.dll
@@ -200,6 +225,7 @@ internal class ParatextRegistrationService(PapiClient papiClient)
 
             // Actually change the registration info
             RegistrationInfo.ChangeRegistrationData(newRegistrationData);
+            (ParatextInfo.Default as PlatformParatextInfo)?.ForgetCopiedFromParatext9();
 
             // registration code may have changed, so reset the registry server with the new user data
             Paratext.Data.RegistryServerAccess.RegistryServer.Default?.ResetServer(
@@ -218,104 +244,78 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     }
 
     /// <summary>
-    /// Returns information about user's current ParatextData.dll internet settings
+    /// Whether Platform.Bible's current registration was copied from Paratext 9 when its own
+    /// ParatextData folder was first set up (false if it was entered in Platform.Bible instead).
     /// </summary>
-    /// <param name="requestContents">Contents of command request. No contents expected</param>
-    /// <returns>Paratext registration information</returns>
-    private InternetAccess.InternetSettingsMemento GetParatextDataInternetSettings()
+    internal static bool IsRegistrationCopiedFromParatext9() =>
+        ParatextInfo.Default is PlatformParatextInfo platformParatextInfo
+        && platformParatextInfo.IsRegistrationCopiedFromParatext9;
+
+    /// <summary>
+    /// The internet use Paratext 9 currently has saved (<c>"Enabled"</c>, <c>"VpnRequired"</c>,
+    /// <c>"Disabled"</c> or <c>"ProxyOnly"</c>), or null when Paratext 9 is not installed or its
+    /// setting cannot be read. Paratext 9's own setting, not Platform.Bible's copy of it; see
+    /// <see cref="PlatformParatextInfo.ReadParatext9InternetUse"/>.
+    /// </summary>
+    internal static string? GetParatext9InternetUse() =>
+        (ParatextInfo.Default as PlatformParatextInfo)?.ReadParatext9InternetUse()?.ToString();
+
+    /// <summary>
+    /// Developer reset: puts Platform.Bible's own registration into the state a Paratext 9 user has
+    /// on their first Platform.Bible launch. The app must be restarted afterwards. Only ever touches
+    /// Platform.Bible's pinned ParatextData folder — Paratext 9's registration is never changed.
+    /// </summary>
+    /// <param name="mode">
+    /// <c>copyFromParatext9</c>: have the next startup replace Platform.Bible's copies of the
+    /// registration and internet settings with fresh copies from Paratext 9. <c>clear</c>: remove
+    /// only Platform.Bible's registration (an unregistered Paratext 9 user). <c>keep</c>: do
+    /// nothing.
+    /// </param>
+    internal static void ResetForFirstRun(string mode)
     {
-        try
+        if (mode == "keep")
+            return;
+
+        // Refuse unless ParatextData is using PlatformParatextInfo: its own folder resolution can
+        // create or seed a Paratext 9 folder, and the registration there belongs to Paratext 9.
+        if (ParatextInfo.Default is not PlatformParatextInfo platformParatextInfo)
+            throw new InvalidOperationException(
+                "Refusing to reset registration: ParatextData is not using Platform.Bible's own "
+                    + "app-data folder"
+            );
+
+        switch (mode)
         {
-            var internetSettings = new InternetAccess.InternetSettingsMemento
-            {
-                SelectedServer = InternetAccess.SelectedServers,
-                PermittedInternetUse = InternetAccess.RawStatus,
-                ProxyHost = InternetAccess.ProxyHost,
-                ProxyPort = InternetAccess.ProxyPort,
-                ProxyUsername = InternetAccess.ProxyUsername,
-                ProxyPassword = !string.IsNullOrEmpty(InternetAccess.ProxyPassword)
-                    ? PLACEHOLDER_PASSWORD
-                    : null,
-                ProxyMode = InternetAccess.ProxyMode,
-                OverrideDBLServer = InternetAccess.OverrideDBLServer,
-                OverrideDBLApiServer = InternetAccess.OverrideDBLApiServer,
-                OverrideGbcServer = InternetAccess.OverrideGbcServer,
-                DBLEmail = InternetAccess.DBLEmail,
-                DBLPassword = !string.IsNullOrEmpty(InternetAccess.DBLPassword)
-                    ? PLACEHOLDER_PASSWORD
-                    : null,
-            };
-            return internetSettings;
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Getting ParatextData InternetSettings failed! {e}");
-            throw new Exception($"Getting ParatextData InternetSettings failed! {e.Message}");
+            case "copyFromParatext9":
+                platformParatextInfo.RequestReseedFromParatext9();
+                break;
+            case "clear":
+                RegistrationInfo.DeleteRegistration();
+                platformParatextInfo.ForgetCopiedFromParatext9();
+                // An earlier copyFromParatext9 reset whose restart never happened would otherwise
+                // bring the registration back.
+                platformParatextInfo.CancelReseedFromParatext9();
+                break;
+            default:
+                throw new ArgumentException(
+                    $"Unknown registration reset mode: {mode}",
+                    nameof(mode)
+                );
         }
     }
 
     /// <summary>
-    /// Sets information about user's current ParatextData.dll internet settings
+    /// Returns the Paratext Registry website URL for the environment currently selected in
+    /// ParatextData internet settings.
+    /// <para>
+    /// ParatextData owns this mapping, so the link always points at the registry the rest of the
+    /// app is actually talking to. Today it resolves Production to
+    /// <c>https://registry.paratext.org</c> and Development, Test, and QualityAssurance all to
+    /// <c>https://registry-dev.paratext.org</c> — deliberately not mirrored here, because a copy
+    /// would silently drift the moment ParatextData changes it.
+    /// </para>
     /// </summary>
-    /// <param name="newInternetSettings">internet settings object for updating ParatextData.dll internet settings</param>
-    private void SetParatextDataInternetSettings(
-        InternetAccess.InternetSettingsMemento newInternetSettings
-    )
-    {
-        try
-        {
-            // Set empty strings to null (except proxy-related settings since they are handled by
-            // SetProxy) so they are removed from `InternetSettings.xml` as it happens in PT9
-            if (newInternetSettings.OverrideDBLServer == "")
-                newInternetSettings.OverrideDBLServer = null;
-            if (newInternetSettings.OverrideDBLApiServer == "")
-                newInternetSettings.OverrideDBLApiServer = null;
-            if (newInternetSettings.OverrideGbcServer == "")
-                newInternetSettings.OverrideGbcServer = null;
-            if (newInternetSettings.DBLEmail == "")
-                newInternetSettings.DBLEmail = null;
-            if (newInternetSettings.DBLPassword == "")
-                newInternetSettings.DBLPassword = null;
-
-            // Unfortunately, `InternetAccess.SetProxy` is the only way to set proxy properties, and
-            // it does some weird stuff. Make sure `ProxyHost` is `null` if not using a proxy. Then
-            // `InternetAccess.SetProxy` will set the proxy properties to `null`. But it will also
-            // set `RawStatus` to `InternetUse.Disabled`, so set that back to whatever the user
-            // selected if they selected something that is not `InternetUse.ProxyOnly`. But we want
-            // to leave it disabled if they selected `InternetUse.ProxyOnly` but provided no host
-            if (newInternetSettings.PermittedInternetUse != InternetUse.ProxyOnly)
-                newInternetSettings.ProxyHost = null;
-            InternetAccess.SetProxy(
-                newInternetSettings.ProxyHost,
-                newInternetSettings.ProxyPort,
-                newInternetSettings.ProxyUsername,
-                newInternetSettings.ProxyPassword != PLACEHOLDER_PASSWORD
-                    ? newInternetSettings.ProxyPassword
-                    : InternetAccess.ProxyPassword,
-                newInternetSettings.ProxyMode
-            );
-            if (
-                InternetAccess.RawStatus == InternetUse.Disabled
-                && newInternetSettings.PermittedInternetUse != InternetUse.Disabled
-                && newInternetSettings.PermittedInternetUse != InternetUse.ProxyOnly
-            )
-                InternetAccess.RawStatus = newInternetSettings.PermittedInternetUse;
-
-            InternetAccess.SelectedServers = newInternetSettings.SelectedServer;
-
-            InternetAccess.OverrideDBLServer = newInternetSettings.OverrideDBLServer;
-            InternetAccess.OverrideDBLApiServer = newInternetSettings.OverrideDBLApiServer;
-            InternetAccess.OverrideGbcServer = newInternetSettings.OverrideGbcServer;
-            InternetAccess.DBLEmail = newInternetSettings.DBLEmail;
-            if (newInternetSettings.DBLPassword != PLACEHOLDER_PASSWORD)
-                InternetAccess.DBLPassword = newInternetSettings.DBLPassword;
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Setting ParatextData InternetSettings failed! {e}");
-            throw new Exception($"Setting Paratext Registration data failed! {e.Message}");
-        }
-    }
+    private string GetParatextRegistryUrl() => InternetAccess.RegistryServer;
 
     /// <summary>
     /// For any project with uncommitted changes on this machine, marks a point in project history in

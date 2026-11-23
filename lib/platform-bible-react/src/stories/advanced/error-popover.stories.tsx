@@ -55,6 +55,7 @@ const defaultLocalizedStrings: ErrorPopoverLocalizedStrings = {
   '%webView_error_dump_info_message%':
     'An error occurred. You can copy the details below for troubleshooting.',
   '%webView_error_dump_copied_message%': 'Error details copied to clipboard!',
+  '%webView_error_dump_copy_button%': 'Copy error details',
 };
 
 export const Default: Story = {
@@ -132,6 +133,7 @@ Performance: 2.3ms render time`,
       '%webView_error_dump_header%': 'Debug Information',
       '%webView_error_dump_info_message%': 'Component state and performance details for debugging.',
       '%webView_error_dump_copied_message%': 'Debug details copied to clipboard!',
+      '%webView_error_dump_copy_button%': 'Copy error details',
     },
     children: (
       <Button variant="ghost" size="sm">
@@ -318,6 +320,7 @@ Recommendation: Increase memory or review cache policies`}
                 '%webView_error_dump_header%': 'Cache Warning',
                 '%webView_error_dump_info_message%': 'Cache performance is below optimal levels.',
                 '%webView_error_dump_copied_message%': 'Cache details copied to clipboard!',
+                '%webView_error_dump_copy_button%': 'Copy error details',
               }}
             >
               <Badge

@@ -1,0 +1,198 @@
+import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
+import { logger } from '@shared/services/logger.service';
+import { notificationService } from '@shared/services/notification.service';
+import { getErrorMessage, normalizeProjectId, type LocalizeKey } from 'platform-bible-utils';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+/**
+ * Message shown when a picked project fails to open. Declared here rather than inline so the key is
+ * spelled exactly once — `PlatformNotification.message` accepts any string, so a typo would not
+ * fail the build; it would ship a raw `%key%` into a toast.
+ */
+export const PROJECT_OPEN_FAILED_MESSAGE_KEY: LocalizeKey = '%toolbar_project_open_failed%';
+
+/**
+ * Shared by every "couldn't open that project" toast so a user retrying against an unavailable
+ * editor replaces the message rather than collecting one copy per attempt.
+ */
+export const PROJECT_OPEN_FAILED_NOTIFICATION_ID = 'toolbar-project-open-failed';
+
+/**
+ * Sends the "couldn't open that project" toast and swallows its own failure.
+ *
+ * A named function rather than a chain inside the open-failure handler: nesting one promise in
+ * another's rejection path is what `promise/no-nesting` is about, and pulling it out keeps the
+ * handler itself synchronous — an `async` handler there would be a promise nobody holds, so a throw
+ * outside the inner `catch` would surface as an unhandled rejection rather than a logged warning.
+ */
+function reportProjectOpenFailure() {
+  notificationService
+    .send({
+      message: PROJECT_OPEN_FAILED_MESSAGE_KEY,
+      severity: 'warning',
+      notificationId: PROJECT_OPEN_FAILED_NOTIFICATION_ID,
+    })
+    .catch((notificationError: unknown) => {
+      logger.warn(
+        `Toolbar could not notify the user that opening a project failed: ${getErrorMessage(notificationError)}`,
+      );
+    });
+}
+
+/**
+ * How long the toolbar keeps naming a just-selected project before falling back to whatever the
+ * open editor reports. The bound exists because a successful open has no guaranteed completion
+ * signal here: `useProjectPickerData` resolves the current project from THIS window's editor web
+ * views — deliberately, so a background window's editor never becomes this window's current project
+ * — so an editor that opens in another window (or resolves without producing one here) neither
+ * throws nor ever matches. Without the bound the trigger would name a project that is not open,
+ * indefinitely.
+ *
+ * The duration is a round number, not a measured one — it only has to outlast any plausible open.
+ * Widen it freely if a slow open is seen losing its label.
+ */
+export const PENDING_PROJECT_TIMEOUT_MS = 15_000;
+
+/** What {@link usePendingProject} hands back to the surface that names the selected project. */
+export type PendingProjectState = {
+  /**
+   * The project the user has just picked, held until the editor reports it. `undefined` whenever
+   * there is nothing to bridge.
+   */
+  pendingProject: ProjectItem | undefined;
+  /**
+   * The project to name right now: the pending pick when there is one, otherwise whatever the
+   * editor reports.
+   *
+   * Resolved here rather than by each surface so the rule for which of the two wins lives in one
+   * place — a caller handed both can combine them into a state that contradicts itself.
+   */
+  displayedProject: ProjectItem | undefined;
+  /**
+   * Opens a project, and — when `item` carries the display fields to do it with — starts naming it
+   * immediately, ahead of the editor reporting it.
+   *
+   * Omit `item` when the project's name is not known. Nothing is bridged in that case, so the
+   * surface keeps naming whatever is currently open until the editor reports the new project; that
+   * degrades more gracefully than bridging with a fabricated name.
+   */
+  beginOpenProject: (projectId: string, item?: ProjectItem) => void;
+};
+
+/**
+ * Bridges the gap between the user picking a project and the editor reporting it, so the surface
+ * naming the project can name the pick the moment it is made rather than lagging the editor.
+ *
+ * The bridge is retired by whichever of five exits comes first: the editor catching up (comparing
+ * normalized ids, since the editor reports the project in its own casing), the editor moving to
+ * some OTHER project instead, the open failing, the user picking the project that is already open,
+ * or {@link PENDING_PROJECT_TIMEOUT_MS} elapsing.
+ *
+ * Display fields travel with the pick, not just an id: a project picked from a dialog need not be
+ * in any visible list, so there is not always a list row to name it from.
+ *
+ * @param currentProject The project the editor currently reports, or `undefined` if none
+ * @param openProject Opens the picked project. A rejection retires the pick that caused it.
+ */
+export function usePendingProject(
+  currentProject: ProjectItem | undefined,
+  openProject: (projectId: string) => Promise<void>,
+): PendingProjectState {
+  const [pendingProject, setPendingProject] = useState<ProjectItem | undefined>(undefined);
+  const pendingProjectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Identifies the pick itself, not the project it names. Keying latest-wins on the project id
+  // instead would let a slow rejection for one pick of a project retire a NEWER pick of that same
+  // project, which is reachable whenever a user picks the same row twice inside one open's
+  // latency.
+  const attemptRef = useRef(0);
+  // What the editor reported when the current pick was armed. The catch-up effect needs it to tell
+  // "the editor has not moved yet" from "the editor moved somewhere other than this pick" — at arm
+  // time `currentProject` already differs from the pick, so a bare mismatch would retire the
+  // bridge instantly.
+  const armedAgainstIdRef = useRef<string | undefined>(undefined);
+
+  // The one entry point every selection path takes, so the trigger names the picked project the
+  // moment it is picked whether it came from the popover or from the dialog.
+  const beginOpenProject = useCallback(
+    (projectId: string, item?: ProjectItem) => {
+      // Already the current project: there is nothing to bridge. Arming anyway would swap the
+      // trigger onto this item's spelling of an id the editor already reports, and leave a timer
+      // to unwind. An unnamed pick is likewise nothing to bridge — there is no name to show.
+      const isAlreadyCurrent =
+        !!currentProject && normalizeProjectId(currentProject.id) === normalizeProjectId(projectId);
+      attemptRef.current += 1;
+      const attempt = attemptRef.current;
+      if (item && !isAlreadyCurrent) {
+        armedAgainstIdRef.current = currentProject
+          ? normalizeProjectId(currentProject.id)
+          : undefined;
+        setPendingProject(item);
+        // Supersede whatever an earlier pick armed, so the bound always belongs to the newest one.
+        clearTimeout(pendingProjectTimeoutRef.current);
+        pendingProjectTimeoutRef.current = setTimeout(() => {
+          setPendingProject(undefined);
+        }, PENDING_PROJECT_TIMEOUT_MS);
+      } else {
+        // Re-picking the open project is also the user correcting the trigger, and an unnamed pick
+        // has nothing to put there: either way an earlier pick whose editor never reported here
+        // would otherwise keep its name up until the bound expired.
+        setPendingProject(undefined);
+      }
+      // Deliberate: the open runs even when this project is already current. Re-picking the open
+      // row is how a user reveals or refocuses its existing editor, so skipping the call would
+      // make that row inert. The cost is that recency is re-stamped and the Recent section can
+      // reorder, which happens after the popover has closed.
+      openProject(projectId).catch((e: unknown) => {
+        logger.warn(`Could not open project ${projectId}: ${getErrorMessage(e)}`);
+        // Latest-wins, keyed on the attempt rather than the project: a slow failure for an earlier
+        // pick must not clear a newer one, even when both name the same project.
+        if (attempt !== attemptRef.current) return;
+        setPendingProject(undefined);
+        // Dropping the name back to whatever is open would otherwise undo the user's pick with no
+        // account of why. The same latest-wins gate governs the report, because a failure the user
+        // has already moved on from would otherwise toast while the project they picked afterwards
+        // is open and named in the trigger, which reads as that one failing. Only this path
+        // reports: the timeout above is not a failure, since an editor that opens in another
+        // window never reports here and has not gone wrong.
+        reportProjectOpenFailure();
+      });
+    },
+    [currentProject, openProject],
+  );
+
+  // The editor settled: the pending bridge has done its job either way.
+  useEffect(() => {
+    if (!pendingProject || !currentProject) return;
+    const currentId = normalizeProjectId(currentProject.id);
+    // The editor caught up with the pick.
+    if (currentId === normalizeProjectId(pendingProject.id)) {
+      setPendingProject(undefined);
+      return;
+    }
+    // The editor moved to a project that is neither the pick nor what it reported when the pick
+    // was armed — two picks resolving out of order, say. Naming the pick until the bound expires
+    // would leave the trigger contradicting the editor for as long as 15 seconds, so defer to what
+    // is actually open.
+    if (currentId !== armedAgainstIdRef.current) setPendingProject(undefined);
+  }, [pendingProject, currentProject]);
+
+  // Nothing pending means nothing left for the bound to unwind, whichever path retired it — the
+  // editor catching up, or a failed open. One place to cancel, so no path can forget to.
+  useEffect(() => {
+    if (!pendingProject) {
+      clearTimeout(pendingProjectTimeoutRef.current);
+      pendingProjectTimeoutRef.current = undefined;
+    }
+  }, [pendingProject]);
+
+  useEffect(
+    () => () => {
+      clearTimeout(pendingProjectTimeoutRef.current);
+    },
+    [],
+  );
+
+  return { pendingProject, displayedProject: pendingProject ?? currentProject, beginOpenProject };
+}
+
+export default usePendingProject;

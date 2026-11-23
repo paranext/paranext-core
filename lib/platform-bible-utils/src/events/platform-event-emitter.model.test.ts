@@ -54,3 +54,85 @@ describe('unsubscribing', () => {
     });
   });
 });
+
+describe('emitIsolated', () => {
+  it('runs the subscribers after one that throws and reports which one threw', () => {
+    const emitter = new PlatformEventEmitter<string>();
+    const subscribersRun: number[] = [];
+    const thrown = new Error('subscriber blew up');
+    emitter.subscribe(() => subscribersRun.push(0));
+    emitter.subscribe(() => {
+      throw thrown;
+    });
+    emitter.subscribe(() => subscribersRun.push(2));
+    const reportedErrors: [unknown, number][] = [];
+
+    emitter.emitIsolated('the news', (error, subscriberIndex) => {
+      reportedErrors.push([error, subscriberIndex]);
+    });
+
+    expect(subscribersRun).toEqual([0, 2]);
+    expect(reportedErrors).toEqual([[thrown, 1]]);
+  });
+
+  it('does not throw out of the emit when a subscriber throws', () => {
+    const emitter = new PlatformEventEmitter<undefined>();
+    emitter.subscribe(() => {
+      throw new Error('subscriber blew up');
+    });
+
+    expect(() => emitter.emitIsolated(undefined, () => {})).not.toThrow();
+  });
+
+  it('gives every subscriber the event, unlike emit which stops at the first throw', () => {
+    const emitter = new PlatformEventEmitter<number>();
+    const eventsSeenByLastSubscriber: number[] = [];
+    emitter.subscribe(() => {
+      throw new Error('subscriber blew up');
+    });
+    emitter.subscribe((eventNumber) => {
+      eventsSeenByLastSubscriber.push(eventNumber);
+    });
+
+    expect(() => emitter.emit(1)).toThrow('subscriber blew up');
+    expect(eventsSeenByLastSubscriber).toEqual([]);
+
+    emitter.emitIsolated(2, () => {});
+
+    expect(eventsSeenByLastSubscriber).toEqual([2]);
+  });
+
+  it('reports an async subscriber that rejects and still runs the later subscribers', async () => {
+    const emitter = new PlatformEventEmitter<string>();
+    const subscribersRun: number[] = [];
+    const rejected = new Error('async subscriber blew up');
+    emitter.subscribe(() => subscribersRun.push(0));
+    emitter.subscribe(async () => {
+      subscribersRun.push(1);
+      throw rejected;
+    });
+    emitter.subscribe(() => subscribersRun.push(2));
+    const reportedErrors: [unknown, number][] = [];
+
+    emitter.emitIsolated('the news', (error, subscriberIndex) => {
+      reportedErrors.push([error, subscriberIndex]);
+    });
+
+    // The later subscribers run synchronously; only the rejection is reported later
+    expect(subscribersRun).toEqual([0, 1, 2]);
+
+    // A rejection can only be seen once the microtask queue has drained
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(reportedErrors).toEqual([[rejected, 1]]);
+  });
+
+  it('still refuses to emit once disposed', async () => {
+    const emitter = new PlatformEventEmitter<undefined>();
+    await emitter.dispose();
+
+    expect(() => emitter.emitIsolated(undefined, () => {})).toThrow('Emitter is disposed');
+  });
+});

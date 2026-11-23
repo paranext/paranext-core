@@ -121,6 +121,57 @@ const seedEntries: Entry[] = [
   },
 ];
 
+/**
+ * An entry with long sense definitions and many Strong's codes, as some real SDBH/SDBG entries
+ * have. The details must wrap these inside a narrow pane instead of scrolling sideways.
+ */
+const longTextEntry: Entry = {
+  id: 'H1980',
+  lexicalReferenceTextId: 'SDBH',
+  lexicalReferenceTextVersion: VERSION,
+  lemma: 'הָלַךְ',
+  strongsCodes: ['A1946', 'A1981', 'H1980', 'H1981', 'H3212', 'H3213'],
+  domains: [{ taxonomy: 'Lexical Semantic Domains', code: '117', label: 'Motion' }],
+  occurrences: {
+    WLC: [{ verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, wordNum: 4 }],
+  },
+  senses: {
+    s1: {
+      id: 's1',
+      entryId: 'H1980',
+      lexicalReferenceTextId: 'SDBH',
+      lexicalReferenceTextVersion: VERSION,
+      bcp47Code: 'en',
+      definition:
+        '= action by which humans, deities, or animals move forward, usually towards a destination, without saying anything about the manner in which they move; also used of time and of events that come about',
+      glosses: ['to come', 'to go', 'to walk', 'to proceed', 'to travel', 'to depart'],
+      strongsCodes: ['H1980', 'H3212'],
+      domains: [
+        { taxonomy: 'Lexical Semantic Domains', code: '117', label: 'Motion' },
+        { taxonomy: 'Lexical Semantic Domains', code: '096', label: 'Journey' },
+      ],
+      occurrences: {
+        WLC: [{ verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, wordNum: 4 }],
+      },
+    },
+    s2: {
+      id: 's2',
+      entryId: 'H1980',
+      lexicalReferenceTextId: 'SDBH',
+      lexicalReferenceTextVersion: VERSION,
+      bcp47Code: 'en',
+      definition:
+        '= behavior by which people conduct their lives according to a particular pattern of conduct or set of values, especially with regard to obedience to God and his commands',
+      glosses: ['to live', 'to behave', 'to conduct oneself'],
+      strongsCodes: ['H1980'],
+      domains: [{ taxonomy: 'Lexical Semantic Domains', code: '088', label: 'Behavior' }],
+      occurrences: {
+        WLC: [{ verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, wordNum: 4 }],
+      },
+    },
+  },
+};
+
 /** Whether an entry has any occurrence matching the scope-filtered selector. */
 function entryMatchesScope(
   entry: Entry,
@@ -220,6 +271,20 @@ export const EntryList: Story = {
 /** Exactly one entry matches — the detail view renders directly without the list. */
 export const SingleEntry: Story = {
   decorators: [createDecorator({ entries: [seedEntries[0]] })],
+};
+
+/**
+ * Long sense definitions and many Strong's codes in a pane as narrow as a Simple-mode column. The
+ * definitions and the header wrap; nothing in the details should scroll sideways.
+ */
+export const LongTextInNarrowPane: Story = {
+  decorators: [
+    () => (
+      <div className="tw:w-[380px] tw:border tw:border-border">
+        <DictionaryHarness config={{ entries: [longTextEntry] }} />
+      </div>
+    ),
+  ],
 };
 
 /** Entries are still loading — the skeleton placeholders render. */

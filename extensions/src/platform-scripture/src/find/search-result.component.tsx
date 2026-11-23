@@ -1,14 +1,42 @@
-import { Copy, X } from 'lucide-react';
-import { Button, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
+import { ArrowRight, Copy, Minus, Plus, X } from 'lucide-react';
+import {
+  Button,
+  ContentZoomRoot,
+  DisabledActionTooltip,
+  DropdownMenuItem,
+  ResultsCard,
+} from 'platform-bible-react';
 import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
+import {
+  formatResultReference,
+  getResultBookName,
+  getUsfmToInsert,
+  preserveTrailingSpaces,
+  renderWithInvisibleChars,
+} from './find.utils';
+import { MatchedUsfmText } from './matched-usfm-text.component';
+import {
+  getFindHighlightClasses,
+  getGoldFindHighlightClasses,
+  getReplaceHighlightClasses,
+  getReplaceTextColorClasses,
+} from './replace-preview-styles';
+import { DEFAULT_FIND_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
+import { collapseUsfmMarkersForDisplay } from './usfm-tokens.util';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
 
 /** How many words to show around the search result */
 const WORDS_AROUND_SEARCH_RESULT = 15;
+
+/**
+ * How much of a match with markers the one-line card header renders. Far more than the widest line
+ * can show, so cutting there changes nothing on screen.
+ */
+const HEADER_MAX_CHARACTERS = 1000;
 
 export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%general_cancel%',
@@ -28,6 +56,14 @@ export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
  */
 export type FindLogger = { warn: (...args: unknown[]) => void };
 
+/** Configuration for the replacement preview shown in replace mode. */
+export interface ReplaceConfig {
+  /** The replacement string to use */
+  term: string;
+  /** Whether to apply preserve-case transformation to the replacement */
+  preserveCase: boolean;
+}
+
 /** Props interface for the SearchResult component */
 interface SearchResultProps {
   /** The search result data to display */
@@ -38,10 +74,21 @@ interface SearchResultProps {
   isSelected: boolean;
   /** UsjReaderWriter for the book this search result occurred in */
   usjReaderWriter: UsjReaderWriter | undefined;
+  /**
+   * Pre-serialized USFM string for the book, cached at the book level to avoid repeated toUsfm()
+   * calls across the results in a book.
+   */
+  cachedUsfm?: string;
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
-  /** Callback function called when the user clicks on this search result */
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
+  /** Callback function called when the user clicks on (selects) this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when this result card receives browser focus (e.g. Tab navigation) */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user double-clicks the result — focus shifts to the editor at this match */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user clicks the scripture reference — focus shifts to the editor */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on this result */
@@ -52,6 +99,30 @@ interface SearchResultProps {
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /**
+   * Whether replace is blocked for a reason unrelated to `isReplacing` (project is read-only, or
+   * structure is locked and the pending replacement would change it) — mirrors the toolbar Replace
+   * / Replace All gating so this per-result action and its keyboard shortcut can't bypass it.
+   */
+  isReplaceBlocked: boolean;
+  /**
+   * Explanation shown in a tooltip while `isReplaceBlocked` is true — the same text the toolbar
+   * Replace / Replace All buttons show, so a read-only or structure-locked project explains itself
+   * consistently everywhere replace can be triggered from.
+   */
+  replaceBlockedTooltipText: string;
+  /** Configuration for the replacement preview (used in replace mode) */
+  replaceConfig?: ReplaceConfig;
+  /** Options controlling how the replace preview is displayed */
+  previewOptions?: PreviewOptions;
+  /**
+   * Whether the project has AllowInvisibleChars enabled. Controls whether the USFM tilde `~` is
+   * treated as a NBSP escape (false, the default) or as a literal tilde character (true). Passed
+   * through to {@link renderWithInvisibleChars} when `previewOptions.showInvisible` is true.
+   */
+  allowInvisibleCharacters?: boolean;
+  /** Whether to show the markers the match includes. Off where they would mean nothing. */
+  shouldShowMarkers?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -78,7 +149,8 @@ const truncateText = (text: string, maxWords: number, shouldCutFromStart: boolea
 /**
  * SearchResult component displays a single search result item with verse reference, matched text,
  * and contextual actions. When selected, it shows the full verse text with the search term
- * highlighted and provides options to copy reference, verse text, or both.
+ * highlighted and provides options to copy reference, verse text, or both. In replace mode it also
+ * renders a preview of the replacement according to {@link PreviewOptions}.
  *
  * @param props - The props for the SearchResult component
  * @returns JSX element representing a search result card
@@ -88,14 +160,24 @@ export default function SearchResult({
   globalResultsIndex,
   isSelected,
   usjReaderWriter,
+  cachedUsfm,
   localizedBookData,
   onResultClick,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
   onCancelReplace,
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  isReplaceBlocked,
+  replaceBlockedTooltipText,
+  replaceConfig,
+  previewOptions = DEFAULT_FIND_PREVIEW_OPTIONS,
+  allowInvisibleCharacters = false,
+  shouldShowMarkers = false,
   logger,
 }: SearchResultProps) {
   // useRef requires null as the initial value for DOM refs
@@ -107,6 +189,13 @@ export default function SearchResult({
 
   useEffect(() => {
     // Registers a `IntersectionObserver` instance to determine when the component is visible in the DOM
+    //
+    // Hidden case: self-correcting, so nothing to do. rc-dock keeps an inactive tab's pane mounted
+    // under `display: none`, where nothing has layout and the observer reports `isIntersecting:
+    // false` — which is why `textParts` below bails and an expanded card reads "Loading verse
+    // text…". Activating the tab gives the pane layout, the observer fires again with a true
+    // intersection, and the text fills in. The only cost is one frame of the loading state on tab
+    // activation, so this deliberately gets no `useViewVisibility` catch-up.
     const observer = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting));
     if (cardRef.current) {
       observer.observe(cardRef.current);
@@ -117,6 +206,12 @@ export default function SearchResult({
     };
   }, [cardRef]);
 
+  // Hidden case: intentionally not handled. `requestAnimationFrame` does not progress inside a
+  // `display: none` pane, so a replace performed while Find is the inactive tab leaves this progress
+  // bar at 0% for the whole 1-second revert window instead of animating through it. Accepted: the
+  // bar only paces an undo window whose real timer runs on its own in the web view regardless, so
+  // the replace and its revert opportunity both behave correctly — what is missed is the animation,
+  // and a user who cannot see the tab has nothing to time against anyway.
   useEffect(() => {
     if (!searchResult.isReplaced) {
       setIsProgressAnimating(false);
@@ -126,7 +221,15 @@ export default function SearchResult({
     return () => cancelAnimationFrame(frame);
   }, [searchResult.isReplaced]);
 
-  // When this result becomes selected, we should calculate the context if we haven't already
+  // When this result becomes selected, scroll it into view.
+  //
+  // Hidden case: intentionally not handled. In Simple mode Find is a permanent tab that spends most
+  // of the session inactive, and rc-dock keeps inactive panes mounted with `display: none`, where
+  // this `scrollIntoView` no-ops. So a selection that changes while hidden (e.g. a scripture edit
+  // re-runs the search and auto-selects a result) leaves the list scrolled where it was. Accepted
+  // because the selected card stays highlighted and the very next selection change — including any
+  // keyboard navigation once the tab is active — scrolls it into view. Not worth a
+  // `useViewVisibility` catch-up for a scroll offset the user can correct by scrolling.
   useEffect(() => {
     if (isSelected) {
       cardRef.current?.scrollIntoView({ block: 'nearest' });
@@ -140,13 +243,16 @@ export default function SearchResult({
       const startIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.start);
       const endIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.end);
 
-      const usfm = usjReaderWriter.toUsfm();
+      const usfm = cachedUsfm ?? usjReaderWriter.toUsfm();
 
-      let beforeText = usfm.substring(0, startIndexInUsfm);
+      // The raw USFM carries markers the reader never sees. Collapse them so the highlighted span
+      // (and the clipboard copy built from it) reads as the searched phrase does, and so the
+      // context on either side reads the same way rather than showing markers the match doesn't.
+      let beforeText = collapseUsfmMarkersForDisplay(usfm.substring(0, startIndexInUsfm));
 
-      const text = usfm.substring(startIndexInUsfm, endIndexInUsfm);
+      const text = collapseUsfmMarkersForDisplay(usfm.substring(startIndexInUsfm, endIndexInUsfm));
 
-      let afterText = usfm.substring(endIndexInUsfm);
+      let afterText = collapseUsfmMarkersForDisplay(usfm.substring(endIndexInUsfm));
 
       if (countWords(beforeText) > WORDS_AROUND_SEARCH_RESULT) {
         beforeText = truncateText(beforeText, WORDS_AROUND_SEARCH_RESULT, true);
@@ -166,32 +272,60 @@ export default function SearchResult({
       );
       return undefined;
     }
-  }, [usjReaderWriter, searchResult, isVisible, logger]);
+  }, [usjReaderWriter, cachedUsfm, searchResult, isVisible, logger]);
+
+  /** Applies the showInvisible option to a string. */
+  const displayText = useCallback(
+    (text: string) =>
+      previewOptions.showInvisible
+        ? renderWithInvisibleChars(text, allowInvisibleCharacters)
+        : text,
+    [previewOptions.showInvisible, allowInvisibleCharacters],
+  );
+
+  // The match with its markers showing, when it includes any, so the user can see what Replace
+  // would delete. Stands in only where the match is displayed: `textParts` stays marker-free, since
+  // the clipboard copies are built from it.
+  const hasMarkersToShow = shouldShowMarkers && !!searchResult.removedMarkers?.length;
+  const matchWithMarkers = hasMarkersToShow ? (
+    <MatchedUsfmText matchedUsfm={searchResult.matchedUsfm} renderText={displayText} />
+  ) : undefined;
+
+  const fontClass = previewOptions.monospace ? 'tw:font-mono' : 'scripture-font';
+
+  const { highlightShape, color } = previewOptions;
+  const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
+  const findHighlightClass = `${fontClass} ${getGoldFindHighlightClasses(highlightShape)}`;
+  const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
+  // In inline layout the find and replace spans are directly adjacent — only round the outer corners
+  // so the two spans look like one unified rectangle split by color.
+  const findClassInline = `${fontClass} ${getFindHighlightClasses(color, highlightShape, true, 'left')}`;
+  const replaceClassInline = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape, 'right')}`;
+
+  // Invisible-chars mode replaces spaces with ·, leaving no wrap points, so break anywhere
+  const breakClass = previewOptions.showInvisible ? 'tw:break-all' : 'tw:break-words';
 
   /**
-   * Highlights the search term within the verse text by wrapping the specified occurrence in a
-   * <strong> tag. If the component is not selected, returns the plain verse text.
-   *
-   * @returns The verse text with the search term highlighted, or plain text if not selected
+   * Highlights the search term within the verse text, keeping leading/trailing spaces of the match
+   * visible inside the highlight.
    */
   const getFocusedVerseText = () => {
     if (!textParts) return localizedStrings['%webView_find_loadingVerseText%'];
 
     const { beforeText, text, afterText } = textParts;
 
+    // Only the verse text zooms with the pane; the loading message above stays at interface size.
     return (
-      <>
-        {beforeText}
-        <mark className="tw:bg-amber-100 tw:ring-2 tw:rounded-sm tw:ring-offset-1 tw:ring-amber-400">
-          {text}
+      <ContentZoomRoot as="span">
+        {displayText(beforeText)}
+        {/* <mark> exposes the match as highlighted text to assistive tech; findHighlightClass sets
+            its own bg + text color, overriding the UA default mark styling. */}
+        <mark className={findHighlightClass}>
+          {matchWithMarkers ?? displayText(preserveTrailingSpaces(text))}
         </mark>
-        {afterText}
-      </>
+        {displayText(afterText)}
+      </ContentZoomRoot>
     );
-  };
-
-  const getReference = () => {
-    return `${searchResult.start.verseRef.book} ${searchResult.start.verseRef.chapterNum}:${searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}`;
   };
 
   const getVerseText = () => {
@@ -200,7 +334,7 @@ export default function SearchResult({
   };
 
   const handleCopyReference = () => {
-    navigator.clipboard.writeText(getReference());
+    navigator.clipboard.writeText(formatResultReference(searchResult));
   };
 
   const handleCopyVerseText = () => {
@@ -208,7 +342,7 @@ export default function SearchResult({
   };
 
   const handleCopyReferenceAndVerseText = () => {
-    navigator.clipboard.writeText(`${getReference()} - ${getVerseText()}`);
+    navigator.clipboard.writeText(`${formatResultReference(searchResult)} - ${getVerseText()}`);
   };
 
   const handleDismiss = () => {
@@ -216,18 +350,27 @@ export default function SearchResult({
   };
 
   const replaceButton = (
-    <Button
-      className="tw:m-1 tw:h-6 tw:text-foreground"
-      variant="outline"
-      size="sm"
-      disabled={isReplacing}
-      onClick={(e) => {
-        e.stopPropagation();
-        onReplace(globalResultsIndex);
-      }}
-    >
-      {localizedStrings['%webView_find_replace%']}
-    </Button>
+    <DisabledActionTooltip disabled={isReplaceBlocked} tooltipText={replaceBlockedTooltipText}>
+      <Button
+        className="tw:m-1 tw:h-6 tw:text-foreground"
+        variant="outline"
+        size="sm"
+        disabled={isReplacing || isReplaceBlocked}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            onReplace(globalResultsIndex);
+          }
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onReplace(globalResultsIndex);
+        }}
+      >
+        {localizedStrings['%webView_find_replace%']}
+      </Button>
+    </DisabledActionTooltip>
   );
 
   const dropdownContent = (
@@ -251,15 +394,164 @@ export default function SearchResult({
     </>
   );
 
-  const cardContent = (
-    <div className="tw:text-xs tw:font-medium tw:flex tw:items-center tw:gap-2 tw:min-h-8">
-      <div className="tw:shrink-0">
-        {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
-          searchResult.start.verseRef.book}{' '}
-        {searchResult.start.verseRef.chapterNum}:
-        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
-        <span className="scripture-font">{searchResult.text ?? ''}</span>
+  let previewReplacement: string | undefined;
+  if (isReplaceMode && !searchResult.isReplaced && replaceConfig) {
+    previewReplacement = getUsfmToInsert(
+      searchResult,
+      replaceConfig.term,
+      replaceConfig.preserveCase,
+    );
+  }
+
+  /**
+   * Renders the replace preview element. Layout determines the visual style:
+   *
+   * - Arrow: [find-strikethrough] → [replace]
+   * - Inline: [before][find-strikethrough][replace][after] embedded in verse context
+   * - Block: two lines with - (find) and + (replace); context only when selected
+   */
+  const getReplacePreviewElement = () => {
+    if (previewReplacement === undefined) return undefined;
+    if (previewOptions.layout === 'find') return undefined;
+
+    const rawFindText = searchResult.text ?? '';
+    // When showInvisible is on, let renderWithInvisibleChars turn trailing spaces into · directly
+    // (same as replace text). preserveTrailingSpaces is only needed when showInvisible is off so
+    // that trailing spaces aren't collapsed inside the CSS-highlighted span.
+    let findText: ReactNode = matchWithMarkers;
+    if (!findText) {
+      findText = previewOptions.showInvisible
+        ? displayText(rawFindText)
+        : preserveTrailingSpaces(rawFindText);
+    }
+    const replaceText = displayText(previewReplacement);
+
+    // When replacing with nothing, show a thin vertical bar using the replace color so the user
+    // can see where the deletion will occur without a space being implied.
+    const isEmptyReplace = replaceText === '';
+    const deletionBar = (
+      <span
+        className={`tw:inline-block tw:align-middle tw:bg-current ${getReplaceTextColorClasses(color)}`}
+        style={{ width: '2px', height: '1lh' }}
+        aria-hidden="true"
+      />
+    );
+
+    // Only the preview text is marked for content zoom; the arrow, minus and plus icons keep
+    // interface size.
+    if (previewOptions.layout === 'inline') {
+      // Falls back to arrow if context not yet loaded
+      if (!textParts) {
+        return (
+          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
+            <ContentZoomRoot as="span" className={`${findClass} tw:min-w-0 ${breakClass}`}>
+              {findText}
+            </ContentZoomRoot>
+            <ArrowRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:rtl:rotate-180" />
+            {isEmptyReplace ? (
+              deletionBar
+            ) : (
+              <ContentZoomRoot as="span" className={`${replaceClass} tw:min-w-0 ${breakClass}`}>
+                {replaceText}
+              </ContentZoomRoot>
+            )}
+          </div>
+        );
+      }
+      return (
+        <ContentZoomRoot as="div" className={`tw:text-muted-foreground ${fontClass} ${breakClass}`}>
+          {displayText(textParts.beforeText)}
+          <span className={findClassInline}>
+            {matchWithMarkers ??
+              (previewOptions.showInvisible
+                ? displayText(textParts.text)
+                : preserveTrailingSpaces(textParts.text))}
+          </span>
+          {isEmptyReplace ? deletionBar : <span className={replaceClassInline}>{replaceText}</span>}
+          {displayText(textParts.afterText)}
+        </ContentZoomRoot>
+      );
+    }
+
+    if (previewOptions.layout === 'block') {
+      const hasContext = isSelected && textParts;
+      const before = hasContext ? displayText(textParts.beforeText) : '';
+      const after = hasContext ? displayText(textParts.afterText) : '';
+      return (
+        <div className="tw:space-y-0.5">
+          <div className="tw:flex tw:items-baseline tw:gap-1">
+            <Minus className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
+            <ContentZoomRoot
+              as="span"
+              className={`tw:text-muted-foreground tw:min-w-0 ${breakClass} ${fontClass}`}
+            >
+              {before}
+              <span className={findClass}>{findText}</span>
+              {after}
+            </ContentZoomRoot>
+          </div>
+          <div className="tw:flex tw:items-baseline tw:gap-1">
+            <Plus className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-foreground" />
+            <ContentZoomRoot
+              as="span"
+              className={`tw:text-foreground tw:min-w-0 ${breakClass} ${fontClass}`}
+            >
+              {before}
+              {isEmptyReplace ? deletionBar : <span className={replaceClass}>{replaceText}</span>}
+              {after}
+            </ContentZoomRoot>
+          </div>
+        </div>
+      );
+    }
+
+    // Default: arrow layout
+    return (
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
+        <ContentZoomRoot as="span" className={`${findClass} tw:min-w-0 ${breakClass}`}>
+          {findText}
+        </ContentZoomRoot>
+        <ArrowRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:rtl:rotate-180" />
+        {isEmptyReplace ? (
+          deletionBar
+        ) : (
+          <ContentZoomRoot as="span" className={`${replaceClass} tw:min-w-0 ${breakClass}`}>
+            {replaceText}
+          </ContentZoomRoot>
+        )}
       </div>
+    );
+  };
+
+  const cardContent = (
+    <div className="tw:text-sm tw:font-medium tw:flex tw:items-center tw:gap-2 tw:min-h-8">
+      <button
+        type="button"
+        className="tw:shrink-0 tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-semibold tw:text-inherit tw:hover:underline"
+        onClick={(e) => {
+          e.stopPropagation();
+          onResultReferenceClick?.(searchResult, globalResultsIndex);
+        }}
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
+        {formatResultReference(searchResult, getResultBookName(searchResult, localizedBookData))}
+      </button>
+      {!searchResult.isReplaced && (
+        <ContentZoomRoot
+          as="span"
+          className="scripture-font tw:min-w-0 tw:truncate tw:font-normal tw:text-muted-foreground"
+        >
+          {hasMarkersToShow ? (
+            <MatchedUsfmText
+              matchedUsfm={searchResult.matchedUsfm}
+              renderText={displayText}
+              maxCharacters={HEADER_MAX_CHARACTERS}
+            />
+          ) : (
+            (searchResult.text ?? '')
+          )}
+        </ContentZoomRoot>
+      )}
       {searchResult.isReplaced && (
         <>
           <span className="tw:text-red-500 tw:font-semibold tw:shrink-0">
@@ -289,14 +581,61 @@ export default function SearchResult({
     </div>
   );
 
+  // Verse text is shown for find mode and for the arrow/find preview layouts. Inline/block layouts
+  // embed the surrounding context inside the preview element itself, so the separate verse-text line
+  // is omitted to avoid duplication.
+  const showVerseTextInAdditional =
+    !isReplaceMode || previewOptions.layout === 'arrow' || previewOptions.layout === 'find';
+
   const additionalSelectedContent = (
-    <div className="tw:text-xs tw:m-1 tw:font-normal tw:text-muted-foreground scripture-font">
-      {getFocusedVerseText()}
-    </div>
+    <>
+      {showVerseTextInAdditional && (
+        <div
+          className={`tw:text-xs tw:m-1 tw:font-normal tw:text-muted-foreground ${fontClass} ${
+            previewOptions.showInvisible ? 'tw:break-all' : 'tw:break-words'
+          }`}
+        >
+          {getFocusedVerseText()}
+        </div>
+      )}
+      {isReplaceMode && isSelected && !searchResult.isReplaced && getReplacePreviewElement()}
+    </>
   );
 
   return (
-    <div ref={cardRef}>
+    // The card body is a decorative wrapper; the interactive control is the ResultsCard button
+    // inside it. These handlers add editor-navigation affordances (double-click / Tab focus) and a
+    // replace shortcut without adding a competing interactive role on the wrapper itself.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      ref={cardRef}
+      onDoubleClick={() => onResultDoubleClick?.(searchResult, globalResultsIndex)}
+      onFocus={(e) => {
+        // Only fire when focus explicitly comes from outside the card (e.g. Tab navigation), not
+        // from an interaction with a child button.
+        if (!e.relatedTarget || !(e.relatedTarget instanceof Node)) return;
+        if (!cardRef.current?.contains(e.relatedTarget)) {
+          onResultFocus?.(searchResult, globalResultsIndex);
+        }
+      }}
+      onKeyDownCapture={(e) => {
+        // When the selected card is focused (not a child button) in replace mode, Enter/Space runs
+        // the replace instead of merely re-selecting.
+        if (
+          isSelected &&
+          isReplaceMode &&
+          !searchResult.isReplaced &&
+          !isReplacing &&
+          !isReplaceBlocked &&
+          (e.key === 'Enter' || e.key === ' ') &&
+          !(e.target instanceof HTMLButtonElement)
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          onReplace(globalResultsIndex);
+        }
+      }}
+    >
       <ResultsCard
         cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
           searchResult.start.verseRef.verseNum

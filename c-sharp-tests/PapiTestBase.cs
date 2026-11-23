@@ -4,8 +4,13 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
 using System.Xml.Linq;
+using Paranext.DataProvider;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
+using Paratext.Data.ProjectSettingsAccess;
+using PtxUtils;
 
 namespace TestParanextDataProvider
 {
@@ -46,6 +51,10 @@ namespace TestParanextDataProvider
                 ScrTextCollection.Remove(project, false);
 
             _client?.Dispose();
+            // LocalParatextProjects is now IDisposable (it owns a project-directory watcher). The
+            // test double never starts a watcher - it has no PapiClient - so this is a no-op, but
+            // dispose it anyway to honor the contract (and satisfy NUnit1032).
+            _projects?.Dispose();
         }
         #endregion
 
@@ -84,6 +93,21 @@ namespace TestParanextDataProvider
             DummyScrText scrText = new();
             return scrText;
         }
+
+        /// <summary>
+        /// Sets the project's type, giving a derived type the placeholder base project it needs
+        /// </summary>
+        protected static void SetProjectType(ScrText scrText, Enum<ProjectType> type) =>
+            scrText.Settings.TranslationInfo = new TranslationInformation(
+                type,
+                type.IsDerivedType() ? "PlaceholderBase" : ""
+            );
+
+        /// <summary>
+        /// Makes the project a Study Bible Additions project, which Platform.Bible can't open
+        /// </summary>
+        protected static void MakeStudyBibleAdditions(ScrText scrText) =>
+            SetProjectType(scrText, ProjectType.StudyBibleAdditions);
 
         /// <summary>
         /// Creates project details from the specified project
@@ -161,6 +185,44 @@ namespace TestParanextDataProvider
             };
             return jsonObject;
         }
+
+        /// <summary>
+        /// Creates a <see cref="ParatextProjectSendReceiveService"/> wired to this fixture's
+        /// <see cref="Client"/> and <see cref="ParatextProjects"/> test doubles, so the construction
+        /// shape lives in one place rather than being duplicated per fixture.
+        /// </summary>
+        protected ParatextProjectSendReceiveService CreateSendReceiveService() =>
+            CreateSendReceiveService(Client);
+
+        /// <summary>
+        /// As <see cref="CreateSendReceiveService()"/>, but wired to <paramref name="client"/>. Use
+        /// this whenever a test builds its own <see cref="DummyPapiClient"/>: a service left on the
+        /// fixture's <see cref="Client"/> would send its traffic to a client the test is not
+        /// asserting against, so a later assertion on service-side traffic would read the wrong one.
+        /// </summary>
+        protected ParatextProjectSendReceiveService CreateSendReceiveService(DummyPapiClient client)
+        {
+            var factory = new ParatextProjectDataProviderFactory(client, ParatextProjects);
+            return new ParatextProjectSendReceiveService(
+                client,
+                factory,
+                new AppInfo("test", "1.0.0", "test"),
+                ParatextProjects
+            );
+        }
+
+        /// <summary>
+        /// The options the PAPI JSON-RPC formatter actually serializes with — what a wire-shape
+        /// assertion has to use. Not interchangeable with
+        /// <see cref="SerializationOptions.CreateSerializationOptions"/>: the formatter copies only
+        /// some of those options onto its own, so an assertion made against the shared options alone
+        /// can pass while the wire differs.
+        /// </summary>
+        protected static JsonSerializerOptions WireSerializerOptions() =>
+            (
+                (StreamJsonRpc.SystemTextJsonFormatter)
+                    SerializationOptions.CreateJsonRpcMessageFormatter()
+            ).JsonSerializerOptions;
 
         /// <summary>
         /// Creates a JSON string node with the specified data

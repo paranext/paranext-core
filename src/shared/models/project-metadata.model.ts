@@ -16,6 +16,68 @@ export type ProjectMetadataWithoutFactoryInfo = {
    * project.
    */
   projectInterfaces: ProjectInterfaces[];
+  /**
+   * Short display name of the project. Absent when the producing Project Data Provider Factory does
+   * not supply it; consumers should fall back to {@link id}.
+   *
+   * @experimental Recently added; may change as we learn how it is used.
+   */
+  name?: string;
+  /**
+   * Full display name of the project. Absent when not supplied; consumers should fall back to
+   * {@link name}, then {@link id}.
+   *
+   * @experimental Recently added; may change as we learn how it is used.
+   */
+  fullName?: string;
+  /**
+   * Language of the project (raw setting value). Absent when not supplied (no language to show).
+   *
+   * @experimental Recently added; may change as we learn how it is used.
+   */
+  language?: string;
+  /**
+   * BCP-47 language tag of the project. Absent when not supplied (no language to show).
+   *
+   * @experimental Recently added; may change as we learn how it is used.
+   */
+  languageTag?: string;
+  /**
+   * Whether the project's primary content (e.g. Scripture text) is editable.
+   *
+   * **Absence is NOT the same as `false`.** An absent value means the registered default of
+   * `platform.isEditable`, which is `true` - i.e. a factory that omits this field means "editable".
+   * Only an explicit `false` (e.g. a read-only published resource) marks a project non-editable.
+   * Consumers must treat missing as editable (test `isEditable !== false`), never `isEditable ??
+   * false`.
+   *
+   * @experimental Recently added; may change as we learn how it is used.
+   */
+  isEditable?: boolean;
+  /**
+   * Whether the project is a published (read-only) resource. An absent value means the registered
+   * default of `platform.isPublished`, which is `false` (not a published resource).
+   *
+   * @experimental Recently added; may change as we learn how it is used.
+   */
+  isPublished?: boolean;
+  /**
+   * Localize key explaining why Platform.Bible cannot open the project (e.g. a Study Bible
+   * Additions project). **Absent or empty means the project can be opened**, and so does a failed
+   * metadata lookup, so an error never locks a user out of a real project.
+   *
+   * - Tool pickers leave such a project out. Surfaces where users open projects (Home, New Tab, the
+   *   Simple-mode project picker) show it disabled with the localized reason.
+   * - Platform.Bible refuses the project's Scripture text with an error containing
+   *   `(PROJECT_OPEN_BLOCKED)`. A web view of your own that opens projects must check this field.
+   * - The project's data stays available for Send/Receive, settings and metadata.
+   * - For producers: the value must be a registered localize key; omit the field rather than setting
+   *   `''`. When several factories serve a project, the first non-empty reason wins, and no factory
+   *   can clear it.
+   *
+   * @experimental Recently added; may change as we learn how it is used.
+   */
+  unsupportedReason?: string;
 };
 
 export type ProjectDataProviderFactoryMetadataInfo = {

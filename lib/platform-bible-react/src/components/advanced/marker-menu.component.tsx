@@ -1,5 +1,6 @@
 import { FC, LegacyRef, useMemo, useState } from 'react';
-import { Ban } from 'lucide-react';
+import { Ban, Check } from 'lucide-react';
+import { stripMarkerNestingPrefix } from '@/components/advanced/marker-palette-filter.util';
 import {
   Command,
   CommandEmpty,
@@ -12,7 +13,7 @@ import {
 } from '../shadcn-ui/command';
 
 /**
- * Object containing all keys used for localization in the FootnoteEditor component. If you're using
+ * Object containing all keys used for localization in the MarkerMenu component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
@@ -21,6 +22,13 @@ export const MARKER_MENU_STRING_KEYS = Object.freeze([
   '%markerMenu_disallowed_label%',
   '%markerMenu_noResults%',
   '%markerMenu_searchPlaceholder%',
+  // These four keys are not read by this component directly; they are provided here so callers
+  // can localize them and pass the result into the optional `searchPlaceholder` prop to override
+  // the default search-field placeholder.
+  '%markerMenu_searchPlaceholder_character%',
+  '%markerMenu_searchPlaceholder_insert%',
+  '%markerMenu_searchPlaceholder_newParagraph%',
+  '%markerMenu_searchPlaceholder_paragraph%',
 ] as const);
 
 export type MarkerMenuLocalizedStrings = {
@@ -45,10 +53,41 @@ export interface MarkerMenuItem {
   subtitle?: string;
   /** Optional name of icon to use instead of the marker */
   icon?: FC<MarkerIconProps>;
-  /** Whether the command/marker is deprecated */
+  /**
+   * Whether the command/marker is deprecated. Deprecated items stay visible in the menu (even when
+   * the search query is empty) but are rendered disabled so they cannot be selected.
+   */
   isDeprecated?: boolean;
-  /** Whether the command/marker is disallowed for this project */
+  /**
+   * Whether the command/marker is disallowed for this project (e.g. blocked while structure is
+   * protected). Unlike {@link MarkerMenuItem.isDeprecated}, this flag affects visibility as well as
+   * selectability: while the search query is empty, disallowed items are hidden if any allowed
+   * items exist (to reduce clutter) but are shown when every item is disallowed (so the menu isn't
+   * empty). A non-empty query reveals a disallowed item only on an exact marker-code match or a
+   * title match. Whenever a disallowed item is shown it is rendered disabled so it cannot be
+   * selected.
+   */
   isDisallowed?: boolean;
+  /**
+   * How much of the consumer's current selection this marker covers: `'all'`, `'partial'`, or
+   * `'none'`. Optional and additive — with no value, no selection affordance renders and no
+   * `aria-checked` is set, which is how consumers that do not track a selection behave.
+   *
+   * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this affects
+   * neither visibility nor selectability. It is display only.
+   */
+  selectionState?: 'all' | 'partial' | 'none';
+  /**
+   * Whether the consumer currently has no operation for this row, so it must not be selectable.
+   * Optional and additive — with no value the row is selectable exactly as it has always been.
+   *
+   * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this says
+   * nothing about the marker itself and so renders no trailing label: those two describe a property
+   * of the marker, while this describes the consumer's momentary inability to act on it. It also
+   * does not affect visibility — the row stays listed, because a row that disappears reads as "this
+   * marker does not exist here" rather than "you cannot do that to it right now."
+   */
+  isDisabled?: boolean;
   /** Function to be triggered when the marker or command is selected */
   action: () => void;
 }
@@ -64,12 +103,55 @@ export interface MarkerMenuProps {
   markerMenuItems: MarkerMenuItem[];
   /** Optional ref for the command search input to be able to focus it manually */
   searchRef?: LegacyRef<HTMLInputElement>;
+  /**
+   * Optional placeholder text for the search input. When provided, overrides the default
+   * `%markerMenu_searchPlaceholder%` localized string.
+   */
+  searchPlaceholder?: string;
+  /**
+   * Optional marker whose row is highlighted when the menu opens, in place of the first row. Pass
+   * the marker the selection already has, so that Enter on a freshly opened menu re-applies it
+   * rather than picking whatever sorts first. Ignored when no selectable row has this marker, in
+   * which case the first row is highlighted as usual. Read only on mount.
+   */
+  defaultHighlightedMarker?: string;
 }
 
 /** Function to format the marker menu icon and size it accordingly */
 function MenuMarkerIcon({ icon, className }: { icon?: FC<MarkerIconProps>; className?: string }) {
   const IconComponent = icon ?? Ban;
   return <IconComponent className={className} size={16} />;
+}
+
+/**
+ * Leading selection indicator for a marker row, on the start side per the Component Choices
+ * guideline. Rendered only when the consumer supplies a selection state, so rows without one keep
+ * the layout they have always had.
+ *
+ * A checked row means the marker is on the selection — whether on all of it or only part of it. UX
+ * chose this two-glyph reading over a three-glyph one (decided 2026-08-06): a dash for partial read
+ * as a disabled checkbox rather than as "some of this", and an empty box for `'none'` made a
+ * single-select picker look multi-select. The distinction is not lost, only moved: `aria-checked`
+ * still reports `mixed` for a partial row, so the tri-state survives for screen-reader users while
+ * the visual stays binary. The `'none'` box still reserves its width so rows stay aligned.
+ */
+function MarkerSelectionStateIndicator({ state }: { state: 'all' | 'partial' | 'none' }) {
+  return (
+    <div
+      data-slot="marker-selection-state"
+      className="tw:flex tw:w-4 tw:min-w-4 tw:items-center tw:justify-center"
+    >
+      {state !== 'none' && <Check size={16} />}
+    </div>
+  );
+}
+
+/**
+ * The identity cmdk tracks a row's highlight by. Explicit rather than cmdk's default (the row's
+ * text content) so a default highlight can name the row up front.
+ */
+function getMarkerMenuItemValue(item: MarkerMenuItem) {
+  return `item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`;
 }
 
 /**
@@ -86,21 +168,54 @@ function MarkerMenuCommandItem({
   return (
     <CommandItem
       className="tw:flex tw:gap-2 tw:hover:bg-accent"
-      disabled={item.isDisallowed || item.isDeprecated}
+      disabled={item.isDisallowed || item.isDeprecated || item.isDisabled}
+      // Absent for items with no selection state, so existing consumers' rows are unchanged.
+      // Never pair this with `data-checked`: CommandItem renders its own trailing check for that,
+      // which would double the checkmark.
+      aria-checked={
+        item.selectionState === undefined
+          ? undefined
+          : // `as const` keeps the literal types ('mixed', true, false) instead of widening to
+            // `string | boolean`, which is required for assignability to CommandItem's
+            // `aria-checked` prop type (boolean | 'false' | 'true' | 'mixed' | undefined).
+            ({ all: true, partial: 'mixed', none: false } as const)[item.selectionState]
+      }
+      value={getMarkerMenuItemValue(item)}
       onSelect={item.action}
     >
+      {item.selectionState !== undefined && (
+        <MarkerSelectionStateIndicator state={item.selectionState} />
+      )}
       <div className="tw:w-8 tw:min-w-8">
         {item.marker ? (
-          <span className="tw:text-xs">{item.marker}</span>
+          // Monospace: a USFM marker is a code, not prose, and should read as one. Deliberately
+          // inherits the row's own foreground rather than taking a marker-specific colour.
+          <span className="tw:font-mono tw:text-xs">{item.marker}</span>
         ) : (
           <div>
             <MenuMarkerIcon icon={item.icon} />
           </div>
         )}
       </div>
-      <div>
-        <p className="tw:text-sm">{item.title}</p>
-        {item.subtitle && <p className="tw:text-xs tw:text-muted-foreground">{item.subtitle}</p>}
+      {/* Title and detail sit side by side, detail trailing and subordinate. Both truncate rather
+          than wrap — consumers can pin this popover narrower than its content wants — and the
+          detail's much larger shrink factor means it gives up its space first, so the title, which
+          identifies the row, keeps as much as it can.
+
+          Native `title` attributes rather than the Tooltip component: a Radix tooltip inside a cmdk
+          list fights the list's own hover and focus handling. */}
+      <div className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2">
+        <p className="tw:min-w-0 tw:shrink tw:truncate tw:text-sm" title={item.title}>
+          {item.title}
+        </p>
+        {item.subtitle && (
+          <p
+            className="tw:min-w-0 tw:shrink-[9999] tw:truncate tw:text-end tw:text-xs tw:text-muted-foreground"
+            title={item.subtitle}
+          >
+            {item.subtitle}
+          </p>
+        )}
       </div>
       {(item.isDisallowed || item.isDeprecated) && (
         <CommandShortcut className="tw:font-sans">
@@ -114,58 +229,95 @@ function MarkerMenuCommandItem({
 }
 
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
-export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps) {
+export function MarkerMenu({
+  localizedStrings,
+  markerMenuItems,
+  searchRef,
+  searchPlaceholder,
+  defaultHighlightedMarker,
+}: MarkerMenuProps) {
   const [commandSearch, setCommandSearch] = useState<string>('');
 
-  const [exactMatchItems, titleMatchItems] = useMemo(() => {
-    const query = commandSearch.trim().toLowerCase();
+  // Computed once: cmdk reads its default only on mount, and the highlight is the user's to move
+  // from then on.
+  // TODO(PT-4907): cmdk sets the search box's `aria-activedescendant` only when its value changes,
+  // which this default never does, so screen readers are not told the highlighted row on open.
+  const [defaultHighlightedValue] = useState(() => {
+    const item = markerMenuItems.find(
+      (markerItem) =>
+        markerItem.marker === defaultHighlightedMarker &&
+        !markerItem.isDisallowed &&
+        !markerItem.isDeprecated &&
+        !markerItem.isDisabled,
+    );
+    return item ? getMarkerMenuItemValue(item) : undefined;
+  });
+
+  const [codeMatchItems, titleMatchItems] = useMemo(() => {
+    // A leading `+` is USFM nesting syntax (`\+nd` nests inside an open char span), not part of the
+    // marker code — strip it so `+nd` resolves to the bare `nd` item. The shared helper is the one
+    // strip rule for every marker-matching site, so this menu and the palettes cannot drift.
+    const query = stripMarkerNestingPrefix(commandSearch.trim().toLowerCase());
     if (!query) {
-      return [markerMenuItems, []];
+      // Hide disallowed markers until specifically searched, so the menu isn't cluttered with
+      // entries the user cannot insert.
+      const allowedItems = markerMenuItems.filter((markerItem) => !markerItem.isDisallowed);
+      // ...but when every item is disallowed (e.g. all of a parent's markers are blocked while
+      // structure is protected), fall back to showing the disallowed items (disabled) so the menu
+      // surfaces the locked options instead of reading as an empty "No results" state.
+      return [allowedItems.length > 0 ? allowedItems : markerMenuItems, []];
     }
 
-    // Puts items with markers that have direct inclusions of the search query at the top
-    const filteredExactMatchItems = markerMenuItems.filter((markerItem) =>
-      markerItem.marker?.toLowerCase().includes(query),
-    );
-    // Then lists items with titles that includes the search query
+    // Marker-code matches first. Disallowed markers require an exact code match (never a substring),
+    // so a broad query doesn't surface sibling markers the user cannot use.
+    const filteredCodeMatchItems = markerMenuItems.filter((markerItem) => {
+      const code = markerItem.marker?.toLowerCase();
+      return markerItem.isDisallowed ? code === query : code?.includes(query);
+    });
+    // Then title matches. A disallowed marker's title match is itself its reveal condition, so it
+    // needs no extra gate here.
     const filteredTitleMatchItems = markerMenuItems.filter(
       (markerItem) =>
         markerItem.title.toLowerCase().includes(query) &&
-        !filteredExactMatchItems.includes(markerItem),
+        !filteredCodeMatchItems.includes(markerItem),
     );
 
-    return [filteredExactMatchItems, filteredTitleMatchItems];
+    return [filteredCodeMatchItems, filteredTitleMatchItems];
   }, [commandSearch, markerMenuItems]);
 
   return (
-    <Command className="tw:p-1" shouldFilter={false} loop>
+    <Command className="tw:p-1" shouldFilter={false} loop defaultValue={defaultHighlightedValue}>
       <CommandInput
         className="marker-menu-search"
         ref={searchRef}
         value={commandSearch}
         onValueChange={(value) => setCommandSearch(value)}
-        placeholder={localizedStrings['%markerMenu_searchPlaceholder%']}
+        placeholder={searchPlaceholder ?? localizedStrings['%markerMenu_searchPlaceholder%']}
+        // Picker semantics: the list is the whole point here, and nothing else in this menu claims
+        // Space. Only a LEADING space is intercepted, so titles containing spaces ("Cross
+        // Reference") are still searchable.
+        spaceSelectsHighlightedItem
       />
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>
         <CommandGroup>
-          {exactMatchItems.map((item) => (
+          {codeMatchItems.map((item) => (
             <MarkerMenuCommandItem
               item={item}
               localizedStrings={localizedStrings}
-              key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
+              key={getMarkerMenuItemValue(item)}
             />
           ))}
         </CommandGroup>
         {titleMatchItems.length > 0 && (
           <>
-            {exactMatchItems.length > 0 && <CommandSeparator alwaysRender />}
+            {codeMatchItems.length > 0 && <CommandSeparator alwaysRender />}
             <CommandGroup>
               {titleMatchItems.map((item) => (
                 <MarkerMenuCommandItem
                   item={item}
                   localizedStrings={localizedStrings}
-                  key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
+                  key={getMarkerMenuItemValue(item)}
                 />
               ))}
             </CommandGroup>

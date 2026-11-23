@@ -107,6 +107,10 @@ export function validatePopoverRequest(request: PopoverRequest): void {
     throwValidationError('maxWidth must be greater than 0');
   }
 
+  if (request.maxHeight !== undefined && request.maxHeight <= 0) {
+    throwValidationError('maxHeight must be greater than 0');
+  }
+
   if (request.dismissAfterMs !== undefined && request.dismissAfterMs <= 0) {
     throwValidationError('dismissAfterMs must be greater than 0');
   }
@@ -135,6 +139,17 @@ export function validateCommandPaletteRequest(request: CommandPaletteRequest): v
     validateLabelLength(item.label);
     if (item.description) validateLabelLength(item.description);
   });
+
+  // A list-focused palette has no driver of its own. It focuses the list and renders its filter
+  // READ-ONLY, and the component handles nothing but Escape outside forwarding — so without a
+  // requester driving it, typing does nothing, the arrows do not move the highlight and Enter does
+  // not commit. The user could only press Escape or click. The two options are one feature.
+  //
+  // `passive` is excluded because it takes no focus at all, which makes `focusTarget` moot: the
+  // requester already receives every key.
+  if (!request.passive && request.focusTarget === 'list' && !request.keyForwarding) {
+    throwValidationError("focusTarget 'list' requires keyForwarding");
+  }
 
   // Validate anchor if provided
   if (request.anchor) {

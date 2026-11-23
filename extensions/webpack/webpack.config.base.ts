@@ -142,7 +142,19 @@ const configBase: webpack.Configuration = {
           // Processes style transformations in PostCSS - after scss so PostCSS runs on just css
           'postcss-loader',
           // Compiles Sass to CSS
-          'sass-loader',
+          {
+            loader: 'sass-loader',
+            options: {
+              sassOptions: {
+                // The tailwind prebuild loader below inlines machine-generated Tailwind CSS into
+                // each style file before sass compiles it. Tailwind's typography plugin emits
+                // custom-property declarations after nested rules, which trips sass's mixed-decls
+                // deprecation warning. We cannot restructure generated CSS, so silence just this
+                // deprecation. https://sass-lang.com/d/mixed-decls
+                silenceDeprecations: ['mixed-decls'],
+              },
+            },
+          },
           // Redirect tailwind.css imports to the pre-built version (only works in CSS, not in code)
           // by recursively inlining local @use/@import and replacing tailwind.css with prebuilt
           // tailwind styles. This runs BEFORE sass-loader (loaders execute bottom-to-top)

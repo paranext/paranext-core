@@ -1,0 +1,134 @@
+// Imports rc-dock's `es/` build on purpose: vitest resolves `rc-dock` via `main` → `lib/`, but
+// patch-package (patches/rc-dock+3.3.2.patch) patches only `es/`, the build webpack ships
+// (`module` → `es/`). Importing `rc-dock` here would test the unpatched code.
+import { TabCache } from 'rc-dock/es/DockTabs';
+import { describe, expect, it } from 'vitest';
+import { createDockContext } from './__tests__/rc-dock.test-utils';
+
+/**
+ * Builds `parent > child > ...` from the given tag/class specs and returns the innermost element.
+ * Each spec is `tag` or `tag.class`.
+ */
+function buildChain(parent: Element, ...specs: string[]): Element {
+  let current = parent;
+  specs.forEach((spec) => {
+    const [tag, className] = spec.split('.');
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    current.appendChild(element);
+    current = element;
+  });
+  return current;
+}
+
+/** {@link buildChain} for a chain whose innermost spec is a `div`, as `TabCache`'s refs are. */
+function buildDivChain(parent: Element, ...specs: string[]): HTMLDivElement {
+  const innermost = buildChain(parent, ...specs);
+  if (!(innermost instanceof HTMLDivElement)) throw new Error('Innermost spec must be a div');
+  return innermost;
+}
+
+/**
+ * The hidden tab copy rc-tabs renders inside the overflow "more" dropdown: rc-menu's `<li>` wraps a
+ * `<span>`, which wraps rc-dock's drag-initiator div, which holds the `.dock-tab-hit-area` div.
+ */
+function createPopupHitArea(): HTMLDivElement {
+  return buildDivChain(document.body, 'ul', 'li', 'span', 'div', 'div.dock-tab-hit-area');
+}
+
+/** The same hit area inside the real tab strip, which has no `<li>` between it and the strip. */
+function createRealHitArea(root: Element = document.body): HTMLDivElement {
+  return buildDivChain(
+    root,
+    'div.dock-layout',
+    'div.dock-nav-list',
+    'div.dock-tab',
+    'div.dock-tab-btn',
+    'div',
+    'div.dock-tab-hit-area',
+  );
+}
+
+/** The tab and hit-area refs `cache` stored from `getRef`/`getHitAreaRef`. */
+function getStoredRefs(cache: TabCache): { ref: HTMLDivElement; hitAreaRef: HTMLDivElement } {
+  // rc-dock declares these public fields with a leading underscore; the names aren't ours to change
+  // eslint-disable-next-line no-underscore-dangle
+  return { ref: cache._ref, hitAreaRef: cache._hitAreaRef };
+}
+
+/**
+ * Directly sets `cache`'s stored hit-area ref, bypassing `getHitAreaRef`'s popup guard. Seeds a
+ * known value so a rejection case can assert the ref was left alone, rather than merely asserting
+ * `undefined` — which a fresh `TabCache` reports even if the guard never ran at all.
+ */
+function seedHitAreaRef(cache: TabCache, ref: HTMLDivElement): void {
+  // rc-dock declares this public field with a leading underscore; the name isn't ours to change
+  // eslint-disable-next-line no-underscore-dangle
+  cache._hitAreaRef = ref;
+}
+
+/**
+ * Directly sets `cache`'s stored tab ref, bypassing `getRef`'s popup guard. Seeds a known value so
+ * a rejection case can assert the ref was left alone, rather than merely asserting `undefined` —
+ * which a fresh `TabCache` reports even if the guard never ran at all.
+ */
+function seedRef(cache: TabCache, ref: HTMLDivElement): void {
+  // rc-dock declares this public field with a leading underscore; the name isn't ours to change
+  // eslint-disable-next-line no-underscore-dangle
+  cache._ref = ref;
+}
+
+describe('patched rc-dock TabCache popup check', () => {
+  // Pins the patch: the unpatched `isPopupDiv` only walks up a fixed one or two `parentElement`
+  // levels, so a hit area three levels under the dropdown's `<li>` reads as NOT a popup there and
+  // overwrites the real strip's stored ref. Fails against an unpatched install.
+  it('ignores a hit area three levels under an overflow-dropdown <li>', () => {
+    const cache = new TabCache(createDockContext());
+    const sentinel = document.createElement('div');
+    seedHitAreaRef(cache, sentinel);
+
+    cache.getHitAreaRef(createPopupHitArea());
+
+    expect(getStoredRefs(cache).hitAreaRef).toBe(sentinel);
+  });
+
+  // Pins the patch: the dropdown copy is the same three-levels-deep popup hit area above, so
+  // registering it AFTER the real hit area lets the unpatched fixed-depth check overwrite the real
+  // ref too. Fails against an unpatched install.
+  it('keeps the real hit area when the dropdown copy registers after it', () => {
+    const cache = new TabCache(createDockContext());
+    const realHitArea = createRealHitArea();
+
+    cache.getHitAreaRef(realHitArea);
+    cache.getHitAreaRef(createPopupHitArea());
+
+    expect(getStoredRefs(cache).hitAreaRef).toBe(realHitArea);
+  });
+
+  // Guards the walk's shape, not the patch: the dropdown's tab node sits exactly two
+  // `parentElement` levels under its `<li>`, which the unpatched fixed-depth check already
+  // rejects. Passes against an unpatched install too.
+  it('ignores a tab node two levels under an overflow-dropdown <li>', () => {
+    const cache = new TabCache(createDockContext());
+    const sentinel = document.createElement('div');
+    seedRef(cache, sentinel);
+
+    cache.getRef(buildDivChain(document.body, 'ul', 'li', 'span', 'div'));
+
+    expect(getStoredRefs(cache).ref).toBe(sentinel);
+  });
+
+  // Guards the walk's shape, not the patch: the real hit area has no `<li>` within the fixed
+  // one-or-two-level reach either check climbs, so an unrelated `<li>` further up the tree
+  // (wrapping the whole dock layout) is never mistaken for the popup. Passes against an unpatched
+  // install too.
+  it('keeps a real-strip hit area even when an <li> wraps the whole dock layout', () => {
+    const cache = new TabCache(createDockContext());
+    const outerListItem = buildChain(document.body, 'ul', 'li');
+    const realHitArea = createRealHitArea(outerListItem);
+
+    cache.getHitAreaRef(realHitArea);
+
+    expect(getStoredRefs(cache).hitAreaRef).toBe(realHitArea);
+  });
+});

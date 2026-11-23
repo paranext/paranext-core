@@ -1,0 +1,187 @@
+import type { EffectiveResourceReference, ResourceReference } from 'platform-scripture';
+import type { DblResourceData, ResourceType } from 'platform-bible-utils';
+import { describe, expect, it, vi } from 'vitest';
+
+import { buildPickerResources, type DownloadedResource } from './downloaded-resources.utils';
+import { getResourceReferenceRowId, isSameResource } from './resource-reference.utils';
+import { findSelectedRow, resolveResourceSelection } from './resource-selection.utils';
+import { toResourceReference } from './select-dbl-resource';
+import { getStoredResourceSelection } from './resource-selection-store';
+import { buildResourceTextPanelState } from './show-resource-in-panel.util';
+
+const settings = vi.hoisted(() => ({
+  /** The resource selection setting, holding a pick made for another project */
+  stored: {
+    ScriptureResource: { 'previous-project': { selectedResourceId: 'dbl:previous' } },
+  } as unknown,
+}));
+
+// Hoisted above the imports by Vitest, wherever they are written.
+vi.mock('@papi/frontend', () => ({ default: {}, logger: { warn: vi.fn() } }));
+vi.mock('@papi/backend', () => ({
+  default: {
+    settings: {
+      get: vi.fn(async () => settings.stored),
+      set: vi.fn(async (_key: string, value: unknown) => {
+        settings.stored = value;
+      }),
+    },
+  },
+  logger: { warn: vi.fn() },
+}));
+
+/*
+ * `showResourceInReferencePanel` (extension host) picks the row the panel should select, and the
+ * panel (web view) builds its rows on its own. Nothing ties the two together but this: the row id
+ * the command queues must be the id of the row the panel lists for that resource, or the panel
+ * falls back to its first row and shows a different text than the one the user opened.
+ */
+
+const ENTRY: DblResourceData = {
+  dblEntryUid: 'UID-BYZ',
+  displayName: 'BYZ',
+  fullName: 'Byzantine Text',
+  bestLanguageName: 'Greek',
+  type: 'ScriptureResource',
+  size: 100,
+  installed: true,
+  updateAvailable: false,
+  projectId: 'byz-project',
+};
+
+const OTHER: DownloadedResource = { projectId: 'other', name: 'OTHER', language: 'en' };
+
+/** The project the panel shows. */
+const PANEL_PROJECT_ID = 'panel-project';
+
+/**
+ * The selection the panel reads for its project once the provider has built it with `queued`, while
+ * another project holds a pick of its own.
+ */
+async function queuedSelection(queued: string, panelType: ResourceType = 'ScriptureResource') {
+  const resourceType =
+    panelType === 'CommentaryResource' ? 'CommentaryResource' : 'ScriptureResource';
+  await buildResourceTextPanelState({}, PANEL_PROJECT_ID, resourceType, {
+    selectedResourceId: queued,
+  });
+  return getStoredResourceSelection(resourceType, PANEL_PROJECT_ID);
+}
+
+/** The row the panel shows when the command queued `entry`'s reference. */
+async function selectedProjectId(
+  entry: DblResourceData,
+  userItems: EffectiveResourceReference[],
+  panelType: ResourceType,
+  queuedReference: ResourceReference = toResourceReference(entry),
+): Promise<string | undefined> {
+  const rows = buildPickerResources(
+    userItems,
+    [OTHER, { projectId: entry.projectId, name: entry.displayName, language: 'grc' }],
+    [entry],
+  ).filter((row) => row.type === panelType);
+  const queued = getResourceReferenceRowId(queuedReference);
+  // Matched, not fallen back to: a fallback picks the first row, which could be this one by luck.
+  if (!findSelectedRow(rows, queued)) return undefined;
+  const { selectedResourceId, userPickedResourceId } = await queuedSelection(queued, panelType);
+  return resolveResourceSelection(rows, {
+    selectedResourceId,
+    userPickedResourceId,
+    pendingResourceId: undefined,
+    isPendingPickWritten: false,
+    heldFallbackRowId: undefined,
+    isListComplete: true,
+    areSourcesSettled: true,
+    mayPersistCorrection: true,
+  }).selectedRow?.projectId;
+}
+
+describe('the selection queued for a resource is a row its panel lists', () => {
+  it('for a DBL resource saved to the personal list', async () => {
+    const saved = { ...toResourceReference(ENTRY), source: 'user' as const };
+    expect(await selectedProjectId(ENTRY, [saved], 'ScriptureResource')).toBe('byz-project');
+  });
+
+  it('for a DBL resource whose save failed, listed among the downloaded resources', async () => {
+    expect(await selectedProjectId(ENTRY, [], 'ScriptureResource')).toBe('byz-project');
+  });
+
+  it('for a DBL resource whose save failed, while the team list holds an installed resource', async () => {
+    // A configured resource replaces a downloaded selection the user did not pick; one opened from
+    // Home was picked, so it stays on screen.
+    const teamEntry: DblResourceData = {
+      ...ENTRY,
+      dblEntryUid: 'UID-ESV',
+      displayName: 'ESV',
+      projectId: 'esv-project',
+    };
+    const rows = buildPickerResources(
+      [{ ...toResourceReference(teamEntry), source: 'admin' }],
+      [
+        { projectId: 'esv-project', name: 'ESV', language: 'en' },
+        { projectId: ENTRY.projectId, name: ENTRY.displayName, language: 'grc' },
+      ],
+      [teamEntry, ENTRY],
+    );
+    const { selectedResourceId, userPickedResourceId } = await queuedSelection(
+      getResourceReferenceRowId(toResourceReference(ENTRY)),
+    );
+    expect(
+      resolveResourceSelection(rows, {
+        selectedResourceId,
+        userPickedResourceId,
+        pendingResourceId: undefined,
+        isPendingPickWritten: false,
+        heldFallbackRowId: undefined,
+        isListComplete: true,
+        areSourcesSettled: true,
+        mayPersistCorrection: true,
+      }).selectedRow?.projectId,
+    ).toBe('byz-project');
+  });
+
+  it('for a DBL resource the team list holds with its uid in other casing', async () => {
+    const teamCopy = {
+      type: 'dblResource' as const,
+      name: 'BYZ',
+      id: 'uid-byz',
+      source: 'admin' as const,
+    };
+    // The command selects the team's copy, as found by `isSameResource`.
+    expect(isSameResource(teamCopy, toResourceReference(ENTRY))).toBe(true);
+    expect(await selectedProjectId(ENTRY, [teamCopy], 'ScriptureResource', teamCopy)).toBe(
+      'byz-project',
+    );
+  });
+
+  it('for a DBL resource selected by its project before the catalog had loaded', async () => {
+    // The command could only name it by its project; the panel's rows now come from the catalog.
+    const byProject = { type: 'project' as const, name: 'BYZ', id: 'byz-project' };
+    expect(await selectedProjectId(ENTRY, [], 'ScriptureResource', byProject)).toBe('byz-project');
+  });
+
+  it('for a locally-installed non-DBL resource', async () => {
+    const local = {
+      ...ENTRY,
+      dblEntryUid: 'VULGP83',
+      projectId: 'VULGP83',
+      displayName: 'VULGP83',
+    };
+    expect(await selectedProjectId(local, [], 'ScriptureResource')).toBe('VULGP83');
+  });
+
+  it('for a downloaded resource the catalog does not have', async () => {
+    // The command names it by its project, as the panel lists a download with no catalog row.
+    const rows = buildPickerResources(
+      [],
+      [OTHER, { projectId: 'local-1', name: 'LOCAL', language: 'en' }],
+      [],
+    ).filter((row) => row.type === 'ScriptureResource');
+    const queued = getResourceReferenceRowId({ type: 'project', name: 'LOCAL', id: 'local-1' });
+    expect(findSelectedRow(rows, queued)?.projectId).toBe('local-1');
+  });
+
+  it('for a commentary, in the Commentaries panel', async () => {
+    const commentary = { ...ENTRY, type: 'CommentaryResource' as const };
+    expect(await selectedProjectId(commentary, [], 'CommentaryResource')).toBe('byz-project');
+  });
+});

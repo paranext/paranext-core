@@ -20,6 +20,7 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
     private const string ASSIGNED_TO = "assignedTo";
     private const string SCRIPTURE_RANGES = "scriptureRanges";
     private const string IS_READ = "isRead";
+    private const string IS_RESOLVED = "isResolved";
     private const string NOTE_CATEGORY = "noteCategory";
     private const string DEDUPLICATE_THREADS = "deduplicateThreads";
 
@@ -55,6 +56,9 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
 
         if (root.TryGetProperty(IS_READ, out JsonElement isReadEl))
             selector.IsRead = isReadEl.GetBoolean();
+
+        if (root.TryGetProperty(IS_RESOLVED, out JsonElement isResolvedEl))
+            selector.IsResolved = isResolvedEl.GetBoolean();
 
         // Defaults to NoteCategory.General in CommentThreadSelector, so only override when explicitly set
         if (
@@ -134,12 +138,12 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
         return dateFilter;
     }
 
-    private static List<ScriptureRange> ReadScriptureRanges(
+    private static List<CommentScriptureRange> ReadScriptureRanges(
         JsonElement element,
         JsonSerializerOptions options
     )
     {
-        var ranges = new List<ScriptureRange>();
+        var ranges = new List<CommentScriptureRange>();
 
         foreach (JsonElement rangeEl in element.EnumerateArray())
         {
@@ -155,14 +159,7 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
                 ? granEl.GetString()
                 : null;
 
-            ranges.Add(
-                new ScriptureRange
-                {
-                    Start = start,
-                    End = end,
-                    Granularity = granularity,
-                }
-            );
+            ranges.Add(new CommentScriptureRange(start, end, granularity));
         }
 
         return ranges;

@@ -17,6 +17,8 @@ const localizedStrings = getLocalizedStrings([...HOME_STRING_KEYS]);
 // Sample view id, matching the webViewId the real new-tab web view passes to the open command.
 const SAMPLE_WEB_VIEW_ID = 'platformGetResources.newTab';
 
+const UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
+
 const staticLocalProjects: LocalProjectInfo[] = [
   {
     projectId: '1',
@@ -76,4 +78,45 @@ export const Default: Story = {
 
 export const Empty: Story = {
   decorators: [],
+};
+
+/** A project that cannot be opened is listed, muted, with Open disabled and the reason on hover. */
+function UnsupportedProjectDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: [
+          ...staticLocalProjects,
+          {
+            projectId: 'sba1',
+            isPublished: false,
+            fullName: 'SBA Project - unsupported',
+            name: 'SBA',
+            language: 'English',
+            unsupportedReason: UNSUPPORTED_REASON_KEY,
+          },
+        ],
+        localizedUnsupportedReasons: getLocalizedStrings([UNSUPPORTED_REASON_KEY]),
+        showGetResourcesButton: false,
+        headerContent: (
+          <>
+            <Plus size={36} />
+            <CardTitle>New Tab</CardTitle>
+          </>
+        ),
+        onOpenProject: (projectId, isPublished) =>
+          alertCommand(
+            isPublished
+              ? 'platformScriptureEditor.openResourceViewer'
+              : 'platformScriptureEditor.openScriptureEditor',
+            { projectId, webViewId: SAMPLE_WEB_VIEW_ID },
+          ),
+      }}
+    />
+  );
+}
+
+export const UnsupportedProject: Story = {
+  decorators: [UnsupportedProjectDecorator],
 };

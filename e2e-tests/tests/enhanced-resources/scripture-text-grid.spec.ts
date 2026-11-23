@@ -1,0 +1,849 @@
+/**
+ * E2E checks for the Scripture Text Grid (Text Collection) web view, attached to a running app in
+ * Power mode (`enhanced-resources.fixture.ts` asserts the mode).
+ *
+ * Covered: the tab (opened by the `platformScriptureEditor.showTextCollectionPanel` command; titled
+ * "Text Collection" and closable), the verse-list and single-resource layouts, the chapter-context
+ * split, partial resource failure, the empty state, keyboard and screen-reader behavior, and the
+ * verse-aligned Grid view. In Simple mode the tab is not closable; the
+ * `buildScriptureTextGridWebView` unit tests in `platform-scripture-editor.utils.test.ts` pin that,
+ * since this fixture cannot run in Simple mode.
+ *
+ * The command's menu item ("Text collection") is shown only in Simple mode, so the tab test sends
+ * the command directly; the other tests open the grid through the page object, which also binds it
+ * to the project they seed.
+ *
+ * NOT covered (need an app relaunch the CDP fixture can't do; verified manually): `useWebViewState`
+ * restart-persistence, and feature-flag-OFF hiding the view (registration happens at activation).
+ */
+import type { Page } from '@playwright/test';
+import { test, expect } from '../../fixtures/enhanced-resources.fixture';
+import { tabButton } from '../../fixtures/dock-tab-helpers';
+import { waitForAppReady } from '../../fixtures/helpers';
+import {
+  saveScrollGroupRef,
+  setScrollGroupRefFromRenderer,
+} from '../../fixtures/settled-positions-helpers';
+import { closeAllNonHomeDockTabs } from './test-helpers';
+import {
+  discoverAdminTextConnectionProject,
+  armColumnRenderMeasure,
+  flagResourcesAndOpenGrid,
+  flagResourcesAndOpenScriptureTextGrid,
+  openAlignedGridWithResources,
+  readColumnRenderMs,
+  openScriptureTextGrid,
+  restoreScriptureTextGridProjectSettings,
+  SCRIPTURE_TEXT_GRID_TAB_TITLE,
+} from './scripture-text-grid.page';
+
+test.describe('Scripture Text Grid tab', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test('showTextCollectionPanel opens a closable tab titled "Text Collection"', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+
+    // The command behind the "Text collection" menu item; it shows the tab, opening it if needed,
+    // and returns the tab's web view id. Sent through the renderer's `papi`, as
+    // `sendOpenEnhancedResourceCommand` does.
+    const webViewId = await mainPage.evaluate(async () => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: { commands: { sendCommand: (command: string) => Promise<string | undefined> } };
+      };
+      return win.papi.commands.sendCommand('platformScriptureEditor.showTextCollectionPanel');
+    });
+    expect(webViewId).toBeTruthy();
+
+    const tab = tabButton(mainPage, webViewId ?? '');
+    await expect(tab).toBeVisible({ timeout: 15_000 });
+    await expect(tab.locator('.platform-tab-title-text')).toHaveText(SCRIPTURE_TEXT_GRID_TAB_TITLE);
+
+    // Closable: the close button shows (CSS hides it on a tab that is neither active nor hovered,
+    // and a newly opened tab is active), and using it removes the tab. The click is dispatched, as
+    // in `closeDockTab`.
+    const closeButton = tab.locator('.dock-tab-close-btn');
+    await expect(closeButton).toBeVisible();
+    await closeButton.dispatchEvent('click');
+    await expect(tab).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PT-4052 — ScriptureTextGrid renderer (verse default + chapter-context split).
+//
+// Honest runnability: there is NO dev-fixture plumbing for web-view content (a web view is a
+// renderer iframe with no injected env), and most scenarios need real flagged resources. Data-mutating
+// specs skip in CI and discover an admin-writable project locally (mirroring the other
+// data-mutating enhanced-resources specs).
+//
+// Env vars:
+// - E2E_TEST_PROJECT_ID — pin an admin-writable text-connection project (optional)
+// - E2E_TEST_RESOURCE_IDS — comma-separated downloaded Bible-text project IDs for multi-resource
+//   tests; each must contain Matthew 5 (`TEXT_REFERENCE`) with its verses inside paragraph markers,
+//   or the Grid view shows "No verses to show"
+// ---------------------------------------------------------------------------
+/**
+ * Where tests that read resource text pin scroll group 0. Left unpinned, the grid shows wherever an
+ * earlier test or session left the group, and a resource lacking that chapter shows a placeholder.
+ */
+const TEXT_REFERENCE = { book: 'MAT', chapterNum: 5, verseNum: 9 };
+// Made-up project ids: no project has them, so their cells stay in the loading state. That suits
+// tests that check row structure rather than text, and needs no installed resource.
+const MADE_UP_PROJECT_ID_A = 'aabbccddeeff00112233';
+const MADE_UP_PROJECT_ID_B = 'bbccddeeff0011223344';
+// Tests of the verse list seed two resources: one shown resource renders as a single chapter
+// region, not a list.
+const MADE_UP_LIST_PROJECT_IDS = [MADE_UP_PROJECT_ID_A, MADE_UP_PROJECT_ID_B];
+// A made-up DBL resource uid. A DBL uid is checked against resources installed on disk, so this
+// settles on "Resource not installed" ("Resource unavailable" only if that disk scan fails or finds
+// no installed DBL resources AND the DBL catalog is not ready or fails).
+const MISSING_DBL_RESOURCE_ID = 'f'.repeat(48);
+const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
+  .split(',')
+  .map((id) => id.trim())
+  .filter(Boolean);
+
+test.describe('Scripture Text Grid renderer', () => {
+  let restoreScrollGroupRef: (() => Promise<void>) | undefined;
+
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+    restoreScrollGroupRef = await saveScrollGroupRef();
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+    await restoreScrollGroupRef?.();
+  });
+
+  test('one shown resource renders as a single chapter region, not a list', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      {
+        type: 'project',
+        name: 'STG renderer smoke',
+        id: MADE_UP_PROJECT_ID_A,
+        isInTextCollection: true,
+      },
+    ]);
+
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    await expect(
+      stg.frame.locator(`[role="region"][data-resource-id="${MADE_UP_PROJECT_ID_A}"]`),
+    ).toBeVisible({ timeout: 15_000 });
+    // The region and the verse list are separate render branches, so once the region is visible
+    // these zero counts can't be racing a slower render.
+    await expect(stg.frame.locator('[role="list"]')).toHaveCount(0);
+    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(0);
+    await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+    // A one-column verse-aligned Grid also renders a region per resource; this is not that view.
+    await expect(stg.frame.getByTestId('scripture-text-grid-aligned')).toHaveCount(0);
+  });
+
+  test('verse-click opens chapter-context panel beside the row', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'STG split',
+    );
+    const firstCell = stg.frame.locator('[role="listitem"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+
+    await firstCell.click();
+    await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
+      timeout: 15_000,
+    });
+    // The split panel's inner cell is presentational (no listitem role); only verse list items are
+    // listitems. Assert the chapter-context region is visible and the verse list still shows both
+    // flagged resources' listitems.
+    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(2);
+    await expect(stg.frame.locator('[role="list"]')).toBeVisible();
+  });
+
+  test('Escape closes the chapter-context panel without blanking the row', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'STG esc',
+    );
+    await stg.frame.locator('[role="listitem"]').first().click();
+    await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await mainPage.keyboard.press('Escape');
+    await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+    await expect(stg.frame.locator('[role="listitem"]').first()).toBeVisible();
+  });
+
+  test('verse view is a vertical column, unaffected by RTL UI locale', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'WEB', id: 'rtl001', isInTextCollection: true },
+      { type: 'project', name: 'KJV', id: 'rtl002', isInTextCollection: true },
+    ]);
+
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    await expect(stg.frame.locator('[role="list"]')).toBeVisible({ timeout: 15_000 });
+
+    const directions = await stg.frame.locator('[role="list"]').evaluate((list) => {
+      document.documentElement.dir = 'ltr';
+      const ltr = getComputedStyle(list).flexDirection;
+      document.documentElement.dir = 'rtl';
+      const rtl = getComputedStyle(list).flexDirection;
+      document.documentElement.dir = 'ltr';
+      return { ltr, rtl };
+    });
+    // Column in both directions — the verse view stacks vertically, which does not reverse under RTL.
+    expect(directions.ltr).toBe('column');
+    expect(directions.rtl).toBe('column');
+  });
+
+  test('partial failure: valid and invalid resources render side by side', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    const validIds = REAL_RESOURCE_IDS.slice(0, 2);
+    warnAndSkip(
+      validIds.length < 1,
+      'Set E2E_TEST_RESOURCE_IDS with at least one downloaded resource',
+    );
+
+    // Pin the reference so the valid rows have text; a freshly opened grid follows scroll group 0.
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      ...validIds.map((id, index) => ({
+        type: 'project' as const,
+        name: `Valid ${index + 1}`,
+        id,
+        isInTextCollection: true,
+      })),
+      {
+        type: 'dblResource',
+        name: 'Missing resource',
+        id: MISSING_DBL_RESOURCE_ID,
+        isInTextCollection: true,
+      },
+    ]);
+
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    const rowFor = (resourceId: string) =>
+      stg.frame.locator(`[role="listitem"][data-resource-id="${resourceId}"]`);
+    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(validIds.length + 1, {
+      timeout: 15_000,
+    });
+    await expect(rowFor(MISSING_DBL_RESOURCE_ID).getByText('Resource not installed')).toBeVisible({
+      timeout: 15_000,
+    });
+    // Every valid resource shows its text. Only a cell that has text renders no placeholder, so a
+    // valid row still loading, or wrongly reported missing, fails here.
+    await Promise.all(
+      validIds.map(async (id) => {
+        // The row must exist, or the zero count below would hold for a row that was never found.
+        await expect(rowFor(id)).toHaveCount(1);
+        await expect(rowFor(id).locator('[data-cell-placeholder]')).toHaveCount(0, {
+          timeout: 15_000,
+        });
+      }),
+    );
+  });
+
+  test('scrRef sync: rows follow a reference change and stay visible', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
+      REAL_RESOURCE_IDS.length < 2,
+      'Set E2E_TEST_RESOURCE_IDS with two downloaded resource IDs',
+    );
+
+    // Start from a known reference, so the move below always changes it: moving to the reference
+    // the group already holds sends no change at all.
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Sync',
+    );
+    const rows = stg.frame.locator('[role="listitem"]');
+    const rowNames = stg.frame.locator('[data-disclosure-control]');
+    await expect(rows).toHaveCount(2, { timeout: 15_000 });
+    await expect(rowNames.first()).toHaveAttribute('aria-label', /, MAT 5:9$/);
+
+    await setScrollGroupRefFromRenderer(mainPage, { book: 'MAT', chapterNum: 5, verseNum: 4 });
+
+    // Each row's accessible name ends with the reference it shows, so these wait for the grid to
+    // take up the new reference; the rows must still be there and visible afterwards.
+    await expect(rowNames.first()).toHaveAttribute('aria-label', /, MAT 5:4$/);
+    await expect(rowNames.nth(1)).toHaveAttribute('aria-label', /, MAT 5:4$/);
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toBeVisible();
+    await expect(rows.nth(1)).toBeVisible();
+  });
+
+  test('frame budget: verse row renders >=5 cells under threshold (split closed)', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
+      REAL_RESOURCE_IDS.length < 5,
+      'Set E2E_TEST_RESOURCE_IDS with five downloaded resource IDs',
+    );
+
+    await flagResourcesAndOpenScriptureTextGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 5).map((id, index) => ({
+        type: 'project' as const,
+        name: `Perf ${index + 1}`,
+        id,
+        isInTextCollection: true,
+      })),
+    );
+
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
+      const start = performance.now();
+      await new Promise<void>((resolve) => {
+        const observer = new MutationObserver(() => {
+          if (document.querySelectorAll('[role="listitem"]').length >= 5) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        if (document.querySelectorAll('[role="listitem"]').length >= 5) resolve();
+      });
+      return performance.now() - start;
+    });
+
+    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(5, { timeout: 15_000 });
+    expect(elapsedMs).toBeLessThan(220);
+  });
+
+  test('chapter mode arranges resources side-by-side (row layout)', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'WEB', id: 'chap001', isInTextCollection: true },
+      { type: 'project', name: 'KJV', id: 'chap002', isInTextCollection: true },
+    ]);
+
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    await stg.switchToChapterView();
+
+    // The chapter group lays out as a horizontal row of columns and shows no chapter-context split.
+    const grid = stg.frame.locator('[role="group"]');
+    await expect(grid).toBeVisible({ timeout: 15_000 });
+    await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+    const flexDirection = await grid.evaluate((el) => getComputedStyle(el).flexDirection);
+    expect(flexDirection).toBe('row');
+    // Each resource is its own region (side-by-side column).
+    await expect(stg.frame.locator('[role="region"]')).toHaveCount(2);
+  });
+
+  test('chapter mode: clicking a cell opens no chapter-context split (selection sync is delegated to the shared scrRef)', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
+      REAL_RESOURCE_IDS.length < 2,
+      'Set E2E_TEST_RESOURCE_IDS with two downloaded resource IDs',
+    );
+
+    await flagResourcesAndOpenScriptureTextGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2).map((id, index) => ({
+        type: 'project' as const,
+        name: `ChapSync ${index + 1}`,
+        id,
+        isInTextCollection: true,
+      })),
+    );
+
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    await stg.switchToChapterView();
+
+    await expect(stg.frame.locator('[role="region"]')).toHaveCount(2, { timeout: 15_000 });
+    // Clicking inside a chapter region must NOT open the verse-view chapter-context split, and both
+    // regions stay visible (selection sync keeps every column mounted and navigated).
+    await stg.frame.locator('[role="region"]').first().click();
+    await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+    await expect(stg.frame.locator('[role="region"]')).toHaveCount(2);
+    await expect(stg.frame.locator('[role="region"]').nth(1)).toBeVisible();
+  });
+
+  test('chapter frame budget: >=5 side-by-side chapters render under the chapter-mode baseline', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
+      REAL_RESOURCE_IDS.length < 5,
+      'Set E2E_TEST_RESOURCE_IDS with five downloaded resource IDs',
+    );
+
+    await flagResourcesAndOpenScriptureTextGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 5).map((id, index) => ({
+        type: 'project' as const,
+        name: `ChapPerf ${index + 1}`,
+        id,
+        isInTextCollection: true,
+      })),
+    );
+
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    // Armed before the switch, read after it: the switch itself ends with an awaited keypress, so
+    // anything that starts the clock afterwards is measuring an already-finished render.
+    await armColumnRenderMeasure(stg.frame, 5);
+    await stg.switchToChapterView();
+    const elapsedMs = await readColumnRenderMs(stg.frame);
+
+    await expect(stg.frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
+    // Chapter mode renders full chapters (10–100x a verse cell), so the ~220ms verse threshold does
+    // NOT apply. Baseline established here; tighten once real measurements are collected.
+    // eslint-disable-next-line no-console -- surfaces the measured baseline in CI/local logs
+    console.log(`[chapter frame budget] ${elapsedMs.toFixed(1)}ms for 5 side-by-side chapters`);
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+
+  test('chapter mode: horizontal row is RTL-safe (flex-direction row, not a hardcoded axis)', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'WEB', id: 'chaprtl1', isInTextCollection: true },
+      { type: 'project', name: 'KJV', id: 'chaprtl2', isInTextCollection: true },
+    ]);
+
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    await stg.switchToChapterView();
+
+    const grid = stg.frame.locator('[role="group"]');
+    await expect(grid).toBeVisible({ timeout: 15_000 });
+    const directions = await grid.evaluate((el) => {
+      document.documentElement.dir = 'ltr';
+      const ltr = getComputedStyle(el).flexDirection;
+      document.documentElement.dir = 'rtl';
+      const rtl = getComputedStyle(el).flexDirection;
+      document.documentElement.dir = 'ltr';
+      return { ltr, rtl };
+    });
+    // `flex-direction: row` follows `dir`: under RTL the columns flow right-to-left visually while
+    // the computed value stays `row` (it does NOT become `row-reverse`). Asserting it stays `row`
+    // both ways confirms the row is RTL-safe (no hardcoded left/right axis). Visual RTL column order
+    // is confirmed in the manual AT pass.
+    expect(directions.ltr).toBe('row');
+    expect(directions.rtl).toBe('row');
+  });
+});
+
+test.describe('Scripture Text Grid empty state', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+  });
+
+  test('shows directional copy and no cells when nothing is shown', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    // Flag nothing → the effective list is empty → the grid renders the empty state, not cells.
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, []);
+
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    await expect(stg.frame.getByTestId('scripture-text-grid-empty-state')).toBeVisible({
+      timeout: 15_000,
+    });
+    // The verse listitem is the cell; `[role="gridcell"]` has matched nothing since PT-4157 removed
+    // that role, so asserting zero of those could not fail.
+    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PT-4057 — accessibility pass on top of the PT-4062 renderer. Each verse row is a `listitem`
+// whose name control (`[data-disclosure-control]`) carries a reference-bearing accessible name, is
+// keyboard-reachable (Tab) and -activatable (Enter/Space) with a visible focus ring; the row
+// announces chapter-context open/close through a polite live region. Local-only for the same reason as the renderer specs above (mutate real settings).
+// ---------------------------------------------------------------------------
+
+test.describe('Scripture Text Grid accessibility', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+  });
+
+  test('row control accessible name includes the resource label and verse reference', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'AccName',
+    );
+    // The name lives on the row's disclosure control, not the row: the row is a `listitem` and the
+    // control owns the accessible name, the tab stop and `aria-expanded`.
+    const firstCell = stg.frame.locator('[data-disclosure-control]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    // Accessible name is "<label>, <BOOK C:V>" — anchored so a stray substring can't match.
+    // The book id is a 3-char USFM code; only the first char may be a digit (1-4, e.g. 1SA, 2KI,
+    // 3JN), and the remaining two are always letters.
+    await expect(firstCell).toHaveAttribute('aria-label', /^[^,]+,\s[A-Z1-4][A-Z]{2}\s\d+:\d+$/);
+  });
+
+  test('Tab moves focus between row controls, not into editor content', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'Tab',
+    );
+    const firstCell = stg.frame.locator('[data-disclosure-control]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+
+    // Capture the first control's aria-label to verify Tab moves focus to a different row.
+    const firstLabel = await firstCell.getAttribute('aria-label');
+    await firstCell.focus();
+    await mainPage.keyboard.press('Tab');
+    // Read the active element from INSIDE the frame document so focus escaping the iframe
+    // fails the test rather than passing vacuously.
+    // `FrameLocator` has no `evaluate` (Playwright 1.58). Going through a locator inside the
+    // frame runs this in the FRAME's document, which is the point: reading
+    // `document.activeElement` from the parent would pass even if focus escaped the iframe.
+    const focused = await stg.frame.locator('body').evaluate(() => {
+      const element = document.activeElement;
+      return {
+        label: element?.getAttribute('aria-label') ?? undefined,
+        isInsideRow: !!element?.closest('[role="listitem"]'),
+        isRowControl: !!element?.matches('[data-disclosure-control], [data-reorder-handle-id]'),
+        isEditable: element instanceof HTMLElement && element.isContentEditable,
+      };
+    });
+    // The grip leads each row, before its name, so Tab from row 1's name lands on row 2's grip (or
+    // on row 2's name when reordering is off). Either way it is a row control, not the editor's
+    // contenteditable surface.
+    expect(focused.label).not.toBe(firstLabel);
+    expect(focused.isInsideRow).toBe(true);
+    expect(focused.isRowControl).toBe(true);
+    expect(focused.isEditable).toBe(false);
+  });
+
+  test('focused row control shows a focus ring', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'Ring',
+    );
+    const firstCell = stg.frame.locator('[data-disclosure-control]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    // The ring is `focus-visible`-gated, which Chromium applies only for keyboard-originated focus —
+    // a programmatic `.focus()` would not trigger it. Land on the cell, then leave and re-enter via
+    // the keyboard so the focus is keyboard-originated.
+    await firstCell.focus();
+    await mainPage.keyboard.press('Shift+Tab');
+    await mainPage.keyboard.press('Tab');
+    const boxShadow = await stg.frame
+      .locator('[data-disclosure-control]:focus')
+      .evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(boxShadow).not.toBe('none');
+  });
+
+  test('chapter-context open and close are announced in the live region', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      MADE_UP_LIST_PROJECT_IDS,
+      'Announce',
+    );
+    // The grid has other polite regions (reorder moves, the catalog banner); the chapter-context
+    // announcer is the atomic one.
+    const status = stg.frame.locator('[role="status"][aria-atomic="true"]');
+    const firstCell = stg.frame.locator('[role="listitem"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    // Nothing announced until the split is opened.
+    await expect(status).toHaveText('');
+
+    await firstCell.click();
+    await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
+      timeout: 15_000,
+    });
+    // Opening announces a non-empty "opened" message.
+    await expect(status).not.toHaveText('');
+    const openedMessage = await status.textContent();
+
+    await mainPage.keyboard.press('Escape');
+    await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+    // Closing announces a distinct "closed" message (a polite region needs a text change to re-fire).
+    await expect(status).not.toHaveText('');
+    expect(await status.textContent()).not.toBe(openedMessage);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Verse-aligned (Grid) view.
+//
+// Alignment can only be checked where there is layout, so these measure rendered geometry in the
+// running app: every column's block for verse N must have the same top. No unit test can make that
+// assertion (jsdom lays nothing out), and it fails if the subgrid chain breaks anywhere between the
+// grid root and the verse blocks — including inside the editor's own wrappers, which this repo does
+// not own.
+// ---------------------------------------------------------------------------
+test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
+  let restoreScrollGroupRef: (() => Promise<void>) | undefined;
+
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+    restoreScrollGroupRef = await saveScrollGroupRef();
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+    await restoreScrollGroupRef?.();
+  });
+
+  /**
+   * Shared prerequisites: a local admin-writable project and enough downloaded resources. Returns
+   * the project id, or skips the test with a warning naming what is missing.
+   */
+  async function requireProjectAndResources(mainPage: Page, resourceCount: number) {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
+      REAL_RESOURCE_IDS.length < resourceCount,
+      `Set E2E_TEST_RESOURCE_IDS with at least ${resourceCount} downloaded resource IDs`,
+    );
+    return projectId;
+  }
+
+  test('verse N of every resource shares a row, natively', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Aligned',
+    );
+
+    const grid = stg.frame.getByTestId('scripture-text-grid-aligned');
+    await expect(stg.frame.locator('.verse-block[data-verse-start]').first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const topsByVerse = await grid.evaluate((root) => {
+      const tops: Record<string, number[]> = {};
+      root.querySelectorAll<HTMLElement>('.verse-block[data-verse-start]').forEach((block) => {
+        const verse = block.dataset.verseStart ?? '';
+        (tops[verse] ??= []).push(Math.round(block.getBoundingClientRect().top));
+      });
+      return tops;
+    });
+
+    // Positive control: some verse must be rendered by more than one column, or "every shared verse
+    // aligns" would hold vacuously over a grid where no verse is shared.
+    const sharedVerses = Object.entries(topsByVerse).filter(([, tops]) => tops.length > 1);
+    expect(sharedVerses.length).toBeGreaterThan(0);
+    sharedVerses.forEach(([verse, tops]) => {
+      expect(new Set(tops).size, `verse ${verse} tops: ${tops.join(', ')}`).toBe(1);
+    });
+  });
+
+  test('no interior grid lines between columns', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Borderless',
+    );
+
+    const columnBorders = await stg.frame
+      .getByTestId('scripture-text-grid-aligned')
+      .evaluate((root) =>
+        Array.from(root.children).map((column) => {
+          const style = getComputedStyle(column);
+          return [style.borderLeftWidth, style.borderRightWidth].join('/');
+        }),
+      );
+
+    expect(columnBorders.length).toBeGreaterThan(1);
+    columnBorders.forEach((borders) => expect(borders).toBe('0px/0px'));
+  });
+
+  test('columns run right-to-left under an RTL locale', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'AlignedRtl',
+    );
+
+    // The chapter row's RTL guard asserts `flex-direction`, which this branch does not use: the
+    // columns here are grid tracks, and a track's inline axis follows `dir` only if nothing pins it
+    // to a physical side. Measure where the first column actually lands instead.
+    const firstColumnLeft = await stg.frame
+      .getByTestId('scripture-text-grid-aligned')
+      .evaluate((root) => {
+        const readFirstLeft = () => {
+          const [first] = Array.from(root.children);
+          return first.getBoundingClientRect().left;
+        };
+        document.documentElement.dir = 'ltr';
+        const ltr = readFirstLeft();
+        document.documentElement.dir = 'rtl';
+        const rtl = readFirstLeft();
+        document.documentElement.dir = 'ltr';
+        return { ltr, rtl };
+      });
+
+    // Same first column, opposite edge of the grid: in LTR it starts at the left, in RTL it starts
+    // further right, because the remaining columns now sit to its left.
+    expect(firstColumnLeft.rtl).toBeGreaterThan(firstColumnLeft.ltr);
+  });
+
+  test('grid frame budget: >=5 aligned columns render under the chapter-mode baseline', async ({
+    mainPage,
+  }) => {
+    const projectId = await requireProjectAndResources(mainPage, 5);
+    await setScrollGroupRefFromRenderer(mainPage, TEXT_REFERENCE);
+    // Opened in Verse view, so the switch into Grid is a statement of its own that the measurement
+    // can bracket. `openAlignedGridWithResources` would switch and then await the grid, and the
+    // columns are the grid's own children from the same React pass — nothing left to measure.
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 5),
+      'AlignedPerf',
+    );
+
+    await armColumnRenderMeasure(stg.frame, 5);
+    await stg.switchToGridView();
+    const elapsedMs = await readColumnRenderMs(stg.frame);
+
+    await expect(stg.frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
+    // Same threshold as the chapter-mode budget: this renders the same five whole chapters, and
+    // alignment is native layout rather than measurement, so it should not cost materially more.
+    // eslint-disable-next-line no-console -- surfaces the measured baseline in CI/local logs
+    console.log(`[aligned frame budget] ${elapsedMs.toFixed(1)}ms for 5 aligned columns`);
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+});
+
+/**
+ * Conditional `test.skip` that first emits a console warning when it is about to skip.
+ *
+ * These enhanced-resources specs run only locally (they mutate real project settings and need
+ * downloaded resources), so a bare `test.skip` on a missing prerequisite is silent — a dev without
+ * the local setup could miss that a whole scenario never ran. The warning surfaces the skipped
+ * prerequisite in the run output while still skipping (not failing), so an unconfigured machine is
+ * not blocked. Use only for prerequisite gates, not the deliberate CI gate.
+ */
+function warnAndSkip(condition: boolean, reason: string): void {
+  if (condition) {
+    // Warn (not fail) so a missing local prerequisite is visible in the run output without blocking
+    // an unconfigured machine. console is the only run-output channel available in a spec here.
+    // eslint-disable-next-line no-console
+    console.warn(`[scripture-text-grid.spec] Skipping test — ${reason}`);
+  }
+  test.skip(condition, reason);
+}

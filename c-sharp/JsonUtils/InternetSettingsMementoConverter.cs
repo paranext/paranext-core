@@ -27,7 +27,8 @@ public class InternetSettingsMementoConverter
     )
     {
         ServerType selectedServer = ServerType.Production;
-        InternetUse permittedInternetUse = InternetUse.VpnRequired;
+        // Not VpnRequired: Platform.Bible does not implement it, and startup replaces it anyway
+        InternetUse permittedInternetUse = InternetUse.Disabled;
         int proxyPort = 0;
         string? proxyHost = null;
         string? proxyUsername = null;

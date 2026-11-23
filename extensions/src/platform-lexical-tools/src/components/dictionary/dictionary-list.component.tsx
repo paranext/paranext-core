@@ -147,6 +147,8 @@ export function DictionaryList({
             />
           </div>
         ) : (
+          // The Drawer is the entry pane's narrow layout, so its project text zooms like the wide
+          // layout's; menus and tooltips still keep interface size.
           <Drawer
             direction="right"
             open={selectedEntry !== undefined}

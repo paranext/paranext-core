@@ -7,7 +7,7 @@ import type {
   WebViewDefinition,
 } from '@papi/core';
 import type { HelloRock3Event, HelloRock3ProjectWebViewController } from 'hello-rock3';
-import { getErrorMessage, isPlatformError, PlatformEventEmitter } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { checkDetails, createHelloCheck } from './checks';
 import { HelloRock3ProjectDataProviderEngineFactory } from './models/hello-rock3-project-data-provider-engine-factory.model';
 import { HELLO_ROCK3_PROJECT_INTERFACES } from './models/hello-rock3-project-data-provider-engine.model';
@@ -118,11 +118,10 @@ class HelloRock3ProjectWebViewFactory extends WebViewFactory<
     const projectId = openWebViewOptions.projectId || savedWebView.projectId || undefined;
     return {
       title: projectId
-        ? `Hello Third Rock Project: ${
-            (await (
-              await papi.projectDataProviders.get('platform.base', projectId)
-            ).getSetting('platform.name')) ?? projectId
-          }`
+        ? await papi.localization.getLocalizedProjectTitle({
+            localizeKey: '%helloRock3_project_titleWithProject%',
+            projectId,
+          })
         : 'Hello Third Rock Project',
       ...savedWebView,
       content: helloRock3ProjectWebView,
@@ -218,11 +217,10 @@ const helloRock3ProjectViewerProvider: IWebViewProviderWithType = {
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     return {
       title: projectId
-        ? `Hello Third Rock Project Viewer: ${
-            (await (
-              await papi.projectDataProviders.get('platform.base', projectId)
-            ).getSetting('platform.name')) ?? projectId
-          }`
+        ? await papi.localization.getLocalizedProjectTitle({
+            localizeKey: '%helloRock3_projectViewer_titleWithProject%',
+            projectId,
+          })
         : 'Hello Third Rock Project Viewer',
       ...savedWebView,
       content: helloRock3ProjectViewerWebView,
@@ -238,9 +236,14 @@ const helloRock3ProjectViewerProvider: IWebViewProviderWithType = {
 
 /** Number of times the `helloRock3` function has been called */
 let helloRock3Count = 0;
-/** Emitter to inform subscribers when `helloRock3` is called */
-let onHelloRock3Emitter: PlatformEventEmitter<HelloRock3Event>;
-const onHelloRock3EventType = 'helloRock3.onHelloRock3';
+/**
+ * Buffered emitter to inform subscribers when `helloRock3` is called. Buffered so a call that
+ * happens before the emitter finishes registering is queued and flushed, not thrown away.
+ */
+let onHelloRock3Emitter:
+  | { emit: (event: HelloRock3Event) => void; dispose: () => void }
+  | undefined;
+const onHelloRock3EventType = 'helloRock3.onHelloRock3' as const;
 
 /**
  * Simple function to return `Hello Third Rock!`. Registered as a command handler.
@@ -250,6 +253,8 @@ const onHelloRock3EventType = 'helloRock3.onHelloRock3';
  */
 function helloRock3() {
   helloRock3Count += 1;
+  // Buffered emit — if this runs before the emitter has registered, the event is queued and flushed
+  // once registration completes (rather than throwing).
   onHelloRock3Emitter?.emit({ times: helloRock3Count });
   return 'Hello Third Rock!';
 }
@@ -458,8 +463,21 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     reactWebView2Provider,
   );
 
-  onHelloRock3Emitter =
-    papi.network.createNetworkEventEmitter<HelloRock3Event>(onHelloRock3EventType);
+  // Created synchronously (buffered) so a `helloRock3` call can't outrun registration. Buffered
+  // emits are flushed once registration completes.
+  onHelloRock3Emitter = papi.network.createBufferedNetworkEventEmitter(onHelloRock3EventType, {
+    notification: {
+      summary: 'Emitted each time the helloRock3.helloRock3 command is called.',
+      params: [
+        {
+          name: 'event',
+          required: true,
+          summary: 'The hello-rock3 event payload.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  });
 
   const helloRock3Promise = papi.commands.registerCommand('helloRock3.helloRock3', helloRock3);
 
@@ -499,7 +517,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await htmlWebViewProviderPromise,
     await reactWebViewProviderPromise,
     await reactWebView2ProviderPromise,
-    onHelloRock3Emitter,
+    {
+      dispose: async () => {
+        onHelloRock3Emitter?.dispose();
+        return true;
+      },
+    },
     await helloRock3Promise,
     await showContextMenuAlertPromise,
     await helloExceptionPromise,

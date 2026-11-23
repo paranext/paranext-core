@@ -17,6 +17,7 @@ export function useWebViewScrollGroupScrRef(
   setScrRef: (newScrRef: SerializedVerseRef) => void,
   scrollGroupId: ScrollGroupId | undefined,
   setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+  sourceProjectId: string | undefined,
 ] {
   // Get the saved web view definition's id and scrollGroupScrRef and stay up to date
   const [savedWebViewDefinition, setSavedWebViewDefinition] = useState(() => {
@@ -38,7 +39,7 @@ export function useWebViewScrollGroupScrRef(
       [savedWebViewDefinition],
     ),
   );
-  const { scrollGroupScrRef } = savedWebViewDefinition;
+  const { scrollGroupScrRef, projectId } = savedWebViewDefinition;
 
   return useScrollGroupScrRef(
     scrollGroupScrRef,
@@ -47,6 +48,7 @@ export function useWebViewScrollGroupScrRef(
         this.updateWebViewDefinition({ scrollGroupScrRef: newScrollGroupScrRef }),
       [],
     ),
+    projectId,
   );
 }
 

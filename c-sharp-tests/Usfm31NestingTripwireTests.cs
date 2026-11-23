@@ -1,0 +1,183 @@
+using Paratext.Data.ProjectSettingsAccess;
+
+namespace TestParanextDataProvider
+{
+    /// <summary>
+    /// Upgrade tripwire for USFM 3.1 inline-marker nesting semantics.
+    ///
+    /// <para>
+    /// The 9.5 ParatextData this tripwire was written against (9.5.0.24 as of 2026-10-27, the
+    /// <c>ParatextPackageVersion</c> in ParanextDataProvider.csproj) supports only USFM 2 and 3.0: its
+    /// <c>UsfmVersionOption</c> enum ends at <c>Version3</c>, and a project migrated to USFM 3.1
+    /// in Paratext 9.6+ sets <c>MinParatextDataVersion 9.6.1.1</c>, which locks it out of this
+    /// ParatextData entirely. So today Platform.Bible only ever opens USFM &lt;= 3.0 text, and the
+    /// Standard-view editor's nesting behavior deliberately targets the &lt;= 3.0 rules
+    /// exclusively.
+    /// </para>
+    ///
+    /// <para>
+    /// USFM 3.1 INVERTS the core inline-marker nesting rules. When the ParatextData package is
+    /// upgraded to a 9.6+ version (adding <c>UsfmVersionOption.Version3_1</c>), this test fails
+    /// until Platform.Bible honors the project's <c>&lt;UsfmVersion&gt;</c> setting wherever the
+    /// &lt;= 3.0 rules are currently hard-coded. The checklist below is the record of what that
+    /// entails — what must become version-switched, with the Paratext 9 reference sites in
+    /// parentheses, verified against ~/source/repos/Paratext:
+    /// </para>
+    ///
+    /// <para>
+    /// 0. THE DRIVER: <c>ProjectSettings.RequiresPlusOnNestedStyles()</c>
+    ///    (ProjectSettings.cs:2398-2401) returns true for &lt;= 3.0 and false for 3.1, and every
+    ///    delta below branches on it. It already exists in this ParatextData (it is the &lt;= 3.0
+    ///    "true" side); the tripwire fires on <c>Version3_1</c> because that is the enum value that
+    ///    lets a project reach the "false" side. MinParatextDataVersion gate for 3.1 projects is
+    ///    9.6.1.1 (ParatextInfo.cs:130).
+    /// 1. Close-on-bare vs nest-by-default: in &lt;= 3.0 a char marker WITHOUT "+" closes ALL open
+    ///    char styles before opening; in 3.1 a bare char marker NESTS by default and auto-closes
+    ///    ONLY notesub -&gt; notesub (note-section marker into note-section marker), with the
+    ///    ft -&gt; xt pair explicitly EXEMPTED so it does NOT auto-close
+    ///    (UsfmParser.cs:530-546, CharacterStyleShouldAutomaticallyClose). Affects the
+    ///    scripture-editors tokenizer's charOpen auto-close (usfmFragmentToUsj) and every
+    ///    marker-edit path that relies on it (Tier-2 rebuilds re-tokenize visible glyph text).
+    /// 2. "+" emission: in &lt;= 3.0 the writer emits "+" on the opener AND closer of any char
+    ///    whose parent is a char (UsxFragmenter, "usePlusOnNestedStyles"); in 3.1 it never emits
+    ///    "+" at all. Affects the editable marker glyph text (which mirrors the writer so Tier-2
+    ///    round-trips are lossless) and the TS USJ-&gt;USFM serializer's nestedPrefix.
+    /// 3. End-marker matching: &lt;= 3.0 expects "\+marker*" for nested closers; 3.1 matches bare
+    ///    "\marker*" and reports a leftover "\+marker*" as unmatched (UsfmParser End-token case).
+    /// 4. Verse boundaries: &lt;= 3.0 keeps char styles OPEN across \v (the verse milestone nests
+    ///    inside the char); in 3.1 <c>\v</c> CLOSES all open char styles (UsfmParser.cs:250-253,
+    ///    Verse case).
+    /// 5. The is-closed lookahead is a DIFFERENT IMPLEMENTATION, not just a different outcome:
+    ///    &lt;= 3.0 uses <c>LookaheadForClosingMarker</c> (a stack-shape test), 3.1 uses
+    ///    <c>LookaheadForClosingMarkerUsfm31</c> (a note-section-marker STRUCTURAL test, bounded by
+    ///    paragraph/verse; same-marker reopen counts as unclosed) — UsfmParser.cs:85-88, 703-746.
+    ///    The two agree for an explicit "\marker*" closer but diverge on the implicit cases that
+    ///    decide closed="false".
+    /// 6. Export omits closed="false" in 3.1: the sink writes the attribute only when
+    ///    <c>!closed &amp;&amp; (!forExport || RequiresPlusOnNestedStyles())</c>
+    ///    (UsxUsfmParserSink.cs:82,241,287). Under &lt;= 3.0 the right-hand side is always true,
+    ///    so every genuinely-unclosed span carries the flag on every path — but under 3.1 a
+    ///    <c>forExport</c> conversion drops it entirely, and Platform.Bible's editor USX itself
+    ///    takes the export path: <c>ParatextProjectDataProvider.ConvertUsfmToUsx</c> passes
+    ///    <c>forExport: true</c> deliberately (link-href chars stay normal, figure src becomes
+    ///    file). The Standard-view editor keys closer DISPLAY and its honesty rule on
+    ///    closed="false", so on a 3.1 project every note-content span would arrive
+    ///    attribute-less: the editor would render phantom <c>\ft*</c> closers that editable mode
+    ///    saves as real bytes, and an explicitly-closed <c>\xt …\xt*</c> is indistinguishable
+    ///    per span from an unclosed one (a span-level marker-family default was tried in the
+    ///    editor and reverted — it strips the <c>\xt*</c> and attribute run off explicitly-closed
+    ///    spans in &lt;= 3.0 corpus data). On upgrade, either editor reads must stop using the
+    ///    export path (re-solving the link-href / figure-src reasons it was chosen), or the
+    ///    project's UsfmVersion must reach the editor's load options so the note-content
+    ///    families default to unclosed for 3.1 input only.
+    /// 7. Stylesheet: the <c>notesub</c> TextProperty (<c>scNoteSubMarker</c>, ScrTag.cs:217,278)
+    ///    that marks the whole footnote/cross-ref content-marker family exists ONLY in
+    ///    usfm3_1.sty, and NEST / "\+" are removed from those markers' OccursUnder there. 3.1
+    ///    projects also default to usfm3_1.sty, carry a "\usfm 3.1" header after \id, and emit USX
+    ///    version="3.1" — all of which flow into the style-info wire data and any USX handling.
+    /// 8. The 3.1 MIGRATION adds explicit end markers to nested char styles but DELIBERATELY SKIPS
+    ///    note-section markers, which stay open (ProjectPropertiesUtils.cs:629-699, IsNoteSectionMarker
+    ///    skip at :647). It also strips "\+" prefixes, converts link-* attribute names, and injects
+    ///    the "\usfm 3.1" header. A finer-grained save path needs an equivalent that closes nested
+    ///    body styles while leaving \fr/\ft/\xo/\xt open. (Paratext 9's 3.1 editor separately strips
+    ///    stray typed "\+" prefixes on save via UsfmUtils.RemoveMarkerPlusIfNotNeeded.)
+    /// 9. New 3.1 milestones become reachable: qt-s / qt1-s..qt5-s, ts-s, and ts.
+    /// 10. <c>\ref</c> markers: <c>ParatextProjectDataProvider.ConvertUsfmToUsx</c> deliberately
+    ///    omits <c>JumpDecorater</c> because this ParatextData cannot tell a generated
+    ///    <c>ref</c> from an authored one (no <c>gen</c> attribute support) and always strips
+    ///    <c>ref</c>-type markers on USX -&gt; USFM, which would delete user-authored
+    ///    <c>\ref</c>s; they survive today only via the unknown-marker path (unclosed -&gt;
+    ///    <c>para</c> type; closed -&gt; <c>para</c> opener + <c>unmatched</c> closer). If the
+    ///    upgraded ParatextData distinguishes generated refs (USFM 3.1 defines <c>\ref</c>),
+    ///    revisit emitting real <c>ref</c>-type USX (see the decision comment in
+    ///    ConvertUsfmToUsx).
+    /// 11. USX/USJ version (catalog rows UV-2 and UV-3 in
+    ///    .context/standards/Scripture-Data-Fidelity-Catalog.md): preserved end to end, never
+    ///    derived from the document. This ParatextData stamps every USX <c>version="3.0"</c>
+    ///    (<c>UsfmToUsx.UsxVersionNumber</c>, a static constant, even for USFM 2 projects), and the
+    ///    TypeScript pipeline carries whatever it is served: scripture-utilities'
+    ///    <c>usxStringToUsj</c> keeps the root <c>version</c>, the editor reports the version of the
+    ///    USJ it was handed on every USJ it produces, and <c>usjToUsxString</c> writes the USJ's own
+    ///    version back — so the extender PDPE's <c>setBookUSJ</c> / <c>setChapterUSJ</c> write the
+    ///    version the getters read, with no TypeScript-side constant. The version is NOT derived
+    ///    from a <c>\usfm</c> header: usfm.sty defines <c>\usfm</c> as an ordinary paragraph marker,
+    ///    so it round-trips as <c>&lt;para style="usfm"&gt;</c> (never USX's <c>&lt;usfm&gt;</c>
+    ///    element, which <c>UsxFragmenter</c> ignores) and is independent of the stamp
+    ///    (UsfmVersionMarkerRoundTripCaptureTests pins both, for project UsfmVersion 2 and 3).
+    ///    <c>ConvertUsxToUsfm</c> never reads the stamp, so it is inert on this PDP's own write path;
+    ///    Paratext 9's plugin API does reject a mismatch (<c>ProjectWrapper.PutUSX</c>,
+    ///    ParatextData/Plugins/ProjectWrapper.cs). On upgrade, Paratext 9.6 removes the
+    ///    <c>UsfmToUsx.UsxVersionNumber</c> constant: <c>UsfmToUsx.GetUsfmVersionForScrText</c>
+    ///    (ParatextData/UsfmToUsx.cs) derives the stamp from the project's UsfmVersion SETTING
+    ///    (Version2 or Version3 → "3.0", Version3_1 → "3.1"; still never from the <c>\usfm</c>
+    ///    header), <c>RunConverter</c> uses it whenever the caller passes no explicit
+    ///    <c>versionNumber</c> (PT10's <c>ConvertUsfmToUsx</c> and <c>GetVerseUsx</c> pass none), and
+    ///    ProjectWrapper's mismatch check compares against it. So on upgrade:
+    ///    (a) <c>ParatextProjectDataProvider.GetVerseUsx</c> builds its own <c>&lt;usx&gt;</c>
+    ///    wrapper from <c>UsfmToUsx.UsxVersionNumber</c>; switch it to
+    ///    <c>UsfmToUsx.GetUsfmVersionForScrText(scrText)</c> so a verse stays stamped like its
+    ///    chapter and book.
+    ///    (b) In UsfmVersionMarkerRoundTripCaptureTests, add <c>UsfmHeader_IsAParagraph_…</c> cases
+    ///    for a project whose UsfmVersion setting is <c>Version3_1</c>, expecting
+    ///    <c>version="3.1"</c> on the chapter, book and verse paths for EVERY header value (3.0, 3.1,
+    ///    2.4) — the header must still have no effect — and keep the Version2/Version3 cases at
+    ///    "3.0". Re-check that the save-path tests still round-trip a 3.1 project's USX, then update
+    ///    catalog row UV-2 to say the stamp follows the project setting.
+    ///    (c) Audit the TypeScript readers that still assume 3.0 (catalog row UV-3) —
+    ///    <c>UsjReaderWriter</c> (platform-bible-utils) throws on a non-3.0 USJ unless given a markers
+    ///    map, the editor web view reads with <c>USFM_MARKERS_MAP_PARATEXT_3_0</c> (which warns on
+    ///    any other version), and the web view's loading placeholder <c>defaultUsj</c> is pinned to
+    ///    "3.0" — each must pick its markers map (and the placeholder its version) from the
+    ///    document's version.
+    /// </para>
+    ///
+    /// <para>
+    /// Non-goals on upgrade (NOT version-gated in Paratext 9 either): accepting "\+x" on parse
+    /// (strip the "+" when a char is open; unknown marker when nothing is open) and the pure
+    /// token-normalize path's verbatim "+" preservation.
+    /// </para>
+    /// </summary>
+    [TestFixture]
+    public class Usfm31NestingTripwireTests
+    {
+        [Test(
+            Description = "Self-activating upgrade guard: passes vacuously while the referenced "
+                + "ParatextData lacks UsfmVersionOption.Version3_1; when a package upgrade adds "
+                + "it, this fails until USFM 3.1 nesting semantics are honored per the class "
+                + "comment's checklist."
+        )]
+        public void UsfmVersionOption_Version31Available_NestingSemanticsMustBeVersionSwitched()
+        {
+            // Reflection (name-based parse) because the member doesn't exist at compile time in
+            // the ParatextData version currently referenced.
+            if (!Enum.TryParse("Version3_1", out UsfmVersionOption version31))
+            {
+                Assert.Pass(
+                    "The referenced ParatextData's UsfmVersionOption enum does not define "
+                        + "Version3_1 — USFM 3.1 projects cannot reach this ParatextData (their "
+                        + "MinParatextDataVersion locks them out), so the <= 3.0 nesting rules "
+                        + "are the only reachable semantics. This test self-activates when the "
+                        + "ParatextData package is upgraded to a 9.6+ version that adds it."
+                );
+            }
+
+            Assert.Fail(
+                $"ParatextData now defines UsfmVersionOption.{version31}, so USFM 3.1 projects "
+                    + "can reach Platform.Bible — but the Standard-view editor's inline-marker "
+                    + "nesting AND closer/attribute semantics are hard-coded to USFM <= 3.0. In "
+                    + "3.1 (driven by ProjectSettings.RequiresPlusOnNestedStyles() == false): a "
+                    + "bare char marker NESTS by default and auto-closes only notesub -> notesub "
+                    + "(ft -> xt exempted); '+' is never emitted and nested closers are bare "
+                    + "'\\marker*'; '\\v' CLOSES open char styles; the is-closed decision uses a "
+                    + "DIFFERENT lookahead (LookaheadForClosingMarkerUsfm31, a note-section-marker "
+                    + "structural test); a 3.1 EXPORT omits closed=\"false\" while the editor "
+                    + "(non-export) USX still emits it — the closer-display/honesty rule keys on "
+                    + "that flag; and the 3.1 migration adds end markers to nested body styles but "
+                    + "DELIBERATELY skips note-section markers (\\fr/\\ft/\\xo/\\xt stay open). "
+                    + "Honor the project's <UsfmVersion> setting per the checklist in this test "
+                    + "class's doc comment, then update this test to assert the version-switched "
+                    + "behavior instead of failing."
+            );
+        }
+    }
+}

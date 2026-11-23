@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { WEB_VIEW_CONTENT_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
+import type { RegisteredWebViewRoot } from '@renderer/global-this-web-view.model';
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
@@ -13,20 +14,31 @@ import {
   isWebViewNonceCorrect,
   reloadWebView,
   updateTabPartialSync,
-} from '@renderer/services/web-view.service-host';
+  getSavedWebViewDefinitionSync,
+  waitForWebViewProviderToRegister,
+} from '@renderer/services/web-view.service-shard';
+import {
+  applyContentZoomForWebView,
+  forgetContentZoom,
+} from '@renderer/services/web-view-content-zoom.service';
+import { claimWebViewRoots, getShownDocument } from '@renderer/services/web-view-root.registry';
 import { logger } from '@shared/services/logger.service';
 import {
   PromiseChainingMap,
   UnsubscriberAsync,
   formatReplacementString,
   isLocalizeKey,
+  type LocalizeKey,
   serialize,
   getLocalizeKeysForScrollGroupIds,
   isPlatformError,
   getErrorMessage,
+  createMenuTemplateVars,
 } from 'platform-bible-utils';
 import {
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
+  BookChapterControlHandle,
   SelectMenuItemHandler,
   ScrollGroupSelector,
   TabToolbar,
@@ -40,21 +52,24 @@ import {
   useScrollGroupScrRef,
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
+import { useEvaluatedMenu } from '@renderer/hooks/papi-hooks/use-evaluated-menu.hook';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
+import { registerBookChapterControlHandle } from '@renderer/services/book-chapter-control.registry';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import {
   getWebViewMessageRequestType,
   WebViewMessageRequestHandler,
 } from '@shared/services/web-view.service-model';
-import { Canon } from '@sillsdev/scripture';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
+import { WindowClosingError } from '@renderer/services/window-closing-error.model';
+import {
+  BOOKS_PRESENT_DEFAULT,
+  getBookIdsFromBooksPresent,
+} from 'platform-bible-utils/experimental';
 
-export const TAB_TYPE_WEBVIEW = 'webView';
-
-const BOOKS_PRESENT_DEFAULT = '';
 const WEB_VIEW_MENU_DEFAULT = {
   topMenu: undefined,
   includeDefaults: true,
@@ -62,6 +77,8 @@ const WEB_VIEW_MENU_DEFAULT = {
 };
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const registrationPromises = new PromiseChainingMap<string>(logger);
 
@@ -72,20 +89,68 @@ const CROSS_ORIGIN_REMOVE_EVENT_LISTENER_ERROR_REGEX =
  * Tell the web view service to load the web view with the provided information. Used to retrieve
  * web view content and to reload the web view when the extension service reloads
  *
+ * Both callers (`loadWebViewTab` restoring a saved/baked tab, and the
+ * `platform.onDidReloadExtensions` handler below) are the extension-still-activating race this
+ * product's serial extension-host startup can hit, not a user action — so this waits patiently for
+ * the provider to register, re-arming instead of failing after the first 20 seconds, BEFORE calling
+ * `reloadWebView` — see {@link waitForWebViewProviderToRegister} for why the wait happens here
+ * rather than inside `reloadWebView` itself. An explicit user-initiated reload (the error boundary,
+ * or a PAPI-triggered one) goes through `reloadWebView` directly instead of through here, and keeps
+ * the shorter, one-shot wait.
+ *
  * @param data Web view definition to load
  */
 async function retrieveWebViewContent(webViewType: string, id: string): Promise<void> {
+  await waitForWebViewProviderToRegister(webViewType);
+
   const loadedId = await reloadWebView(webViewType, id, {
     bringToFront: false,
   });
 
-  if (!loadedId)
+  if (!loadedId) {
+    // Two very different answers arrive as the same `undefined`, and the dock tells them apart. A
+    // web view that is no longer in it left while the reload was in flight — a layout load took the
+    // dock wholesale, which is what an interface mode switch does to a tab still fetching its
+    // content, or the tab was dragged into another window. Whatever took it disposed what backed
+    // it, so there is nothing here to report. A web view still in the dock is one whose provider
+    // declined to supply content, leaving that tab waiting on content that is never coming, which
+    // nothing else will mention.
+    if (!getSavedWebViewDefinitionSync(id)) {
+      logger.debug(
+        `WebView with type ${webViewType} and id ${id} is no longer in this window's dock; nothing to reload`,
+      );
+      return;
+    }
     throw new Error(
       `WebView with type ${webViewType} and id ${id} returned undefined when reloading!`,
     );
+  }
 
   if (loadedId !== id)
     logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
+}
+
+/**
+ * The unmount that a React web view's bootstrap published for the root of the iframe's CURRENT
+ * document (`contentWindow` always resolves to the current one), or `undefined` if that document
+ * published none or is cross-origin.
+ */
+function getCurrentDocumentUnmountRoot(
+  iframe: HTMLIFrameElement | null | undefined,
+): (() => void) | undefined {
+  try {
+    // Align with WebViewCleanup from globalThis
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const contentWindowWithCleanup = iframe?.contentWindow as
+      | (Window & { webViewCleanup?: typeof globalThis.webViewCleanup })
+      | null
+      | undefined;
+    return contentWindowWithCleanup?.webViewCleanup?.unmountRoot;
+  } catch {
+    // The close-time cleanup logs a warning if it finds no unmount to call, so a miss here needs no
+    // message of its own
+    return undefined;
+  }
 }
 
 export function WebView({
@@ -132,44 +197,24 @@ export function WebView({
    */
   const messageBufferRef = useRef<Parameters<WebViewMessageRequestHandler>[]>([]);
 
-  // Store reference to iframe's cleanup function so we can call it before iframe loses contentWindow
-  const unmountRootFunctionRef = useRef<(() => void) | undefined>(undefined);
-
-  // Extract and store cleanup function when iframe loads
-  useEffect(() => {
-    const currentIframe = iframeRef.current;
-    if (!currentIframe) return;
-
-    const extractCleanupFunction = () => {
-      try {
-        // Align with WebViewCleanup from globalThis
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const contentWindowWithCleanup = currentIframe.contentWindow as Window & {
-          webViewCleanup?: typeof globalThis.webViewCleanup;
-        };
-
-        if (contentWindowWithCleanup?.webViewCleanup?.unmountRoot)
-          unmountRootFunctionRef.current = contentWindowWithCleanup.webViewCleanup.unmountRoot;
-      } catch {
-        // While closing the WebView, we log a warning if the cleanup function is missing
-        // If we log these errors when capturing, it causes noise during startup that isn't important since we try capturing multiple times
-      }
-    };
-
-    // Try to extract immediately in case iframe is already loaded
-    extractCleanupFunction();
-
-    // Also try shortly after the iframe loads to give time for the iframe's React app to initialize
-    const handleLoad = () => {
-      setTimeout(extractCleanupFunction, 200);
-    };
-
-    currentIframe.addEventListener('load', handleLoad);
-
+  /**
+   * The React roots that this iframe's documents have registered and that have not been unmounted
+   * yet. Claimed before the iframe's document can parse, so a bootstrap that registers its root
+   * while parsing already finds this component.
+   */
+  const heldRootsRef = useRef(new Set<RegisteredWebViewRoot>());
+  /**
+   * The held roots whose document has been the iframe's shown document at a load. A document that
+   * never got that far never ran `pagehide`, so it may never run `unload` either.
+   */
+  const loadedRootsRef = useRef(new WeakSet<RegisteredWebViewRoot>());
+  useLayoutEffect(() => {
+    const heldRoots = heldRootsRef.current;
+    const releaseClaim = claimWebViewRoots(id, iframeRef, (root) => heldRoots.add(root));
     return () => {
-      currentIframe.removeEventListener('load', handleLoad);
+      releaseClaim();
     };
-  }, [id, content]); // Re-run when content changes
+  }, [id]);
 
   /**
    * Flush all buffered messages to the iframe. Called when the iframe becomes ready to receive
@@ -287,11 +332,47 @@ export function WebView({
   }, [id, postMessageCallback]);
 
   const handleLoadIframe = useCallback(() => {
+    // Every held root whose document is no longer the iframe's is unmounted. rc-dock moving this
+    // tab within the window re-inserts the iframe, which loads a new document while this component
+    // stays mounted, and React comes from this window, so a replaced document's root stays mounted
+    // here unless it is unmounted now. A reload normally has the document's own `unload` handler
+    // unmount it first, making this a no-op; this is the fallback should that `unload` not run,
+    // though the replaced root can then render into the loading document until this load. A
+    // document replaced before it ever loaded (a second move before the first new document's load)
+    // is unmounted here too: its own queued unmount is dropped with its realm, and this load
+    // belongs to a later document. The root of the current document is kept.
+    const shownDocument = getShownDocument(iframeRef.current);
+    heldRootsRef.current.forEach((root) => {
+      if (root.document === shownDocument) loadedRootsRef.current.add(root);
+    });
+    heldRootsRef.current.forEach((root) => {
+      if (root.document === shownDocument) return;
+      heldRootsRef.current.delete(root);
+      if (!loadedRootsRef.current.has(root))
+        logger.debug(
+          `Unmounting the React root of a document that was replaced before it loaded for WebView ${id}`,
+        );
+      else if (!root.hasUnloaded)
+        logger.warn(
+          `The replaced document's unload never ran for WebView ${id}, so its React root was unmounted late. Electron may no longer fire unload in web view iframes.`,
+        );
+      try {
+        root.unmountRoot();
+      } catch (error) {
+        logger.warn(
+          `Failed to unmount replaced React root for WebView ${id}: ${getErrorMessage(error)}`,
+        );
+      }
+    });
+
     // Mark that the iframe content has loaded so messages can be sent
     iframeHasLoadedRef.current = true;
     // Increment the tracker for the number of times the iframe has loaded
     setIframeHasLoadedTimes((prev) => prev + 1);
-  }, []);
+    // Pushes the pane's current zoom variables and starts the wait that drops zoom areas left
+    // behind by content this load replaced. The iframe element itself is never scaled.
+    applyContentZoomForWebView(id);
+  }, [id]);
 
   // Keep track of focus in the iframe
   useEffect(() => {
@@ -306,19 +387,25 @@ export function WebView({
     flushMessageBuffer();
 
     // Focus this WebView when it is loaded - focusing tab on mount in `platform-panel.component.tsx`
-    // doesn't always work perfectly with WebViews, so we also focus them here
-    (async () => {
-      try {
-        await windowService.setFocus({
-          focusType: 'tab',
-          id,
-        });
-      } catch (e) {
-        logger.warn(
-          `web-view.component on load failed to set focus on cross-origin webView ${id}: ${getErrorMessage(e)}`,
-        );
-      }
-    })();
+    // doesn't always work perfectly with WebViews, so we also focus them here.
+    // Hidden case: skipped when the tab is not in front of its group. rc-dock keeps an inactive
+    // tab's pane mounted with `display: none`, so its iframe has no client rects. An iframe loads
+    // there only when its web view was reloaded in the background (`bringToFront: false`), and
+    // focusing the tab would make it the active one, undoing that. A tab asked to come to the front
+    // is already active by the time its content loads.
+    if (iframe.getClientRects().length > 0)
+      (async () => {
+        try {
+          await windowService.setFocus({
+            focusType: 'tab',
+            id,
+          });
+        } catch (e) {
+          logger.warn(
+            `web-view.component on load failed to set focus on cross-origin webView ${id}: ${getErrorMessage(e)}`,
+          );
+        }
+      })();
 
     // Cross-origin iframes don't have contentDocument, and their focus works just fine without tracking
     // the active element in the iframe. No need to do more
@@ -393,39 +480,54 @@ export function WebView({
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WEB_VIEW_CONTENT_TYPE.URL;
 
-  // Clean up iframe content on unmount to prevent memory leaks
-  // When React removes the WebView component from the DOM, the iframe's srcDoc
-  // content can remain in memory. This effect ensures that we explicitly clear
-  // the content when the component unmounts to prevent memory leaks.
-  useEffect(() => {
-    // Capture the current iframe reference to use in cleanup
+  // Forget this pane's content zoom on unmount. The React roots are unmounted by the layout-effect
+  // cleanup below.
+  useEffect(() => () => forgetContentZoom(id), [id]);
+
+  // Unmount the React roots on close. A layout-effect cleanup runs before React removes the iframe,
+  // so `contentWindow` still resolves to the document shown at close. The held roots are the
+  // normal source of what to unmount; the shown document's own published unmount is a fallback for
+  // a root that never reached this component (its registration failed, or the registry module was
+  // reset by a hot reload). A close before a replacement document loads would otherwise leave that
+  // document's root mounted, since its own unload-time unmount cannot be relied on once the iframe
+  // is removed.
+  // WARNING: a Suspense or Activity boundary above the dock that hides this content would run this
+  // cleanup too, unmounting live roots whose iframes stay in place.
+  useLayoutEffect(() => {
     const currentIframe = iframeRef.current;
+    const heldRoots = heldRootsRef.current;
 
     return () => {
       if (!currentIframe) {
         logger.warn(`WebView ${id} iframe reference was not available during cleanup`);
         return;
       }
-
-      // Cleanly unmount any React root using the stored cleanup function
-      if (!unmountRootFunctionRef.current) {
+      const unmountRoots = new Set(
+        [
+          ...[...heldRoots].map((root) => root.unmountRoot),
+          getCurrentDocumentUnmountRoot(currentIframe),
+        ].filter((unmountRoot) => unmountRoot !== undefined),
+      );
+      heldRoots.clear();
+      if (unmountRoots.size === 0) {
         logger.warn(`No cleanup function available for WebView ${id}`);
-      } else {
-        // Use setTimeout to avoid synchronous unmount during React rendering
-        setTimeout(() => {
-          try {
-            if (!unmountRootFunctionRef.current) {
-              logger.warn(`No cleanup function available for WebView ${id}`);
-            } else {
-              unmountRootFunctionRef.current();
-              logger.debug(`Successfully unmounted React root for WebView ${id}`);
-            }
-          } catch (error) {
-            logger.warn(`Failed unmount React root for WebView ${id}: ${getErrorMessage(error)}`);
-          }
-          unmountRootFunctionRef.current = undefined;
-        }, 0);
+        return;
       }
+      // Deferred a timer turn so the unmount never runs inside React's commit
+      setTimeout(() => {
+        let anyUnmountFailed = false;
+        unmountRoots.forEach((unmountRoot) => {
+          try {
+            unmountRoot();
+          } catch (error) {
+            anyUnmountFailed = true;
+            logger.warn(
+              `Failed to unmount React root for WebView ${id}: ${getErrorMessage(error)}`,
+            );
+          }
+        });
+        if (!anyUnmountFailed) logger.debug(`Successfully unmounted React root for WebView ${id}`);
+      }, 0);
     };
   }, [id]);
 
@@ -442,11 +544,30 @@ export function WebView({
         updateWebViewDefinitionSync(id, { scrollGroupScrRef: newScrollGroupScrRef }),
       [id],
     ),
+    projectId,
   );
 
   const isPowerMode = useIsPowerMode();
 
+  // Register this tab's BookChapterControl (power mode only — that is when it renders) so
+  // platform.openBookChapterControl can open it when this web view is active. React 19 cleanup
+  // callback ref so registration tracks the control's mount/unmount exactly
+  const registerBookChapterControl = useCallback(
+    (handle: BookChapterControlHandle | null) => {
+      if (!handle) return undefined;
+      const unsubscribe = registerBookChapterControlHandle(id, handle);
+      return () => {
+        unsubscribe();
+      };
+    },
+    [id],
+  );
+
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
+
+  const [bookChapterControlLocalizedStrings] = useLocalizedStrings(
+    bookChapterControlLocalizedStringKeys,
+  );
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
@@ -464,15 +585,14 @@ export function WebView({
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
 
-  const fetchActiveBooks = () => {
-    return Array.from(booksPresent).reduce((ids: string[], char, index) => {
-      if (char === '1') {
-        ids.push(Canon.bookNumberToId(index + 1));
-      }
-
-      return ids;
-    }, []);
-  };
+  // Stable identity per booksPresent value. BookChapterControl memoizes its book list (and the
+  // filtering/matching derived from it) on this function's identity, so a fresh closure every render
+  // would recompute all of that on every WebView render while a control is mounted (power mode).
+  // Mirrors the top toolbar's fetchActiveBookIds in platform-bible-toolbar.tsx.
+  const fetchActiveBooks = useCallback(
+    () => getBookIdsFromBooksPresent(booksPresent),
+    [booksPresent],
+  );
 
   const projectMenuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
@@ -506,13 +626,19 @@ export function WebView({
     return webViewMenuPossiblyError;
   }, [id, webViewMenuPossiblyError, webViewType]);
 
+  const menuTemplateVars = useMemo(
+    () => createMenuTemplateVars({ webViewId: id, webViewType, projectId }),
+    [id, webViewType, projectId],
+  );
+  const evaluatedTopMenu = useEvaluatedMenu(webViewMenu.topMenu, menuTemplateVars);
+
   return (
     <div className="web-view-parent">
       {shouldShowToolbar && !isLoadingMenu && !isPlatformError(webViewMenu) && (
         <TabToolbar
           onSelectProjectMenuItem={projectMenuCommandHandler}
           onSelectViewInfoMenuItem={viewInfoMenuCommandHandler}
-          projectMenuData={webViewMenu.topMenu}
+          projectMenuData={evaluatedTopMenu}
           className="web-view-tab-nav"
           // In simple mode, hide the per-tab BCV control and scroll group selector for ALL webview
           // types served by this generic tab toolbar (commentary, notes, etc.) — not just scripture
@@ -522,11 +648,13 @@ export function WebView({
           startAreaChildren={
             isPowerMode ? (
               <BookChapterControl
+                ref={registerBookChapterControl}
                 scrRef={scrRef}
                 handleSubmit={setScrRef}
                 getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
                 recentSearches={recentScriptureRefs}
                 onAddRecentSearch={addRecentScriptureRef}
+                localizedStrings={bookChapterControlLocalizedStrings}
               />
             ) : undefined
           }
@@ -581,8 +709,10 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
     ...savedTabInfo,
     data,
     tabIconUrl: data.iconUrl,
+    tabIconName: data.iconName,
     tabTitle: data.title ?? '%tab_title_unknown%',
     tabTooltip: data.tooltip ?? '',
+    isClosable: data.isClosable,
     content: <WebView {...data} />,
   };
 }
@@ -606,6 +736,16 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
         try {
           await retrieveWebViewContent(data.webViewType, data.id);
         } catch (e) {
+          // A window that has been told it is closing refuses in-flight reloads; that refusal is
+          // an ordinary part of closing, not a failure worth surfacing at error level.
+          if (e instanceof WindowClosingError) {
+            logger.debug(
+              `web-view.component did not retrieve web view content for ${serialize(
+                savedTabInfo,
+              )}: ${getErrorMessage(e)}`,
+            );
+            return;
+          }
           logger.error(
             `web-view.component failed to retrieve web view content for ${serialize(
               savedTabInfo,

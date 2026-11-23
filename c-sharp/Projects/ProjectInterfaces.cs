@@ -10,6 +10,14 @@ public static class ProjectInterfaces
     /// Provider must implement
     /// </summary>
     public const string BASE = "platform.base";
+
+    /// <summary>
+    /// The `projectInterface` a Project Data Provider serves when it can list the data qualifiers an
+    /// extension has data for (`listExtensionDataQualifiers`). Separate from <see cref="BASE"/>
+    /// because not every PDP can enumerate its extension data and PDP methods are never optional: a
+    /// PDP that can enumerate advertises this interface, and one that cannot leaves it off.
+    /// </summary>
+    public const string EXTENSION_DATA_ENUMERATION = "platform.extensionDataEnumeration";
     public const string USFM_BOOK = "platformScripture.USFM_Book";
     public const string USFM_CHAPTER = "platformScripture.USFM_Chapter";
     public const string USFM_VERSE = "platformScripture.USFM_Verse";
@@ -19,6 +27,11 @@ public static class ProjectInterfaces
     public const string PLAIN_TEXT_VERSE = "platformScripture.PlainText_Verse";
     public const string LEGACY_COMMENT = "legacyCommentManager.comments";
     public const string MARKER_NAMES = "platformScripture.MarkerNames";
+    public const string STYLE_INFO = "platformScripture.StyleInfo";
     public const string TEXT_CONNECTION_SETTINGS = "platformScripture.textConnectionSettings";
+    public const string USER_EDITOR_SETTINGS = "platformScripture.userEditorSettings";
     public const string SCRIPTURE_EDIT_PERMISSIONS = "platformScripture.scriptureEditPermissions";
+    public const string VERSIFICATION = "platformScripture.Versification";
+    public const string PT9_INTERLINEAR = "platformScripture.Pt9Interlinear";
+    public const string COPY_LIMIT = "platformScripture.CopyLimit";
 }

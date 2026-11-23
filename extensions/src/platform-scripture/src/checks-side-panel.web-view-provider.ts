@@ -11,6 +11,9 @@ import tailwindStyles from './tailwind.css?inline';
 
 export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
+/** Lucide icon name for the tab icon, shown when Simple mode collapses tabs to icons only. */
+export const CHECKS_SIDE_PANEL_ICON_NAME = 'clipboard-check';
+
 export interface ChecksSidePanelWebViewOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   editorScrollGroupId: ScrollGroupScrRef | undefined;
@@ -31,14 +34,29 @@ export class ChecksSidePanelWebViewProvider implements IWebViewProvider {
   ): Promise<WebViewDefinition | undefined> {
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    const title = await papi.localization.getLocalizedString({
-      localizeKey: '%webView_checksSidePanel_title%',
-    });
+    const [title, interfaceMode] = await Promise.all([
+      papi.localization.getLocalizedString({
+        localizeKey: '%webView_checksSidePanel_title%',
+      }),
+      papi.settings.get('platform.interfaceMode'),
+    ]);
 
     return {
       ...savedWebView,
       title,
       projectId,
+      // In Simple mode this is a Column 3 tab, pinned like its siblings there: `getTabGroup` routes
+      // a non-closable tab of this type to Column 3's rc-dock group, which keeps it from being
+      // dragged into another column. Power mode docks it as an ordinary closable panel.
+      // TODO(PT-4405) move this into the renderer.
+      isClosable: interfaceMode !== 'simple',
+      // Icon only in Simple mode, like the other Column 3 tabs: Column 3 collapses its tabs to icons
+      // there, and a tab with no icon falls back to the generic app logo. The icon is drawn in the
+      // tab's text colour so it follows the theme. Power mode tabs are labeled with text and show
+      // the default logo; a saved icon is dropped so a Simple-mode icon doesn't carry over into
+      // Power mode.
+      iconName: interfaceMode === 'simple' ? CHECKS_SIDE_PANEL_ICON_NAME : undefined,
+      iconUrl: undefined,
       content: checksSidePanelWebView,
       styles: tailwindStyles,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,

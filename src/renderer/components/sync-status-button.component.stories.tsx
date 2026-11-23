@@ -1,0 +1,411 @@
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { type ComponentType, useEffect, useMemo, useState } from 'react';
+import { userEvent, within } from 'storybook/test';
+import { SyncStatusButton } from './sync-status-button.component';
+// Deep relative (not aliased) so the story drives the webpack-aliased `useSyncStatus` mock without
+// pulling it into tsc typecheck. Mirrors how the first-run steps reach `.storybook/*` helpers.
+import {
+  type SyncStatusMock,
+  SyncStatusMockContext,
+} from '../../../.storybook/mocks/sync-status-mock-channel';
+
+// The button reads nothing but `useSyncStatus()`, and in Storybook that hook has no Send/Receive
+// backend to derive a status from — so every state below is reached by naming the hook's return
+// value through `.storybook/mocks/use-sync-status.hook.ts` rather than by giving the component props
+// it does not have in the app. `Cancelling…` is the one state the hook cannot express (the button
+// owns it, entered by clicking Cancel): the Storybook command stub leaves `cancelSync` outstanding,
+// which is also what a real accepted cancel looks like until Send/Receive reaches a stopping point.
+
+const ONE_PROJECT = [{ projectId: 'proj-hnf', name: 'HNF' }];
+
+const SEVERAL_PROJECTS = [
+  { projectId: 'proj-hnf', name: 'HNF' },
+  { projectId: 'proj-tpts', name: 'TPTS' },
+  { projectId: 'proj-web', name: 'WEB' },
+];
+
+const TWO_PROJECTS: SyncStatusMock['unsyncedProjects'] = [
+  { projectId: 'proj-hnf', name: 'HNF', direction: 'send' },
+  { projectId: 'proj-tpts', name: 'TPTS', direction: 'send' },
+];
+
+const RECEIVE_PROJECTS: SyncStatusMock['unsyncedProjects'] = [
+  { projectId: 'proj-hnf', name: 'HNF', direction: 'receive' },
+];
+
+/** One project with changes in each direction, and one waiting only to be received. */
+const BOTH_PROJECTS: SyncStatusMock['unsyncedProjects'] = [
+  { projectId: 'proj-hnf', name: 'HNF', direction: 'both' },
+  { projectId: 'proj-tpts', name: 'TPTS', direction: 'receive' },
+];
+
+/** Long enough to clip inside the button's 180px cap, so the truncation tooltip is exercisable. */
+const LONG_NAME_PROJECT = [
+  { projectId: 'proj-long', name: 'Hunde New Testament and Portions Revision' },
+];
+
+/**
+ * What a story names. `isVerdictFromBackendOnly` defaults to false — the ordinary case, where the
+ * Send/Receive extension reported the verdict itself and the detail behind it exists — so only a
+ * story about a verdict the backend reported has to say otherwise.
+ */
+type StoryStatus = Omit<SyncStatusMock, 'isVerdictFromBackendOnly' | 'runEpoch'> & {
+  isVerdictFromBackendOnly?: boolean;
+  runEpoch?: number;
+};
+
+/** Fills in what a story left unsaid, so a new `SyncStatusInfo` field is defaulted in one place. */
+function resolveStatus(status: StoryStatus): SyncStatusMock {
+  return { isVerdictFromBackendOnly: false, runEpoch: 0, ...status };
+}
+
+/**
+ * Each story wraps the button in its own provider so stories rendered together on the autodocs page
+ * each read their own status. The value is built outside the render function to keep its identity
+ * stable across re-renders.
+ */
+function withSyncStatus(status: StoryStatus) {
+  const mock = resolveStatus(status);
+  return function StoryDecorator(Story: ComponentType) {
+    return (
+      <SyncStatusMockContext.Provider value={mock}>
+        <Story />
+      </SyncStatusMockContext.Provider>
+    );
+  };
+}
+
+/** How long the story below leaves the sync running after Cancel is clicked. */
+const CANCEL_TAKES_EFFECT_MS = 600;
+
+/**
+ * Drives the one sequence a fixed mock cannot express: a sync that is running, then ends as a
+ * non-success once the cancel takes effect. The button reads the two together — its own pending
+ * request plus the non-success outcome — to report a cancellation rather than a failure, so both
+ * halves have to happen in order for that state to exist.
+ */
+function withSyncEndingAfterCancel(syncingProjects: SyncStatusMock['syncingProjects']) {
+  return function StoryDecorator(Story: ComponentType) {
+    const [hasEnded, setHasEnded] = useState(false);
+    useEffect(() => {
+      const timeout = setTimeout(() => setHasEnded(true), CANCEL_TAKES_EFFECT_MS);
+      return () => clearTimeout(timeout);
+    }, []);
+    const mock = useMemo<SyncStatusMock>(
+      () =>
+        hasEnded
+          ? resolveStatus({ status: 'failed', syncingProjects: [], unsyncedProjects: [] })
+          : resolveStatus({ status: 'syncing', syncingProjects, unsyncedProjects: [] }),
+      // `syncingProjects` is the decorator factory's own argument, fixed for the story's lifetime.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [hasEnded],
+    );
+    return (
+      <SyncStatusMockContext.Provider value={mock}>
+        <Story />
+      </SyncStatusMockContext.Provider>
+    );
+  };
+}
+
+const meta: Meta<typeof SyncStatusButton> = {
+  title: 'Advanced/SyncStatusButton',
+  component: SyncStatusButton,
+  tags: ['autodocs'],
+  decorators: [
+    // Stands in for the toolbar: the button is sized to shrink and truncate inside a bar, so
+    // reviewing it outside one would hide the clipping it is designed for.
+    (Story) => (
+      <div className="tw:flex tw:h-14 tw:w-[420px] tw:items-center tw:justify-end tw:gap-1 tw:rounded-md tw:border tw:bg-background tw:px-2">
+        <Story />
+      </div>
+    ),
+  ],
+};
+export default meta;
+
+type Story = StoryObj<typeof SyncStatusButton>;
+
+/** Clicks the button, which is what opens the popover — it has no controlled `open` prop. */
+const openPopover: NonNullable<Story['play']> = async ({ canvasElement }) => {
+  await userEvent.click(within(canvasElement).getByTestId('toolbar-sync-button'));
+};
+
+/**
+ * Nothing has synced this session and nothing is running: the resting "Sync" label behind the sync
+ * glyph. Every state carries an icon, because the label is capped and truncates — a squeezed
+ * toolbar would otherwise leave this control a clipped word with nothing identifying it.
+ */
+export const Idle: Story = {
+  decorators: [withSyncStatus({ status: 'idle', syncingProjects: [], unsyncedProjects: [] })],
+};
+
+/**
+ * A sync is running but its projects are not knowable — a Send/Receive build predating
+ * `syncingProjectIds`, or a state read that failed. The bare "Syncing" is the honest label; naming
+ * a guessed project is the untruthfulness this control exists to remove.
+ */
+export const SyncingUnknownProjects: Story = {
+  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: [], unsyncedProjects: [] })],
+};
+
+/** One project syncing, named in the label. */
+export const SyncingOneProject: Story = {
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: ONE_PROJECT, unsyncedProjects: [] }),
+  ],
+};
+
+/** Several projects syncing: the label counts them rather than listing them in the bar. */
+export const SyncingSeveralProjects: Story = {
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: SEVERAL_PROJECTS, unsyncedProjects: [] }),
+  ],
+};
+
+/** The last sync finished and every project in it succeeded. */
+export const Synced: Story = {
+  decorators: [withSyncStatus({ status: 'synced', syncingProjects: [], unsyncedProjects: [] })],
+};
+
+/**
+ * The last sync finished with at least one project that did not succeed, and nobody asked for it to
+ * stop. Send/Receive reports a user-cancelled sync the same way — its unfinished projects get a
+ * non-success result rather than a cancellation of their own — so `Cancelled` below is this state
+ * plus the button's own knowledge that it made the request.
+ */
+export const Failed: Story = {
+  decorators: [withSyncStatus({ status: 'failed', syncingProjects: [], unsyncedProjects: [] })],
+};
+
+/**
+ * The sync the user cancelled has now stopped. Reported as a cancellation, muted rather than in
+ * destructive red: the sync did not go wrong, it was stopped on request, and colouring it as an
+ * error reports the user's own click back to them as a fault. Send/Receive carries no `cancelled`
+ * result status, so this control's pending request is the only thing separating the two.
+ */
+export const Cancelled: Story = {
+  decorators: [withSyncEndingAfterCancel(ONE_PROJECT)],
+  play: async (context) => {
+    await openPopover(context);
+    // Radix portals the popover content to `document.body`, so it is outside the story canvas.
+    await userEvent.click(within(document.body).getByTestId('toolbar-sync-cancel-button'));
+  },
+};
+
+/**
+ * No sync is running, the last one did not fail, and at least one project holds local changes not
+ * yet sent: "Unsynced changes". Read from each project's repository, so it also covers edits made
+ * in an earlier session.
+ */
+export const Unsynced: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: TWO_PROJECTS,
+      unsyncedDirection: 'send',
+    }),
+  ],
+};
+
+/** Changes are waiting on the server only: nothing local to send, so the receive icon shows. */
+export const UnsyncedReceive: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: RECEIVE_PROJECTS,
+      unsyncedDirection: 'receive',
+    }),
+  ],
+};
+
+/** Changes are waiting in both directions, so the combined icon shows. */
+export const UnsyncedBoth: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: BOTH_PROJECTS,
+      unsyncedDirection: 'both',
+    }),
+  ],
+};
+
+/**
+ * The status could not be read at all. Deliberately not `idle`: "nothing has synced" would be a
+ * positive claim resting on a read that never answered — which is what the question-mark icon says,
+ * in place of `Idle`'s sync glyph.
+ */
+export const Unknown: Story = {
+  decorators: [withSyncStatus({ status: 'unknown', syncingProjects: [], unsyncedProjects: [] })],
+};
+
+/**
+ * A project name too long for the button, so the label truncates instead of pushing its toolbar
+ * neighbours off the bar. Hover it to see the tooltip that keeps the full name recoverable — the
+ * tooltip appears only while the label is actually clipped.
+ */
+export const TruncatedProjectName: Story = {
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: LONG_NAME_PROJECT, unsyncedProjects: [] }),
+  ],
+};
+
+/** Popover during a sync: the projects by name, Cancel sync, and the way through to the details. */
+export const PopoverSyncing: Story = {
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: SEVERAL_PROJECTS, unsyncedProjects: [] }),
+  ],
+  play: openPopover,
+};
+
+/** Popover during a sync whose projects are unknown: the bare "Syncing" line in place of the list. */
+export const PopoverSyncingUnknownProjects: Story = {
+  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: [], unsyncedProjects: [] })],
+  play: openPopover,
+};
+
+/**
+ * Popover during a sync the backend is reporting progress for: the current item and its percent.
+ * This is what a Simple-mode sync loses if the indicator carries no progress: core's direct sync
+ * callers (the startup and project-switch syncs) suppress the persistent C# toast in favour of this
+ * surface, and the Send/Receive extension's `syncOpenProjects` does the same in Simple mode once
+ * paranext/paratext-bible-internal-extensions#206 lands; Power-mode syncs (auto-sync, session
+ * syncs) keep the toast.
+ */
+export const PopoverSyncingWithProgress: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'syncing',
+      syncingProjects: SEVERAL_PROJECTS,
+      unsyncedProjects: [],
+      syncProgress: { text: 'GreekNT', fraction: 0.42 },
+    }),
+  ],
+  play: openPopover,
+};
+
+/**
+ * Indeterminate progress, shown verbatim with no percent. ParatextData sends a complete localized
+ * sentence here, and this is the case a user on a flaky connection most needs to see — without it a
+ * retrying sync is indistinguishable from a stuck one.
+ */
+export const PopoverSyncingReconnecting: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'syncing',
+      syncingProjects: ONE_PROJECT,
+      unsyncedProjects: [],
+      syncProgress: { text: 'Connection to server lost. Retrying…' },
+    }),
+  ],
+  play: openPopover,
+};
+
+/** Popover while idle: no Cancel, since there is nothing to cancel. */
+export const PopoverIdle: Story = {
+  decorators: [withSyncStatus({ status: 'idle', syncingProjects: [], unsyncedProjects: [] })],
+  play: openPopover,
+};
+
+/** Popover after a successful sync. */
+export const PopoverSynced: Story = {
+  decorators: [withSyncStatus({ status: 'synced', syncingProjects: [], unsyncedProjects: [] })],
+  play: openPopover,
+};
+
+/** Popover after a sync that did not succeed — the case "View sync details" exists for. */
+export const PopoverFailed: Story = {
+  decorators: [withSyncStatus({ status: 'failed', syncingProjects: [], unsyncedProjects: [] })],
+  play: openPopover,
+};
+
+/** Popover with unsent local changes: the projects that hold them, by name. */
+export const PopoverUnsynced: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: TWO_PROJECTS,
+      unsyncedDirection: 'send',
+    }),
+  ],
+  play: openPopover,
+};
+
+/**
+ * Popover with changes in both directions: a project with both appears under each heading, and a
+ * receive-only project appears under "Changes to receive:" alone.
+ */
+export const PopoverUnsyncedBoth: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: BOTH_PROJECTS,
+      unsyncedDirection: 'both',
+    }),
+  ],
+  play: openPopover,
+};
+
+/**
+ * A sync the Send/Receive extension never saw — the Simple-mode startup sync — which the backend
+ * itself reported as failed. "View sync details" stays in place but is inert, with a line saying
+ * why: it opens that extension's own last results, which describe a DIFFERENT sync. Dimmed rather
+ * than removed, because this popover updates live and taking a control away under someone who is in
+ * it drops their focus.
+ */
+export const PopoverFailedFromBackend: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'failed',
+      syncingProjects: [],
+      unsyncedProjects: [],
+      isVerdictFromBackendOnly: true,
+    }),
+  ],
+  play: openPopover,
+};
+
+/**
+ * The same arrangement for a sync that SUCCEEDED. The detail behind a success belongs to just as
+ * different a sync, so the link is dimmed here too — the case most likely to read as a bug if the
+ * control simply vanished once a startup sync finished well.
+ */
+export const PopoverSyncedFromBackend: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'synced',
+      syncingProjects: [],
+      unsyncedProjects: [],
+      isVerdictFromBackendOnly: true,
+    }),
+  ],
+  play: openPopover,
+};
+
+/** Popover when the status is unreadable: it says so rather than claiming no sync is running. */
+export const PopoverUnknown: Story = {
+  decorators: [withSyncStatus({ status: 'unknown', syncingProjects: [], unsyncedProjects: [] })],
+  play: openPopover,
+};
+
+/**
+ * Cancel has been clicked and the request accepted, so the button reads "Cancelling…" and is
+ * `aria-disabled` (not `disabled`, which would drop focus out of this non-modal popover). The sync
+ * keeps reporting `syncing` meanwhile, because a cancel only takes effect when Send/Receive reaches
+ * a stopping point.
+ */
+export const Cancelling: Story = {
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: ONE_PROJECT, unsyncedProjects: [] }),
+  ],
+  play: async (context) => {
+    await openPopover(context);
+    // Radix portals the popover content to `document.body`, so it is outside the story canvas.
+    await userEvent.click(within(document.body).getByTestId('toolbar-sync-cancel-button'));
+  },
+};

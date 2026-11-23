@@ -1,0 +1,2061 @@
+// @vitest-environment jsdom
+// We pull the click handler out of `setAnnotationSpy.mock.calls[0][3]` (typed `unknown`) and
+// must cast it to a callable signature for the test to invoke it. There is no cleaner alternative.
+/* eslint-disable no-type-assertion/no-type-assertion */
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as React from 'react';
+import { render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import type { Usj } from '@eten-tech-foundation/scripture-utilities';
+import {
+  EnhancedScripturePane,
+  ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
+  annotationToRange,
+  detectSourceLanguage,
+  renderTooltipMarkdown,
+} from './scripture-pane.component';
+import type { MarbleAnnotation } from '../../lib/marble-converter';
+import type { TooltipViewModel } from '../../presenters/tooltip-presenter';
+
+// Module-scope spies so tests can assert on calls across renders. The mock's
+// useImperativeHandle returns a fresh object each render, but the spies it
+// references are stable - so assertions stay reliable.
+const setAnnotationSpy = vi.fn();
+const removeAnnotationSpy = vi.fn();
+// D-012: spy on Editorial's imperative `setUsj()` so we can verify the chapter-change sync.
+const setUsjSpy = vi.fn();
+// D-008: capture the logger that EnhancedScripturePane passes to <Editorial> so we can verify
+// the wrapper downgrades the "Failed to find start or end node of the annotation" error.
+let lastEditorialLogger:
+  | {
+      error: (...args: unknown[]) => void;
+      warn: (...args: unknown[]) => void;
+      info: (...args: unknown[]) => void;
+      debug: (...args: unknown[]) => void;
+    }
+  | undefined;
+// Capture the `options` object passed to <Editorial> so tests can assert both the derived
+// `extraValidMarkers` and — critically — that its identity stays STABLE across USJ changes that
+// don't change the marker set (an identity change would make the real Editorial reconcile and
+// destroy Marble marks).
+let lastEditorialOptions: { nodes?: { extraValidMarkers?: readonly string[] } } | undefined;
+
+// papi.overlays is an external boundary; mock it so unit tests can assert on
+// hover-lifecycle calls without spinning up the real overlay service.
+const mockShowPopover = vi.fn();
+const mockUpdatePopover = vi.fn();
+const mockDismissPopover = vi.fn();
+
+vi.mock('@papi/frontend', () => ({
+  default: {
+    overlays: {
+      showPopover: (...args: unknown[]) => mockShowPopover(...args),
+      updatePopover: (...args: unknown[]) => mockUpdatePopover(...args),
+      dismissPopover: (...args: unknown[]) => mockDismissPopover(...args),
+    },
+  },
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+// Network-object proxy mock. The component fetches the popover content through this proxy (no
+// papi.commands.sendCommand path remains since the D-02 fix). Methods declared with vi.fn() so
+// individual tests can override .mockResolvedValueOnce / .mockRejectedValueOnce as needed.
+// EnhancedResourcesNetworkObject has many methods we don't exercise in this test - cast through
+// `unknown` so we only need to stub the two methods the scripture pane actually calls.
+const mockErProxy = {
+  buildTooltipData: vi.fn(),
+  translatePartOfSpeech: vi.fn(),
+} as unknown as import('../../lib/use-enhanced-resources-proxy').EnhancedResourcesNetworkObject & {
+  buildTooltipData: ReturnType<typeof vi.fn>;
+  translatePartOfSpeech: ReturnType<typeof vi.fn>;
+};
+
+const SCR_REF_JHN_1_1 = { book: 'JHN', chapterNum: 1, verseNum: 1 };
+
+beforeAll(() => {
+  (globalThis as unknown as { webViewId: string }).webViewId = 'test-webview';
+});
+
+// Editorial is heavy and depends on Lexical; mock it so unit tests stay fast and isolated.
+// The mock renders a div the tests can query, and exposes setAnnotation/removeAnnotation spies on a ref.
+vi.mock('@eten-tech-foundation/platform-editor', () => {
+  return {
+    Editorial: React.forwardRef(function MockEditorial(
+      props: {
+        defaultUsj?: unknown;
+        options?: { isReadonly?: boolean; nodes?: { extraValidMarkers?: readonly string[] } };
+        logger?: {
+          error: (...args: unknown[]) => void;
+          warn: (...args: unknown[]) => void;
+          info: (...args: unknown[]) => void;
+          debug: (...args: unknown[]) => void;
+        };
+      },
+      ref: React.Ref<{
+        setAnnotation: (...args: unknown[]) => void;
+        removeAnnotation: (...args: unknown[]) => void;
+        setUsj: (...args: unknown[]) => void;
+      }>,
+    ) {
+      React.useImperativeHandle(ref, () => ({
+        setAnnotation: setAnnotationSpy,
+        removeAnnotation: removeAnnotationSpy,
+        setUsj: setUsjSpy,
+      }));
+      // D-008: capture the logger so tests can drive it as the editor would.
+      lastEditorialLogger = props.logger;
+      // Capture options so tests can assert extraValidMarkers content + options-identity stability.
+      lastEditorialOptions = props.options;
+      return (
+        <div
+          data-testid="mock-editorial"
+          data-readonly={String(props.options?.isReadonly ?? false)}
+          data-has-usj={String(props.defaultUsj !== undefined)}
+        />
+      );
+    }),
+    getDefaultViewOptions: () => ({}),
+  };
+});
+
+const STRINGS_BAG = {
+  '%enhancedResources_scripturePane_loading%': 'Loading',
+  '%enhancedResources_scripturePane_emptyTitle%': 'No content',
+  '%enhancedResources_scripturePane_emptyDescription%': 'Open a resource',
+  '%enhancedResources_scripturePane_errorTitle%': 'Something went wrong',
+  '%enhancedResources_scripturePane_filterActive%': 'Filter',
+};
+
+// Most tests in this file rely on `setAnnotation` having been called by the time the test queries
+// the spy. Effect A / Effect C defer their first chunk by one `requestAnimationFrame` (so the
+// editor's Lexical tree has a frame to commit before annotations are applied — see
+// `usjJustChangedRef` in scripture-pane.component.tsx); jsdom doesn't drain those frames inside an
+// `await Promise.resolve()`, so without intervention every test would have to manually schedule a
+// RAF flush. Replace `requestAnimationFrame` with a synchronous shim that invokes the callback
+// immediately, plus `flushMountEffects()` resolves the chained microtasks the async applyChunked
+// helper hits so spy assertions become observable.
+//
+// Tests that specifically exercise the RAF deferral (the D-013 suite) override this via
+// `vi.spyOn(globalThis, 'requestAnimationFrame')`; their `mockRestore()` returns us to the
+// synchronous shim, which is the right baseline for the surrounding tests.
+beforeEach(() => {
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+    cb(0);
+    return 0;
+  }) as typeof globalThis.requestAnimationFrame;
+});
+
+/**
+ * Flush the microtask chain that `applyChunked` schedules: the function awaits one `Promise<void>`
+ * resolved by the (now-synchronous) RAF callback, then optionally awaits another `Promise<void>`
+ * between chunks. Two `await Promise.resolve()`s reliably let it run through the first chunk's
+ * setAnnotation calls before the test queries the spy.
+ */
+async function flushMountEffects(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+/**
+ * Create a fake `<mark>` element with the `annotationId-${id}` class that the editor would normally
+ * emit, append it to document.body, and return it. The marble overlay rules in production are
+ * CSS-only (see `buildMarbleOverlayCss`), so tests can verify behavior either by asserting on the
+ * dynamic stylesheet content (`getOverlayCss` / `overlayHasRuleFor`) - which is the canonical path
+ *
+ * - Or by relying on jsdom's CSS matching against this fixture for end-to-end-style cases.
+ *   Module-scope so both the EnhancedScripturePane and marble-hover-lifecycle suites can share it.
+ */
+function createMarkFixture(id: string): HTMLElement {
+  const mark = globalThis.document.createElement('mark');
+  mark.className = `editor-typed-mark-external-marble-word annotationId-${id}`;
+  globalThis.document.body.appendChild(mark);
+  return mark;
+}
+
+/**
+ * Read the textContent of the dynamic overlay stylesheet the component installs in document.head.
+ * Returns an empty string if no overlay stylesheet is mounted (which is the case before any
+ * EnhancedScripturePane has been rendered).
+ */
+function getOverlayCss(): string {
+  return document.querySelector('style[data-er-marble-overlays]')?.textContent ?? '';
+}
+
+/**
+ * Check whether the dynamic overlay stylesheet contains a rule that targets `annotationId-${id}`
+ * AND sets the given background-color CSS variable. Parses the stylesheet by splitting on `}` and
+ * matching each rule's selector list against the id; precise enough to distinguish filter (one
+ * specific id) from filter-match (the lemma siblings) from hover-match.
+ */
+function overlayHasRuleFor(annotationId: string, bgCssVar: string): boolean {
+  const css = getOverlayCss();
+  const ruleBlocks = css.split('}').filter((block) => block.includes('{'));
+  return ruleBlocks.some((block) => {
+    const [selectorList, declarations] = block.split('{');
+    return (
+      selectorList.includes(`annotationId-${annotationId}`) &&
+      declarations.includes(`var(${bgCssVar})`)
+    );
+  });
+}
+
+/** True when the global highlight-all rule (no annotation-id selector) is present. */
+function overlayHasHighlightAllRule(): boolean {
+  return getOverlayCss().includes('var(--er-marble-highlight-all-bg)');
+}
+
+/**
+ * D-013: drain a queue of stubbed requestAnimationFrame callbacks sequentially, yielding to
+ * microtasks twice between each. Callers stub `globalThis.requestAnimationFrame` with a push to the
+ * queue and call this helper to flush. The sequential drain is intentional — we mimic the browser's
+ * one-callback-per-frame ordering, and yielding to microtasks twice lets the async applyChunked()
+ * resume past its `await new Promise(RAF)` and enqueue the next iteration before the helper picks
+ * it up.
+ */
+async function drainRafQueue(queue: FrameRequestCallback[]): Promise<void> {
+  // Use a guarded shift in a while loop with proper handling of the `undefined` shift result.
+  // Sequential awaits are required for ordering (see helper docstring above).
+  /* eslint-disable no-await-in-loop */
+  while (queue.length > 0) {
+    const cb = queue.shift();
+    if (cb) {
+      cb(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+}
+
+/**
+ * Build a minimal USJ fixture whose first paragraph has `count` text children. Annotation paths
+ * shaped `$.content[0].content[N]` resolve to string leaves, so `annotationToRange` returns a valid
+ * non-collapsed range for each.
+ */
+function makeTestUsj(count: number): Usj {
+  return {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      {
+        type: 'para',
+        marker: 'p',
+        content: Array.from({ length: count }, (_, i) => `word-${i}`),
+      },
+    ],
+  } as unknown as Usj;
+}
+
+beforeEach(() => {
+  // restoreAllMocks resets vi.spyOn() targets back to originals - must run BEFORE we install
+  // the per-test mock implementations below, otherwise our resolved-value setup gets wiped.
+  vi.restoreAllMocks();
+  // Clear any leftover hover/mark fixtures from previous tests. createMarkFixture in the
+  // hover-lifecycle suite appends <mark> elements to document.body, and makeFakeMouseEvent
+  // appends a <span> for the hover event's currentTarget.ownerDocument scope. Leaking
+  // these would cross-contaminate getOverlayCss results across tests.
+  // Only remove the fixtures (mark+span at the body root), NOT testing-library's render
+  // containers (which @testing-library/react cleans up via its own auto-cleanup).
+  document
+    .querySelectorAll('body > mark, body > span')
+    .forEach((node) => node.parentNode?.removeChild(node));
+  // Also remove any stale overlay stylesheet from a previous test (testing-library's auto-
+  // unmount handles this in practice, but a hard sweep guards against partial cleanup).
+  document
+    .querySelectorAll('style[data-er-marble-overlays]')
+    .forEach((node) => node.parentNode?.removeChild(node));
+  setAnnotationSpy.mockClear();
+  removeAnnotationSpy.mockClear();
+  setUsjSpy.mockClear();
+  mockShowPopover.mockReset();
+  mockShowPopover.mockResolvedValue('overlay-1');
+  mockUpdatePopover.mockReset();
+  mockUpdatePopover.mockResolvedValue(undefined);
+  mockDismissPopover.mockReset();
+  mockDismissPopover.mockResolvedValue(undefined);
+  mockErProxy.buildTooltipData.mockReset();
+  mockErProxy.buildTooltipData.mockResolvedValue({
+    sourceForm: 'λόγος',
+    lemma: 'λόγος',
+    partOfSpeechRaw: 'noun',
+    rawGlosses: ['word, speech, reason'],
+  });
+  mockErProxy.translatePartOfSpeech.mockReset();
+  mockErProxy.translatePartOfSpeech.mockResolvedValue({
+    displayString: 'noun (masculine)',
+    isKnown: true,
+    localizationKey: 'pos.noun.m',
+  });
+});
+
+describe('EnhancedScripturePane', () => {
+  it('renders the loading skeleton when isLoading is true', () => {
+    render(
+      <EnhancedScripturePane
+        usj={undefined}
+        annotations={[]}
+        isLoading
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    const pane = screen.getByTestId('er-scripture-pane');
+    expect(pane).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('renders the empty state when usj is undefined and not loading', () => {
+    render(
+      <EnhancedScripturePane
+        usj={undefined}
+        annotations={[]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    expect(screen.getByText('No content')).toBeInTheDocument();
+    expect(screen.getByText('Open a resource')).toBeInTheDocument();
+  });
+
+  it('renders an alert when errorMessage is provided', () => {
+    render(
+      <EnhancedScripturePane
+        usj={undefined}
+        annotations={[]}
+        errorMessage="boom"
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong');
+    expect(screen.getByRole('alert')).toHaveTextContent('boom');
+  });
+
+  it('renders the Editorial component in readonly mode when usj is supplied', () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    const editorial = screen.getByTestId('mock-editorial');
+    expect(editorial).toHaveAttribute('data-readonly', 'true');
+    expect(editorial).toHaveAttribute('data-has-usj', 'true');
+  });
+
+  // The pane derives extraValidMarkers from the displayed USJ (so the editor doesn't warn about
+  // handbook markers) and keys `options` on the marker SET so the object identity stays stable
+  // across chapter changes that reuse the same markers — an identity change would make Editorial
+  // reconcile and destroy the Marble annotation marks.
+  describe('extraValidMarkers passed to Editorial', () => {
+    const usjWithMarkers = (markers: string[]): Usj =>
+      ({
+        type: 'USJ',
+        version: '3.1',
+        content: markers.map((marker) => ({ type: 'para', marker, content: ['x'] })),
+      }) as unknown as Usj;
+
+    it('passes the distinct markers the USJ uses — sorted, deduped, z-markers omitted', () => {
+      render(
+        <EnhancedScripturePane
+          usj={usjWithMarkers(['pn', 'jmp', 'pn', 'zbadge'])}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(lastEditorialOptions?.nodes?.extraValidMarkers).toEqual(['jmp', 'pn']);
+    });
+
+    it('keeps options identity stable for the same marker set (any order) and changes it when the set changes', () => {
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={usjWithMarkers(['pn', 'jmp'])}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      const optionsForPnJmp = lastEditorialOptions;
+      expect(optionsForPnJmp?.nodes?.extraValidMarkers).toEqual(['jmp', 'pn']);
+
+      // Same set, different first-seen order (plus a duplicate) → same key → SAME options identity.
+      rerender(
+        <EnhancedScripturePane
+          usj={usjWithMarkers(['jmp', 'pn', 'jmp'])}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(lastEditorialOptions).toBe(optionsForPnJmp);
+
+      // Different set → new options identity and updated markers.
+      rerender(
+        <EnhancedScripturePane
+          usj={usjWithMarkers(['pn', 'jmp', 'xtSee'])}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(lastEditorialOptions).not.toBe(optionsForPnJmp);
+      expect(lastEditorialOptions?.nodes?.extraValidMarkers).toEqual(['jmp', 'pn', 'xtSee']);
+    });
+  });
+
+  it('hands Editorial no context-menu container, so the editor keeps its menu at interface scale', () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+
+    // Positive control: the options object reached the editor, so the absence below is real.
+    expect(lastEditorialOptions?.nodes).toBeDefined();
+    expect(lastEditorialOptions).not.toHaveProperty('contextMenuContainer');
+  });
+
+  it('exports the localized string keys as a frozen array', () => {
+    expect(Object.isFrozen(ENHANCED_SCRIPTURE_PANE_STRING_KEYS)).toBe(true);
+    expect(ENHANCED_SCRIPTURE_PANE_STRING_KEYS).toContain(
+      '%enhancedResources_scripturePane_emptyTitle%',
+    );
+  });
+
+  // D-012 (2026-05-16): ER scripture pane was stuck on the initially-loaded chapter when the
+  // wiring layer reloaded USJ after a BCV nav. Editorial reads `defaultUsj` only at mount time,
+  // so subsequent USJ prop changes must be pushed through the imperative `setUsj()` ref API.
+  describe('D-012 chapter-USJ sync on prop change', () => {
+    it('does not call setUsj on the initial mount (defaultUsj covers it)', () => {
+      const initialUsj = makeTestUsj(2);
+      render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // Editorial consumes the value via defaultUsj on mount; calling setUsj() once more would
+      // force a redundant Lexical re-init.
+      expect(setUsjSpy).not.toHaveBeenCalled();
+    });
+
+    it('pushes the new USJ through editor.setUsj() when the usj prop changes after mount', () => {
+      const initialUsj = makeTestUsj(2);
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(setUsjSpy).not.toHaveBeenCalled();
+
+      const newChapterUsj = makeTestUsj(5);
+      rerender(
+        <EnhancedScripturePane
+          usj={newChapterUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      expect(setUsjSpy).toHaveBeenCalledTimes(1);
+      expect(setUsjSpy).toHaveBeenCalledWith(newChapterUsj);
+    });
+
+    it('does not call setUsj when re-rendered with the same usj reference', () => {
+      const initialUsj = makeTestUsj(2);
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      rerender(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          highlightAllResearchTerms
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // Unrelated prop change (highlightAllResearchTerms) must NOT trigger a redundant setUsj push.
+      expect(setUsjSpy).not.toHaveBeenCalled();
+    });
+
+    it('skips the setUsj push when the new usj is undefined (empty state takes over)', () => {
+      const initialUsj = makeTestUsj(2);
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      rerender(
+        <EnhancedScripturePane
+          usj={undefined}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // No Editorial to push to — the empty state renders instead.
+      expect(setUsjSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // D-013 (2026-05-16): D-012's setUsj path was racing the chunked-RAF annotation apply. The
+  // editor schedules its Lexical-tree rebuild on the next render, but Effect A / Effect C started
+  // setAnnotation calls SYNCHRONOUSLY after setUsj — yielding "Failed to find start or end node"
+  // misses in bulk and an intermittent renderer crash when the editor's queued update overlapped
+  // the LoadStatePlugin commit. Fix: defer the first chunk by one RAF after a USJ swap, AND
+  // capture a per-run "epoch" so a subsequent USJ swap aborts the in-flight chunked apply
+  // immediately (per-chunk and per-item) rather than waiting for the effect cleanup to flip
+  // `cancelled`.
+  describe('D-013 chunked-RAF apply coordination with setUsj', () => {
+    it('defers the first chunk by one RAF on first mount (Lexical tree not yet committed)', async () => {
+      // Although Editorial consumed `defaultUsj` synchronously, the Lexical tree it builds is
+      // committed inside React effects that haven't fired by the time our Effect A first runs.
+      // Storybook verified the race: without first-mount RAF deferral, every setAnnotation call
+      // silently fails to resolve and no <mark> elements wrap the wg spans. The cost is one frame
+      // of latency at mount, which is imperceptible compared to the (otherwise) total failure.
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+      const rafCallbacks: FrameRequestCallback[] = [];
+      rafSpy.mockImplementation((cb) => {
+        rafCallbacks.push(cb);
+        return rafCallbacks.length;
+      });
+
+      try {
+        const annotations: MarbleAnnotation[] = [
+          {
+            usjPath: '$.content[0].content[1]',
+            kind: 'word',
+            annotationId: 'wg-mount-1',
+            metadata: {},
+          },
+        ];
+        render(
+          <EnhancedScripturePane
+            usj={makeTestUsj(3)}
+            annotations={annotations}
+            localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+          />,
+        );
+
+        // Synchronously, setAnnotation must NOT have fired — Effect A scheduled a RAF and is
+        // waiting for it.
+        expect(setAnnotationSpy).not.toHaveBeenCalled();
+        expect(rafCallbacks.length).toBeGreaterThanOrEqual(1);
+
+        // Flush the deferred RAF and yield to microtasks so applyChunked resumes past
+        // `await new Promise(RAF)`.
+        await drainRafQueue(rafCallbacks);
+
+        expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+        expect(setAnnotationSpy).toHaveBeenCalledWith(
+          expect.anything(),
+          'marble-word',
+          'wg-mount-1',
+          expect.any(Object),
+        );
+      } finally {
+        rafSpy.mockRestore();
+      }
+    });
+
+    it('defers the first chunk by one RAF when usj changes after mount', async () => {
+      // Setup: stub requestAnimationFrame so we can drive it deterministically. We have to
+      // restore it after the test so other tests (which use RAF for the chunk-yield) are not
+      // affected.
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+      const rafCallbacks: FrameRequestCallback[] = [];
+      rafSpy.mockImplementation((cb) => {
+        rafCallbacks.push(cb);
+        return rafCallbacks.length;
+      });
+
+      const initialUsj = makeTestUsj(3);
+      const annotations: MarbleAnnotation[] = [
+        {
+          usjPath: '$.content[0].content[1]',
+          kind: 'word',
+          annotationId: 'wg-001',
+          metadata: {},
+        },
+      ];
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={annotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // Mount-time chunk also defers by one RAF (see the "defers the first chunk by one RAF on
+      // first mount" test). Drain the mount-time RAF so subsequent assertions about the
+      // post-mount swap see a clean spy state.
+      await drainRafQueue(rafCallbacks);
+      expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+      setAnnotationSpy.mockClear();
+
+      // Now swap USJ. D-012 fires `editor.setUsj()` and D-013 sets the "just changed" flag so
+      // Effect A's next run defers its first chunk by one RAF.
+      const newChapterUsj = makeTestUsj(3);
+      const newChapterAnnotations: MarbleAnnotation[] = [
+        {
+          usjPath: '$.content[0].content[1]',
+          kind: 'word',
+          annotationId: 'wg-002',
+          metadata: {},
+        },
+      ];
+      rerender(
+        <EnhancedScripturePane
+          usj={newChapterUsj}
+          annotations={newChapterAnnotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      // Effect A scheduled a RAF; setAnnotation must NOT have fired yet — that's the load-bearing
+      // safety property (we wait for the editor's setUsj-driven re-render to commit first).
+      expect(setAnnotationSpy).not.toHaveBeenCalled();
+      expect(rafCallbacks.length).toBeGreaterThanOrEqual(1);
+
+      // Flush the deferred RAF and yield to microtasks so applyChunked resumes past
+      // `await new Promise(RAF)`.
+      await drainRafQueue(rafCallbacks);
+
+      // Now setAnnotation fires against the new tree with the new annotation id.
+      expect(setAnnotationSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        'marble-word',
+        'wg-002',
+        expect.any(Object),
+      );
+
+      rafSpy.mockRestore();
+    });
+
+    it('aborts an in-flight chunked apply when usj changes again before completion', async () => {
+      // This test simulates a fast double-nav (BCV nav fires twice while the first nav's
+      // chunked apply is still running). The epoch guard must abort the first apply so its
+      // stale setAnnotation calls don't hit the new tree.
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+      const rafCallbacks: FrameRequestCallback[] = [];
+      rafSpy.mockImplementation((cb) => {
+        rafCallbacks.push(cb);
+        return rafCallbacks.length;
+      });
+
+      const initialUsj = makeTestUsj(3);
+      const chapterAAnnotations: MarbleAnnotation[] = Array.from({ length: 3 }, (_, i) => ({
+        usjPath: `$.content[0].content[${i % 3}]`,
+        kind: 'word',
+        annotationId: `wg-A-${i}`,
+        metadata: {},
+      }));
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={chapterAAnnotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      // Mount: chunk is RAF-deferred (see the "defers the first chunk by one RAF on first mount"
+      // test). Drain that RAF, then assert + clear the spy state before exercising the swap path.
+      await drainRafQueue(rafCallbacks);
+      expect(setAnnotationSpy).toHaveBeenCalledTimes(3);
+      setAnnotationSpy.mockClear();
+
+      // First USJ swap → schedules a RAF for the deferred first chunk.
+      const chapterBUsj = makeTestUsj(3);
+      const chapterBAnnotations: MarbleAnnotation[] = Array.from({ length: 3 }, (_, i) => ({
+        usjPath: `$.content[0].content[${i % 3}]`,
+        kind: 'word',
+        annotationId: `wg-B-${i}`,
+        metadata: {},
+      }));
+      rerender(
+        <EnhancedScripturePane
+          usj={chapterBUsj}
+          annotations={chapterBAnnotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(setAnnotationSpy).not.toHaveBeenCalled();
+
+      // Second USJ swap BEFORE we flush the first RAF — this bumps the epoch and the first
+      // apply must abort instead of touching the editor.
+      const chapterCUsj = makeTestUsj(3);
+      const chapterCAnnotations: MarbleAnnotation[] = Array.from({ length: 3 }, (_, i) => ({
+        usjPath: `$.content[0].content[${i % 3}]`,
+        kind: 'word',
+        annotationId: `wg-C-${i}`,
+        metadata: {},
+      }));
+      rerender(
+        <EnhancedScripturePane
+          usj={chapterCUsj}
+          annotations={chapterCAnnotations}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      // Flush all RAFs that have been scheduled. The first-pass RAF was scheduled by Chapter B's
+      // applyChunked but Chapter C's rerender already incremented the epoch — that pass must NOT
+      // call setAnnotation. The second RAF was scheduled by Chapter C's applyChunked and SHOULD
+      // call setAnnotation for the chapter-C ids. Drain helper isolates the await-in-loop pattern
+      // (which is intentional here - we MUST flush sequentially to mimic browser frame ordering)
+      // out of the test body.
+      await drainRafQueue(rafCallbacks);
+
+      // Only chapter-C annotation ids must have fired — Chapter B's pass was aborted by the
+      // epoch guard before its first setAnnotation call.
+      const calledIds = setAnnotationSpy.mock.calls.map((call) => call[2]);
+      expect(calledIds.every((id) => typeof id === 'string' && id.startsWith('wg-C-'))).toBe(true);
+      expect(calledIds.length).toBeGreaterThan(0);
+      expect(calledIds.some((id) => typeof id === 'string' && id.startsWith('wg-B-'))).toBe(false);
+
+      rafSpy.mockRestore();
+    });
+
+    it('keeps the D-012 setUsj push working alongside the D-013 epoch+RAF coordination', () => {
+      // Regression guard: D-012's setUsj push must still fire on USJ swap. D-013 only adds
+      // coordination around the annotation-apply effects; it must not change the D-012 contract.
+      const initialUsj = makeTestUsj(2);
+      const { rerender } = render(
+        <EnhancedScripturePane
+          usj={initialUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      const newChapterUsj = makeTestUsj(5);
+      rerender(
+        <EnhancedScripturePane
+          usj={newChapterUsj}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+      expect(setUsjSpy).toHaveBeenCalledTimes(1);
+      expect(setUsjSpy).toHaveBeenCalledWith(newChapterUsj);
+    });
+  });
+
+  // D-008 regression: the Editorial-lib annotation resolver logs a noisy `error()` on every
+  // annotation whose start/end node it cannot find in the freshly-mounted Lexical tree. We
+  // wrap the logger and downgrade just that one message to `debug`. Everything else (including
+  // unrelated errors) must still surface at the original level.
+  describe('D-008 logger wrapper (annotation-resolver miss suppression)', () => {
+    it('passes a logger prop to Editorial that downgrades the annotation-resolver miss to debug', async () => {
+      const papiModule = await import('@papi/frontend');
+      const papiLogger = papiModule.logger as unknown as {
+        error: ReturnType<typeof vi.fn>;
+        warn: ReturnType<typeof vi.fn>;
+        info: ReturnType<typeof vi.fn>;
+        debug: ReturnType<typeof vi.fn>;
+      };
+      papiLogger.error.mockClear();
+      papiLogger.debug.mockClear();
+      papiLogger.warn.mockClear();
+      papiLogger.info.mockClear();
+      lastEditorialLogger = undefined;
+
+      render(
+        <EnhancedScripturePane
+          usj={makeTestUsj(2)}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      expect(lastEditorialLogger).toBeDefined();
+      // Simulate the editor lib's exact log call shape.
+      lastEditorialLogger!.error('Failed to find start or end node of the annotation.');
+
+      expect(papiLogger.error).not.toHaveBeenCalled();
+      expect(papiLogger.debug).toHaveBeenCalledTimes(1);
+      const debugMessage = papiLogger.debug.mock.calls[0]?.[0];
+      expect(String(debugMessage)).toContain('Failed to find start or end node of the annotation');
+    });
+
+    it('still surfaces unrelated editor errors at the original level', async () => {
+      const papiModule = await import('@papi/frontend');
+      const papiLogger = papiModule.logger as unknown as {
+        error: ReturnType<typeof vi.fn>;
+        warn: ReturnType<typeof vi.fn>;
+        debug: ReturnType<typeof vi.fn>;
+      };
+      papiLogger.error.mockClear();
+      papiLogger.debug.mockClear();
+      papiLogger.warn.mockClear();
+      lastEditorialLogger = undefined;
+
+      render(
+        <EnhancedScripturePane
+          usj={makeTestUsj(2)}
+          annotations={[]}
+          localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        />,
+      );
+
+      expect(lastEditorialLogger).toBeDefined();
+      lastEditorialLogger!.error('Some other editor error');
+      lastEditorialLogger!.warn('Unrelated warning');
+
+      // Unrelated error still goes to error, not debug.
+      expect(papiLogger.error).toHaveBeenCalledWith('Some other editor error');
+      expect(papiLogger.warn).toHaveBeenCalledWith('Unrelated warning');
+      // No annotation-resolver miss was logged, so debug must not be called for that reason.
+      const debugCallsForAnnotationMiss = papiLogger.debug.mock.calls.filter((args) =>
+        args.some(
+          (arg) => typeof arg === 'string' && arg.includes('Failed to find start or end node'),
+        ),
+      );
+      expect(debugCallsForAnnotationMiss).toHaveLength(0);
+    });
+  });
+
+  it('calls setAnnotation for each marble annotation when usj + annotations are supplied', async () => {
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-001',
+        metadata: { strong: 'H7225' },
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'note',
+        annotationId: 'note-1',
+        metadata: { caller: '+' },
+      },
+    ];
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(3)}
+        annotations={annotations}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await flushMountEffects();
+    // setAnnotation should be called only for word annotations; notes are skipped because in
+    // readonly mode the editor renders note callers as ImmutableNoteCallerNode whose content
+    // children don't exist in the Lexical tree, causing path resolution to silently fail.
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    // Only call: word annotation
+    expect(setAnnotationSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        start: expect.objectContaining({ jsonPath: '$.content[0].content[1]' }),
+      }),
+      'marble-word',
+      'wg-001',
+      expect.objectContaining({ onClick: expect.any(Function) }),
+    );
+  });
+
+  it('routes a left-click on an annotation to onTokenClick (not onTokenContextMenu)', async () => {
+    const onTokenClick = vi.fn();
+    const onTokenContextMenu = vi.fn();
+    const annotation: MarbleAnnotation = {
+      usjPath: '$.content[0].content[1]',
+      kind: 'word',
+      annotationId: 'wg-001',
+      metadata: {},
+    };
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(2)}
+        annotations={[annotation]}
+        onTokenClick={onTokenClick}
+        onTokenContextMenu={onTokenContextMenu}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await flushMountEffects();
+    // Grab the onClick callback the component registered with the editor.
+    const callbacks = setAnnotationSpy.mock.calls[0][3] as {
+      onClick: (event: { button: number }, type: string, id: string, textContent: string) => void;
+    };
+    const clickHandler = callbacks.onClick;
+    clickHandler({ button: 0 }, 'marble-word', 'wg-001', 'λόγος');
+    expect(onTokenClick).toHaveBeenCalledWith('wg-001', annotation, 'λόγος');
+    expect(onTokenContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('routes a right-click (button 2) on an annotation to onTokenContextMenu', async () => {
+    const onTokenClick = vi.fn();
+    const onTokenContextMenu = vi.fn();
+    const annotation: MarbleAnnotation = {
+      usjPath: '$.content[0].content[1]',
+      kind: 'word',
+      annotationId: 'wg-001',
+      metadata: {},
+    };
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(2)}
+        annotations={[annotation]}
+        onTokenClick={onTokenClick}
+        onTokenContextMenu={onTokenContextMenu}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await flushMountEffects();
+    const callbacks = setAnnotationSpy.mock.calls[0][3] as {
+      onClick: (event: { button: number }, type: string, id: string, textContent: string) => void;
+    };
+    const clickHandler = callbacks.onClick;
+    clickHandler({ button: 2 }, 'marble-word', 'wg-001', 'λόγος');
+    expect(onTokenContextMenu).toHaveBeenCalledWith('wg-001', annotation, expect.anything());
+    expect(onTokenClick).not.toHaveBeenCalled();
+  });
+
+  it('emits a filter CSS rule for the filtered annotation id (and does NOT go through setAnnotation)', async () => {
+    // The filter overlay is emitted as a CSS rule keyed off the `annotationId-X` class Editorial
+    // attaches to every mark, not via editor.setAnnotation. The rule applies to current AND future
+    // marks - no per-element classList mutation, no race with Effect A's chunked apply.
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-001',
+        metadata: {},
+      },
+    ];
+
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(2)}
+        annotations={annotations}
+        filteredTokenId="wg-001"
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+
+    await vi.waitFor(() => {
+      expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(true);
+    });
+    // setAnnotation was NOT called for any filter type — the whole point of the CSS-rule path is
+    // to bypass the editor for purely cosmetic overlays.
+    const filterCalls = setAnnotationSpy.mock.calls.filter(([, type]) => type === 'marble-filter');
+    expect(filterCalls).toHaveLength(0);
+  });
+
+  it('emits the global highlight-all CSS rule when highlightAllResearchTerms is true', async () => {
+    // Highlight-all is a single universal CSS rule (`.editor-typed-mark-external-marble-word { ... }`)
+    // that the browser matches against every current AND future marble-word mark. No per-mark
+    // classList mutation, no MutationObserver, no race with Effect A's chunked apply.
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-001',
+        metadata: {},
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'note',
+        annotationId: 'note-1',
+        metadata: { caller: '+' },
+      },
+    ];
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(3)}
+        annotations={annotations}
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasHighlightAllRule()).toBe(true);
+    });
+    // The rule targets `.editor-typed-mark-external-marble-word`, not marble-note - notes are
+    // styled with the marble-note color, not the highlight overlay.
+    expect(getOverlayCss()).toContain('.editor-typed-mark-external-marble-word ');
+    // setAnnotation was NOT called for any highlight type — the whole point of the CSS-rule path is
+    // to bypass the editor for purely cosmetic overlays.
+    const highlightSetAnnotationCalls = setAnnotationSpy.mock.calls.filter(
+      ([, type]) => type === 'marble-highlight',
+    );
+    expect(highlightSetAnnotationCalls).toHaveLength(0);
+  });
+
+  it('does not re-run the annotation effect when re-rendered with the same props (no fake-dep churn)', async () => {
+    const annotation: MarbleAnnotation = {
+      usjPath: '$.content[0].content[1]',
+      kind: 'word',
+      annotationId: 'wg-001',
+      metadata: {},
+    };
+    const usj = makeTestUsj(2);
+    // Hold every prop reference stable across renders so the only thing that *could* change
+    // is the unstable inline `() => {}` defaults the component itself fabricates.
+    const annotationsArr = [annotation];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await flushMountEffects();
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    setAnnotationSpy.mockClear();
+    removeAnnotationSpy.mockClear();
+    // Re-render with the same props. With unstable defaults (`() => {}` recreated each render),
+    // the effect re-runs and calls setAnnotation again. With Fix 1's module-level constants,
+    // the dep array sees identical references and the effect does NOT re-run.
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await flushMountEffects();
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
+    expect(removeAnnotationSpy).not.toHaveBeenCalled();
+  });
+
+  it('toggling filteredTokenId adds/removes the filter CSS rule without re-firing base annotations', async () => {
+    const annotation: MarbleAnnotation = {
+      usjPath: '$.content[0].content[1]',
+      kind: 'word',
+      annotationId: 'wg-001',
+      metadata: {},
+    };
+    const annotationsArr = [annotation];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = makeTestUsj(2);
+
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await flushMountEffects();
+    // First render: base marble-word annotation only.
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    expect(setAnnotationSpy.mock.calls[0][1]).toBe('marble-word');
+    setAnnotationSpy.mockClear();
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        filteredTokenId="wg-001"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    // Filter is now an entry in the dynamic stylesheet. No setAnnotation calls at all - filter
+    // does not go through the editor.
+    await vi.waitFor(() => {
+      expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(true);
+    });
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
+    removeAnnotationSpy.mockClear();
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    // Filter rule removed from the stylesheet; base annotation untouched, no removeAnnotation.
+    expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(false);
+    expect(removeAnnotationSpy).not.toHaveBeenCalled();
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
+  });
+
+  it('emits filter-match rules for lemma-siblings of the filtered word, but not for the focal word itself', async () => {
+    // Two-fold click highlight: the clicked word wears the strong filter color (filter-bg), every
+    // lemma-sibling wears the lighter filter-match color (filter-match-bg), and unrelated words
+    // get neither.
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: { lexicalLinks: ['SDBH:logos:001'] },
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'word',
+        annotationId: 'wg-B',
+        metadata: { lexicalLinks: ['SDBH:logos:002'] },
+      },
+      {
+        usjPath: '$.content[0].content[3]',
+        kind: 'word',
+        annotationId: 'wg-C',
+        metadata: { lexicalLinks: ['SDBH:theos:003'] },
+      },
+    ];
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={annotations}
+        filteredTokenId="wg-A"
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      // Focal word: strong filter rule, NOT the lighter filter-match.
+      expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(true);
+      expect(overlayHasRuleFor('wg-A', '--er-marble-filter-match-bg')).toBe(false);
+      // Lemma-sibling: lighter filter-match rule only.
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-match-bg')).toBe(true);
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-bg')).toBe(false);
+      // Unrelated lemma: neither rule.
+      expect(overlayHasRuleFor('wg-C', '--er-marble-filter-bg')).toBe(false);
+      expect(overlayHasRuleFor('wg-C', '--er-marble-filter-match-bg')).toBe(false);
+    });
+  });
+
+  it('moves filter / filter-match rules when filteredTokenId moves between lemma groups', async () => {
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: { lexicalLinks: ['SDBH:logos:001'] },
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'word',
+        annotationId: 'wg-B',
+        metadata: { lexicalLinks: ['SDBH:logos:002'] },
+      },
+      {
+        usjPath: '$.content[0].content[3]',
+        kind: 'word',
+        annotationId: 'wg-C',
+        metadata: { lexicalLinks: ['SDBH:theos:003'] },
+      },
+    ];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = makeTestUsj(4);
+
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-A"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-match-bg')).toBe(true);
+    });
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-C"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      // New focal word's filter rule is present.
+      expect(overlayHasRuleFor('wg-C', '--er-marble-filter-bg')).toBe(true);
+    });
+    // Previous focal word no longer carries a filter rule.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(false);
+    // Previous lemma-sibling no longer carries a filter-match rule.
+    expect(overlayHasRuleFor('wg-B', '--er-marble-filter-match-bg')).toBe(false);
+    // theos has no other members, so no new filter-match siblings.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-filter-match-bg')).toBe(false);
+  });
+
+  it('overlays apply to marks regardless of when they appear in the DOM (CSS handles virtualization for free)', async () => {
+    // Regression: the previous classList-mutation path required iterating live marks at apply
+    // time. Marks added later (Effect A's chunked apply emits ~50/RAF; future editor-side
+    // virtualization on scroll would also lazy-mount marks) were missed. With the dynamic
+    // stylesheet, the rule is in document.head as soon as the persistent inputs change, and the
+    // browser matches it against any current OR future marble-word mark. This test demonstrates
+    // the property by creating a mark AFTER mount and verifying the rule is already present.
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: {},
+      },
+    ];
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(2)}
+        annotations={annotations}
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasHighlightAllRule()).toBe(true);
+    });
+    // Add a mark for `wg-B` AFTER the persistent overlay rules are in place. No mutation is
+    // needed - the rule's selector already matches `wg-B` (since highlight-all is universal).
+    createMarkFixture('wg-B');
+    expect(overlayHasHighlightAllRule()).toBe(true);
+  });
+
+  it('keeps highlight-all active for the previously-filtered word when filteredTokenId changes', async () => {
+    // Regression: clicking word A then word B (with highlight-all on) used to leave word A with
+    // no overlay because the old filter-via-setAnnotation cleanup destroyed and recreated the
+    // <mark> DOM element, stripping the direct-DOM `er-marble-highlight-all` class. With CSS
+    // rules, both the highlight-all rule and the filter rule are in the dynamic stylesheet and
+    // the browser handles selector matching - nothing is ever stripped off marks.
+    const annotations: MarbleAnnotation[] = [
+      {
+        usjPath: '$.content[0].content[1]',
+        kind: 'word',
+        annotationId: 'wg-A',
+        metadata: {},
+      },
+      {
+        usjPath: '$.content[0].content[2]',
+        kind: 'word',
+        annotationId: 'wg-B',
+        metadata: {},
+      },
+    ];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = makeTestUsj(3);
+
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-A"
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasHighlightAllRule()).toBe(true);
+      expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(true);
+    });
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotations}
+        filteredTokenId="wg-B"
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasRuleFor('wg-B', '--er-marble-filter-bg')).toBe(true);
+    });
+    // The universal highlight-all rule is still in the stylesheet (it applies to ALL marble-word
+    // marks regardless of which one is the filter focal, so word A keeps its blue overlay).
+    expect(overlayHasHighlightAllRule()).toBe(true);
+    // Word A no longer has its own filter rule.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-filter-bg')).toBe(false);
+  });
+
+  it('toggling highlightAllResearchTerms adds the highlight-all rule without re-firing base or filter setAnnotation calls', async () => {
+    const annotation: MarbleAnnotation = {
+      usjPath: '$.content[0].content[1]',
+      kind: 'word',
+      annotationId: 'wg-001',
+      metadata: {},
+    };
+    const annotationsArr = [annotation];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = makeTestUsj(2);
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        filteredTokenId="wg-001"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    await flushMountEffects();
+    // First render: 1 base marble-word annotation. Filter is now a CSS rule, not a setAnnotation
+    // call, so it does NOT show up in the setAnnotation spy.
+    const initialCalls = setAnnotationSpy.mock.calls;
+    expect(initialCalls.filter(([, type]) => type === 'marble-word')).toHaveLength(1);
+    expect(initialCalls.filter(([, type]) => type === 'marble-filter')).toHaveLength(0);
+    setAnnotationSpy.mockClear();
+    removeAnnotationSpy.mockClear();
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        filteredTokenId="wg-001"
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    // The highlight-all rule lands in the dynamic stylesheet. No setAnnotation involved.
+    await vi.waitFor(() => {
+      expect(overlayHasHighlightAllRule()).toBe(true);
+    });
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
+  });
+
+  it('chunks setAnnotation calls across animation frames so the JS thread can service other work', async () => {
+    // 120 annotations exceeds the CHUNK_SIZE of 50, forcing at least two RAF yields.
+    const annotations: MarbleAnnotation[] = Array.from({ length: 120 }, (_, i) => ({
+      usjPath: `$.content[0].content[${i}]`,
+      kind: 'word',
+      annotationId: `wg-${i}`,
+      metadata: {},
+    }));
+    // Spy on requestAnimationFrame to confirm the effect yielded.
+    const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(120)}
+        annotations={annotations}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(setAnnotationSpy).toHaveBeenCalledTimes(120);
+    });
+    expect(rafSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('aborts mid-apply if the component unmounts during the chunked loop', async () => {
+    const annotations: MarbleAnnotation[] = Array.from({ length: 200 }, (_, i) => ({
+      usjPath: `$.content[0].content[${i}]`,
+      kind: 'word',
+      annotationId: `wg-${i}`,
+      metadata: {},
+    }));
+    // Stub requestAnimationFrame so we can intercept each yield and unmount before chunk 2.
+    // Effect A defers its very first chunk by one RAF (see the "defers the first chunk by one RAF
+    // on first mount" test), so the first registered callback releases chunk 1, then the next
+    // registered callback gates chunk 2.
+    const rafCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+    const { unmount } = render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(200)}
+        annotations={annotations}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    // Release the first-chunk RAF (the mount-time deferral) and wait for chunk 1 to apply +
+    // schedule chunk 2's RAF.
+    await vi.waitFor(() => {
+      expect(rafCallbacks.length).toBeGreaterThanOrEqual(1);
+    });
+    rafCallbacks[0](performance.now());
+    await vi.waitFor(() => {
+      expect(setAnnotationSpy).toHaveBeenCalledTimes(50);
+      // Chunk 1's between-chunks yield queued the next RAF.
+      expect(rafCallbacks.length).toBeGreaterThanOrEqual(2);
+    });
+    unmount();
+    // Now release the second RAF gate. Cancellation should short-circuit before chunk 2 runs.
+    rafCallbacks[1](performance.now());
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    // Total setAnnotation calls should not have grown past the first chunk.
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(50);
+  });
+
+  it('renders surface text in the filter banner when filteredTokenSurface is provided', () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[]}
+        filteredTokenId="453"
+        filteredTokenSurface="λόγος"
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Filter: λόγος');
+  });
+
+  it('falls back to filteredTokenId in the filter banner when surface is not provided', () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[]}
+        filteredTokenId="453"
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Filter: 453');
+  });
+
+  it('removes editor-applied annotations and tears down the overlay stylesheet on unmount', async () => {
+    const { unmount } = render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(2)}
+        annotations={[
+          {
+            usjPath: '$.content[0].content[1]',
+            kind: 'word',
+            annotationId: 'wg-001',
+            metadata: {},
+          },
+        ]}
+        filteredTokenId="wg-001"
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    // The dynamic overlay stylesheet is mounted with both rules present.
+    await vi.waitFor(() => {
+      expect(overlayHasHighlightAllRule()).toBe(true);
+      expect(overlayHasRuleFor('wg-001', '--er-marble-filter-bg')).toBe(true);
+    });
+
+    removeAnnotationSpy.mockClear();
+    unmount();
+
+    // The annotation effect's cleanup removes the setAnnotation-managed marble-word type via
+    // editor.removeAnnotation. The overlay stylesheet's own mount-effect cleanup removes the
+    // `<style data-er-marble-overlays>` element from document.head, so no overlay rules linger.
+    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-word', 'wg-001');
+    expect(document.querySelector('style[data-er-marble-overlays]')).toBeNull();
+    // Neither the highlight nor filter overlay is routed through removeAnnotation - they were
+    // CSS rules, gone with the stylesheet.
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-highlight', 'wg-001');
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-filter', 'wg-001');
+  });
+});
+
+describe('marble hover lifecycle', () => {
+  function getHoverHandlersForCall(callIndex: number) {
+    const callbacks = setAnnotationSpy.mock.calls[callIndex][3] as {
+      onClick?: (...args: unknown[]) => void;
+      onMouseEnter?: (event: MouseEvent, type: string, id: string, textContent: string) => void;
+      onMouseLeave?: (event: MouseEvent, type: string, id: string, textContent: string) => void;
+    };
+    return callbacks;
+  }
+
+  function makeFakeMouseEvent(): MouseEvent {
+    const target = document.createElement('span');
+    target.getBoundingClientRect = () => ({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+      top: 20,
+      left: 10,
+      right: 40,
+      bottom: 60,
+      toJSON: () => '',
+    });
+    // D-15 final fix: handleMarbleMouseEnter reads target.ownerDocument to scope the
+    // querySelectorAll for er-marble-hover-match class application. Attach the span to
+    // document.body so ownerDocument resolves to jsdom's document (where any test
+    // fixture marks created with createMarkFixture below live).
+    document.body.appendChild(target);
+    const event = new MouseEvent('mouseenter');
+    Object.defineProperty(event, 'currentTarget', { value: target });
+    return event;
+  }
+
+  // lexicalLinks shape is `NAMESPACE:LEMMA:ID`; the consumer extracts the middle segment as the
+  // lemma for hover-time matching. Use simple ASCII namespaces / IDs so tests are readable.
+  const wordA: MarbleAnnotation = {
+    usjPath: '$.content[0].content[1]',
+    kind: 'word',
+    annotationId: 'wg-A',
+    metadata: { lexicalLinks: ['SDBH:logos:001'] },
+  };
+  const wordB: MarbleAnnotation = {
+    usjPath: '$.content[0].content[2]',
+    kind: 'word',
+    annotationId: 'wg-B',
+    metadata: { lexicalLinks: ['SDBH:logos:002'] },
+  };
+  const wordC: MarbleAnnotation = {
+    usjPath: '$.content[0].content[3]',
+    kind: 'word',
+    annotationId: 'wg-C',
+    metadata: { lexicalLinks: ['SDBH:theos:003'] },
+  };
+
+  it('mouseenter on a marble-word triggers showPopover with the anchor rect', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+    expect(handlers.onMouseEnter).toBeDefined();
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+    expect(mockShowPopover).toHaveBeenCalledWith(
+      expect.objectContaining({
+        anchor: { x: 10, y: 20, width: 30, height: 40 },
+        side: 'top',
+        content: expect.objectContaining({ type: 'markdown' }),
+      }),
+      'test-webview',
+    );
+  });
+
+  // NOTE: A previous integration test asserted `updatePopover` was called with markdown
+  // containing the lemma after `buildTooltipData` resolved. That test exercised the runtime
+  // wiring of mockUpdatePopover and asserted the OLD markdown shape (Lemma/POS/gloss/Strong/
+  // notes). The current emitter produces a different shape (sourceForm / POS / lemma /
+  // rendering-status). Markdown-emission behavior is now covered directly by the
+  // `renderTooltipMarkdown` describe block at the bottom of this file, which is the right
+  // unit-of-test boundary for the emitter. See Task 3a.10.
+
+  it('mouseleave dismisses the popover and removes the hover-match CSS rule (after debounce window)', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    await Promise.resolve();
+    // Sanity: enter inserted the hover-match rule for the lemma-matching sibling.
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(true);
+
+    removeAnnotationSpy.mockClear();
+    handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
+
+    // D-15: mouseleave defers cleanup with a 50ms timeout so a spurious leave (caused by
+    // any editor-induced mark re-render briefly taking the cursor off the hovered <mark>)
+    // doesn't tear down the popover. Synchronously after leave, cleanup has NOT yet run.
+    expect(mockDismissPopover).not.toHaveBeenCalled();
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(true);
+
+    // After the debounce window elapses, cleanup runs.
+    await vi.waitFor(() => {
+      expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
+    });
+    // Hover-match is a CSS rule, not an editor annotation. Cleanup drops the rule from the
+    // dynamic stylesheet - it does NOT call editor.removeAnnotation('marble-hover-match', ...).
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(false);
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-hover-match', expect.anything());
+  });
+
+  it('RESOURCE_EXHAUSTED from showPopover is swallowed', async () => {
+    mockShowPopover.mockRejectedValueOnce({ code: 'RESOURCE_EXHAUSTED', message: 'debounced' });
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+
+    expect(() => {
+      handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    }).not.toThrow();
+  });
+
+  it('buildTooltipData rejection leaves loading markdown without crashing', async () => {
+    mockErProxy.buildTooltipData.mockRejectedValueOnce(new Error('backend down'));
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        erProxy={mockErProxy}
+        resourceId="ESV"
+        glossLanguage="en"
+        scrRef={SCR_REF_JHN_1_1}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    // Flush the showLoadingPopover and the (rejecting) buildTooltipData promises.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Loading popover still anchors; structured updatePopover never fires because the backend
+    // fetch rejected. The component logs a warning (mocked) and bails - no throw, no crash.
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+    expect(mockUpdatePopover).not.toHaveBeenCalled();
+  });
+
+  it('happy path: hover fires buildTooltipData -> translatePartOfSpeech -> updatePopover with structured markdown', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+        erProxy={mockErProxy}
+        resourceId="ESV"
+        glossLanguage="en"
+        scrRef={SCR_REF_JHN_1_1}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+
+    // Wait for showLoadingPopover + buildTooltipData + translatePartOfSpeech + updatePopover.
+    await vi.waitFor(() => {
+      expect(mockUpdatePopover).toHaveBeenCalled();
+    });
+
+    // buildTooltipData received the wire-shaped TooltipInputDto (resourceId, tokenId,
+    // currentReference in bookNum form, glossLanguage). bookNum 43 = JHN.
+    expect(mockErProxy.buildTooltipData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceId: 'ESV',
+        tokenId: 'wg-A',
+        glossLanguage: 'en',
+        currentReference: expect.objectContaining({
+          bookNum: 43,
+          chapterNum: 1,
+          verseNum: 1,
+        }),
+      }),
+    );
+
+    // After tooltip data lands, the component calls translatePartOfSpeech with the raw POS code.
+    // The source form 'λόγος' is Greek-block, so the language argument is 'Greek'.
+    expect(mockErProxy.translatePartOfSpeech).toHaveBeenCalledWith('noun', 'Greek', 'long');
+
+    // updatePopover receives the structured markdown for the resolved tooltip data.
+    const updateCall = mockUpdatePopover.mock.calls[0];
+    expect(updateCall[0]).toBe('overlay-1');
+    expect(updateCall[1]).toEqual(
+      expect.objectContaining({
+        type: 'markdown',
+        // sourceForm bold header, then localized POS, then lemma label, then gloss.
+        markdown: expect.stringContaining('**λόγος**'),
+      }),
+    );
+    expect(updateCall[1].markdown).toContain('noun (masculine)');
+    expect(updateCall[1].markdown).toContain('word, speech, reason');
+  });
+
+  it('every annotation sharing the hovered lemma - including the hovered word itself - is selected by the hover-match CSS rule', async () => {
+    // Hover-match is now emitted as a CSS rule keyed off the `annotationId-X` class Editorial
+    // attaches to every mark. The hovered word IS included in the match set so the entire
+    // matching expression reads as one visually unified group. (Users expect the word under
+    // their cursor to look like part of the group, not a transparent gap in the middle of a
+    // highlighted phrase.) wordA and wordB share 'logos' lemma; wordC has 'theos' (non-matching).
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+    setAnnotationSpy.mockClear();
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+
+    // Hover-match rule selects both wg-A (hovered) and wg-B (lemma-sibling); wg-C is excluded.
+    expect(overlayHasRuleFor('wg-A', '--er-marble-hover-match-bg')).toBe(true);
+    expect(overlayHasRuleFor('wg-B', '--er-marble-hover-match-bg')).toBe(true);
+    expect(overlayHasRuleFor('wg-C', '--er-marble-hover-match-bg')).toBe(false);
+
+    // And no marble-hover-match editor annotation was ever applied (the whole point of the
+    // CSS-rule path is to bypass setAnnotation for purely-cosmetic overlays).
+    const matchCalls = setAnnotationSpy.mock.calls.filter(
+      ([, type]) => type === 'marble-hover-match',
+    );
+    expect(matchCalls).toHaveLength(0);
+  });
+
+  it('a mouseenter for the same id within the leave-debounce window cancels the pending leave (D-15)', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    await Promise.resolve();
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+
+    // Simulate the spurious leave/re-enter the editor produces when it recreates marks:
+    // mouseleave on wg-A, then mouseenter on wg-A again before the 50ms debounce elapses.
+    handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+
+    // Wait past the debounce window. The pending leave should have been cancelled, so
+    // dismissPopover never fires and the original popover stays.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 80);
+    });
+    expect(mockDismissPopover).not.toHaveBeenCalled();
+    // The re-entered mouseenter must be a no-op for the same id (D-14 guard) - no second
+    // showPopover call.
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+  });
+
+  it('a mouseenter for a different id within the leave-debounce window runs cleanup synchronously then starts the new hover (D-15)', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(4)}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    await Promise.resolve();
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+
+    // Leave wg-A, then enter wg-C before the 50ms debounce elapses. The pending leave is
+    // cancelled (D-15 enter-guard) but a different id is hovered, so cleanup must run
+    // synchronously before the new hover starts. dismissPopover for the wg-A overlay fires
+    // immediately, and a fresh showPopover fires for wg-C.
+    handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-C', 'theos');
+
+    expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
+    expect(mockShowPopover).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('annotationToRange (USJ walker)', () => {
+  it('returns explicit text-end range for a marker whose content is a plain string', () => {
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'char',
+          marker: 'wg',
+          content: ['beginning'],
+        },
+      ],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a1',
+      kind: 'word',
+      usjPath: '$.content[0]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toEqual({
+      start: { jsonPath: '$.content[0]', offset: 0 },
+      end: { jsonPath: '$.content[0].content[0]', offset: 'beginning'.length },
+    });
+  });
+
+  it('descends into the last child for a marker with nested content', () => {
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'char',
+          marker: 'wg',
+          content: [{ type: 'char', marker: 'add', content: ['extra'] }, 'tail'],
+        },
+      ],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a2',
+      kind: 'word',
+      usjPath: '$.content[0]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toEqual({
+      start: { jsonPath: '$.content[0]', offset: 0 },
+      end: { jsonPath: '$.content[0].content[1]', offset: 'tail'.length },
+    });
+  });
+
+  it('returns undefined when the marker content is empty', () => {
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'char',
+          marker: 'wg',
+          content: [],
+        },
+      ],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a3',
+      kind: 'word',
+      usjPath: '$.content[0]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toBeUndefined();
+  });
+
+  it('returns undefined when the usjPath does not resolve to a node', () => {
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'char', marker: 'wg', content: ['x'] }],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a4',
+      kind: 'word',
+      usjPath: '$.content[99]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toBeUndefined();
+  });
+
+  it('descends recursively through nested element-only chains to find the text', () => {
+    // Edge case: the marker contains only a nested element which itself contains a string.
+    // The walker should descend into the last element child until it finds a string leaf.
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'char',
+          marker: 'wg',
+          content: [
+            {
+              type: 'char',
+              marker: 'add',
+              content: ['inner'],
+            },
+          ],
+        },
+      ],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a5',
+      kind: 'word',
+      usjPath: '$.content[0]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toEqual({
+      start: { jsonPath: '$.content[0]', offset: 0 },
+      end: { jsonPath: '$.content[0].content[0].content[0]', offset: 'inner'.length },
+    });
+  });
+});
+
+describe('renderTooltipMarkdown', () => {
+  // ScripturePaneLocalizedStringKey is module-private inside scripture-pane.component.tsx;
+  // cast through Parameters<> so the test stays decoupled from that internal type while still
+  // matching the public signature of `renderTooltipMarkdown`.
+  const localizeIdentity = ((key: string) => key) as Parameters<typeof renderTooltipMarkdown>[1];
+
+  it('renders phrase view model with sourceForm + phrase key', () => {
+    const vm: TooltipViewModel = { kind: 'phrase', sourceForm: 'ἐν ἀρχῇ' };
+    expect(renderTooltipMarkdown(vm, localizeIdentity)).toBe(
+      '**ἐν ἀρχῇ**\n\n%enhancedResources_tooltip_phrase%',
+    );
+  });
+
+  it('renders word view model with localized POS, lemma, gloss', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: 'noun (feminine)',
+      gloss: 'beginning',
+    };
+    const out = renderTooltipMarkdown(vm, localizeIdentity);
+    expect(out).toBe(
+      [
+        '**רֵאשִׁית**',
+        '**noun (feminine)** (noun)',
+        '%enhancedResources_tooltip_lemmaLabel% **rēʾšît**',
+        'beginning',
+      ].join('\n\n'),
+    );
+  });
+
+  it('falls back to raw POS when posLocalized is undefined', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'beginning',
+    };
+    const out = renderTooltipMarkdown(vm, localizeIdentity);
+    expect(out).toContain('**noun**\n\n');
+    expect(out).not.toContain('(noun)');
+  });
+
+  it('emits noGloss placeholder when gloss is undefined', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: undefined,
+    };
+    expect(renderTooltipMarkdown(vm, localizeIdentity)).toContain(
+      '%enhancedResources_tooltip_noGloss%',
+    );
+  });
+
+  it('omits POS line when posRaw is empty', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: '',
+      posLocalized: undefined,
+      gloss: 'beginning',
+    };
+    const out = renderTooltipMarkdown(vm, localizeIdentity);
+    // No POS line - just sourceForm, lemma, gloss.
+    expect(out.split('\n\n')).toHaveLength(3);
+  });
+
+  // Mirror the format-string shape from contributions/localizedStrings.json so substitution
+  // behavior is actually exercised. localizeIdentity above returns the raw key (no `{0}`),
+  // which cannot demonstrate that `{0}`/`{1}` placeholders get replaced.
+  const RENDERING_STATUS_TEMPLATES: Record<string, string> = {
+    '%enhancedResources_tooltip_noRenderingsForTerm%': 'NO_RENDERINGS_FOR_TERM[{0}]',
+    '%enhancedResources_tooltip_deniedRendering%': 'DENIED_RENDERING[{0}]',
+    '%enhancedResources_tooltip_missingRendering%': 'MISSING_RENDERING[{0}]',
+    '%enhancedResources_tooltip_guessedRenderingFound%': 'GUESSED[{0}|{1}]',
+    '%enhancedResources_tooltip_renderingFound%': 'FOUND[{0}|{1}]',
+  };
+  const localizeWithTemplates = ((key: string) =>
+    RENDERING_STATUS_TEMPLATES[key] ?? key) as Parameters<typeof renderTooltipMarkdown>[1];
+
+  it.each([
+    ['noRenderingsEntered', 'NO_RENDERINGS_FOR_TERM'],
+    ['renderingDeniedInVerse', 'DENIED_RENDERING'],
+    ['renderingMissingInVerse', 'MISSING_RENDERING'],
+    ['noVerseText', 'MISSING_RENDERING'],
+  ] as const)('emits %s rendering-status with project substitution', (code, templateMarker) => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'beginning',
+      renderingStatus: { code, trackedProjectName: 'ESV' },
+    };
+    const out = renderTooltipMarkdown(vm, localizeWithTemplates);
+    // Localized template was picked up.
+    expect(out).toContain(templateMarker);
+    // {0} placeholder must be substituted with the project name.
+    expect(out).toContain('ESV');
+    expect(out).not.toContain('{0}');
+  });
+
+  it('emits guessedRenderingFound with both substitutions (PT9 order: {0}=project, {1}=rendering)', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'beginning',
+      renderingStatus: {
+        code: 'guessedRenderingFound',
+        foundRendering: 'start',
+        trackedProjectName: 'NIV',
+      },
+    };
+    const out = renderTooltipMarkdown(vm, localizeWithTemplates);
+    // PT9 MarbleForm.cs:2737 substitutes (trackedProject.Name, FoundRendering) into MarbleForm_9.
+    expect(out).toContain('GUESSED[NIV|start]');
+    expect(out).not.toContain('{0}');
+    expect(out).not.toContain('{1}');
+  });
+
+  it('emits renderingFound with both substitutions (PT9 order: {0}=project, {1}=rendering)', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'רֵאשִׁית',
+      lemma: 'rēʾšît',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'beginning',
+      renderingStatus: {
+        code: 'renderingFound',
+        foundRendering: 'beginning',
+        trackedProjectName: 'ESV',
+      },
+    };
+    const out = renderTooltipMarkdown(vm, localizeWithTemplates);
+    // PT9 MarbleForm.cs:2742 substitutes (trackedProject.Name, FoundRendering) into MarbleForm_10.
+    expect(out).toContain('FOUND[ESV|beginning]');
+    expect(out).not.toContain('{0}');
+    expect(out).not.toContain('{1}');
+  });
+
+  it('escapes markdown special chars in user-supplied fields', () => {
+    const vm: TooltipViewModel = {
+      kind: 'word',
+      sourceForm: 'a_b*c',
+      lemma: 'x_y',
+      posRaw: 'noun',
+      posLocalized: undefined,
+      gloss: 'foo[bar]',
+    };
+    const out = renderTooltipMarkdown(vm, localizeIdentity);
+    expect(out).toContain('a\\_b\\*c');
+    expect(out).toContain('x\\_y');
+    expect(out).toContain('foo\\[bar\\]');
+  });
+});
+
+describe('detectSourceLanguage', () => {
+  it('detects Hebrew block (U+0590-U+05FF)', () => {
+    expect(detectSourceLanguage('בָּרָא')).toBe('Hebrew');
+  });
+  it('detects Hebrew Presentation Forms A (U+FB1D-U+FB4F)', () => {
+    // U+FB2A = HEBREW LETTER SHIN WITH SHIN DOT (precomposed presentation form)
+    expect(detectSourceLanguage('שׁ')).toBe('Hebrew');
+  });
+  it('detects Greek basic block (U+0370-U+03FF)', () => {
+    expect(detectSourceLanguage('λόγος')).toBe('Greek');
+  });
+  it('detects Greek Extended block (U+1F00-U+1FFF) for polytonic forms', () => {
+    // 'Ἁγίῳ' contains U+1F09 (Greek capital alpha with dasia) - Greek Extended block.
+    expect(detectSourceLanguage('Ἁγίῳ')).toBe('Greek');
+  });
+  it('returns undefined for Latin transliteration', () => {
+    expect(detectSourceLanguage('logos')).toBeUndefined();
+  });
+  it('returns undefined for empty string', () => {
+    expect(detectSourceLanguage('')).toBeUndefined();
+  });
+  it('detects whichever language appears first in mixed text', () => {
+    // Latin 'logos' first (no detection), then Greek - the loop returns at the first match.
+    expect(detectSourceLanguage('logos λόγος')).toBe('Greek');
+  });
+});

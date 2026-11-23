@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import DockLayout from 'rc-dock';
 import { Filter } from 'rc-dock/lib/Algorithm';
 
@@ -15,22 +15,29 @@ import {
   WebViewTabProps,
   TabInfo,
   DirectionFromTab,
+  TAB_TYPE_WEBVIEW,
 } from '@shared/models/docking-framework.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 
 import { testLayout } from '@renderer/testing/test-layout.data';
 import { simpleLayout } from '@renderer/components/docking/simple-layout.data';
-import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-host';
-import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
+import {
+  closeTab,
+  handleDockEmptiedByRemoval,
+  registerDockLayout,
+} from '@renderer/services/web-view.service-shard';
+import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-shard';
 import { logger } from '@shared/services/logger.service';
-import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
+import { getErrorMessage } from 'platform-bible-utils';
 
 import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrapper.component';
 import {
   addTabToDock,
   addWebViewToDock,
+  containsTab,
   floatTabById,
   getAllWebViewDefinitions,
+  getOpenTabCount,
   getTabInfoByElement,
   getTabInfoById,
   getWebViewDefinition,
@@ -47,6 +54,35 @@ import {
   isTab,
   RCDockTabInfo,
 } from '@renderer/components/docking/docking-framework-internal.model';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { getDockLayoutOuterInset } from '@renderer/components/docking/platform-dock-layout-positioning.util';
+import { updateWindowTitle } from '@renderer/components/docking/window-label.util';
+import { installMiddleClickTabBarHandlers } from '@renderer/components/docking/platform-dock-layout-middle-click-handlers.util';
+
+/**
+ * Attribute set to `"true"` on the dock's root element (rc-dock's `.dock-layout`) once this
+ * window's initial layout load has finished and React has rendered the result, so the layout it
+ * brought is in the DOM. From then on that load will not replace the dock again. See
+ * `registerDockLayout`'s `onInitialLayoutLoadFinished` for the cases it covers, including a load
+ * that stood down without writing. Never set when the initial load fails, and removed when the dock
+ * layout registers again, until that registration's initial load finishes.
+ *
+ * Nothing in the app reads it. It is what e2e tests wait on before acting on a freshly started
+ * window's dock (`waitForDockLayoutLoaded` in `e2e-tests/fixtures/helpers.ts`, which waits for this
+ * attribute by its exact selector; see PT-4755), since a tab they open before that load lands is
+ * replaced along with everything else.
+ */
+export const LAYOUT_LOADED_ATTRIBUTE = 'data-layout-loaded';
+
+/** Closes a tab, logging instead of rejecting if `closeTab` fails or finds no such tab */
+async function handleCloseTab(tabId: string) {
+  try {
+    const didClose = await closeTab(tabId);
+    if (!didClose) logger.warn(`Failed to close tab ${tabId}: tab not found in the dock layout`);
+  } catch (error) {
+    logger.error(`Failed to close tab ${tabId}: ${getErrorMessage(error)}`);
+  }
+}
 
 export function PlatformDockLayout() {
   // This ref will always be defined
@@ -66,57 +102,127 @@ export function PlatformDockLayout() {
    */
   const onLayoutChangeRef = useRef<OnLayoutChange | undefined>(undefined);
 
+  const isPowerMode = useIsPowerMode();
+
+  /** Whether this window's initial layout load has finished — see {@link LAYOUT_LOADED_ATTRIBUTE} */
+  const [hasInitialLayoutLoadFinished, setHasInitialLayoutLoadFinished] = useState(false);
+
+  /** Look a tab up the way the label reader needs it, carrying the `tabTitle` this component sets */
+  const findTabForTitle = useCallback((tabId: string) => {
+    const tab = dockLayoutRef.current.find(tabId);
+    // Tabs in this dock layout are the `RCDockTabInfo` this component builds, so they hold `tabTitle`
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return isTab(tab) ? (tab as RCDockTabInfo) : undefined;
+  }, []);
+
+  /**
+   * Re-read the window's name from the layout the dock is currently showing.
+   *
+   * For the paths rc-dock does not report: `loadLayout` explicitly does not fire `onLayoutChange`,
+   * and neither does the first render of `defaultLayout`, so a window that restores its layout and
+   * is never touched would otherwise keep the document's initial title.
+   */
+  const refreshWindowTitle = useCallback(
+    () => updateWindowTitle(dockLayoutRef.current.getLayout(), findTabForTitle),
+    [findTabForTitle],
+  );
+
   useEffect(() => {
+    // Whether this registration is still the current one. A report from a superseded registration's
+    // load must not mark the dock the next registration is still loading.
+    let isCurrentRegistration = true;
     // Register with `web-view.service.ts` so it can perform operations on us
-    const unsub = registerDockLayout({
-      onLayoutChangeRef,
-      loadLayout: (layout: LayoutInfo) => loadLayout(dockLayoutRef.current, layout),
-      findFirstWebViewDefinitionByType: (webViewType: string) =>
-        findFirstWebViewDefinitionByType(dockLayoutRef.current, webViewType),
-      addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout, shouldBringToFront = true) =>
-        addTabToDock(savedTabInfo, layout, shouldBringToFront, dockLayoutRef.current),
-      addWebViewToDock: (webView: WebViewTabProps, layout: Layout, shouldBringToFront = true) =>
-        addWebViewToDock(webView, layout, shouldBringToFront, dockLayoutRef.current),
-      removeTabFromDock: (tabId: string) => {
-        const tabToRemove = dockLayoutRef.current.find(tabId);
-        // Null required by the external API
-        // eslint-disable-next-line no-null/no-null
-        if (isTab(tabToRemove)) dockLayoutRef.current.dockMove(tabToRemove, null, 'remove');
-        // Return whether or not we found the tab to remove
-        return !!tabToRemove;
+    const unsub = registerDockLayout(
+      {
+        onLayoutChangeRef,
+        loadLayout: (layout: LayoutInfo) => {
+          loadLayout(dockLayoutRef.current, layout);
+          refreshWindowTitle();
+        },
+        findFirstWebViewDefinitionByType: (webViewType: string, projectId?: string) =>
+          findFirstWebViewDefinitionByType(dockLayoutRef.current, webViewType, projectId),
+        addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout, shouldBringToFront = true) =>
+          addTabToDock(savedTabInfo, layout, shouldBringToFront, dockLayoutRef.current),
+        addWebViewToDock: (
+          webView: WebViewTabProps,
+          layout: Layout,
+          shouldBringToFront = true,
+          activateWithoutDocumentFocus: boolean | undefined = undefined,
+        ) =>
+          addWebViewToDock(
+            webView,
+            layout,
+            shouldBringToFront,
+            dockLayoutRef.current,
+            activateWithoutDocumentFocus,
+          ),
+        removeTabFromDock: (tabId: string) => {
+          const tabToRemove = dockLayoutRef.current.find(tabId);
+          // Null required by the external API
+          // eslint-disable-next-line no-null/no-null
+          if (isTab(tabToRemove)) dockLayoutRef.current.dockMove(tabToRemove, null, 'remove');
+          // Return whether or not we found the tab to remove
+          return !!tabToRemove;
+        },
+        floatTabById: (tabId: string) => floatTabById(tabId, dockLayoutRef.current),
+        getAllWebViewDefinitions: () => getAllWebViewDefinitions(dockLayoutRef.current),
+        getOpenTabCount: () => getOpenTabCount(dockLayoutRef.current),
+        getWebViewDefinition: (webViewId: string) =>
+          getWebViewDefinition(webViewId, dockLayoutRef.current),
+        updateTabPartial: (
+          tabId: string,
+          partialTabInfo: Partial<TabInfo>,
+          shouldBringToFront = false,
+        ) => updateTabPartial(dockLayoutRef.current, tabId, partialTabInfo, shouldBringToFront),
+        updateWebViewDefinition: (
+          webViewId: string,
+          updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
+          shouldBringToFront = false,
+          activateWithoutDocumentFocus: boolean | undefined = undefined,
+        ) =>
+          updateWebViewDefinition(
+            webViewId,
+            updateInfo,
+            shouldBringToFront,
+            dockLayoutRef.current,
+            activateWithoutDocumentFocus,
+          ),
+        getTabInfoByDirectionFromTab: (sourceTabId: string, direction: DirectionFromTab) =>
+          getTabInfoByDirectionFromTab(dockLayoutRef.current, sourceTabId, direction),
+        getTabInfoByElement: (tabElement: Element) =>
+          getTabInfoByElement(dockLayoutRef.current, tabElement),
+        getTabInfoById: (tabId: string) =>
+          getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
+        containsTab: (tabOrTabGroupId: string) =>
+          containsTab(dockLayoutRef.current, tabOrTabGroupId),
+        focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) =>
+          focusTab(dockLayoutRef.current, tabId, activateWithoutDocumentFocus),
+        // `LayoutInfo` is intentionally opaque in the shared model so callers don't need to know
+        // about rc-dock's `LayoutBase`. Cross the boundary here at the only place we know the
+        // concrete shape.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        testLayout: testLayout as unknown as LayoutInfo,
+        // Same boundary crossing as `testLayout` above.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        simpleLayout: simpleLayout as unknown as LayoutInfo,
       },
-      floatTabById: (tabId: string) => floatTabById(tabId, dockLayoutRef.current),
-      getAllWebViewDefinitions: () => getAllWebViewDefinitions(dockLayoutRef.current),
-      getWebViewDefinition: (webViewId: string) =>
-        getWebViewDefinition(webViewId, dockLayoutRef.current),
-      updateTabPartial: (
-        tabId: string,
-        partialTabInfo: Partial<TabInfo>,
-        shouldBringToFront = false,
-      ) => updateTabPartial(dockLayoutRef.current, tabId, partialTabInfo, shouldBringToFront),
-      updateWebViewDefinition: (
-        webViewId: string,
-        updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
-        shouldBringToFront = false,
-      ) =>
-        updateWebViewDefinition(webViewId, updateInfo, shouldBringToFront, dockLayoutRef.current),
-      getTabInfoByDirectionFromTab: (sourceTabId: string, direction: DirectionFromTab) =>
-        getTabInfoByDirectionFromTab(dockLayoutRef.current, sourceTabId, direction),
-      getTabInfoByElement: (tabElement: Element) =>
-        getTabInfoByElement(dockLayoutRef.current, tabElement),
-      getTabInfoById: (tabId: string) =>
-        getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
-      focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
-      // `LayoutInfo` is intentionally opaque in the shared model so callers don't need to know
-      // about rc-dock's `LayoutBase`. Cross the boundary here at the only place we know the
-      // concrete shape.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      testLayout: testLayout as unknown as LayoutInfo,
-      // Same boundary crossing as `testLayout` above.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      simpleLayout: simpleLayout as unknown as LayoutInfo,
-    });
+      () => {
+        if (isCurrentRegistration) setHasInitialLayoutLoadFinished(true);
+      },
+    );
+
+    // Name the window from whatever it renders first, before any layout change has happened. No
+    // `defaultLayout` is passed, so this always resolves the empty-window key and always costs one
+    // localization request. It stays because it is the only cover for `loadLayout` failing or
+    // returning early, which would otherwise leave the boilerplate document title on screen; a
+    // later real title replaces it, and `latestRequestedLabel` keeps this one from overwriting it.
+    refreshWindowTitle();
+
     return () => {
+      isCurrentRegistration = false;
+      // A re-registration starts its own initial load, so the mark (removed by the effect below
+      // once this state clears) must not outlive the registration it described
+      setHasInitialLayoutLoadFinished(false);
       unsub();
       // This is not a component ref but just a timeout. We don't want to save the value from when
       // this hook first ran
@@ -124,7 +230,28 @@ export function PlatformDockLayout() {
       clearTimeout(focusTabAfterCloseTimeoutRef.current);
     };
     // Is there any situation where dockLayoutRef will change? We need to add to dependencies if so
-  }, []);
+  }, [refreshWindowTitle]);
+
+  useEffect(() => {
+    if (!hasInitialLayoutLoadFinished) return undefined;
+    // Set from an effect, after the commit, rather than when the load finishes: the load hands its
+    // layout to rc-dock as a state update, which renders in the same commit as this component's
+    // state change at the latest, so by now the DOM shows the layout the load applied. rc-dock's root
+    // element takes no attributes through props, so this sets it on the element directly
+    // (`getRootElement` is in rc-dock's typings, though left out of its docs).
+    const rootElement = dockLayoutRef.current.getRootElement();
+    rootElement?.setAttribute(LAYOUT_LOADED_ATTRIBUTE, 'true');
+    return () => rootElement?.removeAttribute(LAYOUT_LOADED_ATTRIBUTE);
+  }, [hasInitialLayoutLoadFinished]);
+
+  useEffect(
+    () =>
+      installMiddleClickTabBarHandlers(document, {
+        findTab: (tabId) => dockLayoutRef.current.find(tabId),
+        onCloseTab: handleCloseTab,
+      }),
+    [],
+  );
 
   return (
     <DockLayoutWrapper
@@ -133,13 +260,7 @@ export function PlatformDockLayout() {
       saveTab={saveTab}
       /* Put a visual space around all tab-groups.
        * I tried using CSS padding and margin for this, but both causes overflows. */
-      style={{
-        position: 'absolute',
-        top: 48,
-        bottom: 8,
-        left: 8,
-        right: 8,
-      }}
+      style={getDockLayoutOuterInset(isPowerMode)}
       onLayoutChange={(layout, currentTabId, direction) => {
         let webViewDefinition: WebViewDefinition | undefined;
         const didCloseWebView = direction === 'remove';
@@ -177,29 +298,28 @@ export function PlatformDockLayout() {
               }
             }
 
-            // If there are no more docked tabs, add one
+            // If there are no more docked tabs, hand off the decision of what happens next
             if (direction === 'float' || direction === 'remove') {
               if (layout.dockbox.children.length === 1) {
-                const hasNoTabs = !dockLayoutRef.current.find(
+                const hasNoDockedTabs = !dockLayoutRef.current.find(
                   // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
                   (item) => isTab(item) && item.id !== currentTabId,
                   // Search through the docked tabs. This is the API for rc-dock, so we must use it
                   // eslint-disable-next-line no-bitwise
                   Filter.Docked | Filter.Tab,
                 );
-                if (hasNoTabs) {
-                  (async () => {
-                    try {
-                      await openWebView('platformGetResources.home', {
-                        type: 'tab',
-                      });
-                    } catch (e) {
-                      throw new Error(
-                        `platform-dock-layout.component error: Opening Home web view failed! ${e}`,
-                        { cause: e },
-                      );
-                    }
-                  })();
+                if (hasNoDockedTabs) {
+                  // An empty dock is not the same as an empty window: a tab the user just floated
+                  // (or a dialog, which opens as a float) has not gone away. Only a window with
+                  // nothing left anywhere is reported, and whether such a window closes or docks
+                  // Home is the main process's call — it is the only place that knows how many
+                  // windows exist. Otherwise Home simply fills the dock sitting empty behind the
+                  // tabs that are still there.
+                  // `layout` is rc-dock's `LayoutBase`, and it is the layout the dock is changing
+                  // to, where `dockLayoutRef.current` still holds the one it is changing from.
+                  // Cross to the opaque `LayoutInfo` here, as elsewhere in this file.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  handleDockEmptiedByRemoval(layout as unknown as LayoutInfo);
                 }
               }
             }
@@ -216,6 +336,21 @@ export function PlatformDockLayout() {
               }
           }
         }
+
+        // What this window is called follows what it is showing, so it is recomputed whenever the
+        // layout moves: a tab switch, or a tab opening, closing or moving between windows.
+        //
+        // It also runs on changes that alter no title at all. `updateWebViewDefinition` ends in
+        // rc-dock's `updateTab`, which always reports a layout change, so a detached view's verse
+        // move and any `useWebViewState` write arrive here too. That is cheap when the resulting
+        // label is a plain tab title, and one cross-process localization request when it is a
+        // LocalizeKey — which is the Simple-mode case, whose first docked panel is titled by key.
+        //
+        // Deferred a microtask because this callback runs BEFORE the dock adopts the new layout, so
+        // both the layout the dock reports and the tabs it can find are still the previous ones. A
+        // tab that has just opened is not findable yet, and reading now would name the window after
+        // whatever it was showing before — the very case this feature exists for
+        queueMicrotask(refreshWindowTitle);
 
         (async () => {
           if (onLayoutChangeRef.current) {

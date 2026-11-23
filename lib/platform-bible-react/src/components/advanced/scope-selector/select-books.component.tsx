@@ -33,6 +33,13 @@ type SelectBooksProps = {
    * value contains localized versions of the ID and full book name
    */
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
+  /**
+   * Optional explanations, by section, for why that section has no available books. Each is shown
+   * as a tooltip on that section's quick-select button while it is disabled. Supply one for any
+   * section whose books the consumer withholds deliberately, so the disabled button reads as "not
+   * searched here" rather than "this project has none".
+   */
+  disabledSectionExplanations?: Partial<Record<Section, string>>;
 };
 
 /**
@@ -49,6 +56,7 @@ export function SelectBooks({
   onChangeSelectedBookIds,
   localizedStrings,
   localizedBookNames,
+  disabledSectionExplanations,
 }: SelectBooksProps) {
   const moreText = localizedStrings['%webView_book_selector_more%'];
 
@@ -81,6 +89,7 @@ export function SelectBooks({
               selectedBookIds={selectedBookIds}
               onToggle={toggleSection}
               localizedStrings={localizedStrings}
+              disabledExplanation={disabledSectionExplanations?.[section]}
             />
           );
         })}
@@ -92,6 +101,7 @@ export function SelectBooks({
         onChangeSelectedBookIds={onChangeSelectedBookIds}
         localizedStrings={localizedStrings}
         localizedBookNames={localizedBookNames}
+        disabledSectionExplanations={disabledSectionExplanations}
       />
 
       {selectedBookIds.length > 0 && (

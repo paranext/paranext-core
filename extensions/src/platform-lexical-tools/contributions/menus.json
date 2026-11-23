@@ -4,8 +4,10 @@
     "groups": {},
     "items": [
       {
-        "label": "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%",
-        "localizeNotes": "Scripture Editor top menu > Project > Dictionary: SDBH/SDBG",
+        "label": "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Project > Dictionary: SDBH/SDBG (opens the Hebrew and Greek dictionary as a tab)",
+        "iconNameBefore": "book-a",
         "group": "platform.projectResources",
         "order": 100,
         "command": "platformLexicalTools.openDictionary"

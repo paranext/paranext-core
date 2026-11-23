@@ -4,7 +4,7 @@ import '@testing-library/jest-dom';
 import { Dialog } from 'platform-bible-react';
 import { ALERT_DIALOG } from './alert-dialog.component';
 
-// Mock dialog-base.data to avoid dependency on dialog.service-host
+// Mock dialog-base.data to avoid dependency on dialog.service-shard
 vi.mock('./dialog-base.data', async () => {
   const actual = await vi.importActual('./dialog-base.data');
   return actual;

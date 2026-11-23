@@ -1,0 +1,75 @@
+/*
+ * Tailwind entry for the paranext-core Electron app (renderer) build (PT-3920).
+ *
+ * platform-bible-react (PBR) scans only its OWN source, so `tw:` utilities that core uses but PBR
+ * doesn't also use are never emitted and silently render as nothing. This entry makes the app build
+ * emit utilities from core's own source (scanned via `@source` below).
+ *
+ * It emits the `theme` + `utilities` layers but NOT preflight/base or the concrete theme color
+ * values (`.light`/`.dark`/`.paratext-*`) — those stay PBR's job, injected at runtime under
+ * `.pr-twp`. The `@theme inline` block, `dark` variant, and typography (`@config`) mirror PBR's
+ * `src/index.css`; keep them in sync. Full rationale: docs/tailwind.md.
+ */
+@layer theme, base, components, utilities;
+/* Import the default theme scale (text sizes, spacing, etc.) so core's utilities are self-sufficient
+ * rather than relying on PBR to emit the tokens they reference. */
+@import 'tailwindcss/theme.css' layer(theme) prefix(tw);
+/* `source(none)` disables auto content-detection so scanning is scoped to core's renderer source. */
+@import 'tailwindcss/utilities.css' layer(utilities) prefix(tw) source(none);
+@source '../**/*.{ts,tsx}';
+
+/* PBR's config supplies the typography plugin + theme-aware prose overrides so `tw:prose*` matches PBR. */
+@config '../../../lib/platform-bible-react/tailwind.config.ts';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success-foreground: var(--success-foreground);
+  --color-diff-deleted: var(--diff-deleted);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-heading: var(--font-sans);
+  /* Font family stays a literal (not a `var()` map); the actual @font-face is loaded by PBR at runtime. */
+  --font-sans: 'IBM Plex Sans Variable', sans-serif;
+  /* Lets the spacing scale be overridden by the concrete `--spacing` PBR injects at runtime. */
+  --spacing: calc(var(--spacing));
+}

@@ -1,3 +1,5 @@
+using Paranext.DataProvider.NetworkObjects.Documentation;
+
 namespace Paranext.DataProvider.NetworkObjects;
 
 internal abstract class DataProvider : NetworkObject
@@ -38,10 +40,20 @@ internal abstract class DataProvider : NetworkObject
         await RegisterNetworkObjectAsync(
             DataProviderName,
             GetFunctions(),
-            GetDataProviderCreatedDetails()
+            GetDataProviderCreatedDetails(),
+            GetNetworkObjectDocumentation()
         );
         await StartDataProviderAsync();
     }
+
+    /// <summary>
+    /// Optional documentation for this data provider, threaded into registration. Override to mark
+    /// the whole provider experimental (set <see cref="NetworkObjectDocumentation.Experimental"/>) or
+    /// to document/mark only specific functions via <see cref="NetworkObjectDocumentation.Methods"/> —
+    /// e.g. one experimental projectInterface on a PDP that also exposes stable ones. Defaults to
+    /// <c>null</c> (no documentation).
+    /// </summary>
+    protected virtual NetworkObjectDocumentation? GetNetworkObjectDocumentation() => null;
 
     /// <summary>
     /// Create an event that tells the network details about the data provider that is being created
@@ -60,6 +72,19 @@ internal abstract class DataProvider : NetworkObject
     }
 
     /// <summary>
+    /// Called on the data types of every update event this provider sends that names data types,
+    /// before it is sent. Override to add data types that must be refreshed whenever other data
+    /// changes. <c>"*"</c> already refreshes every data type, so it is sent without reaching this
+    /// hook, and nothing is sent for a blank data type or an empty list.
+    /// </summary>
+    /// <param name="dataTypes">
+    /// The data types the update names: never empty, and a list this provider owns, so an override
+    /// may change it and return it.
+    /// </param>
+    /// <returns>The data types to send. Nothing is sent if the list is empty.</returns>
+    protected virtual List<string> ExpandDataUpdateScope(List<string> dataTypes) => dataTypes;
+
+    /// <summary>
     /// Notify all processes on the network that this data provider has new data.
     ///
     /// This method transforms the data scope in the same way that `data-provider`service.ts`'s
@@ -73,35 +98,35 @@ internal abstract class DataProvider : NetworkObject
         if (dataScope == null)
             return;
 
-        // The final computed data scope to send out in the update event. Based on dataScope
-        object dataScopeResult;
+        // "*" is passed as a string; any other scope is sent as a list of data types.
+        // Presumably this will change as part of https://github.com/paranext/paranext-core/issues/443
+        if (dataScope is "*")
+        {
+            await PapiClient.SendEventAsync(_eventType, dataScope);
+            return;
+        }
 
+        List<string> dataTypes;
         if ((dataScope is string s) && !string.IsNullOrWhiteSpace(s))
-        {
-            // If we are returning "*", just pass it as a string.  Otherwise we have to provide a list of strings.
-            // Presumably this will change as part of https://github.com/paranext/paranext-core/issues/443
-            dataScopeResult = (s == "*") ? s : new List<string> { s };
-        }
-        else if (dataScope is List<string> dataScopeList)
-        {
-            if (dataScopeList.Count > 0)
-                dataScopeResult = dataScope;
-            // Empty list means no data type updates
-            else
-            {
-                Console.WriteLine("Did not send data update event. dataScope is an empty list");
-                return;
-            }
-        }
+            dataTypes = [s];
+        else if (dataScope is List<string> dataScopeList && dataScopeList.Count > 0)
+            dataTypes = [.. dataScopeList];
         else
         {
             Console.WriteLine(
-                "Did not send data update event. dataScope is not a string or list of strings"
+                "Did not send data update event. dataScope is blank, an empty list, or not a string or list of strings"
             );
             return;
         }
 
-        await PapiClient.SendEventAsync(_eventType, dataScopeResult);
+        dataTypes = ExpandDataUpdateScope(dataTypes);
+        if (dataTypes.Count == 0)
+        {
+            Console.WriteLine("Did not send data update event. The expanded dataScope is empty");
+            return;
+        }
+
+        await PapiClient.SendEventAsync(_eventType, dataTypes);
     }
 
     /// <summary>

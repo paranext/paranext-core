@@ -1,0 +1,2070 @@
+// @vitest-environment jsdom
+import '@testing-library/jest-dom';
+import type React from 'react';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
+import {
+  act,
+  createEvent,
+  fireEvent,
+  getNodeText,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
+import {
+  BOOK_NOT_AVAILABLE_KEY,
+  EMPTY_KEY,
+  LOADING_KEY,
+  FAILED_KEY,
+  NOT_INSTALLED_KEY,
+  UNAVAILABLE_KEY,
+  ResourceCellView,
+  COPY_KEY,
+  INSTALL_UNVERIFIED_KEY,
+} from './resource-cell-view.component';
+
+// jsdom doesn't ship a ResizeObserver (needed by Radix portal content). A stub is sufficient since
+// the tests don't inspect layout behavior. The hasPointerCapture / scrollIntoView shims Radix also
+// needs are installed repo-wide by vitest.setup.ts.
+class NoopResizeObserver implements ResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = NoopResizeObserver;
+  }
+});
+
+const localizedStrings = {
+  [UNAVAILABLE_KEY]: 'Resource unavailable',
+  [NOT_INSTALLED_KEY]: 'Resource not installed',
+  [LOADING_KEY]: 'Resource is loading…',
+  [FAILED_KEY]: 'Download failed',
+  [EMPTY_KEY]: 'No text for this verse',
+  [BOOK_NOT_AVAILABLE_KEY]: 'Book not in this text',
+  [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this resource is installed",
+};
+
+/** The zoom area the cells under test mark their text with. */
+const ZOOM_AREA = 'resource-web';
+
+/** Renders cells in a plain div wrapper — ResourceCellView is now presentational, no role needed. */
+function renderCells(cells: React.ReactNode) {
+  return render(<div>{cells}</div>);
+}
+
+describe('ResourceCellView row smoke', () => {
+  it('partial failure: ready, failed, and downloading cells render independently', () => {
+    renderCells(
+      <>
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          copyLimit={undefined}
+          editor={<span>Blessed are the poor in spirit</span>}
+        />
+        <ResourceCellView
+          state="failed"
+          zoomArea={ZOOM_AREA}
+          label="ASV"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          copyLimit={undefined}
+          editor={undefined}
+        />
+        <ResourceCellView
+          state="downloading"
+          zoomArea={ZOOM_AREA}
+          label="KJV"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          copyLimit={undefined}
+          editor={undefined}
+        />
+      </>,
+    );
+
+    // Each resource's label text is visible in its header.
+    expect(screen.getByText('WEB')).toBeInTheDocument();
+    expect(screen.getByText('ASV')).toBeInTheDocument();
+    expect(screen.getByText('KJV')).toBeInTheDocument();
+
+    // No gridcell role — ResourceCellView is now purely presentational.
+    expect(screen.queryByRole('gridcell')).not.toBeInTheDocument();
+
+    // Content renders per state.
+    expect(screen.getByText('Blessed are the poor in spirit')).toBeInTheDocument();
+    expect(screen.getByText('Download failed')).toBeInTheDocument();
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
+    // Only the failed cell shows "Resource unavailable"; the downloading cell shows the loading text.
+    expect(screen.getAllByText('Resource unavailable')).toHaveLength(1);
+    // Neither "not installed" nor the editor appear for the failed/downloading cells.
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+  });
+
+  it('unavailable: shows "Resource not installed" — no spinner, no "Download failed", no editor', () => {
+    renderCells(
+      <ResourceCellView
+        state="unavailable"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('Resource not installed')).toBeInTheDocument();
+    expect(screen.queryByText('Resource is loading…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
+  });
+
+  it('bookNotAvailable: names the missing book without claiming a fault or a remedy', () => {
+    renderCells(
+      <ResourceCellView
+        state="bookNotAvailable"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('Book not in this text')).toBeInTheDocument();
+    // The resource is installed and working, so none of the fault wording may appear — each of
+    // these would send the user after a download that cannot supply a book the text never had.
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource is loading\u2026')).not.toBeInTheDocument();
+  });
+
+  it('unverified: says it could not check \u2014 not "not installed", no retry wording, no editor', () => {
+    renderCells(
+      <ResourceCellView
+        state="unverified"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
+  });
+
+  it('mixed direction: LTR and RTL cells apply independent dir', () => {
+    const { container } = renderCells(
+      <>
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          copyLimit={undefined}
+          editor={<span>Blessed are the poor in spirit</span>}
+        />
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="עברית"
+          textDirection="rtl"
+          localizedStrings={localizedStrings}
+          copyLimit={undefined}
+          editor={<span>אַשְׁרֵי הָאִישׁ</span>}
+        />
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="العربية"
+          textDirection="rtl"
+          localizedStrings={localizedStrings}
+          copyLimit={undefined}
+          editor={<span>طُوبَى لِلْمَسَاكِينِ</span>}
+        />
+      </>,
+    );
+
+    // No gridcell role — purely presentational.
+    expect(screen.queryByRole('gridcell')).not.toBeInTheDocument();
+
+    // Scope the direction counts to the rendered subtree (not the whole document).
+    expect(container.querySelectorAll('[dir="ltr"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[dir="rtl"]')).toHaveLength(2);
+
+    expect(screen.getByText('Blessed are the poor in spirit')).toBeInTheDocument();
+    expect(screen.getByText('אַשְׁרֵי הָאִישׁ')).toBeInTheDocument();
+    expect(screen.getByText('طُوبَى لِلْمَسَاكِينِ')).toBeInTheDocument();
+  });
+});
+
+describe('ResourceCellView name display', () => {
+  it('inline mode hangs the name before the verse text in reading order', () => {
+    const { container } = renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    // Name precedes the verse text in DOM (reading) order — assert via text order in the subtree.
+    const text = container.textContent ?? '';
+    expect(text.indexOf('NIV')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('NIV')).toBeLessThan(text.indexOf('In the beginning'));
+  });
+
+  it('inline mode puts the name and verse text in one row (name beside text, not a header band)', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const name = screen.getByText('NIV');
+    const verse = screen.getByText('In the beginning');
+    // Inline: one row holds the name beside the verse text.
+    const row = name.closest('.stg-verse-row');
+    expect(row).toContainElement(verse);
+  });
+
+  it('inline mode scopes the row to the resource dir and puts the name first in DOM order', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="עברית"
+        textDirection="rtl"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        nameDisplay="inline"
+        editor={<span>אַשְׁרֵי</span>}
+      />,
+    );
+    const name = screen.getByText('עברית');
+    const row = name.closest('.stg-verse-row');
+    expect(row).toHaveAttribute('dir', 'rtl');
+    // The name comes first in DOM order; with `dir="rtl"` its inline-start offset (which jsdom does
+    // not lay out) places it on the right. Visual placement is verified in Storybook, not here.
+    expect(row?.firstElementChild).toContainElement(name);
+  });
+
+  it('inline mode still shows the name while downloading', () => {
+    renderCells(
+      <ResourceCellView
+        state="downloading"
+        zoomArea={ZOOM_AREA}
+        label="KJV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        nameDisplay="inline"
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('KJV')).toBeInTheDocument();
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
+  });
+
+  it('inline mode still shows the name when the download failed', () => {
+    renderCells(
+      <ResourceCellView
+        state="failed"
+        zoomArea={ZOOM_AREA}
+        label="ASV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        nameDisplay="inline"
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('ASV')).toBeInTheDocument();
+    expect(screen.getByText('Download failed')).toBeInTheDocument();
+  });
+
+  it('inline mode still shows the name for an empty verse', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        nameDisplay="inline"
+        emptyMessage={localizedStrings[EMPTY_KEY]}
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('WEB')).toBeInTheDocument();
+    expect(screen.getByText('No text for this verse')).toBeInTheDocument();
+  });
+
+  it('the visible name is aria-hidden so the parent listitem name is not announced twice', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    // ResourceCellView is presentational (no role/aria-label of its own); the parent verse
+    // `listitem` owns the accessible name, so the visible copy must be hidden from the a11y tree.
+    expect(screen.getByText('NIV')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('defaults to header display: the name band tops the cell and does not wrap the content', () => {
+    const { container } = renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={<span>Blessed</span>}
+      />,
+    );
+    // The cell root is the presentational div ResourceCellView renders (our wrapper's only child).
+    const cell = container.firstElementChild?.firstElementChild;
+    const name = screen.getByText('WEB');
+    const verse = screen.getByText('Blessed');
+    // Header mode: the name sits in a header band (which also hosts the reorder grip) that is a
+    // direct child of the cell root; unlike inline mode, the band does not wrap the content — the content
+    // is a sibling.
+    const band = name.parentElement;
+    expect(band?.parentElement).toBe(cell);
+    expect(band).not.toContainElement(verse);
+    // Header mode routes through the same helper, so it inherits the aria-hidden non-duplication.
+    expect(name).toHaveAttribute('aria-hidden', 'true');
+  });
+});
+
+const menuStrings = {
+  [UNAVAILABLE_KEY]: 'Resource unavailable',
+  [LOADING_KEY]: 'Resource is loading…',
+  [FAILED_KEY]: 'Download failed',
+  [COPY_KEY]: 'Copy',
+};
+
+const zoomMenuLabels = {
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
+  reset: 'Zoom reset',
+  options: 'Zoom options for {resourceName}',
+};
+
+/**
+ * The open menu's items and separators in document order, a separator shown as `—`. Each menuitem's
+ * own label only (its direct text nodes, per `getNodeText`), so a shortcut hint rendered beside it
+ * is invisible here; assert hint content separately.
+ */
+function menuEntries(menu: HTMLElement): string[] {
+  return Array.from(menu.querySelectorAll('[role="menuitem"], [role="separator"]')).map((entry) =>
+    entry.getAttribute('role') === 'separator' ? '—' : getNodeText(entry),
+  );
+}
+
+/**
+ * The rendered menuitem whose own label text is exactly `label`, regardless of a shortcut hint
+ * rendered beside it as a sibling element: `getByText` matches only an element's own direct
+ * text-node children, so the hint's separate nested text does not affect this lookup.
+ */
+function zoomMenuItem(label: string): HTMLElement {
+  const item = screen.getByText(label).closest('[role="menuitem"]');
+  if (!(item instanceof HTMLElement)) throw new Error(`No menuitem rendered for "${label}"`);
+  return item;
+}
+
+/** Every element from `element` up to and including `root`, innermost first. */
+function ancestorsUpTo(element: HTMLElement, root: Element): HTMLElement[] {
+  const chain: HTMLElement[] = [];
+  for (let current = element.parentElement; current; current = current.parentElement) {
+    chain.push(current);
+    if (current === root) break;
+  }
+  return chain;
+}
+
+describe('ResourceCellView right-click menu', () => {
+  it.each(['inline', 'header'] as const)(
+    '%s layout: offers Copy alone without zoom menu labels',
+    (nameDisplay) => {
+      renderCells(
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>verse</span>}
+          nameDisplay={nameDisplay}
+        />,
+      );
+
+      fireEvent.contextMenu(screen.getByText('verse'));
+
+      expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
+      expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+      expect(screen.queryByRole('menuitem', { name: /zoom/i })).not.toBeInTheDocument();
+    },
+  );
+
+  it('offers no zoom options button in the header without zoom menu labels', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse</span>}
+        nameDisplay="header"
+        showDragHandle
+        reorderHandleLabel="Reorder WEB"
+      />,
+    );
+    // Positive control: the header renders its one button, the reorder grip.
+    expect(screen.getByRole('button', { name: 'Reorder WEB' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it.each([
+    ['whose resource is not installed', 'unavailable', 'Resource not installed'],
+    [
+      'whose install could not be checked',
+      'unverified',
+      "Couldn't check whether this resource is installed",
+    ],
+  ] as const)('leaves the browser menu alone on a cell %s', (_, state, text) => {
+    renderCells(
+      <ResourceCellView
+        state={state}
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={{
+          ...menuStrings,
+          [NOT_INSTALLED_KEY]: 'Resource not installed',
+          [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this resource is installed",
+        }}
+        copyLimit={undefined}
+        editor={undefined}
+      />,
+    );
+    const event = createEvent.contextMenu(screen.getByText(text));
+    fireEvent(screen.getByText(text), event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('shows an enabled Copy item when text is selected', () => {
+    // Spy on window.getSelection to simulate selected text at the time of right-click.
+    // The component only calls toString() on the Selection; implementing the full ~30-member
+    // Selection interface in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'selected text',
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse</span>}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+
+    const copyItem = screen.getByRole('menuitem', { name: 'Copy' });
+    expect(copyItem).toBeInTheDocument();
+    expect(copyItem).not.toHaveAttribute('aria-disabled', 'true');
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('shows a disabled Copy item when no text is selected', () => {
+    // Spy on window.getSelection to simulate no selection.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => '',
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse</span>}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+
+    const copyItem = screen.getByRole('menuitem', { name: 'Copy' });
+    expect(copyItem).toBeInTheDocument();
+    expect(copyItem).toHaveAttribute('aria-disabled', 'true');
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('still opens the menu, with Copy disabled, when the selection cannot be read', () => {
+    // A selection left anchored in nodes the editor has since replaced throws when it is read.
+    // The component reads only these members; the rest of `Selection` is irrelevant here.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      rangeCount: 1,
+      getRangeAt: () => {
+        throw new DOMException('The index is not in the allowed range.', 'IndexSizeError');
+      },
+      toString: () => 'selected text',
+    } as unknown as Selection);
+
+    try {
+      renderCells(
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>verse</span>}
+        />,
+      );
+
+      fireEvent.contextMenu(screen.getByText('verse'));
+
+      expect(screen.getByRole('menuitem', { name: 'Copy' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    } finally {
+      getSelectionSpy.mockRestore();
+    }
+  });
+
+  it('selecting Copy writes the selected text to the clipboard', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    // Stub navigator.clipboard (not available in jsdom by default).
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'selected text',
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse</span>}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('selected text');
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('shortens the copied text to the copy limit', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'abcdefgh',
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyLimit={4}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('abcd');
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('writes nothing to the clipboard when the copy limit is 0', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'abcdefgh',
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyLimit={0}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).not.toHaveBeenCalled();
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('copies only the part of a selection inside the right-clicked cell', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    renderCells(
+      <>
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-web"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>unlimited verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-asv"
+          label="ASV"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          editor={<span>limited verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+          copyLimit={3}
+        />
+      </>,
+    );
+
+    // A selection dragged from the first cell's text into the second cell's.
+    const unlimitedText = screen.getByText('unlimited verse').firstChild;
+    const limitedText = screen.getByText('limited verse').firstChild;
+    if (!unlimitedText || !limitedText) throw new Error('verse text nodes not rendered');
+    const range = document.createRange();
+    range.setStart(unlimitedText, 0);
+    range.setEnd(limitedText, 'limited verse'.length);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    fireEvent.contextMenu(screen.getByText('unlimited verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('unlimited verse');
+
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it.each([
+    ['a character outside the Basic Multilingual Plane', 'a\u{1E900}b', 'a'],
+    ['a base letter and its combining mark', 'aéb', 'a'],
+    ['a cluster that ends exactly at the copy limit', 'éab', 'é'],
+  ])('does not split %s at the copy limit', async (_name, selectedText, expectedText) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => selectedText,
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyLimit={2}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledWith(expectedText);
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('copies under the copy limit in force when the menu opened, even if it grows before Copy', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'abcdefgh',
+    } as Selection);
+
+    const cellWithLimit = (copyLimit: number | undefined) => (
+      <div>
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={copyLimit}
+          editor={<span>verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+      </div>
+    );
+    try {
+      const { rerender } = render(cellWithLimit(3));
+
+      fireEvent.contextMenu(screen.getByText('verse'));
+      // Another view moves the scroll group to a chapter with no limit while the menu is open.
+      rerender(cellWithLimit(undefined));
+      await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+      expect(writeText).toHaveBeenCalledWith('abc');
+    } finally {
+      getSelectionSpy.mockRestore();
+    }
+  });
+
+  it.each(['header', 'inline'] as const)(
+    "does not count the cell's own name when a selection is dragged in from another cell (%s layout)",
+    async (nameDisplay) => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        writable: true,
+        configurable: true,
+      });
+
+      renderCells(
+        <>
+          <ResourceCellView
+            state="ready"
+            zoomArea="resource-web"
+            label="WEB"
+            textDirection="ltr"
+            localizedStrings={menuStrings}
+            copyLimit={undefined}
+            editor={<span>first verse</span>}
+            zoomMenuLabels={zoomMenuLabels}
+            nameDisplay={nameDisplay}
+          />
+          <ResourceCellView
+            state="ready"
+            zoomArea="resource-asv"
+            label="ASV"
+            textDirection="ltr"
+            localizedStrings={menuStrings}
+            copyLimit={100}
+            editor={<span>second verse</span>}
+            zoomMenuLabels={zoomMenuLabels}
+            nameDisplay={nameDisplay}
+          />
+        </>,
+      );
+
+      // A selection dragged from the first cell's text to the end of the second cell's, crossing the
+      // second cell's name.
+      const firstText = screen.getByText('first verse').firstChild;
+      const secondText = screen.getByText('second verse').firstChild;
+      if (!firstText || !secondText) throw new Error('verse text nodes not rendered');
+      const range = document.createRange();
+      range.setStart(firstText, 0);
+      range.setEnd(secondText, 'second verse'.length);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+
+      fireEvent.contextMenu(screen.getByText('second verse'));
+      await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+      expect(writeText).toHaveBeenCalledWith('second verse');
+
+      window.getSelection()?.removeAllRanges();
+    },
+  );
+
+  it('keeps the direction of a backward selection that crosses cells', () => {
+    renderCells(
+      <>
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-web"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>first verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-asv"
+          label="ASV"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>second verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+      </>,
+    );
+
+    // Dragged upward: from the end of the second cell's text back into the first cell's.
+    const firstText = screen.getByText('first verse').firstChild;
+    const secondText = screen.getByText('second verse').firstChild;
+    if (!firstText || !secondText) throw new Error('verse text nodes not rendered');
+    const selection = window.getSelection();
+    if (!selection) throw new Error('no selection');
+    selection.setBaseAndExtent(secondText, 'second verse'.length, firstText, 2);
+
+    // jsdom moves the selection onto any element that takes focus, which a browser does not, and
+    // the menu takes focus as it opens.
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
+    try {
+      fireEvent.contextMenu(screen.getByText('first verse'));
+    } finally {
+      focusSpy.mockRestore();
+    }
+
+    expect(selection.anchorNode).toBe(secondText);
+    expect(selection.anchorOffset).toBe('second verse'.length);
+    expect(selection.focusNode).toBe(firstText);
+    expect(selection.focusOffset).toBe(2);
+
+    selection.removeAllRanges();
+  });
+});
+
+describe('ResourceCellView zoom menus', () => {
+  it.each(['inline', 'header'] as const)(
+    '%s layout: the right-click menu offers Copy, a separator, Zoom in, Zoom out and Zoom reset, in that order',
+    (nameDisplay) => {
+      renderCells(
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>verse</span>}
+          nameDisplay={nameDisplay}
+          zoomMenuLabels={zoomMenuLabels}
+        />,
+      );
+      fireEvent.contextMenu(screen.getByText('verse'));
+      expect(menuEntries(screen.getByRole('menu'))).toEqual([
+        'Copy',
+        '—',
+        'Zoom in',
+        'Zoom out',
+        'Zoom reset',
+      ]);
+    },
+  );
+
+  it('disables each zoom item at its bound: Zoom in at 300 %, Zoom out at 50 %, Reset without an own level', () => {
+    const { rerender } = renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        canZoomIn={false}
+        canZoomOut
+        canReset={false}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('verse'));
+    const menu = screen.getByRole('menu');
+    expect(zoomMenuItem('Zoom in')).toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom out')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom reset')).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.keyDown(menu, { key: 'Escape' });
+
+    rerender(
+      <div>
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+          canZoomIn
+          canZoomOut={false}
+          canReset
+        />
+      </div>,
+    );
+    fireEvent.contextMenu(screen.getByText('verse'));
+    // Positive control: a menu re-opened after the rerender.
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(zoomMenuItem('Zoom in')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom out')).toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom reset')).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('choosing each zoom item calls its callback', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onZoomIn = vi.fn();
+    const onZoomOut = vi.fn();
+    const onResetZoom = vi.fn();
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        onZoomIn={onZoomIn}
+        onZoomOut={onZoomOut}
+        onResetZoom={onResetZoom}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(zoomMenuItem('Zoom in'));
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(zoomMenuItem('Zoom out'));
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(zoomMenuItem('Zoom reset'));
+    expect(onZoomIn).toHaveBeenCalledTimes(1);
+    expect(onZoomOut).toHaveBeenCalledTimes(1);
+    expect(onResetZoom).toHaveBeenCalledTimes(1);
+  });
+
+  it('header layout: the "⋮" button, named for the resource, opens the three zoom items without Copy', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onZoomIn = vi.fn();
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse</span>}
+        nameDisplay="header"
+        zoomMenuLabels={zoomMenuLabels}
+        canZoomIn={false}
+        onZoomIn={onZoomIn}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Zoom options for WEB' }));
+    const menu = screen.getByRole('menu');
+    expect(menuEntries(menu)).toEqual(['Zoom in', 'Zoom out', 'Zoom reset']);
+    expect(zoomMenuItem('Zoom in')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('header layout: the "⋮" button sits after the name and shows only on hover or focus, except on touch screens', () => {
+    const { container } = renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse</span>}
+        nameDisplay="header"
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Zoom options for WEB' });
+    expect(button.parentElement).toContainElement(screen.getByText('WEB'));
+    expect(screen.getByText('WEB').compareDocumentPosition(button)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    [
+      'tw:opacity-0',
+      'tw:group-hover:opacity-100',
+      'tw:group-focus-within:opacity-100',
+      'tw:[@media(hover:none)]:opacity-100',
+    ].forEach((className) => expect(button.classList.contains(className)).toBe(true));
+    // The reveal keys off the cell root, which carries the `group` the classes above refer to.
+    expect(container.firstElementChild?.firstElementChild?.classList.contains('tw:group')).toBe(
+      true,
+    );
+  });
+
+  it('inline layout: no "⋮" button, since a verse row shows its name inline', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse</span>}
+        nameDisplay="inline"
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    // Positive control: the zoom labels are live, so the right-click menu carries zoom items.
+    fireEvent.contextMenu(screen.getByText('verse'));
+    expect(zoomMenuItem('Zoom in')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /zoom options/i })).not.toBeInTheDocument();
+  });
+
+  it('clicking the "⋮" button does not bubble a click to the parent', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onParentClick = vi.fn();
+    render(
+      // Test-only click sink used to assert propagation; not a real interactive control.
+      // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
+      <div onClick={onParentClick}>
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>verse</span>}
+          nameDisplay="header"
+          zoomMenuLabels={zoomMenuLabels}
+        />
+      </div>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Zoom options for WEB' }));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(onParentClick).not.toHaveBeenCalled();
+  });
+});
+
+describe('ResourceCellView zoom menu shortcut hints', () => {
+  const originalUserAgent = navigator.userAgent;
+
+  afterEach(() => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: originalUserAgent,
+      configurable: true,
+    });
+  });
+
+  it.each([
+    ['Linux', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'],
+    ['Windows', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'],
+  ])(
+    'shows each zoom item’s %s chord as separate keycaps, matching the content-zoom catalog entries',
+    (_os, userAgent) => {
+      Object.defineProperty(window.navigator, 'userAgent', {
+        value: userAgent,
+        configurable: true,
+      });
+      renderCells(
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          editor={<span>verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />,
+      );
+      fireEvent.contextMenu(screen.getByText('verse'));
+
+      // content-zoom-in: Ctrl++ -> keycaps ['Ctrl', '+'], so one "+" is the separator (a SPAN) and
+      // the other is the second keycap's own Kbd.
+      const zoomIn = zoomMenuItem('Zoom in');
+      expect(within(zoomIn).getByText('Ctrl').tagName).toBe('KBD');
+      expect(
+        within(zoomIn)
+          .getAllByText('+')
+          .map((element) => element.tagName)
+          .sort(),
+      ).toEqual(['KBD', 'SPAN']);
+
+      // content-zoom-out: Ctrl+-
+      const zoomOut = zoomMenuItem('Zoom out');
+      expect(within(zoomOut).getByText('Ctrl').tagName).toBe('KBD');
+      expect(within(zoomOut).getByText('-').tagName).toBe('KBD');
+      expect(within(zoomOut).getByText('+').tagName).toBe('SPAN');
+
+      // content-zoom-reset: Ctrl+0
+      const reset = zoomMenuItem('Zoom reset');
+      expect(within(reset).getByText('Ctrl').tagName).toBe('KBD');
+      expect(within(reset).getByText('0').tagName).toBe('KBD');
+      expect(within(reset).getByText('+').tagName).toBe('SPAN');
+    },
+  );
+
+  it('shows each zoom item’s macOS chord as adjacent keycaps with no separator', () => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      configurable: true,
+    });
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('verse'));
+
+    // content-zoom-in on macOS: ⌘=
+    const zoomIn = zoomMenuItem('Zoom in');
+    expect(within(zoomIn).getByText('⌘').tagName).toBe('KBD');
+    expect(within(zoomIn).getByText('=').tagName).toBe('KBD');
+    expect(within(zoomIn).queryByText('+')).not.toBeInTheDocument();
+
+    // content-zoom-out on macOS: ⌘-
+    const zoomOut = zoomMenuItem('Zoom out');
+    expect(within(zoomOut).getByText('⌘').tagName).toBe('KBD');
+    expect(within(zoomOut).getByText('-').tagName).toBe('KBD');
+    expect(within(zoomOut).queryByText('+')).not.toBeInTheDocument();
+
+    // content-zoom-reset on macOS: ⌘0
+    const reset = zoomMenuItem('Zoom reset');
+    expect(within(reset).getByText('⌘').tagName).toBe('KBD');
+    expect(within(reset).getByText('0').tagName).toBe('KBD');
+    expect(within(reset).queryByText('+')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceCellView reorder grip', () => {
+  it('renders the grip as a focusable, labeled control and fires onReorderKeyDown on keydown', () => {
+    const onReorderKeyDown = vi.fn();
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="Genesis"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="gen"
+        reorderHandleLabel="Reorder Genesis"
+        reorderHint="Drag or press arrow keys to reorder"
+        onReorderKeyDown={onReorderKeyDown}
+      />,
+    );
+
+    const grip = screen.getByRole('button', { name: 'Reorder Genesis' });
+    expect(grip).toHaveAttribute('data-reorder-handle-id', 'gen');
+    // A real focusable control (button), not an aria-hidden decoration.
+    expect(grip).not.toHaveAttribute('aria-hidden');
+    act(() => grip.focus());
+    expect(grip).toHaveFocus();
+
+    fireEvent.keyDown(grip, { key: 'ArrowRight' });
+    expect(onReorderKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the reorder hint tooltip on grip focus', async () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="Genesis"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="gen"
+        reorderHandleLabel="Reorder Genesis"
+        reorderHint="Drag or press arrow keys to reorder"
+        onReorderKeyDown={vi.fn()}
+      />,
+    );
+
+    fireEvent.focus(screen.getByRole('button', { name: 'Reorder Genesis' }));
+    // Radix renders the tooltip content into a live region on focus.
+    expect(await screen.findAllByText('Drag or press arrow keys to reorder')).not.toHaveLength(0);
+  });
+
+  it('does not crash when showDragHandle is set without reorder wiring', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="Genesis"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={<span>In the beginning</span>}
+        showDragHandle
+      />,
+    );
+    // The grip still renders (no aria-label supplied); the label text is still shown in the header.
+    expect(screen.getByText('Genesis')).toBeInTheDocument();
+    expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+});
+
+describe('ResourceCellView content zoom marker', () => {
+  function renderMarkedCell(nameDisplay: 'inline' | 'header') {
+    return renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>marked verse</span>}
+        nameDisplay={nameDisplay}
+        showDragHandle
+        reorderHandleLabel="Reorder WEB"
+      />,
+    );
+  }
+
+  it.each(['inline', 'header'] as const)(
+    '%s layout: marks one element, with the resource’s own area and name, around the cell text, and nothing zooms that text but the marker',
+    (nameDisplay) => {
+      const { container } = renderMarkedCell(nameDisplay);
+      const markers = container.querySelectorAll('[data-platform-content-zoom-root]');
+      expect(markers).toHaveLength(1);
+      const marker = markers[0];
+      expect(marker.getAttribute('data-platform-content-zoom-root')).toBe(ZOOM_AREA);
+      expect(marker.getAttribute('data-platform-content-zoom-label')).toBe('WEB');
+
+      const verse = screen.getByText('marked verse');
+      const chain = ancestorsUpTo(verse, marker);
+      // Positive control: the walk reached the marker, so it covered every element in between.
+      expect(chain.at(-1)).toBe(marker);
+      // CSS `zoom` on any of these would multiply with the area's level (or, on the marker itself,
+      // replace it), so the cell text would no longer be sized by the content zoom alone.
+      [verse, ...chain].forEach((element) => {
+        expect(element.style.zoom).toBeFalsy();
+        expect(element.getAttribute('style') ?? '').not.toMatch(/zoom/i);
+      });
+    },
+  );
+
+  it.each(['inline', 'header'] as const)(
+    '%s layout: keeps the scroll box and its padding outside the marker',
+    (nameDisplay) => {
+      const { container } = renderMarkedCell(nameDisplay);
+      const marker = container.querySelector('[data-platform-content-zoom-root]');
+      if (!marker) throw new Error('marker missing');
+      // The scrollbar and the padding keep interface size; only the text inside them scales.
+      expect(marker.getAttribute('class') ?? '').not.toMatch(/overflow|tw:p-2/);
+      const scrollBox = marker.parentElement?.closest('[class~="tw:overflow-auto"]');
+      expect(scrollBox).not.toBeNull();
+      expect(scrollBox?.contains(marker)).toBe(true);
+    },
+  );
+
+  it.each(['inline', 'header'] as const)(
+    '%s layout: leaves the resource name outside the marker',
+    (nameDisplay) => {
+      const { container } = renderMarkedCell(nameDisplay);
+      const marker = container.querySelector('[data-platform-content-zoom-root]');
+      expect(marker?.contains(screen.getByText('WEB'))).toBe(false);
+    },
+  );
+
+  it('header layout: leaves the reorder grip outside the marker', () => {
+    const { container } = renderMarkedCell('header');
+    const marker = container.querySelector('[data-platform-content-zoom-root]');
+    expect(marker?.contains(screen.getByRole('button', { name: 'Reorder WEB' }))).toBe(false);
+  });
+
+  it('"blocks" zoom target: hands the area’s level to the verse blocks instead of zooming any box', () => {
+    const { container } = renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        copyLimit={undefined}
+        editor={<span>verse-blocks</span>}
+        contentOverflow="visible"
+        zoomTarget="blocks"
+      />,
+    );
+    // In the aligned grid this wrapper is a `grid-template-rows: subgrid` box, so `zoom` on it would
+    // scale the shared row tracks it inherits along with the text and let one column measure its rows
+    // differently from its neighbours. The level rides down to the verse blocks instead, read from
+    // the same platform variable the marker's own rule reads.
+    const content = container.querySelector<HTMLElement>('[data-cell-content]');
+    expect(content?.style.zoom).toBeFalsy();
+    expect(content?.style.getPropertyValue('--aligned-zoom')).toBe(
+      `var(--platform-content-zoom-${ZOOM_AREA},var(--platform-content-zoom-default,1))`,
+    );
+    // The text is still marked, so the resource stays a zoom area the platform can report and act on.
+    expect(
+      container
+        .querySelector('[data-platform-content-zoom-root]')
+        ?.contains(screen.getByText('verse-blocks')),
+    ).toBe(true);
+  });
+});
+
+// The header band is the reorder drag source for both the chapter row and the Grid view. Asserted
+// on this component rather than only through `ScriptureTextGrid`, whose tests mock `ResourceCell`
+// and hand-roll a draggable header — so deleting `draggable` here would leave those green.
+describe('ResourceCellView header drag source', () => {
+  const headerDragProps = {
+    state: 'ready' as const,
+    zoomArea: ZOOM_AREA,
+    label: 'Genesis',
+    textDirection: 'ltr',
+    localizedStrings,
+    copyLimit: undefined,
+    editor: <span>In the beginning</span>,
+  };
+
+  it('makes the header band draggable and reports drag start and end', () => {
+    const onDragStart = vi.fn();
+    const onDragEnd = vi.fn();
+    renderCells(<ResourceCellView {...headerDragProps} headerDrag={{ onDragStart, onDragEnd }} />);
+
+    const header = screen.getByTestId('scripture-text-grid-column-drag-source');
+    expect(header).toHaveAttribute('draggable', 'true');
+
+    fireEvent.dragStart(header);
+    expect(onDragStart).toHaveBeenCalledTimes(1);
+    fireEvent.dragEnd(header);
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the cell undraggable when no reorder is wired', () => {
+    // A `draggable` ancestor makes its whole subtree draggable, which turns a click-drag across the
+    // text into a reorder instead of a selection — the capability one editor per column exists for.
+    renderCells(<ResourceCellView {...headerDragProps} />);
+
+    expect(screen.queryByTestId('scripture-text-grid-column-drag-source')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[draggable="true"]')).toHaveLength(0);
+  });
+});
+
+describe('ResourceCellView content scroll ownership', () => {
+  const baseProps = {
+    state: 'ready' as const,
+    zoomArea: ZOOM_AREA,
+    label: 'WEB',
+    textDirection: 'ltr',
+    localizedStrings,
+    copyLimit: undefined,
+    editor: <div data-testid="editor" />,
+  };
+
+  it('scrolls its own content by default, with scroll anchoring off', () => {
+    // The reference scroll tells the reader's scrolling from its own by comparing `scrollTop`, and
+    // scroll anchoring rewrites `scrollTop` without either of them — the aligned grid's root turns
+    // it off for the same reason.
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).toHaveClass('tw:overflow-auto');
+    expect(content).toHaveClass('tw:[overflow-anchor:none]');
+  });
+
+  it('makes its scroll port a tab stop so the scrolled text is keyboard-reachable', () => {
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).toHaveAttribute('tabindex', '0');
+    // Named for the resource, so landing on it says whose text the keys scroll.
+    expect(screen.getByRole('group', { name: 'WEB' })).toBe(content);
+    // `outline-hidden`, not `outline-none`: it keeps a real outline under forced colors, where the
+    // ring (a box-shadow) is not drawn.
+    expect(content).toHaveClass('tw:focus-visible:outline-hidden', 'tw:focus-visible:ring-2');
+    expect(content).not.toHaveClass('tw:focus-visible:outline-none');
+  });
+
+  it('adds no tab stop when an ancestor owns the scroll port', () => {
+    const { container } = renderCells(
+      <ResourceCellView {...baseProps} contentOverflow="visible" />,
+    );
+
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).not.toHaveAttribute('tabindex');
+    expect(content).not.toHaveAttribute('role');
+    expect(content).not.toHaveAttribute('aria-label');
+  });
+
+  it('hands scrolling to an ancestor when asked, so an aligned grid can own the scroll port', () => {
+    // A scroll container's children cannot participate in an ancestor's grid, so leaving
+    // `overflow: auto` here would stop the verse blocks aligning across columns.
+    const { container } = renderCells(
+      <ResourceCellView {...baseProps} contentOverflow="visible" />,
+    );
+
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).toHaveClass('tw:overflow-visible');
+    expect(content).not.toHaveClass('tw:overflow-auto');
+    expect(content).not.toHaveClass('tw:[overflow-anchor:none]');
+  });
+
+  it('exposes the layout anchors the aligned grid styles hook onto', () => {
+    // These attributes are load-bearing for that view's layout, not test ids.
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-root]')).toBeInTheDocument();
+    expect(container.querySelector('[data-cell-header]')).toBeInTheDocument();
+    expect(container.querySelector('[data-cell-pad]')).toBeInTheDocument();
+  });
+
+  it('keeps the header OUTSIDE the content box, which the chapter scroll depends on', () => {
+    // `getFirstVisibleY` treats any `[data-cell-header]` INSIDE the port as a sticky header covering
+    // its top. In a chapter cell the header is the port's sibling, so that lookup finds nothing and
+    // contributes no offset — which is the only reason the port math needs no per-layout branch.
+    // Moving the header inside the port as a NON-sticky element would offset every chapter-mode
+    // scroll by its height, since it scrolls away while still being counted as covering the top.
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-content] [data-cell-header]')).toBeNull();
+  });
+});
+
+describe('ResourceCellView verse row layout', () => {
+  it('renders the reorder grip in verse mode, not only in the header', () => {
+    const onReorderKeyDown = vi.fn();
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="web"
+        reorderHandleLabel="Reorder WEB"
+        onReorderKeyDown={onReorderKeyDown}
+      />,
+    );
+    const grip = screen.getByRole('button', { name: 'Reorder WEB' });
+    expect(grip).toHaveAttribute('data-reorder-handle-id', 'web');
+    fireEvent.keyDown(grip, { key: 'ArrowDown' });
+    expect(onReorderKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no grip in verse mode without showDragHandle', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        reorderHandleId="web"
+      />,
+    );
+    // Positive control: the verse row itself rendered, so the absences below are meaningful.
+    expect(document.querySelector('.stg-verse-row')).not.toBeNull();
+    expect(document.querySelector('[data-reorder-handle-id]')).toBeNull();
+    expect(document.querySelector('.stg-verse-row-with-grip')).toBeNull();
+  });
+
+  it('leads the row with the grip, before the name, as the chapter header does', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="web"
+        reorderHandleLabel="Reorder WEB"
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB"
+      />,
+    );
+    const grip = screen.getByRole('button', { name: 'Reorder WEB' });
+    const name = screen.getByRole('button', { name: 'WEB' });
+    // Document order is the tab order; the stylesheet places the name past the grip's lane only
+    // for a row carrying the with-grip class.
+    const row = grip.closest('.stg-verse-row');
+    expect(row).toHaveClass('stg-verse-row-with-grip');
+    const buttons = [...(row?.querySelectorAll<HTMLElement>('button') ?? [])];
+    expect(buttons.indexOf(grip)).toBeLessThan(buttons.indexOf(name));
+  });
+
+  it("publishes the name's rendered width so line 1 starts right after it", () => {
+    // jsdom does no layout, so stand in for the browser's measurement of the name alone.
+    const measure = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function measureElement(this: HTMLElement) {
+        return new DOMRect(0, 0, this.classList.contains('stg-verse-name') ? 41.5 : 0, 20);
+      });
+    try {
+      renderCells(
+        <ResourceCellView
+          zoomArea={ZOOM_AREA}
+          copyLimit={undefined}
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          editor={<span>In the beginning</span>}
+        />,
+      );
+      const row = document.querySelector<HTMLElement>('.stg-verse-row');
+      expect(row?.style.getPropertyValue('--stg-name-width')).toBe('41.5px');
+    } finally {
+      measure.mockRestore();
+    }
+  });
+
+  it('catches up on the name width once a row mounted in a hidden tab is shown', () => {
+    // A row in a hidden tab has no layout, so its first measurement is 0; the observer's report
+    // when the tab is shown is what publishes the width.
+    let nameWidth = 0;
+    const measure = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function measureElement(this: HTMLElement) {
+        return new DOMRect(0, 0, this.classList.contains('stg-verse-name') ? nameWidth : 0, 20);
+      });
+    // Reports a resize only for an element the component asked it to observe, as the browser does.
+    const observed = new Set<Element>();
+    let reportResize: (() => void) | undefined;
+    const disconnect = vi.fn();
+    const CapturingResizeObserver = vi.fn((callback: () => void) => {
+      reportResize = () => {
+        if (observed.size > 0) callback();
+      };
+      return {
+        observe: (target: Element) => observed.add(target),
+        unobserve: (target: Element) => observed.delete(target),
+        disconnect,
+      };
+    });
+    vi.stubGlobal('ResizeObserver', CapturingResizeObserver);
+    try {
+      const { unmount } = renderCells(
+        <ResourceCellView
+          zoomArea={ZOOM_AREA}
+          copyLimit={undefined}
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          editor={<span>In the beginning</span>}
+        />,
+      );
+      const row = document.querySelector<HTMLElement>('.stg-verse-row');
+      // Positive control: the row rendered, so the missing width is the zero being skipped.
+      expect(row).not.toBeNull();
+      expect(row?.style.getPropertyValue('--stg-name-width')).toBe('');
+
+      nameWidth = 41.5;
+      act(() => reportResize?.());
+      expect(row?.style.getPropertyValue('--stg-name-width')).toBe('41.5px');
+
+      unmount();
+      expect(disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      measure.mockRestore();
+    }
+  });
+
+  it('carries the classes the verse stylesheet scopes its float exclusion on', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const name = screen.getByText('WEB');
+    // The name sits in the measured `.stg-verse-name` box, with the copyright indicator when there
+    // is one, directly inside the row.
+    const nameBox = name.closest('.stg-verse-name');
+    expect(nameBox).not.toBeNull();
+    expect(nameBox?.parentElement).toHaveClass('stg-verse-row');
+    expect(screen.getByText('In the beginning').closest('.stg-verse-content')).not.toBeNull();
+  });
+
+  it('keeps the row flush at the inline edge so the reclaimed width is not given back', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = screen.getByText('WEB').closest<HTMLElement>('.stg-verse-row');
+    const inlinePadding = [...(row?.classList ?? [])].filter((className) =>
+      /^tw:(p|px|ps|pl)-/.test(className),
+    );
+    expect(inlinePadding).toEqual([]);
+  });
+
+  it("hands the resource's zoom level to the row from outside the zoomed text", () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = screen.getByText('WEB').closest<HTMLElement>('.stg-verse-row');
+    // The float exclusion inside the zoomed text divides by this, so it must read the same level the
+    // platform's own rule zooms the area's marker by.
+    expect(row?.style.getPropertyValue('--stg-zoom')).toBe(
+      `var(--platform-content-zoom-${ZOOM_AREA},var(--platform-content-zoom-default,1))`,
+    );
+    // The name stays unzoomed, or rows at different zooms stop aligning with each other.
+    expect(row?.style.zoom).toBeFalsy();
+    const marker = screen
+      .getByText('In the beginning')
+      .closest('[data-platform-content-zoom-root]');
+    expect(marker?.closest('.stg-verse-content')).not.toBeNull();
+    expect(marker?.contains(screen.getByText('WEB'))).toBe(false);
+  });
+
+  it('reserves the name width on placeholders, which have no line boxes to shorten', () => {
+    const { unmount } = renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    expect(document.querySelector('.stg-verse-name-reserve')).not.toBeNull();
+    unmount();
+
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        emptyMessage={localizedStrings[EMPTY_KEY]}
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    expect(document.querySelector('.stg-verse-name-reserve')).not.toBeNull();
+  });
+
+  it('does not reserve placeholder width in header mode, which has no hanging name', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    // Positive control: the placeholder rendered, so its missing reserve is meaningful.
+    expect(screen.getByText(localizedStrings[LOADING_KEY])).toBeInTheDocument();
+    expect(document.querySelector('.stg-verse-name-reserve')).toBeNull();
+  });
+});
+
+describe('ResourceCellView verse row disclosure control', () => {
+  it("makes the name the row's focusable disclosure control when wired", () => {
+    const onDisclosureActivate = vi.fn();
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded={false}
+        disclosureControlsId="panel-1"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    expect(control).toHaveAttribute('aria-expanded', 'false');
+    // Absent while collapsed: a dangling idref is an ARIA error.
+    expect(control).not.toHaveAttribute('aria-controls');
+    control.focus();
+    expect(control).toHaveFocus();
+    fireEvent.click(control);
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it('points aria-controls at the panel only while expanded', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded
+        disclosureControlsId="panel-1"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(control).toHaveAttribute('aria-controls', 'panel-1');
+  });
+
+  it('toggles once for a double-click on the name', () => {
+    const onDisclosureActivate = vi.fn();
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, MAT 5:3"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+
+    fireEvent.click(control, { detail: 1 });
+    fireEvent.click(control, { detail: 2 });
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
+
+    // Positive control: a keyboard activation (detail 0) still toggles.
+    fireEvent.click(control, { detail: 0 });
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels a held Enter's auto-repeats, so holding it toggles once", () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB, MAT 5:3"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    // user-event never flags a held key's keydowns as repeats, so assert the cancellation the
+    // browser relies on instead: a cancelled Enter keydown does not activate the button.
+    // `fireEvent` returns false when the event was cancelled.
+    expect(fireEvent.keyDown(control, { key: 'Enter' })).toBe(true);
+    expect(fireEvent.keyDown(control, { key: 'Enter', repeat: true })).toBe(false);
+  });
+
+  /** Renders a disclosure control whose name is (or is not) clipped, as jsdom never lays text out. */
+  function renderDisclosureWithName({ isTruncated }: { isTruncated: boolean }) {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="Berean Standard Bible 2024"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="Berean Standard Bible 2024, MAT 5:3"
+      />,
+    );
+    const name = screen.getByText('Berean Standard Bible 2024');
+    Object.defineProperty(name, 'clientWidth', { configurable: true, value: 96 });
+    Object.defineProperty(name, 'scrollWidth', {
+      configurable: true,
+      value: isTruncated ? 180 : 96,
+    });
+    return screen.getByRole('button', { name: 'Berean Standard Bible 2024, MAT 5:3' });
+  }
+
+  it('shows a truncated name in full on keyboard focus, and Escape dismisses it', async () => {
+    const user = userEvent.setup();
+    renderDisclosureWithName({ isTruncated: true });
+
+    await user.tab();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Berean Standard Bible 2024');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('shows no tooltip on focus when the name already fits', async () => {
+    const user = userEvent.setup();
+    const control = renderDisclosureWithName({ isTruncated: false });
+
+    await user.tab();
+    // Positive control: focus did land on the control, so the missing tooltip is meaningful.
+    expect(control).toHaveFocus();
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('keeps the name a presentational label when no disclosure is wired', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    // The row itself is named by the parent listitem in that case, so the visible copy stays hidden.
+    expect(screen.getByText('WEB')).toHaveAttribute('aria-hidden', 'true');
+    expect(document.querySelector('[data-disclosure-control]')).toBeNull();
+  });
+});
+
+describe('ResourceCellView copyright indicator', () => {
+  const INDICATOR = <span data-testid="copyright-indicator" />;
+
+  it('puts the indicator in the header next to the name', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    expect(screen.getByText('NIV').parentElement).toContainElement(
+      screen.getByTestId('copyright-indicator'),
+    );
+  });
+
+  it('puts the indicator beside the hanging name in inline mode, outside the verse text', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    const indicator = screen.getByTestId('copyright-indicator');
+    expect(screen.getByText('NIV').parentElement).toContainElement(indicator);
+    expect(screen.getByText('In the beginning').parentElement).not.toContainElement(indicator);
+  });
+});
+
+describe('ResourceCellView right-click inside something opened from the cell', () => {
+  it('leaves the right-click menu closed for a right-click in a window portalled out of the cell', async () => {
+    // The copyright details window renders into document.body, but React still delivers its
+    // events to the cell it was opened from
+    const portalledWindow = createPortal(
+      <div role="dialog" aria-label="Copyright for NIV">
+        Copyright text
+      </div>,
+      document.body,
+    );
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyrightIndicator={portalledWindow}
+      />,
+    );
+
+    const isNotCancelled = fireEvent.contextMenu(screen.getByText('Copyright text'));
+
+    expect(isNotCancelled).toBe(true);
+    expect(screen.queryByRole('menuitem', { name: 'Copy' })).not.toBeInTheDocument();
+
+    // The same right-click on the verse text does open it
+    fireEvent.contextMenu(screen.getByText('verse'));
+    expect(await screen.findByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
+  });
+});

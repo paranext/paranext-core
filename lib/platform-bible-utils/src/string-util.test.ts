@@ -18,13 +18,14 @@ import {
   substring,
   toArray,
   ordinalCompare,
-  testingStringUtils,
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
   formatReplacementStringToArray,
   toKebabCase,
   collapseMiddleWords,
+  isolateBidi,
 } from './string-util';
+import { GraphemeString } from './grapheme-string';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
 const SHORT_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '👨‍👩‍👧‍👦', '👮🏽‍♀️'];
@@ -114,71 +115,6 @@ describe('endsWith', () => {
   it('endsWith with position', () => {
     const result = endsWith(LONG_SURROGATE_PAIRS_STRING, 'At🦄', 8);
     expect(result).toEqual(true);
-  });
-});
-
-describe('indexOfClosestClosingCurlyBrace', () => {
-  const curlyString =
-    //           1           2
-    // 23 456 78901 2 345678901 23456
-    'Thi\\{s👮🏽‍♀️{is}👨‍👩‍👧‍👦\\}a {stri\\}ng}!';
-
-  it('gets the closest un-escaped curly brace', () => {
-    let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 0, false);
-    expect(result).toBe(10);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 4, false);
-    expect(result).toBe(10);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 10, false);
-    expect(result).toBe(10);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 11, false);
-    expect(result).toBe(25);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 16, false);
-    expect(result).toBe(25);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 23, false);
-    expect(result).toBe(25);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 25, false);
-    expect(result).toBe(25);
-  });
-
-  it('gets the closest escaped curly brace', () => {
-    let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 0, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 4, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 10, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 11, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 13, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 16, true);
-    expect(result).toBe(22);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 22, true);
-    expect(result).toBe(22);
-  });
-
-  it('returns -1 when out of bounds or no more curly braces are found', () => {
-    const strLength = stringLength(curlyString);
-    let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -1, true);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -1, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -10, true);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -10, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength, true);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength + 5, true);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength + 5, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 26, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 23, true);
-    expect(result).toBe(-1);
   });
 });
 
@@ -548,13 +484,11 @@ describe('padEnd', () => {
     expect(result).toEqual(LONG_SURROGATE_PAIRS_STRING + SEVEN_XS);
   });
 
-  // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
-  // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
-  // limit only works when length(padString) = 1
-  // ('padEnd with padString', () => {
-  //   const result = padEnd(TEXT_STRING, TEST_STRING_LENGTH + 10, 'ha');
-  //   expect(result).toEqual(`${TEXT_STRING}hahahahaha`);
-  // });
+  it('padEnd truncates a multi-grapheme padString to the target length', () => {
+    const target = stringLength(MEDIUM_SURROGATE_PAIRS_STRING) + 10;
+    const result = padEnd(MEDIUM_SURROGATE_PAIRS_STRING, target, 'ha');
+    expect(result).toEqual(`${MEDIUM_SURROGATE_PAIRS_STRING}hahahahaha`);
+  });
 });
 
 describe('padStart', () => {
@@ -572,13 +506,11 @@ describe('padStart', () => {
     expect(result).toEqual(SEVEN_XS + LONG_SURROGATE_PAIRS_STRING);
   });
 
-  // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
-  // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
-  // limit only works when length(padString) = 1
-  // ('padStart with padString', () => {
-  //   const result = padStart(TEST_STRING, TEST_STRING_LENGTH + 10, 'ha');
-  //   expect(result).toEqual(`hahahahaha${TEST_STRING}`);
-  // });
+  it('padStart truncates a multi-grapheme padString to the target length', () => {
+    const target = stringLength(MEDIUM_SURROGATE_PAIRS_STRING) + 10;
+    const result = padStart(MEDIUM_SURROGATE_PAIRS_STRING, target, 'ha');
+    expect(result).toEqual(`hahahahaha${MEDIUM_SURROGATE_PAIRS_STRING}`);
+  });
 });
 
 describe('slice', () => {
@@ -685,9 +617,9 @@ describe('split', () => {
     expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_ARRAY);
   });
 
-  it('split with splitLimit', () => {
+  it('split with splitLimit discards the remainder, as native does', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '𐐷', 2);
-    expect(result).toEqual(['Look', 'At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
+    expect(result).toEqual(['Look', 'At🦄This']);
   });
 
   it('split by empty string', () => {
@@ -713,6 +645,41 @@ describe('split', () => {
   it('split with RegExp separator that matches nothing in the string', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /\d/);
     expect(result).toEqual([MEDIUM_SURROGATE_PAIRS_STRING]);
+  });
+
+  it('a non-participating capture group is an empty string, not `undefined`', () => {
+    // Native puts `undefined` here under a `string[]` declaration that does not admit it, so
+    // `.map((part) => part.trim())` type-checks and then throws. This wrapper delivers the type it
+    // advertises.
+    expect('a1b'.split(/(z)?(\d)/)).toEqual(['a', undefined, '1', 'b']);
+    expect(split('a1b', /(z)?(\d)/)).toEqual(['a', '', '1', 'b']);
+    expect(() => split('a1b', /(z)?(\d)/).map((part) => part.trim())).not.toThrow();
+  });
+
+  it('every entry is a string for any capturing separator', () => {
+    const separators = [/(z)?(\d)/, /(a)|(1)/, /(x)?(y)?(b)/, /(-)/];
+    separators.forEach((separator) => {
+      ['a1b', 'ab', '2026-08-27', ''].forEach((subject) => {
+        split(subject, separator).forEach((part) => {
+          expect(typeof part).toEqual('string');
+        });
+      });
+    });
+  });
+
+  it('capture groups still interleave, as native does', () => {
+    expect(split('2026-08-27', /(-)/)).toEqual(['2026', '-', '08', '-', '27']);
+  });
+
+  it('the class keeps `undefined` where a group did not participate', () => {
+    // The substitution is the wrapper's, made to honor its `string[]` contract. The class declares
+    // `(GraphemeString | undefined)[]`, so it reports the difference the wrapper has to flatten.
+    expect(new GraphemeString('a1b').split(/(z)?(\d)/).map((part) => part?.toString())).toEqual([
+      'a',
+      undefined,
+      '1',
+      'b',
+    ]);
   });
 });
 
@@ -868,5 +835,31 @@ describe('truncateOmittingMiddleWords', () => {
     expect(
       collapseMiddleWords('- ? lorem ipsum dolor sit amed 0 0 - hi 0 1 2 3 4 5 6 7', 7),
     ).toEqual('- ? lorem ipsum dolor sit amed [...] 1 2 3 4 5 6 7');
+  });
+});
+
+describe('isolateBidi', () => {
+  it('should surround the text with the isolate code points', () => {
+    expect(isolateBidi('HNF')).toEqual('\u2068HNF\u2069');
+  });
+
+  it('should isolate a right-to-left name interpolated into a left-to-right sentence', () => {
+    expect(
+      formatReplacementString('Syncing {projectName}.', {
+        projectName: isolateBidi('\u0645\u0634\u0631\u0648\u0639'),
+      }),
+    ).toEqual('Syncing \u2068\u0645\u0634\u0631\u0648\u0639\u2069.');
+  });
+
+  it('should leave the text itself untouched', () => {
+    // Only the two code points are added, so the isolated value still contains exactly what it did.
+    const isolated = isolateBidi(SHORT_SURROGATE_PAIRS_STRING);
+    expect(substring(isolated, 1, stringLength(isolated) - 1)).toEqual(
+      SHORT_SURROGATE_PAIRS_STRING,
+    );
+  });
+
+  it('should isolate an empty string without producing anything else', () => {
+    expect(isolateBidi('')).toEqual('\u2068\u2069');
   });
 });

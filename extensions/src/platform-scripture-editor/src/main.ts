@@ -7,47 +7,75 @@ import type {
   WebViewDefinition,
 } from '@papi/core';
 import {
-  AsyncVariable,
-  deepEqual,
   getErrorMessage,
+  newGuid,
   PlatformEventEmitter,
   ResourceType,
   serialize,
 } from 'platform-bible-utils';
 import {
   EditorDecorations,
+  EditorMessageInsertCommentAtSelection,
+  EditorMessageInsertTextualNoteAtSelection,
   SelectionChangeEvent,
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
+  ScriptureEditorViewType,
   ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
 import { mergeDecorations } from './decorations.util';
+import { createSelectionTracker } from './selection-tracker.utils';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import modelTextPanelWebViewStyles from './model-text-panel.web-view.scss?inline';
 import modelTextPanelWebView from './model-text-panel.web-view?inline';
 import resourceTextPanelWebViewStyles from './resource-text-panel.web-view.scss?inline';
 import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
+import { ScriptureTextGridWebViewFactory } from './scripture-text-grid-web-view.factory';
 import {
   convertScriptureRangeToEditorRange,
+  finalizeProjectSwitch,
   formatEditorTitle,
+  buildScriptureEditorWebViewState,
+  getTabTitleProjectName,
   openCommentListAndSelectThread,
-  openTextConnectionPanels,
+  type OpenEditorDispatch,
+  openOrUpdateRelatedPanels,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
   selectProjectIdsForOpenMode,
+  showsReadOnlyPreview,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
+  syncOnSwitchToPower,
+  toScriptureEditorInfos,
+  updateRelatedChecksSidePanel,
+  updateRelatedFindPanel,
+  VIEW_TYPE_FOR_SET_VIEW_COMMAND,
 } from './platform-scripture-editor.utils';
-import { MarkersViewNotifier } from './markers-view-notifier.model';
+import { ReadOnlyViewNotifier } from './read-only-view-notifier.model';
+import { SharedLayoutReceiver } from './shared-layout-receiver.model';
+import {
+  BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
+  COMMENTARIES_PANEL_WEBVIEW_TYPE,
+  showBibleTextsTab,
+  showCommentariesTab,
+  showTextCollectionTab,
+} from './show-panel.util';
+import {
+  buildResourceTextPanelState,
+  showResourceInReferencePanel,
+  type ResourceTextPanelOptions,
+} from './show-resource-in-panel.util';
+import { updateStoredResourceSelection } from './resource-selection-store';
 
 logger.debug('Scripture Editor is importing!');
 
 const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
-const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
-const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
+/** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
 
 // #region Editor Selection Tracking
 
@@ -83,15 +111,32 @@ const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchPro
 const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
 
 /**
- * Event emitter fired before a project switch. Created lazily on the first call to open() to avoid
- * network initialization races during extension activation.
+ * Event emitter fired before a project switch. Payload carries the switch's unique `switchId`, so
+ * the renderer's workspace-updating service can pair each finish with exactly the switch that
+ * started it. Created lazily on the first call to open() to avoid network initialization races
+ * during extension activation.
  */
-let projectSwitchWillStartEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+let projectSwitchWillStartEmitter: PlatformEventEmitter<{ switchId: string }> | undefined;
 
-/** Event emitter fired after a project switch completes. Created lazily on the first call to open(). */
-let projectSwitchDidFinishEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+/**
+ * Event emitter fired after a project switch completes, with the `switchId` of the will-start event
+ * that began it. Created lazily on the first call to open().
+ */
+let projectSwitchDidFinishEmitter: PlatformEventEmitter<{ switchId: string }> | undefined;
 
 // #endregion Project Switch Events
+
+// #region Shared Layout
+
+/**
+ * Coordinates team-member receipt of a shared layout across project switches and Send/Receive
+ * syncs. Created in activate(). `open()` is a separate top-level function (not nested inside
+ * activate()), so this is module-level rather than a local const; call sites there use optional
+ * chaining since it is `undefined` until activation completes.
+ */
+let sharedLayoutReceiver: SharedLayoutReceiver | undefined;
+
+// #endregion Shared Layout
 
 interface ResourceViewerOptions extends OpenWebViewOptions {
   projectId?: string;
@@ -123,61 +168,45 @@ async function openPlatformResourceViewer(
   return open(true, projectId, existingTabIdToReplace, options);
 }
 
+/**
+ * Paratext 9's `UpdateInsertMenuItems` (`TextForm.cs`) shows footnote, cross-reference, and end
+ * note only when the project is not a resource project and not Study Bible additions, and enables
+ * them only with book text and a view that allows note insertion. Platform.Bible gates the Insert
+ * items declaratively (`enabledWhen` in menus.json) and re-checks at submission — see
+ * `adr-menus-gate-declaratively-with-context-keys` in Architecture-Decisions.md; the
+ * submission-time check is the web view's read-only/sync-blocked guard in
+ * `insertNoteAtCurrentSelection`, the one callback all three insert kinds share. The comment editor
+ * opener reaches the web view the same way but is handled there by its own
+ * `insertCommentAtCurrentSelection`.
+ *
+ * @param method The controller method to invoke: one of the three textual-note inserters or the
+ *   comment editor opener — all take no arguments and resolve once requested.
+ */
+async function requestEditorInsert(
+  method:
+    | EditorMessageInsertTextualNoteAtSelection['method']
+    | EditorMessageInsertCommentAtSelection['method'],
+  webViewId: string | undefined,
+): Promise<void> {
+  logger.debug(`Requesting ${method} on WebView ${webViewId}`);
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.[method]();
+}
+
 async function insertFootnoteAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting footnote...');
-
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertFootnoteAtSelection();
+  return requestEditorInsert('insertFootnoteAtSelection', webViewId);
 }
 
 async function insertCrossReferenceAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting cross-reference...');
+  return requestEditorInsert('insertCrossReferenceAtSelection', webViewId);
+}
 
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertCrossReferenceAtSelection();
+async function insertEndnoteAtSelection(webViewId: string | undefined): Promise<void> {
+  return requestEditorInsert('insertEndnoteAtSelection', webViewId);
 }
 
 async function insertCommentAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting project comment...');
-
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertCommentAtSelection();
+  return requestEditorInsert('insertCommentAtSelection', webViewId);
 }
 
 /** Function to prompt for a project or use the one passed in and open it in the editor */
@@ -196,8 +225,11 @@ async function open(
         'platformGetResources.excludePdpFactoryIdsInHome',
       ),
     });
+    const openableProjectMetadatas = projectMetadatas.filter(
+      (projectMetadata) => !projectMetadata.unsupportedReason,
+    );
     const projectsWithIsPublished = await Promise.all(
-      projectMetadatas.map(async (projectMetadata) => {
+      openableProjectMetadatas.map(async (projectMetadata) => {
         const pdp = await papi.projectDataProviders.get('platform.base', projectMetadata.id);
         return {
           projectId: projectMetadata.id,
@@ -243,17 +275,21 @@ async function open(
     // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
     // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
     // resolveOpenEditorDispatch JSDoc for the priority order.
-    const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-    const allScriptureEditors = allOpenDefs
-      .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
-      .map((def) => ({
-        id: def.id,
-        projectId: def.projectId,
-        // WebView state isn't statically typed, but `getWebViewDefinition` always stores
-        // `isReadOnly` as boolean here. Treat any other value as `false` for safety.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        isReadOnly: !!(def.state?.isReadOnly as boolean | undefined),
-      }));
+    // This rejects when a window could not be asked what it has open — most often a window whose
+    // renderer is still starting or has just gone away — and it may also time out under load. Both
+    // mean the same thing here: what is open is unknown. Carrying on with an empty list would tell
+    // the dispatch helper that nothing is open, and in simple mode that opens a second editor on
+    // top of the one the user already has, unsaved changes and all. Abort instead.
+    let allOpenDefs: SavedWebViewDefinition[];
+    try {
+      allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+    } catch (e) {
+      logger.error(
+        `open: could not establish which editors are already open (${getErrorMessage(e)}); not opening`,
+      );
+      throw e;
+    }
+    const allScriptureEditors = toScriptureEditorInfos(allOpenDefs);
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
     const requestedIsReadOnly = !projectForWebView.isEditable;
 
@@ -279,31 +315,69 @@ async function open(
     // The transition overlay and project-switch sync only apply in simple mode when the tab
     // content is actually being replaced (not on new-tab opens or focus-existing navigations).
     const needsOverlay = interfaceMode === 'simple' && dispatch.kind === 'replace-tab';
+    // Pairs this switch's will-start and did-finish events, so the renderer releases exactly this
+    // switch when it finishes — never an unrelated concurrent one.
+    const switchId = newGuid();
 
     if (needsOverlay) {
       // Create emitters lazily on first use, after full activation, to avoid network init races.
+      // Uses the async factory (the sync createNetworkEventEmitter is deprecated) so the events can
+      // carry `x-experimental` in the generated OpenRPC document — these are recently-added switch-
+      // pairing events whose contract isn't settled (see their @experimental TSDoc in the d.ts). The
+      // payload type is inferred from the NetworkEvents augmentation, so no explicit generic here.
+      // Awaited before emit: the enclosing handler is async, so this only adds first-use latency and
+      // the will-start event still fires before the switch below.
       if (!projectSwitchWillStartEmitter)
-        projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<
-          Record<string, never>
-        >(PROJECT_SWITCH_WILL_START_EVENT);
+        projectSwitchWillStartEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_WILL_START_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary:
+                'Emitted just before a scripture editor web view is opened or replaced with a new project.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary: 'Token pairing this switch with its matching onDidSwitchProject event.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
       if (!projectSwitchDidFinishEmitter)
-        projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<
-          Record<string, never>
-        >(PROJECT_SWITCH_DID_FINISH_EVENT);
-      projectSwitchWillStartEmitter.emit({});
+        projectSwitchDidFinishEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_DID_FINISH_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary: 'Emitted after the scripture editor web view open/replace call resolves.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary:
+                    'The switchId of the onWillSwitchProject event that started this switch.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
+      projectSwitchWillStartEmitter.emit({ switchId });
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
-      // Skip outgoing S/R for read-only viewers — no local changes are possible.
+      // Fire-and-forget: runs concurrently with openWebView below. It skips the outgoing S/R only
+      // for a published resource — an `Editable=F` translation project can still hold new comments.
       // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
       // require tracking a dirty flag in the editor controller, which doesn't exist yet).
-      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
-      // Fire-and-forget: runs concurrently with openWebView below.
-      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
+      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoing?.projectId, interfaceMode);
     }
 
     const emitDidFinish = () => {
       if (!needsOverlay) return;
-      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
+      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({ switchId });
       else
         logger.warn(
           'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
@@ -316,40 +390,99 @@ async function open(
       options,
     };
 
-    // If in simple interface mode, open/update the model text, bible text, and commentary text panels
-    if (interfaceMode === 'simple' && projectForWebView.projectId)
-      await openTextConnectionPanels(papi, projectForWebView.projectId);
+    // If in Simple interface mode, open/update the related panels (model text, Bible texts,
+    // commentaries, comments, text collection) and auto-apply the admin's shared layout for the
+    // project being opened (re-arm the buffered panels, focus the desired col-3 tab). They follow
+    // the editor onto any project, editable or not, except the Text Collection, which
+    // `openOrUpdateRelatedPanels` skips for a published resource. Note: A manual/later sync's
+    // held change is applied via the notification's "Apply now" rather than automatically here.
+    if (interfaceMode === 'simple' && projectForWebView.projectId) {
+      await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
+      await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
+    }
+
+    // Re-check the replace-tab target after openOrUpdateRelatedPanels: concurrent panel
+    // operations can remove the target tab between when the dispatch was resolved (above) and
+    // when openWebView runs. If the target is gone, re-resolve with fresh dock state so we
+    // don't throw "Replacing tab failed".
+    // Only applies in simple mode: openOrUpdateRelatedPanels (the source of the race) only runs
+    // there, and in power mode re-resolving would return the same caller-supplied
+    // existingTabIdToReplace anyway, so the re-check couldn't help.
+    // This read rejects when a window could not be asked what it has open (the dominant cause) and
+    // can also time out under load. Either way the original dispatch stands: it was resolved from a
+    // read that did succeed moments ago, and the one thing the re-check guards against — the target
+    // tab having vanished in the meantime — still surfaces, loudly, as openWebView refusing to
+    // replace a tab that is not there.
+    let finalDispatch: OpenEditorDispatch = dispatch;
+    if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
+      try {
+        const freshDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+        if (!freshDefs.some((def) => def.id === dispatch.targetTabId)) {
+          finalDispatch = resolveOpenEditorDispatch(
+            toScriptureEditorInfos(freshDefs),
+            projectForWebView.projectId,
+            requestedIsReadOnly,
+            interfaceMode,
+            existingTabIdToReplace,
+          );
+        }
+      } catch (e) {
+        logger.error(
+          `open: could not re-check which editors are open before replacing a tab (${getErrorMessage(e)}); using the dispatch resolved earlier`,
+        );
+      }
+    }
 
     const openedWebViewId = await papi.webViews
       .openWebView(
         SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-        dispatch.kind === 'replace-tab'
-          ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
+        finalDispatch.kind === 'replace-tab'
+          ? { type: 'replace-tab', targetTabId: finalDispatch.targetTabId }
           : undefined,
         openWebViewOptions,
       )
       .finally(emitDidFinish);
+
+    // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find and Checks
+    // wait until here because they are the panels that need the id of the editor this call just
+    // created. No Simple-mode or project-kind checks here — each helper owns its own guards.
+    await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
+    await updateRelatedChecksSidePanel(papi, projectForWebView.projectId, openedWebViewId);
 
     return openedWebViewId;
   }
   return undefined;
 }
 
-async function changeScriptureView(webViewId: string | undefined): Promise<void> {
+/**
+ * Resolves the Scripture editor controller for a web view id, or `undefined` when the id doesn't
+ * name a live Scripture editor.
+ *
+ * The menu commands below are all invoked with the id of whatever web view the user had focused, so
+ * each one has to establish the same four things before it can act: that an id arrived at all, that
+ * a web view is open under it, that the web view is a Scripture editor rather than some other tab,
+ * and that a controller can be obtained for it. None of those is an error — a menu item can
+ * legitimately fire against a tab that is not an editor — so each is logged at debug level and
+ * yields `undefined`, leaving the caller nothing to do.
+ *
+ * @param webViewId The id of the web view the command was invoked from
+ * @returns The editor's controller, or `undefined` if there isn't one to act on
+ */
+async function getScriptureEditorController(webViewId: string | undefined) {
   if (!webViewId) {
     logger.debug('No editor WebView ID!');
-    return;
+    return undefined;
   }
 
   const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
   if (!webViewDefinition) {
     logger.debug(`No webViewDefinition found for ${webViewId}!`);
-    return;
+    return undefined;
   }
 
   if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
     logger.debug(`WebView is not a Scripture editor!`);
-    return;
+    return undefined;
   }
 
   const controller = await papi.webViews.getWebViewController(
@@ -359,70 +492,43 @@ async function changeScriptureView(webViewId: string | undefined): Promise<void>
 
   if (!controller) {
     logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
-    return;
+    return undefined;
   }
 
-  await controller.changeScriptureView();
+  return controller;
+}
+
+async function changeScriptureView(webViewId: string | undefined): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.changeScriptureView();
+}
+
+async function setScriptureView(
+  webViewId: string | undefined,
+  viewType: ScriptureEditorViewType,
+): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.setScriptureView(viewType);
+}
+
+async function undoInEditor(webViewId: string | undefined): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.undo();
+}
+
+async function redoInEditor(webViewId: string | undefined): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.redo();
 }
 
 async function toggleFootnotesPane(webViewId: string | undefined): Promise<void> {
-  if (!webViewId) {
-    logger.debug('No editor WebView ID!');
-    return;
-  }
-
-  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
-  if (!webViewDefinition) {
-    logger.debug(`No webViewDefinition found for ${webViewId}!`);
-    return;
-  }
-
-  if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
-    logger.debug(`WebView is not a Scripture editor!`);
-    return;
-  }
-
-  const controller = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!controller) {
-    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
-    return;
-  }
-
-  await controller.toggleFootnotesPaneVisibility();
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.toggleFootnotesPaneVisibility();
 }
 
 async function changeFootnotesPaneLocation(webViewId: string | undefined): Promise<void> {
-  if (!webViewId) {
-    logger.debug('No editor WebView ID!');
-    return;
-  }
-
-  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
-  if (!webViewDefinition) {
-    logger.debug(`No webViewDefinition found for ${webViewId}!`);
-    return;
-  }
-
-  if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
-    logger.debug(`WebView is not a Scripture editor!`);
-    return;
-  }
-
-  const controller = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!controller) {
-    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
-    return;
-  }
-
-  await controller.changeFootnotesPaneLocation();
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.changeFootnotesPaneLocation();
 }
 
 /** Simple WebView provider so PAPI can get a Scripture Editor upon request */
@@ -437,7 +543,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE)
       throw new Error(
-        `${SCRIPTURE_EDITOR_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} WebView`,
+        `${SCRIPTURE_EDITOR_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
     // We know that the projectId (if present in the state) will be a string.
@@ -473,6 +579,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         optionsDecorations,
       ),
       isReadOnly,
+      // Always rebuild un-blocked. isSyncBlocked is transient runtime state owned by the core
+      // auto-sync edit-block driver; forcing it false here means a crash/reload mid-sync can never
+      // restore a read-only editor from the saved layout.
+      isSyncBlocked: false,
       /**
        * The original title string or localized string key passed in for us to use to format the
        * title when it should change
@@ -480,16 +590,50 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       unformattedTitle,
     };
 
+    // Started here so its project lookup overlaps the permission check and title formatting below.
+    const webViewStatePromise = buildScriptureEditorWebViewState(
+      papi,
+      projectId,
+      savedWebViewStateUpdated,
+    );
+
+    // Fold the Scripture-edit role check into the title's read-only computation only — `isReadOnly`
+    // itself must keep its narrower "opened as Resource Viewer" tab-identity meaning (see Section 2
+    // of the design spec). A lookup failure or a project that doesn't advertise
+    // `platformScripture.scriptureEditPermissions` fails open here (title stays whatever
+    // isReadOnly/Preview already computed), matching the same fail-open convention the webview's
+    // own reactive `canUserEditScripture` signal uses — so the open-time label and the live gate
+    // never disagree about which direction an error should bias.
+    // Preview is read-only only in Power: outside Power a saved formatted view is the editable
+    // Simple view
+    let isReadOnlyForTitle =
+      isReadOnly ||
+      showsReadOnlyPreview(savedWebViewStateUpdated.viewType, interfaceMode === 'power');
+    if (!isReadOnlyForTitle && projectId) {
+      try {
+        const scriptureEditPermissionsPdp = await papi.projectDataProviders.get(
+          'platformScripture.scriptureEditPermissions',
+          projectId,
+        );
+        if (
+          scriptureEditPermissionsPdp &&
+          !(await scriptureEditPermissionsPdp.canUserEditScripture())
+        )
+          isReadOnlyForTitle = true;
+      } catch (e) {
+        logger.warn(`Error checking Scripture edit permission for title: ${getErrorMessage(e)}`);
+      }
+    }
+
     const title = await formatEditorTitle(
       unformattedTitle,
       projectId,
-      isReadOnly || savedWebViewStateUpdated.viewType === 'markers',
-      async (projectIdFormat) => {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
-        return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
-      },
+      isReadOnlyForTitle,
+      async (projectIdFormat) => getTabTitleProjectName(papi, projectIdFormat),
       papi.localization.getLocalizedStrings,
     );
+
+    const webViewState = await webViewStatePromise;
 
     return {
       ...savedWebView,
@@ -498,7 +642,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       tooltip: optionsTooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,
       styles: platformScriptureEditorWebViewStyles,
-      state: savedWebViewStateUpdated,
+      state: webViewState,
       projectId,
       allowPopups: true,
       shouldShowToolbar: false,
@@ -506,6 +650,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       // BCV control (which is the single navigation point in simple mode). Power mode preserves the
       // saved value.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This webview is dual-mode: in simple mode it's the fixed 3-column layout's Column 2 and
+      // must always remain open, so it's non-closable there. Power mode allows closing/rearranging
+      // freely, matching its pre-existing behavior.
+      isClosable: interfaceMode === 'power',
     };
   }
 
@@ -518,21 +666,23 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       if (webView.id === currentWebViewDefinition.id) currentWebViewDefinition = webView;
     });
     /**
-     * Variable that holds the current selection in the editor. Will be `undefined` if could not
-     * determine selection. Will also be `undefined` initially until the editor reports its first
-     * selection.
+     * The selection the editor last reported. `getSelection()` callers wait for the editor's first
+     * report; after that they get the last report, which is `undefined` when the editor has none.
      */
-    let currentSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
-    /**
-     * Variable used to block `getSelection()` callers until the editor reports its first selection.
-     * Constructed lazily on the first `getSelection()` call so its internal 10s timeout timer never
-     * starts if nobody is waiting. If a selection arrives before any `getSelection()` call,
-     * `currentSelection` populates and this variable is never constructed at all — which is the
-     * common case in Platform.Bible when the editor is opened without a `projectId`.
-     */
-    let firstSelectionAsync:
-      | AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined>
-      | undefined;
+    const selectionTracker = createSelectionTracker<ScriptureRangeUsjVerseRefChapterLocation>(
+      `platformScriptureEditor.selection.${currentWebViewDefinition.id}`,
+    );
+    /** Posts an insert-note-at-selection message of the given kind to this editor's web view. */
+    async function postInsertNoteMessage(
+      method: EditorMessageInsertTextualNoteAtSelection['method'],
+    ): Promise<void> {
+      const message: EditorWebViewMessage = { method };
+      await papi.webViewProviders.postMessageToWebView(
+        currentWebViewDefinition.id,
+        webViewNonce,
+        message,
+      );
+    }
     return {
       async selectRange(range) {
         try {
@@ -610,6 +760,63 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(message);
         }
       },
+      async setScriptureView(viewType) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to setScriptureView ${viewType}`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'setScriptureView',
+            viewType,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running setScriptureView! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async undo() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to undo`,
+          );
+          const message: EditorWebViewMessage = { method: 'undo' };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running undo! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async redo() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to redo`,
+          );
+          const message: EditorWebViewMessage = { method: 'redo' };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running redo! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
       async toggleFootnotesPaneVisibility() {
         try {
           logger.debug(
@@ -662,26 +869,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(message);
         }
       },
-      async insertFootnoteAtSelection() {
-        const message: EditorWebViewMessage = {
-          method: 'insertFootnoteAtSelection',
-        };
-        await papi.webViewProviders.postMessageToWebView(
-          currentWebViewDefinition.id,
-          webViewNonce,
-          message,
-        );
-      },
-      async insertCrossReferenceAtSelection() {
-        const message: EditorWebViewMessage = {
-          method: 'insertCrossReferenceAtSelection',
-        };
-        await papi.webViewProviders.postMessageToWebView(
-          currentWebViewDefinition.id,
-          webViewNonce,
-          message,
-        );
-      },
+      insertFootnoteAtSelection: () => postInsertNoteMessage('insertFootnoteAtSelection'),
+      insertCrossReferenceAtSelection: () =>
+        postInsertNoteMessage('insertCrossReferenceAtSelection'),
+      insertEndnoteAtSelection: () => postInsertNoteMessage('insertEndnoteAtSelection'),
       async insertCommentAtSelection() {
         const { projectId } = currentWebViewDefinition;
         if (!projectId) {
@@ -784,42 +975,17 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(errorMessage);
         }
       },
-      async getSelection() {
-        // If we already have a selection, return it directly.
-        if (currentSelection !== undefined) return currentSelection;
-        // Otherwise lazy-construct the AsyncVariable so its 10s timer only starts when a caller
-        // is actually waiting. Subsequent callers reuse the same promise — including the cached
-        // rejection if the timeout already fired, so retries get the same rejection rather than
-        // a silent `undefined`.
-        if (!firstSelectionAsync) {
-          firstSelectionAsync = new AsyncVariable(
-            `platformScriptureEditor.selection.${currentWebViewDefinition.id}`,
-          );
-        }
-        return firstSelectionAsync.promise;
+      getSelection() {
+        return selectionTracker.getSelection();
       },
       async updateSelectionInternal(selection) {
-        const webViewId = currentWebViewDefinition.id;
-
         // If the selection didn't change, we don't need to do anything
-        if (deepEqual(currentSelection, selection)) return;
+        if (!selectionTracker.report(selection)) return;
 
-        currentSelection = selection;
-        // Resolve the first selection async variable IF it was lazy-constructed by a caller.
-        // If no caller has called getSelection() yet, firstSelectionAsync is still undefined and
-        // there is nothing to resolve — `currentSelection` is the source of truth from here.
-        if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
-          firstSelectionAsync.resolveToValue(selection);
-        }
-        selectionChangedEventEmitter?.emit({ webViewId, selection });
+        selectionChangedEventEmitter?.emit({ webViewId: currentWebViewDefinition.id, selection });
       },
       async dispose() {
-        currentSelection = undefined;
-        // If a caller lazy-constructed the AsyncVariable and it hasn't settled, reject it so
-        // any pending `getSelection()` callers fail fast rather than waiting for the 10s timeout.
-        if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
-          firstSelectionAsync.rejectWithReason('Disposed before first selection received');
-        }
+        selectionTracker.dispose();
         return unsubFromWebViewUpdates();
       },
     };
@@ -828,12 +994,15 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
 const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebViewFactory();
 
 /**
- * Pending projectId to apply during the next model text panel getWebView call. `null` means no
- * pending value; `undefined` is a valid pending value (opens the panel with no project).
+ * Pending projectId to apply during the next model text panel getWebView call. `undefined` means no
+ * pending value; reset to `undefined` after each getWebView call consumes it.
  *
- * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ * Prefer passing the projectId in options over adding another pending slot like this one:
+ * `reloadWebView` types its third argument as `ReloadWebViewOptions` (only `bringToFront`), but
+ * both it and `openWebView` forward that object to `IWebViewProvider.getWebView`, so a wider
+ * options type carries a projectId through directly — see `updateRelatedTextCollectionPanel`.
  */
-let modelTextPendingProjectId: string | undefined;
+let currentModelTextProjectId: string | undefined;
 
 const modelTextPanelWebViewProvider: IWebViewProvider = {
   async getWebView(
@@ -846,42 +1015,55 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
       );
     // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
     const projectId =
-      modelTextPendingProjectId !== undefined
-        ? modelTextPendingProjectId
+      currentModelTextProjectId !== undefined
+        ? currentModelTextProjectId
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
-    modelTextPendingProjectId = undefined;
+    currentModelTextProjectId = undefined;
+    // Re-read every call so mode changes are picked up at open/replace/restore time.
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
     return {
       ...savedWebView,
       title: '%webView_modelTextPanel_title%',
       projectId,
       content: modelTextPanelWebView,
       styles: modelTextPanelWebViewStyles,
+      // In simple mode, force the model text panel to scroll group 0 so it stays verse-synced
+      // with the scripture editor (which is also forced to 0 in simple mode). Power mode preserves
+      // the saved value.
+      scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This tab is part of the fixed 3-column simple-mode layout (Column 1) and must always
+      // remain open there, so it's non-closable in simple mode. Power mode allows closing (this
+      // webview type isn't currently opened outside the fixed layout, but this keeps it consistent
+      // with the other fixed-layout webviews rather than hardcoding `false`).
+      isClosable: interfaceMode === 'power',
     };
   },
 };
 
 /**
- * Pending projectIds to apply during the next resource panel getWebView call, keyed by web view
+ * Pending projectIds to apply during the next Column 3 panel getWebView call, keyed by web view
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
  * pending value should be used. Absence means no pending value.
  *
- * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ * Used to pass a new projectId through reloadWebView. For new data, prefer the reload options
+ * (`ResourceTextPanelOptions`), which `reloadWebView` forwards to the provider.
  */
-const resourceTextPanelPendingProjectIds = new Map<string, string | undefined>();
+const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 
 /**
  * Creates a resource panel web view provider that injects the given resourceType into web view
- * state so the shared component can filter resources appropriately.
+ * state so the shared component can filter resources appropriately. Exported for its tests.
  */
-function createResourceTextPanelProvider(
+export function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+  iconName: string,
 ): IWebViewProvider {
   return {
     async getWebView(
       savedWebView: SavedWebViewDefinition,
-      openWebViewOptions: ResourceViewerOptions,
+      openWebViewOptions: ResourceTextPanelOptions,
     ): Promise<WebViewDefinition | undefined> {
       if (savedWebView.webViewType !== webViewType)
         throw new Error(
@@ -890,20 +1072,39 @@ function createResourceTextPanelProvider(
           } web view`,
         );
       // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
-      const projectId = resourceTextPanelPendingProjectIds.has(webViewType)
-        ? resourceTextPanelPendingProjectIds.get(webViewType)
+      const projectId = currentResourceTextPanelProjectIds.has(webViewType)
+        ? currentResourceTextPanelProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
-      resourceTextPanelPendingProjectIds.delete(webViewType);
+      currentResourceTextPanelProjectIds.delete(webViewType);
+      // Re-read every call so mode changes are picked up at open/replace/restore time.
+      const interfaceMode = await papi.settings.get('platform.interfaceMode');
+      // Deliberately leaves `scrollGroupScrRef` alone rather than pinning it to 0 in simple mode
+      // the way the editor and the Text Collection do. These panels inherit whatever the saved
+      // layout carries, and an absent value resolves to scroll group 0
+      // (`use-scroll-group-scr-ref.hook.ts`), so a saved layout that names no group does follow the
+      // shared reference in simple mode. A saved layout that names a different group keeps it,
+      // which is the behavior pinning would take away.
       return {
         ...savedWebView,
         title,
         projectId,
         content: resourceTextPanelWebView,
         styles: resourceTextPanelWebViewStyles,
-        state: {
-          ...savedWebView.state,
+        // Icon-only tab in Simple mode, drawn in the tab's text colour so it follows the theme.
+        // Power mode labels this tab with text and shows the default logo; a saved icon is dropped
+        // since it may name an asset that no longer exists.
+        iconName: interfaceMode === 'simple' ? iconName : undefined,
+        iconUrl: undefined,
+        // Also selects a resource opened elsewhere — from Home in Simple mode — when one is passed.
+        state: await buildResourceTextPanelState(
+          savedWebView.state,
+          projectId,
           resourceType,
-        },
+          openWebViewOptions,
+        ),
+        // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
+        // must always remain open there, so it's non-closable in simple mode.
+        isClosable: interfaceMode === 'power',
       };
     },
   };
@@ -913,12 +1114,14 @@ const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourceTextPanel
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_bibleTexts_title%',
   'ScriptureResource',
+  'book-open',
 );
 
 const commentariesPanelWebViewProvider: IWebViewProvider = createResourceTextPanelProvider(
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_commentaries_title%',
   'CommentaryResource',
+  'file-text',
 );
 
 async function openResourceText(
@@ -934,7 +1137,7 @@ async function openResourceText(
   const existingPanel = allOpenDefs.find((def) => def.webViewType === webViewType);
 
   if (existingPanel) {
-    resourceTextPanelPendingProjectIds.set(webViewType, projectId);
+    currentResourceTextPanelProjectIds.set(webViewType, projectId);
     return papi.webViews.reloadWebView(webViewType, existingPanel.id, { bringToFront: true });
   }
 
@@ -973,6 +1176,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
   );
+  // TODO(PT-3666): The Project menu's Insert items (footnote, cross-reference, comment — the three
+  // commands registered below) show enabled even where editing isn't allowed. Gate them on project
+  // editability the way the Edit flyout already is.
   const insertCrossReferencePromise = papi.commands.registerCommand(
     'platformScriptureEditor.insertCrossReferenceAtSelection',
     insertCrossReferenceAtSelection,
@@ -984,8 +1190,29 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             name: 'webViewId',
             required: false,
             summary:
-              'The ID of the web view tied to the project that we are inserting the footnote',
-            schema: { type: 'null' },
+              'The ID of the web view tied to the project that we are inserting the cross-reference',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const insertEndnotePromise = papi.commands.registerCommand(
+    'platformScriptureEditor.insertEndnoteAtSelection',
+    insertEndnoteAtSelection,
+    {
+      method: {
+        summary: 'Insert an endnote into the project at the given selection in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that we are inserting the endnote',
+            schema: { type: 'string' },
           },
         ],
         result: {
@@ -1085,7 +1312,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     changeScriptureView,
     {
       method: {
-        summary: 'Change the Scripture view type in the editor',
+        summary: 'Toggle the editor between Standard view and Preview (Power mode only)',
         params: [
           {
             name: 'webViewId',
@@ -1101,6 +1328,99 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
   );
+
+  const setViewStandardPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.setViewStandard',
+    (webViewId) =>
+      setScriptureView(
+        webViewId,
+        VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewStandard'],
+      ),
+    {
+      method: {
+        'x-experimental': true,
+        summary: 'Show Standard view in the editor (the Simple view outside Power mode)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose Scripture view is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const setViewPreviewPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.setViewPreview',
+    (webViewId) =>
+      setScriptureView(
+        webViewId,
+        VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewPreview'],
+      ),
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'Show Preview, the read-only formatted view, in the editor (the Simple view outside Power mode)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose Scripture view is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const undoPromise = papi.commands.registerCommand('platformScriptureEditor.undo', undoInEditor, {
+    method: {
+      'x-experimental': true,
+      summary: 'Undo the last edit in the editor',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'The ID of the WebView whose last edit is to be undone',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  });
+
+  const redoPromise = papi.commands.registerCommand('platformScriptureEditor.redo', redoInEditor, {
+    method: {
+      'x-experimental': true,
+      summary: 'Redo the last undone edit in the editor',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'The ID of the WebView whose last undone edit is to be redone',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  });
 
   const toggleFootnotesPanePromise = papi.commands.registerCommand(
     'platformScriptureEditor.toggleFootnotes',
@@ -1162,6 +1482,15 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     commentariesPanelWebViewProvider,
   );
 
+  // Feature flag (default on): gate the Scripture Text Grid web view. When off, the provider is
+  // not registered so the view cannot be opened or restored. The Paratext 10 default-layout
+  // inclusion is gated by the same setting in the paratext-10-studio repo.
+  // Kick off the settings read now but DON'T await it here — awaiting would serialize every
+  // registration below this line behind a single settings round-trip. It is resolved at the end.
+  const isScriptureTextGridEnabledPromise = papi.settings.get(
+    'platformScriptureEditor.enableScriptureTextGrid',
+  );
+
   const openResourceTextPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openResourceText',
     openResourceText,
@@ -1192,6 +1521,152 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const showResourceInReferencePanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showResourceInReferencePanel',
+    showResourceInReferencePanel,
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          "Show a resource in the Bible texts or Commentaries tab, adding it to the user's personal list unless the team's list has it",
+        params: [
+          {
+            name: 'resourceProjectId',
+            required: true,
+            summary: 'The local project id of the resource to show',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            "How the show ended: 'shown' (with the tab's webViewId), 'notShown' (the user has been told; open nothing else) or 'openElsewhere' (no reference tab is open, or neither tab lists its kind). Never rejects",
+          schema: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['shown', 'notShown', 'openElsewhere'] },
+              webViewId: { type: 'string' },
+            },
+            required: ['status'],
+          },
+        },
+      },
+    },
+  );
+
+  const updateResourceSelectionPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.updateResourceSelection',
+    updateStoredResourceSelection,
+    {
+      method: {
+        summary:
+          'Change the resource the Bible texts or Commentaries panel keeps for one project, keeping every other project',
+        params: [
+          {
+            name: 'resourceType',
+            required: true,
+            summary:
+              'The panel: ScriptureResource for Bible Texts, CommentaryResource for Commentaries',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'The project; omitted for a panel with no project open',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'update',
+            required: true,
+            summary: 'The fields to change; a field left out keeps its value',
+            schema: {
+              type: 'object',
+              properties: {
+                selectedResourceId: { type: 'string' },
+                userPickedResourceId: { type: 'string' },
+              },
+            },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Resolves once the change is stored',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const showBibleTextsPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showBibleTextsPanel',
+    showBibleTextsTab,
+    {
+      method: {
+        summary: 'Bring the Bible texts tab to the front, opening it if it is not open',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor whose project a newly opened tab shows',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Bible texts web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const showCommentariesPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showCommentariesPanel',
+    showCommentariesTab,
+    {
+      method: {
+        summary: 'Bring the Commentaries tab to the front, opening it if it is not open',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor whose project a newly opened tab shows',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Commentaries web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const showTextCollectionPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showTextCollectionPanel',
+    () => showTextCollectionTab(),
+    {
+      method: {
+        summary:
+          'Bring the Text collection tab to the front, opening it if it is not open and the feature is available',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor the request came from (unused)',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Text collection web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   const openModelTextPanelPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openModelText',
     async (projectId?: string) => {
@@ -1201,7 +1676,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       );
 
       if (existingPanel) {
-        modelTextPendingProjectId = projectId;
+        currentModelTextProjectId = projectId;
         return papi.webViews.reloadWebView(MODEL_TEXT_PANEL_WEBVIEW_TYPE, existingPanel.id, {
           bringToFront: true,
         });
@@ -1235,32 +1710,133 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     EDITOR_SELECTION_CHANGED_EVENT,
   );
 
-  // Default active project picker for simple layout. Subscribes to web-view-open and
-  // sync-completion events and attempts to fill the empty Scripture Editor with the
-  // most-recently-active editable project. Re-runs on each subscribed event; concurrent
-  // triggers coalesce into a single follow-up run.
+  // Default active project picker for simple layout. Subscribes to web-view-open, sync-completion
+  // and project-set-change events and attempts to fill the empty Scripture Editor with the
+  // most-recently-active project. Re-runs on each subscribed event; concurrent triggers coalesce
+  // into a single follow-up run.
   const unsubFromDefaultProjectPicker = startDefaultProjectPicker(papi);
 
+  // Payload type is inferred from the NetworkEvents augmentation added earlier — do NOT pass an
+  // explicit payload generic here.
+  const sharedLayoutReArmEmitter = await papi.network.createNetworkEventEmitterAsync(
+    'platformScriptureEditor.onSharedLayoutApply',
+  );
+
+  sharedLayoutReceiver = new SharedLayoutReceiver(papi, sharedLayoutReArmEmitter);
+
+  const applySharedLayoutPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.applySharedLayout',
+    async (notificationId) => {
+      await sharedLayoutReceiver?.applyFromNotification(notificationId);
+    },
+    {
+      method: {
+        summary: 'Apply the buffered shared layout for the project tied to a notification',
+        params: [
+          {
+            name: 'notificationId',
+            required: true,
+            summary: 'The id of the notification whose shared layout should be applied',
+            schema: { type: ['string', 'number'] },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
+  const finalizeProjectSwitchPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.finalizeProjectSwitch',
+    (projectId) =>
+      finalizeProjectSwitch(papi, projectId, (id) =>
+        sharedLayoutReceiver ? sharedLayoutReceiver.applyForProject(id) : Promise.resolve(),
+      ),
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          "Replay the project-switch side effects (S/R sync, shared-layout auto-apply, recently-opened) for a project whose Scripture Editor tab is already showing correctly, bypassing openScriptureEditor's focus-existing short-circuit",
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project now showing in the Scripture Editor',
+            schema: { type: 'string' },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
+  const syncOnSwitchToPowerPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.syncOnSwitchToPower',
+    async (projectId) => {
+      // Not awaited: waiting for the answer and then the sync can outlast the caller's request
+      // timeout. The catch only backs up `syncOnSwitchToPower`'s own handling of its failures.
+      syncOnSwitchToPower(papi, projectId).catch((e) =>
+        logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`),
+      );
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'Send/receive the project the Simple-mode Scripture Editor was showing, if it holds local changes to send, after a switch to Power mode',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project the Simple-mode Scripture Editor was showing',
+            schema: { type: 'string' },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
-  const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
-  const markerNotifierUnsubscribers = await markerNotifier.start();
+  const readOnlyViewNotifier = new ReadOnlyViewNotifier(papi, context.executionToken);
+  const readOnlyViewNotifierUnsubscribers = await readOnlyViewNotifier.start();
+
+  // Resolve the feature flag (kicked off above so it overlapped the other registrations) and, only
+  // if enabled, register the provider. Awaiting the flag here rather than up front keeps every
+  // registration above running in parallel instead of behind this one settings round-trip.
+  const scriptureTextGridRegistration = (await isScriptureTextGridEnabledPromise)
+    ? await papi.webViewProviders.registerWebViewProvider(
+        SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+        new ScriptureTextGridWebViewFactory(),
+      )
+    : undefined;
 
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
     await changeScriptureViewPromise,
+    await setViewStandardPromise,
+    await setViewPreviewPromise,
+    await undoPromise,
+    await redoPromise,
     await toggleFootnotesPanePromise,
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,
+    await insertEndnotePromise,
     await insertCommentPromise,
     await annotationStyleDataProviderPromise,
     await modelTextPanelWebViewProviderPromise,
     await openModelTextPanelPromise,
     await bibleTextsPanelWebViewProviderPromise,
     await commentariesPanelWebViewProviderPromise,
+    ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
+    await showResourceInReferencePanelPromise,
+    await updateResourceSelectionPromise,
+    await showBibleTextsPanelPromise,
+    await showCommentariesPanelPromise,
+    await showTextCollectionPanelPromise,
     selectionChangedEventEmitter,
     {
       dispose: async () => {
@@ -1272,7 +1848,18 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
     unsubFromDefaultProjectPicker,
-    ...markerNotifierUnsubscribers,
+    ...readOnlyViewNotifierUnsubscribers,
+    await applySharedLayoutPromise,
+    await finalizeProjectSwitchPromise,
+    await syncOnSwitchToPowerPromise,
+    sharedLayoutReArmEmitter,
+    {
+      dispose: async () => {
+        sharedLayoutReceiver?.dispose();
+        sharedLayoutReceiver = undefined;
+        return true;
+      },
+    },
   );
 
   logger.debug('Scripture editor is finished activating!');

@@ -14,7 +14,6 @@ import {
   deepClone,
   isLocalizeKey,
   isString,
-  startsWith,
 } from 'platform-bible-utils';
 
 /**
@@ -220,7 +219,7 @@ export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
     const settingNames = new Set<string>();
     contributionArray.forEach((settingsGroup) =>
       Object.keys(settingsGroup.properties).forEach((settingName) => {
-        if (!startsWith(settingName, namespace))
+        if (!settingName.startsWith(namespace))
           throw new Error(
             `${this.settingTypeName}s contribution from ${documentName} provided ${this.settingTypeName} ${settingName} which does not start with '${namespace}'`,
           );

@@ -1,0 +1,16 @@
+\c 4
+\cl Chapter Four
+\cd This chapter description (cd) follows the chapter label (cl). Chapter 4 exercises standard USFM that chapters 1 through 3 do not use, plus shapes that pin known converter bugs. Chapter 5 holds deliberately damaged USFM.
+\s1 A section heading before verse 1
+\r (2 Sam 4.1-12)
+\b
+\p
+\v 1 A cross reference\x + \xo 4.1: \xt 1 Sam 31.4; 2 Sam 1.1\x* sits mid-verse. This verse ends with a footnote butted against the next verse marker with no space between them.\f + \fr 4.1 \ft A footnote that ends right before the next verse marker.\f*
+\v 2-3 \vp 2-3a\vp* Verse bridge 2-3 carrying a published verse number (vp).
+\v 4a Verse segment 4a.
+\v 4b Verse segment 4b.
+\v 5 An endnote\fe + \fr 4.5 \ft Endnote text.\fe* then a footnote with no caller\f - \fr 4.5 \ft The minus caller means no caller is shown.\f* then one with a custom caller\f a \fr 4.5 \ft Custom caller a.\f* end.
+\v 6 Non-breaking spaces: a character span whose whole content is a NBSP \nd ~\nd*, one with a leading NBSP \nd ~lead\nd*, one with a trailing NBSP \nd trail~\nd*, a NBSP before punctuation mot~: and one inside a number 1~000.
+\p ~
+\p The paragraph above has a lone NBSP as its only content. This paragraph ends with a space before an unknown marker \zunk Unknown marker content.
+\p Authored references: a closed \ref 1 Sam 1.1|1SA 1:1\ref* and an unclosed \ref 1 Sam 2.1|1SA 2:1 that runs to the end of the paragraph.

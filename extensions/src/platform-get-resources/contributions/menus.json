@@ -4,11 +4,22 @@
     "groups": {},
     "items": [
       {
-        "label": "%mainMenu_open%",
-        "localizeNotes": "Application main menu > Project > Open...",
+        "label": "%mainMenu_open_2%",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Project > Open (opens the Home view, which lists local and shared projects and launches the resource download dialog)",
+        "iconNameBefore": "house",
         "group": "platform.projectResources",
         "order": -100,
         "command": "platformGetResources.openHome"
+      },
+      {
+        "label": "%resources_getResources%",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Project > Get resources (opens the dialog that downloads and installs resources)",
+        "iconNameBefore": "download",
+        "group": "platform.projectProjects",
+        "order": -999999,
+        "command": "platformGetResources.openGetResources"
       }
     ]
   },

@@ -1,7 +1,13 @@
-import { newPlatformError } from 'platform-bible-utils';
 import type { ResourceReferenceList } from 'platform-scripture';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
+import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
+import {
+  getScriptureTextGridContents,
+  getViewOptionsTexts,
+  removeFromUserResources,
+  type TextCollectionSources,
+} from './scripture-text-grid-contents.utils';
+import { selectTextConnection } from './select-dbl-resource';
 
 const RESOURCE_A = {
   dblEntryUid: 'uid-a',
@@ -27,12 +33,19 @@ const RESOURCE_B = {
   projectId: 'proj-b',
 };
 
-function makeAdminList(ids: string[]): ResourceReferenceList {
-  return {
-    dataVersion: '1.0.0',
-    items: ids.map((id) => ({ type: 'dblResource' as const, name: `name-${id}`, id })),
-  };
-}
+// Synthetic entry for a locally-installed non-DBL resource (e.g. VULGP83).
+// Convention: dblEntryUid === projectId marks it as non-DBL.
+const RESOURCE_LOCAL = {
+  dblEntryUid: 'VULGP83',
+  displayName: 'VULGP83',
+  fullName: 'Vulgate P83',
+  bestLanguageName: 'Latin',
+  type: 'ScriptureResource' as const,
+  size: 0,
+  installed: true,
+  updateAvailable: false,
+  projectId: 'VULGP83',
+};
 
 function makeUserList(ids: string[]): ResourceReferenceList {
   return {
@@ -42,169 +55,18 @@ function makeUserList(ids: string[]): ResourceReferenceList {
 }
 
 describe('selectDblResource', () => {
-  describe('admin path (canWrite=true, setAdminSetting defined)', () => {
-    let setAdminSetting: ReturnType<typeof vi.fn>;
-    let setUserList: ReturnType<typeof vi.fn>;
-    let getUserList: ReturnType<typeof vi.fn>;
-    let onSelect: ReturnType<typeof vi.fn>;
-
-    beforeEach(() => {
-      setAdminSetting = vi.fn();
-      setUserList = vi.fn().mockResolvedValue(undefined);
-      getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      onSelect = vi.fn();
-    });
-
-    it('prepends the new resource to the admin list', async () => {
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList(['uid-existing']),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(setAdminSetting).toHaveBeenCalledWith({
-        dataVersion: '1.0.0',
-        items: [
-          { type: 'dblResource', name: 'Resource A', id: 'uid-a' },
-          { type: 'dblResource', name: 'name-uid-existing', id: 'uid-existing' },
-        ],
-      });
-    });
-
-    it('deduplicates: removes existing entry with the same id before prepending', async () => {
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList(['uid-a', 'uid-other']),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(setAdminSetting).toHaveBeenCalledWith({
-        dataVersion: '1.0.0',
-        items: [
-          { type: 'dblResource', name: 'Resource A', id: 'uid-a' },
-          { type: 'dblResource', name: 'name-uid-other', id: 'uid-other' },
-        ],
-      });
-    });
-
-    it('preserves non-dblResource items during deduplication', async () => {
-      const adminSetting: ResourceReferenceList = {
-        dataVersion: '1.0.0',
-        items: [
-          { type: 'dblResource' as const, name: 'name-uid-a', id: 'uid-a' },
-          // 'project' is a valid ResourceReference type but requires a cast here because the
-          // ResourceReferenceList item union doesn't include it directly in this context
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          { type: 'project' as never, name: 'some-project' },
-        ],
-      };
-      await selectTextConnection(
-        RESOURCE_A,
-        adminSetting,
-        setAdminSetting,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(setAdminSetting).toHaveBeenCalledWith(
-        expect.objectContaining({
-          items: expect.arrayContaining([expect.objectContaining({ type: 'project' })]),
-        }),
-      );
-    });
-
-    it('calls onSelect with the dblEntryUid after writing', async () => {
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(onSelect).toHaveBeenCalledWith('uid-a');
-    });
-
-    it('does not call getUserList or setUserList', async () => {
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(getUserList).not.toHaveBeenCalled();
-      expect(setUserList).not.toHaveBeenCalled();
-    });
-
-    it('returns early without writing when adminSetting is a PlatformError', async () => {
-      await selectTextConnection(
-        RESOURCE_A,
-        newPlatformError(new Error('setting error')),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(setAdminSetting).not.toHaveBeenCalled();
-      expect(onSelect).not.toHaveBeenCalled();
-    });
-
-    it('returns early without writing when adminSetting is undefined', async () => {
-      await selectTextConnection(
-        RESOURCE_A,
-        undefined,
-        setAdminSetting,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(setAdminSetting).not.toHaveBeenCalled();
-      expect(onSelect).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('user path (canWrite=false or admin not available)', () => {
-    let setAdminSetting: ReturnType<typeof vi.fn>;
+  describe('writing to the user list', () => {
     let setUserList: ReturnType<typeof vi.fn>;
     let onSelect: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
-      setAdminSetting = vi.fn();
       setUserList = vi.fn().mockResolvedValue(undefined);
       onSelect = vi.fn();
     });
 
     it('prepends the new resource to the user list', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList(['uid-existing']));
-      await selectTextConnection(
-        RESOURCE_B,
-        makeAdminList([]),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
+      await selectTextConnection(RESOURCE_B, getUserList, setUserList, undefined, onSelect);
 
       expect(setUserList).toHaveBeenCalledWith({
         dataVersion: '1.0.0',
@@ -217,15 +79,7 @@ describe('selectDblResource', () => {
 
     it('deduplicates: removes existing user entry with the same id before prepending', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList(['uid-b', 'uid-other']));
-      await selectTextConnection(
-        RESOURCE_B,
-        makeAdminList([]),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
+      await selectTextConnection(RESOURCE_B, getUserList, setUserList, undefined, onSelect);
 
       expect(setUserList).toHaveBeenCalledWith({
         dataVersion: '1.0.0',
@@ -236,17 +90,39 @@ describe('selectDblResource', () => {
       });
     });
 
+    it('deduplicates an existing entry whose uid is cased differently', async () => {
+      const getUserList = vi.fn().mockResolvedValue(makeUserList(['UID-B', 'uid-other']));
+      await selectTextConnection(RESOURCE_B, getUserList, setUserList, undefined, onSelect);
+
+      expect(setUserList).toHaveBeenCalledWith({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource', name: 'Resource B', id: 'uid-b' },
+          { type: 'dblResource', name: 'name-uid-other', id: 'uid-other' },
+        ],
+      });
+    });
+
+    it("keeps the earlier entry's other fields, such as its Text collection flag", async () => {
+      const getUserList = vi.fn().mockResolvedValue({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource', name: 'old name', id: 'uid-b', isInTextCollectionForUser: true },
+        ],
+      });
+      await selectTextConnection(RESOURCE_B, getUserList, setUserList, undefined, onSelect);
+
+      expect(setUserList).toHaveBeenCalledWith({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource', name: 'Resource B', id: 'uid-b', isInTextCollectionForUser: true },
+        ],
+      });
+    });
+
     it('uses DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion when getUserList returns undefined', async () => {
       const getUserList = vi.fn().mockResolvedValue(undefined);
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
+      await selectTextConnection(RESOURCE_A, getUserList, setUserList, undefined, onSelect);
 
       expect(setUserList).toHaveBeenCalledWith({
         dataVersion: DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
@@ -254,66 +130,35 @@ describe('selectDblResource', () => {
       });
     });
 
-    it('calls onSelect with the dblEntryUid after writing', async () => {
-      const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
+    it('preserves non-dblResource items during deduplication', async () => {
+      const getUserList = vi.fn().mockResolvedValue({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource' as const, name: 'name-uid-a', id: 'uid-a' },
+          // 'project' is a valid ResourceReference type but requires a cast here because the
+          // ResourceReferenceList item union doesn't include it directly in this context
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          { type: 'project' as never, name: 'some-project' },
+        ],
+      });
+      await selectTextConnection(RESOURCE_A, getUserList, setUserList, undefined, onSelect);
 
-      expect(onSelect).toHaveBeenCalledWith('uid-a');
+      expect(setUserList).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: expect.arrayContaining([expect.objectContaining({ type: 'project' })]),
+        }),
+      );
     });
 
-    it('does not call setAdminSetting', async () => {
+    it('calls onSelect with the reference it wrote', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        setAdminSetting,
-        vi.fn().mockResolvedValue(false),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
+      await selectTextConnection(RESOURCE_A, getUserList, setUserList, undefined, onSelect);
 
-      expect(setAdminSetting).not.toHaveBeenCalled();
-    });
-
-    it('falls through to user path when setAdminSetting is undefined even if canWrite is true', async () => {
-      const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        undefined,
-        vi.fn().mockResolvedValue(true),
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(setUserList).toHaveBeenCalled();
-      expect(onSelect).toHaveBeenCalledWith('uid-a');
-    });
-
-    it('takes the user path when canUserWriteProjectSettings is undefined', async () => {
-      const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
-      await selectTextConnection(
-        RESOURCE_A,
-        makeAdminList([]),
-        setAdminSetting,
-        undefined,
-        getUserList,
-        setUserList,
-        onSelect,
-      );
-
-      expect(setUserList).toHaveBeenCalled();
-      expect(setAdminSetting).not.toHaveBeenCalled();
+      expect(onSelect).toHaveBeenCalledWith({
+        type: 'dblResource',
+        name: 'Resource A',
+        id: 'uid-a',
+      });
     });
   });
 
@@ -321,15 +166,165 @@ describe('selectDblResource', () => {
     it('does not throw when onSelect is not provided', async () => {
       const setUserList = vi.fn().mockResolvedValue(undefined);
       await expect(
-        selectTextConnection(
-          RESOURCE_A,
-          makeAdminList([]),
-          undefined,
-          vi.fn().mockResolvedValue(false),
-          vi.fn().mockResolvedValue(makeUserList([])),
-          setUserList,
-        ),
+        selectTextConnection(RESOURCE_A, vi.fn().mockResolvedValue(makeUserList([])), setUserList),
       ).resolves.toBeUndefined();
     });
+  });
+
+  describe('non-DBL local resource (dblEntryUid === projectId)', () => {
+    it('stores a ProjectReference instead of a DblResourceReference', async () => {
+      const setUserList = vi.fn().mockResolvedValue(undefined);
+      const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
+      await selectTextConnection(RESOURCE_LOCAL, getUserList, setUserList);
+
+      expect(setUserList).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [{ type: 'project', name: 'VULGP83', id: 'VULGP83' }],
+        }),
+      );
+    });
+
+    it('deduplicates an existing ProjectReference with the same id', async () => {
+      const getUserList = vi.fn().mockResolvedValue({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'project', name: 'VULGP83', id: 'VULGP83' },
+          { type: 'dblResource' as const, name: 'name-uid-a', id: 'uid-a' },
+        ],
+      });
+      const setUserList = vi.fn().mockResolvedValue(undefined);
+      await selectTextConnection(RESOURCE_LOCAL, getUserList, setUserList);
+
+      expect(setUserList).toHaveBeenCalledWith({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'project', name: 'VULGP83', id: 'VULGP83' },
+          { type: 'dblResource', name: 'name-uid-a', id: 'uid-a' },
+        ],
+      });
+    });
+
+    it('calls onSelect with the ProjectReference it wrote', async () => {
+      const setUserList = vi.fn().mockResolvedValue(undefined);
+      const onSelect = vi.fn();
+      await selectTextConnection(
+        RESOURCE_LOCAL,
+        vi.fn().mockResolvedValue(makeUserList([])),
+        setUserList,
+        undefined,
+        onSelect,
+      );
+      expect(onSelect).toHaveBeenCalledWith({ type: 'project', name: 'VULGP83', id: 'VULGP83' });
+    });
+  });
+
+  describe('installResource parameter', () => {
+    let setUserList: ReturnType<typeof vi.fn>;
+    let getUserList: ReturnType<typeof vi.fn>;
+    let onSelect: ReturnType<typeof vi.fn>;
+    let installResource: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      setUserList = vi.fn().mockResolvedValue(undefined);
+      getUserList = vi.fn().mockResolvedValue(makeUserList([]));
+      onSelect = vi.fn();
+      installResource = vi.fn().mockResolvedValue(undefined);
+    });
+
+    it('skips installResource when the resource is already installed', async () => {
+      await selectTextConnection(
+        RESOURCE_A, // installed: true
+        getUserList,
+        setUserList,
+        installResource,
+        onSelect,
+      );
+
+      expect(installResource).not.toHaveBeenCalled();
+      expect(setUserList).toHaveBeenCalled();
+      expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'uid-a' }));
+    });
+
+    it('calls installResource with the dblEntryUid before writing settings when not installed', async () => {
+      const callOrder: string[] = [];
+      installResource = vi.fn().mockImplementation(async () => {
+        callOrder.push('install');
+      });
+      setUserList = vi.fn().mockImplementation(async () => {
+        callOrder.push('write');
+      });
+
+      await selectTextConnection(
+        RESOURCE_B, // installed: false
+        getUserList,
+        setUserList,
+        installResource,
+        onSelect,
+      );
+
+      expect(installResource).toHaveBeenCalledWith('uid-b');
+      expect(callOrder).toEqual(['install', 'write']);
+    });
+
+    it('cancels the settings write and does not call onSelect when installResource throws', async () => {
+      installResource = vi.fn().mockRejectedValue(new Error('install failed'));
+
+      await selectTextConnection(
+        RESOURCE_B, // installed: false
+        getUserList,
+        setUserList,
+        installResource,
+        onSelect,
+      );
+
+      expect(setUserList).not.toHaveBeenCalled();
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('proceeds without installing when installResource is not provided and resource is not installed', async () => {
+      await selectTextConnection(
+        RESOURCE_B, // installed: false
+        getUserList,
+        setUserList,
+        undefined, // no installResource
+        onSelect,
+      );
+
+      expect(setUserList).toHaveBeenCalled();
+      expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'uid-b' }));
+    });
+  });
+});
+
+describe('removing a resource, then adding it back from Bible texts', () => {
+  it('keeps it listed in the Text Collection but off the grid', async () => {
+    const sources: TextCollectionSources = {
+      adminReferenced: { dataVersion: '1.1.0', items: [] },
+      userReferenced: {
+        dataVersion: '1.1.0',
+        items: [{ type: 'dblResource', name: 'A', id: 'uid-a', isInTextCollectionForUser: true }],
+      },
+      overlay: {},
+      order: [],
+    };
+    let userList = removeFromUserResources('uid-a', sources.userReferenced);
+    expect(getViewOptionsTexts({ ...sources, userReferenced: userList }).bottom).toEqual([]);
+
+    await selectTextConnection(
+      RESOURCE_A,
+      async () => userList,
+      async (list) => {
+        userList = list;
+      },
+    );
+
+    const readded = { ...sources, userReferenced: userList };
+    expect(getScriptureTextGridContents(readded)).toEqual([]);
+    expect(getViewOptionsTexts(readded).bottom).toEqual([
+      expect.objectContaining({
+        reference: expect.objectContaining({ id: 'uid-a' }),
+        checked: false,
+      }),
+    ]);
   });
 });

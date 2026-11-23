@@ -104,7 +104,7 @@ public class NamespaceDirectoryAnalyzerTests
             class Generated { }
             """;
 
-        await VerifyWithPathAsync(source, "/repo/c-sharp/obj/Debug/net8.0/Generated.cs");
+        await VerifyWithPathAsync(source, "/repo/c-sharp/obj/Debug/net10.0/Generated.cs");
     }
 
     [Test]
@@ -152,7 +152,7 @@ public class NamespaceDirectoryAnalyzerTests
     }
 
     [Test]
-    public async Task RootFileClaimmingSubdirectory_Diagnostic()
+    public async Task RootFileClaimingSubdirectory_Diagnostic()
     {
         const string source = """
             namespace {|#0:Paranext.DataProvider.Services|};

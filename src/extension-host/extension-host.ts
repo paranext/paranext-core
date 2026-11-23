@@ -1,3 +1,5 @@
+// Keep first: installs DOM globals before any import can convert scripture. See the module's docs.
+import '@node/polyfills/dom-globals.polyfill';
 import '@extension-host/global-this.model';
 import '@node/utils/log-archiver.util';
 import { isClient } from '@shared/utils/internal-util';
@@ -17,30 +19,35 @@ import { initialize as initializeSettingsService } from '@extension-host/service
 import { initialize as initializeThemeData } from '@extension-host/services/theme-data.service-host';
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
-import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
+import {
+  EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE,
+  extensionHostStartedMessage,
+  gracefulShutdownMessage,
+} from '@node/models/interprocess-messages.model';
 import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
 import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
+import * as analyticsService from '@extension-host/services/analytics.service';
+import { hasGracefulShutdownStarted, runGracefulShutdown } from '@extension-host/graceful-shutdown';
+import { exitExtensionHostOnLostConnection } from '@extension-host/exit-on-lost-connection';
+import {
+  announceExtensionHostStarted,
+  registerExtensionHostStartedEvent,
+} from '@extension-host/announce-extension-host-started';
+import { markStartup } from '@shared/utils/startup-timing.util';
+import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,
 );
 logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
+markStartup(STARTUP_MARK_PROCESS_START);
 
 // Make a graceful way to tear down the process since Windows and POSIX operating systems handle it differently
 process.on('message', (message) => {
   if (isString(message) && message === gracefulShutdownMessage) {
     logger.info('Beginning to shut down process due to graceful shutdown message');
-    (async () => {
-      try {
-        await extensionService.shutdown();
-      } catch (error) {
-        logger.error(`Failed to deactivate extensions. ${getErrorMessage(error)}`);
-      } finally {
-        logger.info('Finally shutting down process due to graceful shutdown message');
-        process.exit();
-      }
-    })();
+    runGracefulShutdown(() => process.exit());
   }
 });
 
@@ -51,18 +58,29 @@ process.on('exit', () => {
   logger.info('Finished killing child processes created by extensions');
 });
 
+/**
+ * Determines if an error is a broken pipe error e.g. the stdout pipe from extension host to main
+ * broke. Checks the `code` property because Node formats the message as `'write EPIPE'` (syscall
+ * first), with a message check as a fallback.
+ */
+function isEpipeError(error: unknown): boolean {
+  if (typeof error === 'object' && error && 'code' in error && error.code === 'EPIPE') return true;
+  return getErrorMessage(error).includes('EPIPE');
+}
+
 // Add unhandled exception and rejection handlers
 process.on('uncaughtException', (error) => {
-  const errorMessage = getErrorMessage(error);
+  // If the pipe from extension host to main breaks, stop logging to console because writing to the
+  // broken pipe throws EPIPE again, producing an infinite uncaughtException loop
+  if (isEpipeError(error)) logger.transports.console.level = false;
 
-  // If the pipe from extension host to main breaks, stop logging to console because it will infinitely
-  // produce errors in a loop
-  if (errorMessage.startsWith('EPIPE')) logger.transports.console.level = false;
-
-  logger.error(`Unhandled exception in extension host: ${errorMessage}`);
+  logger.error(`Unhandled exception in extension host: ${getErrorMessage(error)}`);
 });
 
 process.on('unhandledRejection', (reason) => {
+  // Same EPIPE feedback loop protection as uncaughtException above
+  if (isEpipeError(reason)) logger.transports.console.level = false;
+
   logger.error(`Unhandled promise rejection in extension host, reason: ${getErrorMessage(reason)}`);
 });
 
@@ -70,8 +88,45 @@ process.on('unhandledRejection', (reason) => {
 
 (async () => {
   try {
-    // The network service has to start first, and it uses the shared store after initialization
-    await networkService.initialize();
+    // Fire this first: trackEvent() always queues until the engine is ready, so calling it here
+    // — before anything else in this IIFE runs — guarantees app_launch is first in flush order.
+    analyticsService.trackEvent('app_launch');
+
+    // The network service has to start first, and it uses the shared store after initialization.
+    // Without a connection this process can do nothing, and the lost-connection exit below is not
+    // subscribed yet, so exit now: main reports a non-zero exit it did not ask for as a crash, and
+    // every window shows the extensions-have-stopped banner instead of nothing answering.
+    try {
+      await networkService.initialize();
+    } catch (error) {
+      logger.error(
+        `Extension host could not connect to main; exiting so main can report it. ${getErrorMessage(error)}`,
+      );
+      // The queued analytics (`app_launch`) are deliberately not flushed: there is no connection
+      // to flush them over.
+      process.exit(EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE);
+    }
+    // Subscribed as soon as there is a connection to lose. Returns an unsubscriber we never call.
+    exitExtensionHostOnLostConnection({
+      onDidLoseConnection: networkService.onDidLoseConnection,
+      runGracefulShutdown,
+      hasGracefulShutdownStarted,
+      exitProcess: (code) => process.exit(code),
+    });
+    const startedEventRegistration = registerExtensionHostStartedEvent();
+    // Analytics initialization must not gate extension-host startup — it can take up to
+    // ENVIRONMENT_RESOLUTION_TIMEOUT_MS if the Send/Receive server-target lookup is slow.
+    // trackEvent()'s `unresolved` queue tolerates this finishing at any point.
+    // This .catch() is unreachable today: resolveEnvironment() never rejects -- its async step,
+    // getSelectedServer(), catches every failure internally (timeout, vanished provider, read
+    // failure) and resolves to `undefined` rather than throwing -- and the rest of initialize()'s
+    // body is synchronous and already self-guarded. It's a defensive guard, not live error
+    // handling -- kept so that if a future change to analytics.service.ts ever breaks that
+    // never-rejects guarantee, it fails safe (logged) instead of raising an unhandled promise
+    // rejection here.
+    analyticsService.initialize().catch((error) => {
+      logger.error(`Analytics: failed to initialize: ${String(error)}`);
+    });
     await initializeSharedStoreService(networkService);
 
     // Prepare all services that need to be running because extensions might rely on them
@@ -85,9 +140,18 @@ process.on('unhandledRejection', (reason) => {
       initializeDatabaseService(),
       startLocalOAuthServer(),
     ]);
+    markStartup('host-services-ready');
 
     // The extension service locks down importing other modules, so be careful what runs after it
     await extensionService.initialize();
+    markStartup('extensions-initialized');
+    await startedEventRegistration;
+    announceExtensionHostStarted();
+    // `process.send` exists only when main forked this process with an IPC channel; run on its own
+    // (`npm run start:extension-host`) there is no main restart to tell.
+    process.send?.(extensionHostStartedMessage, (error) => {
+      if (error) logger.warn(`Error telling main the extension host started: ${error}`);
+    });
   } catch (error) {
     logger.error(error);
   }

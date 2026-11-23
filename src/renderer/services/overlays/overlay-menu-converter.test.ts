@@ -42,6 +42,45 @@ describe('overlay-menu-converter', () => {
       });
     });
 
+    it('carries disabled onto a command item', () => {
+      const menu: Localized<SingleColumnMenu> = {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 1,
+            localizeNotes: '',
+            disabled: true,
+          },
+        ],
+      };
+
+      expect(convertContributionToContextMenuItems(menu)).toStrictEqual([
+        { type: 'item', id: 'ext.cmd', label: 'Cmd', disabled: true },
+      ]);
+    });
+
+    it('leaves disabled off a command item that is not disabled', () => {
+      const menu: Localized<SingleColumnMenu> = {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 1,
+            localizeNotes: '',
+            disabled: false,
+          },
+        ],
+      };
+
+      const [item] = convertContributionToContextMenuItems(menu);
+      expect(item).not.toHaveProperty('disabled');
+    });
+
     it('should order items by their order field', () => {
       const menu: Localized<SingleColumnMenu> = {
         groups: {
@@ -133,6 +172,7 @@ describe('overlay-menu-converter', () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
         type: 'submenu',
+        id: 'ext.submenuItem',
         label: 'My Submenu',
         items: [
           {
@@ -225,6 +265,7 @@ describe('overlay-menu-converter', () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
         type: 'submenu',
+        id: 'ext.mySubmenu',
         label: 'Submenu',
         items: [
           { type: 'item', id: 'ext.subA', label: 'Sub A' },
@@ -232,6 +273,34 @@ describe('overlay-menu-converter', () => {
           { type: 'item', id: 'ext.subB', label: 'Sub B' },
         ],
       });
+    });
+
+    it("carries a menu item's shortcut through, and adds none to an item without one", () => {
+      const menu: Localized<SingleColumnMenu> = {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.find',
+            group: 'ext.group1',
+            label: 'Find',
+            order: 1,
+            localizeNotes: '',
+            shortcut: 'Ctrl+F',
+          },
+          {
+            command: 'ext.other',
+            group: 'ext.group1',
+            label: 'Other',
+            order: 2,
+            localizeNotes: '',
+          },
+        ],
+      };
+
+      const [find, other] = convertContributionToContextMenuItems(menu);
+
+      expect(find).toEqual({ type: 'item', id: 'ext.find', label: 'Find', shortcut: 'Ctrl+F' });
+      expect(other).not.toHaveProperty('shortcut');
     });
   });
 });

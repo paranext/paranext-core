@@ -152,6 +152,27 @@ export const WithFallbackLanguages: Story = {
   },
 };
 
+export const Disabled: Story = {
+  render: () => (
+    <UiLanguageSelectorWithState
+      knownUiLanguages={mockKnownLanguages}
+      initialPrimaryLanguage="es"
+      initialFallbackLanguages={['en']}
+      localizedStrings={{
+        '%settings_uiLanguageSelector_fallbackLanguages%': 'Fallback languages',
+      }}
+      disabled
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Language selector that shows the current languages but cannot be changed.',
+      },
+    },
+  },
+};
+
 export const LimitedLanguages: Story = {
   render: () => {
     const limitedLanguages = Object.fromEntries(Object.entries(mockKnownLanguages).slice(0, 4));

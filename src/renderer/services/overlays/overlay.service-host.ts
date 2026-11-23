@@ -9,9 +9,16 @@
  * - Focus save/restore via window service getFocus/setFocus
  * - Aria-live announcements for cross-iframe screen reader accessibility
  * - Auto-dismiss on scroll, tab change, and window blur (context menus/popovers)
+ * - Auto-dismiss on any mouse-down or Escape anywhere in the app window, including inside WebView
+ *   iframes, via the main process's app-window input event
  */
 
-import { FocusSubject } from '@shared/services/window.service-model';
+import {
+  AppWindowInputEvent,
+  EVENT_NAME_ON_DID_APP_WINDOW_INPUT,
+  FocusSubject,
+} from '@shared/services/window.service-model';
+import { getNetworkEvent } from '@shared/services/network.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
 import { localizationService } from '@shared/services/localization.service';
@@ -19,24 +26,39 @@ import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
 import {
   formatReplacementString,
+  isLocalizeKey,
+  getErrorMessage,
   isPlatformError,
   LocalizeKey,
   newGuid,
   newPlatformError,
+  createMenuTemplateVars,
+  getTemplateVarNames,
   ReferencedItem,
   ABORTED,
   FAILED_PRECONDITION,
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
-import type { PlatformError } from 'platform-bible-utils';
+import type {
+  LanguageStrings,
+  Localized,
+  PlatformError,
+  SingleColumnMenu,
+} from 'platform-bible-utils';
+import { contextKeysService } from '@shared/services/context-keys.service';
+import { evaluateMenuRecordingReads } from '@shared/utils/evaluate-menu-recording-reads.util';
+import { collectContextMenuKeys } from '@renderer/components/overlays/overlay-context-menu-localization.util';
+import { webViewService } from '@shared/services/web-view.service';
 import type { ReactElement } from 'react';
 import {
+  CommandPaletteItem,
   CommandPaletteRequest,
   IOverlayService,
   OverlayEntry,
   PopoverContent,
   PopoverRequest,
 } from './overlay.service-model';
+import { filterPaletteItems, getPaletteFilterMode } from './overlay-palette-filter.util';
 import { convertContributionToContextMenuItems } from './overlay-menu-converter';
 import {
   validateCommandPaletteRequest,
@@ -50,9 +72,23 @@ import {
   getOverlaysByWebView,
   getOverlays,
   getOverlayById,
+  getTopmostOverlay,
   updateOverlayContent,
+  updateContextMenuItems,
+  updateCommandPaletteState,
 } from './overlay-store';
-import { translateCoordinates, clampToViewport, isWebViewVisible } from './overlay-coordinates';
+import {
+  translateCoordinates,
+  clampToViewport,
+  isWebViewVisible,
+  getWebViewIframe,
+} from './overlay-coordinates';
+import {
+  markOverlayFocusReturnIfFocusInside,
+  resetOverlayFocusReturnMarks,
+  takeOverlayFocusReturnMark,
+} from './overlay-focus-return.util';
+import { isWindowBlurPress } from './window-blur-press.util';
 
 // ── Debounce ──
 
@@ -71,6 +107,35 @@ const OVERLAY_CREATION_GRACE_MS = 300;
 
 /** Timestamp of the most recent overlay creation */
 let lastOverlayCreatedAt = 0;
+
+/** ID of the most recently created overlay, paired with {@link lastOverlayCreatedAt} */
+let lastOverlayCreatedId: string | undefined;
+
+/** Records an overlay creation for the auto-dismiss listeners' grace period */
+function noteOverlayCreated(overlayId: string): void {
+  lastOverlayCreatedAt = Date.now();
+  lastOverlayCreatedId = overlayId;
+}
+
+/** Whether an overlay was created too recently for an auto-dismiss listener to act on it */
+function isWithinOverlayCreationGrace(): boolean {
+  return Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS;
+}
+
+/**
+ * Selector matching every parent-document element that is overlay CONTENT: the overlay host's
+ * portal container plus popovers and command palettes, which render through Radix portals directly
+ * under `document.body` when they are anchored, outside the host div. Kept in one constant so the
+ * focus-change and app-window-input listeners cannot drift apart on what counts as interacting with
+ * an overlay rather than clicking away from it.
+ *
+ * The scroll listener deliberately keeps its own, narrower selector: it asks whether the scroll
+ * happened inside content that is itself scrollable (a popover or a command palette list), not
+ * whether the event touched an overlay, and widening it to the host container would change which
+ * scrolls dismiss a context menu.
+ */
+const OVERLAY_CONTENT_SELECTOR =
+  '[data-overlay-host], [data-overlay-popover], [data-overlay-command-palette], [data-radix-popper-content-wrapper]';
 
 /** Tracks the last invocation time per overlay type per webViewId */
 const lastInvocationTime = new Map<string, number>();
@@ -97,46 +162,133 @@ export function resetDebounceState(): void {
   lastInvocationTime.clear();
 }
 
+/**
+ * Monotonic sequence over every `showCommandPalette` request, all webViews. Paired with
+ * {@link latestCommandPaletteRequestSeqByWebView} so a request that awaited item localization can
+ * tell "a newer request arrived while this one was localizing" apart from "this request is still
+ * the one the user asked for" — stored-entry creation order cannot, because overlapped requests add
+ * in localization-COMPLETION order, not arrival order.
+ */
+let commandPaletteRequestCounter = 0;
+
+/** The {@link commandPaletteRequestCounter} value of each webView's latest palette request. */
+const latestCommandPaletteRequestSeqByWebView = new Map<string, number>();
+
 // ── Focus Save/Restore ──
 
-/** Saved focus subject per overlay ID, captured via windowService.getFocus() */
-const savedFocusState = new Map<string, FocusSubject>();
+/** What the overlay service remembers about an overlay in order to return focus when it closes. */
+interface FocusRecord {
+  /** Id of the web view (or service) that requested the overlay */
+  requesterId: string;
+  /** Whether the overlay is a modal dialog, which returns focus whenever it is answered */
+  isModal: boolean;
+  /** The window service's focus subject when the overlay opened; set once `getFocus` answers */
+  subject?: FocusSubject;
+}
+
+/** Focus records per overlay ID, created synchronously when the overlay opens */
+const focusRecords = new Map<string, FocusRecord>();
 
 /**
- * Captures the current window focus subject and stores it for later restoration. Uses the window
- * service's getFocus API instead of postMessage to iframes.
+ * Id of the tab or web view the window service most recently reported as focused. Kept when focus
+ * moves outside every tab (into a modal dialog, say), so a modal dialog that the dialog service
+ * opened can return to the tab the user was in. A web view's tab id equals its web view id.
  */
-async function saveFocus(overlayId: string): Promise<void> {
-  try {
-    const focusSubject = await windowService.getFocus();
-    // Guard against writing stale entries after the overlay has been dismissed.
-    // saveFocus is called without await, so restoreFocus may delete the entry before we get here.
-    if (focusSubject && getOverlayById(overlayId)) {
-      savedFocusState.set(overlayId, focusSubject);
-    }
-  } catch {
-    // Best-effort focus save
-  }
+let lastFocusedTabId: string | undefined;
+
+/**
+ * Starts the focus record for an overlay and fills in the window service's focus subject once it
+ * answers. The record exists from the start so a close that beats the answer still knows its
+ * requester.
+ */
+function saveFocus(overlayId: string, requesterId: string, isModal: boolean = false): void {
+  const record: FocusRecord = { requesterId, isModal };
+  focusRecords.set(overlayId, record);
+  windowService
+    .getFocus()
+    .then((focusSubject) => {
+      if (focusSubject) record.subject = focusSubject;
+      if (focusSubject && focusSubject.focusType !== 'other' && !lastFocusedTabId)
+        lastFocusedTabId = focusSubject.id;
+      return undefined;
+    })
+    .catch(() => {
+      // Best-effort focus save
+    });
 }
 
 /**
- * Restores focus to the subject that was active when the overlay was created. Uses the window
- * service's setFocus API to return focus to the original webView or tab.
+ * Whether the document's focused element sits inside the given overlay's own content: every overlay
+ * component writes its id to its content roots as `data-overlay-id`. Focus in another overlay of
+ * the same type, a web view frame or the rest of the app is not focus this overlay holds.
  */
-function restoreFocus(overlayId: string): void {
-  const focusSubject = savedFocusState.get(overlayId);
-  savedFocusState.delete(overlayId);
+function isFocusInsideOverlayContent(overlayId: string): boolean {
+  let element = document.activeElement;
+  while (element) {
+    if (element.getAttribute('data-overlay-id') === overlayId) return true;
+    element = element.parentElement;
+  }
+  return false;
+}
 
-  if (!focusSubject || focusSubject.focusType === 'other') return;
+/**
+ * Where focus goes back to: the requesting web view when it is a real web view whose frame exists,
+ * so a menu opened in a pane the window service has not yet noticed still returns to that pane.
+ * Otherwise (a modal dialog, whose requester is the dialog service) the tab the user was last in,
+ * or else the subject the window service reported when the overlay opened. A target that no longer
+ * exists is never returned to. Undefined when there is nowhere to go.
+ */
+function resolveFocusTarget(
+  record: FocusRecord,
+): { focusType: 'webView' | 'tab'; id: string } | undefined {
+  if (getWebViewIframe(record.requesterId)) return { focusType: 'webView', id: record.requesterId };
 
-  // setFocus accepts SetFocusSubject (webView or tab with id) — pass only the fields it needs
-  const setFocusTarget =
-    focusSubject.focusType === 'webView'
-      ? focusSubject
-      : { focusType: focusSubject.focusType, id: focusSubject.id };
-  windowService.setFocus(setFocusTarget).catch(() => {
+  if (record.isModal) {
+    if (lastFocusedTabId) return { focusType: 'tab', id: lastFocusedTabId };
+  }
+
+  const { subject } = record;
+  if (!subject || subject.focusType === 'other') return undefined;
+  // `setFocus` looks a tab up and does nothing for a missing one, but records a web view blindly
+  if (subject.focusType === 'webView' && !getWebViewIframe(subject.id)) return undefined;
+  return { focusType: subject.focusType, id: subject.id };
+}
+
+/**
+ * Settles an overlay's focus record when it closes, returning focus to the opener when asked to.
+ * Called synchronously from the one place each overlay type settles. This function itself never
+ * reads where focus currently is; the only focus read is the containment check in
+ * {@link settleTransientOverlayFocus}, so a click elsewhere can never pull focus back.
+ *
+ * @param overlayId The overlay that is closing
+ * @param shouldReturnFocus Whether this close hands focus back to the opener
+ */
+function settleFocus(overlayId: string, shouldReturnFocus: boolean): void {
+  const record = focusRecords.get(overlayId);
+  focusRecords.delete(overlayId);
+  if (!shouldReturnFocus || !record) return;
+
+  const target = resolveFocusTarget(record);
+  if (!target) return;
+  windowService.setFocus(target).catch(() => {
     // Best-effort focus restore
   });
+}
+
+/**
+ * Settles a context menu, popover or command palette that closed. These return focus to the opener
+ * when an item was picked (a result came back), or when the close was marked as returning focus and
+ * focus was inside the overlay's own content at that moment. A click elsewhere, a pane or tab
+ * switch, a replacement, a timeout and a scroll never return focus.
+ */
+function settleTransientOverlayFocus(overlayId: string, wasPicked: boolean): void {
+  const isMarked = takeOverlayFocusReturnMark(overlayId);
+  settleFocus(overlayId, wasPicked || (isMarked && isFocusInsideOverlayContent(overlayId)));
+}
+
+/** Whether a rejection is the replacement or shutdown of an overlay rather than an answer to it */
+function isAbortedRejection(reason: unknown): boolean {
+  return isPlatformError(reason) && reason.code === ABORTED;
 }
 
 // ── Aria-Live Announcements ──
@@ -186,6 +338,128 @@ async function announceLocalizedToScreenReader(
   }
 }
 
+/**
+ * The two static palette-announcement templates, resolved ONCE per palette open instead of per
+ * announcement: `announceCommandPaletteState` runs on nearly every filtering keystroke (its de-dupe
+ * guard keys on the highlighted item and the match count, and typing changes the count), and
+ * resolving through `localizationService` is a JSON-RPC round trip to the extension host — so
+ * without this cache the palette pays one IPC round trip per keystroke, independent of item count.
+ * Refreshed at open so a language change is picked up by the next palette; until the resolve lands
+ * (or if it yields nothing), announcements fall back to the per-call path.
+ */
+let paletteAnnounceStrings:
+  | { noResults: string; highlightedItem: string; resultCount: string }
+  | undefined;
+
+/** Kicks off (fire-and-forget) the per-open resolution backing {@link paletteAnnounceStrings}. */
+function refreshPaletteAnnounceStrings(): void {
+  paletteAnnounceStrings = undefined;
+  localizationService
+    .getLocalizedStrings({
+      localizeKeys: [
+        '%overlay_aria_commandPaletteNoResults%',
+        '%overlay_aria_commandPaletteHighlightedItem%',
+        '%overlay_aria_commandPaletteResultCount%',
+      ],
+    })
+    .then((strings) => {
+      const noResults = strings['%overlay_aria_commandPaletteNoResults%'];
+      const highlightedItem = strings['%overlay_aria_commandPaletteHighlightedItem%'];
+      const resultCount = strings['%overlay_aria_commandPaletteResultCount%'];
+      if (noResults !== undefined && highlightedItem !== undefined && resultCount !== undefined)
+        paletteAnnounceStrings = { noResults, highlightedItem, resultCount };
+      return undefined;
+    })
+    .catch(() => undefined); // the per-call fallback keeps announcing (raw keys at worst)
+}
+
+/**
+ * The command palette state most recently announced to screen readers. Compared against on every
+ * update so an update that changes neither the highlighted item nor the match count announces
+ * nothing — a live region that repeats itself talks over the user's next keystroke.
+ *
+ * One record covers every palette: only one is open per WebView, and a different palette replaces
+ * the record rather than adding to it, so a closed palette leaves nothing behind.
+ */
+let lastAnnouncedPaletteState:
+  | { overlayId: string; highlightedItemId: string | undefined; itemCount: number }
+  | undefined;
+
+/**
+ * Announces a command palette's highlighted item and match count to screen readers, unless neither
+ * changed since the last announcement.
+ *
+ * This live region is the palette's only accessible channel while it is driven from elsewhere: a
+ * passive palette never takes focus (the driving WebView keeps it, which is what lets that
+ * WebView's own keydown semantics run), and `aria-activedescendant` speaks only from a focused
+ * element — so without this, a screen reader user hears the palette open and then nothing about
+ * what it went on to show.
+ *
+ * A list-focused palette has a focused listbox and so speaks its own highlight; it passes
+ * `announceHighlightedItem: false` and uses this for the empty case and the match count, which
+ * `aria-activedescendant` cannot express.
+ *
+ * @param overlayId The command palette overlay the state belongs to
+ * @param filteredItems The items currently matching the palette's filter text
+ * @param selectedIndex The highlighted item's index within `filteredItems`
+ * @param announceHighlightedItem Whether the highlighted item is spoken here. False when the
+ *   palette focuses its own list, which announces the highlight through `aria-activedescendant`
+ */
+function announceCommandPaletteState(
+  overlayId: string,
+  filteredItems: CommandPaletteItem[],
+  selectedIndex: number,
+  announceHighlightedItem: boolean,
+): void {
+  const highlightedItem = filteredItems[selectedIndex];
+  // The highlight is part of the de-dupe key only when the highlight is what gets spoken. For a
+  // list-focused palette it is not, so keying on it would make every arrow key a "change" and
+  // repeat the match count over the top of the next keystroke.
+  const announcedItemId = announceHighlightedItem ? highlightedItem?.id : undefined;
+  const previous = lastAnnouncedPaletteState;
+  if (
+    previous &&
+    previous.overlayId === overlayId &&
+    previous.highlightedItemId === announcedItemId &&
+    previous.itemCount === filteredItems.length
+  )
+    return;
+
+  lastAnnouncedPaletteState = {
+    overlayId,
+    highlightedItemId: announcedItemId,
+    itemCount: filteredItems.length,
+  };
+
+  if (filteredItems.length === 0) {
+    if (paletteAnnounceStrings) announceToScreenReader(paletteAnnounceStrings.noResults);
+    else announceLocalizedToScreenReader('%overlay_aria_commandPaletteNoResults%');
+    return;
+  }
+  if (!announceHighlightedItem) {
+    // The listbox speaks the highlighted item itself; the COUNT has no other voice.
+    const countReplacers = { count: `${filteredItems.length}` };
+    if (paletteAnnounceStrings)
+      announceToScreenReader(
+        formatReplacementString(paletteAnnounceStrings.resultCount, countReplacers),
+      );
+    else
+      announceLocalizedToScreenReader('%overlay_aria_commandPaletteResultCount%', countReplacers);
+    return;
+  }
+  if (!highlightedItem) return;
+  const replacers = {
+    label: highlightedItem.label,
+    index: `${selectedIndex + 1}`,
+    count: `${filteredItems.length}`,
+  };
+  if (paletteAnnounceStrings)
+    announceToScreenReader(
+      formatReplacementString(paletteAnnounceStrings.highlightedItem, replacers),
+    );
+  else announceLocalizedToScreenReader('%overlay_aria_commandPaletteHighlightedItem%', replacers);
+}
+
 // ── Auto-Dismiss Helpers ──
 
 /** Map of overlay ID to its auto-dismiss timer, cleared on manual dismissal */
@@ -220,6 +494,61 @@ function dismissAll(...types: OverlayEntry['type'][]): void {
   });
 }
 
+/**
+ * Dismiss the overlays that clicking away or pressing Escape closes: context menus, command
+ * palettes, and popovers. Modal dialogs are exempt — they are dismissed by their own shell.
+ *
+ * A popover that opted out with `dismissOnClickOutside: false` survives a click away but not
+ * Escape, matching the popover component's own Escape handler, which dismisses regardless of that
+ * option (the option governs click-outside, not the key).
+ *
+ * @param trigger What is dismissing the overlays. `windowBlur` is the parent window losing focus
+ *   and otherwise dismisses exactly as `clickAway` does
+ * @param onlyIds When provided, only overlays with these IDs are dismissed. The app-window input
+ *   listener uses it to act on exactly the overlays that were open when the input happened — every
+ *   one of them for a click away, only the topmost for Escape.
+ */
+function dismissTransientOverlays(
+  trigger: 'clickAway' | 'escape' | 'windowBlur',
+  onlyIds?: ReadonlySet<string>,
+): void {
+  // Escape, and the app losing OS focus (as opposed to a click into a pane, which also blurs the
+  // parent window), return focus to the opener when focus is inside the overlay's own content
+  const returnsFocusIfInside =
+    trigger === 'escape' || (trigger === 'windowBlur' && !document.hasFocus());
+  const dismiss = (overlay: OverlayEntry): void => {
+    if (returnsFocusIfInside) markOverlayFocusReturnIfFocusInside(overlay.id);
+    resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
+  };
+  getOverlays().forEach((overlay) => {
+    if (onlyIds && !onlyIds.has(overlay.id)) return;
+    if (overlay.type === 'contextMenu' || overlay.type === 'commandPalette') {
+      dismiss(overlay);
+      return;
+    }
+    if (
+      overlay.type === 'popover' &&
+      (trigger === 'escape' || overlay.request.dismissOnClickOutside !== false)
+    ) {
+      dismiss(overlay);
+    }
+  });
+}
+
+/** Whether any item's `when` or `enabledWhen` uses the template variable `{name}`. */
+function menuExpressionsUseTemplateVar(menu: Localized<SingleColumnMenu>, name: string): boolean {
+  return menu.items.some((item) =>
+    [item.when, item.enabledWhen].some((expression) => {
+      if (!expression) return false;
+      try {
+        return getTemplateVarNames(expression).includes(name);
+      } catch {
+        return false;
+      }
+    }),
+  );
+}
+
 // ── Core Service Methods ──
 
 /**
@@ -247,19 +576,51 @@ async function showContextMenu(
 
   // Fetch menu contributions for this webViewType
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const webViewMenu = await menuDataService.getWebViewMenu(webViewType as ReferencedItem);
+  const { contextMenu } = await menuDataService.getWebViewMenu(webViewType as ReferencedItem);
 
-  if (!webViewMenu.contextMenu) {
+  if (!contextMenu) {
     return undefined;
   }
 
-  const items = convertContributionToContextMenuItems(webViewMenu.contextMenu);
+  // The only network call while building a menu, made only when an item's expression uses
+  // {projectId}. Through the shared proxy rather than the renderer's own web view service shard: the
+  // shard's import graph reaches back to this module through the frontend PAPI, which would be a
+  // cycle. A failed lookup leaves the project unset: the menu is evaluated without a project, so positive
+  // {projectId} gates read as unset.
+  let projectId: string | undefined;
+  if (menuExpressionsUseTemplateVar(contextMenu, 'projectId')) {
+    try {
+      projectId = (await webViewService.getOpenWebViewDefinition(webViewId))?.projectId;
+    } catch (error) {
+      logger.warn(
+        `Could not look up the project of web view ${webViewId}; the context menu is evaluated without a project (positive {projectId} gates read as unset): ${getErrorMessage(error)}`,
+      );
+    }
+  }
+  const templateVars = createMenuTemplateVars({ webViewId, webViewType, projectId });
+  // `when` hides an item and `enabledWhen` on a command item disables it. `checkedWhen`, and
+  // `enabledWhen` on a submenu, are rejected at load. While the menu is open it re-evaluates
+  // whenever a context key it read changes, and closes if every item becomes hidden.
+  const onEvaluationError = (expression: string, error: unknown) =>
+    logger.warn(
+      `Error evaluating context menu when-expression '${expression}': ${getErrorMessage(error)}`,
+    );
+  const initialEvaluation = evaluateMenuRecordingReads(
+    contextMenu,
+    templateVars,
+    onEvaluationError,
+  );
+  let { readKeys } = initialEvaluation;
+  const items = convertContributionToContextMenuItems(initialEvaluation.evaluatedMenu);
 
   if (items.length === 0) {
     return undefined;
   }
 
   validateContextMenuItems(items);
+  // Every item the menu can show, hidden ones included, so a label that appears later is already
+  // localized. The converter ignores `when`/`enabledWhen`, so the unevaluated menu is safe to use.
+  const localizeKeys = collectContextMenuKeys(convertContributionToContextMenuItems(contextMenu));
 
   const existingOverlays = getOverlaysByWebView(webViewId).filter((o) => o.type === 'contextMenu');
   existingOverlays.forEach((existing) => {
@@ -267,36 +628,62 @@ async function showContextMenu(
       existing.id,
       newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
-    restoreFocus(existing.id);
   });
 
   const overlayId = newGuid();
-  saveFocus(overlayId);
+  saveFocus(overlayId, webViewId);
 
   const rawPosition = options?.position ?? { x: 0, y: 0 };
   const translatedPosition = translateCoordinates(webViewId, rawPosition);
   const clampedPosition = clampToViewport(translatedPosition, 4);
 
   announceLocalizedToScreenReader('%overlay_aria_contextMenuOpened%');
-  lastOverlayCreatedAt = Date.now();
+  noteOverlayCreated(overlayId);
 
-  const selectedCommand = await new Promise<string | undefined>((resolve, reject) => {
+  // Nothing between the first evaluation and the subscription below may await: a key change in
+  // that gap would be missed.
+  const selectedCommandPromise = new Promise<string | undefined>((resolve, reject) => {
     addOverlay({
       type: 'contextMenu',
       id: overlayId,
       webViewId,
       items,
+      localizeKeys,
       position: clampedPosition,
       resolve: (result) => {
-        restoreFocus(overlayId);
+        settleTransientOverlayFocus(overlayId, result !== undefined);
         resolve(result);
       },
       reject: (reason?: unknown) => {
-        restoreFocus(overlayId);
+        settleTransientOverlayFocus(overlayId, false);
         reject(reason);
       },
     });
   });
+
+  const unsubscribe = contextKeysService.onDidChange((event) => {
+    if (!readKeys.has(event.key)) return;
+    try {
+      if (!getOverlayById(overlayId)) return;
+      const next = evaluateMenuRecordingReads(contextMenu, templateVars, onEvaluationError);
+      readKeys = next.readKeys;
+      const nextItems = convertContributionToContextMenuItems(next.evaluatedMenu);
+      if (nextItems.length === 0) {
+        resolveAndRemoveOverlay(overlayId, 'contextMenu', undefined);
+        return;
+      }
+      validateContextMenuItems(nextItems);
+      updateContextMenuItems(overlayId, nextItems);
+    } catch (error) {
+      logger.warn(`Could not refresh open context menu ${overlayId}: ${getErrorMessage(error)}`);
+    }
+  });
+  let selectedCommand: string | undefined;
+  try {
+    selectedCommand = await selectedCommandPromise;
+  } finally {
+    unsubscribe();
+  }
 
   if (selectedCommand) {
     try {
@@ -341,13 +728,12 @@ export async function showModalDialogOverlay<TReturn>(
       existing.id,
       newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
-    restoreFocus(existing.id);
   });
 
   const overlayId = newGuid();
 
   // Save current focus state for later restoration
-  saveFocus(overlayId);
+  saveFocus(overlayId, webViewId, true);
 
   const title = typeof props.title === 'string' ? props.title : 'Dialog';
   announceLocalizedToScreenReader('%overlay_aria_dialogOpened%', { title });
@@ -365,16 +751,44 @@ export async function showModalDialogOverlay<TReturn>(
       // Generic T resolve can't be assigned to unknown resolve without widening
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       resolve: ((result: unknown) => {
-        restoreFocus(overlayId);
+        // Every answer to a modal dialog (OK, Cancel, Escape, the close button, the backdrop)
+        // returns focus: nothing else is left to hold it once the dialog unmounts.
+        settleFocus(overlayId, true);
         // Cast unknown result back to the generic dialog response type
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         resolve(result as TReturn | undefined);
       }) as (result: unknown) => void,
       reject: (reason?: unknown) => {
-        restoreFocus(overlayId);
+        // A dialog that reports an error was answered; a replaced or shut-down one was not
+        settleFocus(overlayId, !isAbortedRejection(reason));
         reject(reason);
       },
     });
+  });
+}
+
+/**
+ * Rejects every modal dialog overlay this window is currently showing, for a window that is going
+ * away.
+ *
+ * A modal dialog's promise is handed out by {@link showModalDialogOverlay} and lives nowhere else.
+ * It is not in the dialog service's map of live requests, so the rejection that fails this window's
+ * docked dialogs does not reach it, and the main process lifts the request timeout on `showDialog`,
+ * so nothing expires it either. A window destroyed with a modal on screen therefore leaves its
+ * requestor — usually in a process that outlives the window — waiting on an answer nobody is left
+ * to give.
+ *
+ * Deliberately narrower than the general dismissal this module does internally: the only caller is
+ * the dialog service's unload handler, and what it needs is exactly the modal dialogs this window
+ * will never answer, not an arbitrary set of overlay types.
+ *
+ * @param reason Message the requestors' promises are rejected with
+ * @internal
+ */
+export function rejectModalDialogOverlaysOnShutdown(reason: string): void {
+  getOverlays().forEach((overlay) => {
+    if (overlay.type === 'modalDialog')
+      rejectAndRemoveOverlay(overlay.id, newPlatformError(reason, ABORTED));
   });
 }
 
@@ -408,13 +822,12 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
       existing.id,
       newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
-    restoreFocus(existing.id);
   });
 
   const overlayId = newGuid();
 
   // Save current focus state for later restoration
-  saveFocus(overlayId);
+  saveFocus(overlayId, webViewId);
 
   // Translate coordinates from iframe-relative to document-relative
   const translatedPosition = translateCoordinates(webViewId, request.anchor);
@@ -446,7 +859,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
     position: clampedPosition,
     resolve: (actionId: string | undefined) => {
       clearPopoverTimer(overlayId);
-      restoreFocus(overlayId);
+      settleTransientOverlayFocus(overlayId, actionId !== undefined);
       const pending = popoverPromises.get(overlayId);
       if (pending) {
         pending.resolve(actionId);
@@ -455,7 +868,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
     },
     reject: (error: PlatformError) => {
       clearPopoverTimer(overlayId);
-      restoreFocus(overlayId);
+      settleTransientOverlayFocus(overlayId, false);
       const pending = popoverPromises.get(overlayId);
       if (pending) {
         pending.reject(error);
@@ -466,7 +879,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
 
   announceLocalizedToScreenReader('%overlay_aria_popoverOpened%');
 
-  lastOverlayCreatedAt = Date.now();
+  noteOverlayCreated(overlayId);
 
   // Set up auto-dismiss timer if requested
   if (request.dismissAfterMs && request.dismissAfterMs > 0) {
@@ -502,6 +915,7 @@ async function updatePopover(overlayId: string, content: PopoverContent): Promis
 async function dismissPopover(overlayId: string): Promise<void> {
   const overlay = getOverlayById(overlayId);
   if (!overlay || overlay.type !== 'popover') return;
+  markOverlayFocusReturnIfFocusInside(overlayId);
   resolveAndRemoveOverlay(overlayId, 'popover', undefined);
 }
 
@@ -523,14 +937,75 @@ async function onPopoverDismissed(overlayId: string): Promise<string | undefined
 }
 
 /**
+ * Collects the `LocalizeKey` values found in command palette items' `label`, `description`, and
+ * `badge` fields. Empty when every field is a plain string.
+ */
+function collectPaletteItemLocalizeKeys(items: CommandPaletteItem[]): LocalizeKey[] {
+  const keys: LocalizeKey[] = [];
+  items.forEach((item) => {
+    [item.label, item.description, item.badge].forEach((value) => {
+      if (value !== undefined && isLocalizeKey(value)) keys.push(value);
+    });
+  });
+  return keys;
+}
+
+/**
+ * Resolves `LocalizeKey` values in command palette items' `label`/`description`/`badge` fields to
+ * localized strings via the localization service; plain-string fields pass through unchanged. A key
+ * the service does not know (or a failed lookup) keeps its raw key text — the same fallback the
+ * command palette component applies when rendering — so the resolved items are exactly what the
+ * palette displays.
+ */
+async function localizePaletteItems(
+  items: CommandPaletteItem[],
+  localizeKeys: LocalizeKey[],
+): Promise<CommandPaletteItem[]> {
+  let localizedStrings: LanguageStrings = {};
+  try {
+    localizedStrings = await localizationService.getLocalizedStrings({ localizeKeys });
+  } catch {
+    // Leave the map empty — every key falls back to its raw text below
+  }
+  const resolve = (value: string | LocalizeKey): string =>
+    isLocalizeKey(value) ? (localizedStrings[value] ?? value) : value;
+  return items.map((item) => ({
+    ...item,
+    label: resolve(item.label),
+    description: item.description ? resolve(item.description) : undefined,
+    badge: item.badge ? resolve(item.badge) : undefined,
+  }));
+}
+
+/**
+ * Rejects (ABORTED) and removes every command palette this WebView already has open — a new request
+ * replaces its predecessors rather than stacking on them, which is what keeps the
+ * one-palette-per-WebView invariant true in the store. A replaced palette does not return focus.
+ */
+function replaceExistingCommandPalettes(webViewId: string): void {
+  getOverlaysByWebView(webViewId)
+    .filter((o) => o.type === 'commandPalette')
+    .forEach((existing) => {
+      rejectAndRemoveOverlay(
+        existing.id,
+        newPlatformError('Overlay was replaced by a new request', ABORTED),
+      );
+    });
+}
+
+/**
  * Shows a command palette overlay with searchable/filterable items. Validates the request, checks
  * visibility, translates coordinates, and returns the user's selection or undefined if dismissed.
+ *
+ * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings here,
+ * before the overlay entry is stored, so host-side filtering and commit resolution operate on the
+ * same strings the palette renders.
  *
  * @param request The command palette request with items and optional anchor
  * @param webViewId The webViewId that originated the request
  * @returns The selected item's ID, or undefined if dismissed
  * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
- *   debounce cooldown
+ *   debounce cooldown while this WebView has no palette open
  */
 async function showCommandPalette(
   request: CommandPaletteRequest,
@@ -543,27 +1018,55 @@ async function showCommandPalette(
     throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
   }
 
-  // Leading-edge debounce: drop rapid re-triggers within 50ms
-  if (!debounceCheck('commandPalette', webViewId)) {
+  // Leading-edge debounce: drop rapid re-triggers within 50ms — but only when this WebView has NO
+  // palette open. A show that REPLACES an open palette is a legitimate rapid second request (the
+  // `\` commit key reopens the palette back-to-back), and rejecting one leaves the OLD palette
+  // mounted while the owner's rejection cleanup clears its session, dropping keystrokes through to
+  // the document under a visible palette. The debounce absorbs accidental double-opens, not
+  // replaces.
+  const hasExistingPalette = getOverlaysByWebView(webViewId).some(
+    (o) => o.type === 'commandPalette',
+  );
+  if (!hasExistingPalette && !debounceCheck('commandPalette', webViewId)) {
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
-  // Replace any existing command palette from this webView
-  const existingOverlays = getOverlaysByWebView(webViewId).filter(
-    (o) => o.type === 'commandPalette',
-  );
-  existingOverlays.forEach((existing) => {
-    rejectAndRemoveOverlay(
-      existing.id,
-      newPlatformError('Overlay was replaced by a new request', ABORTED),
-    );
-    restoreFocus(existing.id);
-  });
+  // This request is now the webView's LATEST palette request; anything older is stale. See the
+  // post-await check below for what the sequence buys.
+  commandPaletteRequestCounter += 1;
+  const requestSeq = commandPaletteRequestCounter;
+  latestCommandPaletteRequestSeqByWebView.set(webViewId, requestSeq);
+
+  // Replace any existing command palette from this webView BEFORE the localization await below:
+  // if the replace ran only on the far side of the await, a second request could start while the
+  // first was still resolving localization and BOTH would end up added.
+  replaceExistingCommandPalettes(webViewId);
+
+  // Resolve LocalizeKey item text ONCE, up front, so the stored entry only ever holds the same
+  // resolved strings the palette renders — host-side filtering and commit can then never disagree
+  // with the on-screen list. Skipped entirely (no await) when every item field is a plain string,
+  // preserving synchronous overlay creation for those callers.
+  const itemLocalizeKeys = collectPaletteItemLocalizeKeys(request.items);
+  let { items } = request;
+  if (itemLocalizeKeys.length > 0) {
+    items = await localizePaletteItems(request.items, itemLocalizeKeys);
+    // The await reopened the window the pre-await sweep closed: other requests for this webView
+    // may have arrived (and possibly added their palettes) while localization resolved. NEWEST
+    // WINS in both directions: a request that is no longer its webView's latest aborts itself
+    // exactly as if it had been replaced — overlapped awaits resolve in localization-COMPLETION
+    // order, so without this check an older request finishing LAST would sweep out the newer
+    // palette and mount its own — and a still-newest request sweeps again so anything that landed
+    // mid-await is replaced like any pre-existing palette, keeping one palette per webView.
+    if (latestCommandPaletteRequestSeqByWebView.get(webViewId) !== requestSeq) {
+      throw newPlatformError('Overlay was replaced by a new request', ABORTED);
+    }
+    replaceExistingCommandPalettes(webViewId);
+  }
 
   const overlayId = newGuid();
 
   // Save current focus state for later restoration
-  saveFocus(overlayId);
+  saveFocus(overlayId, webViewId);
 
   // Translate coordinates from iframe-relative to document-relative (if anchored)
   let position: { x: number; y: number } | undefined;
@@ -573,8 +1076,19 @@ async function showCommandPalette(
   }
 
   announceLocalizedToScreenReader('%overlay_aria_commandPaletteOpened%');
+  // Pre-resolve the per-update announcement templates so the filtering keystrokes that follow
+  // format locally instead of paying a localization round trip each (see the cache's doc).
+  refreshPaletteAnnounceStrings();
+  // Baseline for the highlight/match-count announcements: what the palette shows the moment it
+  // opens, unfiltered and highlighting its first item. The first update then announces only if it
+  // actually changes one of them.
+  lastAnnouncedPaletteState = {
+    overlayId,
+    highlightedItemId: items[0]?.id,
+    itemCount: items.length,
+  };
 
-  lastOverlayCreatedAt = Date.now();
+  noteOverlayCreated(overlayId);
 
   return new Promise<string | undefined>((resolve, reject) => {
     addOverlay({
@@ -582,18 +1096,186 @@ async function showCommandPalette(
       id: overlayId,
       webViewId,
       request,
-      items: request.items,
+      items,
+      selectedIndex: 0,
       position,
       resolve: (selectedId) => {
-        restoreFocus(overlayId);
+        settleTransientOverlayFocus(overlayId, selectedId !== undefined);
         resolve(selectedId);
       },
       reject: (reason?: unknown) => {
-        restoreFocus(overlayId);
+        settleTransientOverlayFocus(overlayId, false);
         reject(reason);
       },
     });
   });
+}
+
+/**
+ * A command palette overlay entry, narrowed from the {@link OverlayEntry} union. Alias for the
+ * command palette drivers below, which all operate on this variant.
+ */
+type CommandPaletteEntry = Extract<OverlayEntry, { type: 'commandPalette' }>;
+
+/**
+ * Finds the active command palette overlay for the given WebView, if any. The service enforces one
+ * command palette per WebView at a time, so a WebView ID alone is a sufficient handle for the
+ * `updateCommandPalette`/`commitCommandPaletteSelection`/`dismissCommandPalette` drivers below —
+ * unlike the popover family, which is keyed by the overlay ID returned from `showPopover`.
+ *
+ * @param webViewId The WebView to look up
+ * @returns The active command palette overlay entry, or undefined if none is active
+ */
+function getActiveCommandPalette(webViewId: string): CommandPaletteEntry | undefined {
+  // Topmost rather than first-created: the show path keeps one palette per WebView (sweeping both
+  // before and after its localization await), but if two ever momentarily coexist, the newest is
+  // the one on screen — so it is the one the drivers must drive.
+  const entry = getTopmostOverlay((o) => o.type === 'commandPalette' && o.webViewId === webViewId);
+  return entry?.type === 'commandPalette' ? entry : undefined;
+}
+
+/**
+ * Updates the filter text and/or moves the highlighted selection of the active command palette for
+ * the given WebView. No-op if no command palette is active for that WebView.
+ *
+ * @param webViewId The WebView whose command palette should be updated
+ * @param update `filterText` and/or `moveSelection` (clamped to the filtered list's bounds).
+ *   `filterText` drives passive palettes' list directly and, for ACTIVE palettes, the (controlled)
+ *   search input — the extension forwards keystrokes this way when the cross-frame focus handoff
+ *   loses and the user's typing lands in the editor instead of the palette.
+ */
+async function updateCommandPalette(
+  webViewId: string,
+  update: { filterText?: string; moveSelection?: number },
+): Promise<void> {
+  const entry = getActiveCommandPalette(webViewId);
+  if (!entry) {
+    // LOUD: a dropped update means the palette's filter/selection silently diverges from what the
+    // user typed (observed live as `\f` + Space committing nothing and stranding the literal).
+    logger.warn(
+      `updateCommandPalette: no active command palette for WebView ${webViewId} — update dropped ` +
+        `(filterText=${JSON.stringify(update.filterText)}, moveSelection=${update.moveSelection})`,
+    );
+    return;
+  }
+
+  let nextFilterText = entry.filterText;
+  if (update.filterText !== undefined) {
+    // Match the store's own normalization ('' is never stored) so an empty string arriving over a
+    // stored `undefined` does not read as a change.
+    nextFilterText = update.filterText || undefined;
+  } else if (update.moveSelection === undefined) {
+    // Nothing to update
+    return;
+  }
+
+  // A new filter produces a NEWLY RANKED list, so the old highlight index means nothing in it —
+  // carrying it forward (the store only clamps) would leave the highlight on whatever now happens
+  // to sit at that position and commit that item on Enter, rather than the best match the
+  // re-ranked list puts first. Only when the filter actually changed, and never on an arrow-key
+  // move, which is the one case that legitimately carries the index.
+  const didFilterTextChange = nextFilterText !== entry.filterText;
+  const resetSelection = didFilterTextChange && update.moveSelection === undefined;
+
+  const filteredItems = filterPaletteItems(
+    entry.items,
+    nextFilterText,
+    getPaletteFilterMode(entry.request),
+    entry.request.searchFields,
+  );
+  updateCommandPaletteState(entry.id, {
+    // The RAW value, not the normalized one: the store reads `undefined` as "leave unchanged" and
+    // does its own '' normalization, so passing the normalized form would drop a filter CLEAR.
+    filterText: update.filterText,
+    selectedIndex: resetSelection ? 0 : undefined,
+    selectedIndexDelta: update.moveSelection,
+    itemCount: filteredItems.length,
+  });
+
+  // Re-read the entry for the index the store clamped, rather than clamping a second time here.
+  const updatedEntry = getActiveCommandPalette(webViewId);
+  // A PASSIVE palette focuses nothing, so its `aria-activedescendant` cannot speak and every part
+  // of the state has to come from here.
+  //
+  // A LIST-FOCUSED palette DOES focus the listbox that carries it, so the highlighted item is
+  // already announced the standard way and saying it again speaks every marker twice, with the
+  // second utterance over the next keystroke — the two come from different channels, so the
+  // announcer's own de-dupe cannot suppress it. But `aria-activedescendant` has nothing to say
+  // when the filter matches NOTHING: without the empty case here, a user who types a marker that
+  // does not exist hears silence and then an Enter that does nothing. The match count has no
+  // other voice either. So list-focused palettes announce everything EXCEPT the highlight.
+  if (updatedEntry && (updatedEntry.request.passive || updatedEntry.request.focusTarget === 'list'))
+    announceCommandPaletteState(
+      updatedEntry.id,
+      filteredItems,
+      updatedEntry.selectedIndex,
+      !!updatedEntry.request.passive,
+    );
+}
+
+/**
+ * Commits the currently highlighted item of the active command palette for the given WebView,
+ * resolving its promise with that item's `id`. Skips `disabled` items, moving forward to the next
+ * enabled item in the filtered list; no-ops if none are enabled. No-op if no command palette is
+ * active for that WebView.
+ *
+ * @param webViewId The WebView whose command palette selection should be committed
+ */
+async function commitCommandPaletteSelection(webViewId: string): Promise<void> {
+  const entry = getActiveCommandPalette(webViewId);
+  if (!entry) {
+    // LOUD: a silent commit no-op strands the requesting flow — the palette promise never
+    // resolves, so e.g. the standard-view `\f` + Space/Enter apply never runs and the typed
+    // literal stays in the document looking like the commit "did nothing".
+    logger.warn(
+      `commitCommandPaletteSelection: no active command palette for WebView ${webViewId} — ` +
+        `commit dropped`,
+    );
+    return;
+  }
+
+  const filtered = filterPaletteItems(
+    entry.items,
+    entry.filterText,
+    getPaletteFilterMode(entry.request),
+    entry.request.searchFields,
+  );
+  if (filtered.length === 0) {
+    logger.warn(
+      `commitCommandPaletteSelection: filter ${JSON.stringify(entry.filterText)} matches 0 of ` +
+        `${entry.items.length} items — commit dropped, palette left open`,
+    );
+    return;
+  }
+
+  const startIndex = Math.min(Math.max(entry.selectedIndex, 0), filtered.length - 1);
+  let item = filtered[startIndex];
+  for (let step = 1; item?.disabled && step < filtered.length; step += 1) {
+    item = filtered[(startIndex + step) % filtered.length];
+  }
+  if (!item || item.disabled) {
+    logger.warn(
+      `commitCommandPaletteSelection: every filtered item is disabled — commit dropped, ` +
+        `palette left open`,
+    );
+    return;
+  }
+
+  resolveAndRemoveOverlay(entry.id, 'commandPalette', item.id);
+}
+
+/**
+ * Dismisses the active command palette for the given WebView, resolving its promise with
+ * `undefined`. Works for both active and passive palettes. No-op if no command palette is active
+ * for that WebView.
+ *
+ * @param webViewId The WebView whose command palette should be dismissed
+ */
+async function dismissCommandPalette(webViewId: string): Promise<void> {
+  const entry = getActiveCommandPalette(webViewId);
+  if (!entry) return;
+  markOverlayFocusReturnIfFocusInside(entry.id);
+  resolveAndRemoveOverlay(entry.id, 'commandPalette', undefined);
 }
 
 /** The overlay service instance exposed on papi */
@@ -604,11 +1286,126 @@ export const overlayService: IOverlayService = {
   dismissPopover,
   onPopoverDismissed,
   showCommandPalette,
+  updateCommandPalette,
+  commitCommandPaletteSelection,
+  dismissCommandPalette,
 };
 
 // ── Event Listeners for Auto-Dismiss ──
 
-/** Set up scroll, tab change, and blur listeners */
+/**
+ * How long the dismissal decision for an app-window mouse-down signal waits before it is made. The
+ * main process's `before-mouse-event` hook fires BEFORE any frame processes the click, so its
+ * network event can arrive ahead of the parent document's own pointerdown listener. The wait lets
+ * that pointerdown be recorded first, so a click on overlay content is recognized as one, and is
+ * short enough to stay imperceptible.
+ */
+const APP_WINDOW_INPUT_DEFER_MS = 30;
+
+/**
+ * How recent a parent-document pointerdown must be to count as the same gesture as an app-window
+ * mouse-down signal. Wide enough to absorb network-event delivery jitter and a busy renderer; short
+ * enough that the PREVIOUS click's record is not mistaken for this one when the user clicks the
+ * parent document and then a WebView iframe in quick succession.
+ */
+const PARENT_POINTER_DOWN_CORRELATION_MS = 150;
+
+/**
+ * The most recent pointerdown seen in the parent document, where overlays render. Clicks inside a
+ * WebView iframe never reach the parent document, so their absence here is what identifies an
+ * app-window mouse-down signal as having landed inside a WebView.
+ */
+let lastParentPointerDown: { time: number; insideOverlay: boolean } | undefined;
+
+/**
+ * Resets the parent-document pointerdown record and the focus-return state (open overlays' focus
+ * records and the last focused tab). Exported for use in tests only, so one test's recorded click
+ * cannot correlate with the next test's input signal and no test inherits another's focus state.
+ *
+ * @internal
+ */
+export function resetAppWindowInputState(): void {
+  lastParentPointerDown = undefined;
+  lastFocusedTabId = undefined;
+  focusRecords.clear();
+  resetOverlayFocusReturnMarks();
+}
+
+/**
+ * The overlays an app-window input signal is allowed to dismiss: everything open when the signal
+ * arrives, minus an overlay created inside the creation grace window.
+ *
+ * Capturing the IDs up front is what keeps a click from closing an overlay it opened itself: an
+ * overlay created after the signal (the usual order — the main process's hook runs before any frame
+ * processes the click) is simply not in the set. The grace exclusion covers the reverse race, where
+ * a busy renderer processes the click and creates the overlay before the signal is delivered. Old
+ * overlays stay dismissable either way, which a blanket grace check would prevent.
+ */
+function getDismissableOverlayIds(): Set<string> {
+  const ids = new Set(getOverlays().map((overlay) => overlay.id));
+  if (lastOverlayCreatedId && isWithinOverlayCreationGrace()) ids.delete(lastOverlayCreatedId);
+  return ids;
+}
+
+/**
+ * Dismiss transient overlays on a mouse-down or Escape anywhere in the app window, as announced by
+ * the main process. Its input hooks see every frame, including WebView iframes whose events never
+ * reach the parent document, so this is what closes an overlay when the user clicks or presses
+ * Escape inside a WebView.
+ *
+ * Dismissing is idempotent (an overlay resolves once), so overlapping with the handling a frame
+ * does for itself — Radix's outside-click dismissal, a WebView's own Escape handling — is safe.
+ */
+function handleAppWindowInput(event: AppWindowInputEvent): void {
+  // Every mouse-down in the app arrives here, so nothing dismissable is the common path
+  const dismissableOverlayIds = getDismissableOverlayIds();
+  if (dismissableOverlayIds.size === 0) return;
+
+  if (event.kind === 'escape') {
+    // Escape closes the topmost surface only, so a stack of overlays unwinds one press at a time
+    // (Dismissal Patterns → Accessibility in the platform-bible-react guidelines). The topmost
+    // overlay is found WITHOUT filtering any type out: when it is a modal dialog, this press
+    // belongs to the modal's own shell, and dismissing anything BENEATH it would unwind two
+    // surfaces on one press (the shell answers for the modal while this branch answered for the
+    // overlay under it). The same one-surface rule covers an overlay still inside its creation
+    // grace: it is the topmost surface, so nothing under it is dismissed either.
+    const topmost = getTopmostOverlay(() => true);
+    if (!topmost || topmost.type === 'modalDialog') return;
+    if (!dismissableOverlayIds.has(topmost.id)) return;
+    // A command palette whose requesting session claims Escape (`keyForwarding`) is closed by that
+    // session: the key reaches it either directly (a passive palette never takes focus) or
+    // forwarded from the palette. Dismissing it here as well races that keydown, which this signal
+    // usually wins, and a session that finds its palette already gone no longer claims the key, so
+    // the SAME press then also reaches whatever the session sits in - closing a footnotes pane row
+    // editor along with the marker palette opened in it.
+    if (topmost.type === 'commandPalette' && topmost.request.keyForwarding?.keys.includes('Escape'))
+      return;
+    dismissTransientOverlays('escape', new Set([topmost.id]));
+    return;
+  }
+
+  setTimeout(() => {
+    const recentParentPointerDown =
+      lastParentPointerDown &&
+      Date.now() - lastParentPointerDown.time < PARENT_POINTER_DOWN_CORRELATION_MS
+        ? lastParentPointerDown
+        : undefined;
+    // Consume-once: this record correlates ONE app-window signal with ONE parent pointerdown.
+    // Left in place, an already-consumed value could satisfy a LATER signal still inside the
+    // correlation window — a follow-up click inside a WebView would inherit the previous
+    // click's "inside overlay" verdict and skip a dismissal it should have performed.
+    lastParentPointerDown = undefined;
+    // Clicking overlay content (a palette item, a popover's body) is interacting with the overlay,
+    // not clicking away from it. Everything else dismisses, including a click with no recent
+    // parent-document pointerdown — that one landed inside a WebView iframe, which is always
+    // outside the overlay.
+    if (recentParentPointerDown?.insideOverlay) return;
+
+    dismissTransientOverlays('clickAway', dismissableOverlayIds);
+  }, APP_WINDOW_INPUT_DEFER_MS);
+}
+
+/** Set up scroll, tab change, blur, and app-window input listeners */
 function registerAutoDismissListeners(): void {
   // Dismiss context menus and popovers on scroll (capturing phase to catch scroll events from
   // any element in the parent document's DOM tree). Note: scroll events inside iframes don't
@@ -631,37 +1428,61 @@ function registerAutoDismissListeners(): void {
     { capture: true },
   );
 
-  // Dismiss context menus, command palettes, and popovers on window blur
+  // Dismiss context menus, command palettes, and popovers (except those with
+  // dismissOnClickOutside: false) on window blur
   window.addEventListener('blur', () => {
     // Skip if an overlay was just created — focus shifts from panel activation can trigger blur
-    if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
+    if (isWithinOverlayCreationGrace()) return;
 
-    dismissAll('contextMenu', 'commandPalette');
-    // Popovers with dismissOnClickOutside: false may persist across blur
-    const allOverlays = getOverlays();
-    allOverlays.forEach((overlay) => {
-      if (overlay.type === 'popover' && overlay.request.dismissOnClickOutside !== false) {
-        resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
-      }
-    });
+    dismissTransientOverlays('windowBlur');
   });
 
+  // Record every parent-document pointerdown, and whether it landed on overlay content, so an
+  // app-window mouse-down signal can tell a click in the parent document from one inside a WebView
+  // iframe. Capture phase so a handler that stops propagation cannot hide the click.
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      // The press a window blur produces in this document is not a click, and recording it would
+      // make the app-window mouse-down that follows look like a click on overlay content.
+      if (isWindowBlurPress(e)) return;
+      lastParentPointerDown = {
+        time: Date.now(),
+        insideOverlay: e.target instanceof Element && !!e.target.closest(OVERLAY_CONTENT_SELECTOR),
+      };
+    },
+    { capture: true },
+  );
+
+  // Dismiss overlays on a mouse-down or Escape anywhere in the app window, including inside
+  // WebView iframes
+  getNetworkEvent(EVENT_NAME_ON_DID_APP_WINDOW_INPUT)(handleAppWindowInput);
+
   // Dismiss overlays when the focused tab changes
-  let lastFocusId: string | undefined;
+  let lastTrackedFocusId: string | undefined;
   windowService
     .subscribeFocus(undefined, (focusSubject) => {
       if (isPlatformError(focusSubject)) return;
 
       // Determine the id of the newly focused subject (undefined for 'other')
       const newFocusId = focusSubject.focusType === 'other' ? undefined : focusSubject.id;
+      if (newFocusId) lastFocusedTabId = newFocusId;
 
       // Only dismiss if focus actually moved to a different tab/webView
-      if (newFocusId === lastFocusId) return;
-      lastFocusId = newFocusId;
+      if (newFocusId === lastTrackedFocusId) return;
+      lastTrackedFocusId = newFocusId;
 
       // Skip if an overlay was just created — right-clicking a different panel causes focus
       // changes that would otherwise immediately dismiss the just-created context menu
-      if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
+      if (isWithinOverlayCreationGrace()) return;
+
+      // Focus moving INTO an overlay is interacting with it, not leaving it — clicking a palette's
+      // own search input must not close that palette. Overlays live in the parent document, so
+      // detectFocus classifies focusing one as leaving the webview; check whether the newly active
+      // element actually sits inside overlay content before dismissing. OVERLAY_CONTENT_SELECTOR is
+      // shared with the app-window input listener so both spare the same content, anchored or not.
+      const active = document.activeElement;
+      if (active?.closest(OVERLAY_CONTENT_SELECTOR)) return;
 
       dismissAll('contextMenu', 'commandPalette', 'popover');
     })

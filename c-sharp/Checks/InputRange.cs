@@ -1,13 +1,20 @@
+using System;
+using System.Text.Json.Serialization;
+using Paranext.DataProvider.Scripture;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
 
 /// <summary>
-/// Represents a range of text within a project that checks can target. This class must
-/// serialize/deserialize to the CheckInputRange type defined in TypeScript.
+/// Represents a range of text within a project that checks can target. This record must
+/// serialize/deserialize to the CheckInputRange type defined in TypeScript — the canonical
+/// <see cref="ScriptureRange"/> (<see cref="ScriptureRange.Start"/> / <see cref="ScriptureRange.End"/>)
+/// plus a <see cref="ProjectId"/>, serialized flat. <see cref="InputRange"/> derives from
+/// <see cref="ScriptureRange"/>, so the inherited <c>Start</c>/<c>End</c> serialize alongside
+/// <c>ProjectId</c> on a single JSON object.
 /// <br />
-/// An <see cref="InputRange"/> represents a selection of scripture text. If <see cref="End"/> is
-/// null, then only the verse indicated by <see cref="Start"/> is included.
+/// An <see cref="InputRange"/> represents a selection of scripture text. If <see cref="ScriptureRange.End"/>
+/// is null, then only the verse indicated by <see cref="ScriptureRange.Start"/> is included.
 /// <br />
 /// Special values for verse and chapter numbers:
 /// - Verse 0: Includes all parts of the chapter, including content before the first verse.
@@ -18,42 +25,42 @@ namespace Paranext.DataProvider.Checks;
 ///   desired and the exact number of chapters is unknown.
 /// <br />
 /// Note that Paratext checks cannot be run on less than an entire book because of the definition of
-/// <see cref="ScriptureCheckBase.Run"/>. The <see cref="InputRange"/> class allows defining a
+/// <see cref="ScriptureCheckBase.Run"/>. The <see cref="InputRange"/> record allows defining a
 /// range that is more granular than an entire book because that is how Platform.Bible's interfaces
 /// work, and we need to serialize and deserialize these structures when communicating with the
 /// platform. Whenever a Paratext check is given a range, though, it can only target entire books.
 /// <br />
 /// See the TypeScript check data types for more details.
 /// </summary>
-internal sealed class InputRange
+internal sealed record InputRange : ScriptureRange
 {
-    private string _projectId;
-    private VerseRef _start;
-    private VerseRef? _end;
-
     // Maximum verse/chapter number that can be represented in BBBCCCVVV format
     public const int MAX_CHAPTER_OR_VERSE_NUM = 999;
 
+    public string ProjectId { get; }
+
+    [JsonConstructor]
     public InputRange(string projectId, VerseRef start, VerseRef? end)
+        : base(Clamp(start), ClampNullable(end))
     {
         ArgumentException.ThrowIfNullOrEmpty(projectId);
-
-        // Clamp verse and chapter numbers to MAX values
-        if (start.VerseNum > MAX_CHAPTER_OR_VERSE_NUM)
-            start.VerseNum = MAX_CHAPTER_OR_VERSE_NUM;
-        if (start.ChapterNum > MAX_CHAPTER_OR_VERSE_NUM)
-            start.ChapterNum = MAX_CHAPTER_OR_VERSE_NUM;
-        if (end.HasValue && end.Value.VerseNum > MAX_CHAPTER_OR_VERSE_NUM)
-            end = new VerseRef(end.Value) { VerseNum = MAX_CHAPTER_OR_VERSE_NUM };
-        if (end.HasValue && end.Value.ChapterNum > MAX_CHAPTER_OR_VERSE_NUM)
-            end = new VerseRef(end.Value) { ChapterNum = MAX_CHAPTER_OR_VERSE_NUM };
-
-        VerifyRange(start, end);
-
-        _projectId = projectId;
-        _start = start;
-        _end = end;
+        VerifyRange(Start, End);
+        ProjectId = projectId;
     }
+
+    // Clamp verse and chapter numbers to MAX_CHAPTER_OR_VERSE_NUM. VerseRef is a struct, so the
+    // parameter is a by-value copy — mutating and returning it does not affect the caller.
+    private static VerseRef Clamp(VerseRef verseRef)
+    {
+        if (verseRef.VerseNum > MAX_CHAPTER_OR_VERSE_NUM)
+            verseRef.VerseNum = MAX_CHAPTER_OR_VERSE_NUM;
+        if (verseRef.ChapterNum > MAX_CHAPTER_OR_VERSE_NUM)
+            verseRef.ChapterNum = MAX_CHAPTER_OR_VERSE_NUM;
+        return verseRef;
+    }
+
+    private static VerseRef? ClampNullable(VerseRef? verseRef) =>
+        verseRef.HasValue ? Clamp(verseRef.Value) : null;
 
     private static void VerifyRange(VerseRef start, VerseRef? end)
     {
@@ -71,34 +78,6 @@ internal sealed class InputRange
 
         if (end.HasValue && (start > end.Value))
             throw new ArgumentException("end must come after start");
-    }
-
-    public string ProjectId
-    {
-        get { return _projectId; }
-        set
-        {
-            ArgumentException.ThrowIfNullOrEmpty(value, "ProjectId");
-            _projectId = value;
-        }
-    }
-    public VerseRef Start
-    {
-        get { return _start; }
-        set
-        {
-            VerifyRange(value, _end);
-            _start = value;
-        }
-    }
-    public VerseRef? End
-    {
-        get { return _end; }
-        set
-        {
-            VerifyRange(_start, value);
-            _end = value;
-        }
     }
 
     /// <summary>
@@ -131,19 +110,5 @@ internal sealed class InputRange
         if (bookNum == End.Value.BookNum && chapterNum > End.Value.ChapterNum)
             return false;
         return true;
-    }
-
-    public override bool Equals(object? obj)
-    {
-        if (obj is not InputRange other)
-            return false;
-        return _projectId == other._projectId
-            && _start.Equals(other._start)
-            && Nullable.Equals(_end, other._end);
-    }
-
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(_projectId, _start, _end);
     }
 }

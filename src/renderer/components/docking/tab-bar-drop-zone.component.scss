@@ -1,0 +1,90 @@
+@use './tab-bar-metrics';
+
+// This class only sets sizing for the invisible drop zone itself; its position and its "grow to
+// fill leftover space" behavior come from the `.dock-nav > .dock-extra-content` flex rules in
+// `dock-layout-wrapper.component.scss`'s TAB-BAR region — kept there so all tab-bar flex layout
+// stays in one place.
+.platform-tab-bar-drop-zone {
+  // `flex-basis: 0` (the `0` in the shorthand) keeps this element out of the flex line's
+  // hypothetical main-size total, so it only ever claims space nothing else needs — it can't force
+  // `.dock-nav-wrap` (the tab list) to shrink and push a tab into the overflow dropdown. The flex
+  // `gap` between "+" and this zone still applies while the zone is 0px wide, so it does cost the
+  // tab list that gap's width.
+  flex: 1 0 0;
+  // The default flex-item `min-width: auto` would otherwise floor this at its content size; it has
+  // no content, but pin it to 0 so a change here can't reintroduce that floor.
+  min-width: 0;
+  // Fill the bar's full height (matching the "+" button) rather than just its own flex-centered
+  // content box, so the drop target isn't a thin sliver.
+  align-self: stretch;
+  // Positioned in every state, not only while dragging: this is the containing block that
+  // `.platform-tab-bar-drop-zone-indicator` below sizes its `position: absolute` box against. Left
+  // static, that box would size against the nearest positioned ancestor instead — the whole tab
+  // bar — and sit on top of every tab, out ahead of even the `pointer-events: none` on the
+  // indicator below.
+  position: relative;
+
+  // Set only while a drag is in progress (`TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE` in
+  // `tab-bar-drop-zone.component.tsx`, set by `claimLastTabOverlap`, which explains why the zone
+  // covers the last tab's trailing half).
+  &[data-dragging] {
+    // z-index 1 lifts the zone and its drag-time hit extensions above the last tab (inside the
+    // positioned `.dock-nav-wrap`) and the non-positioned "+". rc-dock's `.dock-drop-edge`
+    // (z-index 100) is positioned below the tab bar in dock-layout-wrapper.component.scss, so it
+    // does not overlap the bar.
+    //
+    // This literal is intentionally outside the named scale in
+    // `.claude/rules/ux/z-index-tiers.md`: that scale orders layers stacked above the whole page
+    // (backdrop, modal, overlay content, …), whose lowest tier already sits far higher than 1. This
+    // `1` instead orders siblings within one tab bar's own local stacking context (against the tab
+    // bar's other children, not against any app-wide layer), so it never competes with that scale.
+    // Verified in the running app against the surfaces it has to sit above: the tab bar's own last
+    // tab and "+" button, and rc-dock's `.dock-drop-edge` layer, which is positioned below the bar.
+    z-index: 1;
+
+    // Drag-time hit extensions. Whatever they cover hits the zone, since a pseudo-element hit-tests
+    // as its originating element. Anything they don't cover inside the bar would hit
+    // `.dock-extra-content`, `.dock-nav` or `.dock-bar`, none of which accept a drop, so the drop
+    // would silently do nothing. They are absolutely positioned rather than growing the zone's real
+    // box (padding, a negative margin, or removing the gap) — the same overflow-dropdown risk the
+    // class comment above explains. Both reach over `.dock-extra-content`'s block padding, so the
+    // bar's full height accepts the drop.
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      inset-block: calc(-1 * var(--tab-header-to-content-gap, 0px));
+    }
+
+    // Backward: the zone's own box plus the last tab's trailing half.
+    &::before {
+      inset-inline-start: calc(-1 * var(--tab-bar-drop-zone-overlap, 0px));
+      inset-inline-end: 0;
+    }
+
+    // Forward: the flex gap before "+", "+" itself (moved to the bar's end during a drag) and the
+    // bar's trailing padding. "+" isn't positioned, so this paints and hit-tests above it. On a bar
+    // crowded enough to overflow, the zone has no width to draw an indicator in, so it refuses the
+    // drop (see `onDragOver`) and this area takes no drop; the last visible tab's own rc-dock
+    // target still appends after that tab.
+    &::after {
+      inset-inline-start: 100%;
+      width: tab-bar-metrics.$tab-bar-extra-gap + tab-bar-metrics.$panel-button-size +
+        tab-bar-metrics.$tab-bar-padding-inline;
+    }
+  }
+}
+
+// A separate element from the zone above, reaching back from the zone's start to the last tab's
+// trailing edge — see `onDragOver` in tab-bar-drop-zone.component.tsx for why `setDropRect` targets
+// this element rather than the zone.
+.platform-tab-bar-drop-zone-indicator {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inset-inline-start: calc(-1 * var(--tab-bar-drop-zone-indicator-lead, 0px));
+  // This element exists only as a geometry reference for `setDropRect`, never as an interactive
+  // surface; it must never intercept pointer events itself, so hit-testing always reaches the zone
+  // (`.platform-tab-bar-drop-zone`, its containing block) and the tabs painted beneath it.
+  pointer-events: none;
+}

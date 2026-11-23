@@ -1,0 +1,1601 @@
+// @vitest-environment jsdom
+// The module under test value-imports `platform-bible-react`, whose bundled entry point touches
+// `document` at module-eval time (it re-exports the whole component library). The default `node`
+// environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom — same fix
+// already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
+import { describe, it, expect, vi } from 'vitest';
+import { MutableRefObject } from 'react';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import type {
+  DeltaOpInsertNoteEmbed,
+  EditorRef,
+  SelectionRange,
+} from '@eten-tech-foundation/platform-editor';
+import {
+  evaluateMenu,
+  isBlockMarker,
+  isLocalizeKey,
+  parseWhenExpression,
+} from 'platform-bible-utils';
+import {
+  CONTEXT_MENU_ACTION_TO_NOTE_KIND,
+  createInsertContextMenuItems,
+  deriveReadOnlyFlags,
+  flushRowEditsThenSave,
+  generateInlineMarkerMenuListItems,
+  getChapterKey,
+  getEditorFocusLocation,
+  getEditorWebViewContextKeyNames,
+  getEditorWebViewContextKeys,
+  INSERT_CONTEXT_MENU_STRING_KEYS,
+  insertNoteAtCurrentSelectionCore,
+  markerMenuItemsToResolvedPaletteItems,
+  nextEditingNoteOps,
+  NOTE_INSERT_CONFIG,
+  forgetCaretSnapshotIfParaMarkerSelected,
+  parseCallerSequenceSetting,
+  type ReadOnlyInputs,
+  doesPaneSessionOwnContent,
+  type PaneEditingSession,
+  resolveEditingSessionActivity,
+  restoreSelectionIfLost,
+  returnFocusToScriptureTextIfDocumentFocused,
+  shouldSkipNoteInsert,
+  STALE_NOTE_EDITING_SESSION_MS,
+} from './platform-scripture-editor.web-view.utils';
+import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
+
+// insertNoteAtCurrentSelectionCore logs its read-only/no-editor skip through `logger.debug`; the
+// shared `@papi/frontend` mock exports no `logger`, so the skip path needs its own, same as
+// use-open-find-shortcut.hook.test.ts. Hoisted so the vi.mock factory below can reference it (the
+// factory is hoisted above imports).
+const { loggerDebug } = vi.hoisted(() => ({ loggerDebug: vi.fn() }));
+vi.mock('@papi/frontend', () => ({
+  default: {},
+  logger: { debug: loggerDebug },
+}));
+
+/** Build a mock editor ref exposing a spy for the method the generator calls. */
+function makeMockEditorRef() {
+  const insertMarker = vi.fn();
+  // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const ref = {
+    current: { insertMarker },
+  } as unknown as MutableRefObject<EditorRef | null>;
+  return { ref, insertMarker };
+}
+
+describe('generateInlineMarkerMenuListItems', () => {
+  // The 'p' parent's children include block markers (e.g. 'q' poetry, 's1' section heading) and
+  // inline markers (e.g. 'f' footnote, 'x' cross-reference) against the real usfmMarkers data.
+  const PARENT = 'p';
+  const noop = () => {};
+
+  it('offers both block and inline markers for the parent', () => {
+    const { ref } = makeMockEditorRef();
+    const markers = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    ).map((item) => item.marker ?? '');
+
+    // The menu is the one place a user can reach either kind from the keyboard, so both have to be
+    // there: 'nd'/'wj' character styles, 'f'/'x' notes, 'p'/'q'/'s1' block styles.
+    expect(markers).toEqual(expect.arrayContaining(['nd', 'wj', 'f', 'x', 'p', 'q', 's1']));
+    expect(markers.filter((marker) => isBlockMarker(marker)).length).toBeGreaterThan(0);
+    expect(markers.filter((marker) => !isBlockMarker(marker)).length).toBeGreaterThan(0);
+  });
+
+  it('offers only the markers the parent declares as children', () => {
+    const { ref } = makeMockEditorRef();
+    const markers = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    ).map((item) => item.marker);
+
+    // Parent-scoped, not the whole marker table: 'p' declares no introduction markers, and a menu
+    // that offered them would be listing markers that cannot occur here.
+    expect(markers).not.toContain('ip');
+    expect(markers).not.toContain('imt');
+  });
+
+  it('while a chapter is loading: a pick closes the menu without inserting', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const close = vi.fn();
+    const restoreSelection = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      false,
+      vi.fn(),
+      restoreSelection,
+      PARENT,
+      () => true,
+    );
+
+    items.find((item) => item.marker === 'nd')?.action();
+
+    expect(insertMarker).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('sorts by marker code', () => {
+    const { ref } = makeMockEditorRef();
+    const markers = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    ).map((item) => item.marker ?? '');
+
+    expect(markers).toEqual([...markers].sort((a, b) => a.localeCompare(b)));
+  });
+
+  it('returns [] for a parent with no children, so the menu never opens empty', () => {
+    const { ref } = makeMockEditorRef();
+    // 'nd' is a leaf character marker — nothing can be inserted under it.
+    expect(
+      generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn(), undefined, 'nd'),
+    ).toEqual([]);
+  });
+
+  it('when protected: block-marker item is disallowed and its action notifies without inserting', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const notify = vi.fn();
+    const close = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      true,
+      notify,
+      undefined,
+      PARENT,
+    );
+
+    const blockItem = items.find((i) => i.marker === 'q');
+    expect(blockItem?.isDisallowed).toBe(true);
+
+    blockItem?.action?.();
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('when protected: inline-marker item is allowed and its action inserts', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const notify = vi.fn();
+    const close = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      true,
+      notify,
+      undefined,
+      PARENT,
+    );
+
+    const inlineItem = items.find((i) => i.marker === 'f');
+    expect(inlineItem?.isDisallowed).toBeFalsy();
+
+    inlineItem?.action?.();
+    expect(insertMarker).toHaveBeenCalledWith('f');
+    expect(notify).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('when not protected: no item is disallowed and all actions insert', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const notify = vi.fn();
+    const close = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      false,
+      notify,
+      undefined,
+      PARENT,
+    );
+
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((i) => !i.isDisallowed)).toBe(true);
+
+    items[0].action?.();
+    expect(insertMarker).toHaveBeenCalledWith(items[0].marker);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('localizes marker titles, falling back to the raw localize key when not loaded', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      { '%markerMenu_marker_f_description%': 'Fußnote (übersetzt)' },
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    );
+
+    expect(items.find((i) => i.marker === 'f')?.title).toBe('Fußnote (übersetzt)');
+    expect(items.find((i) => i.marker === 'nd')?.title).toBe('%markerMenu_marker_nd_description%');
+  });
+
+  it('restores the caret before inserting, so a pick made after the menu took focus still lands', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      vi.fn(),
+      {},
+      false,
+      vi.fn(),
+      restoreSelection,
+      PARENT,
+    );
+
+    items[0].action?.();
+
+    expect(restoreSelection).toHaveBeenCalledTimes(1);
+    expect(insertMarker).toHaveBeenCalledWith(items[0].marker);
+    // Order is the whole point: this menu focuses its own search input on open, which can leave
+    // the editor with no selection — restoring after the insert would be too late to place it.
+    expect(restoreSelection.mock.invocationCallOrder[0]).toBeLessThan(
+      insertMarker.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('when protected: does not restore the caret either (nothing is inserted)', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      vi.fn(),
+      {},
+      true,
+      vi.fn(),
+      restoreSelection,
+      PARENT,
+    );
+
+    items.find((item) => item.isDisallowed)?.action?.();
+
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('returns [] when there is no parent marker', () => {
+    const { ref } = makeMockEditorRef();
+    expect(generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn())).toEqual([]);
+  });
+});
+
+describe('getChapterKey', () => {
+  it('is stable for identical inputs', () => {
+    expect(getChapterKey('GEN', 1, 'English')).toBe(getChapterKey('GEN', 1, 'English'));
+  });
+
+  it('differs across book and chapter', () => {
+    expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('EXO', 1, 'English'));
+    expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('GEN', 2, 'English'));
+  });
+
+  // A versification change re-selects the chapter document just as a chapter switch does, so it
+  // must change the key too — otherwise a pending debounced save scheduled under the old
+  // versification fires as a "same chapter" save through the NEW versification's save function.
+  it('differs when only the versification differs', () => {
+    expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('GEN', 1, 'Septuagint'));
+    expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('GEN', 1, undefined));
+  });
+});
+
+/** The caret position a focus-out captured, for the selection-restoring helpers below. */
+const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
+
+/** Editor stub exposing only the selection methods the selection-restoring helpers use. */
+function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
+  return {
+    getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
+    setSelection: vi.fn(),
+    getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
+  };
+}
+
+describe('restoreSelectionIfLost', () => {
+  it('restores the snapshot when the live selection is gone', () => {
+    const editor = makeEditor(undefined);
+
+    restoreSelectionIfLost(editor, snapshot);
+
+    expect(editor.setSelection).toHaveBeenCalledTimes(1);
+    expect(editor.setSelection).toHaveBeenCalledWith(snapshot);
+  });
+
+  it('leaves a live selection completely alone', () => {
+    const liveSelection: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[0]', offset: 0 },
+    };
+    const editor = makeEditor(liveSelection);
+
+    restoreSelectionIfLost(editor, snapshot);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('leaves a selected paragraph marker alone, so the dropdown retags that paragraph', () => {
+    // `getSelection()` reports undefined for a marker selection — a USJ selection is a text range
+    // and cannot represent a selected node — yet the selection is live. Restoring the snapshot over
+    // it would move the retag to whichever paragraph last held the caret.
+    const editor = makeEditor(undefined, 'li2');
+
+    restoreSelectionIfLost(editor, snapshot);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the selection is gone but no snapshot was captured', () => {
+    const editor = makeEditor(undefined);
+
+    restoreSelectionIfLost(editor, undefined);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('tolerates a null editor handle (ref not mounted)', () => {
+    // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
+    // eslint-disable-next-line no-null/no-null
+    expect(() => restoreSelectionIfLost(null, snapshot)).not.toThrow();
+  });
+});
+
+describe('forgetCaretSnapshotIfParaMarkerSelected', () => {
+  it('forgets the snapshot while a paragraph marker is the selection', () => {
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined, 'p'), snapshotRef);
+
+    expect(snapshotRef.current).toBeUndefined();
+  });
+
+  it('keeps the snapshot when no paragraph marker is selected', () => {
+    // The paragraph menu opened over a caret: the snapshot is that caret, and a pick needs it back.
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined), snapshotRef);
+
+    expect(snapshotRef.current).toBe(snapshot);
+  });
+
+  it('leaves nothing for a pick to restore once the document is replaced under an open menu', () => {
+    // The caret was last in paragraph C, then B's marker was selected and the menu opened. A reload
+    // (a Replace in Find, an automatic Send/Receive) drops B's marker selection while the menu is
+    // open; restoring the old snapshot then would retag C, which may be off-screen.
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined, 'q1'), snapshotRef);
+    const reloadedEditor = makeEditor(undefined);
+
+    restoreSelectionIfLost(reloadedEditor, snapshotRef.current);
+
+    expect(reloadedEditor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('tolerates a null editor handle (ref not mounted)', () => {
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
+    // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
+    // eslint-disable-next-line no-null/no-null
+    forgetCaretSnapshotIfParaMarkerSelected(null, snapshotRef);
+
+    expect(snapshotRef.current).toBe(snapshot);
+  });
+});
+
+describe('resolveEditingSessionActivity', () => {
+  const NOW = 1_000_000;
+
+  it('keeps deferring for a fresh note-editing session', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - 1_000,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+  });
+
+  it('keeps deferring right up to the staleness bound, and stops exactly at it', () => {
+    const justInside = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - (STALE_NOTE_EDITING_SESSION_MS - 1),
+      nowMs: NOW,
+    });
+    expect(justInside).toEqual({ isActive: true, isNoteSessionStale: false });
+
+    const atBound = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - STALE_NOTE_EDITING_SESSION_MS,
+      nowMs: NOW,
+    });
+    expect(atBound).toEqual({ isActive: false, isNoteSessionStale: true });
+  });
+
+  it('a popover edit or save refreshes the clock, so a live long edit is never reaped', () => {
+    // Session opened long ago, but the user interacted with the popover recently. The web view
+    // stamps the refresh timestamp on every edit inside the popover (FootnoteEditor's onNoteEdit)
+    // and on every save that reaches the parent editor, and that refresh timestamp (not the open
+    // timestamp) is what the caller passes in — any refresh younger than the bound keeps the
+    // session active.
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - 5_000,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+  });
+
+  it('treats an open session with no recorded time as stale (cannot prove it is live)', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: undefined,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: false, isNoteSessionStale: true });
+  });
+
+  it('is inactive with no palette session and no note session', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: undefined,
+      noteSessionRefreshedAtMs: undefined,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+  });
+
+  it('a palette session keeps the deferral active with no time bound of its own', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: true,
+      editingNoteKey: undefined,
+      noteSessionRefreshedAtMs: undefined,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+  });
+
+  it('still reports a stale note session for cleanup even while a palette session stays active', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: true,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - STALE_NOTE_EDITING_SESSION_MS - 1,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: true, isNoteSessionStale: true });
+  });
+
+  // The pane's row editor saves as it goes, so it claims the text on the Scripture editor's terms:
+  // focus in the pane plus an edit in this view (the text or a pane row) within the ownership
+  // window. Holding updates back any longer makes this view push its older copy of the chapter over
+  // another view's edit or a Send/Receive merge.
+  describe('a footnotes-pane session', () => {
+    const paneSessionInput = {
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW,
+      nowMs: NOW,
+    };
+
+    it('holds updates back while the pane has focus and was edited within the window', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: {
+          hasFocus: true,
+          focusLocation: 'thisEditor',
+          lastEditAtMs: NOW - (EDITOR_OWNERSHIP_WINDOW_MS - 1),
+        },
+      });
+      expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+    });
+
+    it('lets updates through once the last edit is as old as the window', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: {
+          hasFocus: true,
+          focusLocation: 'thisEditor',
+          lastEditAtMs: NOW - EDITOR_OWNERSHIP_WINDOW_MS,
+        },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    it('lets updates through while focus is outside the pane, however recent the edit', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: false, focusLocation: 'thisEditor', lastEditAtMs: NOW },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    // The row editor's DOM focus survives a click into another web view, so the window focus
+    // subject decides whether the user is still in the pane.
+    it('lets updates through once another web view has focus, despite DOM focus and a recent edit', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: true, focusLocation: 'anotherWebView', lastEditAtMs: NOW },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    // Claiming the chapter here would defer the update and push this view's copy over it. While
+    // focus settles, `useEditorPdpSync` holds the delivery instead.
+    it('makes no claim while the focus subject is still settling', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: true, focusLocation: 'settling', lastEditAtMs: NOW },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    it('lets updates through for a row that was opened but never edited', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: true, focusLocation: 'thisEditor', lastEditAtMs: undefined },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    // The update a quiet pane session lets through ends the session itself, so there is nothing
+    // for the popover's staleness reaper to clean up.
+    it('is never reported stale, whatever the popover clock says', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        noteSessionRefreshedAtMs: NOW - STALE_NOTE_EDITING_SESSION_MS - 1,
+        paneSession: { hasFocus: false, focusLocation: 'thisEditor', lastEditAtMs: undefined },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    it('still defers to an open palette session', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        hasPaletteSession: true,
+        paneSession: { hasFocus: false, focusLocation: 'thisEditor', lastEditAtMs: undefined },
+      });
+      expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+    });
+  });
+});
+
+describe('doesPaneSessionOwnContent', () => {
+  const NOW = 2_000_000;
+  const NOTE_KEY = 'note-key-1';
+  const editedSession: PaneEditingSession = {
+    hasFocus: true,
+    focusLocation: 'thisEditor',
+    lastEditAtMs: NOW - (EDITOR_OWNERSHIP_WINDOW_MS - 1),
+  };
+
+  it('is true with focus in the pane and an edit within the ownership window, wherever the window focus is', () => {
+    expect(doesPaneSessionOwnContent(NOTE_KEY, editedSession, NOW)).toBe(true);
+    expect(
+      doesPaneSessionOwnContent(NOTE_KEY, { ...editedSession, focusLocation: 'settling' }, NOW),
+    ).toBe(true);
+    expect(
+      doesPaneSessionOwnContent(
+        NOTE_KEY,
+        { ...editedSession, focusLocation: 'anotherWebView' },
+        NOW,
+      ),
+    ).toBe(true);
+  });
+
+  it('is false once the last edit is as old as the window', () => {
+    expect(
+      doesPaneSessionOwnContent(
+        NOTE_KEY,
+        { ...editedSession, lastEditAtMs: NOW - EDITOR_OWNERSHIP_WINDOW_MS },
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it('is false without focus in the pane, or without an edit', () => {
+    expect(doesPaneSessionOwnContent(NOTE_KEY, { ...editedSession, hasFocus: false }, NOW)).toBe(
+      false,
+    );
+    expect(
+      doesPaneSessionOwnContent(NOTE_KEY, { ...editedSession, lastEditAtMs: undefined }, NOW),
+    ).toBe(false);
+  });
+
+  it('is false without an open note session, or without a pane session', () => {
+    expect(doesPaneSessionOwnContent(undefined, editedSession, NOW)).toBe(false);
+    expect(doesPaneSessionOwnContent(NOTE_KEY, undefined, NOW)).toBe(false);
+  });
+});
+
+describe('markerMenuItemsToResolvedPaletteItems', () => {
+  it('resolves the close-tag badge LocalizeKey to its localized string', () => {
+    const items = markerMenuItemsToResolvedPaletteItems(
+      [{ marker: 'wj*', kind: 'closeTag', isBasic: true }],
+      { '%markerMenu_endTag_label%': 'End' },
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0].badge).toBe('End');
+  });
+
+  it('produces items with NO unresolved LocalizeKey text, so the palette request skips the localization await', () => {
+    const items = markerMenuItemsToResolvedPaletteItems(
+      [
+        { marker: 'wj*', kind: 'closeTag', isBasic: true },
+        { marker: 'nd', kind: 'character', isBasic: false, description: 'Name of God' },
+        { marker: 'f', kind: 'note', isBasic: true, description: 'Footnote' },
+      ],
+      { '%markerMenu_endTag_label%': 'End' },
+    );
+    const textValues = items.flatMap((item) =>
+      [item.label, item.description, item.badge].filter((value) => value !== undefined),
+    );
+    expect(textValues.length).toBeGreaterThan(0);
+    expect(textValues.filter((value) => isLocalizeKey(value))).toEqual([]);
+  });
+
+  it('keeps raw key text for a key the strings map does not know (same fallback the overlay host applies)', () => {
+    const items = markerMenuItemsToResolvedPaletteItems(
+      [{ marker: 'wj*', kind: 'closeTag', isBasic: true }],
+      {},
+    );
+    expect(items[0].badge).toBe('%markerMenu_endTag_label%');
+  });
+
+  it('passes plain-string fields through unchanged', () => {
+    const items = markerMenuItemsToResolvedPaletteItems(
+      [{ marker: 'nd', kind: 'character', isBasic: false, description: 'Name of God' }],
+      { '%markerMenu_endTag_label%': 'End' },
+    );
+    expect(items[0]).toMatchObject({
+      id: 'nd',
+      label: 'nd',
+      description: 'Name of God',
+      muted: true,
+    });
+    expect(items[0].badge).toBeUndefined();
+  });
+});
+
+describe('parseCallerSequenceSetting', () => {
+  it('splits a space-separated sequence into individual callers', () => {
+    expect(parseCallerSequenceSetting('a b c')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('drops empty entries from extra/leading/trailing whitespace (PT9 GetNthCaller splits with RemoveEmptyEntries)', () => {
+    expect(parseCallerSequenceSetting('  a   b\tc ')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('returns undefined for an empty or whitespace-only value so callers apply their own PT9 default', () => {
+    expect(parseCallerSequenceSetting('')).toBeUndefined();
+    expect(parseCallerSequenceSetting('   ')).toBeUndefined();
+  });
+
+  it('keeps multi-character and non-Latin callers verbatim', () => {
+    expect(parseCallerSequenceSetting('๑ ๒ ๓')).toEqual(['๑', '๒', '๓']);
+    expect(parseCallerSequenceSetting('aa bb')).toEqual(['aa', 'bb']);
+  });
+});
+
+describe('returnFocusToScriptureTextIfDocumentFocused', () => {
+  function makeNoteFocusEditor() {
+    return { selectAfterNote: vi.fn(), focus: vi.fn() };
+  }
+
+  // A popover closed from another view must not pull focus into this editor: the user's typing
+  // would then be saved into this text instead of the one they are typing in.
+  it('does nothing while the document does not have focus', () => {
+    const editor = makeNoteFocusEditor();
+    const restoreSelection = vi.fn();
+
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, 2, {
+      hasFocus: () => false,
+    });
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, undefined, {
+      hasFocus: () => false,
+    });
+
+    expect(editor.selectAfterNote).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(editor.focus).not.toHaveBeenCalled();
+  });
+
+  it('restores the caret, then focuses, when no note is given', () => {
+    const editor = makeNoteFocusEditor();
+    const calls: string[] = [];
+    const restoreSelection = vi.fn(() => calls.push('restore'));
+    editor.focus.mockImplementation(() => calls.push('focus'));
+
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, undefined, {
+      hasFocus: () => true,
+    });
+
+    expect(calls).toEqual(['restore', 'focus']);
+    expect(editor.selectAfterNote).not.toHaveBeenCalled();
+  });
+
+  it('puts the caret just past the given note, then focuses', () => {
+    const editor = makeNoteFocusEditor();
+    const calls: string[] = [];
+    editor.selectAfterNote.mockImplementation(() => calls.push('selectAfterNote'));
+    editor.focus.mockImplementation(() => calls.push('focus'));
+    const restoreSelection = vi.fn();
+
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, 2, {
+      hasFocus: () => true,
+    });
+
+    expect(editor.selectAfterNote).toHaveBeenCalledWith(2);
+    expect(calls).toEqual(['selectAfterNote', 'focus']);
+    expect(restoreSelection).not.toHaveBeenCalled();
+  });
+});
+
+describe('flushRowEditsThenSave', () => {
+  /** A save debouncer whose pending state the row editor's flush can change, like the real one. */
+  function makeSave(initiallyPending: boolean) {
+    let pending = initiallyPending;
+    const flushedPromise = Promise.resolve();
+    const save = {
+      schedule: () => {
+        pending = true;
+      },
+      isPending: () => pending,
+      flush: vi.fn(() => {
+        if (!pending) return undefined;
+        pending = false;
+        return flushedPromise;
+      }),
+    };
+    return { save, flushedPromise };
+  }
+
+  it("lands the row editor's pending edits before flushing the save", () => {
+    const { save, flushedPromise } = makeSave(true);
+    const calls: string[] = [];
+    const rowEditor = { flushPendingEdits: vi.fn(() => calls.push('row')) };
+    save.flush.mockImplementationOnce(() => {
+      calls.push('save');
+      return flushedPromise;
+    });
+
+    const result = flushRowEditsThenSave(rowEditor, save);
+
+    expect(calls).toEqual(['row', 'save']);
+    expect(result).toBe(flushedPromise);
+  });
+
+  // The row's pending keystrokes are what schedules the save, so it was not pending beforehand.
+  it("flushes the save the row editor's edits scheduled when none was pending yet", () => {
+    const { save, flushedPromise } = makeSave(false);
+    const rowEditor = { flushPendingEdits: vi.fn(() => save.schedule()) };
+
+    const result = flushRowEditsThenSave(rowEditor, save);
+
+    expect(save.flush).toHaveBeenCalledOnce();
+    expect(result).toBe(flushedPromise);
+  });
+
+  it('returns undefined when nothing was pending anywhere', () => {
+    const { save } = makeSave(false);
+
+    expect(flushRowEditsThenSave(undefined, save)).toBeUndefined();
+    expect(save.flush).not.toHaveBeenCalled();
+  });
+
+  it('flushes a pending save when no row session is open', () => {
+    const { save, flushedPromise } = makeSave(true);
+
+    expect(flushRowEditsThenSave(undefined, save)).toBe(flushedPromise);
+  });
+});
+
+describe('nextEditingNoteOps', () => {
+  function noteOp(text: string): DeltaOpInsertNoteEmbed {
+    return {
+      insert: { note: { style: 'f', caller: '+', contents: { ops: [{ insert: text }] } } },
+    };
+  }
+
+  // The row editor's own apply re-keys the note. Its array must keep its identity, or the mounted
+  // row editor reloads mid-typing; and it must hold the new op, or a row editor remounted
+  // mid-session loads the note as it was when the session opened, losing the session's edits.
+  it('refreshes the same array in place when the row editor re-keyed the note', () => {
+    const editingNoteOps = [noteOp('as opened')];
+    const edited = noteOp('as edited');
+
+    const next = nextEditingNoteOps(editingNoteOps, edited, {
+      action: 'rekey',
+      reloadRowEditor: false,
+    });
+
+    expect(next).toBe(editingNoteOps);
+    expect(next?.[0]).toBe(edited);
+  });
+
+  it('hands out a fresh array when the note changed from elsewhere', () => {
+    const editingNoteOps = [noteOp('as opened')];
+    const changed = noteOp('changed in the text');
+
+    const next = nextEditingNoteOps(editingNoteOps, changed, {
+      action: 'follow-note',
+      reloadRowEditor: true,
+    });
+
+    expect(next).not.toBe(editingNoteOps);
+    expect(next).toEqual([changed]);
+  });
+
+  it('leaves the array alone when the note only moved', () => {
+    const opened = noteOp('as opened');
+    const editingNoteOps = [opened];
+
+    const next = nextEditingNoteOps(editingNoteOps, noteOp('as opened'), {
+      action: 'follow-note',
+      reloadRowEditor: false,
+    });
+
+    expect(next).toBe(editingNoteOps);
+    expect(next?.[0]).toBe(opened);
+  });
+
+  it('leaves the array alone when the note did not resolve', () => {
+    const editingNoteOps = [noteOp('as opened')];
+
+    expect(
+      nextEditingNoteOps(editingNoteOps, undefined, { action: 'rekey', reloadRowEditor: false }),
+    ).toBe(editingNoteOps);
+  });
+});
+
+describe('NOTE_INSERT_CONFIG', () => {
+  // Per-kind, not aggregate: a table iterated in bulk can't tell a cross-wired entry (e.g. the
+  // endnote kind reusing the footnote's marker or commit-message key) from a correct one. Each
+  // case pins its OWN kind's fields against the other two kinds' values, so a swap fails here.
+  it.each([
+    ['insertFootnoteAtSelection', 'f', '%versionHistoryCommit_beforeInsertFootnote%'],
+    ['insertCrossReferenceAtSelection', 'x', '%versionHistoryCommit_beforeInsertCrossReference%'],
+    ['insertEndnoteAtSelection', 'fe', '%versionHistoryCommit_beforeInsertEndnote%'],
+  ] as const)(
+    '%s maps to marker %s and commit-message key %s',
+    (kind, marker, commitMessageKey) => {
+      expect(NOTE_INSERT_CONFIG[kind].marker).toBe(marker);
+      expect(NOTE_INSERT_CONFIG[kind].commitMessageKey).toBe(commitMessageKey);
+    },
+  );
+
+  it('gives each kind a distinct marker, commit-message key, and edit description', () => {
+    const configs = Object.values(NOTE_INSERT_CONFIG);
+    const markers = configs.map((config) => config.marker);
+    const commitMessageKeys = configs.map((config) => config.commitMessageKey);
+    const editDescriptions = configs.map((config) => config.editDescription);
+
+    expect(new Set(markers).size).toBe(configs.length);
+    expect(new Set(commitMessageKeys).size).toBe(configs.length);
+    expect(new Set(editDescriptions).size).toBe(configs.length);
+  });
+});
+
+describe('shouldSkipNoteInsert', () => {
+  it('skips when there is no mounted editor', () => {
+    expect(shouldSkipNoteInsert(false, false)).toBe(true);
+  });
+
+  it('skips when the editor is read-only', () => {
+    expect(shouldSkipNoteInsert(true, true)).toBe(true);
+  });
+
+  it('does not skip with a mounted, writable editor', () => {
+    expect(shouldSkipNoteInsert(true, false)).toBe(false);
+  });
+});
+
+describe('deriveReadOnlyFlags', () => {
+  const writable: ReadOnlyInputs = {
+    isReadOnly: false,
+    isProjectEditableLoading: false,
+    isProjectEditable: true,
+    isCanUserEditScriptureUnresolved: false,
+    canUserEditScripture: true,
+    isSyncBlocked: false,
+    isInterfaceModeLoading: false,
+    viewType: 'standard',
+    isPowerMode: true,
+  };
+
+  it('is writable when nothing blocks editing', () => {
+    expect(deriveReadOnlyFlags(writable)).toEqual({
+      isReadOnlyEffective: false,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: false,
+    });
+  });
+
+  it.each<[string, Partial<ReadOnlyInputs>]>([
+    ['isReadOnly', { isReadOnly: true }],
+    ['project not editable', { isProjectEditable: false }],
+    ['user cannot edit Scripture', { canUserEditScripture: false }],
+    ['Preview in Power mode', { viewType: 'formatted', isPowerMode: true }],
+  ])('is read-only in every output for %s', (_name, override) => {
+    expect(deriveReadOnlyFlags({ ...writable, ...override })).toEqual({
+      isReadOnlyEffective: true,
+      isDurablyReadOnly: true,
+      isReadOnlyForTitle: true,
+    });
+  });
+
+  it('freezes editing but is not durably read-only while a sync blocks it', () => {
+    expect(deriveReadOnlyFlags({ ...writable, isSyncBlocked: true })).toEqual({
+      isReadOnlyEffective: true,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: false,
+    });
+  });
+
+  it.each<[string, Partial<ReadOnlyInputs>]>([
+    ['project editability loading', { isProjectEditableLoading: true }],
+    ['permission unresolved', { isCanUserEditScriptureUnresolved: true }],
+    ['interface mode loading', { isInterfaceModeLoading: true }],
+  ])('fails closed with an undefined title flag while %s', (_name, override) => {
+    expect(deriveReadOnlyFlags({ ...writable, ...override })).toEqual({
+      isReadOnlyEffective: true,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: undefined,
+    });
+  });
+
+  it('leaves the formatted view writable in Simple mode', () => {
+    expect(deriveReadOnlyFlags({ ...writable, viewType: 'formatted', isPowerMode: false })).toEqual(
+      { isReadOnlyEffective: false, isDurablyReadOnly: false, isReadOnlyForTitle: false },
+    );
+  });
+
+  it.each([true, false])('never makes the markers view read-only (Power: %s)', (isPowerMode) => {
+    expect(deriveReadOnlyFlags({ ...writable, viewType: 'markers', isPowerMode })).toEqual({
+      isReadOnlyEffective: false,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: false,
+    });
+  });
+});
+
+describe('insertNoteAtCurrentSelectionCore', () => {
+  // Resolves every kind's commit-message key to a traceable `LOC:<key>` string, same convention as
+  // the localized-strings stub further down this file.
+  const localizedStrings = Object.fromEntries(
+    Object.values(NOTE_INSERT_CONFIG).map((config) => [
+      config.commitMessageKey,
+      `LOC:${config.commitMessageKey}`,
+    ]),
+  );
+
+  /** A fresh pair of spies plus a shared call log, so ORDER between them is observable. */
+  function makeDeps() {
+    const calls: string[] = [];
+    const insertMarker = vi.fn((marker: string) => {
+      calls.push(`insertMarker:${marker}`);
+    });
+    const commitSnapshot = vi.fn(async (message: string) => {
+      calls.push(`commitSnapshot:${message}`);
+    });
+    return { calls, insertMarker, commitSnapshot };
+  }
+
+  // Falsifiability: this must go RED if the read-only check is deleted or moved below the
+  // snapshot.
+  it('skips both the snapshot and the marker insert when read-only', async () => {
+    const { calls, insertMarker, commitSnapshot } = makeDeps();
+    await insertNoteAtCurrentSelectionCore(
+      'insertFootnoteAtSelection',
+      true,
+      true,
+      insertMarker,
+      commitSnapshot,
+      localizedStrings,
+    );
+    expect(calls).toEqual([]);
+    expect(commitSnapshot).not.toHaveBeenCalled();
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('skips both the snapshot and the marker insert with no mounted editor', async () => {
+    const { calls, insertMarker, commitSnapshot } = makeDeps();
+    await insertNoteAtCurrentSelectionCore(
+      'insertFootnoteAtSelection',
+      false,
+      false,
+      insertMarker,
+      commitSnapshot,
+      localizedStrings,
+    );
+    expect(calls).toEqual([]);
+    expect(commitSnapshot).not.toHaveBeenCalled();
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('commits the snapshot with the kind’s commit message BEFORE inserting the marker when editable', async () => {
+    const { calls, insertMarker, commitSnapshot } = makeDeps();
+    await insertNoteAtCurrentSelectionCore(
+      'insertEndnoteAtSelection',
+      true,
+      false,
+      insertMarker,
+      commitSnapshot,
+      localizedStrings,
+    );
+    expect(calls).toEqual([
+      `commitSnapshot:LOC:${NOTE_INSERT_CONFIG.insertEndnoteAtSelection.commitMessageKey}`,
+      `insertMarker:${NOTE_INSERT_CONFIG.insertEndnoteAtSelection.marker}`,
+    ]);
+  });
+});
+
+describe('CONTEXT_MENU_ACTION_TO_NOTE_KIND', () => {
+  // Per-action, not aggregate: a table iterated in bulk can't tell a cross-wired entry (e.g. the
+  // footnote action mapped to the endnote kind) from a correct one, since every kind still appears
+  // somewhere in the table either way.
+  it.each([
+    ['insertFootnote', 'insertFootnoteAtSelection'],
+    ['insertCrossReference', 'insertCrossReferenceAtSelection'],
+    ['insertEndnote', 'insertEndnoteAtSelection'],
+  ] as const)('%s maps to %s', (action, kind) => {
+    expect(CONTEXT_MENU_ACTION_TO_NOTE_KIND[action]).toBe(kind);
+  });
+
+  it('maps each action to a distinct kind', () => {
+    const kinds = Object.values(CONTEXT_MENU_ACTION_TO_NOTE_KIND);
+    expect(new Set(kinds).size).toBe(kinds.length);
+  });
+});
+
+describe('createInsertContextMenuItems', () => {
+  // Parity contract: the context menu must offer exactly the Insert-menu inserts, in menu order.
+  // Read the Insert menu straight from the contribution so a menus.json change without a
+  // context-menu twin fails this test.
+  const menusJson = JSON.parse(
+    readFileSync(join(__dirname, '../contributions/menus.json'), 'utf8'),
+  );
+  const { groups, items: topMenuItems } =
+    menusJson.webViewMenus['platformScriptureEditor.react'].topMenu;
+  // Taken from the Insert COLUMN rather than the one group in it today: keyed on the group name, a
+  // second group added to that column would put an item in the Insert menu with no context-menu
+  // twin and leave this guard green.
+  const insertGroupOrders = new Map<string, number>(
+    Object.entries(groups)
+      .filter(([, group]) => group.column === 'platformScriptureEditor.insert')
+      .map(([name, group]): [string, number] => [name, group.order]),
+  );
+  const insertMenuItems: {
+    label: string;
+    group: string;
+    order: number;
+    hiddenInterfaceModes?: string[];
+    when?: string;
+  }[] = topMenuItems
+    .filter((item: { group: string }) => insertGroupOrders.has(item.group))
+    .sort(
+      (a: { group: string; order: number }, b: { group: string; order: number }) =>
+        (insertGroupOrders.get(a.group) ?? 0) - (insertGroupOrders.get(b.group) ?? 0) ||
+        a.order - b.order,
+    );
+
+  const makeActions = () => ({
+    insertFootnote: vi.fn(),
+    insertCrossReference: vi.fn(),
+    insertEndnote: vi.fn(),
+    insertComment: vi.fn(),
+  });
+
+  // Localized-strings stub: key -> `LOC:<key>` so titles are traceable to keys.
+  const strings = Object.fromEntries(
+    insertMenuItems.map((item) => [item.label, `LOC:${item.label}`]),
+  );
+
+  const ENABLED = {
+    isReadOnly: false,
+    canUserCreateComments: true,
+    isSyncBlocked: false,
+    isResource: false,
+  };
+
+  it('offers exactly the Insert-menu items, localized, in the same order', () => {
+    const items = createInsertContextMenuItems(strings, makeActions(), ENABLED);
+    expect(items.map((i) => i.title)).toEqual(insertMenuItems.map((i) => `LOC:${i.label}`));
+  });
+
+  // The builder and the web view's localized-strings list must ask for the SAME keys — a key
+  // present in one and not the other resolves to `undefined` and renders a blank row. Asserting
+  // against the exported list (rather than the menus.json labels above) catches that drift
+  // directly: every title this builder can produce must resolve through one of these keys.
+  it('resolves every title through a key in INSERT_CONTEXT_MENU_STRING_KEYS', () => {
+    const keyedStrings = Object.fromEntries(
+      INSERT_CONTEXT_MENU_STRING_KEYS.map((key) => [key, key]),
+    );
+    const items = createInsertContextMenuItems(keyedStrings, makeActions(), ENABLED);
+    items.forEach((item) => {
+      expect(INSERT_CONTEXT_MENU_STRING_KEYS).toContain(item.title);
+    });
+  });
+
+  // createInsertContextMenuItems takes no interface-mode input, so it cannot honor a per-mode
+  // hide: an Insert-column item hidden from Simple mode's top menu would still show up here. The
+  // parity test above compares labels/order only and would pass vacuously in that case, so pin the
+  // gap directly rather than leaving it latent.
+  it('has no Insert-column item declaring hiddenInterfaceModes, since the builder cannot honor it', () => {
+    const itemsWithHiddenModes = insertMenuItems.filter(
+      (item) => item.hiddenInterfaceModes?.length,
+    );
+    expect(itemsWithHiddenModes).toEqual([]);
+  });
+
+  it('disables note inserts when read-only and the comment insert per permission', () => {
+    const readOnly = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isReadOnly: true,
+    });
+    expect(readOnly.map((i) => !!i.isDisabled)).toEqual([false, true, true, true]);
+    const noCommentPermission = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      canUserCreateComments: false,
+    });
+    expect(noCommentPermission.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
+  });
+
+  it('keeps Insert comment selectable in read-only text when the user may comment', () => {
+    const items = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isReadOnly: true,
+      canUserCreateComments: true,
+      isSyncBlocked: false,
+    });
+    expect(items[0].isDisabled).toBe(false);
+    expect(items.slice(1).every((i) => i.isDisabled)).toBe(true);
+  });
+
+  // A sync freeze reaches the note inserts through the editor's own read-only state, so only the
+  // comment insert — which does not go through the editor — needs the flag directly.
+  it('disables the comment insert while sync-blocked', () => {
+    const syncBlocked = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isSyncBlocked: true,
+    });
+    expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
+  });
+
+  // Mirrors the top menu, where every insert item carries `when: !…isResource` and so is removed
+  // (not greyed out) for a resource.
+  it('omits every insert item for a resource, whatever the other state says', () => {
+    const resource = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isResource: true,
+    });
+    expect(resource).toEqual([]);
+    const readOnlyResource = createInsertContextMenuItems(strings, makeActions(), {
+      isReadOnly: true,
+      canUserCreateComments: false,
+      isSyncBlocked: true,
+      isResource: true,
+    });
+    expect(readOnlyResource).toEqual([]);
+  });
+
+  it('gates every Insert-column item in the top menu on the project not being a resource', () => {
+    expect(insertMenuItems.length).toBeGreaterThan(0);
+    insertMenuItems.forEach((item) => {
+      expect(item.when).toBe('!platform.project.{projectId}.isResource');
+    });
+  });
+
+  // Per-item, not aggregate: calling every item's onSelect and counting each action's TOTAL calls
+  // passes under any permutation of the item-to-action mapping — it cannot tell "Insert footnote"
+  // wired to insertCrossReference from the correct wiring. Asserting ONE item's onSelect against
+  // every action's call count catches exactly that cross-wiring.
+  it.each([
+    [0, 'insertComment'],
+    [1, 'insertFootnote'],
+    [2, 'insertCrossReference'],
+    [3, 'insertEndnote'],
+  ] as const)('item %i runs ONLY its own action (%s)', (index, actionName) => {
+    const actions = makeActions();
+    const items = createInsertContextMenuItems(strings, actions, ENABLED);
+    items[index].onSelect();
+    (['insertFootnote', 'insertCrossReference', 'insertEndnote', 'insertComment'] as const).forEach(
+      (name) => {
+        expect(actions[name]).toHaveBeenCalledTimes(name === actionName ? 1 : 0);
+      },
+    );
+  });
+});
+
+describe('getEditorFocusLocation', () => {
+  const ownId = 'editor';
+
+  it.each([true, false])(
+    'reports another web view when the subject is a different web view (document focus %s)',
+    (hasFocus) => {
+      expect(getEditorFocusLocation({ focusType: 'webView', id: 'find' }, ownId, hasFocus)).toBe(
+        'anotherWebView',
+      );
+    },
+  );
+
+  it("reports another web view when the subject is a different web view's tab", () => {
+    expect(
+      getEditorFocusLocation({ focusType: 'tab', id: 'find', tabType: 'webView' }, ownId, false),
+    ).toBe('anotherWebView');
+  });
+
+  it("reports settling while the subject names this editor's iframe but the document has no focus", () => {
+    expect(getEditorFocusLocation({ focusType: 'webView', id: ownId }, ownId, false)).toBe(
+      'settling',
+    );
+  });
+
+  it("reports this editor when the subject names this editor's iframe and the document has focus", () => {
+    expect(getEditorFocusLocation({ focusType: 'webView', id: ownId }, ownId, true)).toBe(
+      'thisEditor',
+    );
+  });
+
+  it("reports this editor for this editor's own tab", () => {
+    expect(
+      getEditorFocusLocation({ focusType: 'tab', id: ownId, tabType: 'webView' }, ownId, false),
+    ).toBe('thisEditor');
+  });
+
+  it('reports this editor for a non-web-view tab such as a dialog', () => {
+    expect(
+      getEditorFocusLocation(
+        { focusType: 'tab', id: 'dialog-1', tabType: 'platform.selectProject' },
+        ownId,
+        false,
+      ),
+    ).toBe('thisEditor');
+  });
+
+  it('reports this editor for focus outside any web view or tab', () => {
+    expect(getEditorFocusLocation({ focusType: 'other' }, ownId, false)).toBe('thisEditor');
+  });
+
+  it('reports this editor when focus is unknown', () => {
+    expect(getEditorFocusLocation(undefined, ownId, false)).toBe('thisEditor');
+  });
+});
+
+describe('getEditorWebViewContextKeys', () => {
+  it('names the four per-web-view keys from the web view id', () => {
+    const keys = getEditorWebViewContextKeys('wv1', {
+      isReadOnly: false,
+      isPreview: false,
+      isSyncBlocked: false,
+      footnotesPaneVisible: false,
+    });
+    expect(Object.keys(keys).sort()).toEqual([
+      'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.isPreview',
+      'platformScriptureEditor.webView.wv1.isReadOnly',
+      'platformScriptureEditor.webView.wv1.isSyncBlocked',
+    ]);
+  });
+
+  it('lists the same key names as it publishes, from the web view id alone', () => {
+    const names = getEditorWebViewContextKeyNames('wv1');
+    expect(names).toEqual(
+      Object.keys(
+        getEditorWebViewContextKeys('wv1', {
+          isReadOnly: true,
+          isPreview: true,
+          isSyncBlocked: true,
+          footnotesPaneVisible: true,
+        }),
+      ),
+    );
+    expect([...names].sort()).toEqual([
+      'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.isPreview',
+      'platformScriptureEditor.webView.wv1.isReadOnly',
+      'platformScriptureEditor.webView.wv1.isSyncBlocked',
+    ]);
+  });
+
+  it('mirrors isReadOnly, isPreview, isSyncBlocked and footnotesPaneVisible', () => {
+    expect(
+      getEditorWebViewContextKeys('wv1', {
+        isReadOnly: true,
+        isPreview: true,
+        isSyncBlocked: false,
+        footnotesPaneVisible: true,
+      }),
+    ).toEqual({
+      'platformScriptureEditor.webView.wv1.isReadOnly': true,
+      'platformScriptureEditor.webView.wv1.isPreview': true,
+      'platformScriptureEditor.webView.wv1.isSyncBlocked': false,
+      'platformScriptureEditor.webView.wv1.footnotesPaneVisible': true,
+    });
+  });
+});
+
+describe('menus.json dynamic conditions', () => {
+  const menusJson = JSON.parse(
+    readFileSync(join(__dirname, '../contributions/menus.json'), 'utf8'),
+  );
+  const { topMenu } = menusJson.webViewMenus['platformScriptureEditor.react'];
+  const TEMPLATE_VARS = { webViewId: 'wv', projectId: 'p1' };
+
+  const ALL_FACTS_ON: Record<string, boolean> = {
+    'platform.project.p1.isResource': false,
+    'platform.project.p1.isEditable': true,
+    'platformScripture.project.p1.canEditScripture': true,
+    'platformScripture.project.p1.canCreateComments': true,
+    'platformScriptureEditor.webView.wv.isReadOnly': false,
+    'platformScriptureEditor.webView.wv.isPreview': false,
+    'platformScriptureEditor.webView.wv.isSyncBlocked': false,
+    'platformScriptureEditor.webView.wv.footnotesPaneVisible': true,
+  };
+
+  const evaluate = (overrides: Record<string, boolean> = {}) => {
+    const facts = { ...ALL_FACTS_ON, ...overrides };
+    return evaluateMenu(topMenu, (key: string) => facts[key], TEMPLATE_VARS);
+  };
+
+  const isDisabledFn = (menu: { items: { command?: string; disabled?: boolean }[] }) => {
+    return (command: string) => {
+      const matches = menu.items.filter((item) => item.command === command);
+      expect(matches).toHaveLength(1);
+      return matches[0].disabled === true;
+    };
+  };
+
+  const INSERT_NOTE_COMMANDS = [
+    'platformScriptureEditor.insertFootnoteAtSelection',
+    'platformScriptureEditor.insertCrossReferenceAtSelection',
+    'platformScriptureEditor.insertEndnoteAtSelection',
+  ];
+  const INSERT_COMMENT_COMMAND = 'platformScriptureEditor.insertCommentAtSelection';
+  const EDIT_COMMANDS = [
+    'platformScriptureEditor.undo',
+    'platformScriptureEditor.redo',
+    'platformScriptureEditor.cutSelection',
+    'platformScriptureEditor.pasteAtSelection',
+  ];
+  const COMMENTS_COMMANDS = [
+    'legacyCommentManager.openCommentList',
+    'legacyCommentManager.showCommentListPanel',
+  ];
+
+  it('evaluates the Insert items disabled for a read-only project and enabled for an editable one', () => {
+    const enabled = isDisabledFn(evaluate());
+    [...INSERT_NOTE_COMMANDS, INSERT_COMMENT_COMMAND].forEach((command) =>
+      expect(enabled(command)).toBe(false),
+    );
+
+    const readOnly = isDisabledFn(evaluate({ 'platform.project.p1.isEditable': false }));
+    INSERT_NOTE_COMMANDS.forEach((command) => expect(readOnly(command)).toBe(true));
+    // Comments are governed by comment permission, not the editable setting
+    expect(readOnly(INSERT_COMMENT_COMMAND)).toBe(false);
+  });
+
+  it('disables the note inserts and the editing Edit items in a tab whose frozen read-only state is set, even when the project is editable', () => {
+    const frozen = isDisabledFn(
+      evaluate({
+        'platform.project.p1.isEditable': true,
+        'platformScriptureEditor.webView.wv.isReadOnly': true,
+      }),
+    );
+    [...INSERT_NOTE_COMMANDS, ...EDIT_COMMANDS].forEach((command) =>
+      expect(frozen(command)).toBe(true),
+    );
+    // Comments are governed by comment permission, not by the tab's read-only state
+    expect(frozen(INSERT_COMMENT_COMMAND)).toBe(false);
+  });
+
+  it('disables the note inserts in a preview and while sync is blocked', () => {
+    const preview = isDisabledFn(
+      evaluate({ 'platformScriptureEditor.webView.wv.isPreview': true }),
+    );
+    INSERT_NOTE_COMMANDS.forEach((command) => expect(preview(command)).toBe(true));
+    expect(preview(INSERT_COMMENT_COMMAND)).toBe(false);
+
+    const blocked = isDisabledFn(
+      evaluate({ 'platformScriptureEditor.webView.wv.isSyncBlocked': true }),
+    );
+    [...INSERT_NOTE_COMMANDS, INSERT_COMMENT_COMMAND].forEach((command) =>
+      expect(blocked(command)).toBe(true),
+    );
+  });
+
+  it('disables Insert comment without comment permission', () => {
+    const noPermission = isDisabledFn(
+      evaluate({ 'platformScripture.project.p1.canCreateComments': false }),
+    );
+    expect(noPermission(INSERT_COMMENT_COMMAND)).toBe(true);
+  });
+
+  it('removes the Insert items, the Comments items and the editing Edit items for a resource', () => {
+    const commandsOf = (menu: { items: { command?: string }[] }) =>
+      menu.items.map((item) => item.command);
+    const REMOVED_FOR_RESOURCE = [
+      ...INSERT_NOTE_COMMANDS,
+      INSERT_COMMENT_COMMAND,
+      ...COMMENTS_COMMANDS,
+      ...EDIT_COMMANDS,
+    ];
+    const project = commandsOf(evaluate());
+    REMOVED_FOR_RESOURCE.forEach((command) => expect(project).toContain(command));
+
+    const resource = commandsOf(evaluate({ 'platform.project.p1.isResource': true }));
+    REMOVED_FOR_RESOURCE.forEach((command) => expect(resource).not.toContain(command));
+    // Copy and Find read without editing, so a resource keeps them.
+    expect(resource).toContain('platformScriptureEditor.copySelection');
+    expect(resource).toContain('platformScripture.openFind');
+  });
+
+  describe('the Edit section a resource shows instead of the Edit flyout', () => {
+    const EDIT_SUBMENU_ID = 'platformScriptureEditor.editSubmenu';
+    const EDIT_COLUMN = 'platformScriptureEditor.edit';
+    // A resource is never editable, so both facts hold for every real resource
+    const RESOURCE_FACTS = {
+      'platform.project.p1.isResource': true,
+      'platform.project.p1.isEditable': false,
+    };
+    type EvaluatedItem = { id?: string; command?: string; group: string; order: number };
+    type EvaluatedMenu = {
+      columns: Record<string, unknown>;
+      groups: Record<string, { column?: string; order: number }>;
+      items: EvaluatedItem[];
+    };
+
+    /** The served top menu in an interface mode: items hidden in that mode are removed first. */
+    const evaluateInMode = (
+      mode: 'simple' | 'power',
+      overrides: Record<string, boolean>,
+    ): EvaluatedMenu => {
+      const modeMenu = {
+        ...topMenu,
+        items: topMenu.items.filter(
+          (item: { hiddenInterfaceModes?: string[] }) => !item.hiddenInterfaceModes?.includes(mode),
+        ),
+      };
+      const facts = { ...ALL_FACTS_ON, ...overrides };
+      return evaluateMenu(modeMenu, (key: string) => facts[key], TEMPLATE_VARS);
+    };
+
+    /** The commands of the items sitting in groups of the Edit column, in display order. */
+    const editSectionCommands = (menu: EvaluatedMenu): (string | undefined)[] => {
+      const groupOrder: Record<string, number> = {};
+      Object.entries(menu.groups).forEach(([key, group]) => {
+        if (group.column === EDIT_COLUMN) groupOrder[key] = group.order;
+      });
+      return menu.items
+        .filter((item) => item.group in groupOrder)
+        .sort((a, b) => groupOrder[a.group] - groupOrder[b.group] || a.order - b.order)
+        .map((item) => item.command);
+    };
+    const hasEditSubmenu = (menu: EvaluatedMenu) =>
+      menu.items.some((item) => item.id === EDIT_SUBMENU_ID);
+    const countOf = (menu: EvaluatedMenu, command: string) =>
+      menu.items.filter((item) => item.command === command).length;
+
+    it('replaces the Edit flyout with an Edit section holding Copy and Find on a resource in Power', () => {
+      const menu = evaluateInMode('power', RESOURCE_FACTS);
+      expect(hasEditSubmenu(menu)).toBe(false);
+      expect(editSectionCommands(menu)).toEqual([
+        'platformScriptureEditor.copySelection',
+        'platformScripture.openFind',
+      ]);
+      expect(menu.columns).toHaveProperty([EDIT_COLUMN]);
+      // Each command is offered once: no copy of Copy or Find is left behind from the flyout
+      expect(countOf(menu, 'platformScriptureEditor.copySelection')).toBe(1);
+      expect(countOf(menu, 'platformScripture.openFind')).toBe(1);
+    });
+
+    it('shows only Copy in the Edit section on a resource in Simple', () => {
+      const menu = evaluateInMode('simple', RESOURCE_FACTS);
+      expect(hasEditSubmenu(menu)).toBe(false);
+      expect(editSectionCommands(menu)).toEqual(['platformScriptureEditor.copySelection']);
+      // Simple's Find stays under Tools and resources
+      expect(countOf(menu, 'platformScripture.openFind')).toBe(1);
+    });
+
+    it.each([
+      ['an editable project', {}],
+      ['a read-only project that is not a resource', { 'platform.project.p1.isEditable': false }],
+    ])('keeps the Edit flyout and has no Edit section on %s', (_name, overrides) => {
+      (['power', 'simple'] as const).forEach((mode) => {
+        const menu = evaluateInMode(mode, overrides);
+        expect(hasEditSubmenu(menu)).toBe(true);
+        expect(editSectionCommands(menu)).toEqual([]);
+        expect(countOf(menu, 'platformScriptureEditor.copySelection')).toBe(1);
+      });
+    });
+
+    it('declares the Edit section group as experimental and no item as experimental', () => {
+      expect(topMenu.groups['platformScriptureEditor.resourceEditActions']).toMatchObject({
+        column: EDIT_COLUMN,
+        isExperimental: true,
+      });
+      topMenu.items.forEach((item: object) => expect(item).not.toHaveProperty('isExperimental'));
+    });
+  });
+
+  it('disables Undo, Redo, Cut and Paste exactly when Insert footnote is disabled', () => {
+    const FACTS_THAT_DISABLE = [
+      { 'platform.project.p1.isEditable': false },
+      { 'platformScripture.project.p1.canEditScripture': false },
+      { 'platformScriptureEditor.webView.wv.isReadOnly': true },
+      { 'platformScriptureEditor.webView.wv.isPreview': true },
+      { 'platformScriptureEditor.webView.wv.isSyncBlocked': true },
+    ];
+    const enabled = isDisabledFn(evaluate());
+    EDIT_COMMANDS.forEach((command) => expect(enabled(command)).toBe(false));
+    FACTS_THAT_DISABLE.forEach((facts) => {
+      const disabled = isDisabledFn(evaluate(facts));
+      EDIT_COMMANDS.forEach((command) => expect(disabled(command)).toBe(true));
+    });
+  });
+
+  it('leaves Copy enabled when the project cannot be edited', () => {
+    const readOnly = isDisabledFn(evaluate({ 'platform.project.p1.isEditable': false }));
+    expect(readOnly('platformScriptureEditor.copySelection')).toBe(false);
+  });
+
+  it('checks Show footnotes from the footnotes pane fact', () => {
+    const find = (facts: Record<string, boolean>) =>
+      evaluate(facts).items.find(
+        (item: { command?: string }) => item.command === 'platformScriptureEditor.toggleFootnotes',
+      );
+    expect(find({})?.checked).toBe(true);
+    expect(
+      find({ 'platformScriptureEditor.webView.wv.footnotesPaneVisible': false })?.checked,
+    ).toBe(false);
+  });
+
+  it('parses every when-expression in the document', () => {
+    const expressions: string[] = [];
+    const collect = (node: unknown) => {
+      if (Array.isArray(node)) node.forEach(collect);
+      else if (node && typeof node === 'object')
+        Object.entries(node).forEach(([key, value]) => {
+          if (
+            (key === 'when' || key === 'enabledWhen' || key === 'checkedWhen') &&
+            typeof value === 'string'
+          )
+            expressions.push(value);
+          else collect(value);
+        });
+    };
+    collect(menusJson);
+    expect(expressions.length).toBeGreaterThanOrEqual(7);
+    expressions.forEach((expression) =>
+      expect(() => parseWhenExpression(expression)).not.toThrow(),
+    );
+  });
+});

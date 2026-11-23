@@ -1,0 +1,340 @@
+/**
+ * E2E tests for the onboarding tour.
+ *
+ * The onboarding tour is a one-shot spotlight overlay that shows on its own once in Simple mode,
+ * after the first-run wizard has been completed (i.e. `firstRunStatus.kind === 'app'`). It persists
+ * completion in localStorage (`platform-bible.onboardingTourComplete`) and never shows again.
+ *
+ * ## Test strategy
+ *
+ * `isolated.fixture` starts a fresh Electron instance, with a clean localStorage, for each test.
+ * The Simple-mode checks are the steps of one test and share one instance: the first step runs on
+ * that clean localStorage, and every later step first clears the completion record and reloads
+ * (`restoreFreshTour`), which is the first-launch state the tour reads. Settings are seeded through
+ * the fixture's own `test.use` options, never through a spec-level `preConfigureSettings` — hooks
+ * run before test-scoped fixture setup, so a spec's own seed loses to the fixture's for any shared
+ * key and leaks on restore (see the `IsolatedFixtures` doc):
+ *
+ * - `interfaceMode` — the mode the block is about. The unrequested showing needs `'simple'`; the
+ *   Power block pins `'power'` to exercise the replay path.
+ * - `seedSettings: { 'platform.firstRunComplete': true }` — so `resolveInternal` resolves to `{ kind:
+ *   'app' }` without going through the wizard and without contacting the Paratext registration
+ *   backend.
+ *
+ * `waitForAppReady` suppresses the tour by default (it writes the completion flag so no other test
+ * races the tour's async open). These tests are the exception — they pass `allowOnboardingTour:
+ * true` via the local `waitForAppReadyWithTour` wrapper so the tour is free to show.
+ *
+ * ## Expected stops
+ *
+ * Four stops always resolve here: the project, model-text and resources dock columns, and the user
+ * profile trigger. The Send/Receive stop is conditional — its anchor (`toolbar-sync-area`) is an
+ * empty, zero-size wrapper unless the send/receive extension supplies the sync button, and Tour
+ * skips zero-size targets. paranext-core does not bundle that extension, so the stop is normally
+ * absent; it can still appear if the tour opens before the availability probe settles. Hence the
+ * assertions below: the four unconditional stops must ALL be present and in order, and the sync
+ * stop is the only permitted variation.
+ *
+ * ## Power mode
+ *
+ * The tour never shows on its own in Power mode, but a Help-menu replay does run there. Power
+ * shares exactly one anchor with Simple — the toolbar's profile trigger — so `Tour`'s open-time
+ * filter reduces the replay to that single stop. That reduction is the whole justification for
+ * offering the tour in Power, and it cannot be unit-tested: it depends on `tw:empty:hidden`
+ * zero-sizing `toolbar-sync-area`, which jsdom does not evaluate.
+ *
+ * ## Tour retrigger
+ *
+ * The tour only shows _on its own_ when `platform-bible.onboardingTourComplete` is absent from
+ * localStorage. Each test gets a fresh isolated user-data dir, so localStorage starts empty and the
+ * tour appears without any explicit clearing; each later Simple-mode step clears the flag itself
+ * (`restoreFreshTour`). Steps that verify the "does not show again" behaviour advance all the way
+ * through the tour first to write the flag, then reload. Help > Show the tour again
+ * (`platform.showOnboardingTour`) is the one path that reopens it regardless of the flag.
+ */
+import type { Page } from '@playwright/test';
+import { test, expect } from '../../fixtures/isolated.fixture';
+import { sendCommandFromPage, waitForAppReady } from '../../fixtures/helpers';
+import {
+  clearTourDone,
+  getTourBackButton,
+  getTourDialog,
+  getTourDoneButton,
+  getTourNextButton,
+  getTourTotalSteps,
+  getCurrentStepTitle,
+  advanceTour,
+  advanceToLastStep,
+  goBackTour,
+  skipTour,
+  englishLabel,
+} from '../../fixtures/onboarding-tour.page';
+
+/** Title of the one stop whose anchor the toolbar renders in both interface modes. */
+const PROFILE_STEP_TITLE = 'Profile';
+/** Titles (from `assets/localization/en.json`) of the stops that always resolve in this build. */
+const REQUIRED_STEP_TITLES = [
+  'Your project',
+  englishLabel('%onboardingTour_step_baseOrModelText_title%'),
+  'Your resources and tools',
+  PROFILE_STEP_TITLE,
+];
+/** Title of the stop that is present only when the send/receive extension supplies the sync button. */
+const CONDITIONAL_STEP_TITLE = 'Sync';
+
+/**
+ * These tests need the tour to actually show, so opt out of waitForAppReady's default tour
+ * suppression.
+ */
+async function waitForAppReadyWithTour(page: Page): Promise<void> {
+  await waitForAppReady(page, { allowOnboardingTour: true });
+}
+
+/** Walks the tour from its current step to the last one, collecting each step's title in order. */
+async function collectStepTitles(page: Page): Promise<string[]> {
+  const titles: string[] = [];
+  const nextButton = getTourNextButton(page);
+  // Bounded well above the real stop count so a regression cannot loop forever.
+  for (let i = 0; i < 10; i += 1) {
+    // Walking the tour is sequential by definition — each step must be read, then clicked past,
+    // before the next one exists to read. There is nothing here to parallelize.
+    // eslint-disable-next-line no-await-in-loop
+    titles.push(await getCurrentStepTitle(page));
+    // Same reason: the button's visibility is only meaningful for the step just recorded.
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await nextButton.isVisible())) break;
+    // Same reason: the click must land before the loop reads the step it reveals.
+    // eslint-disable-next-line no-await-in-loop
+    await nextButton.click();
+  }
+  return titles;
+}
+
+/** How many steps the Simple-mode test runs; its timeout is this many {@link STEP_TIMEOUT_MS}. */
+const SIMPLE_MODE_STEP_COUNT = 9;
+
+/** The time budget of one Simple-mode step, app reload included. */
+const STEP_TIMEOUT_MS = 120_000;
+
+/**
+ * Puts the tour back to its first-launch state inside the running app: no completion record, and a
+ * reload so the tour mounts afresh at its first stop. A reload alone is not enough once a step has
+ * skipped or finished the tour, because that writes the completion record.
+ */
+async function restoreFreshTour(page: Page): Promise<void> {
+  await clearTourDone(page);
+  await page.reload();
+  await waitForAppReadyWithTour(page);
+}
+
+/** Bypasses the first-run wizard so `firstRunStatus.kind === 'app'` and the tour can be reached. */
+const SEED_PAST_FIRST_RUN = { 'platform.firstRunComplete': true };
+
+// The fixture suppresses the tour at launch unless a suite opts in; every test here needs it to show.
+test.use({ allowOnboardingTour: true });
+
+test.describe('Onboarding tour', () => {
+  test.use({ interfaceMode: 'simple', seedSettings: SEED_PAST_FIRST_RUN });
+
+  test('Simple-mode tour: first launch, stops, navigation, dismissal and replay', async ({
+    mainPage,
+  }) => {
+    test.setTimeout(SIMPLE_MODE_STEP_COUNT * STEP_TIMEOUT_MS);
+
+    await test.step('shows on first launch in Simple mode (fresh localStorage)', async () => {
+      // The isolated fixture gives us a clean user-data dir with no localStorage, so the tour
+      // shows without any manual clearing. waitForAppReady confirms the dock and overlay are settled
+      // before we assert tour visibility.
+      await waitForAppReadyWithTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+    });
+
+    await test.step('spotlights every unconditional stop, in order', async () => {
+      await restoreFreshTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      const titles = await collectStepTitles(mainPage);
+      // Read at the last stop: the tour drops a conditional stop whose target goes away after it
+      // opened (the sync button, while a project is still opening), and the counter follows.
+      const total = await getTourTotalSteps(mainPage);
+
+      expect(titles).toHaveLength(total);
+      // The four unconditional stops must all be there, in this order — the sync stop may or may not
+      // sit between resources and profile, so filtering it out is what makes the check stable
+      // without weakening it to a bare count.
+      expect(titles.filter((t) => t !== CONDITIONAL_STEP_TITLE)).toEqual(REQUIRED_STEP_TITLES);
+      expect(total).toBe(
+        REQUIRED_STEP_TITLES.length + (titles.includes(CONDITIONAL_STEP_TITLE) ? 1 : 0),
+      );
+    });
+
+    await test.step('advances through all steps with Next and shows Done on the last step', async () => {
+      await restoreFreshTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      await advanceToLastStep(mainPage);
+
+      // On the last step the primary button label changes to "Done".
+      await expect(getTourDoneButton(mainPage)).toBeVisible({ timeout: 5_000 });
+      await expect(getTourNextButton(mainPage)).not.toBeVisible();
+    });
+
+    await test.step('Back returns to the previous step', async () => {
+      await restoreFreshTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      // Back is deliberately absent on the first step, so it only appears once we have advanced.
+      await expect(getTourBackButton(mainPage)).not.toBeVisible();
+      expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
+
+      await advanceTour(mainPage);
+      const secondTitle = await getCurrentStepTitle(mainPage);
+      expect(secondTitle).not.toBe(REQUIRED_STEP_TITLES[0]);
+
+      await goBackTour(mainPage);
+      expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
+    });
+
+    await test.step('Skip closes the tour immediately', async () => {
+      await restoreFreshTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      await skipTour(mainPage);
+
+      // The tour dialog disappears after skip.
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    });
+
+    await test.step('after completing the tour it does not show again after reload', async () => {
+      await restoreFreshTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      // Advance through all steps and click Done, which is what records completion.
+      await advanceToLastStep(mainPage);
+      await getTourDoneButton(mainPage).click();
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+      await mainPage.reload();
+      await waitForAppReadyWithTour(mainPage);
+
+      // The tour must not appear again because completion is already recorded.
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    });
+
+    await test.step('Escape key closes the tour', async () => {
+      await restoreFreshTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      // Advance one step first so we verify Escape works mid-tour, not just on step 1.
+      // advanceTour clicks Next (or Done if on the last step).
+      await advanceTour(mainPage);
+
+      // The Tour component listens for Escape in the capture phase and calls onSkip.
+      await mainPage.keyboard.press('Escape');
+
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    });
+
+    await test.step('shows again once the completion record is cleared', async () => {
+      await restoreFreshTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      // Skipping records completion, so a reload alone would not bring the tour back.
+      await skipTour(mainPage);
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+      await mainPage.reload();
+      await waitForAppReadyWithTour(mainPage);
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+      await clearTourDone(mainPage);
+      await mainPage.reload();
+      await waitForAppReadyWithTour(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+    });
+
+    await test.step('Help > Show the tour reopens the completed tour at its first stop', async () => {
+      await restoreFreshTour(mainPage);
+
+      const dialog = getTourDialog(mainPage);
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+      // Skipping records completion, so nothing but the menu item can bring the tour back.
+      await skipTour(mainPage);
+      await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+      // On a checkout with projects of its own, Simple mode is still opening one right after the
+      // reload above. When its editor finishes loading it takes focus, and an open menu closes when
+      // focus leaves it. So open Help again until its item can be clicked, as a user would.
+      const showTourItem = mainPage.getByRole('menuitem', { name: /Show the tour/i });
+      // A click that lands while the menu is closing can still open the tour and then throw, so an
+      // open dialog ends the loop once a click was attempted. Before any click, a visible dialog
+      // would mean the tour reopened without the menu item, which must not pass this step.
+      let clicked = false;
+      await expect(async () => {
+        if (clicked && (await dialog.isVisible())) return;
+        if (!(await showTourItem.isVisible()))
+          await mainPage.getByRole('menuitem', { name: /^Help$/i }).click({ timeout: 5_000 });
+        clicked = true;
+        await showTourItem.click({ timeout: 2_000 });
+      }).toPass({ timeout: 30_000 });
+
+      await expect(dialog).toBeVisible({ timeout: 15_000 });
+      expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
+    });
+  });
+});
+
+test.describe('Onboarding tour in Power mode', () => {
+  test.use({ interfaceMode: 'power', seedSettings: SEED_PAST_FIRST_RUN });
+
+  test('does not show on its own, Help offers no replay, and the tour command reduces to the profile stop', async ({
+    mainPage,
+  }) => {
+    await waitForAppReadyWithTour(mainPage);
+
+    // The unrequested showing is Simple-only: a single stop appearing unprompted on next launch
+    // for every existing Power user would be interruption without orientation.
+    const dialog = getTourDialog(mainPage);
+    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+    // Power's Help menu leaves the tour out. The positive control proves the menu opened and
+    // filled before the absence is asserted.
+    await mainPage.getByRole('menuitem', { name: /^Help$/i }).click();
+    await expect(mainPage.getByRole('menuitem', { name: /^About/i })).toBeVisible();
+    await expect(mainPage.getByRole('menuitem', { name: /Show the tour/i })).toHaveCount(0);
+    await mainPage.keyboard.press('Escape');
+
+    // The command stays registered, so the tour's Power filtering is still reachable through it.
+    await sendCommandFromPage(mainPage, 'platform.showOnboardingTour');
+
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+    // Exactly one stop, not merely "at least the profile stop". The three dock columns are
+    // Simple-only and `toolbar-sync-area` is an empty zero-size wrapper here, so Tour's open-time
+    // filter drops all four — and the two dropped column descriptions are the ones asserting
+    // Simple invariants ("only ever one project here", "can't be closed or moved"), so a
+    // regression that stopped filtering them would print copy that is false in Power.
+    expect(await getTourTotalSteps(mainPage)).toBe(1);
+    expect(await getCurrentStepTitle(mainPage)).toBe(PROFILE_STEP_TITLE);
+
+    // One stop is both first and last, so the primary action is Done rather than Next.
+    await expect(getTourDoneButton(mainPage)).toBeVisible({ timeout: 5_000 });
+    await expect(getTourNextButton(mainPage)).not.toBeVisible();
+  });
+});

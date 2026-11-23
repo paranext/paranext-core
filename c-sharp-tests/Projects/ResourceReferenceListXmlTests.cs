@@ -94,7 +94,10 @@ public class ResourceReferenceListXmlTests
     public void FromXml_EmptyItemsElement_ReturnsEmptyList()
     {
         var xml = new XElement("Items");
-        ResourceReferenceList result = ResourceReferenceList.FromXml(xml, ResourceReferenceList.CurrentDataVersion);
+        ResourceReferenceList result = ResourceReferenceList.FromXml(
+            xml,
+            ResourceReferenceList.CurrentDataVersion
+        );
         Assert.That(result.Items, Is.Empty);
         Assert.That(result.DataVersion, Is.EqualTo(ResourceReferenceList.CurrentDataVersion));
     }
@@ -119,7 +122,10 @@ public class ResourceReferenceListXmlTests
                 new XAttribute("id", "aabbcc")
             )
         );
-        ResourceReferenceList result = ResourceReferenceList.FromXml(xml, ResourceReferenceList.CurrentDataVersion);
+        ResourceReferenceList result = ResourceReferenceList.FromXml(
+            xml,
+            ResourceReferenceList.CurrentDataVersion
+        );
         Assert.That(result.Items, Has.Count.EqualTo(1));
         var item = result.Items[0] as ProjectReference;
         Assert.That(item, Is.Not.Null);
@@ -139,7 +145,10 @@ public class ResourceReferenceListXmlTests
                 new XAttribute("extraField", "preserved")
             )
         );
-        ResourceReferenceList result = ResourceReferenceList.FromXml(xml, ResourceReferenceList.CurrentDataVersion);
+        ResourceReferenceList result = ResourceReferenceList.FromXml(
+            xml,
+            ResourceReferenceList.CurrentDataVersion
+        );
         Assert.That(result.Items, Has.Count.EqualTo(1));
         var item = result.Items[0] as UnknownResourceReference;
         Assert.That(item, Is.Not.Null);
@@ -163,7 +172,10 @@ public class ResourceReferenceListXmlTests
             ],
         };
         XElement xml = ResourceReferenceList.ToXml(original);
-        ResourceReferenceList result = ResourceReferenceList.FromXml(xml, ResourceReferenceList.CurrentDataVersion);
+        ResourceReferenceList result = ResourceReferenceList.FromXml(
+            xml,
+            ResourceReferenceList.CurrentDataVersion
+        );
 
         Assert.That(result.Items, Has.Count.EqualTo(5));
         Assert.That(result.Items[0], Is.InstanceOf<ProjectReference>());
@@ -174,6 +186,95 @@ public class ResourceReferenceListXmlTests
         Assert.That(((EnhancedResourceReference)result.Items[2]).Name, Is.EqualTo("Enh"));
         Assert.That(result.Items[3], Is.InstanceOf<XmlResourceReference>());
         Assert.That(result.Items[4], Is.InstanceOf<SourceLanguageResourceReference>());
+    }
+
+    // --- IsInTextCollection XML round-trip ---
+
+    [Test]
+    public void ToXml_FromXml_ProjectReference_IsInTextCollectionTrue_RoundTripsCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsInTextCollection = true }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as ProjectReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(true));
+    }
+
+    [Test]
+    public void ToXml_FromXml_ProjectReference_IsInTextCollectionNull_RoundTripsAsNull()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc" }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as ProjectReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsInTextCollection, Is.Null);
+    }
+
+    [Test]
+    public void ToXml_ProjectReference_IsInTextCollectionNull_NoAttributeInXml()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "P", Id = "abc" }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var itemEl = xml.Elements("Item").First();
+        Assert.That(itemEl.Attribute("isInTextCollection"), Is.Null);
+    }
+
+    [Test]
+    public void ToXml_FromXml_EnhancedResourceReference_IsInTextCollectionTrue_RoundTripsCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new EnhancedResourceReference { Name = "BDAG", IsInTextCollection = true }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as EnhancedResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(true));
+    }
+
+    [Test]
+    public void ToXml_FromXml_XmlResourceReference_IsInTextCollectionFalse_RoundTripsCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new XmlResourceReference { Name = "SomeXml", IsInTextCollection = false }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as XmlResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(false));
+    }
+
+    [Test]
+    public void ToXml_FromXml_SourceLanguageResourceReference_IsInTextCollectionTrue_RoundTripsCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new SourceLanguageResourceReference { Name = "Greek", IsInTextCollection = true }],
+        };
+        var xml = ResourceReferenceList.ToXml(list);
+        var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
+
+        var item = result.Items[0] as SourceLanguageResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(true));
     }
 
     [Test]
@@ -188,7 +289,10 @@ public class ResourceReferenceListXmlTests
                 new XAttribute("extraField", "preserved")
             )
         );
-        ResourceReferenceList parsed = ResourceReferenceList.FromXml(original, ResourceReferenceList.CurrentDataVersion);
+        ResourceReferenceList parsed = ResourceReferenceList.FromXml(
+            original,
+            ResourceReferenceList.CurrentDataVersion
+        );
         XElement roundTripped = ResourceReferenceList.ToXml(parsed);
         // All original attributes must survive the round-trip
         XElement item = roundTripped.Elements("Item").Single();

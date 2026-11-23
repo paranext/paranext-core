@@ -39,9 +39,13 @@ function SelectMultipleProjectsDialog({
         excludePdpFactoryIds,
       });
 
+      const openableProjectsMetadata = projectsMetadata.filter(
+        (metadata) => !metadata.unsupportedReason,
+      );
+
       // Get project names
       const projectsMetadataDisplay: ProjectMetadataDisplay[] = await Promise.all(
-        projectsMetadata.map(async (projectMetadata) => {
+        openableProjectsMetadata.map(async (projectMetadata) => {
           const pdp = await papiFrontendProjectDataProviderService.get(
             PROJECT_INTERFACE_PLATFORM_BASE,
             projectMetadata.id,

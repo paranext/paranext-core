@@ -1,14 +1,14 @@
 import { Button, type ButtonProps } from '@/components/shadcn-ui/button';
 import { ButtonGroup, ButtonGroupSeparator } from '@/components/shadcn-ui/button-group';
-import { Kbd } from '@/components/shadcn-ui/kbd';
+import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
+import { isMacOs } from '@/utils/platform.util';
 import { Redo, Undo } from 'lucide-react';
-import { useMemo } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -69,7 +69,7 @@ export function UndoRedoButtons({
   className = 'tw:h-6 tw:w-6',
   variant = 'ghost',
 }: UndoRedoButtonsProps) {
-  const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
+  const isMac = isMacOs();
   const undoLocalized = localizeString(localizedStrings, '%undoButton_tooltip%');
   const redoLocalized = localizeString(localizedStrings, '%redoButton_tooltip%');
   const getsSeparator = variant === 'secondary' || variant === 'default';
@@ -96,7 +96,7 @@ export function UndoRedoButtons({
               {showKeyboardShortcuts && (
                 <>
                   {' '}
-                  <Kbd>{isMac ? '⌘Z' : 'Ctrl+Z'}</Kbd>
+                  <ShortcutKeys hint={isMac ? '⌘Z' : 'Ctrl+Z'} />
                 </>
               )}
             </p>
@@ -125,7 +125,7 @@ export function UndoRedoButtons({
                 {showKeyboardShortcuts && (
                   <>
                     {' '}
-                    <Kbd>{isMac ? '⌘⇧Z' : 'Ctrl+Y'}</Kbd>
+                    <ShortcutKeys hint={isMac ? '⇧⌘Z' : 'Ctrl+Y'} />
                   </>
                 )}
               </p>

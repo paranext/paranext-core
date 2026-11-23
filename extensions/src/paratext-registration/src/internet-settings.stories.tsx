@@ -11,33 +11,22 @@ import {
 import { SaveState } from './utils';
 
 /**
- * `InternetSettingsForm` is the presentational half of the Internet settings web view: the
- * internet-use selector, optional proxy settings, server selector, and the save-and-restart button
- * with success/error alerts. The web view loads and persists settings and runs the restart; this
- * component is fully controlled.
+ * `InternetSettingsForm` orchestrates the radio option list, developer section, and Reset / Save
+ * and restart buttons. The web view manages PAPI fetch/save; this component is fully controlled.
  */
 
 const localizedStrings = getLocalizedStrings(INTERNET_SETTINGS_STRING_KEYS);
 
 const defaultSettings: InternetSettings = {
-  permittedInternetUse: 'VpnRequired',
+  permittedInternetUse: 'Disabled',
   selectedServer: 'Production',
   proxyPort: 0,
-};
-
-const proxySettings: InternetSettings = {
-  permittedInternetUse: 'ProxyOnly',
-  selectedServer: 'Production',
-  proxyMode: 'Http',
-  proxyHost: 'proxy.example.org',
-  proxyPort: 8080,
-  proxyUsername: 'translator',
 };
 
 const meta: Meta<typeof InternetSettingsForm> = {
   title: 'Bundled Extensions/paratext-registration/InternetSettingsForm',
   component: InternetSettingsForm,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
 };
 export default meta;
 
@@ -45,13 +34,14 @@ type Story = StoryObj<typeof InternetSettingsForm>;
 
 type DecoratorConfig = {
   initialSettings?: InternetSettings;
+  savedInternetSettings?: InternetSettings | undefined;
   isFormDisabled?: boolean;
-  isSaveDisabled?: boolean;
   saveState?: SaveState;
   saveError?: string;
+  canEditServer?: boolean;
 };
 
-/** Holds the edited settings in local state so the selects and inputs are interactive. */
+/** Wraps the form in state so the radio list and developer toggle remain interactive. */
 function createDecorator(config: DecoratorConfig) {
   return function InternetSettingsDecorator(
     Story: (update?: { args: InternetSettingsFormProps }) => ReactElement,
@@ -59,41 +49,111 @@ function createDecorator(config: DecoratorConfig) {
     const [internetSettings, setInternetSettings] = useState<InternetSettings>(
       config.initialSettings ?? defaultSettings,
     );
+    const saved =
+      'savedInternetSettings' in config ? config.savedInternetSettings : defaultSettings;
 
     return (
       <Story
         args={{
           localizedStrings,
           internetSettings,
+          savedInternetSettings: saved,
           onInternetSettingsChange: setInternetSettings,
           isFormDisabled: config.isFormDisabled ?? false,
-          isSaveDisabled: config.isSaveDisabled ?? false,
           saveState: config.saveState ?? SaveState.HasNotSaved,
           saveError: config.saveError ?? '',
+          canEditServer: config.canEditServer ?? true,
           onSaveAndRestart: () =>
-            alertCommand('paratextRegistration.setParatextDataInternetSettings', internetSettings),
+            alertCommand(
+              'paratextRegistration.internetSettingsDataProvider → setInternetSettings',
+              internetSettings,
+            ),
         }}
       />
     );
   };
 }
 
-/** Default: VPN-required internet use, no proxy. */
+/**
+ * Default: "Disable access to some Bible translation services" selected, Reset and Save buttons
+ * disabled (no changes yet).
+ */
 export const Default: Story = {
   decorators: [createDecorator({})],
 };
 
-/** Proxy-only internet use reveals the proxy settings card. */
-export const ProxyOnly: Story = {
-  decorators: [createDecorator({ initialSettings: proxySettings })],
+/**
+ * The stored setting names an option this app does not implement yet. `InternetSettings.xml` is
+ * seeded once from a co-installed Paratext 9 on first launch, so this is what an inherited file can
+ * look like. The row stays selected — the panel never silently swaps it — and a banner says why
+ * nothing acts on it until the user picks an available option.
+ */
+export const UnsupportedStoredValue: Story = {
+  decorators: [
+    createDecorator({
+      initialSettings: { ...defaultSettings, permittedInternetUse: 'ProxyOnly' },
+      savedInternetSettings: { ...defaultSettings, permittedInternetUse: 'ProxyOnly' },
+    }),
+  ],
 };
 
-/** Mid-restart: fields disabled, button shows the restarting spinner, success alert visible. */
+/** Initial load in flight — `savedInternetSettings` is undefined; both buttons are disabled. */
+export const Loading: Story = {
+  decorators: [createDecorator({ savedInternetSettings: undefined, isFormDisabled: true })],
+};
+
+/**
+ * User has changed the selection (Unrestricted vs the saved "Disable access…"). Reset and Save and
+ * restart are enabled.
+ */
+export const UnsavedChanges: Story = {
+  decorators: [
+    createDecorator({
+      initialSettings: {
+        permittedInternetUse: 'Enabled',
+        selectedServer: 'Production',
+        proxyPort: 0,
+      },
+      savedInternetSettings: defaultSettings,
+    }),
+  ],
+};
+
+/**
+ * Server selection hidden — the default state for everyone except a Shift-click/Shift-Enter on
+ * "Internet & connectivity" (or an already non-Production server). No locked label, no hint of any
+ * kind: the control is simply absent.
+ */
+export const ServerSelectionHidden: Story = {
+  decorators: [createDecorator({ canEditServer: false })],
+};
+
+/** Developer section expanded — Production/Development toggle visible. */
+export const DeveloperSectionExpanded: Story = {
+  decorators: [createDecorator({})],
+  play: async ({ canvasElement, userEvent }) => {
+    const button = Array.from(canvasElement.querySelectorAll<HTMLButtonElement>('button')).find(
+      (el) => /Developer only/i.test(el.textContent ?? ''),
+    );
+    if (button) await userEvent.click(button);
+  },
+};
+
+/** Save in progress: form disabled, buttons disabled, no alert yet. */
+export const Saving: Story = {
+  decorators: [
+    createDecorator({
+      isFormDisabled: true,
+      saveState: SaveState.IsSaving,
+    }),
+  ],
+};
+
+/** Mid-restart: buttons disabled, spinner visible, success alert showing. */
 export const Restarting: Story = {
   decorators: [
     createDecorator({
       isFormDisabled: true,
-      isSaveDisabled: true,
       saveState: SaveState.IsRestarting,
     }),
   ],
@@ -104,6 +164,18 @@ export const SaveError: Story = {
   decorators: [
     createDecorator({
       saveError: 'Could not reach the registration server. Check your connection and try again.',
+    }),
+  ],
+};
+
+/**
+ * Post-restart: the app has come back up and the success alert shows a "restart completed" message
+ * rather than the countdown message. Buttons are disabled — the settings are saved.
+ */
+export const HasSaved: Story = {
+  decorators: [
+    createDecorator({
+      saveState: SaveState.HasSaved,
     }),
   ],
 };

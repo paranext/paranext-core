@@ -1,0 +1,12 @@
+{
+  "icon": "",
+  "moreInfoUrl": "",
+  "supportUrl": "",
+  "localizedDisplayInfo": {
+    "en": {
+      "displayName": "Paranext Extension Template",
+      "shortSummary": "Base template for a Platform.Bible Extension",
+      "description": "assets/descriptions/description-en.md"
+    }
+  }
+}

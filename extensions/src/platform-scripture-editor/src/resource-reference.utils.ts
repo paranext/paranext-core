@@ -1,4 +1,25 @@
-import type { DblResourceReference, ProjectReference } from 'platform-scripture';
+import type {
+  DblResourceReference,
+  EffectiveResourceReference,
+  ProjectReference,
+  ResourceReference,
+} from 'platform-scripture';
+import { formatProjectName } from 'platform-bible-utils';
+import type { DblResourceData } from 'platform-bible-utils';
+import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+
+/**
+ * Returns true if the {@link DblResourceData} entry was synthesized from a locally-installed non-DBL
+ * project (e.g. VULGP83, TNN, TND, HBK). Locally-installed non-DBL resources use `dblEntryUid ===
+ * projectId` as a synthetic marker set by `getLocalNonDblResources` so that callers can create a
+ * {@link ProjectReference} instead of a {@link DblResourceReference}.
+ *
+ * @param resource The DBL resource data entry to check
+ * @returns `true` if the entry is a locally-installed non-DBL resource
+ */
+export function isNonDblResource(resource: DblResourceData): boolean {
+  return resource.dblEntryUid !== '' && resource.dblEntryUid === resource.projectId;
+}
 
 /**
  * Checks if a {@link ResourceReference} is a {@link DblResourceReference}.
@@ -32,4 +53,109 @@ export function isProjectReference(item: unknown): item is ProjectReference {
     'id' in item &&
     'name' in item
   );
+}
+
+/**
+ * Returns the display label for a resource reference. A DBL resource is labelled short-name-first
+ * through {@link formatProjectName} — `{displayName} - {fullName}` — falling back to `ref.name` if
+ * the DblResourceData entry is not yet in the list. Returns `ref.name` for project references.
+ *
+ * A resource's `displayName` is its short identifying name, so it takes the `shortName` slot. The
+ * helper's de-dup matters here: a locally-installed non-DBL resource is synthesized with `fullName`
+ * falling back to the same string as `displayName` (see `getLocalNonDblResources`), and without it
+ * such a resource would read `WEB - WEB`.
+ *
+ * @param ref The resource reference to label
+ * @param dblResourcesList The list of known DBL resources to look up `ref` in when it's a
+ *   {@link DblResourceReference}
+ * @returns The display label for `ref`
+ */
+export function getRefLabel(ref: ResourceReference, dblResourcesList: DblResourceData[]): string {
+  if (isDblResourceReference(ref)) {
+    const dblData = dblResourcesList.find((r) => r.dblEntryUid === ref.id);
+    if (dblData)
+      return formatProjectName({ shortName: dblData.displayName, fullName: dblData.fullName });
+    return ref.name;
+  }
+  if (isProjectReference(ref)) {
+    return ref.name;
+  }
+  return '';
+}
+
+/**
+ * The row id of a project reference to the given project — see {@link getResourceReferenceRowId}.
+ *
+ * @param projectId The project's id
+ * @returns The namespaced row id
+ */
+export function getProjectRowId(projectId: string): string {
+  return `project:${projectId}`;
+}
+
+/**
+ * A stable identity for a resource reference, for use as a React key, a radio-group value, or a
+ * persisted selection. Namespaced by reference kind because a DBL entry UID and a project ID are
+ * drawn from different spaces and could otherwise collide.
+ *
+ * @param reference The resource reference to identify
+ * @returns The namespaced row id
+ */
+export function getResourceReferenceRowId(reference: ResourceReference): string {
+  if (isDblResourceReference(reference)) return `dbl:${reference.id}`;
+  if (isProjectReference(reference)) return getProjectRowId(reference.id);
+  const name = 'name' in reference && reference.name ? reference.name : '';
+  return `${reference.type}:${name}`;
+}
+
+/**
+ * The bare id a reference is identified by within its own kind — the DBL entry UID or the project
+ * id. Used to recognize a selection persisted before ids were namespaced by kind; prefer
+ * {@link getResourceReferenceRowId} everywhere else.
+ *
+ * @param reference The resource reference to read
+ * @returns The un-namespaced id, or `undefined` for a kind that has none
+ */
+export function getResourceReferenceBareId(reference: ResourceReference): string | undefined {
+  if (isDblResourceReference(reference) || isProjectReference(reference)) return reference.id;
+  return undefined;
+}
+
+/**
+ * Whether two references name the same resource. A DBL entry UID is compared case-insensitively:
+ * its casing differs by source (the catalog whitelist stores it upper-case, the commentary
+ * whitelist lower-case), so a team list and the catalog can spell the same entry differently.
+ *
+ * @param a A reference
+ * @param b Another reference
+ * @returns `true` if both are DBL references to the same entry, or project references to the same
+ *   project
+ */
+export function isSameResource(a: ResourceReference, b: ResourceReference): boolean {
+  if (isDblResourceReference(a) && isDblResourceReference(b))
+    return a.id.toLowerCase() === b.id.toLowerCase();
+  if (isProjectReference(a) && isProjectReference(b)) return a.id === b.id;
+  return false;
+}
+
+/**
+ * The project the model text `effectiveModelText` is read from: an installed DBL resource matched
+ * in `dblResources`, or a locally installed non-DBL resource that `dblResources` lists. `undefined`
+ * when there is no such project to read from.
+ */
+export function getModelResourceProjectId(
+  effectiveModelText: EffectiveResourceReference | undefined,
+  dblResources: DblResourceData[],
+): string | undefined {
+  const match = isDblResourceReference(effectiveModelText)
+    ? findCachedDblResource(effectiveModelText, dblResources)
+    : undefined;
+  if (match?.installed) return match.projectId;
+  // ProjectReferences are locally-installed non-DBL resources. Only treat the reference as
+  // resolvable if the project is confirmed present in dblResources — an admin-shared reference
+  // pointing at a project the user hasn't installed must fall through to the not-found guard.
+  return isProjectReference(effectiveModelText)
+    ? dblResources.find((r) => isNonDblResource(r) && r.projectId === effectiveModelText.id)
+        ?.projectId
+    : undefined;
 }

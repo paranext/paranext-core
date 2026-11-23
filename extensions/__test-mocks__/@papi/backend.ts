@@ -31,10 +31,22 @@ export class DataProviderEngine {
 }
 
 const papi = {
+  // The decorator only flags a method; the mock needs none of that, just a no-op to apply.
+  dataProviders: {
+    decorators: {
+      doNotNotify: vi.fn(),
+    },
+  },
   projectDataProviders: {
     get: vi.fn().mockResolvedValue({
       getSetting: vi.fn().mockResolvedValue(undefined),
     }),
+  },
+  // Default: `get` resolves `undefined` so `interfaceMode !== 'simple'` and structure protection is
+  // inactive unless a test overrides it. `subscribe` resolves a no-op async unsubscriber.
+  settings: {
+    get: vi.fn().mockResolvedValue(undefined),
+    subscribe: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
   },
 };
 

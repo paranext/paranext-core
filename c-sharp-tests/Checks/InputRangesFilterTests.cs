@@ -19,7 +19,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -37,7 +37,7 @@ public class InputRangesFilterTests
         var inputRanges = new[]
         {
             new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
-            new InputRange("project1", new VerseRef("EXO 1:1"), new VerseRef("EXO 10:5"))
+            new InputRange("project1", new VerseRef("EXO 1:1"), new VerseRef("EXO 10:5")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -77,7 +77,7 @@ public class InputRangesFilterTests
         var inputRanges = new[]
         {
             new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
-            new InputRange("project1", new VerseRef("GEN 3:1"), new VerseRef("GEN 8:20"))
+            new InputRange("project1", new VerseRef("GEN 3:1"), new VerseRef("GEN 8:20")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -99,7 +99,7 @@ public class InputRangesFilterTests
         var inputRanges = new[]
         {
             new InputRange("project1", new VerseRef("GEN 1:0"), new VerseRef("GEN 999:999")),
-            new InputRange("project1", new VerseRef("EXO 1:0"), new VerseRef("EXO 999:999"))
+            new InputRange("project1", new VerseRef("EXO 1:0"), new VerseRef("EXO 999:999")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -124,7 +124,7 @@ public class InputRangesFilterTests
         {
             new InputRange("project1", new VerseRef("GEN 3:1"), null),
             // Not verse 0, so no merging
-            new InputRange("project1", new VerseRef("EXO 1:1"), null)
+            new InputRange("project1", new VerseRef("EXO 1:1"), null),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -150,7 +150,7 @@ public class InputRangesFilterTests
         var inputRanges = new[]
         {
             new InputRange("project1", new VerseRef("GEN 1:0"), new VerseRef("GEN 2:10")),
-            new InputRange("project1", new VerseRef("GEN 2:11"), new VerseRef("GEN 5:20"))
+            new InputRange("project1", new VerseRef("GEN 2:11"), new VerseRef("GEN 5:20")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -172,7 +172,7 @@ public class InputRangesFilterTests
         var inputRanges = new[]
         {
             new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
-            new InputRange("project1", new VerseRef("EXO 1:1"), new VerseRef("EXO 10:5"))
+            new InputRange("project1", new VerseRef("EXO 1:1"), new VerseRef("EXO 10:5")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -202,7 +202,7 @@ public class InputRangesFilterTests
             new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
             new InputRange("project1", new VerseRef("GEN 3:1"), new VerseRef("GEN 8:20")),
             new InputRange("project1", new VerseRef("EXO 1:0"), new VerseRef("EXO 999:999")),
-            new InputRange("project1", new VerseRef("LEV 1:1"), null)
+            new InputRange("project1", new VerseRef("LEV 1:1"), null),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -237,7 +237,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -256,7 +256,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 5:1"), new VerseRef("GEN 10:10"))
+            new InputRange("project1", new VerseRef("GEN 5:1"), new VerseRef("GEN 10:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -268,7 +268,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -280,7 +280,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
         var item = new TestItem { References = [new VerseRef("GEN 3:5")] };
@@ -293,7 +293,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
         var item = new TestItem { References = [new VerseRef("EXO 1:1")] };
@@ -306,12 +306,17 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
         var item = new TestItem
         {
-            References = [new VerseRef("EXO 1:1"), new VerseRef("GEN 3:5"), new VerseRef("LEV 1:1")]
+            References =
+            [
+                new VerseRef("EXO 1:1"),
+                new VerseRef("GEN 3:5"),
+                new VerseRef("LEV 1:1"),
+            ],
         };
 
         Assert.That(filter.Accept(item), Is.True);
@@ -322,7 +327,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
         var item = new TestItem { References = [new VerseRef("EXO 1:1"), new VerseRef("LEV 1:1")] };
@@ -335,7 +340,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
         var item = new TestItem { References = [] };
@@ -348,7 +353,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
         var clonedFilter = (InputRangesFilter<TestItem>)filter.Clone();
@@ -364,13 +369,13 @@ public class InputRangesFilterTests
     {
         var inputRanges1 = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter1 = new InputRangesFilter<TestItem>(inputRanges1, GetReferences);
 
         var inputRanges2 = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter2 = new InputRangesFilter<TestItem>(inputRanges2, GetReferences);
 
@@ -382,13 +387,13 @@ public class InputRangesFilterTests
     {
         var inputRanges1 = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter1 = new InputRangesFilter<TestItem>(inputRanges1, GetReferences);
 
         var inputRanges2 = new[]
         {
-            new InputRange("project1", new VerseRef("EXO 1:1"), new VerseRef("EXO 10:5"))
+            new InputRange("project1", new VerseRef("EXO 1:1"), new VerseRef("EXO 10:5")),
         };
         var filter2 = new InputRangesFilter<TestItem>(inputRanges2, GetReferences);
 
@@ -400,14 +405,14 @@ public class InputRangesFilterTests
     {
         var inputRanges1 = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter1 = new InputRangesFilter<TestItem>(inputRanges1, GetReferences);
 
         var inputRanges2 = new[]
         {
             new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
-            new InputRange("project1", new VerseRef("EXO 1:1"), new VerseRef("EXO 10:5"))
+            new InputRange("project1", new VerseRef("EXO 1:1"), new VerseRef("EXO 10:5")),
         };
         var filter2 = new InputRangesFilter<TestItem>(inputRanges2, GetReferences);
 
@@ -419,7 +424,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -434,7 +439,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -447,7 +452,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -460,7 +465,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -475,7 +480,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -490,7 +495,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -505,7 +510,7 @@ public class InputRangesFilterTests
     {
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 1:31"))
+            new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 1:31")),
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 

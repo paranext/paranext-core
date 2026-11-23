@@ -1,0 +1,827 @@
+import {
+  Badge,
+  Button,
+  cn,
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+  Separator,
+  Skeleton,
+  ToggleGroup,
+  ToggleGroupItem,
+  Tooltip,
+  TOOLTIP_DELAY_MS,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  useEvent,
+  type LanguageInfo,
+} from 'platform-bible-react';
+import { CircleUserRound, Languages, Monitor, Moon, Sun, User, Wifi } from 'lucide-react';
+import {
+  useData,
+  useDataProvider,
+  useLocalizedStrings,
+  useSetting,
+} from '@renderer/hooks/papi-hooks';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { useRegistrationValidity } from '@renderer/hooks/use-registration-validity.hook';
+import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
+import {
+  DEFAULT_INTERNET_SETTINGS,
+  INTERNET_SETTINGS_DATA_PROVIDER,
+} from '@renderer/components/internet-settings.constants';
+import {
+  getOfferedLanguageDefaults,
+  switchInterfaceLanguage,
+} from '@shared/data/interface-languages.data';
+import { sendCommand } from '@shared/services/command.service';
+import { getDataProviderObjectId } from '@shared/services/data-provider.service';
+import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
+import type { NetworkObjectDetails } from '@shared/models/network-object.model';
+import { onDidCreateNetworkObject } from '@shared/services/network-object.service';
+import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
+import {
+  formatReplacementString,
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+  type LanguageStrings,
+  type ThemeDefinitionExpanded,
+} from 'platform-bible-utils';
+import type { RegistrationData, ServerType } from 'paratext-registration';
+import { useCallback, useEffect, useState } from 'react';
+import './user-profile-popover.component.css';
+
+const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  '%toolbar_userProfile_label_2%',
+  '%toolbar_userProfile_label_registrationNeeded_2%',
+  '%userProfile_header_defaultName%',
+  '%userProfile_header_notRegistered%',
+  '%userProfile_interfaceMode_simple_label%',
+  '%userProfile_interfaceMode_simple_description_2%',
+  '%userProfile_interfaceMode_power_label%',
+  '%userProfile_interfaceMode_power_labelWithPreview%',
+  '%userProfile_interfaceMode_power_description_2%',
+  '%userProfile_profileAndRegistration_2%',
+  '%userProfile_registrationNeeded%',
+  '%userProfile_networkSettings_3%',
+  '%userProfile_server_badge_development%',
+  '%userProfile_server_badge_qualityAssurance%',
+  '%userProfile_server_badge_test%',
+  '%userProfile_server_tooltip_development%',
+  '%userProfile_server_tooltip_qualityAssurance%',
+  '%userProfile_server_tooltip_test%',
+  '%userProfile_language%',
+  '%userProfile_appearance%',
+  '%userProfile_appearance_light%',
+  '%userProfile_appearance_dark%',
+  '%userProfile_appearance_system%',
+];
+
+/**
+ * Maps each non-Production server environment to its badge label and tooltip localize keys, so the
+ * "Internet connectivity" row can show which server `ParatextData.dll` currently targets.
+ * `Production` deliberately maps to `undefined` rather than being left out of the record: a normal
+ * user is always on Production and must never see this indicator (UX review on PT-4647), and
+ * keeping `Production` as an explicit key means a future `ServerType` addition still has to be
+ * accounted for here instead of silently falling through.
+ *
+ * The other servers target a dev/support audience who will generally recognize terse English
+ * environment names regardless of interface language, so translating their labels risks adding
+ * confusion rather than clarity; that reasoning might not hold in all cases (e.g., non-Roman
+ * scripts), so they remain available for localization as needed. The tooltips carry the real,
+ * localized explanation for anyone (including a non-English-speaking user who ends up on a
+ * non-Production server) who needs to understand what's going on, so they should normally be
+ * translated.
+ */
+const SERVER_BADGE_KEYS: Record<
+  ServerType,
+  { label: LocalizeKey; tooltip: LocalizeKey } | undefined
+> = {
+  Production: undefined,
+  QualityAssurance: {
+    label: '%userProfile_server_badge_qualityAssurance%',
+    tooltip: '%userProfile_server_tooltip_qualityAssurance%',
+  },
+  Development: {
+    label: '%userProfile_server_badge_development%',
+    tooltip: '%userProfile_server_tooltip_development%',
+  },
+  Test: {
+    label: '%userProfile_server_badge_test%',
+    tooltip: '%userProfile_server_tooltip_test%',
+  },
+};
+
+/**
+ * The network object id `paratextRegistration.internetSettingsDataProvider` registers under.
+ * Compared against `onDidCreateNetworkObject` events to catch the moment it first registers — see
+ * `NetworkSettingsRow` and `NonProductionServerDot`.
+ */
+const INTERNET_SETTINGS_DATA_PROVIDER_OBJECT_ID = getDataProviderObjectId(
+  INTERNET_SETTINGS_DATA_PROVIDER,
+);
+
+/** Shown while the offered languages load, or if they cannot be read: exactly the offered languages. */
+const OFFERED_LANGUAGE_DEFAULTS = getOfferedLanguageDefaults();
+
+/**
+ * Placeholder passed as the default value for the `CurrentTheme` data hook so it has something
+ * structurally valid to return while the real theme loads. Nothing on this object is ever surfaced
+ * to the user — the popover only reads `theme.type` and only after `isPlatformError` passes — so
+ * the `label` is irrelevant and just needs to satisfy `ThemeDefinitionExpanded`'s `%${string}%`
+ * shape; reusing the existing `%toolbar_theme_loading%` localize key avoids introducing a bogus
+ * i18n entry purely for this sentinel.
+ */
+const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
+  themeFamilyId: '',
+  type: 'light',
+  id: 'light',
+  label: '%toolbar_theme_loading%',
+  cssVariables: {},
+};
+
+/** Sort entries so 'en' is first, then everything else alphabetically by BCP-47 tag. */
+function sortLanguageEntries<T>(entries: [string, T][]): [string, T][] {
+  return [...entries].sort(([a], [b]) => {
+    if (a === 'en' && b !== 'en') return -1;
+    if (b === 'en' && a !== 'en') return 1;
+    return a.localeCompare(b);
+  });
+}
+
+/**
+ * Small dot marking something that needs attention. Decorative on purpose — callers should pair it
+ * with text carrying the same meaning, so assistive tech is never told twice, unless a caller
+ * documents its own reason for using it as a purely informational (non-actionable) indicator
+ * instead.
+ *
+ * `urgency` lets callers give visually distinct conditions visually distinct colors rather than one
+ * ambiguous dot: `needsAttention` for something the user should act on, `informational` for
+ * something merely worth noting.
+ *
+ * Local rather than from `platform-bible-react` because neither existing option fits: `Badge`'s
+ * `blueIndicator`/`mutedIndicator` variants hardcode `bg-blue-400`/`bg-zinc-400` and so ignore the
+ * theme, and `AvatarBadge` is sized off `Avatar`'s group data-attributes and is not exported. That
+ * makes this the third dot treatment in the app — promoting a themed, exported indicator (and
+ * fixing those Badge variants) is worth its own change, since it touches every consumer. Until
+ * then, prefer extending this rather than copying the class string.
+ *
+ * TODO(PT-4493): promote a themed, exported indicator into `platform-bible-react` and fix the
+ * `Badge` `blueIndicator`/`mutedIndicator` variants, then delete this local copy.
+ */
+function ReminderDot({
+  testId,
+  className,
+  urgency = 'needsAttention',
+}: {
+  testId: string;
+  className?: string;
+  urgency?: 'needsAttention' | 'informational';
+}) {
+  return (
+    <span
+      data-testid={testId}
+      aria-hidden="true"
+      className={cn(
+        // `shrink-0` is in the base because callers place the dot in a flex row beside text (e.g.
+        // the toolbar trigger, the "Registration information" row), where a fixed 8px circle must
+        // never be the item that gives.
+        'tw:size-2 tw:shrink-0 tw:rounded-full',
+        urgency === 'informational' ? 'tw:bg-warning' : 'tw:bg-primary',
+        // Raw class, not a `tw:forced-colors:` utility — that variant emits no CSS in this build
+        // (verified against the built stylesheet). See the rule in the companion .css file.
+        'user-profile-popover-reminder-dot',
+        className,
+      )}
+    />
+  );
+}
+
+/**
+ * Resolves the server `ParatextData.dll` currently targets, or `undefined` while that is unknown
+ * (the provider has not registered, the first read is still loading, or the read failed). Each
+ * caller gets its own call — and so its own subscription — rather than sharing one: a caller that
+ * must be live before the popover is ever opened needs its own independent lookup, not one shared
+ * with content that only exists once the popover is mounted.
+ */
+function useSelectedServer(): ServerType | undefined {
+  const internetSettingsProvider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
+  const [internetSettings, , isLoadingInternetSettings] = useData(
+    internetSettingsProvider,
+  ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
+  // The explicit annotation here is load-bearing, not decorative: `internetSettings` actually
+  // resolves to `any` here (confirmed by probe — assigning it to a `string` const compiles with no
+  // error), not `InternetSettings | PlatformError`. Indexing `SERVER_BADGE_KEYS` directly with
+  // `internetSettings.selectedServer` would compile today only by accident, since an `any` value
+  // defeats the point of the Record's key type. Keep this named, annotated intermediate.
+  const selectedServer: ServerType | undefined =
+    isLoadingInternetSettings || isPlatformError(internetSettings)
+      ? undefined
+      : internetSettings.selectedServer;
+  return selectedServer;
+}
+
+/**
+ * Toolbar-trigger dot marking that the selected server is anything other than Production — its own
+ * indicator, distinct in color from the registration reminder dot, per UX decisions on PT-4647
+ * (Jira comments 28444/28455): a "warning"-colored dot shown only for a non-Production server, so a
+ * normal user on Production never sees it.
+ *
+ * `suppressed` hides it even if the current server is not production. This allows it to be hidden
+ * when a more urgent indicator (e.g., the registration reminder) is also showing, so that it does
+ * not detract from the one most likely to require a normal user's attention.
+ *
+ * Isolated into its own component for the same PT-4417 reason `NetworkSettingsRow` is: it calls
+ * `useSelectedServer` independently of `NetworkSettingsRow` so the parent's retry key can force a
+ * remount if `paratextRegistration.internetSettingsDataProvider` registers after this component's
+ * first mount. Unlike `NetworkSettingsRow` — which exists only while the popover's content is
+ * mounted — this dot must be visible on the toolbar _before_ the user ever opens the popover, so it
+ * keeps its own, independent subscription rather than sharing that row's.
+ *
+ * Decorative, like `ReminderDot` itself: the same information is available as text from the
+ * "Internet & connectivity" row's badge and tooltip once the popover is open.
+ */
+function NonProductionServerDot({
+  className,
+  suppressed,
+}: {
+  className?: string;
+  suppressed: boolean;
+}) {
+  const selectedServer = useSelectedServer();
+
+  if (suppressed || selectedServer === undefined || selectedServer === 'Production')
+    return undefined;
+
+  return (
+    <ReminderDot
+      testId="user-profile-non-production-dot"
+      urgency="informational"
+      className={className}
+    />
+  );
+}
+
+/**
+ * The "Internet connectivity" row, including its server badge.
+ *
+ * Isolated into its own component so the parent can force a fresh mount (via the `key` it supplies)
+ * once `paratextRegistration.internetSettingsDataProvider` registers, if that happens after this
+ * row's first mount. `useDataProvider`/`useData` only re-attempt a lookup that is later disposed
+ * after having been held (see `createUseNetworkObjectHook`); a lookup that comes back empty on its
+ * very first attempt — the data provider has not registered yet — has nothing to dispose, so it is
+ * never retried on its own and the badge would otherwise stay hidden for the rest of the session.
+ * Remounting runs that first lookup again from scratch. Tracked generically at PT-4417; this is a
+ * local workaround for callers that need it, not a fix to the shared hook.
+ */
+function NetworkSettingsRow({
+  localizedStrings,
+  onNetworkSettingsClick,
+}: {
+  localizedStrings: LanguageStrings;
+  onNetworkSettingsClick: (requestDeveloperSettings: boolean) => void;
+}) {
+  const selectedServer = useSelectedServer();
+  // `undefined` both while the server is unknown and when it's Production — Production never gets a
+  // badge (see `SERVER_BADGE_KEYS`).
+  const serverBadge = selectedServer === undefined ? undefined : SERVER_BADGE_KEYS[selectedServer];
+
+  return (
+    <div className="tw:relative tw:flex tw:w-full tw:items-center">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
+        onClick={(e) => onNetworkSettingsClick(e.shiftKey)}
+        // A keyboard-activated click on a focused button carries the live modifier state in
+        // Chromium, so this duplicates that path defensively rather than depending on it:
+        // `preventDefault` stops the native click the Enter keypress would otherwise also
+        // trigger, so Shift+Enter calls the handler exactly once.
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && e.shiftKey) {
+            e.preventDefault();
+            onNetworkSettingsClick(true);
+          }
+        }}
+        data-testid="user-profile-action-network"
+      >
+        <Wifi className="tw:size-3.5" />
+        {localizedStrings['%userProfile_networkSettings_3%']}
+      </Button>
+      {serverBadge !== undefined && (
+        // A sibling of the Button, not a child: a focusable element nested inside another
+        // interactive element fails the axe `nested-interactive` rule and folds the badge
+        // text into the button's accessible name. Absolutely positioned over the row's right
+        // edge to keep the original layout. Narrowly scoped TooltipProvider — the file's other
+        // one only wraps the toolbar-trigger tooltip, not PopoverContent.
+        <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Independently clickable and keyboard-activatable, mirroring the row Button's
+                  plain-click and Shift-click behavior exactly: the badge is a second,
+                  equivalent way to reach the same two outcomes, not a new one. `role="button"`
+                  plus its own key handling make that contract explicit now that it is no
+                  longer a plain nested span inside the Button. `tabIndex` also makes it a
+                  separate focus stop (Tab reaches the row, a second Tab reaches the badge) so
+                  a keyboard or screen-reader user can still reach the tooltip — the one case
+                  that matters is a non-English speaker on a non-Production server, where the
+                  badge alone isn't enough context but the (localized) tooltip is. */}
+              <Badge
+                variant="muted"
+                data-testid="user-profile-server-badge"
+                className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={(e) => onNetworkSettingsClick(e.shiftKey)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onNetworkSettingsClick(e.shiftKey);
+                  }
+                }}
+              >
+                {localizedStrings[serverBadge.label]}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="tw:font-light">{localizedStrings[serverBadge.tooltip]}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Popover triggered from the top-right of the toolbar that surfaces the user's profile (name,
+ * email), interface mode, registration / network settings shortcuts, language, and appearance
+ * (theme) controls. Replaces the previous standalone theme-toggle, internet-settings, and
+ * Paratext-registration buttons in the toolbar.
+ *
+ * The Power option's label is marked as a preview: Power mode ships with features still missing, so
+ * users should read the gaps as "not built yet" rather than as bugs.
+ *
+ * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
+ * on the toolbar trigger and on the "Registration information" row. The dot is never the only
+ * signal: the trigger's accessible label and tooltip change to match, and the popover row carries
+ * screen-reader-only text.
+ *
+ * A second, distinctly-colored dot (see `NonProductionServerDot`) appears on the same trigger
+ * whenever the selected server is not Production, except when suppressed to allow the registration
+ * reminder dot to take precedence. The server dot is purely decorative (not exposed for
+ * accessibility) — the corresponding text is visible on the "Internet connectivity" row's badge and
+ * tooltip instead of on the trigger itself.
+ */
+export function UserProfilePopover() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [registrationData, setRegistrationData] = useState<RegistrationData | undefined>(undefined);
+  const [isRegistrationLoading, setIsRegistrationLoading] = useState(false);
+  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+
+  const { validity: registrationValidity, refresh: refreshRegistration } =
+    useRegistrationValidity();
+  // Only a definitive 'invalid' nags: 'unknown' means the probe could not complete, never that the
+  // registration is bad.
+  const showRegistrationReminder = registrationValidity === 'invalid';
+  const userProfileLabel = showRegistrationReminder
+    ? localizedStrings['%toolbar_userProfile_label_registrationNeeded_2%']
+    : localizedStrings['%toolbar_userProfile_label_2%'];
+
+  const [safeInterfaceMode, setInterfaceMode] = useInterfaceMode();
+
+  const handleInterfaceModeChange = (value: string) => {
+    if (value === '') return;
+    if (value !== 'simple' && value !== 'power') return;
+    // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
+    // try/catch around this call cannot see it. A missing setter is a real runtime state, not a
+    // type formality — `useSetting` has no setter while the subscription is throttled — so say so
+    // rather than letting the click do nothing silently.
+    if (!setInterfaceMode) {
+      logger.warn('UserProfilePopover: cannot set interface mode; the setting is unavailable');
+      return;
+    }
+    setInterfaceMode(value).catch((e: unknown) => {
+      logger.warn(`UserProfilePopover: failed to set interface mode: ${getErrorMessage(e)}`);
+    });
+  };
+
+  const handleProfileAndRegistration = async () => {
+    setIsOpen(false);
+    try {
+      await sendCommand('paratextRegistration.showParatextRegistration');
+    } catch (e: unknown) {
+      logger.warn(`UserProfilePopover: failed to open registration: ${getErrorMessage(e)}`);
+    }
+  };
+
+  // The popover does not need to know the current server to decide whether the dialog should allow
+  // changing it — that is computed live, inside the dialog, from the server the data provider
+  // reports when it opens. This only forwards whether Shift was held, choosing between the two
+  // commands: one that unlocks the (otherwise hidden) server-selection control for this open, and
+  // the plain one that doesn't.
+  const handleNetworkSettings = async (requestDeveloperSettings: boolean) => {
+    setIsOpen(false);
+    try {
+      await sendCommand(
+        requestDeveloperSettings
+          ? 'paratextRegistration.showInternetSettingsWithServerSelection'
+          : 'paratextRegistration.showInternetSettings',
+      );
+    } catch (e: unknown) {
+      logger.warn(`UserProfilePopover: failed to open internet settings: ${getErrorMessage(e)}`);
+    }
+  };
+
+  // Bumped to force a fresh mount of NetworkSettingsRow and NonProductionServerDot — see their doc
+  // comments for why that is the recovery path when the internet settings data provider registers
+  // after either one's first mount.
+  const [internetSettingsRetryKey, setInternetSettingsRetryKey] = useState(0);
+  useEvent(
+    onDidCreateNetworkObject,
+    useCallback((networkObjectDetails: NetworkObjectDetails) => {
+      if (networkObjectDetails.id === INTERNET_SETTINGS_DATA_PROVIDER_OBJECT_ID) {
+        setInternetSettingsRetryKey((previous) => previous + 1);
+      }
+    }, []),
+  );
+
+  const [interfaceLanguage, setInterfaceLanguage] = useSetting('platform.interfaceLanguage', [
+    'en',
+  ]);
+  const safeInterfaceLanguage =
+    isPlatformError(interfaceLanguage) || interfaceLanguage.length === 0
+      ? ['en']
+      : interfaceLanguage;
+  const primaryLanguage = safeInterfaceLanguage[0] ?? 'en';
+
+  const [availableLanguagesPossiblyError] = useData(
+    localizationService.dataProviderName,
+  ).AvailableInterfaceLanguages(undefined, OFFERED_LANGUAGE_DEFAULTS);
+  const availableLanguages: Record<string, LanguageInfo> = isPlatformError(
+    availableLanguagesPossiblyError,
+  )
+    ? OFFERED_LANGUAGE_DEFAULTS
+    : availableLanguagesPossiblyError;
+  // Show the current primary language even when not offered, so it appears pressed.
+  const sortedLanguageEntries = sortLanguageEntries(
+    Object.entries(includeCurrentLanguages(availableLanguages, [primaryLanguage])),
+  );
+
+  const handleLanguageChange = (value: string) => {
+    if (value === '') return;
+    if (value === primaryLanguage) return;
+    const next = switchInterfaceLanguage(safeInterfaceLanguage, value);
+    // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
+    // try/catch around this call cannot see it. A missing setter is a real runtime state, not a
+    // type formality — `useSetting` has no setter while the subscription is throttled — so say so
+    // rather than letting the click do nothing silently.
+    if (!setInterfaceLanguage) {
+      logger.warn('UserProfilePopover: cannot set interface language; the setting is unavailable');
+      return;
+    }
+    setInterfaceLanguage(next)
+      .then(() => offerRestartAfterInterfaceLanguageChange(safeInterfaceLanguage, next))
+      .catch((e: unknown) => {
+        logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
+      });
+  };
+
+  const themeDataProvider = useDataProvider(themeServiceDataProviderName);
+  const [theme, setTheme] = useData<typeof themeServiceDataProviderName>(
+    themeDataProvider,
+  ).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
+  const [shouldMatchSystem, setShouldMatchSystem] = useData<typeof themeServiceDataProviderName>(
+    themeDataProvider,
+  ).ShouldMatchSystem(undefined, false);
+
+  const themeUsable = !isPlatformError(theme);
+  const shouldMatchSystemUsable = !isPlatformError(shouldMatchSystem);
+
+  const appearanceValue: '' | 'light' | 'dark' | 'system' = (() => {
+    if (!themeUsable || !shouldMatchSystemUsable) return '';
+    if (shouldMatchSystem) return 'system';
+    return theme.type === 'dark' ? 'dark' : 'light';
+  })();
+
+  const handleAppearanceChange = (value: string) => {
+    if (value === '') return;
+    if (value !== 'light' && value !== 'dark' && value !== 'system') return;
+    // Theme writes are asynchronous, so a failure arrives as a rejection: a synchronous try/catch
+    // around these calls cannot see it. A missing setter is a real runtime state, not a type
+    // formality — `useData` drops its setter while the theme subscription is throttled — so say so
+    // rather than letting the click do nothing silently.
+    const reportFailure = (e: unknown) => {
+      logger.warn(`UserProfilePopover: failed to set appearance: ${getErrorMessage(e)}`);
+    };
+    const reportUnavailable = () => {
+      logger.warn(
+        'UserProfilePopover: cannot set appearance; the theme subscription is unavailable',
+      );
+    };
+    if (value === 'system') {
+      if (shouldMatchSystemUsable && shouldMatchSystem) return;
+      if (setShouldMatchSystem) setShouldMatchSystem(true).catch(reportFailure);
+      else reportUnavailable();
+      return;
+    }
+    if (shouldMatchSystemUsable && shouldMatchSystem) {
+      if (setShouldMatchSystem) setShouldMatchSystem(false).catch(reportFailure);
+      else reportUnavailable();
+    }
+    if (setTheme) setTheme({ type: value }).catch(reportFailure);
+    else reportUnavailable();
+  };
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    setIsRegistrationLoading(true);
+    (async () => {
+      try {
+        const data = await sendCommand('paratextRegistration.getParatextRegistrationData');
+        if (!cancelled) setRegistrationData(data);
+      } catch (e: unknown) {
+        logger.warn(`UserProfilePopover: failed to fetch registration data: ${getErrorMessage(e)}`);
+      } finally {
+        if (!cancelled) setIsRegistrationLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  // Separate from the profile fetch above: this one owns no state and needs no cleanup, so keeping
+  // it out of that effect keeps the `cancelled` flag's scope obviously limited to the fetch.
+  // Re-checks on EVERY open, which is what makes the dot recoverable: registering from here closes
+  // the popover, and saving normally restarts the app — but that restart is best-effort (the form
+  // only logs a warning if it fails), so when it doesn't happen the dot clears on the next open
+  // rather than this one.
+  useEffect(() => {
+    if (isOpen) refreshRegistration();
+  }, [isOpen, refreshRegistration]);
+
+  // "Not registered" is a state of the whole header — show it only when neither the name nor the
+  // email are populated. When the user has a name but no email, the email line is omitted entirely
+  // so we don't imply the user is unregistered just because the email field happens to be blank.
+  const registeredName = registrationData?.name ?? '';
+  const registeredEmail = registrationData?.email ?? '';
+  const isRegistered = registeredName.length > 0 || registeredEmail.length > 0;
+  const nameText =
+    registeredName.length > 0
+      ? registeredName
+      : localizedStrings['%userProfile_header_defaultName%'];
+  let emailText: string | undefined;
+  if (registeredEmail.length > 0) emailText = registeredEmail;
+  // Suppressed while the reminder shows: the warning line below already says the registration needs
+  // attention, and two near-identical messages read as two separate problems.
+  else if (!isRegistered && !showRegistrationReminder)
+    emailText = localizedStrings['%userProfile_header_notRegistered%'];
+  else emailText = undefined;
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                // `tw:relative` positions the reminder dot below; buttonVariants has no `relative`.
+                className="pr-twp tw:relative tw:h-8 tw:shrink-0"
+                aria-label={userProfileLabel}
+                data-testid="user-profile-popover-trigger"
+              >
+                {/* Power accents the icon so the interface mode reads from the toolbar alone. */}
+                <CircleUserRound
+                  className={cn(safeInterfaceMode === 'power' && 'tw:text-primary')}
+                />
+                {showRegistrationReminder && (
+                  // `end-1` (not `right-1`) so the dot mirrors in RTL. The ring separates the dot
+                  // from the icon it overlaps, so it has to match whatever is behind it: the ghost
+                  // button turns `muted` on hover AND stays `muted` while the popover is open
+                  // (`aria-expanded`), so a fixed `ring-background` would sit there as an off-color
+                  // halo for exactly as long as the user is looking at it.
+                  <ReminderDot
+                    testId="user-profile-registration-dot"
+                    className="tw:absolute tw:end-1 tw:top-1 tw:ring-2 tw:ring-background tw:group-hover/button:ring-muted tw:group-aria-expanded/button:ring-muted"
+                  />
+                )}
+                {/* Bottom corner, mirroring the registration dot's top corner above. Hidden
+                    whenever that dot is showing — see NonProductionServerDot's doc comment for why
+                    the two never appear together. */}
+                <NonProductionServerDot
+                  key={internetSettingsRetryKey}
+                  suppressed={showRegistrationReminder}
+                  className="tw:absolute tw:end-1 tw:bottom-1 tw:ring-2 tw:ring-background tw:group-hover/button:ring-muted tw:group-aria-expanded/button:ring-muted"
+                />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="tw:font-light">{userProfileLabel}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <PopoverContent align="end" className={cn('tw:w-80 tw:gap-1.5')}>
+        <PopoverHeader className="tw:gap-0 tw:px-2">
+          {isRegistrationLoading ? (
+            <>
+              <Skeleton data-testid="user-profile-name-skeleton" className="tw:h-4 tw:w-32" />
+              <Skeleton
+                data-testid="user-profile-email-skeleton"
+                className="tw:mt-1 tw:h-3 tw:w-40"
+              />
+            </>
+          ) : (
+            <>
+              <PopoverTitle
+                data-testid="user-profile-name"
+                className="tw:text-xs tw:leading-tight tw:font-bold"
+              >
+                {nameText}
+              </PopoverTitle>
+              {emailText !== undefined && (
+                <PopoverDescription
+                  data-testid="user-profile-email"
+                  className="user-profile-popover-text-2xs tw:leading-tight"
+                >
+                  {emailText}
+                </PopoverDescription>
+              )}
+              {showRegistrationReminder && (
+                // The identity above stays as-is; this line is what keeps the header from implying
+                // all is well while the dots say otherwise. Visible text, not `sr-only`, so a
+                // sighted user who clicks straight into the popover still gets an explanation.
+                <PopoverDescription
+                  data-testid="user-profile-registration-warning"
+                  className="user-profile-popover-text-2xs tw:mt-1 tw:flex tw:items-center tw:gap-1.5 tw:leading-tight"
+                >
+                  <ReminderDot testId="user-profile-registration-warning-dot" />
+                  {localizedStrings['%userProfile_registrationNeeded%']}
+                </PopoverDescription>
+              )}
+            </>
+          )}
+        </PopoverHeader>
+        <Separator />
+        <ToggleGroup
+          type="single"
+          value={safeInterfaceMode}
+          onValueChange={handleInterfaceModeChange}
+          spacing={2}
+          className="tw:mb-0.5 tw:w-full tw:items-stretch tw:px-2"
+        >
+          <ToggleGroupItem
+            value="simple"
+            data-testid="user-profile-interface-mode-simple"
+            variant="outline"
+            className={cn(
+              'tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-0.5 tw:p-2 tw:text-left tw:whitespace-normal',
+              safeInterfaceMode === 'simple' &&
+                'tw:border-2 tw:border-primary tw:bg-accent tw:text-accent-foreground tw:shadow-sm',
+            )}
+          >
+            <span
+              className={cn(
+                'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
+                safeInterfaceMode === 'simple' && 'tw:text-accent-foreground',
+              )}
+            >
+              {localizedStrings['%userProfile_interfaceMode_simple_label%']}
+            </span>
+            <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
+              {localizedStrings['%userProfile_interfaceMode_simple_description_2%']}
+            </span>
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="power"
+            data-testid="user-profile-interface-mode-power"
+            variant="outline"
+            className={cn(
+              'tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-0.5 tw:p-2 tw:text-left tw:whitespace-normal',
+              safeInterfaceMode === 'power' &&
+                'tw:border-2 tw:border-primary tw:bg-accent tw:text-accent-foreground tw:shadow-sm',
+            )}
+          >
+            <span
+              className={cn(
+                'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
+                safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
+              )}
+            >
+              {formatReplacementString(
+                localizedStrings['%userProfile_interfaceMode_power_labelWithPreview%'],
+                { label: localizedStrings['%userProfile_interfaceMode_power_label%'] },
+              )}
+            </span>
+            <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
+              {localizedStrings['%userProfile_interfaceMode_power_description_2%']}
+            </span>
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <Separator />
+        <div className="tw:flex tw:flex-col tw:gap-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
+            onClick={handleProfileAndRegistration}
+            data-testid="user-profile-action-registration"
+          >
+            <User className="tw:size-3.5" />
+            {localizedStrings['%userProfile_profileAndRegistration_2%']}
+            {showRegistrationReminder && (
+              <>
+                <ReminderDot testId="user-profile-action-registration-dot" className="tw:ms-auto" />
+                {/* Puts the state into the row's accessible name, since the dot is hidden from it. */}
+                <span className="tw:sr-only">
+                  {localizedStrings['%userProfile_registrationNeeded%']}
+                </span>
+              </>
+            )}
+          </Button>
+          <NetworkSettingsRow
+            key={internetSettingsRetryKey}
+            localizedStrings={localizedStrings}
+            onNetworkSettingsClick={handleNetworkSettings}
+          />
+        </div>
+        <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:px-2">
+          <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:pt-1 tw:text-xs tw:text-muted-foreground">
+            <Languages className="tw:size-3.5" />
+            {localizedStrings['%userProfile_language%']}
+          </span>
+          <ToggleGroup
+            type="single"
+            value={primaryLanguage}
+            onValueChange={handleLanguageChange}
+            size="sm"
+            className="tw:min-w-0 tw:flex-1 tw:flex-wrap tw:justify-end"
+          >
+            {sortedLanguageEntries.map(([tag, info]) => (
+              <ToggleGroupItem
+                key={tag}
+                value={tag}
+                variant="outline"
+                data-testid={`user-profile-language-${tag}`}
+                aria-label={info.autonym ?? tag}
+                className="user-profile-popover-text-3xs tw:h-6 tw:min-w-0 tw:px-2"
+              >
+                {tag.toUpperCase()}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+        <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-2">
+          <span className="tw:text-xs tw:text-muted-foreground">
+            {localizedStrings['%userProfile_appearance%']}
+          </span>
+          <ToggleGroup
+            type="single"
+            value={appearanceValue}
+            onValueChange={handleAppearanceChange}
+            size="sm"
+          >
+            <ToggleGroupItem
+              value="light"
+              variant="outline"
+              data-testid="user-profile-appearance-light"
+              aria-label={localizedStrings['%userProfile_appearance_light%']}
+              className="tw:h-6 tw:min-w-0 tw:px-1.5"
+            >
+              <Sun className="tw:size-3" />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="dark"
+              variant="outline"
+              data-testid="user-profile-appearance-dark"
+              aria-label={localizedStrings['%userProfile_appearance_dark%']}
+              className="tw:h-6 tw:min-w-0 tw:px-1.5"
+            >
+              <Moon className="tw:size-3" />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="system"
+              variant="outline"
+              data-testid="user-profile-appearance-system"
+              aria-label={localizedStrings['%userProfile_appearance_system%']}
+              className="tw:h-6 tw:min-w-0 tw:px-1.5"
+            >
+              <Monitor className="tw:size-3" />
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}

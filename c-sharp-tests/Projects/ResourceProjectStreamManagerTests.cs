@@ -1,0 +1,649 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using ICSharpCode.SharpZipLib.Zip;
+using Paranext.DataProvider.Projects;
+using Paratext.Data.ProjectFileAccess;
+using SIL.TestUtilities;
+
+namespace TestParanextDataProvider.Projects
+{
+    /// <summary>
+    /// Covers the archive-backed stream manager against real archives, read through ParatextData's
+    /// own resource file manager, since what matters is that the listing agrees with what that file
+    /// manager will read.
+    /// </summary>
+    [ExcludeFromCodeCoverage]
+    internal class ResourceProjectStreamManagerTests
+    {
+        private const string ExtensionPath = "shared/platform.bible/extensions/myExtension";
+        private const string ArchivePassword = "resource password";
+
+        private TemporaryFolder _folder = null!; // Will be non-null when the test runs
+        private readonly List<ProjectFileManager> _fileManagers = [];
+
+        [SetUp]
+        public void TestSetup()
+        {
+            // TemporaryFolder deletes an existing folder of the same name, so the name carries the
+            // run's id, and the swept prefix lets a later run clean up a folder this one leaked.
+            _folder = new TemporaryFolder(
+                $"{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}"
+            );
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            // Each file manager holds its archive open, and Windows will not delete an open file
+            foreach (var fileManager in _fileManagers)
+                fileManager.Dispose();
+            _fileManagers.Clear();
+            _folder.Dispose();
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_NestedEntries_AreRelativeForwardSlashedAndSorted()
+        {
+            // Written with no directory entries, as archives commonly are, so byMachine/ and
+            // byMachine/ledger/ exist only as parts of an entry name. The file manager's own
+            // directory listing cannot find byMachine/, which holds no file directly
+            var streamManager = CreateStreamManager(
+                [
+                    ($"{ExtensionPath}/second.json", "two"),
+                    ($"{ExtensionPath}/first.json", "one"),
+                    ($"{ExtensionPath}/byMachine/ledger/abc.json", "nested"),
+                    ($"{ExtensionPath}/empty.json", ""),
+                    ("shared/platform.bible/extensions/otherExtension/theirs.json", "theirs"),
+                    ("Settings.xml", "<ScriptureText />"),
+                ]
+            );
+
+            var streamNames = streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            Assert.That(
+                streamNames,
+                Is.EqualTo(
+                    new[] { "byMachine/ledger/abc.json", "empty.json", "first.json", "second.json" }
+                )
+            );
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_EveryNameReadsBackThroughGetDataStream()
+        {
+            Dictionary<string, string> written =
+                new() { ["top.json"] = "top contents", ["byMachine/ledger/abc.json"] = "nested" };
+            var streamManager = CreateStreamManager(
+                written.Select(entry => ($"{ExtensionPath}/{entry.Key}", entry.Value))
+            );
+
+            var streamNames = streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            Assert.Multiple(() =>
+            {
+                // Asserted before the loop so an empty listing cannot pass by skipping it
+                Assert.That(streamNames, Is.EquivalentTo(written.Keys));
+                foreach (var streamName in streamNames)
+                {
+                    Assert.That(
+                        ReadStream(streamManager, $"{ExtensionPath}/{streamName}"),
+                        Is.EqualTo(written[streamName]),
+                        $"Listed name '{streamName}' must read back the data stored under it"
+                    );
+                }
+            });
+        }
+
+        [Test]
+        public void EncryptedResource_UnencryptedEntry_IsNotListedAndThrowsOnRead()
+        {
+            // The file manager refuses an unencrypted entry in an encrypted resource as one it
+            // cannot verify, so it is not part of the resource: not listed, and not read as empty
+            var streamManager = CreateStreamManager(
+                [
+                    ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
+                    ($"{ExtensionPath}/loose.json", "loose", null),
+                ],
+                passwordProtected: true
+            );
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    streamManager.GetExistingDataStreamNames(ExtensionPath),
+                    Is.EqualTo(new[] { "sealed.json" })
+                );
+                Assert.That(
+                    ReadStream(streamManager, $"{ExtensionPath}/sealed.json"),
+                    Is.EqualTo("sealed")
+                );
+                Assert.Throws<InvalidDataException>(
+                    () => streamManager.GetDataStream($"{ExtensionPath}/loose.json")
+                );
+            });
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_EntryThatCannotBeDecrypted_LeavesTheArchiveUnlocked()
+        {
+            var streamManager = CreateStreamManager(
+                [
+                    ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
+                    ($"{ExtensionPath}/foreign.json", "foreign", "another password"),
+                ],
+                passwordProtected: true
+            );
+
+            // Encrypted, so the file manager's rule admits it and it is listed, though it was
+            // encrypted with a password that is not this resource's
+            var streamNames = streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            // A file manager read that fails to decrypt locks the archive and never unlocks it, so
+            // a listing that opened entries would leave a read from any other thread waiting
+            // forever
+            var readElsewhere = Task.Run(
+                () => ReadStream(streamManager, $"{ExtensionPath}/sealed.json")
+            );
+            Assert.That(
+                readElsewhere.Wait(TimeSpan.FromSeconds(10)),
+                Is.True,
+                "A read from another thread was blocked"
+            );
+            Assert.Multiple(() =>
+            {
+                Assert.That(streamNames, Is.EqualTo(new[] { "foreign.json", "sealed.json" }));
+                Assert.That(readElsewhere.Result, Is.EqualTo("sealed"));
+            });
+        }
+
+        [Test]
+        public void GetDataStream_EntryThatCannotBeDecrypted_ThrowsAndLeavesTheArchiveUnlocked(
+            // Real resources hold both deflated and stored entries
+            [Values(CompressionMethod.Deflated, CompressionMethod.Stored)]
+                CompressionMethod compression,
+            // About 1 in 256 entries encrypted with another password pass the header's password
+            // check and fail only once their data is read
+            [Values]
+                bool wrongPasswordPassesHeaderCheck
+        )
+        {
+            var streamManager = CreateStreamManagerWithForeignEntry(
+                compression,
+                wrongPasswordPassesHeaderCheck
+            );
+
+            // Read on a thread of its own, as a request would be: a lock the file manager leaked
+            // there would block every other thread, which a read on this same thread would not show
+            Exception? foreignFailure = null;
+            Thread foreignRead =
+                new(() =>
+                {
+                    try
+                    {
+                        streamManager.GetDataStream($"{ExtensionPath}/foreign.json");
+                    }
+                    catch (Exception e)
+                    {
+                        foreignFailure = e;
+                    }
+                });
+            foreignRead.Start();
+            Assert.That(
+                foreignRead.Join(TimeSpan.FromSeconds(10)),
+                Is.True,
+                "The read never ended"
+            );
+
+            // Caught here too: an exception left unhandled on a thread of its own would end the
+            // whole test run rather than fail this test
+            string? sealedContents = null;
+            Exception? sealedFailure = null;
+            Thread sealedRead =
+                new(() =>
+                {
+                    try
+                    {
+                        sealedContents = ReadStream(streamManager, $"{ExtensionPath}/sealed.json");
+                    }
+                    catch (Exception e)
+                    {
+                        sealedFailure = e;
+                    }
+                })
+                {
+                    IsBackground = true,
+                };
+            sealedRead.Start();
+
+            Assert.Multiple(() =>
+            {
+                // Throws rather than reading as empty, which a caller could not tell from an empty
+                // or absent document
+                Assert.That(foreignFailure, Is.InstanceOf<InvalidDataException>());
+                Assert.That(
+                    sealedRead.Join(TimeSpan.FromSeconds(10)),
+                    Is.True,
+                    "A read from another thread was blocked"
+                );
+                Assert.That(sealedFailure, Is.Null);
+                Assert.That(sealedContents, Is.EqualTo("sealed"));
+            });
+        }
+
+        [Test]
+        public void GetDataStream_EntryWhoseDataDoesNotMatchItsCrc_Throws()
+        {
+            // Stored and unencrypted, so nothing but the CRC can tell the damaged bytes from data
+            WriteArchive(
+                [($"{ExtensionPath}/damaged.json", "intact contents", null)],
+                CompressionMethod.Stored
+            );
+            var archiveBytes = File.ReadAllBytes(ArchivePath);
+            var dataOffset = archiveBytes.AsSpan().IndexOf("intact contents"u8);
+            archiveBytes[dataOffset] = (byte)'D';
+            File.WriteAllBytes(ArchivePath, archiveBytes);
+            var streamManager = CreateStreamManager(passwordProtected: false);
+
+            Assert.Throws<InvalidDataException>(
+                () => streamManager.GetDataStream($"{ExtensionPath}/damaged.json")
+            );
+        }
+
+        [Test]
+        public void GetDataStream_AesEntryWhoseDataWasAltered_Throws()
+        {
+            // Stored, so the altered byte reaches the AES stream's authentication check unchanged
+            const string Contents = "sealed contents that are long enough";
+            WriteArchive(
+                [($"{ExtensionPath}/sealed.json", Contents, ArchivePassword)],
+                CompressionMethod.Stored,
+                aesKeySize: 256
+            );
+            var archiveBytes = File.ReadAllBytes(ArchivePath);
+            // The local header, then the AES-256 salt and its 2-byte password verifier
+            var dataStart =
+                30
+                + BitConverter.ToUInt16(archiveBytes, 26)
+                + BitConverter.ToUInt16(archiveBytes, 28)
+                + 16
+                + 2;
+            archiveBytes[dataStart + 3] ^= 0xFF;
+            File.WriteAllBytes(ArchivePath, archiveBytes);
+            var streamManager = CreateStreamManager(passwordProtected: true);
+
+            Assert.Throws<InvalidDataException>(
+                () => streamManager.GetDataStream($"{ExtensionPath}/sealed.json")
+            );
+        }
+
+        [Test]
+        public void GetDataStream_EncryptedEntryShorterThanItsEncryptionHeader_Throws()
+        {
+            WriteArchive(
+                [($"{ExtensionPath}/short.json", "intact contents", ArchivePassword)],
+                CompressionMethod.Stored,
+                useZip64: UseZip64.Off
+            );
+            // Cut the entry's recorded size to less than ZipCrypto's 12-byte header, in both the
+            // local header and the central directory
+            var archiveBytes = File.ReadAllBytes(ArchivePath);
+            BitConverter.TryWriteBytes(archiveBytes.AsSpan(18, 4), 5u);
+            var centralDirectoryStart = archiveBytes.AsSpan().IndexOf("PK\x01\x02"u8);
+            BitConverter.TryWriteBytes(archiveBytes.AsSpan(centralDirectoryStart + 20, 4), 5u);
+            File.WriteAllBytes(ArchivePath, archiveBytes);
+            var streamManager = CreateStreamManager(passwordProtected: true);
+
+            // Reported as bad data, though SharpZipLib throws an EndOfStreamException, which is an
+            // IOException: data that ends early does not read back on a retry
+            Assert.Throws<InvalidDataException>(
+                () => streamManager.GetDataStream($"{ExtensionPath}/short.json")
+            );
+        }
+
+        [Test]
+        public void GetDataStream_ArchiveFileFailsPartwayThroughTheEntry_ThrowsTheIOException()
+        {
+            WriteArchive(
+                [($"{ExtensionPath}/mine.json", "intact contents", null)],
+                CompressionMethod.Stored
+            );
+            var dataOffset = File.ReadAllBytes(ArchivePath).AsSpan().IndexOf("intact contents"u8);
+            var streamManager = new ResourceProjectStreamManager(
+                CreateFileManager(passwordProtected: false),
+                ArchivePath,
+                passwordProvider: null,
+                path => new StreamFailingAt(File.OpenRead(path), dataOffset)
+            );
+
+            // Not reported as bad data: a failure to read the file says nothing about the entry's
+            // data, and may pass on a retry
+            Assert.Throws<IOException>(
+                () => streamManager.GetDataStream($"{ExtensionPath}/mine.json")
+            );
+        }
+
+        [Test]
+        public void GetDataStream_AesEncryptedEntry_ReadsBack()
+        {
+            // An AES entry may record no CRC, since its stream authenticates the data instead
+            WriteArchive(
+                [($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword)],
+                CompressionMethod.Deflated,
+                aesKeySize: 256
+            );
+            var streamManager = CreateStreamManager(passwordProtected: true);
+
+            Assert.That(
+                ReadStream(streamManager, $"{ExtensionPath}/sealed.json"),
+                Is.EqualTo("sealed")
+            );
+        }
+
+        /// <summary>
+        /// Upgrade tripwire. GetDataStream decrypts each entry twice only because this
+        /// ParatextData's file manager never releases its archive lock when an entry fails to open.
+        /// ubsicap/Paratext#678 fixes that; it merged into the 9.5 branch (3ea2cf56c3) after
+        /// 9.5.0.24 was published. Fails on any ParatextData upgrade so the order is revisited.
+        /// </summary>
+        [Test]
+        public void ParatextDataUpgrade_ReadEachEntryOnceIfTheLockFixShipped()
+        {
+            Assert.That(
+                typeof(Paratext.Data.ScrText).Assembly.GetName().Version,
+                Is.EqualTo(new Version(9, 5, 0, 24)),
+                "ParatextData was upgraded. If it includes ubsicap/Paratext#678 (merge commit "
+                    + "3ea2cf56c3 on the 9.5 branch), make ResourceProjectStreamManager.GetDataStream "
+                    + "read each entry once: read through the file manager, report a failure to "
+                    + "open (ParatextData throws FileNotFoundException for one) or to inflate as "
+                    + "InvalidDataException, then compare the CRC of the bytes it returned with the "
+                    + "entry's recorded CRC. Keep the CRC check: ZipCrypto's header check accepts "
+                    + "about 1 wrong password in 256, and neither ParatextData nor SharpZipLib's "
+                    + "ZipFile checks the CRC. Then delete this test. If the upgrade does not "
+                    + "include #678, confirm that first against the ParatextData release notes or "
+                    + "the 9.5 branch history (merge commit 3ea2cf56c3 is not in it), and only then "
+                    + "change the version here."
+            );
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_NameGetDataStreamRefuses_IsNotListed()
+        {
+            var streamManager = CreateStreamManager(
+                [($"{ExtensionPath}/mine.json", "mine"), ($"{ExtensionPath}/a..b.json", "x")]
+            );
+
+            Assert.That(
+                streamManager.GetExistingDataStreamNames(ExtensionPath),
+                Is.EqualTo(new[] { "mine.json" })
+            );
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_PathDoesNotExist_IsEmpty()
+        {
+            var streamManager = CreateStreamManager([("Settings.xml", "<ScriptureText />")]);
+
+            Assert.That(streamManager.GetExistingDataStreamNames(ExtensionPath), Is.Empty);
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_ArchiveMissing_Throws()
+        {
+            var fileManager = CreateFileManager(
+                [("Settings.xml", "", null)],
+                passwordProtected: false
+            );
+            var streamManager = new ResourceProjectStreamManager(
+                fileManager,
+                Path.Join(_folder.Path, "missing.p8z"),
+                passwordProvider: null
+            );
+
+            // An unreachable resource is a failure, not a resource with no data
+            Assert.Throws<FileNotFoundException>(
+                () => streamManager.GetExistingDataStreamNames(ExtensionPath)
+            );
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_ArchiveNotLocated_Throws()
+        {
+            var fileManager = CreateFileManager(
+                [($"{ExtensionPath}/mine.json", "mine", null)],
+                passwordProtected: false
+            );
+            var streamManager = new ResourceProjectStreamManager(
+                fileManager,
+                archivePath: null,
+                passwordProvider: null
+            );
+
+            // Reported as an unreachable resource, the same as a missing archive, rather than as a
+            // resource with no data
+            Assert.Throws<FileNotFoundException>(
+                () => streamManager.GetExistingDataStreamNames(ExtensionPath)
+            );
+        }
+
+        [Test]
+        public void GetDataStream_Absent_IsNull()
+        {
+            var streamManager = CreateStreamManager([($"{ExtensionPath}/mine.json", "mine")]);
+
+            Assert.That(streamManager.GetDataStream($"{ExtensionPath}/never.json"), Is.Null);
+        }
+
+        [Test]
+        public void Writes_AreRefused()
+        {
+            var streamManager = CreateStreamManager([($"{ExtensionPath}/mine.json", "mine")]);
+
+            Assert.Multiple(() =>
+            {
+                Assert.Throws<InvalidOperationException>(
+                    () =>
+                        streamManager.GetDataStream(
+                            $"{ExtensionPath}/mine.json",
+                            createIfNotExists: true
+                        )
+                );
+                Assert.Throws<InvalidOperationException>(
+                    () => streamManager.DeleteDataStream($"{ExtensionPath}/mine.json")
+                );
+            });
+        }
+
+        [Test]
+        public void GetDataStream_NameWithDotDot_Throws()
+        {
+            var streamManager = CreateStreamManager([($"{ExtensionPath}/mine.json", "mine")]);
+
+            // The same names the directory-backed manager refuses, so whether a name is valid does
+            // not depend on what kind of project it is read from
+            Assert.Throws<ArgumentException>(
+                () => streamManager.GetDataStream($"{ExtensionPath}/../theirs.json")
+            );
+        }
+
+        private ResourceProjectStreamManager CreateStreamManager(
+            IEnumerable<(string Name, string Contents)> entries
+        ) =>
+            CreateStreamManager(
+                entries.Select(entry => (entry.Name, entry.Contents, (string?)null)),
+                passwordProtected: false
+            );
+
+        private ResourceProjectStreamManager CreateStreamManager(
+            IEnumerable<(string Name, string Contents, string? Password)> entries,
+            bool passwordProtected
+        )
+        {
+            WriteArchive(entries, CompressionMethod.Deflated);
+            return CreateStreamManager(passwordProtected);
+        }
+
+        /// <summary>
+        /// A stream manager over the archive already written at <see cref="ArchivePath"/>
+        /// </summary>
+        private ResourceProjectStreamManager CreateStreamManager(bool passwordProtected) =>
+            // The same provider the file manager was given, as the PDP passes it
+            new(
+                CreateFileManager(passwordProtected),
+                ArchivePath,
+                passwordProtected ? new FixedPasswordProvider() : null
+            );
+
+        /// <summary>
+        /// A password-protected resource holding sealed.json, encrypted with its password, and
+        /// foreign.json, encrypted with another. Resources use ZipCrypto, which checks a password
+        /// against one byte of a random header, so whether that check accepts the other password
+        /// is chance; the archive is rewritten until it lands on the side asked for.
+        /// </summary>
+        private ResourceProjectStreamManager CreateStreamManagerWithForeignEntry(
+            CompressionMethod compression,
+            bool wrongPasswordPassesHeaderCheck
+        )
+        {
+            (string Name, string Contents, string? Password)[] entries =
+            [
+                ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
+                ($"{ExtensionPath}/foreign.json", "foreign", "another password"),
+            ];
+            // A wrong password passes about 1 try in 256, so the odds of all of them failing are
+            // about e^-39
+            for (var attempt = 0; attempt < 10_000; attempt++)
+            {
+                WriteArchive(entries, compression);
+                if (
+                    PassesHeaderPasswordCheck($"{ExtensionPath}/foreign.json")
+                    == wrongPasswordPassesHeaderCheck
+                )
+                    return CreateStreamManager(passwordProtected: true);
+            }
+            throw new AssertionException(
+                "Could not write an archive with the header check asked for"
+            );
+        }
+
+        /// <summary>
+        /// Whether the archive password gets past the entry's header, the only check ZipCrypto
+        /// makes before the data is read
+        /// </summary>
+        private bool PassesHeaderPasswordCheck(string entryName)
+        {
+            using ZipFile archive = new(ArchivePath) { Password = ArchivePassword };
+            try
+            {
+                using var _ = archive.GetInputStream(archive.GetEntry(entryName));
+                return true;
+            }
+            catch (ZipException)
+            {
+                return false;
+            }
+        }
+
+        private ProjectFileManager CreateFileManager(
+            IEnumerable<(string Name, string Contents, string? Password)> entries,
+            bool passwordProtected
+        )
+        {
+            WriteArchive(entries, CompressionMethod.Deflated);
+            return CreateFileManager(passwordProtected);
+        }
+
+        /// <param name="aesKeySize">
+        /// The AES key size to encrypt entries with, or 0 for ZipCrypto, which real resources use
+        /// </param>
+        /// <param name="useZip64">
+        /// Whether entries may record their sizes in Zip64 extra fields; Off keeps them in the
+        /// headers' fixed fields, where a test can change them
+        /// </param>
+        private void WriteArchive(
+            IEnumerable<(string Name, string Contents, string? Password)> entries,
+            CompressionMethod compression,
+            int aesKeySize = 0,
+            UseZip64 useZip64 = UseZip64.Dynamic
+        )
+        {
+            using ZipOutputStream archive = new(File.Create(ArchivePath)) { UseZip64 = useZip64 };
+            // Each entry is encrypted with its own password, or not at all when it has none
+            foreach (var (name, contents, password) in entries)
+            {
+                archive.Password = password;
+                archive.PutNextEntry(
+                    new ZipEntry(name)
+                    {
+                        CompressionMethod = compression,
+                        AESKeySize = password == null ? 0 : aesKeySize,
+                    }
+                );
+                var bytes = Encoding.UTF8.GetBytes(contents);
+                archive.Write(bytes, 0, bytes.Length);
+            }
+        }
+
+        private ProjectFileManager CreateFileManager(bool passwordProtected)
+        {
+            ResourceProjectFileManager fileManager =
+                new("TST", passwordProtected ? new FixedPasswordProvider() : null, ArchivePath);
+            _fileManagers.Add(fileManager);
+            return fileManager;
+        }
+
+        private string ArchivePath => Path.Join(_folder.Path, "TST.p8z");
+
+        private static string ReadStream(ResourceProjectStreamManager streamManager, string name)
+        {
+            using Stream stream =
+                streamManager.GetDataStream(name)
+                ?? throw new AssertionException($"'{name}' names no stream");
+            using StreamReader reader = new(stream, Encoding.UTF8);
+            return reader.ReadToEnd();
+        }
+
+        /// <summary>
+        /// A read-only stream that throws an IOException on any read reaching one position
+        /// </summary>
+        private sealed class StreamFailingAt(Stream inner, long failingPosition) : Stream
+        {
+            public override bool CanRead => true;
+            public override bool CanSeek => true;
+            public override bool CanWrite => false;
+            public override long Length => inner.Length;
+            public override long Position
+            {
+                get => inner.Position;
+                set => inner.Position = value;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                if (Position <= failingPosition && failingPosition < Position + count)
+                    throw new IOException("The archive file could not be read");
+                return inner.Read(buffer, offset, count);
+            }
+
+            public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+
+            public override void Flush() { }
+
+            public override void SetLength(long value) => throw new NotSupportedException();
+
+            public override void Write(byte[] buffer, int offset, int count) =>
+                throw new NotSupportedException();
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                    inner.Dispose();
+                base.Dispose(disposing);
+            }
+        }
+
+        private sealed class FixedPasswordProvider : IZippedResourcePasswordProvider
+        {
+            public string GetPassword() => ArchivePassword;
+        }
+    }
+}

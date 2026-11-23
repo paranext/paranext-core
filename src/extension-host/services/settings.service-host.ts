@@ -21,13 +21,13 @@ import {
   debounce,
   deserialize,
   getErrorMessage,
-  includes,
   isLocalizeKey,
   isString,
   serialize,
 } from 'platform-bible-utils';
 import { joinUriPaths } from '@node/utils/util';
 import * as nodeFS from '@node/services/node-file-system.service';
+import { isJsonRpcMethodNotFoundError } from '@shared/data/rpc.model';
 import { serializeRequestType } from '@shared/utils/util';
 import { LocalizedSettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 import {
@@ -113,18 +113,18 @@ class SettingDataProviderEngine
   implements IDataProviderEngine<SettingDataTypes>
 {
   private settingsData: Partial<AllSettingsData>;
-  private unsubscribeOnDidRebuildSettings: Unsubscriber | undefined;
+  #unsubscribeOnDidRebuildSettings: Unsubscriber | undefined;
 
   constructor(settingsData: Partial<AllSettingsData>) {
     super();
     this.settingsData = deserialize(serialize(settingsData));
 
-    this.unsubscribeOnDidRebuildSettings = settingsDocumentCombiner.onDidRebuild(
+    this.#unsubscribeOnDidRebuildSettings = settingsDocumentCombiner.onDidRebuild(
       debounce(() => {
         // Make sure we haven't been disposed since being called and the debounce ended, then
         // announce that settings have updated so anyone who has the default value gets an updated
         // default
-        if (this.unsubscribeOnDidRebuildSettings) this.notifyUpdate('');
+        if (this.#unsubscribeOnDidRebuildSettings) this.notifyUpdate('');
       }, 100),
     );
   }
@@ -188,9 +188,10 @@ class SettingDataProviderEngine
     try {
       return await networkService.request(requestType, newValue, currentValue, allChanges ?? {});
     } catch (error) {
-      // If there is no validator just let the change go through
-      const missingValidatorMsg = `'${requestType}' not found`;
-      if (includes(getErrorMessage(error), missingValidatorMsg)) return true;
+      // If there is no validator just let the change go through. Only a method-not-found response
+      // means "no validator registered" — an error from a validator that ran and rejected must
+      // propagate, or an invalid value gets written.
+      if (isJsonRpcMethodNotFoundError(error, requestType)) return true;
       throw error;
     }
   }
@@ -210,9 +211,9 @@ class SettingDataProviderEngine
   }
 
   async dispose(): Promise<boolean> {
-    if (this.unsubscribeOnDidRebuildSettings) {
-      const success = this.unsubscribeOnDidRebuildSettings();
-      this.unsubscribeOnDidRebuildSettings = undefined;
+    if (this.#unsubscribeOnDidRebuildSettings) {
+      const success = this.#unsubscribeOnDidRebuildSettings();
+      this.#unsubscribeOnDidRebuildSettings = undefined;
       return success;
     }
     return true;
