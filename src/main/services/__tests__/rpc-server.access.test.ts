@@ -74,6 +74,11 @@ const TABLE: { requestType: string; callers: RemoteIdentity[]; registrant: Conne
       callers: ['renderer'],
       registrant: 'main',
     },
+    {
+      requestType: 'command:platform.restartExtensionHost',
+      callers: ['renderer', 'extensionHost'],
+      registrant: 'main',
+    },
   ];
 
 const OPEN_REQUEST_TYPE = 'command:test.open';

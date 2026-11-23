@@ -131,7 +131,6 @@ These methods don't follow the `category:directive` pattern:
 |--------|-------------|---------|
 | `command:platform.quit` | Close the application | Terminates all processes |
 | `command:platform.restart` | Restart the application | All state is lost |
-| `command:platform.restartExtensionHost` | Restart extension host | Extensions reload |
 
 ### Utility
 

@@ -33,7 +33,8 @@ This client presents no launch secret, so main serves it as `unidentified`. Main
 unidentified connection the request types listed in `src/shared/data/request-access.data.ts` (the
 error is `MethodNotFound`: `'<method>' is not available on this connection`). It also refuses any
 handler whose registrant restricted its callers with `allowedCallers`. Everything else works.
-To read the log, read the log file (see the `log-inspector` skill).
+To read the log, read the log file (see the `log-inspector` skill). `platform.restartExtensionHost`
+is one of the refused commands: restart the app instead (`platform.restart`).
 
 ### 3. Platform.Bible Must Be Running
 
@@ -223,9 +224,6 @@ lsof -i :8876
 **Use with caution - these affect the running application:**
 
 ```bash
-# Restart extension host (extensions will reload)
-(echo '{"jsonrpc":"2.0","id":1,"method":"command:platform.restartExtensionHost","params":[]}'; sleep 1) | websocat ws://localhost:8876
-
 # Restart the entire application
 (echo '{"jsonrpc":"2.0","id":1,"method":"command:platform.restart","params":[]}'; sleep 1) | websocat ws://localhost:8876
 

@@ -22,6 +22,7 @@ const RESTRICTED_REQUEST_TYPES = [
   'object:DataProtectionService.encryptString',
   'object:DataProtectionService.decryptString',
   'command:platform.getLogFileContent',
+  'command:platform.restartExtensionHost',
 ];
 
 describe('request access table', () => {
@@ -50,6 +51,11 @@ describe('request access table', () => {
     );
     expect(isCallAllowed('object:DataProtectionService.decryptString', 'renderer')).toBe(false);
     expect(isCallAllowed('command:platform.getLogFileContent', 'renderer')).toBe(true);
+    expect(isCallAllowed('command:platform.restartExtensionHost', 'renderer')).toBe(true);
+    expect(isCallAllowed('command:platform.restartExtensionHost', 'extensionHost')).toBe(true);
+    expect(isCallAllowed('command:platform.restartExtensionHost', 'dotnetDataProvider')).toBe(
+      false,
+    );
   });
 
   it('covers a new request type in a controlled category', () => {
@@ -142,6 +148,7 @@ describe('request access table', () => {
       'paratextRegistration.resetForFirstRun',
       'platform.resetFirstRun',
       'platform.getLogFileContent',
+      'platform.restartExtensionHost',
     ];
     restrictedCommands.forEach((commandName) =>
       expect(getRequestAccessRule(`command:${commandName}`)).toBeDefined(),

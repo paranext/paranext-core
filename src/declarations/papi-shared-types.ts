@@ -110,6 +110,9 @@ declare module 'papi-shared-types' {
      * A call while a restart is already in flight (from its start until the new extension host
      * announces its start) joins that restart and resolves with it, at once if the new process is
      * already forked, rather than stopping the host that is still starting.
+     *
+     * Only the app's windows, including any WebView in them, and the extension host may call it;
+     * other connections are refused with `MethodNotFound`.
      */
     'platform.restartExtensionHost': () => Promise<void>;
     /**

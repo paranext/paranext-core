@@ -69,6 +69,9 @@ const REQUEST_TYPE_RULES: ReadonlyMap<string, RequestAccessRule> = new Map([
   ['object:DataProtectionService.encryptString', rule(['extensionHost'], 'main')],
   ['object:DataProtectionService.decryptString', rule(['extensionHost'], 'main')],
   ['command:platform.getLogFileContent', rule(['renderer'], 'main')],
+  // A restart drops every request type the extension host registered, leaving each one open to
+  // whoever registers it first until the new host does
+  ['command:platform.restartExtensionHost', rule(['renderer', 'extensionHost'], 'main')],
 ]);
 
 /**
