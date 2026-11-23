@@ -4,12 +4,13 @@
  * `node` with type stripping.
  */
 
+const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { JSDOM, VirtualConsole } = require('jsdom');
 // Explicit `.ts`: bare `node` does not resolve extensionless TypeScript files.
 const { LIBRARY_DIRS } = require('./library-dist.util.ts');
-const { listDistModules } = require('./list-dist-modules.util.ts');
+const { isCommonJsSource, listDistModules } = require('./list-dist-modules.util.ts');
 
 const REPO_ROOT: string = path.resolve(__dirname, '..', '..', '..');
 
@@ -41,11 +42,31 @@ async function loadLibrary(libraryDir: string): Promise<string[]> {
   console.log(
     `${libraryDir}: loading ${commonJs.length} CommonJS and ${esModules.length} ES modules`,
   );
+  const distDirs: string[] = LIBRARY_DIRS.map((dir: string) => path.join(REPO_ROOT, dir, 'dist'));
   const commonJsFailures: string[] = commonJs.flatMap((file: string) => {
+    if (!isCommonJsSource(fs.readFileSync(file, 'utf8'), file)) {
+      return [`${file}: not valid CommonJS (contains ES module syntax)`];
+    }
     try {
       require(file);
       return [];
     } catch (error) {
+      // Node cannot require() an ES module graph that uses top-level await, and the staged editor
+      // package is one. Consumers bundle these files with webpack and are unaffected, so a file
+      // that is valid CommonJS and fails only for that reason outside our own dist still passes.
+      const dependency: string | undefined = /Required module: (.+)/.exec(errorMessage(error))?.[1];
+      const isExternalAsyncModule =
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ERR_REQUIRE_ASYNC_MODULE' &&
+        dependency !== undefined &&
+        !distDirs.some((dir: string) => dependency.trim().startsWith(dir));
+      if (isExternalAsyncModule) {
+        console.log(
+          `${file}: syntax OK; not required because ${dependency.trim()} uses top-level await`,
+        );
+        return [];
+      }
       return [`${file}: ${errorMessage(error)}`];
     }
   });
