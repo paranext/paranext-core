@@ -356,25 +356,28 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   // Paste and Paste as plain text are handled inside the editor library that ships as the
   // `@eten-tech-foundation/platform-editor` package (its `ClipboardPlugin` reads the clipboard and
   // dispatches the paste), so there is no handler file in this repo to link. `locations` names the
-  // web view and the footnotes component that mount that editor, because a path in another repo
-  // would not resolve. No `command`: the chord is the editor's own, not a PAPI command a menu item
-  // runs.
+  // components that mount that editor, because a path in another repo would not resolve: the web
+  // view, which renders the footnote editor for a note, and the footnote editor component that
+  // embeds the editor for a note's text. `platform-scripture-editor-footnotes.component.tsx` is not
+  // listed: it only forwards `renderEditingFootnote` to `FootnoteList`. No `command`: the chord is
+  // the editor's own, not a PAPI command a menu item runs.
   {
     id: 'scripture-editor-paste',
-    purpose: 'Paste the clipboard into the editor, keeping any markers and formatting it holds',
+    purpose:
+      'Paste the clipboard into the editor. In the Standard view and the footnote editors, USFM pastes as markers; in Simple mode’s text, see CB-3 and CB-5 in the Scripture Data Fidelity Catalog for what a paste keeps',
     category: 'Editing',
     context:
       'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
     keys: { macOS: '⌘V', windows: 'Ctrl+V', linux: 'Ctrl+V' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
     ],
   },
   {
     id: 'scripture-editor-paste-plain-text',
     purpose:
-      'Paste the clipboard as plain text. Where the editor shows markers as editable text (the Standard view, and the footnote editors), USFM in the clipboard pastes as the prose a view with hidden markers copies: a footnote’s words inline, no markers, no verse or chapter numbers. Elsewhere it pastes the clipboard’s text as it is',
+      'Paste the clipboard as plain text. In the Standard view and the footnote editors, USFM pastes as prose (a footnote’s words inline, no markers, no verse or chapter numbers; see CB-27), and text that cannot be turned into prose pastes as a normal paste would. In Simple mode’s text, the text pastes unconverted, and text holding a backslash or slash is refused (CB-5, PT-4911)',
     category: 'Editing',
     context:
       'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
@@ -383,7 +386,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⇧⌘V', windows: 'Ctrl+Shift+V', linux: 'Ctrl+Shift+V' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
     ],
   },
   // The handler is the scripture-editors repo's CopyLimitPlugin; the listed files supply the copy
@@ -689,7 +692,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-editor-context-menu',
     purpose:
-      'Open the editor’s own right-click menu (Cut/Copy/Paste and the Insert footnote/cross-reference/comment/endnote items). While open, the menu holds the keyboard: it is the only keyboard mode on screen, and every other key does nothing until the menu is dismissed or its highlighted item runs',
+      'Open the editor’s own right-click menu (Cut/Copy/Paste/Paste as Plain Text and the Insert footnote/cross-reference/comment/endnote items). While open, the menu holds the keyboard: it is the only keyboard mode on screen, and every other key does nothing until the menu is dismissed or its highlighted item runs',
     category: 'Menus',
     // Not a shortcut this repo registers: the browser raises `contextmenu` inside the editor,
     // which the editor package's `ContextMenuPlugin` (`@eten-tech-foundation/platform-editor`)
