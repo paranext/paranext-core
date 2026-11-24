@@ -239,6 +239,12 @@ open, in progress, or done. Read-only throughout.
   word must appear somewhere in the ticket, in any order. Use 3–6 phrases: the feature's name, its
   user-facing nouns, the PT9 form name, and distinctive wording from the requirements. Narrow a
   noisy phrase to `summary ~ "\"<phrase>\""` (Jira's `summary` is the title).
+- **Code names need the unquoted form too.** For a file name, path or dotted identifier
+  (`webpack.config.base`, `update-from-templates.ts`), the phrase form can miss tickets that
+  contain it verbatim: on 2026-11-24, `text ~ "\"webpack.config.base\""` returned nothing although
+  PT-4447 contains it, while `text ~ "webpack.config.base"` found PT-4447 first. Run such a term
+  again without the inner quotes and read the extra hits; a zero from the phrase form proves
+  nothing about the code name.
 - **Run it through `executeRead` with `responseFields`**, because the default compact result
   leaves out `resolution`, `parent` and the status category even when `fields` asks for them
   (verified 2026-10-12):
