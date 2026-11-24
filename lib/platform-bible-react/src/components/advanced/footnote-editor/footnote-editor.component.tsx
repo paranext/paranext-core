@@ -699,7 +699,7 @@ export default function FootnoteEditor({
       // "Insert cross-reference" / "Insert comment" items). Those items' onSelect closures are
       // bound to the OUTER main-document editorRef, so surfacing them inside this popover would
       // let a right-click here silently mutate the main document. The popover keeps only the
-      // built-in Cut/Copy/Paste context-menu items.
+      // built-in Cut/Copy/Paste/Paste as Plain Text context-menu items.
       contextMenu: undefined,
       markerMenuTrigger: defaultMarkerMenuTrigger,
       hasExternalUI: true,
