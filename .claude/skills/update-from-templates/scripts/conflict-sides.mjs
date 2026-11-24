@@ -26,14 +26,20 @@ const THEIRS = 3;
  * The merge stages present for a conflicted file. A modify/delete conflict has no stage for the
  * side that deleted the file, and an add/add conflict has no merge-base stage.
  */
-const stagesOf = (file) =>
-  new Set(
-    git('ls-files', '--unmerged', '--', `:(top)${file}`)
-      .split('\n')
+const stagesOf = (file) => {
+  const stages = new Set(
+    // `literal`: a file name with `*` or `?` must not be read as a glob
+    git('ls-files', '-z', '--unmerged', '--', `:(top,literal)${file}`)
+      .split('\0')
       .filter(Boolean)
-      // Each line is `<mode> <object> <stage>\t<path>`
-      .map((line) => Number(line.split('\t')[0].split(' ')[2])),
+      // Each entry is `<mode> <object> <stage>\t<path>`
+      .map((entry) => Number(entry.split('\t')[0].split(' ')[2])),
   );
+  // A conflicted file always has at least one stage; none means the lookup missed it, and the
+  // report would wrongly call the file absent on both sides.
+  if (stages.size === 0) throw new Error(`No merge stages found for conflicted file ${file}`);
+  return stages;
+};
 
 /** The file's content at a merge stage. `:<n>:<path>` paths are relative to the repo's top. */
 const contentAt = (n, file) => git('show', `:${n}:${file}`);
@@ -75,7 +81,9 @@ const sideChange = (dir, file, stages, side) => {
   return diff(dir, contentAt(MERGE_BASE, file), contentAt(side, file));
 };
 
-const files = git('diff', '--name-only', '--diff-filter=U').trim().split('\n').filter(Boolean);
+// `-z` lists names unquoted: by default git quotes a non-ASCII name (`"caf\303\251.txt"`), which
+// then matches no file
+const files = git('diff', '-z', '--name-only', '--diff-filter=U').split('\0').filter(Boolean);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'conflict-sides-'));
 let out = '';
 try {

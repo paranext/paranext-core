@@ -61,12 +61,12 @@ paranext-core's `extensions/`, and repos built from `paranext-multi-extension-te
 npm run update-from-templates   # in paranext-core, run it inside extensions/
 ```
 
-It brings in the multi-extension template (a subtree pull for core's `extensions/`, a merge at the root of the other repos), then subtree-pulls `paranext-extension-template` into each extension folder. It stops at the first conflict: resolve, commit, and run it again until every pull reports up to date. Then reconcile `package-lock.json` (take the branch's own side of any lockfile conflict, `git checkout --ours -- package-lock.json`, then `npm i --ignore-scripts` under the repo's pinned Node.js) and run the repo's checks.
+It brings in the multi-extension template (a subtree pull for core's `extensions/`, a merge at the root of the other repos), then subtree-pulls `paranext-extension-template` into each extension folder. It stops at the first conflict: resolve, commit, and run it again until every pull reports up to date. Then reconcile `package-lock.json` (take the branch's own side of any lockfile conflict, `git checkout --ours -- package-lock.json`, then reinstall under the repo's pinned Node.js: `npm i --ignore-scripts` in an extension repo, plain `npm i` in paranext-core, whose install scripts apply its patches and build) and run the repo's checks.
 
 Things to know:
 
 - **Don't trust the script's exit code** (until PT-5114 is fixed). It exits 0 even when it stopped on conflicts; read its output and `git status`.
-- **Check the direction before resolving.** If a pull's conflicts look applied backwards (the template's changes showing up as removals, or the repo's own edits undone), abort it and run the script again rather than resolving by hand.
+- **Check the direction before resolving.** If a pull's conflicts look applied backwards (the template's changes showing up as removals, or the repo's own edits undone), abort it and run the script again rather than resolving by hand. If the re-run looks backwards too, stop: don't resolve it, and record the case on PT-5115.
 - **Keep the repo's own identity and layout** (`name`, `version`, `license`, `lib/` paths, `volta.extends`) and take the template's version bumps and additions.
 
 The full procedure (the backwards-pull checks, core's deliberate differences from the templates, verification gotchas and the PR) is the `update-from-templates` skill: `.claude/skills/update-from-templates/SKILL.md`.

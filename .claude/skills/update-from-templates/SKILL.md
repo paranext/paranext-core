@@ -82,7 +82,7 @@ For each run of the script:
 
 ### 1. Before resolving anything: did the pull go the right way?
 
-Sometimes a pull's conflicts look applied in the wrong direction: the template's changes show up as removals, or the repo's own edits get undone. **Never hand-resolve a pull like that.** Abort it (`git merge --abort`, or `git reset --hard <commit before the run>`), run the script again, and record what happened (see "Record what you see").
+Sometimes a pull's conflicts look applied in the wrong direction: the template's changes show up as removals, or the repo's own edits get undone. **Never hand-resolve a pull like that.** Abort it (`git merge --abort`, or `git reset --hard <commit before the run>`), run the script again, and record what happened (see "Record what you see"). **If the re-run looks backwards too, stop:** don't resolve it, record the case on PT-5115, and ask the user how to go on.
 
 Check these:
 
@@ -94,7 +94,7 @@ Check these:
   git log -1 --format='%h %p | %s' --grep='^git-subtree-dir: <prefix>/*$' HEAD
   ```
 
-  It should be a real squash commit: subject `Squashed '<prefix>/' content from commit …` (no parent) or `Squashed '<prefix>/' changes from … ..…` (one parent). If it is anything else, typically a squash-merged PR whose message copied those trailers (paranext-core's #1634, `4c021221dbe`, is one for `extensions/src/hello-rock3`), expect a wrong merge base and a pull that looks backwards. That is a candidate cause, not yet confirmed: record the case on PT-5115 either way.
+  It should be a real squash commit: subject `Squashed '<prefix>/' content from commit …` (no parent) or `Squashed '<prefix>/' changes from … ..…` (one parent). If it is anything else, typically a squash-merged PR whose message copied those trailers (paranext-core's #1634, `4c021221dbe`, is one for `extensions/src/hello-rock3`), expect a wrong merge base and a pull that looks backwards. That is a candidate cause, not yet confirmed: record the case on PT-5115 either way. A re-run searches from the same `HEAD`, so it finds the same commit and the same merge base: in that case don't expect a re-run to help, and stop as above.
 
 - **Each side's changes (judgment).** For every conflicted file, compare what the template changed since the merge base with what the repo changed:
 
@@ -127,11 +127,15 @@ Repeat until every pull reports `Already up to date` / `Subtree is already at co
 
 ### 4. Lockfile
 
-Run `npm i --ignore-scripts` under the repo's pinned Node.js, not whatever Volta picks for the folder:
+Reinstall under the repo's pinned Node.js, not whatever Volta picks for the folder:
 
-```bash
-volta run --node <volta.node from package.json> npm i --ignore-scripts
-```
+- **Extension repos:** `--ignore-scripts`:
+
+  ```bash
+  volta run --node <volta.node from package.json> npm i --ignore-scripts
+  ```
+
+- **paranext-core:** plain `npm i` (under the same pin), as in Setup. Core's install scripts apply `patches/`, fetch Electron and build what step 5's checks rely on, so skipping them can leave `node_modules` unpatched or unbuilt.
 
 Read the lockfile diff: it should hold only what the `package.json` changes declare (for example a new `@types/node` and its `undici-types`, or a dependency declared per extension). For a large update, compare the lockfile's `packages` maps before and after (added, removed and version-changed top-level packages) rather than reading the raw diff, and match each change to a `package.json` change. A Node.js or npm major change can also add or restore optional platform packages no `package.json` names (`fsevents`, `@esbuild/*`, `@swc/core-*`); check the template's own lockfile before treating one as unexplained. Transitive version bumps pulled up by a new or updated dependency (for example `postcss`, `browserslist`, `caniuse-lite` after `@tailwindcss/postcss` arrives) are expected too: confirm they come from such a dependency (`npm ls <package>`), but don't chase each one further.
 
@@ -154,7 +158,7 @@ Under the repo's pinned Node.js, judge each command by its exit code (and, for c
   - **Type-check:** webpack compiles with SWC, which does not type-check, and lint and build do not run `tsc`. Run the repo's `typecheck` script, or `npx tsc --noEmit -p <tsconfig>` for each extension's `tsconfig.json` (the root one is optional; it can report many unrelated errors), on the branch and on the control. Compare the `error TS` lines, not the exit code (under `volta run` on Windows `tsc` can exit 126 after printing errors): only errors new on the branch count.
 - **Conventions the build does not check** (skip this when only version bumps came in). A template upgrade can change conventions the repo's own code must follow, and lint and build can pass while the result is broken. After a Tailwind 3 → 4 upgrade, for example, classes use the `tw:` prefix, not `tw-`; leftover `tw-` classes and `@apply tw-…` lines silently generate no CSS. Search the repo's own extension code (`.tsx`, `.ts`, `.scss`, `.css`) for the old forms. Then check the new forms generate CSS without reading `dist/`: compile the extension's Tailwind entry stylesheet with its own PostCSS setup and `@tailwindcss/postcss` in a scratch folder, check every class you migrated gets a rule, and include a made-up class as a negative control. Where you can (no login needed), also look at the result in Platform.Bible: `npm start` in the extension repo starts `../paranext-core` with the extension loaded. To stop it, close the app and end the process tree `npm start` began (on Windows `taskkill //T //F //PID <pid>`), then check ports 8876 and 1212 are free. Don't run core's `npm stop` without asking: it kills every webpack, esbuild and Vite process on the machine, including other sessions'.
 - **Build output (`dist/`) is not readable from a session started in a paranext-core checkout:** core's `.claude/settings.json` denies `Read(**/dist/**)`, and that also covers an extension repo the session works in. To check what a build generated, ask the user to copy the files somewhere readable with a `!` command (in Git Bash, so write Windows paths with forward slashes), check the copies, and delete them afterwards.
-- **Before blaming the update for a failure, run the same check on `origin/main` as a control.** A control can also show that something looking broken on the branch was already broken on `main` (platform-bible-sample-extensions' `verse-ref-view` had no Tailwind utilities before the update, because its SCSS used `@import './tailwind.css'`, which Sass leaves as a plain CSS import; `@use` is the fix). Use a second worktree beside the first (for example `<repo>-main-control`), installed under `main`'s Node.js pin. Known pre-existing failures as of 2026-11-21: paratext-bible-internal-extensions' send-receive web-view tests time out under the full suite (they pass alone); paratext-assistant's `checking-assistant` date tests fail outside a UTC-like time zone (run them with `TZ=UTC`).
+- **Before blaming the update for a failure, run the same check on `origin/main` as a control.** A control can also show that something looking broken on the branch was already broken on `main` (platform-bible-sample-extensions' `verse-ref-view` had no Tailwind utilities before the update, because its SCSS used `@import './tailwind.css'`, which Sass leaves as a plain CSS import; `@use` is the fix). Use a second worktree beside the first (for example `<repo>-main-control`), installed under `main`'s Node.js pin. Some repos have tests that fail on `main` too, for example tests that time out only under the full suite (they pass alone) or date tests that fail outside a UTC-like time zone (run them with `TZ=UTC`); the control shows which.
 - **Never remove a control worktree with `git worktree remove` alone:** on Windows it follows the `file:` links in `node_modules` into the core checkout and deletes its files. See step 7 for the safe order.
 - npm 11 may warn that some packages' install scripts are not in an `allowScripts` list (`@swc/core`, `esbuild`, …). Builds still work; note it in the PR if it appears.
 
@@ -184,7 +188,7 @@ Draft the PR body even when asked to stop before pushing; it is where the decisi
 
 **Reviewers:** none designated unless asked. GitHub still adds the repo's CODEOWNERS as reviewers; that is expected, so leave them.
 
-**Auto-merge:** turning it on means an approval merges the PR, so ask the user first, unless they already asked for it. Only where GitHub holds the PR for a review; never assume which repos those are, check. Visibility is `gh repo view <owner>/<repo> --json visibility`; the deciding test is `gh pr view <n> -R <owner>/<repo> --json reviewDecision,mergeStateStatus`: `reviewDecision` is `REVIEW_REQUIRED` only when the branch's rules require an approving review, and `mergeStateStatus` is then `BLOCKED`. `BLOCKED` on its own is not enough, since pending CI also blocks. Reading the protection rule itself needs admin rights on the repo (the API returns 404 or 403 without them), so rely on `reviewDecision`. As of 2026-11-23: paranext-core, paratext-bible-extensions and platform-bible-sample-extensions are public and hold PRs for review; paratext-bible-internal-extensions and paratext-assistant are private with no branch protection, so a mergeable PR there merges the moment auto-merge is on. Where it is safe: `gh pr merge <n> --auto --merge --match-head-commit <full sha>`, then add the auto-merge note to the banner. Elsewhere, merge by hand with a merge commit after approval. The merge-state test needs the PR to exist, so on a stop-before-push run leave the auto-merge sentence out of the drafted banner and say the decision is still open.
+**Auto-merge:** turning it on means an approval merges the PR, so ask the user first, unless they already asked for it. Only where GitHub holds the PR for a review; never assume which repos those are, check. Visibility is `gh repo view <owner>/<repo> --json visibility`; the deciding test is `gh pr view <n> -R <owner>/<repo> --json reviewDecision,mergeStateStatus`: `reviewDecision` is `REVIEW_REQUIRED` only when the branch's rules require an approving review, and `mergeStateStatus` is then `BLOCKED`. `BLOCKED` on its own is not enough, since pending CI also blocks. Reading the protection rule itself needs admin rights on the repo (the API returns 404 or 403 without them), so rely on `reviewDecision`. Where `reviewDecision` is not `REVIEW_REQUIRED`, a mergeable PR merges the moment auto-merge is on. Where it is safe: `gh pr merge <n> --auto --merge --match-head-commit <full sha>`, then add the auto-merge note to the banner. Elsewhere, merge by hand with a merge commit after approval. The merge-state test needs the PR to exist, so on a stop-before-push run leave the auto-merge sentence out of the drafted banner and say the decision is still open.
 
 ### 7. Clean up
 
