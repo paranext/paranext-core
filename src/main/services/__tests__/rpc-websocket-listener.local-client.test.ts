@@ -1,7 +1,6 @@
 import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { RpcWebSocketListener } from '@main/services/rpc-websocket-listener';
 import { REGISTER_METHOD } from '@shared/data/rpc.model';
-import { REGISTRY_TOKEN_REQUEST_TYPE } from '@node/services/request-registry-tokens.service-model';
 import { createFakeWebSocket } from './fake-web-socket-test.util';
 import type { FakeWebSocketServer } from './fake-web-socket-test.util';
 
@@ -84,11 +83,11 @@ describe('RpcWebSocketListener.acceptLocalClient', () => {
 });
 
 describe('a WebSocket client handed over without its handshake request', () => {
-  test('is refused the Registry token request type, as if it had sent Origin', async () => {
+  test('is served as unidentified and refused a restricted request type', async () => {
     servers.length = 0;
     const listener = await connectedListener();
-    const issueToken = vi.fn(() => 'token');
-    await listener.registerMethod(REGISTRY_TOKEN_REQUEST_TYPE, issueToken);
+    const readLog = vi.fn(() => 'log');
+    await listener.registerMethod('command:platform.getLogFileContent', readLog);
     const onConnection = servers[0]?.getHandler('connection');
     if (!onConnection) throw new Error('Main never started listening for connections');
     const client = createFakeWebSocket();
@@ -97,12 +96,32 @@ describe('a WebSocket client handed over without its handshake request', () => {
     client.receiveMessage({
       jsonrpc: '2.0',
       id: 1,
-      method: REGISTRY_TOKEN_REQUEST_TYPE,
-      params: ['ext', 'res', []],
+      method: 'command:platform.getLogFileContent',
+      params: [],
     });
 
     await vi.waitFor(() => expect(client.sentPayloads).toHaveLength(1));
     expect(client.sentPayloads[0]).toContain('not available');
-    expect(issueToken).not.toHaveBeenCalled();
+    expect(readLog).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledWith(expect.stringContaining('as unidentified'));
+  });
+
+  test('is refused a handler main restricted with allowedCallers', async () => {
+    servers.length = 0;
+    const listener = await connectedListener();
+    const handle = vi.fn(() => 'handled');
+    await listener.registerMethod('command:test.restricted', handle, undefined, {
+      allowedCallers: ['extensionHost'],
+    });
+    const onConnection = servers[0]?.getHandler('connection');
+    if (!onConnection) throw new Error('Main never started listening for connections');
+    const client = createFakeWebSocket();
+
+    onConnection(client.webSocket);
+    client.receiveMessage({ jsonrpc: '2.0', id: 1, method: 'command:test.restricted', params: [] });
+
+    await vi.waitFor(() => expect(client.sentPayloads).toHaveLength(1));
+    expect(client.sentPayloads[0]).toContain('not available');
+    expect(handle).not.toHaveBeenCalled();
   });
 });

@@ -29,6 +29,13 @@ export interface WorkerAppFixtures {
    * pinned and asserted rather than merely inherited from whatever the checkout happens to hold.
    */
   interfaceMode: RequiredInterfaceMode;
+  /**
+   * When set, launches the app with `DEV_NOISY` set to this value instead of inheriting it, so a
+   * spec that needs the test extensions (`evil`, `helloRock3`, ...) gets them even where the
+   * environment sets `DEV_NOISY=false`, as CI does. Set with `test.use({ devNoisy: true })`; a spec
+   * that sets it gets its own worker and app.
+   */
+  devNoisy: boolean | undefined;
   electronApp: ElectronApplication;
 }
 
@@ -43,11 +50,13 @@ export type AppFixtures = WorkerAppFixtures & TestAppFixtures;
 export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
   // Option fixture: see the WorkerAppFixtures doc for why the default is 'simple'.
   interfaceMode: ['simple', { option: true, scope: 'worker' }],
+  // Option fixture: undefined inherits DEV_NOISY from the environment (see launchElectronApp)
+  devNoisy: [undefined, { option: true, scope: 'worker' }],
 
   // Worker-scoped: the Electron process is launched once per worker and shared
   // across all tests, avoiding the process startup/teardown cost per test.
   electronApp: [
-    async ({ interfaceMode }, use) => {
+    async ({ interfaceMode, devNoisy }, use) => {
       // Seed platform.firstRunComplete before launch so the first-run wizard overlay (PT-4175) does
       // not gate the app on a fresh CI profile. The wizard is a full-screen modal Dialog that
       // aria-hides the rest of the app (breaking getByRole menu queries) and intercepts pointer
@@ -67,7 +76,9 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
       // eventually undo a leak like that, but only a run that reaches it — a hard kill (Ctrl+C, a
       // crashed worker) reaches neither that safety net nor this finally.
       try {
-        const ctx: ElectronAppContext = await launchElectronApp();
+        const ctx: ElectronAppContext = await launchElectronApp(
+          devNoisy === undefined ? {} : { envOverrides: { DEV_NOISY: String(devNoisy) } },
+        );
         try {
           await use(ctx.electronApp);
         } finally {

@@ -94,6 +94,70 @@ Modules must not enable:
 
 Extensions may bundle additional packages into their own code, provided they meet the security requirements above.
 
+### How the restrictions are enforced
+
+The extension host (`src/extension-host/services/extension.service.ts`) enforces these lists in
+the extension host process:
+
+- **Extension files load through the host's own wrapper, not Node's loader.** `loadExtensionModule`
+  (`extension-sandbox.util.ts`) reads the entry file named by the manifest's `main` and compiles it
+  with `vm.compileFunction`, handing it a plain `module`/`exports` and a bare `require` that calls
+  `requireForExtension`. That `require` returns an extension interface module
+  (`EXTENSION_INTERFACE_MODULE_SPECIFIERS`) or throws. Extension code gets no handle on Node's
+  module loader or cache (`require.cache`, `require.resolve`, `module.constructor`), and dynamic
+  `import()` rejects because no dynamic-import callback is given. `Module.prototype.require` is not
+  replaced: extension files never reach it, and a replacement would not stop a leaked real
+  `require`, whose `.main` and `.cache` reach Node's loader anyway.
+- **Module helpers on `process` are disabled at activation.** `blockProcessModuleAccess` replaces
+  `process.getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`, `loadEnvFile`,
+  `_getActiveHandles`, `_getActiveRequests` and `execve` with functions that throw, and sets
+  `process.mainModule` to `undefined`. It also replaces `process.stdin` with an empty stream: the
+  host's standard input is the null device (`/dev/null`, `NUL` on Windows), so Node would otherwise
+  make it a file stream carrying the whole `fs` module.
+- **Code built from strings is disabled at activation.** `blockCodeGenerationFromStrings` deletes
+  `globalThis.eval` and `globalThis.Function` and locks the `constructor` of the four function
+  prototypes (plain, async, generator, async generator) to a function that throws.
+- **Lockdowns come before any load.** The host gets its extension loader only from
+  `lockDownAndCreateExtensionLoader`, which applies both lockdowns before returning it.
+- **The logger exposes only logging methods.** `papi.logger` in the extension host is a frozen
+  object of the seven logging methods (`createExtensionLogger` in `extension-logger.util.ts`), not
+  the electron-log logger, whose `transports.file` settings could point the log file and
+  `readAllLogs` at any path.
+- **Network:** `fetch` is replaced with `papi.fetch`; `XMLHttpRequest` and `WebSocket` throw.
+- Refusals from the loader and the lockdowns contain the text `not allowed in extensions`.
+
+The regression guard is the `evil` extension's sandbox probes (`extensions/src/evil/evil.js`, which
+logs `Sandbox probes (<phase>): <refused>/<total> refused` and a `<<BAD>>` line per escape, at load,
+at activation and again 3 seconds later to catch a route the host reopens after startup) and
+`src/extension-host/services/extension-sandbox.probes.test.ts`, which runs the same probes in a
+child Node process and fails if any route is open. The running app is checked too: the smoke E2E
+test `e2e-tests/tests/smoke/extension-sandbox.spec.ts` reads every phase's results from the dev app
+through the `evil.getSandboxProbeResults` command, and CI's `check packaged extension sandbox` step
+(`e2e-tests/check-packaged-sandbox-probes.ts`) does the same against the packaged build on Linux,
+Windows and macOS (non-blocking on macOS).
+
+This is an in-process sandbox. It closes the module-loading and string-compilation routes listed
+above, and every extension still shares one JavaScript realm and one `process` with the host, so it
+is not a hard security boundary. As of 2026-11-09 these routes are known to remain open:
+
+- a `net.Socket` built from `process.stdout.constructor` or `process.stderr.constructor`;
+- the rest of the `process` surface, such as `kill`, `send`, `report.writeReport`, `chdir` and
+  `env`;
+- in dev builds, grabbing host functions from stack frames through `Error.prepareStackTrace` and
+  `CallSite.getFunction()`;
+- (added 2026-11-18) after anything in the host has called `fetch` once, Node's built-in HTTP client
+  (undici) on `globalThis[Symbol.for('undici.globalDispatcher.1')]`, whose `dispatch` makes
+  requests that skip `papi.fetch`. Harmless while `papi.fetch` passes requests through unchanged,
+  but a gap if `papi.fetch` ever enforces a policy.
+
+A follow-up audit of the `process` surface is recommended but not filed as of 2026-11-09.
+Process-level isolation (Node's permission model, a process per extension) is out of scope as of
+2026-11-09; see `adr-extensions-load-through-sandbox-loader`.
+
+Extensions also share the host's one PAPI connection, so main cannot tell one extension's requests
+from another's (see
+[What connection identity does not protect against](#what-connection-identity-does-not-protect-against)).
+
 For the complete and up-to-date list, see the [Module Import Restrictions wiki](https://github.com/paranext/paranext/wiki/Module-import-restrictions).
 
 ---
@@ -145,53 +209,119 @@ do that it takes over parts of the renderer realm, which constrains all renderer
 What the guard does not stop, and why, is in `adr-create-element-guard-trusts-call-sites` in
 [Architecture-Decisions.md](./Architecture-Decisions.md).
 
+### PAPI connection identity
+
+Main's PAPI WebSocket listens on `localhost:8876` only, so nothing off the machine can reach it.
+On the machine, main knows which process each connection belongs to without trusting anything the
+connection says about itself:
+
+| Identity | How main knows |
+| --- | --- |
+| `main` | Main's own in-process calls |
+| `renderer` | The connection came from main's port broker (see [The renderer's PAPI port](#the-renderers-papi-port)) |
+| `extensionHost` | The handshake presented the client secret main gave the extension host it launched |
+| `dotnetDataProvider` | The handshake presented the client secret main gave the data provider it launched |
+| `unidentified` | A WebSocket connection that presented no secret: a browser page, an external tool, a child started without main |
+
+Main creates both secrets per launch with `crypto.randomBytes(32)` and hands them over by fork IPC
+(extension host), standard input (packaged .NET) or an environment variable set only in the spawn
+options (`dotnet watch` in development). It keeps only a SHA-256 digest of each client secret and
+compares digests in constant time. A wrong secret is refused outright (401); main proves itself to the
+child by returning the server secret in its handshake reply. Secrets never appear on a command line,
+in main's own environment, or in a log.
+
+The child presents its client secret in the `x-papi-client-secret` handshake header and checks main's
+`x-papi-server-secret` reply, then drops its secrets: they are used once, at connect. Each launched
+identity has **one open connection**: a second handshake with the same launch's secret is refused
+with 409 until the first closes (.NET retries briefly, for `dotnet watch` restarts), and a
+connection from an earlier launch is closed when the next launch connects. The renderer is not a
+WebSocket client, so its identity comes from the port broker, not a header.
+
+**Unidentified clients keep everything except a short restricted list.** Browser clients are
+legitimate: `platform.openDeveloperDocumentationUrl` opens the OpenRPC playground against this
+WebSocket, and developers test PAPI calls from browsers and tools. The table in
+`src/shared/data/request-access.data.ts` restricts these request types:
+
+| Request type | Who may call | Who may register |
+| --- | --- | --- |
+| `requestRegistryTokens:` (whole category) | `extensionHost` | `dotnetDataProvider` |
+| The internet settings setters | `renderer`, `extensionHost` | `dotnetDataProvider` |
+| `command:paratextRegistration.setParatextRegistrationData` | `renderer`, `extensionHost` | `dotnetDataProvider` |
+| `command:paratextRegistration.validateParatextRegistrationData` | `renderer`, `extensionHost` | `dotnetDataProvider` |
+| `command:paratextRegistration.getParatextRegistryUrl` | `renderer`, `extensionHost` | `dotnetDataProvider` |
+| `command:paratextRegistration.resetForFirstRun` | main only | `dotnetDataProvider` |
+| `command:platform.resetFirstRun` | `renderer` | `main` |
+| `object:DataProtectionService.encryptString` / `.decryptString` | `extensionHost` | `main` |
+| `command:platform.getLogFileContent` | `renderer` | `main` |
+| `command:platform.restartExtensionHost` | `renderer`, `extensionHost` | `main` |
+
+Main is always allowed to call. A request type with no row can be registered by anyone, and the
+first to register it receives every call: a request type whose handler is handed a secret, or whose
+answer decides where the user is sent, needs a row for its registrant even when its callers are
+harmless, as `validateParatextRegistrationData` and `getParatextRegistryUrl` have. A restart of the
+extension host drops everything it registered, so `restartExtensionHost` has a row to keep an
+unidentified client from opening that window whenever it likes; the window while the app starts
+remains (PT-5072). A TS process
+applies the same check to its own handlers in `RpcClient.request`, so a handler in the calling
+process answers only callers the rules allow. .NET's `PapiClient` calls its own handlers directly,
+because no third-party code runs there. Refusals answer `MethodNotFound` with
+`'<method>' is not available on this connection` and are logged with the identity.
+
+**An extension can restrict its own handlers.** `allowedCallers` on `registerCommand` names
+the processes that may call the handler (see
+[Extension-Development-Guide.md](Extension-Development-Guide.md)). It is ignored for a request type
+the table restricts, and a client that registers the name first can receive the calls but cannot
+make the real handler act.
+
+**The guarantee is "only the extension host process", not "only extensions with the privilege".**
+See [What connection identity does not protect against](#what-connection-identity-does-not-protect-against).
+Deciding how to keep one extension from acting as another is PT-5072.
+
+**A child started without main loses the restricted features.** `npm run start:extension-host` and
+VS Code's "Debug Extension Host" have no IPC channel, and `npm run start:data` and "Debug .NET Core"
+have no secret, so each connects unidentified: the extension host is refused Registry tokens,
+`papi.dataProtection` and the setters, and main refuses .NET's registration of its rows (.NET logs
+each refusal and keeps running).
+
 ### Paratext Registry access tokens
 
 The `requestRegistryTokens` elevated privilege hands extensions Paratext Registry access tokens
 made from the user's registration code. The code stays in the C# data provider. The extension host
 checks the caller's `paratextRegistryTokenResources` before forwarding a request on
-`requestRegistryTokens:getAccessToken`, a request type extension code can't send through PAPI.
-Tokens carry read scopes only, expire after the Registry-set lifetime (currently 20 minutes), and
-are valid only at the named service.
+`requestRegistryTokens:getAccessToken`. Tokens carry read scopes only, expire after the
+Registry-set lifetime (currently 20 minutes), and are valid only at the named service.
 
-The allowlist stops honest mistakes, not a malicious installed extension. All extensions share one
-JavaScript realm in the extension host, so an installed extension can wrap shared built-ins (for
-example `JSON.parse`, `Promise.prototype.then`, the writable `globalThis.fetch`, or `Object.freeze`
-before activation) and see another extension's tokens without holding the privilege. `createProcess`
-has the same limit. The real control is which extensions get installed.
+Main lets only the extension host process call `requestRegistryTokens:` request types and only the
+data provider main launched register them (see [PAPI connection identity](#papi-connection-identity)).
+The C# handler does not check the allowlist itself. The public PAPI surface gives extensions no way
+to send this request type, so an honest extension reaches it only through the privilege getter,
+which checks the allowlist. Main cannot tell extensions apart on the host's connection, so a
+malicious extension can still send it directly (see
+[What connection identity does not protect against](#what-connection-identity-does-not-protect-against)).
 
-The C# handler does not check the allowlist itself. Main refuses the request type to browser pages
-and web views with the stopgap below, but anything else that can reach the unauthenticated PAPI
-WebSocket can call it for any resource registered with the Registry. Local processes already run
-as the user and can read the user's Paratext data directly, so they gain nothing new.
+### What connection identity does not protect against
 
-**Insecure temporary stopgap, not a security boundary; PT-2893 must replace it.** Main refuses
-`requestRegistryTokens:getAccessToken` from any WebSocket connection whose handshake carried an
-`Origin` header, and from renderer connections (`RpcServer.processMessage` in
-`src/main/services/rpc-server.ts`). Browsers always send `Origin` on a WebSocket handshake, and page
-script can't remove it. The extension host's `ws` client and the C# `ClientWebSocket` send none.
-This keeps out two callers that can already call every other PAPI method, and that this request
-type would hand a credential that works off the machine:
+- **A malicious installed extension.** Every extension shares one JavaScript realm and one
+  connection with the extension host. It can wrap shared built-ins (for example `JSON.parse`,
+  `Promise.prototype.then`, the writable `globalThis.fetch`, or `Object.freeze` before activation)
+  to read another extension's token without holding the privilege, act as another extension, or
+  send any request on the host's connection, including ones the privilege APIs guard
+  (`requestRegistryTokens:`, `createProcess`). Main cannot tell that traffic from the host's own, so
+  the allowlists stop honest mistakes, not this. The real boundary is which extensions get
+  installed, until extensions run in separate processes.
+- **A bad extension's WebView** for rows that allow `renderer`: a WebView can drive its window's PAPI
+  connection, and reach other renderer internals through `window.top` (open work: PT-5065).
+- **Malware running as the same user.** It can read process memory and, on Linux, a process's
+  initial environment (where the development .NET secret travels).
+- **Anything not on the restricted list.** A browser page can still call every other request type,
+  including ones that write project data and settings.
 
-- A web page open in the user's browser, which can connect to `ws://localhost:8876` because
-  connections are not authenticated.
-- Any installed extension's web view, privilege or not. The main process blocks it from opening a
-  WebSocket to port 8876 (see [The renderer's PAPI port](#the-renderers-papi-port)), but it can
-  still drive its window's PAPI connection, and reach other renderer internals through
-  `window.top` (for example webpack's chunk-loading global; open work: PT-5065).
+The connection is not encrypted (`wss`): loopback traffic never leaves the machine, the server
+secret already proves main to its children, and browsers refuse a self-signed certificate on
+`wss://` unless the user installs it, which would break the playground.
 
-The stopgap trusts a header instead of identifying the caller, so any process that leaves `Origin`
-out gets through. Don't treat it as the fix or build on it.
-
-Rejecting browser connections outright is not the fix: browser clients are legitimate too.
-`platform.openDeveloperDocumentationUrl` opens the OpenRPC playground against this WebSocket, and
-developers test PAPI calls from browsers; the stopgap refuses them only this request type. As of
-2026-10, authenticating the clients the main process launches, so that sensitive request types like
-this one can be limited to the extension host, is open work in PT-2893. A renderer connection can't
-be trusted with them even once identified, because a web view can drive its window's PAPI
-connection.
-
-Rationale: `adr-registry-tokens-via-elevated-privilege` in `Architecture-Decisions.md`.
+Rationale: `adr-papi-connection-identity-and-access-table` and
+`adr-registry-tokens-via-elevated-privilege` in `Architecture-Decisions.md`.
 
 ---
 

@@ -74,6 +74,21 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
     }
 
     [Test]
+    public async Task Initialize_RegistrationRefused_LogsAndDoesNotThrow()
+    {
+        // The service from SetUp already holds the request type, so this registration is refused,
+        // as main refuses it to a data provider it did not launch
+        var second = new RegistryAccessTokenService(Client, _userContext, _tokenClient, () => _now);
+
+        await second.InitializeAsync();
+
+        Assert.That(
+            _capturedError.ToString(),
+            Does.Contain("Registry access token service is unavailable")
+        );
+    }
+
+    [Test]
     public void AllowedScopes_AreTheFiveReadScopes()
     {
         // REGISTRY_READ_SCOPES in src/shared/models/request-registry-tokens-privilege.model.ts pins

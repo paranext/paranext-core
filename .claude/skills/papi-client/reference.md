@@ -116,7 +116,6 @@ These methods don't follow the `category:directive` pattern:
 | Method | Description | Returns |
 |--------|-------------|---------|
 | `command:platform.getOSPlatform` | Get operating system | `"win32"`, `"darwin"`, or `"linux"` |
-| `command:platform.getLogFileContent` | Get current log content | string |
 | `command:platform.isFullScreen` | Check full screen mode | boolean |
 
 ### UI Modification
@@ -132,7 +131,6 @@ These methods don't follow the `category:directive` pattern:
 |--------|-------------|---------|
 | `command:platform.quit` | Close the application | Terminates all processes |
 | `command:platform.restart` | Restart the application | All state is lost |
-| `command:platform.restartExtensionHost` | Restart extension host | Extensions reload |
 
 ### Utility
 

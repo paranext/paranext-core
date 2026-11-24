@@ -3715,6 +3715,95 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (accelerators behind the overlay) is PT-4851 and needs main to notice a window's port dying on
   its own. The `TODO(PT-4435)` reconnect markers are re-homed on PT-4495.
 
+## adr-extensions-load-through-sandbox-loader: Extension files load through the host's own vm wrapper, and the remaining module and code-generation routes are locked at activation
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:** PT-1566. The extension host restricted extension imports only by replacing
+  `Module.prototype.require` with a shim, and loaded each extension's entry file with Node's own
+  `require(dir)`, so extension code ran as an ordinary CommonJS module. That left routes to
+  blocked Node modules the shim never saw: dynamic `import('fs')` (served by the ESM loader, not
+  `require`), Node's loader through `module.constructor._load` and `require.cache`,
+  `process.mainModule`, and the `process` helpers `getBuiltinModule`, `binding`, `_linkedBinding`
+  and `dlopen`. Code could also be built from strings through the `constructor` of any function
+  literal (plain, async, generator, async generator) even though `eval` and `Function` were
+  deleted from the global object. Running this branch's `evil` extension (16 sandbox probes at the
+  time) against the extension host as it was before the change refused only 4 of the 16 probes.
+- **Decision:** (1) **Loader over hooks.** `loadExtensionModule`
+  (`src/extension-host/services/extension-sandbox.util.ts`) reads the entry file and compiles it
+  with `vm.compileFunction` without an `importModuleDynamically` callback, handing it a plain
+  `module`/`exports` and a bare `require` that calls `requireForExtension` (`extension.service.ts`).
+  Extension code never touches Node's CommonJS loader, module cache or dynamic-import machinery, and
+  `import()` rejects. (2) **String-built code is blocked by locking prototypes at activation**
+  (`blockCodeGenerationFromStrings`): `eval` and `Function` are deleted and the four function
+  prototypes' `constructor` is made a non-writable, non-configurable function that throws. Each kind
+  gets its own throwing function carrying the original's `name` and `prototype`, so
+  `.constructor.name`, `instanceof` and `util.inspect` still tell function kinds apart; only a
+  reference to an original constructor taken before the lockdown stops matching `fn.constructor`.
+  (3) **`process` helpers are replaced with throwing stubs at activation**
+  (`blockProcessModuleAccess`: `getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`,
+  `loadEnvFile`, `_getActiveHandles`, `_getActiveRequests`, `execve`), `process.mainModule` is set
+  to `undefined`, and `process.stdin` (a file stream carrying `fs`, because the host's standard
+  input is the null device: `/dev/null`, `NUL` on Windows) is replaced with an empty stream.
+  **`papi.logger` is narrowed** to a frozen object of the seven logging methods
+  (`createExtensionLogger`), because electron-log's `transports.file` can point the log file and
+  `readAllLogs` at any path and freezing the logger is shallow; the methods are bound, not wrapped,
+  so the caller shown on each log line is still the extension's. (4) **The
+  `Module.prototype.require` shim is removed.** Entry files no longer go through it, and as a
+  backstop it stopped little: a leaked real `require` carries `.main` and `.cache`, which reach
+  Node's loader around it. It also refused the host's own `require` calls made after activation
+  started. Refusals from the loader and the lockdowns contain `not allowed in extensions`. The
+  `evil` extension's probes and `extension-sandbox.probes.test.ts` (which runs them in a child Node
+  process with and without the lockdowns) are the regression guard. The host gets its loader only
+  from `lockDownAndCreateExtensionLoader`, which applies both lockdowns first, so no extension can
+  load before them; the probe test loads `evil` through that function. The running host's wiring is
+  checked end to end rather than by reading `extension.service.ts` as text (rejected as brittle):
+  `evil` returns each phase's results from the `evil.getSandboxProbeResults` command, which the
+  smoke E2E test `extension-sandbox.spec.ts` reads from the dev app and CI's `check packaged
+  extension sandbox` step reads from the packaged build on every platform (non-blocking on macOS,
+  like the E2E step). The spec loads `evil` by launching with `test.use({ devNoisy: true })`: CI
+  runs the smoke suite with `DEV_NOISY=false`, so without that line `evil` never loads there.
+- **Alternatives:** (A) An ESM loader hook (`module.register`) plus caller detection to refuse
+  dynamic imports from extension files — rejected: it closes only `import()`, leaves the loader
+  and cache reachable, and identifying the caller from a resolve hook is fragile. (B) Starting the
+  extension host with `--disallow-code-generation-from-strings` — rejected: it is process-wide
+  from the first line, so it also applies to the host and its bundled libraries, and setting it
+  later with `v8.setFlagsFromString` has no effect (checked in plain Node 22). (C) Process-level
+  isolation (Node's `--permission` model, or a process per extension) — deferred as out of scope:
+  it is the only route to a hard boundary but changes how extensions are hosted.
+- **Consequences:** This is an in-process sandbox. It closes the module-loading and
+  string-compilation routes listed above; it is not a hard security boundary, because every
+  extension shares one JavaScript realm and one `process` with the host. Known to remain open as of
+  2026-11-09: a `net.Socket` built from `process.stdout.constructor` or
+  `process.stderr.constructor`; the rest of the `process` surface (`kill`, `send`,
+  `report.writeReport`, `chdir`, `env`); and, in dev builds, grabbing host functions from stack
+  frames through `Error.prepareStackTrace` and `CallSite.getFunction()`. Also open (added
+  2026-11-18): after the host calls `fetch` once, Node's built-in HTTP client (undici) on
+  `globalThis[Symbol.for('undici.globalDispatcher.1')]` makes requests that skip `papi.fetch`;
+  harmless while `papi.fetch` passes requests through unchanged. The published type of `papi.logger`
+  in `@papi/backend` narrows from electron-log's `MainLogger` to its seven logging methods; no known
+  extension used anything else. A follow-up audit of the `process` surface is recommended (not filed
+  as of 2026-11-09). Extensions that relied on string-built code or on Node's `module` beyond
+  `exports` break; neither was supported. The extension module cache is no longer involved: a
+  reloaded extension re-reads its file, and nothing deletes `require.cache` entries. Only
+  CommonJS-shaped entry files load (an ES module entry with `import`/`export` syntax fails to
+  compile); `exports.default` still works. The entry file is resolved literally from the manifest's
+  `main` (with `.ts` changed to `.js`), not by Node's `require(dir)` through the directory's
+  `package.json` `main` or `index.js`: every core extension agrees as of 2026-11-09, but a
+  third-party extension whose `package.json` `main` differs from its manifest `main`, or whose
+  manifest `main` has no file extension or names a directory, now fails to load, with an error
+  saying that `main` must name the built `.js` file exactly. Scripts compiled with
+  `vm.compileFunction` do not get Node's source-map rewriting, so the dev extension host installs
+  its own `Error.prepareStackTrace` (`installSourceMappedStackTraces`). `loadExtensionModule`
+  records each extension file's inline source map every time it loads the file, so a rebuilt
+  extension is mapped through its new map; host frames are mapped through the source maps Node
+  recorded when tsx transpiled them. `source-map-support` was rejected because it caches maps by
+  path for the life of the process, so extensions rebuilt in dev were mapped through their old map.
+  Packaged builds install none of this, since extensions ship without source maps there. Packaged
+  builds are checked automatically in CI on Linux, Windows and macOS (see above). Revisit if process
+  isolation is taken up. Supersedes in part the mechanism described in `adr-licensing-boundary`
+  ("shimming `Module.prototype.require`"); the licensing decision there is unchanged.
+
 ## adr-find-block-boundary-whitespace: Find tolerates a whitespace gap only at block boundaries, never mid-paragraph
 
 - **Date:** 2026-09-09
@@ -5799,6 +5888,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   LICENSING.md, "What a third-party extension links against".
 - **Source:** the AGPL relicense (`LICENSING.md`, per-directory `LICENSE` files); rule settled during
   the relicense code review; PAPI question raised in the review of #2654.
+- **Amended 2026-11-09 (PT-1566):** superseded in part by
+  `adr-extensions-load-through-sandbox-loader`. The host now supplies the `@papi/*` modules
+  through the `require` it hands each extension file when it loads it (`requireForExtension`);
+  the `Module.prototype.require` shim is removed. The licensing decision and the Extension
+  Interface it relies on are unchanged.
 
 ## adr-lightweight-decision-log: Keep a lightweight, gate-free architecture-decisions log
 
@@ -7651,6 +7745,60 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   trip to the extension host. A hidden panel needs no catch-up: the switch reloads it like a visible
   one, and picking the selection is data, not layout.
 
+## adr-papi-connection-identity-and-access-table: Main identifies each PAPI connection by a per-launch secret and restricts a short list of request types by identity
+
+- **Date:** 2026-11-13
+- **Status:** Accepted
+- **Context:** The PAPI WebSocket on `localhost:8876` checked nothing at connect, so any local
+  process and any page open in the user's browser could call every request type and register any
+  unclaimed one, including a sensitive one before its real handler started. A sweep found a
+  browser page could change the proxy and DBL server addresses while the saved passwords stayed in
+  use, delete or switch the registration, decrypt anything protected with `papi.dataProtection`,
+  and read the whole main log. The only guard was an `Origin`-header check on
+  `requestRegistryTokens:getAccessToken`, which trusted a header the caller supplies.
+- **Decision:** Main issues two secrets (`crypto.randomBytes(32)`, base64url) to each child each
+  time it launches it: over fork IPC to the extension host, before any extension loads; on standard
+  input to packaged .NET; in an environment variable set only in the spawn options to .NET in
+  development, where `dotnet watch` passes it to each restart. The child presents the client secret
+  in the `x-papi-client-secret` handshake header and closes unless main's reply carries the server
+  secret in `x-papi-server-secret`; it uses them once and drops them. Main keeps only a SHA-256
+  digest of each client secret and tags every connection `main`, `renderer` (port broker),
+  `extensionHost`, `dotnetDataProvider` or `unidentified`; a wrong secret is refused with 401, a
+  second connection of an open launch with 409, and an earlier launch's connection is closed when
+  the next launch connects. A frozen table in `src/shared/data/request-access.data.ts` names, for a
+  short list of request types, who may call (main always may) and the one identity that may
+  register. Registrants can restrict their own handlers with `allowedCallers` on
+  `NetworkMethodHandlerOptions`, ignored for a request type the table restricts. `RpcServer` enforces both on every
+  remote call (before the event branch, per request in a batch) and registration;
+  `RpcClient.request` enforces them on the in-process shortcut, and .NET's `PapiClient` calls its own
+  handlers directly. The `Origin` check is removed.
+- **Alternatives:** Deny by default: closes the browser-page hole, but every external client would
+  need a credential route, and it reverses the position that browser clients (the OpenRPC
+  playground, browser-based testing) are legitimate. Read-only unless identified: needs every
+  request type classified. Presenting the secret in a grown `network:announcePeer`: the connection
+  would exist unidentified until it arrived, so a registration could come first. Hard-coding
+  extension commands in core's table: core would have to know other repos' command names;
+  extensions declare `allowedCallers` instead. A shared secret between a WebViewController and its
+  WebView: same-origin WebViews can read each other and share one connection. Encrypting the socket
+  (`wss`): loopback traffic never leaves the machine, the server secret already proves main to its
+  children, `wss` identifies no client, and it would need a per-launch certificate, pinning in `ws`
+  and C#, and a user-installed trusted certificate for browsers, which breaks the playground. A C#
+  copy of the table: no third-party code runs in .NET, and a second copy would drift.
+- **Consequences:** The guarantee for a restricted request type is "only the extension host
+  process", not "only the extensions that hold the privilege": every extension shares the host's
+  realm and connection, so a malicious installed extension can still send anything on it (PT-5072
+  decides how to separate extensions). A WebView can drive its window's connection, so rows that
+  allow `renderer` allow a WebView. Unidentified clients keep everything not on the list, including
+  writes to project data and settings. A child started without main (`npm run start:data`, VS Code's
+  "Debug .NET Core", `npm run start:extension-host`, "Debug Extension Host") has no secret, connects
+  unidentified, and loses the restricted features; if that ever matters while debugging, the route
+  to add is dev-only: in unpackaged builds main writes both children's secrets to a user-only file,
+  and a standalone child reads it when it was handed nothing. No child reconnects today; reconnect
+  work (PT-4495) will need a way to obtain a fresh secret. The secret-delivery channel is the one a
+  dynamic port (PT-4109) can reuse. Event ownership is unchanged (PT-5073). A new sensitive request
+  type goes in the table, with a test that its string matches the constant its handler registers.
+- **Source:** PT-2893; the Marketplace's use of `allowedCallers` is PT-5074.
+
 ## adr-papi-port-blocked-at-the-session: Renderer windows are kept off the PAPI port by the main process's session, not by the renderer alone
 
 - **Date:** 2026-11-12
@@ -9495,6 +9643,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   follow-up above, previously tracked as PT-4750, is retargeted to PT-4884 (throw codes instead of
   returning them); revisit it together with the WebSocket-authentication and consent-prompt
   conditions above.
+- **Amended 2026-11-13:** Main now identifies each connection by a per-launch secret, and only the
+  extension host process may call `requestRegistryTokens:` request types and only the data
+  provider main launched may register them (`adr-papi-connection-identity-and-access-table`). The
+  `Origin`-header stopgap described above is removed. A web page or WebView can no longer send the
+  request type, because it is not the extension host's connection. The public PAPI surface gives
+  extensions no way to send this request type, so an honest extension reaches it only through the
+  privilege getter, which checks the allowlist; a malicious extension sharing the host's connection
+  can still send it directly. This meets the WebSocket-authentication revisit
+  condition the 2026-11-03 amendment refers to; the consent-prompt and PT-4884 conditions remain.
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
 

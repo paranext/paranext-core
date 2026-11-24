@@ -207,6 +207,7 @@
       "%webView_platformScriptureEditor_charactersInventory%": "Inventory: Characters...",
       "%webView_platformScriptureEditor_configureChecks%": "Configure Checks...",
       "%webView_platformScriptureEditor_copy%": "Copy",
+      "%webView_platformScriptureEditor_copySelection%": "Copy selection",
       "%webView_platformScriptureEditor_copyrightInfo%": "Copyright Info",
       "%webView_platformScriptureEditor_cut%": "Cut",
       "%webView_platformScriptureEditor_edit%": "Edit",
@@ -263,6 +264,7 @@
       "%webView_platformScriptureEditor_settingUnreadable_withheld_banner%": "The text isn't shown because a project setting the editor needs to save it safely couldn't be read",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Share layout with team",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Bible texts",
+      "%webView_platformScriptureEditor_showBooks%": "Show books",
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
       "%webView_platformScriptureEditor_showCommentariesPanel%": "Commentaries",
       "%webView_platformScriptureEditor_showCommentsPanel%": "Comments",
@@ -592,6 +594,7 @@
       "%webView_platformScriptureEditor_charactersInventory%": "Inventario: Caracteres...",
       "%webView_platformScriptureEditor_configureChecks%": "Configurar verificaciones...",
       "%webView_platformScriptureEditor_copy%": "Copiar",
+      "%webView_platformScriptureEditor_copySelection%": "Copiar selección",
       "%webView_platformScriptureEditor_copyrightInfo%": "Información de copyright",
       "%webView_platformScriptureEditor_cut%": "Cortar",
       "%webView_platformScriptureEditor_edit%": "Editar",
@@ -648,6 +651,7 @@
       "%webView_platformScriptureEditor_settingUnreadable_withheld_banner%": "El texto no se muestra porque no se pudo leer una configuración del proyecto que el editor necesita para guardarlo de forma segura",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Compartir diseño con el equipo",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Textos bíblicos",
+      "%webView_platformScriptureEditor_showBooks%": "Mostrar libros",
       "%webView_platformScriptureEditor_showCheckResults%": "Mostrar resultados de verificación...",
       "%webView_platformScriptureEditor_showCommentariesPanel%": "Comentarios bíblicos",
       "%webView_platformScriptureEditor_showCommentsPanel%": "Comentarios de proyecto",
@@ -1436,7 +1440,8 @@
       }
     },
     "%webView_platformScriptureEditor_title_format_2%": {
-      "fallbackKey": "%webView_platformScriptureEditor_title_format%"
+      "fallbackKey": "%webView_platformScriptureEditor_title_format%",
+      "notes": "Scripture editor tab title. {projectName} is the project's short name; {editable} becomes \"(Editable)\" or \"(Read-only)\" for a project, and is removed for a resource together with the space next to it. Keep {editable} separated from the rest of the title by spaces only, with no brackets, dashes or other punctuation around it, or a resource's title keeps that punctuation (for example \"NBV21 -\")."
     },
     "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": {
       "deprecationInfo": {

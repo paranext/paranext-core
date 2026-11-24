@@ -23,7 +23,7 @@ export const CHANGING_THE_EXTERNALS = [
   'review; do not update this test to make it pass.',
 ].join(' ');
 
-/** The specifiers the extension host supplies, as its require shim reads them. */
+/** The specifiers the extension host supplies, as the extension `require` reads them. */
 export function readPermittedModuleSpecifiers(): string[] {
   return [...EXTENSION_INTERFACE_MODULE_SPECIFIERS].sort();
 }

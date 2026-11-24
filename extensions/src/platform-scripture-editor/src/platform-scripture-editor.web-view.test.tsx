@@ -26,6 +26,12 @@ const {
   projectDataProviders,
   projectSettings,
   loadingProjectSettings,
+  appSettings,
+  mockGetLocalizedStrings,
+  toolbarProps,
+  webViewMenu,
+  mockContextKeysSet,
+  captureSelectionHandler,
 } = vi.hoisted(() => ({
   mockUseProjectData: vi.fn(),
   mockUseLocalizedStrings: vi.fn(),
@@ -43,6 +49,17 @@ const {
   projectSettings: new Map<string, unknown>(),
   /** Project settings whose read is still pending, by key; they read as their default meanwhile. */
   loadingProjectSettings: new Set<string>(),
+  /** User settings that read as something other than their default, by key. */
+  appSettings: new Map<string, unknown>(),
+  /** Answers the localization service's `getLocalizedStrings` (used for the tab title). */
+  mockGetLocalizedStrings: vi.fn(),
+  /** The menu the toolbar was last rendered with. */
+  toolbarProps: { current: undefined as unknown },
+  /** What the web view menu subscription delivers instead of its default, when set. */
+  webViewMenu: { current: undefined as unknown },
+  mockContextKeysSet: vi.fn(),
+  /** Receives the `onSelectionChange` the stubbed editor was last rendered with. */
+  captureSelectionHandler: vi.fn<(handler: unknown) => void>(),
 }));
 
 /** What each key localizes to by default; any other key echoes itself, as an unresolved one does. */
@@ -64,14 +81,20 @@ function localizeWith(translations: Record<string, string>) {
  * type answers with the default value its caller passed, settled and not loading, except that
  * `ChapterUSJ` answers with {@link chapterUsjValue} when one is set.
  */
+function dataValueFor(dataType: string | symbol, defaultValue: unknown): unknown {
+  if (dataType === 'ChapterUSJ' && chapterUsjValue.current !== undefined) {
+    return chapterUsjValue.current;
+  }
+  if (dataType === 'WebViewMenu' && webViewMenu.current !== undefined) return webViewMenu.current;
+  return defaultValue;
+}
+
 function dataHooks() {
   return new Proxy(
     {},
     {
       get: (_target, dataType) => (_selector: unknown, defaultValue: unknown) => [
-        dataType === 'ChapterUSJ' && chapterUsjValue.current !== undefined
-          ? chapterUsjValue.current
-          : defaultValue,
+        dataValueFor(dataType, defaultValue),
         vi.fn(),
         false,
       ],
@@ -85,8 +108,20 @@ vi.mock('@papi/frontend', () => {
   const service: unknown = new Proxy(() => Promise.resolve(undefined), {
     get: (_target, property) => (property === 'then' ? undefined : service),
   });
+  const papi: unknown = new Proxy(
+    {},
+    {
+      get: (_target, property) => {
+        if (property === 'contextKeys') return { set: mockContextKeysSet, remove: vi.fn() };
+        if (property === 'localization') {
+          return { getLocalizedStrings: mockGetLocalizedStrings };
+        }
+        return service;
+      },
+    },
+  );
   return {
-    default: service,
+    default: papi,
     logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
   };
 });
@@ -106,7 +141,12 @@ vi.mock('@papi/frontend/react', () => ({
     vi.fn(),
     loadingProjectSettings.has(key),
   ],
-  useSetting: (_key: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), vi.fn(), false],
+  useSetting: (key: string, defaultValue: unknown) => [
+    appSettings.has(key) ? appSettings.get(key) : defaultValue,
+    vi.fn(),
+    vi.fn(),
+    false,
+  ],
   useRecentScriptureRefs: () => ({ recentScriptureRefs: [], addRecentScriptureRef: vi.fn() }),
 }));
 
@@ -116,6 +156,11 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     ...original,
     // The real hook builds an IntersectionObserver, which jsdom does not implement.
     useViewVisibility: () => true,
+    // Wraps the real toolbar so a test can read the menu it was handed.
+    TabToolbar: ({ projectMenuData, ...props }: Record<string, unknown>) => {
+      toolbarProps.current = projectMenuData;
+      return <original.TabToolbar projectMenuData={projectMenuData} {...props} />;
+    },
   };
 });
 
@@ -124,7 +169,8 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
   const original = await importOriginal<typeof import('@eten-tech-foundation/platform-editor')>();
   return {
     ...original,
-    Editorial: React.forwardRef((_props, ref) => {
+    Editorial: React.forwardRef((props: Record<string, unknown>, ref) => {
+      captureSelectionHandler(props.onSelectionChange);
       React.useImperativeHandle(ref, () => editorHandle.current);
       return <div data-testid="editorial" />;
     }),
@@ -157,6 +203,7 @@ function makeProps(
   unsupportedReason: string,
   state: Record<string, unknown> = {},
   book = 'GEN',
+  chapterNum = 1,
 ): WebViewProps {
   // The object literal only provides the minimum props needed for testing — the double cast
   // avoids satisfying every optional field of WebViewProps.
@@ -176,7 +223,7 @@ function makeProps(
       },
     ),
     useWebViewScrollGroupScrRef: vi.fn(() => [
-      { book, chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+      { book, chapterNum, verseNum: 1, versificationStr: 'English' },
       vi.fn(),
       undefined,
       vi.fn(),
@@ -201,9 +248,24 @@ beforeEach(() => {
   mockNotifyEditActionBlocked.mockClear();
   chapterUsjValue.current = undefined;
   editorHandle.current = undefined;
+  captureSelectionHandler.mockClear();
+  mockContextKeysSet.mockClear();
   projectDataProviders.clear();
   projectSettings.clear();
   loadingProjectSettings.clear();
+  appSettings.clear();
+  toolbarProps.current = undefined;
+  webViewMenu.current = undefined;
+  mockGetLocalizedStrings.mockReset();
+  mockGetLocalizedStrings.mockImplementation(async ({ localizeKeys }: { localizeKeys: string[] }) =>
+    Object.fromEntries(
+      localizeKeys.map((key) => {
+        if (key.includes('readonly_indicator')) return [key, '(Read-only)'];
+        if (key.includes('editable_indicator')) return [key, '(Editable)'];
+        return [key, '{editable} {projectName}'];
+      }),
+    ),
+  );
   mockUseLocalizedStrings.mockReset();
   mockUseLocalizedStrings.mockImplementation(localizeWith(TRANSLATIONS));
   // The web view host supplies this global; the editor reads its persisted view type through it.
@@ -630,5 +692,303 @@ describe('Scripture editor "Change footnote pane location" request', () => {
     await requestLocationChange();
 
     expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+});
+
+const HAS_SELECTION_KEY = 'platformScriptureEditor.webView.editor-web-view-id.hasSelection';
+const selectionStart = { jsonPath: '$.content[2].content[1]', offset: 0 };
+const selectionRange = { start: selectionStart, end: { ...selectionStart, offset: 5 } };
+
+const chapterWithText = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN' },
+    { type: 'chapter', marker: 'c', number: '1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
+    },
+  ],
+};
+
+/** The values published for the hasSelection key, in order. */
+const publishedValues = () =>
+  mockContextKeysSet.mock.calls
+    .filter(([key]) => key === HAS_SELECTION_KEY)
+    .map(([, value]) => value);
+
+describe('Scripture editor hasSelection context key', () => {
+  const EditorWebViewUnderTest = getEditorWebView();
+  const webViewElement = (chapterNum = 1) => (
+    <EditorWebViewUnderTest {...makeProps('', { isReadOnly: false }, 'GEN', chapterNum)} />
+  );
+
+  const selectInEditor = async (selection: unknown) => {
+    await act(async () => {
+      const handler = captureSelectionHandler.mock.lastCall?.[0];
+      expect(handler).toBeInstanceOf(Function);
+      if (typeof handler === 'function') await handler(selection);
+    });
+  };
+
+  it('publishes hasSelection true for a selectionRange and keeps it when the editor reports no selection on blur', async () => {
+    chapterUsjValue.current = chapterWithText;
+    await act(async () => {
+      render(webViewElement());
+    });
+    // Positive control: the key starts false.
+    expect(publishedValues()).toEqual([false]);
+
+    await selectInEditor(selectionRange);
+    await selectInEditor(undefined);
+
+    expect(publishedValues()).toEqual([false, true]);
+  });
+
+  it('publishes hasSelection false when a later selection is a caret, writing only on a flip', async () => {
+    chapterUsjValue.current = chapterWithText;
+    await act(async () => {
+      render(webViewElement());
+    });
+
+    await selectInEditor(selectionRange);
+    await selectInEditor({ start: selectionStart, end: { ...selectionStart, offset: 7 } });
+    await selectInEditor({ start: selectionStart });
+
+    expect(publishedValues()).toEqual([false, true, false]);
+  });
+
+  it('publishes hasSelection false after a chapter change', async () => {
+    chapterUsjValue.current = chapterWithText;
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(webViewElement(1));
+    });
+    await selectInEditor(selectionRange);
+    expect(publishedValues()).toEqual([false, true]);
+
+    await act(async () => {
+      result?.rerender(webViewElement(2));
+    });
+
+    expect(publishedValues()).toEqual([false, true, false]);
+  });
+
+  it('publishes hasSelection false when new text from outside replaces the open chapter', async () => {
+    // A mounted editor, so incoming text is applied to it; every method is a no-op.
+    const setUsj = vi.fn();
+    editorHandle.current = new Proxy(
+      {},
+      { get: (_target, property) => (property === 'setUsj' ? setUsj : vi.fn()) },
+    );
+    chapterUsjValue.current = chapterWithText;
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(webViewElement(1));
+    });
+    await selectInEditor(selectionRange);
+    // Positive control: the same chapter re-rendered with the same text keeps the key on.
+    await act(async () => {
+      result?.rerender(webViewElement(1));
+    });
+    expect(publishedValues()).toEqual([false, true]);
+    const setUsjCallsBeforeUpdate = setUsj.mock.calls.length;
+
+    // A background update of the same chapter, such as an in-place resource update.
+    chapterUsjValue.current = {
+      ...chapterWithText,
+      content: [
+        ...chapterWithText.content,
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'More'],
+        },
+      ],
+    };
+    await act(async () => {
+      result?.rerender(webViewElement(1));
+    });
+
+    // The update really replaced the editor's content.
+    expect(setUsj.mock.calls.length).toBeGreaterThan(setUsjCallsBeforeUpdate);
+    expect(publishedValues()).toEqual([false, true, false]);
+  });
+});
+
+describe('Scripture editor hasSelection context key across a view switch', () => {
+  it('publishes hasSelection false after the Scripture view type changes', async () => {
+    // Switching between Standard and Formatted view only takes effect in Power mode.
+    appSettings.set('platform.interfaceMode', 'power');
+    chapterUsjValue.current = chapterWithText;
+    const EditorWebView = getEditorWebView();
+    const elementFor = (viewType: string) => (
+      <EditorWebView {...makeProps('', { isReadOnly: false, viewType })} />
+    );
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(elementFor('standard'));
+    });
+    await act(async () => {
+      const handler = captureSelectionHandler.mock.lastCall?.[0];
+      expect(handler).toBeInstanceOf(Function);
+      if (typeof handler === 'function') await handler(selectionRange);
+    });
+    expect(publishedValues().at(-1)).toBe(true);
+
+    await act(async () => {
+      result?.rerender(elementFor('formatted'));
+    });
+
+    expect(publishedValues().at(-1)).toBe(false);
+  });
+});
+
+describe('Scripture editor resource wiring', () => {
+  const TITLE_KEY = '%test_editor_title_format%';
+
+  /** Props for a read-only tab whose saved title format asks for the read-only indicator. */
+  const titleProps = () => makeProps('', { isReadOnly: true, unformattedTitle: TITLE_KEY });
+
+  const renderTab = async (props: WebViewProps) => {
+    const EditorWebView = getEditorWebView();
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(<EditorWebView {...props} />);
+    });
+    return result;
+  };
+
+  const rerenderTab = async (
+    result: ReturnType<typeof render> | undefined,
+    props: WebViewProps,
+  ) => {
+    const EditorWebView = getEditorWebView();
+    await act(async () => {
+      result?.rerender(<EditorWebView {...props} />);
+    });
+  };
+
+  it('leaves the tab title alone until the published setting is read, then sets the short name alone', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    loadingProjectSettings.add('platform.isPublished');
+    const props = titleProps();
+
+    const result = await renderTab(props);
+    // Held back while platform.isPublished loads; the same props send the title once it settles
+    // (below).
+    expect(props.updateWebViewDefinition).not.toHaveBeenCalled();
+
+    loadingProjectSettings.delete('platform.isPublished');
+    projectSettings.set('platform.isPublished', true);
+    await rerenderTab(result, props);
+
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ title: 'engWEBUS' });
+    // The tab has no icon yet, so the resource's book icon is sent separately.
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ iconName: 'book-open' });
+    expect(props.updateWebViewDefinition).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the read-only indicator in the title of a read-only project', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    projectSettings.set('platform.isPublished', false);
+    const props = titleProps();
+
+    await renderTab(props);
+
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ title: '(Read-only) engWEBUS' });
+  });
+
+  /** The `iconName` values sent through `updateWebViewDefinition`, in call order. */
+  const sentIconNames = (props: WebViewProps) =>
+    vi
+      .mocked(props.updateWebViewDefinition)
+      .mock.calls.filter(([update]) => 'iconName' in update)
+      .map(([update]) => update.iconName);
+
+  it('gives a resource tab the book icon once the published setting is read', async () => {
+    loadingProjectSettings.add('platform.isPublished');
+    const props: WebViewProps = { ...makeProps(''), iconName: undefined };
+
+    const result = await renderTab(props);
+    expect(sentIconNames(props)).toEqual([]);
+
+    loadingProjectSettings.delete('platform.isPublished');
+    projectSettings.set('platform.isPublished', true);
+    await rerenderTab(result, props);
+
+    expect(sentIconNames(props)).toEqual(['book-open']);
+  });
+
+  it('sends no icon to a resource tab that already shows the book icon', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    projectSettings.set('platform.isPublished', true);
+    const props: WebViewProps = { ...titleProps(), iconName: 'book-open' };
+
+    await renderTab(props);
+
+    // Positive control: the tab is read as a resource, as its title without "(Read-only)" shows.
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ title: 'engWEBUS' });
+    expect(sentIconNames(props)).toEqual([]);
+  });
+
+  it('never takes the book icon away from a tab, for a project or when the setting cannot be read', async () => {
+    projectSettings.set('platform.isPublished', false);
+    const projectProps: WebViewProps = { ...makeProps(''), iconName: 'book-open' };
+    const projectResult = await renderTab(projectProps);
+    expect(sentIconNames(projectProps)).toEqual([]);
+    projectResult?.unmount();
+
+    projectSettings.set('platform.isPublished', newPlatformError('project unavailable'));
+    const failedProps: WebViewProps = { ...makeProps(''), iconName: 'book-open' };
+    await renderTab(failedProps);
+    expect(sentIconNames(failedProps)).toEqual([]);
+
+    // Positive control: a resource tab without the icon does get one under the same props.
+    projectSettings.set('platform.isPublished', true);
+    const resourceProps: WebViewProps = { ...makeProps(''), iconName: undefined };
+    await renderTab(resourceProps);
+    expect(sentIconNames(resourceProps)).toEqual(['book-open']);
+  });
+
+  beforeEach(() => {
+    webViewMenu.current = {
+      topMenu: {
+        columns: { 'platform.app': { label: 'Project', order: 1 } },
+        groups: {},
+        items: [],
+      },
+      includeDefaults: true,
+      contextMenu: undefined,
+    };
+  });
+
+  /** Reads `value[key]` when `value` is an object that has it. */
+  const read = (value: unknown, key: string): unknown =>
+    value && typeof value === 'object' && key in value
+      ? Object.entries(value).find(([k]) => k === key)?.[1]
+      : undefined;
+
+  const projectColumnLabel = () =>
+    read(read(read(toolbarProps.current, 'columns'), 'platform.app'), 'label');
+
+  it('names the menu heading after the resource short name', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    projectSettings.set('platform.isPublished', true);
+
+    await renderTab(makeProps('', { isReadOnly: true }));
+
+    expect(projectColumnLabel()).toBe('engWEBUS');
+  });
+
+  it('keeps the original menu heading for a project', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    projectSettings.set('platform.isPublished', false);
+
+    await renderTab(makeProps('', { isReadOnly: true }));
+
+    expect(projectColumnLabel()).toBe('Project');
   });
 });
