@@ -29,6 +29,7 @@ import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
+  useEvaluatedMenu,
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
@@ -97,6 +98,7 @@ import {
   isLocalizeKey,
   isPlatformError,
   LocalizeKey,
+  createMenuTemplateVars,
   serialize,
 } from 'platform-bible-utils';
 import {
@@ -118,7 +120,10 @@ import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet
 import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
-import { substituteProjectNameInMenu } from './menu-label-substitution.util';
+import {
+  substituteProjectNameInMenu,
+  substituteResourceNameInColumnHeading,
+} from './menu-label-substitution.util';
 import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
@@ -166,7 +171,9 @@ import {
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import {
   editorHoldsUnsavedChanges,
+  isDiscardingEditsALoss,
   isEditorContentForChapter,
+  isTypingLostToNavigation,
   performDebouncedPdpSave,
 } from './debounced-pdp-save.util';
 import {
@@ -195,6 +202,7 @@ import { resolveMenuFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { usePauseEditing } from './use-pause-editing.hook';
+import { type NotifyLostEdits, useLostEditsReport } from './use-lost-edits-report.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import {
   getChapterForEditor,
@@ -218,6 +226,8 @@ import {
   deepEqualAcrossIframes,
   findEditorUsjNotes,
   formatEditorTitle,
+  getEditorTabIconName,
+  getEditorTitleEditability,
   generateParagraphMenuListItems,
   getSimpleModeRootClassNames,
   getViewTypeToSave,
@@ -249,6 +259,7 @@ import {
   shouldProtectAddChapterNumber,
   shouldPublishPaneDocument,
   showCommentThreadForInterfaceMode,
+  showsReadOnlyPreview,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   usesPaneNoteModel,
 } from './platform-scripture-editor.utils';
@@ -262,7 +273,12 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   deriveReadOnlyFlags,
+  discardRowEditsAndPendingSave,
+  getEditorWebViewContextKeyNames,
+  getEditorWebViewContextKeys,
+  hasNonCollapsedSelection,
   flushRowEditsThenSave,
+  isFocusLeavingContainer,
   forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
@@ -385,6 +401,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%versionHistoryCommit_beforeInsertEndnote%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
+  '%webView_platformScriptureEditor_error_editsLost_format%',
+  '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%',
   '%webView_platformScriptureEditor_error_permissions_format%',
   '%webView_platformScriptureEditor_error_saveFailed_format%',
   // The one listing of this key. Named via the const so the sync-blocked message, its severity, and
@@ -551,6 +569,7 @@ function PlatformScriptureEditor({
   id: webViewId,
   projectId,
   title,
+  iconName,
   useWebViewState,
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
@@ -955,6 +974,29 @@ function PlatformScriptureEditor({
     return isProjectEditablePossiblyError;
   }, [isProjectEditablePossiblyError]);
 
+  // `platform.isPublished` is the project-kind classification (resource vs project); `isReadOnly` /
+  // `platform.isEditable` is Scripture-text edit PERMISSION and says nothing about kind. Only the
+  // former may decide whether the user is told "this book is not in this resource", which is a
+  // statement of fact with no remedy. Same distinction the open path draws in this extension's
+  // `main.ts`, where the comment on `isPublished` spells out why the two must not be conflated.
+  // Defaults to false so an unresolved setting shows the actionable project message rather than
+  // wrongly telling a project owner their project is a resource.
+  const [isPublishedPossiblyError, , , isIsPublishedLoading] = useProjectSetting(
+    projectId,
+    'platform.isPublished',
+    false,
+  );
+
+  const isResource = useMemo(() => {
+    if (isPlatformError(isPublishedPossiblyError)) {
+      logger.warn(
+        `Error getting whether the project is published: ${getErrorMessage(isPublishedPossiblyError)}`,
+      );
+      return false;
+    }
+    return isPublishedPossiblyError;
+  }, [isPublishedPossiblyError]);
+
   const [canUserEditScripturePossiblyError, , canUserEditScriptureLoading] = useProjectData(
     'platformScripture.scriptureEditPermissions',
     projectId,
@@ -1170,6 +1212,44 @@ function PlatformScriptureEditor({
   useEffect(() => {
     footnotesPaneVisibleRef.current = footnotesPaneVisible;
   }, [footnotesPaneVisible]);
+
+  const isPreview = useMemo(
+    () => showsReadOnlyPreview(viewType, isPowerMode),
+    [viewType, isPowerMode],
+  );
+
+  // Whether the main editor's own selection is a range. Only a selection the editor reports changes
+  // it: an `undefined` report is a blur (opening a menu blurs the editor, whose selection stays and
+  // is what Copy copies), so it leaves the value alone. A chapter change or a Scripture view switch
+  // replaces the editor's content and drops its selection without reporting one, so each clears it,
+  // as does new text from outside replacing the open chapter (`setEditorUsj`).
+  const [hasSelection, setHasSelection] = useState(false);
+
+  useEffect(() => {
+    setHasSelection(false);
+  }, [scrRef.book, scrRef.chapterNum, viewType]);
+
+  // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
+  // them when this web view closes. Hidden case: a hidden tab keeps publishing and its menu keeps
+  // re-evaluating on every key change (the hook subscribes regardless of visibility), so it is
+  // current whenever the tab is shown; nothing waits for activation. `hasSelection` is data-driven
+  // too, so a selection or chapter change in a hidden tab needs no catch-up.
+  useEffect(() => {
+    const keys = getEditorWebViewContextKeys(webViewId, {
+      isReadOnly,
+      isPreview,
+      isSyncBlocked,
+      footnotesPaneVisible,
+      hasSelection,
+    });
+    Object.entries(keys).forEach(([key, value]) => papi.contextKeys.set(key, value));
+  }, [webViewId, isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible, hasSelection]);
+
+  useEffect(() => {
+    return () => {
+      getEditorWebViewContextKeyNames(webViewId).forEach((key) => papi.contextKeys.remove(key));
+    };
+  }, [webViewId]);
 
   const isPowerModeRef = useRef(isPowerMode);
 
@@ -1720,13 +1800,16 @@ function PlatformScriptureEditor({
       if (
         unformattedTitle === NO_UPDATE_TITLE ||
         projectName === defaultProjectName ||
-        resolvedIsDurablyReadOnly === undefined
+        resolvedIsDurablyReadOnly === undefined ||
+        // `isResource` defaults to false while loading; formatting then would show a resource's
+        // read-only indicator until the setting arrives.
+        isIsPublishedLoading
       )
         return NO_UPDATE_TITLE;
       const updatedTitle = await formatEditorTitle(
         unformattedTitle,
         projectId,
-        resolvedIsDurablyReadOnly,
+        getEditorTitleEditability(isResource, resolvedIsDurablyReadOnly),
         async () => projectName,
         papi.localization.getLocalizedStrings,
       );
@@ -1735,7 +1818,15 @@ function PlatformScriptureEditor({
       if (updatedTitle === title) return NO_UPDATE_TITLE;
 
       return updatedTitle;
-    }, [resolvedIsDurablyReadOnly, title, projectId, projectName, unformattedTitle]),
+    }, [
+      resolvedIsDurablyReadOnly,
+      isResource,
+      isIsPublishedLoading,
+      title,
+      projectId,
+      projectName,
+      unformattedTitle,
+    ]),
     NO_UPDATE_TITLE,
   );
 
@@ -1747,6 +1838,15 @@ function PlatformScriptureEditor({
       title: newTitleIfUpdated,
     });
   }, [newTitleIfUpdated, updateWebViewDefinition]);
+
+  // Give a resource tab the book icon once `platform.isPublished` is read: the factory picks the
+  // icon when the tab opens, and its lookup can fail and leave a resource on the project icon.
+  // `getEditorTabIconName` only ever swaps in the book icon, so a project, a setting still loading
+  // (`isResource` is then its default, false) or one that cannot be read keeps the tab's own icon.
+  useEffect(() => {
+    const correctedIconName = getEditorTabIconName(isResource, iconName);
+    if (correctedIconName !== iconName) updateWebViewDefinition({ iconName: correctedIconName });
+  }, [isResource, iconName, updateWebViewDefinition]);
 
   const viewOptions = useMemo<ViewOptions>(
     () => getEditorViewOptions(viewType, isPowerMode, allowInvisibleCharacters),
@@ -1803,14 +1903,17 @@ function PlatformScriptureEditor({
     // A reload replaces every Lexical key, the note the open editor is bound to included, so no
     // note session survives it on EITHER surface — one left open would keep applying into a note
     // that is gone, and `replaceEmbedUpdate` can only log the stale key and drop the edit. A pane
-    // row's pending edits are saved before an external replace gets here
-    // (`flushPendingDebouncedSave`, which `useEditorPdpSync` calls first); anything else the note
-    // editor had not applied yet is overwritten, exactly as the incoming document overwrites the
-    // rest of the chapter.
+    // row's pending edits are landed and reported as lost before an external replace gets here
+    // (`discardUnsavedEdits`, which `useEditorPdpSync` calls first); anything else the note editor
+    // had not applied yet is overwritten, exactly as the incoming document overwrites the rest of
+    // the chapter.
     if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
     // An external apply never reaches `onUsjChange`, so a pending comment is checked here too.
     discardPendingCommentIfAnchorChanged.current(usj);
     editorRef.current?.setUsj(usj, options);
+    // Replacing the document drops the editor's selection without reporting it, so Copy has nothing
+    // to copy until the user selects again.
+    setHasSelection(false);
     // A hidden pane is left without a document; showing it fetches the editor's, which is this one
     // from here on (`getUsj()` returns what `setUsj` was just handed).
     if (footnotesPaneRenderedRef.current) replacePaneDocument(usj);
@@ -2135,7 +2238,7 @@ function PlatformScriptureEditor({
           ),
           insertComment: insertCommentAtCurrentSelection,
         },
-        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
+        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked, isResource },
       ),
     }),
     [
@@ -2144,6 +2247,7 @@ function PlatformScriptureEditor({
       handleHiddenContentDelete,
       canUserCreateComments,
       isSyncBlocked,
+      isResource,
       textDirectionEffective,
       nodeOptions,
       viewOptions,
@@ -2254,6 +2358,18 @@ function PlatformScriptureEditor({
               if (current) endPaneNoteEdit();
               setFootnotesPaneVisible(!current);
             },
+          );
+          break;
+        }
+        case 'changeFootnotesPaneLocation': {
+          // `FootnotesLayout` moves the pane; this opens it too, so the user sees where it went.
+          // Opening re-wraps the text the same way the visibility toggle does, so it keeps the
+          // text's scroll position the same way.
+          if (footnotesPaneVisibleRef.current) break;
+          keepScrollPositionAcross(
+            editorContainerRef.current?.querySelector<HTMLElement>('.editor-container') ??
+              undefined,
+            () => setFootnotesPaneVisible(true),
           );
           break;
         }
@@ -2426,9 +2542,6 @@ function PlatformScriptureEditor({
           }
           break;
         }
-        case 'changeFootnotesPaneLocation': {
-          break;
-        } // handled in FootnoteLayout
         default:
           // Unknown method name
           logger.debug(
@@ -3185,11 +3298,11 @@ function PlatformScriptureEditor({
   }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
   // The localized name of the book on screen (e.g. "Jonah"), for the chapter-marker correction
-  // notice. One key rather than the whole canon: the only book this web view ever has to name is
-  // the one it is editing. `%Book.<id>%` resolves for every canonical id — the localization service
-  // backfills the English names into the backup language — but a web view renders before the
-  // strings arrive, so an unresolved lookup falls back to the 3-letter id rather than putting a raw
-  // `%Book.JON%` in a toast.
+  // notice and, through `useLostEditsReport`, the lost-edits notice. One key rather
+  // than the whole canon: a book this web view names is always one it has shown. `%Book.<id>%`
+  // resolves for every canonical id — the localization service backfills the English names into the
+  // backup language — but a web view renders before the strings arrive, so an unresolved lookup
+  // falls back to the 3-letter id rather than putting a raw `%Book.JON%` in a toast.
   const bookNameLocalizeKeys = useMemo<LocalizeKey[]>(
     () => [`%Book.${scrRef.book}%`],
     [scrRef.book],
@@ -3365,6 +3478,39 @@ function PlatformScriptureEditor({
   }, [usjFromPdpError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
+  // What the latest write to start sends, so the one in flight while `currentlyWritingUsjToPdp` is
+  // set. Unlike `usjSentToPdp`, which `useEditorPdpSync` moves to every delivery, nothing else
+  // moves it: a delivery that arrives mid-write says nothing about what that write carries.
+  const usjBeingWrittenToPdp = useRef<Usj | undefined>(undefined);
+
+  // Tells the user that their latest edits in a chapter were not saved, so they can check it and
+  // make them again.
+  const notifyLostEdits = useCallback<NotifyLostEdits>(
+    (book, chapterNum, replacedByUpdate, routeToThisEditor) =>
+      papi.notifications
+        .send({
+          message: formatReplacementString(
+            localizedStrings[
+              replacedByUpdate
+                ? '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'
+                : '%webView_platformScriptureEditor_error_editsLost_format%'
+            ],
+            { projectName, book, chapter: chapterNum },
+          ),
+          severity: 'error',
+          // Stays up until dismissed: each loss is reported once, and the notice is the only record
+          // of which chapter to check, often read after the user has moved on to another one.
+          duration: 0,
+          webViewId: routeToThisEditor ? webViewId : undefined,
+        })
+        .catch((error) => {
+          logger.warn(`Error notifying about edits that were not saved: ${getErrorMessage(error)}`);
+        }),
+    [localizedStrings, projectName, webViewId],
+  );
+  // The edits the editor holds without having sent them, and the report when they are lost.
+  const lostEdits = useLostEditsReport(scrRef.book, localizedBookName, notifyLostEdits);
+
   // Which save rejection the user has already been told about. A chapter the backend refuses is
   // refused again on every save for as long as the user keeps typing, so this is what turns that
   // run of identical rejections into one report; a write that completes clears it. Both transitions
@@ -3715,6 +3861,9 @@ function PlatformScriptureEditor({
   const paneSelectedIndexRef = useRef<number | undefined>(undefined);
   /** Whether DOM focus is inside the footnotes pane (its row list or its inline row editor). */
   const paneHasFocusRef = useRef(false);
+  // Sends the waiting save when focus leaves the footnotes pane. Behind a ref because the save is
+  // declared after the pane's focus handlers; assigned with the other claim-loss flushes.
+  const flushOnLeavingPaneRef = useRef<() => void>(() => {});
   /** The footnotes pane row holding DOM focus (Tab or the arrow keys), if any. */
   const paneFocusedRowIndexRef = useRef<number | undefined>(undefined);
 
@@ -3770,6 +3919,9 @@ function PlatformScriptureEditor({
       // text while the user types in the pane. The settle writes no DOM selection into the text
       // while focus is elsewhere.
       if (hasFocus) editorRef.current?.commitPendingMarkerEdits();
+      // Leaving the pane ends its claim on the chapter, and its edits are not the text's to claim,
+      // so send them now rather than leave them to an update arriving before the debounce fires.
+      else flushOnLeavingPaneRef.current();
       applyCallerHighlight();
     },
     [applyCallerHighlight],
@@ -3859,6 +4011,26 @@ function PlatformScriptureEditor({
         logger.debug(
           `Not saving the editor's content for ${editorDocumentKey} to ${savedChapterKey}: the editor has not loaded that chapter yet`,
         );
+        // After navigation the editor keeps showing the chapter it is leaving until the next one
+        // loads, and a save of an edit made there is scheduled for the next chapter. Typing, pasting
+        // and the like are held off meanwhile (`usePauseEditing`), but an edit that does not come
+        // through the editor's own keyboard, such as one from the footnotes pane, still lands. If its
+        // save fires before the next chapter arrives, it lands here and the edit is lost, so it is
+        // held like any other unsent edits, and reported if the editor is replaced or closes before
+        // a later save sends them — also when the user moves on again before the next chapter
+        // loads, and the save flushed on that second move is the one refused. `usjSentToPdp` holds
+        // the last chapter delivered or sent for the document the editor holds.
+        if (
+          editorDocument &&
+          editorDocumentKey &&
+          isTypingLostToNavigation(
+            editorDocumentKey,
+            chapterKeyRef.current,
+            usjFromEditor,
+            usjSentToPdp.current,
+          )
+        )
+          lostEdits.recordHeld(lostEdits.describeChapter(editorDocument), 'navigation');
         return Promise.resolve(false);
       }
 
@@ -3913,6 +4085,11 @@ function PlatformScriptureEditor({
             ? () => notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum)
             : undefined,
         );
+      // `usjFromPdp` is the chapter a running write started from, not what it sends, so an editor
+      // matching it (an edit undone back to it) still has something waiting behind that write.
+      if (currentlyWritingUsjToPdp.current) return saveUsjToPdpInternal(usjFromEditor);
+      // The backend already has what the editor holds, so no edits of this chapter are waiting.
+      lostEdits.forgetHeld(savedChapterKey);
       return Promise.resolve(false);
     }
 
@@ -4085,14 +4262,50 @@ function PlatformScriptureEditor({
         return false;
       }
 
+      // Another write is in flight, so this one does not start. Its content is not lost while the
+      // editor stays on this chapter: when the in-flight write's update comes back,
+      // `useEditorPdpSync` sends whatever the editor holds by then. It is lost if the editor
+      // leaves the chapter, closes, or is replaced by an update first, which
+      // `lostEdits.report` warns about. If no update comes back (the write fails, or is declined
+      // while another update arrived during it), nothing sends it until the next edit. Checked here
+      // rather than left to the guard, whose verdict arrives only after an `await`, so the held
+      // chapter is recorded synchronously: a flush on leaving reads it straight after flushing.
+      if (currentlyWritingUsjToPdp.current) {
+        // A save carrying exactly what the running write sends holds nothing back — a push-back
+        // from an update that arrived mid-write, say, with the editor unchanged since — and it means
+        // the editor no longer holds anything newer than that write.
+        if (
+          usjBeingWrittenToPdp.current &&
+          deepEqualAcrossIframes(newUsj, usjBeingWrittenToPdp.current)
+        ) {
+          lostEdits.forgetHeld(savedChapterKey);
+          return false;
+        }
+        lostEdits.recordHeld(
+          {
+            chapterKey: savedChapterKey,
+            book: savedBookName,
+            chapterNum: savedChapterSelector.chapterNum,
+          },
+          'runningSave',
+        );
+        logger.debug(
+          `saveUsjToPdp: waiting for the save of ${savedChapterKey} already in progress; the ` +
+            "editor's latest changes are sent when that save's update comes back",
+        );
+        return false;
+      }
+
       const deliveriesAtWriteStart = pdpDeliveryCount.current;
       try {
         // `withWriteInFlightGuard` holds `currentlyWritingUsjToPdp` for exactly the duration of the
         // write and clears it when the write settles — so it is never reset mid-write by an
-        // unrelated PDP update and never left stuck. It is a no-op (`ran: false`) when a write is
-        // already in flight, which is how we avoid triggering multiple concurrent writes.
+        // unrelated PDP update and never left stuck. It is also a no-op (`ran: false`) when a write
+        // is already in flight, but the check above returns before reaching it then.
         const outcome = await withWriteInFlightGuard(currentlyWritingUsjToPdp, () => {
           usjSentToPdp.current = newUsj;
+          usjBeingWrittenToPdp.current = newUsj;
+          lostEdits.forgetHeld(savedChapterKey);
           return rawSave(newUsj);
         });
         if (!outcome.ran) {
@@ -4115,15 +4328,9 @@ function PlatformScriptureEditor({
             }
             return false;
           }
-          // A save arriving while another write is in flight is DROPPED here, not queued: the
-          // debouncer has already consumed its pending args, and the echo-driven push-back only
-          // re-pushes while the editor still shows this document — so a chapter-switch flush
-          // that lands on a held guard loses those edits outright. Surface it loudly until a
-          // re-queue exists.
+          // A write already in flight is caught before the guard, above, so this is not expected.
           logger.warn(
-            'saveUsjToPdp: dropped a save because another PDP write was already in flight — ' +
-              'no retry is queued for this content, so if this was a chapter-switch flush the ' +
-              'flushed edits did not reach the PDP',
+            `saveUsjToPdp: did not save ${savedChapterKey}: another save started in the meantime`,
           );
           return false;
         }
@@ -4198,6 +4405,9 @@ function PlatformScriptureEditor({
           try {
             if (usjFromPdp && editorRef.current) {
               usjSentToPdp.current = usjFromPdp;
+              // The revert takes back the edits held behind this write too, and the failure is
+              // reported below, so leaving the chapter must not report them again.
+              lostEdits.forgetHeld(savedChapterKey);
               // Forced: when the refused edit is a marker edit still in progress — a chapter or
               // verse number retyped — the stored document can equal the editor's own record from
               // before that edit, which the editor would take for a re-send of old text and keep
@@ -4233,6 +4443,7 @@ function PlatformScriptureEditor({
     notifyChapterMarkerCorrected,
     saveNotificationIds,
     webViewId,
+    lostEdits,
   ]);
 
   // #endregion PDP Save Write Path
@@ -4634,22 +4845,50 @@ function PlatformScriptureEditor({
   // `chapterKeyRef.current` (already the NEW chapter here) — a mismatch saves the captured content
   // via the captured save fn instead of reading the now-swapped editor. Unmount runs the same
   // cleanup, covering web-view dispose.
+  //
+  // Edits the flush cannot send are not reported here but when the next chapter replaces the
+  // editor (`discardUnsavedEdits`): until then the editor still shows them, and the user may come
+  // back to the chapter in time for them to be sent.
   useEffect(() => {
     return () => {
       saveUsjToPdpDebounced.flush();
     };
   }, [saveUsjToPdpDebounced, scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
-  // (2) Focus loss / page teardown: best-effort flush on window blur and pagehide/beforeunload.
-  // The underlying save is async (a papi network send); on teardown paths there is no guarantee
-  // the send completes before the renderer dies — this is deliberately best-effort, matching the
-  // reliability of any async work in these events. On plain blur the send proceeds normally.
+  // Reports edits still held when the editor goes away without `pagehide` having reported them.
+  // Flushes first, so a save the flush holds back is counted whichever cleanup React runs first;
+  // after the chapter-switch cleanup's flush, this one has nothing left to send.
+  useEffect(() => {
+    return () => {
+      saveUsjToPdpDebounced.flush();
+      lostEdits.report('editorClosed');
+    };
+  }, [saveUsjToPdpDebounced, lostEdits]);
+
+  // (2) Focus loss / page teardown: best-effort flush on window blur, on focus leaving the editor
+  // for something else in this web view, and on pagehide/beforeunload. Each of these ends the
+  // editor's claim on the chapter (see `useEditorPdpSync`), and an incoming chapter the editor has
+  // no claim on throws away edits still waiting to be saved, so they are sent at once rather than
+  // when the debounce would fire. A save already in flight still holds the flushed one back, as
+  // anywhere else. The underlying save is async (a papi network send); on teardown paths there is
+  // no guarantee the send completes before the renderer dies — this is deliberately best-effort,
+  // matching the reliability of any async work in these events. On plain blur the send proceeds
+  // normally.
+  //
+  // Held edits are reported on `pagehide`, which fires when the editor closes, reloads, or the app
+  // quits, and runs after `beforeunload` and before the unmount's chapter-switch cleanup.
+  // `beforeunload` does not report: it can be cancelled, leaving the editor open.
   useEffect(() => {
     const flush = () => {
       flushRowEditsThenSave(
         paneEditingIndexRef.current !== undefined ? paneNoteEditorRef.current : undefined,
         saveUsjToPdpDebounced,
       );
+    };
+    const flushOnPageHide = () => {
+      lostEdits.markClosing();
+      flush();
+      lostEdits.report('editorClosed');
     };
     const flushOnBlur = () => {
       // A FOCUSED marker palette is an overlay OUTSIDE this iframe, so opening one blurs this
@@ -4661,31 +4900,64 @@ function PlatformScriptureEditor({
       if (paletteSession.current !== undefined) return;
       flush();
     };
+    // Focus moving to a toolbar or another control in this web view leaves the window focused, so
+    // `blur` does not fire, but the editor no longer has focus and so no longer claims the chapter.
+    // Scoped to the editor itself, not `editorContainerRef`, which also holds the footnotes pane:
+    // the editor's claim rests on the editor having focus, so focus moving into the pane can end it
+    // too, whenever the pane does not hold the claim itself. Sending the save there costs nothing
+    // when the pane does hold it.
+    const flushOnLeavingEditor = (event: FocusEvent) => {
+      if (
+        isFocusLeavingContainer(
+          editorContainerRef.current?.querySelector('.editor-container'),
+          event.target,
+          event.relatedTarget,
+        )
+      )
+        flushOnBlur();
+    };
+    flushOnLeavingPaneRef.current = flushOnBlur;
     window.addEventListener('blur', flushOnBlur);
-    window.addEventListener('pagehide', flush);
+    window.addEventListener('focusout', flushOnLeavingEditor);
+    window.addEventListener('pagehide', flushOnPageHide);
     window.addEventListener('beforeunload', flush);
     return () => {
+      flushOnLeavingPaneRef.current = () => {};
       window.removeEventListener('blur', flushOnBlur);
-      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('focusout', flushOnLeavingEditor);
+      window.removeEventListener('pagehide', flushOnPageHide);
       window.removeEventListener('beforeunload', flush);
     };
-  }, [saveUsjToPdpDebounced]);
+  }, [saveUsjToPdpDebounced, lostEdits]);
 
   /**
-   * (3) External replace: fires the pending debounced save, if one is pending, and returns that
-   * invocation's promise (`undefined` when nothing was pending). Passed to `useEditorPdpSync`,
-   * whose replace path calls it just before an external PDP update overwrites the editor — so
-   * recent keystrokes still inside the trailing window are written through the normal save pipeline
-   * instead of being silently discarded (see the "recent typing wins" comment there). Stable
-   * identity (reads only the stable debouncer) so it never re-triggers the sync effect.
+   * (3) External replace: throws away edits the editor has not saved, and reports them, just before
+   * an incoming chapter the editor has no claim on replaces it. Passed to `useEditorPdpSync`, whose
+   * replace path explains why the incoming chapter wins. The edits are named after the chapter the
+   * editor holds, which is the one they were typed in. Stable identity, so it never re-triggers the
+   * sync effect.
    */
-  const flushPendingDebouncedSave = useCallback(
-    () =>
-      flushRowEditsThenSave(
+  const discardUnsavedEdits = useCallback(
+    (
+      cause: 'replacedByUpdate' | 'leftChapter',
+      lastKnownUsj: Usj | undefined,
+      incomingUsj: Usj,
+    ) => {
+      const discarded = discardRowEditsAndPendingSave(
         paneEditingIndexRef.current !== undefined ? paneNoteEditorRef.current : undefined,
         saveUsjToPdpDebounced,
-      ),
-    [saveUsjToPdpDebounced],
+      );
+      const editorDocument = editorDocumentSelector.current;
+      const lostIn = editorDocument ? lostEdits.describeChapter(editorDocument) : undefined;
+      // Read only when edits were thrown away, and after the row's edits have landed, so they count.
+      const editorUsj = discarded ? editorRef.current?.getUsj() : undefined;
+      const isLoss = !!editorUsj && isDiscardingEditsALoss(editorUsj, lastKnownUsj, incomingUsj);
+      // Nothing is lost when the editor holds only what it last sent or received, even with a save
+      // held behind a running write: that held save carried edits the user has since undone.
+      if (discarded && !isLoss && lostIn) lostEdits.forgetHeld(lostIn.chapterKey);
+      lostEdits.report(cause, isLoss ? lostIn : undefined);
+    },
+    [saveUsjToPdpDebounced, lostEdits],
   );
 
   const handleEditorialUsjChange = useCallback(
@@ -4833,6 +5105,7 @@ function PlatformScriptureEditor({
   const handleSelectionChange = useCallback(
     async (change: SelectionRange | undefined) => {
       currentSelectionRef.current = change;
+      if (change) setHasSelection(hasNonCollapsedSelection(change));
 
       // Convert to ScriptureRangeUsjVerseRefChapterLocation format
       let scriptureSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
@@ -4937,7 +5210,7 @@ function PlatformScriptureEditor({
     usjSentToPdp,
     setEditorUsj,
     saveUsjToPdpIfUpdated,
-    flushPendingDebouncedSave,
+    discardUnsavedEdits,
     isEditingSessionActive,
     isFootnotesPaneOwner,
     lastLocalEditTimestamp,
@@ -5180,7 +5453,7 @@ function PlatformScriptureEditor({
     DEFAULT_WEBVIEW_MENU,
   );
 
-  const webViewMenu = useMemo(() => {
+  const webViewMenuRaw = useMemo(() => {
     if (isPlatformError(webViewMenuPossiblyError)) {
       logger.warn(
         `Failed to load web view menu for ${SCRIPTURE_EDITOR_WEBVIEW_TYPE}`,
@@ -5191,11 +5464,31 @@ function PlatformScriptureEditor({
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
 
+  // Context keys embed the project id in its canonical upper-case form, so the id a tab was opened
+  // with must be normalized before it is substituted into a menu condition.
+  const menuTemplateVars = useMemo(
+    () =>
+      createMenuTemplateVars({
+        webViewId,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId,
+      }),
+    [webViewId, projectId],
+  );
+
+  const evaluatedTopMenu = useEvaluatedMenu(webViewMenuRaw.topMenu, menuTemplateVars);
+
   // Menu labels are localized once for every editor, so the project name stays as the
-  // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here.
+  // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here. A
+  // resource also names its Project column heading after its short name.
   const projectMenuData = useMemo(
-    () => substituteProjectNameInMenu(webViewMenu.topMenu, projectName),
-    [webViewMenu.topMenu, projectName],
+    () =>
+      substituteResourceNameInColumnHeading(
+        substituteProjectNameInMenu(evaluatedTopMenu, projectName),
+        isResource,
+        projectName,
+      ),
+    [evaluatedTopMenu, projectName, isResource],
   );
 
   const [booksPresentPossiblyError] = useProjectSetting(
@@ -5203,29 +5496,6 @@ function PlatformScriptureEditor({
     'platformScripture.booksPresent',
     BOOKS_PRESENT_DEFAULT,
   );
-
-  // `platform.isPublished` is the project-kind classification (resource vs project); `isReadOnly` /
-  // `platform.isEditable` is Scripture-text edit PERMISSION and says nothing about kind. Only the
-  // former may decide whether the user is told "this book is not in this resource", which is a
-  // statement of fact with no remedy. Same distinction the open path draws in this extension's
-  // `main.ts`, where the comment on `isPublished` spells out why the two must not be conflated.
-  // Defaults to false so an unresolved setting shows the actionable project message rather than
-  // wrongly telling a project owner their project is a resource.
-  const [isPublishedPossiblyError, , , isIsPublishedLoading] = useProjectSetting(
-    projectId,
-    'platform.isPublished',
-    false,
-  );
-
-  const isResource = useMemo(() => {
-    if (isPlatformError(isPublishedPossiblyError)) {
-      logger.warn(
-        `Error getting whether the project is published: ${getErrorMessage(isPublishedPossiblyError)}`,
-      );
-      return false;
-    }
-    return isPublishedPossiblyError;
-  }, [isPublishedPossiblyError]);
 
   const booksPresent = useMemo(() => {
     if (isPlatformError(booksPresentPossiblyError)) {

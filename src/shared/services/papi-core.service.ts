@@ -52,6 +52,10 @@ export type {
   ManageExtensions,
 } from '@shared/models/manage-extensions-privilege.model';
 export type {
+  NetworkMethodHandlerOptions,
+  RequestCallerProcess,
+} from '@shared/models/network.model';
+export type {
   NetworkableObject,
   NetworkObject,
   NetworkObjectDetails,
@@ -115,6 +119,7 @@ export type {
   UpdateWebViewEvent,
 } from '@shared/services/web-view.service-model';
 export type { AppInfo } from '@shared/services/app.service-model';
+export type { IContextKeysService } from '@shared/services/context-keys.service-model';
 export type {
   NamedSqlParameters,
   SqlOutputRow,
@@ -124,6 +129,7 @@ export type {
   LocalizationData,
   LocalizationSelector,
   LocalizationSelectors,
+  LocalizedProjectTitleOptions,
 } from '@shared/services/localization.service-model';
 export type {
   SimultaneousProjectSettingsChanges,

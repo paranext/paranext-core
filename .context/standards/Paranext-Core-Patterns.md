@@ -63,7 +63,7 @@ Terse decisions for the C# backend. Each lists the chosen approach, what to avoi
   - Avoid: `Tmds.DBus` (the legacy higher-level package — in maintenance mode), and `dbus-sharp` (unmaintained).
   - Why: the actively maintained low-level library (.NET 8/9 + AOT-compatible) where new D-Bus features land. (No D-Bus code is present in `main` today; this records the decision for when such IPC is added.)
 - **Native OS keyboard / input-method switching (per platform):** P/Invoke per OS behind a single `IKeyboardingPrimitive` interface, with the implementation selected at construction via `RuntimeInformation.IsOSPlatform(...)`. (A per-platform interface rather than one cross-platform library, because `SIL.Windows.Forms.Keyboarding` — PT9's keyboarding library — is Windows-only at the TFM level.)
-  - **Windows:** P/Invoke `user32.dll` — `GetKeyboardLayoutList` / `GetKeyboardLayout` to enumerate, `ActivateKeyboardLayout` to switch. `SIL.Windows.Forms.Keyboarding` targets .NET Framework 4.6.2, so reusing it under a `net8.0-windows` TFM needs verification; standalone P/Invoke is the safer fallback.
+  - **Windows:** P/Invoke `user32.dll` — `GetKeyboardLayoutList` / `GetKeyboardLayout` to enumerate, `ActivateKeyboardLayout` to switch. `SIL.Windows.Forms.Keyboarding` targets .NET Framework 4.6.2, so reusing it under a `net10.0-windows` TFM needs verification; standalone P/Invoke is the safer fallback.
   - **Linux:** IBus over D-Bus via `Tmds.DBus.Protocol` (the `org.freedesktop.IBus` interface — `ListEngines` / `SetGlobalEngine` / `GetGlobalEngine`). Degrade to a no-op plus a console warning when the IBus daemon is absent (XKB-only systems).
   - **macOS:** P/Invoke HIToolbox Text Input Services — `TISCreateInputSourceList` / `TISCopyCurrentKeyboardInputSource` / `TISSelectInputSource`. These survive in macOS 14/15 despite the "Carbon discontinuation" (which removed higher-level UI APIs, not Text Input Services); signed/sandboxed builds may need entitlements for TIS access.
   - Each platform uses a different identifier format (HKL on Windows, IBus engine id on Linux, bundle id on macOS) — normalize to one `KeyboardId` string with per-platform translation. (No keyboarding code is in `main` today; this records the per-platform recipe for when it is added.)
@@ -1606,6 +1606,49 @@ Once an API has a settled shape, meaningful test coverage, and has been validate
 `papi.network.createNetworkEventEmitter` (sync) is deprecated as of 8 June 2026. Use `createNetworkEventEmitterAsync` for new code. Events created via the sync API are not centrally registered and do not appear in the OpenRPC document.
 
 The legacy `getNetworkEvent<T>(name)` overload that takes an explicit type parameter is also deprecated. Declare the event in `NetworkEvents` and call `getNetworkEvent('event.name')` without `<T>` to get inference.
+
+## Context Keys
+
+Context keys are named facts in a flat, in-memory store shared by every process, read by menu
+`when`/`enabledWhen`/`checkedWhen` expressions (see "Menu Availability" in
+[Entry-Point-Guide.md](Entry-Point-Guide.md)). All of this surface is `@experimental`. Rules that
+hold for every producer:
+
+- A key is at least two dot-separated segments of `[A-Za-z0-9_-]`; values are `string`, `boolean`
+  or number. Prefix it with the producing component (`platform.` is reserved for the platform).
+- Publish a plain fact, scoped by key construction (`<ext>.project.{projectId}.canCreateComments`).
+- One producer process per key. A TypeScript process refuses (logs, does not throw) a write to a
+  key another process wrote first; the .NET store does not check, so a C# write to another
+  process's key takes it over. Either way two producers on one key race, so keep exactly one. The
+  store releases a TypeScript process's keys when it disconnects, so a restarted producer
+  republishes under the same key (the .NET process has no in-app restart and is not tracked). A
+  producer's `remove` also releases its key for any process, and a `set` refused because another
+  live process owned the key is applied once the key is released. C# `Remove` writes a live default
+  value (for example `null`, or `false` for a bool), not a release.
+- Publishing must never break the producer: a failed `Set` is logged and the work continues.
+- Publish when the fact becomes known and again whenever it changes. Consumers treat an unpublished
+  key as false.
+
+**From C#.** Build the key string and publish through `ContextKeysService.Instance.Set`
+(`c-sharp/Services/ContextKeysService.cs`, whose `Instance` is the process-wide `ContextKeys` over the
+shared store) on load and on every change of the fact. For unit tests, accept an optional
+`ContextKeys? contextKeys = null` constructor parameter that falls back to
+`ContextKeysService.Instance`, as
+`InternetSettingsDataProvider` and `ParatextProjectDataProvider` do; do not add a required
+dependency, because nothing in production constructs one. Catch and log any exception from `Set`
+instead of letting it reach the data provider. The typed shared-store keys in
+`c-sharp/Services/SharedStoreKeys.cs` mirror the TypeScript typed keys in `shared-store.service.ts`
+(the file says to keep them in sync); a change to one needs the same change in the other.
+
+**From an extension (extension host).** Call `papi.contextKeys.set(key, value)` when the fact
+changes and `papi.contextKeys.remove(key)` when it stops applying. Read with `papi.contextKeys.get`.
+There is no public change subscription: context keys are facts for menus, not a state bus; react
+to the underlying state's own data provider or event.
+
+**From a web view.** Publish from an effect that owns the state, set a key when its value changes,
+and remove every key it set in the effect's cleanup so a closed tab leaves nothing behind. Key the
+name by `webViewId`. A web view that renders its own menu evaluates it with `useEvaluatedMenu` from
+`@papi/frontend/react`, passing a memoized template-variable object.
 
 ---
 

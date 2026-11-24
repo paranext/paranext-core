@@ -1405,6 +1405,26 @@ declare module 'shared/data/rpc.model' {
   /** Port to use for the WebSocket */
   export const WEBSOCKET_PORT = 8876;
   /**
+   * WebSocket handshake request header in which a child main launched presents its client secret.
+   * Mirrored by `CLIENT_SECRET_HEADER` in `c-sharp/PapiClient.cs`.
+   */
+  export const PAPI_CLIENT_SECRET_HEADER = 'x-papi-client-secret';
+  /**
+   * WebSocket handshake reply header in which main proves itself to a child it launched. Mirrored by
+   * `SERVER_SECRET_HEADER` in `c-sharp/PapiClient.cs`.
+   */
+  export const PAPI_SERVER_SECRET_HEADER = 'x-papi-server-secret';
+  /**
+   * The two secrets main hands a child it launches: the client secret the child presents in
+   * {@link PAPI_CLIENT_SECRET_HEADER}, and the server secret main returns in
+   * {@link PAPI_SERVER_SECRET_HEADER}. The .NET data provider parses the same JSON shape
+   * (`LaunchSecrets.Parse` in `c-sharp/LaunchSecrets.cs`).
+   */
+  export type LaunchSecrets = {
+    clientSecret: string;
+    serverSecret: string;
+  };
+  /**
    * Largest message the WebSocket transport carries. A message over this is not a failed request: the
    * receiver closes the connection with 1009, taking down every request in flight on it and, for the
    * C# data provider, the process itself. Declared here rather than left to the `ws` default so a
@@ -1996,6 +2016,16 @@ declare module 'shared/models/openrpc.model' {
   export function withNotificationPrefix(entry: OpenRpcNotification): OpenRpcNotification;
 }
 declare module 'shared/services/shared-store.service' {
+  import { ContextKeyValue, PlatformEvent } from 'platform-bible-utils';
+  /**
+   * Prefix of the request method every non-main process registers, suffixed with its shared store
+   * process ID. The method exists exactly as long as the process is connected, so main learns which
+   * process died from the disconnect event's removed method names and can release that process's
+   * keys.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const SHARED_STORE_OWNER_METHOD_PREFIX = 'shared-store:owner:';
   type LamportClock = {
     counter: number;
     processId: string;
@@ -2004,10 +2034,28 @@ declare module 'shared/services/shared-store.service' {
     value?: unknown;
     clock: LamportClock;
     deleted?: boolean;
+    released?: boolean;
   };
   export type StoreChangeEvent = StoreEntry & {
     key: string;
   };
+  /**
+   * Event describing a change to a value in the shared store
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type SharedStoreChangeEvent = {
+    key: string;
+    value: unknown;
+  };
+  /**
+   * Event that fires whenever any value in the shared store changes, whether the change was made in
+   * this process or applied from another process. Platform-internal. Not intended for use by
+   * extensions — extensions should use settings and other data providers for sharing data.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const onDidChangeSharedStore: PlatformEvent<SharedStoreChangeEvent>;
   type NetworkService = typeof import('shared/services/network.service');
   /**
    * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
@@ -2055,6 +2103,10 @@ declare module 'shared/services/shared-store.service' {
    * key already exists, it can only be set again by the process that created it. This is to prevent
    * race conditions between processes setting values that don't incorporate each others' updates.
    *
+   * A set refused because another process owns the key is held (the latest one per key) and applied
+   * if that owner later removes the key or disconnects. Setting or removing the key from this process
+   * drops the held set.
+   *
    * This runs synchronously and throws if the shared store service has not started initializing (it
    * must be able to broadcast the change). Use {@link setAsync} if you need to wait for initialization
    * before setting.
@@ -2067,6 +2119,12 @@ declare module 'shared/services/shared-store.service' {
   function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void;
   /**
    * Remove a value from the shared store and notify other processes of the change.
+   *
+   * Removing a key releases it: any process may set it afterwards, and a set another process had
+   * refused while this one owned the key is applied. This holds for every shared-store caller
+   * (context keys, the network request timeouts in `network.service.ts`, `dialog.service-router.ts`).
+   * The .NET `SharedStore.Remove` writes a live default value (for example `null`, or `false` for a
+   * bool), never a released tombstone, so release semantics do not apply to keys written from C#.
    *
    * After removal the key is treated as absent — reads return no value (a removed key is distinct
    * from a key whose value is `undefined`). The entry and its Lamport clock are retained internally
@@ -2144,12 +2202,21 @@ declare module 'shared/services/shared-store.service' {
    */
   export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${string}`;
   /**
+   * Keys for context key values (see `context-keys.service.ts`). Keys are dynamically constructed by
+   * adding this prefix to the context key name.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ContextKeySharedStoreKey = `contextKeys.${string}`;
+  /**
    * Defines the keys and types of values held in key-value pairs within the shared store service.
    * Since this service is not part of the public API, the keys and types are not included in
    * `papi-shared-types.ts`. If the platform needs more key-value pairs, they should be added here.
    */
   export interface SharedStoreValues {
     [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
+    /** @experimental This field is unstable and may change or disappear without notice */
+    [contextKey: ContextKeySharedStoreKey]: ContextKeyValue | undefined;
   }
   export type SharedStoreKeys = keyof SharedStoreValues;
   /**
@@ -2246,6 +2313,29 @@ declare module 'shared/models/papi-network-event-emitter.model' {
   }
   export default PapiNetworkEventEmitter;
 }
+declare module 'shared/models/network.model' {
+  /**
+   * A process main can identify: `'renderer'` (the app's windows and every WebView in them),
+   * `'extensionHost'` (all backend extensions), `'dotnetDataProvider'`.
+   */
+  export type RequestCallerProcess = 'renderer' | 'extensionHost' | 'dotnetDataProvider';
+  /** Options related to calling a method over the network */
+  export type NetworkMethodHandlerOptions = {
+    /**
+     * Custom timeout to use for callers of a method instead of the platform-wide timeout value. Set
+     * to 0 to disable the timeout.
+     */
+    timeoutMilliseconds?: number;
+    /**
+     * Processes that may call this handler; main always may. When omitted, anything may call it,
+     * including browser pages and local tools. A refused caller gets `MethodNotFound`.
+     *
+     * Names processes, not extensions: `'extensionHost'` admits every extension and `'renderer'`
+     * every WebView. Ignored for request types the platform restricts itself.
+     */
+    allowedCallers?: readonly RequestCallerProcess[];
+  };
+}
 declare module 'shared/models/rpc.interface' {
   import {
     ConnectionStatus,
@@ -2259,6 +2349,10 @@ declare module 'shared/models/rpc.interface' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
+  import type {
+    NetworkMethodHandlerOptions,
+    RequestCallerProcess,
+  } from 'shared/models/network.model';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   import { PlatformEvent } from 'platform-bible-utils';
   /**
@@ -2353,11 +2447,15 @@ declare module 'shared/models/rpc.interface' {
    * has been registered with a JSONRPC server.
    */
   export interface IRpcMethodRegistrar extends IRpcHandler {
-    /** Register a method that will be called if an RPC request is made */
+    /**
+     * Register a method that will be called if an RPC request is made. `options.allowedCallers`
+     * limits which processes may call it; see `NetworkMethodHandlerOptions.allowedCallers`.
+     */
     registerMethod: (
       methodName: string,
       method: InternalRequestHandler,
       methodDocs?: SingleMethodDocumentation,
+      options?: RpcMethodRegistrationOptions,
     ) => Promise<boolean>;
     /** Unregister a method so it is no longer available to RPC requests */
     unregisterMethod: (methodName: string) => Promise<boolean>;
@@ -2404,9 +2502,9 @@ declare module 'shared/models/rpc.interface' {
      * close code, and a close the app asked for is not a loss.
      *
      * Nor does a connection that was never established. A socket that dies during the opening
-     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
-     * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
-     * event is only for losing a connection that was up.
+     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value.
+     * The renderer surfaces a failed first connect itself (`initializeNetworkReportingFailure`); the
+     * extension host does not yet (PT-4495). This event is only for losing a connection that was up.
      *
      * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
      * to react to the loss rather than to classify it.
@@ -2418,7 +2516,14 @@ declare module 'shared/models/rpc.interface' {
   export type RegisteredRpcMethodDetails = {
     handler: IRpcHandler;
     methodDocs?: SingleMethodDocumentation;
+    /** The processes the registrant allowed to call the method, if it restricted them */
+    allowedCallers?: readonly RequestCallerProcess[];
   };
+  /**
+   * Options a process sends with a method registration. Travels as the third parameter of
+   * `network:registerMethod`.
+   */
+  export type RpcMethodRegistrationOptions = Pick<NetworkMethodHandlerOptions, 'allowedCallers'>;
   /**
    * Minimal interface for event registries so that {@link RpcServer} can participate in event
    * registration without importing from `rpc-websocket-listener.ts` (which would create a circular
@@ -2649,6 +2754,89 @@ declare module 'client/services/web-socket.interface' {
    */
   export type IWebSocket = WebSocket;
 }
+declare module 'shared/data/request-access.data' {
+  import type { RequestCallerProcess } from 'shared/models/network.model';
+  /**
+   * Which process a PAPI connection belongs to, as main determined it when it accepted the
+   * connection. `'main'` is main's own in-process calls; `'unidentified'` is a WebSocket client that
+   * presented no launch secret.
+   */
+  export type ConnectionIdentity = 'main' | RequestCallerProcess | 'unidentified';
+  /** Who may call and who may register a restricted request type */
+  export type RequestAccessRule = Readonly<{
+    /** Processes allowed to call the request type. Main is always allowed as well. */
+    callers: readonly RequestCallerProcess[];
+    /** The only identity allowed to register a handler for the request type */
+    registrant: Exclude<ConnectionIdentity, 'unidentified'>;
+  }>;
+  /**
+   * Gets the rule restricting a request type, if any.
+   *
+   * @param requestType Serialized request type, e.g. `command:platform.getLogFileContent`
+   * @returns The frozen rule, or `undefined` when the request type is not restricted
+   */
+  export function getRequestAccessRule(requestType: string): RequestAccessRule | undefined;
+  /**
+   * Whether a connection may register a handler for a request type. Anyone may register a request
+   * type with no rule; a restricted one only by its registrant.
+   */
+  export function isRegistrationAllowed(
+    requestType: string,
+    registrant: ConnectionIdentity,
+  ): boolean;
+  /**
+   * Whether a connection may call a request type. Main may always call. A request type with a rule
+   * follows the rule, whatever the registrant declared; otherwise the registrant's `allowedCallers`
+   * applies when it declared one.
+   *
+   * @param requestType Serialized request type
+   * @param caller Identity of the calling connection
+   * @param registrantAllowedCallers The `allowedCallers` the registering process declared, if any
+   */
+  export function isCallAllowed(
+    requestType: string,
+    caller: ConnectionIdentity,
+    registrantAllowedCallers?: readonly RequestCallerProcess[],
+  ): boolean;
+  /**
+   * The error message a refused request is answered with. It says the request type is not available
+   * rather than that it is forbidden, and is sent with `MethodNotFound`.
+   */
+  export function getRefusedRequestMessage(requestType: string): string;
+  /**
+   * Validates an `allowedCallers` value that arrived from another process.
+   *
+   * @param value The value to validate
+   * @returns `undefined` when `value` is `undefined`, otherwise a copy of the validated array
+   * @throws When `value` is anything but an array of {@link RequestCallerProcess}
+   */
+  export function parseAllowedCallers(value: unknown): RequestCallerProcess[] | undefined;
+}
+declare module 'client/services/launch-secrets' {
+  import type { ConnectionIdentity } from 'shared/data/request-access.data';
+  import type { LaunchSecrets } from 'shared/data/rpc.model';
+  /** Keeps the secrets main handed this process until the connection to main takes them */
+  export function setLaunchSecrets(secrets: LaunchSecrets): void;
+  /**
+   * Makes the connection to main wait until secrets on their way have arrived, so a PAPI call made
+   * before then cannot connect unidentified
+   */
+  export function setLaunchSecretsArrival(arrival: Promise<void>): void;
+  /** Resolves once secrets on their way have arrived; at once when none are expected */
+  export function waitForLaunchSecretsArrival(): Promise<void>;
+  /**
+   * Returns the secrets once, then forgets them, so nothing that runs after the connection is made
+   * can read them.
+   */
+  export function takeLaunchSecrets(): LaunchSecrets | undefined;
+  /**
+   * Which process main knows this one as. `'unidentified'` until a connection has proven itself: for
+   * the extension host, a handshake whose reply carried the right server secret.
+   */
+  export function getLocalConnectionIdentity(): ConnectionIdentity;
+  /** Records which process main knows this one as, once the connection has proven it */
+  export function markLocalConnectionIdentified(identity: ConnectionIdentity): void;
+}
 declare module 'shared/data/papi-port-close-handshake' {
   import { PapiPortCloseFrame, SyntheticCloseEvent } from 'shared/data/papi-port.model';
   /**
@@ -2867,11 +3055,20 @@ declare module 'renderer/services/electron-papi-port-provider' {
 }
 declare module 'renderer/services/renderer-web-socket.service' {
   /**
-   * Once our network is running, run this so `PapiRendererWebSocket` (the `WebSocket` web views get)
-   * refuses connections to it. Web views can still reach the native `WebSocket` on `window.top`; see
-   * "The renderer's PAPI port" in `.context/standards/Security-Guide.md`.
+   * Runs `initialize`, then blocks web views from the PAPI network whether it resolved or rejected,
+   * so a renderer that failed to connect does not keep running with extension sandboxing off.
+   *
+   * The block cannot run before `initialize` settles: without an Electron bridge, the renderer's own
+   * connection to main is a `PapiRendererWebSocket` to the PAPI port (see `web-socket.factory.ts`).
+   * Until it settles (at most about 10 s, the connect timeout) web views are not blocked; none can
+   * exist yet, because the web view service starts only after this call in `index.tsx`.
+   *
+   * @param initialize Starts the renderer's network service
+   * @throws Whatever `initialize` threw or rejected with, after blocking
    */
-  export const blockWebSocketsToPapiNetwork: () => void;
+  export function initializeNetworkThenBlockPapiWebSockets(
+    initialize: () => Promise<void>,
+  ): Promise<void>;
   /** This wraps the browser's WebSocket implementation to provide
    * better control over internet access. It is isomorphic with the standard WebSocket, so it should
    * act as a drop-in replacement.
@@ -2879,6 +3076,10 @@ declare module 'renderer/services/renderer-web-socket.service' {
    * Note that the Node WebSocket implementation is different and not wrapped here.
    */
   export class PapiRendererWebSocket implements WebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
     readonly CONNECTING: 0;
     readonly OPEN: 1;
     readonly CLOSING: 2;
@@ -2907,16 +3108,75 @@ declare module 'renderer/services/renderer-web-socket.service' {
     send: (data: string | ArrayBufferLike | Blob | ArrayBufferView) => void;
     url: string;
     constructor(url: string | URL, protocols?: string | string[]);
+    /**
+     * Sockets this class returns are native `WebSocket` instances, so `socket instanceof WebSocket`
+     * keeps working for code that sees this class as its `WebSocket`
+     */
+    static [Symbol.hasInstance](instance: unknown): boolean;
   }
+  /**
+   * Puts `PapiRendererWebSocket` in place of the native `WebSocket` on `target` (the top window), and
+   * makes it the `constructor` of every native socket, so a same-origin web view that borrows the
+   * constructor through `window.top` or through a socket it was handed gets the PAPI-port check too.
+   *
+   * This is defence in depth that gives a clear `Invalid URL` error: a fresh iframe in the top
+   * document still gets its own native `WebSocket`, so the main process's `onBeforeRequest` block
+   * (`papi-port-request-block.util.ts`) is what actually closes the port.
+   *
+   * @param target The window whose `WebSocket` to replace
+   */
+  export function replaceTopWindowWebSocket(target: { WebSocket: unknown }): void;
   export default PapiRendererWebSocket;
 }
+declare module 'node/utils/crypto-util' {
+  export function createUuid(): string;
+  /**
+   * Create a cryptographically secure nonce that is at least 128 bits long. See nonce spec at
+   * https://w3c.github.io/webappsec-csp/#security-nonces
+   *
+   * @param encoding: "base64url" (HTML safe, shorter string) or "hex" (longer string) From
+   *   https://base64.guru/standards/base64url, the purpose of this encoding is "the ability to use
+   *   the encoding result as filename or URL address"
+   * @param numberOfBytes: Number of bytes the resulting nonce should contain
+   * @returns Cryptographically secure, pseudo-randomly generated value encoded as a string
+   */
+  export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
+  /**
+   * Calculates the hash of a given data buffer
+   *
+   * @param hashAlgorithm Name of the hash algorithm to use, such as "sha512"
+   * @param encodingType String encoding to use for returning the binary hash value that is calculated
+   * @param buffer Raw data to be fed into the hash algorithm
+   * @returns String encoded value of the digest (https://csrc.nist.gov/glossary/term/hash_digest)
+   */
+  export function generateHashFromBuffer(
+    hashAlgorithm: string,
+    encodingType: 'base64' | 'base64url' | 'hex' | 'binary',
+    buffer: Buffer,
+  ): string;
+  /**
+   * SHA-256 digest of a string's UTF-8 bytes. Two digests are the same length whatever the inputs, so
+   * they can be compared with `crypto.timingSafeEqual`.
+   */
+  export function sha256Digest(value: string): Buffer;
+}
 declare module 'extension-host/services/extension-host-web-socket.model' {
-  import ws from 'ws';
+  import WebSocket from 'ws';
+  import { LaunchSecrets } from 'shared/data/rpc.model';
+  /**
+   * Opens the extension host's connection to main presenting its launch secret. The connection only
+   * opens if main's handshake reply carries the matching server secret, proving it is the main that
+   * launched this process; otherwise it is closed before it opens.
+   *
+   * @param url Address of main's PAPI WebSocket
+   * @param secrets The secrets main handed this process. Not kept after the handshake.
+   */
+  export function createIdentifiedWebSocket(url: string, secrets: LaunchSecrets): WebSocket;
   /**
    * Extension-host client uses ws as its WebSocket client, but the renderer can't use it. So we need
    * to exclude it from the renderer webpack bundle like this.
    */
-  export default ws;
+  export default WebSocket;
 }
 declare module 'client/services/web-socket.factory' {
   import { IWebSocket } from 'client/services/web-socket.interface';
@@ -2929,7 +3189,11 @@ declare module 'client/services/web-socket.factory' {
 }
 declare module 'client/services/rpc-client' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
+  import {
+    IRpcMethodRegistrar,
+    RpcClientDisconnectEvent,
+    RpcMethodRegistrationOptions,
+  } from 'shared/models/rpc.interface';
   import {
     ConnectionStatus,
     EventHandler,
@@ -2980,6 +3244,8 @@ declare module 'client/services/rpc-client' {
     private requestId;
     /** Refers to the current process that created this object (i.e., not main) */
     private readonly jsonRpcServer;
+    /** The `allowedCallers` each method registered in this process was registered with */
+    private readonly allowedCallersByLocalMethodName;
     /** Refers to main */
     private readonly jsonRpcClient;
     private readonly jsonRpcClientServer;
@@ -3023,6 +3289,7 @@ declare module 'client/services/rpc-client' {
       methodName: string,
       method: InternalRequestHandler,
       methodDocs?: SingleMethodDocumentation,
+      options?: RpcMethodRegistrationOptions,
     ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
     registerEvent(
@@ -3076,6 +3343,7 @@ declare module 'main/services/rpc-server' {
     SingleMethodDocumentation,
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
+  import { ConnectionIdentity } from 'shared/data/request-access.data';
   /**
    * Tell socket-close severity how to ask whether the app is shutting down.
    *
@@ -3097,6 +3365,8 @@ declare module 'main/services/rpc-server' {
    */
   export class RpcServer implements IRpcHandler {
     connectionStatus: ConnectionStatus;
+    /** Which process is on the other end of this connection, as main determined when accepting it */
+    readonly identity: ConnectionIdentity;
     /**
      * Whether {@link onWebSocketClose} has already run for the current socket.
      *
@@ -3128,13 +3398,10 @@ declare module 'main/services/rpc-server' {
     private readonly propagateEventMethod;
     /** Called by an RpcServer once its client's methods have been removed from the registry */
     private readonly announceClientDisconnectMethod;
-    /** See the constructor's `isWebSocketWithoutOrigin` */
-    private readonly isWebSocketWithoutOrigin;
     /**
-     * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
-     *   carried no `Origin` header. Only such a client may send the request types main refuses to
-     *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
-     *   them.
+     * @param identity Which process is on the other end, as main determined when accepting the
+     *   connection. Defaults to `'unidentified'`, so a connection nobody vouched for gets no more
+     *   than an unknown client.
      */
     constructor(
       name: string,
@@ -3143,7 +3410,7 @@ declare module 'main/services/rpc-server' {
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
       rpcEventDetailsByEventName: IRpcEventRegistry,
       announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
-      isWebSocketWithoutOrigin?: boolean,
+      identity?: ConnectionIdentity,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -3153,7 +3420,11 @@ declare module 'main/services/rpc-server' {
       skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
-    registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean;
+    registerRemoteMethod(
+      methodName: string,
+      methodDocs?: SingleMethodDocumentation,
+      options?: unknown,
+    ): boolean;
     unregisterRemoteMethod(methodName: string): boolean;
     registerRemoteEvent(
       eventName: string,
@@ -3190,6 +3461,39 @@ declare module 'main/services/rpc-server' {
     private processMessage;
   }
   export default RpcServer;
+}
+declare module 'main/services/launch-secrets.service' {
+  import type { LaunchSecrets } from 'shared/data/rpc.model';
+  import type { RequestCallerProcess } from 'shared/models/network.model';
+  /**
+   * The child processes main launches and identifies by a launch secret. Each presents its client
+   * secret in its PAPI WebSocket handshake and checks main's reply for its server secret.
+   */
+  export type LaunchedIdentity = Exclude<RequestCallerProcess, 'renderer'>;
+  /** What a presented client secret tells main about the connection that presented it */
+  export type IdentifiedLaunch = {
+    identity: LaunchedIdentity;
+    serverSecret: string;
+    launchId: number;
+  };
+  /**
+   * Creates new secrets for a child about to be launched. Replaces any secrets issued earlier for the
+   * identity, so a connection can no longer be made with those.
+   *
+   * Never log the returned secrets or put them on a command line or in main's own environment.
+   */
+  export function issueLaunchSecrets(identity: LaunchedIdentity): LaunchSecrets;
+  /**
+   * Finds which launched child a presented client secret belongs to. Compares digests in constant
+   * time, so a malformed value of any length is simply not found.
+   *
+   * @param presented The client secret a connection presented
+   * @returns The identity, the server secret to return to it, and a number that changes each time
+   *   secrets are issued for the identity; `undefined` when the secret matches no current launch
+   */
+  export function identifyClientSecret(presented: string): IdentifiedLaunch | undefined;
+  /** Forgets the secrets issued for an identity, e.g. when its process has exited */
+  export function revokeLaunchSecrets(identity: LaunchedIdentity): void;
 }
 declare module 'shared/data/network-event-names' {
   /**
@@ -3268,6 +3572,7 @@ declare module 'main/services/rpc-websocket-listener' {
     IRpcMethodRegistrar,
     IRpcWebSocketClientCloser,
     RpcClientDisconnectEvent,
+    RpcMethodRegistrationOptions,
   } from 'shared/models/rpc.interface';
   import {
     OpenRpc,
@@ -3332,6 +3637,10 @@ declare module 'main/services/rpc-websocket-listener' {
     private readonly warnedForeignAnnouncements;
     private readonly clientDisconnectEmitter;
     private readonly connectionLostEmitter;
+    /** Handshakes that presented a valid client secret, kept until their connection is set up */
+    private readonly verifiedLaunchByRequest;
+    /** The one open connection each launched child may have */
+    private readonly openConnectionByLaunchedIdentity;
     /**
      * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
      *   overridden only by tests that need to bind a real socket without colliding with a running
@@ -3350,6 +3659,7 @@ declare module 'main/services/rpc-websocket-listener' {
       methodName: string,
       method: InternalRequestHandler,
       methodDocs?: SingleMethodDocumentation,
+      options?: RpcMethodRegistrationOptions,
     ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
     registerEvent(
@@ -3392,10 +3702,28 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private warnIfInvalidEventAnnouncement;
     /**
+     * Decides whether to complete a WebSocket handshake. A client that presents no secret is served
+     * as `unidentified`. One that presents a secret must present a current launch's client secret,
+     * and that launch must not already have an open connection.
+     *
+     * Never logs the presented header: it may be a real secret sent to the wrong place.
+     */
+    private verifyClient;
+    /** Proves main to a child it identified by returning that launch's server secret */
+    private addServerSecretToHandshakeReply;
+    /**
      * @param upgradeRequest The handshake request, which `ws` always passes. Without one the client
-     *   is treated as having sent `Origin`.
+     *   is served as `unidentified`.
      */
     private onClientConnect;
+    /**
+     * Records the open connection of a launched child. A connection from an earlier launch of the
+     * same child is closed: main has replaced that process, and its socket may not have closed yet.
+     *
+     * @returns `false` when the same launch already has an open connection, which happens only when
+     *   two handshakes with the same secret pass the handshake check together
+     */
+    private trackLaunchedConnection;
     /** Attach an `RpcServer` to a socket and track it until the socket closes */
     private serveClient;
     private announceClientDisconnect;
@@ -3407,16 +3735,6 @@ declare module 'shared/services/rpc-handler.factory' {
   import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
   /** Creates a server or client RPC handler depending on if we're in main or some other process */
   export const createRpcHandler: () => Promise<IRpcMethodRegistrar>;
-}
-declare module 'shared/models/network.model' {
-  /** Options related to calling a method over the network */
-  export type NetworkMethodHandlerOptions = {
-    /**
-     * Custom timeout to use for callers of a method instead of the platform-wide timeout value. Set
-     * to 0 to disable the timeout.
-     */
-    timeoutMilliseconds?: number;
-  };
 }
 declare module 'shared/services/network.service' {
   /**
@@ -5050,28 +5368,40 @@ declare module 'shared/models/docking-framework.model' {
     | 'active'
     | 'update';
   /**
-   * Information about a panel: a tab opened beside the tab group holding `targetTabId`. When no
-   * `targetTabId` is given (or it is not in this window), the tab opens beside the tab group of the
-   * tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it.
+   * Information about a panel: a tab opened beside the tab group holding `targetTabId`, or beside
+   * that tab itself. When no `targetTabId` is given (or it is not in this window), the target is the
+   * tab most recently opened as a `'tab'` or re-opened in this window, else the first tab in it.
    *
-   * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
-   * directly on the `direction` side instead of a new group being created, if that group can take it:
-   * it sits beside the target's group (a group touching it only at a corner does not count), has at
-   * least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at
-   * least as wide (as tall for `top` and `bottom`) as a new group beside the target would be.
-   * Otherwise the tab opens as a new group beside the target's group.
+   * `before-tab` and `after-tab` add the tab, as the active tab, to the target's own tab group, just
+   * before or after the target. This holds whether that group is docked, floating, or maximized. A
+   * group that cannot take the tab gets it beside the group instead, as `left` would for
+   * `before-tab`, or `right` for `after-tab`. Such a group is one of Simple mode's fixed columns, or
+   * a group that holds another kind of tab. Either way, `before-tab` lands on the target's
+   * reading-start side and `after-tab` on its reading-end side.
    *
-   * When the target's tab group is floating or maximized, the tab opens as a new group at the
-   * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
-   * `direction` was asked for, and a floating target that would cover that group is moved aside.
-   * `left` and `right` are mirrored in a right-to-left UI. A target in another application window is
-   * placed by these same rules in the window that holds it.
+   * For `left`, `right`, `top`, or `bottom`, when the target's tab group is docked, the tab is added,
+   * as its active tab, to the tab group directly on the `direction` side instead of a new group being
+   * created, if that group can take it: it sits beside the target's group (a group touching it only
+   * at a corner does not count), has at least one tab, holds the same kind of tab, is not one of
+   * Simple mode's fixed columns, and is at least as wide (as tall for `top` and `bottom`) as a new
+   * group beside the target would be. Otherwise the tab opens as a new group beside the target's
+   * group.
+   *
+   * For `left`, `right`, `top`, or `bottom`, when the target's tab group is floating or maximized,
+   * the tab opens as a new group at the reading-end edge of the dock area (the right, or the left in
+   * a right-to-left UI), whichever side was asked for, and a floating target that would cover that
+   * group is moved aside. `left` and `right` are mirrored in a right-to-left UI.
+   *
+   * A target in another application window is placed by these same rules in the window that holds it.
    */
   interface PanelLayout {
     type: 'panel';
     /**
-     * The side of the target's tab group to open on, in reading order: `right` is the reading-end
-     * side, which is the left in a right-to-left UI
+     * Where to open, in reading order. A side opens beside the target's tab group: `right` is the
+     * reading-end side, which is the left in a right-to-left UI. `before-tab` and `after-tab` open in
+     * the target's own tab group, just before or after the target in its tab order, which is reading
+     * order as for {@link DirectionFromTab}: `after-tab` puts the tab where `nextTab` from the target
+     * goes.
      */
     direction?: PanelDirection;
     /**
@@ -6421,6 +6751,9 @@ declare module 'papi-shared-types' {
      * A call while a restart is already in flight (from its start until the new extension host
      * announces its start) joins that restart and resolves with it, at once if the new process is
      * already forked, rather than stopping the host that is still starting.
+     *
+     * Only the app's windows, including any WebView in them, and the extension host may call it;
+     * other connections are refused with `MethodNotFound`.
      */
     'platform.restartExtensionHost': () => Promise<void>;
     /**
@@ -6440,7 +6773,11 @@ declare module 'papi-shared-types' {
     'platform.restart': () => Promise<void>;
     /** Get the operating system platform */
     'platform.getOSPlatform': () => Promise<string | undefined>;
-    /** Get the current log file content for debugging purposes */
+    /**
+     * Get the current log file content for debugging purposes. Only the app's windows, including
+     * any WebView in them, may call it; the extension host and other connections are refused with
+     * `MethodNotFound`.
+     */
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
@@ -6685,7 +7022,9 @@ declare module 'papi-shared-types' {
      * without Send/Receive, where no sync can clear it, so afterwards
      * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
      * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
-     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console. Only the
+     * app's windows, including any WebView in them, may call it; the extension host and other
+     * connections are refused with `MethodNotFound`.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice
@@ -7696,6 +8035,25 @@ declare module 'shared/services/command.service' {
    * other services and extensions that have registered commands.
    */
   export type ModuleSummaryComments = {};
+}
+declare module 'extension-host/services/extension-logger.util' {
+  import type { MainLogger } from 'electron-log';
+  /** The logger extensions get as `papi.logger`: only electron-log's logging methods */
+  export type ExtensionLogger = Readonly<
+    Pick<MainLogger, 'error' | 'warn' | 'info' | 'verbose' | 'debug' | 'silly' | 'log'>
+  >;
+  /**
+   * Wraps `logger` so extensions can log through it but cannot reach its settings. electron-log's
+   * `transports.file` can point the log file, and `readAllLogs`, at any path, and freezing the logger
+   * does not freeze its nested settings.
+   *
+   * The methods are bound rather than wrapped in functions, because a bound function adds no stack
+   * frame: the logger finds the caller it shows on each line by counting frames from its own.
+   *
+   * @param logger The logger to forward to
+   * @returns A frozen object with only the logging methods
+   */
+  export function createExtensionLogger(logger: MainLogger): ExtensionLogger;
 }
 declare module 'shared/services/internet.service' {
   /** Our shim over fetch. Allows us to control internet access. */
@@ -9394,33 +9752,6 @@ declare module 'node/services/node-file-system.service' {
    * @returns Promise that resolves when the delete operation finishes
    */
   export function deleteDir(uri: Uri): Promise<void>;
-}
-declare module 'node/utils/crypto-util' {
-  export function createUuid(): string;
-  /**
-   * Create a cryptographically secure nonce that is at least 128 bits long. See nonce spec at
-   * https://w3c.github.io/webappsec-csp/#security-nonces
-   *
-   * @param encoding: "base64url" (HTML safe, shorter string) or "hex" (longer string) From
-   *   https://base64.guru/standards/base64url, the purpose of this encoding is "the ability to use
-   *   the encoding result as filename or URL address"
-   * @param numberOfBytes: Number of bytes the resulting nonce should contain
-   * @returns Cryptographically secure, pseudo-randomly generated value encoded as a string
-   */
-  export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
-  /**
-   * Calculates the hash of a given data buffer
-   *
-   * @param hashAlgorithm Name of the hash algorithm to use, such as "sha512"
-   * @param encodingType String encoding to use for returning the binary hash value that is calculated
-   * @param buffer Raw data to be fed into the hash algorithm
-   * @returns String encoded value of the digest (https://csrc.nist.gov/glossary/term/hash_digest)
-   */
-  export function generateHashFromBuffer(
-    hashAlgorithm: string,
-    encodingType: 'base64' | 'base64url' | 'hex' | 'binary',
-    buffer: Buffer,
-  ): string;
 }
 declare module 'shared/models/extension-basic-data.model' {
   /** Represents an object that contains the most basic information about an extension */
@@ -11718,7 +12049,59 @@ declare module 'shared/services/localization.service-model' {
        * the book so that the book name can be displayed in the UI language within the UI
        */
       getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+      /**
+       * Builds a localized title for something scoped to one project, such as a WebView's tab: looks
+       * up the localized format for `localizeKey` and the project's short name (its `platform.name`
+       * setting), then replaces `{projectName}` in the format with that name. Use it in a WebView
+       * provider's `getWebView` so the tab opens with its final title; in the WebView itself, use the
+       * `useLocalizedProjectTitle` hook to keep the title up to date.
+       *
+       * Never rejects, so a failed lookup cannot keep a WebView from opening:
+       *
+       * - If the short name cannot be read, or is blank, the project id is shown in its place.
+       * - If the format lookup fails, the title is just the project's name (or id).
+       *
+       * Both failures are logged as warnings. A key with no localization is not a failure: as with
+       * `getLocalizedString`, the title is the key itself, so the missing string is noticed.
+       *
+       * @example
+       *
+       * ```typescript
+       * // With `"%myExtension_tabTitle%": "My Tool: {projectName}"` contributed
+       * const title = await papi.localization.getLocalizedProjectTitle({
+       *   localizeKey: '%myExtension_tabTitle%',
+       *   projectId,
+       * });
+       * // 'My Tool: WEB'
+       * ```
+       *
+       * @param options What to title; see {@link LocalizedProjectTitleOptions}.
+       * @returns The formatted title
+       */
+      getLocalizedProjectTitle(options: LocalizedProjectTitleOptions): Promise<string>;
     } & IDataProvider<LocalizationDataDataTypes>;
+  /** Options for `papi.localization.getLocalizedProjectTitle`. */
+  export type LocalizedProjectTitleOptions = {
+    /**
+     * Key of the localized title format. The format should contain a `{projectName}` placeholder,
+     * which is replaced with the project's short name (or its id when the name is unavailable).
+     */
+    localizeKey: LocalizeKey;
+    /** Id of the project the title is for */
+    projectId: string;
+    /**
+     * Values for any other `{key}` placeholders in the format. A `projectName` entry is ignored in
+     * favor of the project's name.
+     */
+    replacements?: {
+      [key: string]: unknown;
+    };
+    /**
+     * BCP 47 language codes to look the format up in, as for `getLocalizedString`. Defaults to the
+     * interface languages.
+     */
+    locales?: string[];
+  };
 }
 declare module 'shared/services/localization.service' {
   import { ILocalizationService } from 'shared/services/localization.service-model';
@@ -12345,6 +12728,48 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
   ) => [localizedStrings: LocalizationData, isLoading: boolean];
   export default useLocalizedStrings;
 }
+declare module 'renderer/hooks/papi-hooks/use-localized-project-title.hook' {
+  import type { LocalizedProjectTitleOptions } from 'shared/services/localization.service-model';
+  /**
+   * Builds a localized title for something scoped to one project, such as a WebView's tab, and keeps
+   * it up to date as the project's short name (its `platform.name` setting) or the interface language
+   * changes. `{projectName}` in the localized format is replaced with the project's short name, or
+   * with the project id when the name cannot be read or is blank.
+   *
+   * This is the WebView counterpart of `papi.localization.getLocalizedProjectTitle`, which a WebView
+   * provider uses to give the tab its title on open. It takes the same options, except `locales` (the
+   * title follows the interface languages) and a `projectId` that may be `undefined`. When their
+   * lookups succeed, both produce the same title, so the tab does not change when the WebView takes
+   * over.
+   *
+   * @example
+   *
+   * ```tsx
+   * // With `"%myExtension_tabTitle%": "My Tool: {projectName}"` contributed
+   * const tabTitle = useLocalizedProjectTitle({
+   *   localizeKey: '%myExtension_tabTitle%',
+   *   projectId,
+   * });
+   * useEffect(() => {
+   *   if (tabTitle === undefined) return;
+   *   updateWebViewDefinition({ title: hasUnsavedChanges ? `${tabTitle} ●` : tabTitle });
+   * }, [tabTitle, hasUnsavedChanges, updateWebViewDefinition]);
+   * ```
+   *
+   * @param options What to title; see `LocalizedProjectTitleOptions`. With no `projectId` there is no
+   *   title. The options need not be stable: changing `replacements` triggers no lookups.
+   * @returns The formatted title, or `undefined` while loading or with no `projectId`; keep the
+   *   current title until it is defined.
+   */
+  export function useLocalizedProjectTitle({
+    localizeKey,
+    projectId,
+    replacements,
+  }: Omit<LocalizedProjectTitleOptions, 'projectId' | 'locales'> & {
+    projectId: string | undefined;
+  }): string | undefined;
+  export default useLocalizedProjectTitle;
+}
 declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
   import { NetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
@@ -12383,6 +12808,214 @@ declare module 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook' {
     addRecentScriptureRef: (newRef: SerializedVerseRef) => void;
   };
 }
+declare module 'shared/services/context-keys.service-model' {
+  import { ContextKeyValue } from 'platform-bible-utils';
+  /**
+   * Event emitted when a context key's value changes; platform-internal, not part of PAPI
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ContextKeyChangeEvent = {
+    /**
+     * The context key that changed (without any internal storage prefix)
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    key: string;
+    /**
+     * The new value, or `undefined` if the key was removed
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    value: ContextKeyValue | undefined;
+  };
+  /**
+   *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export interface IContextKeysService {
+    /**
+     * Sets or updates a context key.
+     *
+     * Throws if the key is not structurally valid (at least two dot-separated segments of word
+     * characters or hyphens) or the value is not a string, number, or boolean.
+     *
+     * Conventions: prefix keys with your extension's name (`platform.` is reserved); give each key
+     * exactly one producer. A key first set in one process can only be updated from that same process
+     * until that process removes the key or disconnects, which releases the key for any process to
+     * claim (ownership violations are logged, not thrown). A set refused for ownership is held and
+     * applied when the owner releases the key, so a producer hands a key over by removing it: a moved
+     * tab's new process wins once the old one removes.
+     *
+     * @param key The context key to set, e.g. `myExtension.project.<projectId>.isEditable`
+     * @param value The value to set (string, number, or boolean)
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    set(key: string, value: ContextKeyValue): void;
+    /**
+     * Gets the current value of a context key synchronously from the in-process store copy — no
+     * network call.
+     *
+     * @param key The context key to read
+     * @returns The current value, or `undefined` if the key has never been set, was removed, or is
+     *   not a valid context key (unlike {@link IContextKeysService.set}, this does not throw)
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    get(key: string): ContextKeyValue | undefined;
+    /**
+     * Sets a context key's value to `undefined`. A subsequent {@link IContextKeysService.get} for the
+     * key returns `undefined`.
+     *
+     * Throws if the key is not structurally valid. Like {@link IContextKeysService.set}, a key first
+     * set in one process can only be removed from that same process (ownership violations are logged,
+     * not thrown). Removing a key releases it: any process may set it afterwards, and a set another
+     * process had refused while this one owned the key is applied.
+     *
+     * @param key The context key to remove
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    remove(key: string): void;
+  }
+}
+declare module 'shared/services/context-keys.service' {
+  import { ContextKeyValue } from 'platform-bible-utils';
+  import {
+    ContextKeyChangeEvent,
+    IContextKeysService,
+  } from 'shared/services/context-keys.service-model';
+  function set(key: string, value: ContextKeyValue): void;
+  function get(key: string): ContextKeyValue | undefined;
+  function remove(key: string): void;
+  function getChangeSequence(): number;
+  /**
+   *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const contextKeysService: {
+    set: typeof set;
+    get: typeof get;
+    remove: typeof remove;
+    /**
+     * Event that fires when any context key changes (whether changed locally or in another process).
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    onDidChange: import('platform-bible-utils').PlatformEvent<ContextKeyChangeEvent>;
+    /**
+     * Number of context key changes forwarded so far in this process; a changed value between two
+     * reads means at least one key changed in between. Intended for platform-internal use (the
+     * renderer's useEvaluatedMenu); not part of papi.contextKeys.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    getChangeSequence: typeof getChangeSequence;
+  };
+  /**
+   * Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`)
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const papiContextKeysService: IContextKeysService;
+}
+declare module 'shared/utils/evaluate-menu-recording-reads.util' {
+  import { EvaluatableMenu, WhenExpressionErrorHandler } from 'platform-bible-utils';
+  /**
+   * A menu evaluated against the current context keys, with the keys the evaluation actually read
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type MenuEvaluationWithReads<T extends EvaluatableMenu> = {
+    /**
+     * The evaluated menu, as {@link evaluateMenu} returns it
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    evaluatedMenu: T;
+    /**
+     * Every context key the evaluation looked up. A key outside this set cannot change the result
+     * until a key inside it changes: unresolved template variables return before any lookup, and
+     * `&&`/`||` short-circuit.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    readKeys: ReadonlySet<string>;
+  };
+  /**
+   * Evaluates a menu like {@link evaluateMenu} against the current context keys and reports which keys
+   * the evaluation read, so a surface can skip re-evaluating when an unrelated key changes.
+   *
+   * @param menu The menu document to evaluate
+   * @param templateVars Values for `{placeholder}` segments in expression property references
+   * @param onError Called for each expression that fails to evaluate
+   * @returns The evaluated menu and the set of keys it read
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function evaluateMenuRecordingReads<T extends EvaluatableMenu>(
+    menu: T,
+    templateVars: Record<string, string | undefined>,
+    onError: WhenExpressionErrorHandler,
+  ): MenuEvaluationWithReads<T>;
+}
+declare module 'renderer/hooks/papi-hooks/use-evaluated-menu.hook' {
+  import { EvaluatableMenu } from 'platform-bible-utils';
+  /**
+   * Evaluates the when-expressions (`when`, `enabledWhen`, `checkedWhen`) in a menu document against
+   * the current context keys and re-evaluates when a context key it read changes, local or remote.
+   * Use it in a web view that renders its own menu and must react to keys it does not own.
+   *
+   * @param menuData The menu document to evaluate (pass a referentially stable object, e.g. state or
+   *   memoized data)
+   * @param templateVars Values for `{placeholder}` segments in expression property references.
+   *   `templateVars` MUST be referentially stable (memoize in the caller) or the menu re-evaluates on
+   *   every render
+   * @returns The evaluated menu document (hidden items removed, `disabled`/`checked` decorated), or
+   *   `undefined` if `menuData` is `undefined`
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function useEvaluatedMenu<T extends EvaluatableMenu>(
+    menuData: T | undefined,
+    templateVars: Record<string, string | undefined>,
+  ): T | undefined;
+  export default useEvaluatedMenu;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -12394,9 +13027,11 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
+  export { default as useLocalizedProjectTitle } from 'renderer/hooks/papi-hooks/use-localized-project-title.hook';
   export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
   export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
+  export { default as useEvaluatedMenu } from 'renderer/hooks/papi-hooks/use-evaluated-menu.hook';
 }
 declare module 'renderer/services/overlays/window-blur-press.util' {
   /**
@@ -12420,6 +13055,7 @@ declare module 'renderer/services/overlays/overlay-store' {
    * menus, modal dialogs, popovers) and notifies subscribers on changes.
    */
   import type { PlatformError } from 'platform-bible-utils';
+  import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   import {
     OverlayEntry,
     OverlayResolveType,
@@ -12501,6 +13137,15 @@ declare module 'renderer/services/overlays/overlay-store' {
    * @returns True if the overlay was found and updated, false otherwise
    */
   export function updateOverlayContent(id: string, content: PopoverContent): boolean;
+  /**
+   * Replaces the items of an open context menu and notifies subscribers.
+   *
+   * @param id The overlay id to update
+   * @param items The new menu items
+   * @returns True if the overlay was found and is a context menu, false otherwise
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function updateContextMenuItems(id: string, items: OverlayContextMenuItem[]): boolean;
   /**
    * Updates the mutable `filterText`/`selectedIndex` state of a command palette overlay and notifies
    * subscribers. `selectedIndex` is always clamped to `[0, itemCount - 1]` (or `0` when `itemCount`
@@ -13130,6 +13775,13 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         webViewId: string;
         /** Menu items to render */
         items: OverlayContextMenuItem[];
+        /**
+         * Keys for every item the menu can show, collected from the unevaluated menu so that an item
+         * that appears while the menu is open already has its label localized.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
+         */
+        localizeKeys?: LocalizeKey[];
         /** Document-relative position (already translated from iframe coordinates and clamped) */
         position: {
           x: number;
@@ -13932,6 +14584,10 @@ declare module '@papi/core' {
     ManageExtensions,
   } from 'shared/models/manage-extensions-privilege.model';
   export type {
+    NetworkMethodHandlerOptions,
+    RequestCallerProcess,
+  } from 'shared/models/network.model';
+  export type {
     NetworkableObject,
     NetworkObject,
     NetworkObjectDetails,
@@ -13995,6 +14651,7 @@ declare module '@papi/core' {
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
   export type { AppInfo } from 'shared/services/app.service-model';
+  export type { IContextKeysService } from 'shared/services/context-keys.service-model';
   export type {
     NamedSqlParameters,
     SqlOutputRow,
@@ -14004,6 +14661,7 @@ declare module '@papi/core' {
     LocalizationData,
     LocalizationSelector,
     LocalizationSelectors,
+    LocalizedProjectTitleOptions,
   } from 'shared/services/localization.service-model';
   export type {
     SimultaneousProjectSettingsChanges,
@@ -14740,6 +15398,7 @@ declare module '@papi/backend' {
   import { DialogService } from 'shared/services/dialog.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
   import { IDatabaseService } from 'shared/services/database.service-model';
+  import { IContextKeysService } from 'shared/services/context-keys.service-model';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
   import { BackendNetworkObjectService } from 'shared/services/network-object.service';
@@ -14842,6 +15501,30 @@ declare module '@papi/backend' {
     commands: typeof commandService;
     /**
      *
+     * Service for reading and writing context keys: named properties that drive dynamic UI state such
+     * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+     * declared in menus.json contributions.
+     *
+     * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+     * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+     * producers must re-publish after a restart.
+     *
+     * Conventions:
+     *
+     * - Key format: at least two dot-separated segments of word characters or hyphens
+     * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+     * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+     *   reference these with template variables like `{projectId}`
+     * - Each key should have exactly one producer. A key first set in one process can only be updated
+     *   from that same process until that process removes the key or disconnects
+     * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+     *   refused while another process owned the key is applied once the owner removes it
+     *
+     * @experimental This constant is unstable and may change or disappear without notice
+     */
+    contextKeys: IContextKeysService;
+    /**
+     *
      * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
      *
      * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
@@ -14917,9 +15600,12 @@ declare module '@papi/backend' {
      *
      * All extensions and services should use this logger to provide a unified output of logs
      */
-    logger: import('electron-log').MainLogger & {
-      default: import('electron-log').MainLogger;
-    };
+    logger: Readonly<
+      Pick<
+        import('electron-log').MainLogger,
+        'error' | 'log' | 'warn' | 'info' | 'verbose' | 'debug' | 'silly'
+      >
+    >;
     /**
      *
      * Service that provides a way to call `fetch` since the original function is not available
@@ -15111,6 +15797,30 @@ declare module '@papi/backend' {
   export const commands: typeof commandService;
   /**
    *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const contextKeys: IContextKeysService;
+  /**
+   *
    * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
    *
    * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
@@ -15186,9 +15896,12 @@ declare module '@papi/backend' {
    *
    * All extensions and services should use this logger to provide a unified output of logs
    */
-  export const logger: import('electron-log').MainLogger & {
-    default: import('electron-log').MainLogger;
-  };
+  export const logger: Readonly<
+    Pick<
+      import('electron-log').MainLogger,
+      'error' | 'log' | 'warn' | 'info' | 'verbose' | 'debug' | 'silly'
+    >
+  >;
   /**
    *
    * Service that provides a way to call `fetch` since the original function is not available
@@ -15745,6 +16458,7 @@ declare module '@papi/frontend' {
   import { INotificationService } from 'shared/models/notification.service-model';
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
   import * as commandService from 'shared/services/command.service';
+  import { IContextKeysService } from 'shared/services/context-keys.service-model';
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { InternetService } from 'shared/services/internet.service';
@@ -15790,6 +16504,30 @@ declare module '@papi/frontend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
+    /**
+     *
+     * Service for reading and writing context keys: named properties that drive dynamic UI state such
+     * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+     * declared in menus.json contributions.
+     *
+     * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+     * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+     * producers must re-publish after a restart.
+     *
+     * Conventions:
+     *
+     * - Key format: at least two dot-separated segments of word characters or hyphens
+     * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+     * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+     *   reference these with template variables like `{projectId}`
+     * - Each key should have exactly one producer. A key first set in one process can only be updated
+     *   from that same process until that process removes the key or disconnects
+     * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+     *   refused while another process owned the key is applied once the owner removes it
+     *
+     * @experimental This constant is unstable and may change or disappear without notice
+     */
+    contextKeys: IContextKeysService;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -15970,6 +16708,30 @@ declare module '@papi/frontend' {
    * other services and extensions that have registered commands.
    */
   export const commands: typeof commandService;
+  /**
+   *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const contextKeys: IContextKeysService;
   /**
    *
    * Service exposing various functions related to using webViews

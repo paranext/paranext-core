@@ -13,10 +13,10 @@
  *
  * This spec shrinks the WINDOW, which bottoms out at `WINDOW_MIN_WIDTH_PX` (900). The narrower half
  * — a splitter drag to the editor column's own 297px floor inside a full-screen window — is
- * `paragraph-style-trigger-column-floor.spec.ts`.
+ * `gutter-marker-no-overlap.spec.ts`.
  *
- * ONE test() per spec file (isolated-fixture / second-Electron-instance constraint — see
- * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
+ * One test(): the isolated fixture starts a new app for every test(). Run: `npm run
+ * test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { setWindowWidth } from '../../../fixtures/helpers';
@@ -30,7 +30,7 @@ import {
 
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 /** Sub-pixel layout rounding shows up as a 1px excess that is not a real overrun. */

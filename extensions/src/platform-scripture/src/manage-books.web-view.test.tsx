@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
@@ -38,12 +38,16 @@ type MockWireProject = {
   isRestrictedAsBase: boolean;
 };
 
-const { mockRecentProjects, mockWireProjects } = vi.hoisted(() => {
+const { mockRecentProjects, mockWireProjects, mockUseLocalizedProjectTitle } = vi.hoisted(() => {
   // Annotated rather than asserted: `undefined`/`[]` would otherwise narrow to types no test can
   // assign a real fixture to.
   const recentProjects: { value: unknown } = { value: undefined };
   const wireProjects: { value: MockWireProject[] } = { value: [] };
-  return { mockRecentProjects: recentProjects, mockWireProjects: wireProjects };
+  return {
+    mockRecentProjects: recentProjects,
+    mockWireProjects: wireProjects,
+    mockUseLocalizedProjectTitle: vi.fn<(options: { projectId?: string }) => string | undefined>(),
+  };
 });
 
 vi.mock('@papi/frontend', () => ({
@@ -79,6 +83,7 @@ vi.mock('@papi/frontend/react', async () => {
       Object.fromEntries(keys.map((key) => [key, isSharedKey(key) ? valueFor(key) : key])),
       false,
     ],
+    useLocalizedProjectTitle: mockUseLocalizedProjectTitle,
     useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
       defaultValue,
       vi.fn(),
@@ -181,6 +186,7 @@ function getGroupByTrigger(popover: HTMLElement): HTMLElement {
 
 afterEach(() => {
   vi.clearAllMocks();
+  mockUseLocalizedProjectTitle.mockReturnValue(undefined);
 });
 
 describe('ManageBooksWebView sidebar project grouping', () => {
@@ -277,6 +283,79 @@ describe('ManageBooksWebView sidebar project grouping', () => {
         name: localizedValueFor('%projectSelector_grouping_language_label%'),
       }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('ManageBooksWebView tab title', () => {
+  it("sets the tab title from the project's localized title", async () => {
+    mockRecentProjects.value = [];
+    mockWireProjects.value = [wireProject({})];
+    mockUseLocalizedProjectTitle.mockReturnValue('Manage books — A');
+
+    const ManageBooksWebView = getManageBooksWebView();
+    const props = makeProps();
+    render(<ManageBooksWebView {...props} />);
+
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenCalledWith({
+        projectId: 'PROJECT-A',
+        title: 'Manage books — A',
+      }),
+    );
+    expect(mockUseLocalizedProjectTitle).toHaveBeenCalledWith({
+      localizeKey: '%manageBooks_dialog_titleWithProject%',
+      projectId: 'PROJECT-A',
+    });
+  });
+
+  it('retitles the tab when another project is picked', async () => {
+    mockRecentProjects.value = [];
+    mockWireProjects.value = [
+      wireProject({ projectId: 'PROJECT-A', name: 'A', fullName: 'Project A' }),
+      wireProject({ projectId: 'PROJECT-B', name: 'B', fullName: 'Project B' }),
+    ];
+    mockUseLocalizedProjectTitle.mockImplementation(({ projectId }) =>
+      projectId === 'PROJECT-B' ? 'Manage books — B' : 'Manage books — A',
+    );
+
+    const ManageBooksWebView = getManageBooksWebView();
+    const props = makeProps();
+    render(<ManageBooksWebView {...props} />);
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenLastCalledWith({
+        projectId: 'PROJECT-A',
+        title: 'Manage books — A',
+      }),
+    );
+
+    const { user, popover } = await openSidebarPicker();
+    await user.click(await within(popover).findByRole('option', { name: /Project B/ }));
+
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenLastCalledWith({
+        projectId: 'PROJECT-B',
+        title: 'Manage books — B',
+      }),
+    );
+    expect(mockUseLocalizedProjectTitle).toHaveBeenLastCalledWith({
+      localizeKey: '%manageBooks_dialog_titleWithProject%',
+      projectId: 'PROJECT-B',
+    });
+  });
+
+  it('leaves the tab title alone while the title is loading', async () => {
+    mockRecentProjects.value = [];
+    mockWireProjects.value = [wireProject({})];
+    mockUseLocalizedProjectTitle.mockReturnValue(undefined);
+
+    const ManageBooksWebView = getManageBooksWebView();
+    const props = makeProps();
+    render(<ManageBooksWebView {...props} />);
+
+    expect(await screen.findByTestId('manage-books-sidebar-project-trigger')).toBeInTheDocument();
+    expect(props.updateWebViewDefinition).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.anything() }),
+    );
   });
 });
 

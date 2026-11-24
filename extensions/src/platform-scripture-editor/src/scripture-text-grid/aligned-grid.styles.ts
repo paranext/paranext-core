@@ -10,6 +10,48 @@ import type { CSSProperties } from 'react';
 export const ALIGNED_GRID_CLASS = 'scripture-text-grid-aligned';
 
 /**
+ * Focus ring for a focusable scroll port: the aligned grid's root and a chapter column's scroller.
+ * `outline-hidden` rather than `outline-none`: the ring is a box-shadow, which forced colors
+ * (Windows High Contrast) removes, and `outline-hidden` leaves a real outline in that mode.
+ */
+export const SCROLL_PORT_FOCUS_RING_CLASSES =
+  'tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring';
+
+/**
+ * Ring on a cell (a verse row or a column) while a dragged cell would drop onto it. Wins over the
+ * reveal outlines below when both apply.
+ */
+export const DROP_TARGET_RING_CLASSES = 'tw:ring-2 tw:ring-inset tw:ring-primary';
+
+/**
+ * Outline on the verse row a reveal brought into view. The reveal focuses the row, which declares
+ * no focus ring of its own, so this ring is the row's focus indicator and ends on blur. Forced
+ * colors (Windows High Contrast) removes the ring, a box-shadow, so an outline in the system
+ * `Highlight` color stands in for it there, as `LIST_ITEM_KEYBOARD_FOCUS_RING` does.
+ */
+export const REVEALED_ROW_RING_CLASSES =
+  'tw:ring-2 tw:ring-inset tw:ring-ring tw:forced-colors:outline-2 tw:forced-colors:outline-[color:Highlight] tw:forced-colors:-outline-offset-2';
+
+/**
+ * Outline on the chapter or aligned column a reveal brought into view, drawn on an `::after`
+ * overlay. An inset ring on the column paints beneath its children, where the editor area's opaque
+ * background (and, in the aligned view, the sticky header) covers it; the overlay ignores the
+ * pointer, and its z-index sits above the aligned header's `z-index: 1`.
+ *
+ * Focus is not on the column, so the outline must not read as a focus ring: it outlives focus
+ * moving elsewhere (Find, the chrome), and the column's scroll area can show its own ring inside
+ * it. So it is thicker than a focus ring and set in from the edge of what it frames, leaving a gap
+ * between it and a scroll area's focus ring. It is an outline rather than a ring, so forced colors
+ * keeps it; there it takes the system `Highlight` color.
+ *
+ * The overlay covers the whole column unless the `--stg-reveal-inset-*` properties place it: a
+ * chapter column sets them to its scroll port's client area (`useRevealOutlineInsets`), so the
+ * outline frames the text and stays off the scrollbar and the header.
+ */
+export const REVEALED_COLUMN_OUTLINE_CLASSES =
+  'tw:relative tw:after:pointer-events-none tw:after:absolute tw:after:top-[var(--stg-reveal-inset-top,0px)] tw:after:right-[var(--stg-reveal-inset-right,0px)] tw:after:bottom-[var(--stg-reveal-inset-bottom,0px)] tw:after:left-[var(--stg-reveal-inset-left,0px)] tw:after:z-2 tw:after:outline-3 tw:after:-outline-offset-7 tw:after:outline-ring tw:forced-colors:after:outline-[color:Highlight]';
+
+/**
  * Custom property carrying a column's zoom factor down to its verse blocks.
  *
  * In the other views the platform scales a resource by putting `zoom` on the element that marks its

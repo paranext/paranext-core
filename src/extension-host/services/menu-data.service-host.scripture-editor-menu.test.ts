@@ -174,13 +174,22 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(describeSections(await getEditorTopMenuInMode('power'))).toEqual([
       [
         'platform.app',
-        ['platformScripture.openManageBooks', 'platform.openProjectSettingsForWebView'],
+        [
+          // The Manage books and Show books variants; the menu's conditions keep one of them
+          'platformScripture.openManageBooks',
+          'platformScripture.openManageBooks',
+          'platform.openProjectSettingsForWebView',
+        ],
       ],
       [
         'platformScriptureEditor.simpleEdit',
         [
           'platformScriptureEditor.editSubmenu ▸ platformScriptureEditor.undo, platformScriptureEditor.redo, platformScriptureEditor.cutSelection, platformScriptureEditor.copySelection, platformScriptureEditor.pasteAtSelection, platformScripture.openFind',
         ],
+      ],
+      [
+        'platformScriptureEditor.edit',
+        ['platformScriptureEditor.copySelection', 'platformScripture.openFind'],
       ],
       [
         'platformScriptureEditor.options',
@@ -215,6 +224,7 @@ describe("The scripture editor's Project menu, per mode", () => {
           'platformScriptureEditor.editSubmenu ▸ platformScriptureEditor.undo, platformScriptureEditor.redo, platformScriptureEditor.cutSelection, platformScriptureEditor.copySelection, platformScriptureEditor.pasteAtSelection',
         ],
       ],
+      ['platformScriptureEditor.edit', ['platformScriptureEditor.copySelection']],
       [
         'platformScriptureEditor.options',
         [
@@ -250,8 +260,8 @@ describe("The scripture editor's Project menu, per mode", () => {
 
   /** The section headings, in order, each mode serves: the View and Tools renames live here. */
   test.each([
-    ['power', ['Project', 'View', 'Insert', 'Tools']],
-    ['simple', ['Project', 'View', 'Insert', 'Tools and resources']],
+    ['power', ['Project', 'Edit', 'View', 'Insert', 'Tools']],
+    ['simple', ['Project', 'Edit', 'View', 'Insert', 'Tools and resources']],
   ] as const)('%s labels its sections', async (mode, expectedHeadings) => {
     const menu = await getEditorTopMenuInMode(mode);
     const served = describeSections(menu).map(([columnKey]) => columnKey);
@@ -264,8 +274,8 @@ describe("The scripture editor's Project menu, per mode", () => {
 
   /**
    * The renderer draws only the sections `getMenuSectionsWithItems` returns, so a column that holds
-   * no served item must not be among them: the emptied Edit column, the Info column and the other
-   * mode's Tools column would otherwise render as bare headings.
+   * no served item must not be among them: the Info column and the other mode's Tools column would
+   * otherwise render as bare headings.
    */
   test.each([
     ['power', 'platformScriptureEditor.simpleTools'],
@@ -276,7 +286,8 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(rendered).toEqual(describeSections(menu).map(([columnKey]) => columnKey));
     // Positive control: sections do render, so the exclusions below are not vacuous
     expect(rendered).toContain('platformScriptureEditor.insert');
-    expect(rendered).not.toContain('platformScriptureEditor.edit');
+    // The served menu is unevaluated, so the Edit section (shown on resources only) is present
+    expect(rendered).toContain('platformScriptureEditor.edit');
     expect(rendered).not.toContain('platformScriptureEditor.info');
     expect(rendered).not.toContain(otherModeToolsColumn);
   });
@@ -285,10 +296,10 @@ describe("The scripture editor's Project menu, per mode", () => {
   const ICONS_IN_BOTH_MODES: [string, string | undefined][] = [
     ['platform.openProjectSettingsForWebView', 'settings'],
     ['platformScriptureEditor.editSubmenu', 'pencil'],
-    ['platformScriptureEditor.undo', undefined],
-    ['platformScriptureEditor.redo', undefined],
     ['platformScriptureEditor.cutSelection', undefined],
     ['platformScriptureEditor.copySelection', undefined],
+    // The Edit section's own Copy, shown on resources in place of the flyout's
+    ['platformScriptureEditor.copySelection', 'clipboard-copy'],
     ['platformScriptureEditor.pasteAtSelection', undefined],
     ['platform.webViewContentZoomIn', 'zoom-in'],
     ['platform.webViewContentZoomOut', 'zoom-out'],
@@ -300,8 +311,21 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['platformScriptureEditor.insertCrossReferenceAtSelection', 'square-x'],
     ['platformScriptureEditor.insertEndnoteAtSelection', 'square-sigma'],
   ];
+  /** Undo and Redo carry icons in Power only. */
+  const ICONS_EDIT_HISTORY_POWER: [string, string | undefined][] = [
+    ['platformScriptureEditor.undo', 'undo-2'],
+    ['platformScriptureEditor.redo', 'redo-2'],
+  ];
+  const ICONS_EDIT_HISTORY_SIMPLE: [string, string | undefined][] = [
+    ['platformScriptureEditor.undo', undefined],
+    ['platformScriptureEditor.redo', undefined],
+  ];
   const ICONS_POWER_ONLY: [string, string | undefined][] = [
+    // Manage books and Show books are both served; the menu's conditions keep one of them
     ['platformScripture.openManageBooks', 'book-copy'],
+    ['platformScripture.openManageBooks', 'book-copy'],
+    ['platformScripture.openFind', 'search'],
+    // The Edit section's own Find, shown on resources in place of the flyout's
     ['platformScripture.openFind', 'search'],
     ['platformScriptureEditor.viewSubmenu', 'eye'],
     ['platformScriptureEditor.setViewStandard', undefined],
@@ -318,8 +342,8 @@ describe("The scripture editor's Project menu, per mode", () => {
   ];
 
   test.each([
-    ['power', [...ICONS_IN_BOTH_MODES, ...ICONS_POWER_ONLY]],
-    ['simple', [...ICONS_IN_BOTH_MODES, ...ICONS_SIMPLE_ONLY]],
+    ['power', [...ICONS_IN_BOTH_MODES, ...ICONS_EDIT_HISTORY_POWER, ...ICONS_POWER_ONLY]],
+    ['simple', [...ICONS_IN_BOTH_MODES, ...ICONS_EDIT_HISTORY_SIMPLE, ...ICONS_SIMPLE_ONLY]],
   ] as const)('%s serves the specified icon on every item', async (mode, expectedIcons) => {
     const menu = await getEditorTopMenuInMode(mode);
     const served = menu.items.map((item) => ({
@@ -329,8 +353,16 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(served.length).toBeGreaterThan(0);
     // Every served item is covered by the table, so a new item cannot ship without an icon decision
     expect(served.map(({ key }) => key).sort()).toEqual(expectedIcons.map(([key]) => key).sort());
-    expectedIcons.forEach(([key, icon]) => {
-      expect({ key, icon: served.find((item) => item.key === key)?.icon }).toEqual({ key, icon });
+    // Some commands are served twice in one mode, so compare each command's icons as a list.
+    const servedIcons = (key: string) =>
+      served.filter((item) => item.key === key).map(({ icon }) => icon);
+    const expectedByKey = (key: string) =>
+      expectedIcons.filter(([expectedKey]) => expectedKey === key).map(([, icon]) => icon);
+    expectedIcons.forEach(([key]) => {
+      expect({ key, icons: servedIcons(key).sort() }).toEqual({
+        key,
+        icons: expectedByKey(key).sort(),
+      });
     });
   });
 
@@ -353,6 +385,44 @@ describe("The scripture editor's Project menu, per mode", () => {
       (candidate) => 'command' in candidate && candidate.command === command,
     );
     expect(item && labelText(item.label)).toBe(expected);
+  });
+
+  test('Power serves both the Manage books and the Show books label', async () => {
+    const menu = await getEditorTopMenuInMode('power');
+    const labels = menu.items
+      .filter((item) => 'command' in item && item.command === 'platformScripture.openManageBooks')
+      .map((item) => labelText(item.label));
+    expect(labels.sort()).toEqual(['Manage books', 'Show books']);
+  });
+
+  /** The Edit flyout's groups, in order, each as the commands it holds. */
+  const flyoutGroupCommands = (menu: Menu): string[][] =>
+    keyedEntries<{ menuItem?: string; order: number }>(menu.groups)
+      .filter(([, group]) => group.menuItem === 'platformScriptureEditor.editSubmenu')
+      .sort(([, a], [, b]) => a.order - b.order)
+      .map(([groupKey]) =>
+        itemsInGroup(menu, groupKey).map((item) => ('command' in item ? item.command : item.id)),
+      )
+      .filter((commands) => commands.length > 0);
+
+  test('the Edit flyout separates Undo and Redo from the clipboard items, and Find in Power', async () => {
+    expect(flyoutGroupCommands(await getEditorTopMenuInMode('power'))).toEqual([
+      ['platformScriptureEditor.undo', 'platformScriptureEditor.redo'],
+      [
+        'platformScriptureEditor.cutSelection',
+        'platformScriptureEditor.copySelection',
+        'platformScriptureEditor.pasteAtSelection',
+      ],
+      ['platformScripture.openFind'],
+    ]);
+    expect(flyoutGroupCommands(await getEditorTopMenuInMode('simple'))).toEqual([
+      ['platformScriptureEditor.undo', 'platformScriptureEditor.redo'],
+      [
+        'platformScriptureEditor.cutSelection',
+        'platformScriptureEditor.copySelection',
+        'platformScriptureEditor.pasteAtSelection',
+      ],
+    ]);
   });
 
   test('inventories, Markers Checklist and Basic checks are hidden in Power but stay declared', async () => {

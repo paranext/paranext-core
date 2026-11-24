@@ -6,6 +6,7 @@
 
 import * as commandService from '@shared/services/command.service';
 import { logger as papiLogger } from '@shared/services/logger.service';
+import { createExtensionLogger } from '@extension-host/services/extension-logger.util';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
 import { webViewService } from '@shared/services/web-view.service';
@@ -35,6 +36,8 @@ import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { IDatabaseService } from '@shared/services/database.service-model';
 import { databaseService } from '@shared/services/database.service';
+import { IContextKeysService } from '@shared/services/context-keys.service-model';
+import { papiContextKeysService } from '@shared/services/context-keys.service';
 import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
 import { scrollGroupService } from '@shared/services/scroll-group.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
@@ -89,6 +92,8 @@ const papi = {
   app: appService,
   /** JSDOC DESTINATION commandService */
   commands: commandService,
+  /** JSDOC DESTINATION contextKeysService */
+  contextKeys: papiContextKeysService as IContextKeysService,
   /** JSDOC DESTINATION dataProtectionService */
   dataProtection: dataProtectionService,
   /** JSDOC DESTINATION papiWebViewService */
@@ -103,8 +108,9 @@ const papi = {
   networkObjects: backendNetworkObjectService as BackendNetworkObjectService,
   /** JSDOC DESTINATION networkObjectStatusService */
   networkObjectStatus: networkObjectStatusService as NetworkObjectStatusServiceType,
+  // Only the logging methods: the logger's settings could point its log file at any path
   /** JSDOC DESTINATION logger */
-  logger: papiLogger,
+  logger: createExtensionLogger(papiLogger),
   /** JSDOC DESTINATION internetService */
   internet: internetService as InternetService,
   /** JSDOC DESTINATION dataProviderService */
@@ -168,6 +174,9 @@ Object.freeze(papi.app);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 Object.freeze(papi.commands);
+/** JSDOC DESTINATION contextKeysService */
+export const { contextKeys } = papi;
+Object.freeze(papi.contextKeys);
 /** JSDOC DESTINATION dataProtectionService */
 export const { dataProtection } = papi;
 Object.freeze(papi.dataProtection);

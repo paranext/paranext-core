@@ -1,5 +1,9 @@
 import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { substituteProjectNameInMenu } from './menu-label-substitution.util';
+import {
+  PROJECT_COLUMN_KEY,
+  substituteProjectNameInMenu,
+  substituteResourceNameInColumnHeading,
+} from './menu-label-substitution.util';
 
 type Menu = Localized<MultiColumnMenu>;
 
@@ -106,5 +110,43 @@ describe('substituteProjectNameInMenu', () => {
 
   it('passes undefined through', () => {
     expect(substituteProjectNameInMenu(undefined, 'HPUXR')).toBeUndefined();
+  });
+});
+
+describe('substituteResourceNameInColumnHeading', () => {
+  function buildColumnMenu(): Menu {
+    return {
+      columns: {
+        [PROJECT_COLUMN_KEY]: { label: 'Project', order: 1, localizeNotes: '' },
+        'platform.view': { label: 'View', order: 2, localizeNotes: '' },
+      },
+      groups: {},
+      items: [],
+    };
+  }
+
+  it('labels the Project column with the resource short name', () => {
+    const result = substituteResourceNameInColumnHeading(buildColumnMenu(), true, 'engWEBUS');
+    expect(result.columns[PROJECT_COLUMN_KEY]).toMatchObject({ label: 'engWEBUS', order: 1 });
+    expect(result.columns['platform.view']).toMatchObject({ label: 'View' });
+  });
+
+  it('keeps the Project heading for a project', () => {
+    const menu = buildColumnMenu();
+    expect(substituteResourceNameInColumnHeading(menu, false, 'engWEBUS')).toBe(menu);
+  });
+
+  it('keeps the Project heading while the short name is empty', () => {
+    const menu = buildColumnMenu();
+    expect(substituteResourceNameInColumnHeading(menu, true, '')).toBe(menu);
+  });
+
+  it('returns the menu unchanged when it has no Project column', () => {
+    const menu = buildMenu('Sync');
+    expect(substituteResourceNameInColumnHeading(menu, true, 'engWEBUS')).toBe(menu);
+  });
+
+  it('returns undefined for an undefined menu', () => {
+    expect(substituteResourceNameInColumnHeading(undefined, true, 'engWEBUS')).toBeUndefined();
   });
 });

@@ -4,6 +4,22 @@ import path from 'path';
 import { logger } from '@shared/services/logger.service';
 import { waitForDuration } from 'platform-bible-utils';
 import { formatLog } from '@shared/utils/logger.utils';
+import { issueLaunchSecrets, revokeLaunchSecrets } from '@main/services/launch-secrets.service';
+
+/**
+ * Environment variable that carries the launch secrets to the data provider in development, where
+ * `dotnet watch` has to pass them on to each process it restarts. The data provider clears its own
+ * copy on reading it. Holds the same JSON a packaged build reads from standard input. Mirrored by
+ * `LaunchSecrets.ENVIRONMENT_VARIABLE` in `c-sharp/LaunchSecrets.cs`.
+ */
+const LAUNCH_SECRETS_ENVIRONMENT_VARIABLE = 'PAPI_LAUNCH_SECRETS';
+
+/**
+ * Tells a packaged data provider to read its launch secrets from standard input. Without it the
+ * data provider never waits on standard input, so one started by another tool is not held up.
+ * Mirrored by `LaunchSecrets.STANDARD_INPUT_FLAG` in `c-sharp/LaunchSecrets.cs`.
+ */
+const LAUNCH_SECRETS_ON_STANDARD_INPUT_ARG = '--launch-secrets-on-stdin';
 
 /** Pretty name for the process this service manages. Used in logs */
 const DOTNET_DATA_PROVIDER_NAME = '.net';
@@ -104,6 +120,10 @@ async function waitForDotnetDataProvider(maxWaitTimeInMS: number) {
 function startDotnetDataProvider() {
   if (dotnet) return;
 
+  // Delivered on standard input when packaged and in the spawn environment in development; never on
+  // the command line or in main's own environment
+  const launchSecretsJson = JSON.stringify(issueLaunchSecrets('dotnetDataProvider'));
+
   // default values for development
   let command = 'dotnet';
   let args: string[] = ['watch', '--project', 'c-sharp/ParanextDataProvider.csproj'];
@@ -117,7 +137,7 @@ function startDotnetDataProvider() {
   // running the previous build. Logged below, because a stale build is otherwise invisible: the app
   // starts and behaves normally, just against older C#.
   // `run --no-build` rather than the built assembly directly: the build output path is
-  // runtime-identifier specific (e.g. `bin/Debug/net8.0/linux-x64/`), so letting MSBuild resolve it
+  // runtime-identifier specific (e.g. `bin/Debug/net10.0/linux-x64/`), so letting MSBuild resolve it
   // keeps this working on every platform without hardcoding that layout.
   if (!globalThis.isPackaged && process.env.PT_DOTNET_NO_WATCH === 'true') {
     // `dotnet watch --project X` runs the app with the project directory as its cwd, while
@@ -155,11 +175,10 @@ function startDotnetDataProvider() {
 
     if (process.platform === 'win32') {
       command = path.join(dotnetPath, 'ParanextDataProvider.exe');
-      args = [];
     } else {
       command = path.join(dotnetPath, 'ParanextDataProvider');
-      args = [];
     }
+    args = [LAUNCH_SECRETS_ON_STANDARD_INPUT_ARG];
     options = { cwd: dotnetPath };
   } else {
     // Dev runs, which include the E2E tests, get the bundled sample project when no projects are
@@ -174,11 +193,32 @@ function startDotnetDataProvider() {
         ...process.env,
         PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT:
           process.env.PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT || 'true',
+        [LAUNCH_SECRETS_ENVIRONMENT_VARIABLE]: launchSecretsJson,
       },
     };
   }
 
-  dotnet = spawn(command, args, options);
+  try {
+    dotnet = spawn(command, args, options);
+  } catch (error) {
+    revokeLaunchSecrets('dotnetDataProvider');
+    throw error;
+  }
+
+  if (globalThis.isPackaged) {
+    // A process that has already died closes its end of the pipe; a write error must not reach
+    // main's uncaught exception handler. The data provider reports its own missing secrets.
+    dotnet.stdin.on('error', (error) => {
+      logger.error(
+        formatLog(
+          `Could not write the launch secrets to standard input: ${error.message}`,
+          DOTNET_DATA_PROVIDER_NAME,
+        ),
+      );
+    });
+    dotnet.stdin.write(`${launchSecretsJson}\n`);
+    dotnet.stdin.end();
+  }
 
   dotnet.stdout.on('data', logProcessInfo);
   dotnet.stderr.on('data', logProcessError);
@@ -192,6 +232,7 @@ function startDotnetDataProvider() {
     dotnet?.stderr?.removeListener('data', logProcessError);
     dotnet?.stdout?.removeListener('data', logProcessInfo);
     dotnet = undefined;
+    revokeLaunchSecrets('dotnetDataProvider');
     resolveClose();
   });
 

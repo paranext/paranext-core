@@ -142,10 +142,10 @@ The facts, which are not in doubt:
   extension's own bundle contains none of them and every call into them is resolved at runtime. The
   four `@papi/*` entries are the ones the linkage question turns on; the rest are libraries the host
   supplies, which is why the paragraph above reasons from `platform-bible-utils` being on this list.
-- They are supplied by `src/extension-host/services/extension.service.ts`, which shims
-  `Module.prototype.require` so that `require('@papi/backend')` returns the host's own `papi`
-  object. An extension does not load a copy of a library; it is loaded **by** the host, into the
-  host's process, and calls directly into the host's objects.
+- They are supplied by `src/extension-host/services/extension.service.ts` through the `require` it
+  hands each extension file when it loads it, so that `require('@papi/backend')` returns the host's
+  own `papi` object. An extension does not load a copy of a library; it is loaded **by** the host,
+  into the host's process, and calls directly into the host's objects.
 - `src/extension-host/` is AGPL-3.0-or-later. It is not carved out, and nothing above suggests it
   should be.
 
@@ -338,23 +338,17 @@ distributed in source code form" — which would raise the same AGPL-compatibili
 section answers for `CsvHelper` above. **Neither package's assembly reaches the publish output, so
 the question does not arise.**
 
-Both are netstandard compatibility shims that .NET 8 does not need; the runtime supplies both types
-from its shared framework, on every published runtime identifier. Measured on all four
-(`linux-x64`, `win-x64`, `osx-x64`, `osx-arm64`), the `System.Net.Http.dll` in the publish output is
-the ~1.7 MB framework assembly, never the package's ~280 KB netstandard shim — this project
-publishes `SelfContained`, so conflict resolution picks by assembly version and 8.0.0.0 beats 4.x
-unconditionally.
+Both are netstandard compatibility shims that .NET 10 does not need; the runtime supplies both
+types from its shared framework, on every published runtime identifier. Measured on all four
+(`linux-x64`, `win-x64`, `osx-x64`, `osx-arm64`), the `System.Net.Http.dll` in the publish output
+is the ~1.7–2 MB framework assembly, never the package's ~280 KB netstandard shim.
 
-They differ in what it takes to keep them out of the derived NuGet closure this document is
-generated from, which reads `project.assets.json` rather than the publish output:
-
-- `System.Net.WebSockets` is simply never referenced, so it is in neither.
-- `System.Net.Http` is a transitive dependency of `SIL.Core`, which targets netstandard2.0 and
-  declares version **4.3.4** — past the 4.3.0 the framework's `PackageOverrides.txt` supersedes. A
-  plain restore therefore resolves its `runtimes/unix/lib/netstandard1.6` asset in the assets file
-  even though publish discards it, and the generator would list the package as something this
-  project redistributes. `ParanextDataProvider.csproj` carries an `ExcludeAssets="all"` reference to
-  say otherwise: the assets file then records `_._` placeholders and the closure does not see it.
+Neither is in the derived NuGet closure this document is generated from, which reads
+`project.assets.json` rather than the publish output. The .NET 10 SDK's `PackageOverrides.txt`
+lists `System.Net.Http` 4.3.4 and `System.Net.WebSockets` 4.3.0, so restore prunes both from the
+dependency graph. That includes `System.Net.Http` 4.3.4, which `SIL.Core` (netstandard2.0) still
+declares as a dependency: it never reaches the assets file, so no reference in
+`ParanextDataProvider.csproj` is needed to keep it out.
 
 Neither may be referenced for its assets. If a future dependency forces one of these assemblies into
 the publish output, the "Excluded License" question has to be answered before it ships.

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Users;
 
@@ -9,10 +10,58 @@ namespace Paranext.DataProvider.Users;
 /// `getParatextDataInternetSettings` / `setParatextDataInternetSettings` PAPI commands so consumers
 /// can gate on `useDataProvider` availability (no cold-start race) and receive live updates.
 /// </summary>
-internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
-    : NetworkObjects.DataProvider("paratextRegistration.internetSettingsDataProvider", papiClient)
+internal sealed class InternetSettingsDataProvider : NetworkObjects.DataProvider
 {
     private const string DATA_TYPE_INTERNET_SETTINGS = "InternetSettings";
+    private const string INTERNET_SERVICES_ALLOWED_KEY = "platform.internetServicesAllowed";
+
+    private readonly ContextKeys? _contextKeys;
+    private readonly Func<InternetUse> _readRawStatus;
+
+    /// <param name="papiClient">Client used to register this data provider</param>
+    /// <param name="contextKeys">
+    /// Where the <c>platform.internetServicesAllowed</c> context key is published. Defaults to the
+    /// process-wide shared store, resolved when first published.
+    /// </param>
+    /// <param name="readRawStatus">
+    /// Reads the saved internet-use setting when publishing. Defaults to
+    /// <c>InternetAccess.RawStatus</c>; tests pass a stand-in so they never touch the user's
+    /// <c>InternetSettings.xml</c>.
+    /// </param>
+    public InternetSettingsDataProvider(
+        PapiClient papiClient,
+        ContextKeys? contextKeys = null,
+        Func<InternetUse>? readRawStatus = null
+    )
+        : base("paratextRegistration.internetSettingsDataProvider", papiClient)
+    {
+        _contextKeys = contextKeys;
+        _readRawStatus = readRawStatus ?? (() => InternetAccess.RawStatus);
+        PublishContextKeys();
+    }
+
+    /// <summary>
+    /// Publishes <c>platform.internetServicesAllowed</c>: whether the saved internet-use setting
+    /// lets Send/Receive and the DBL run. Never throws; a failure is logged.
+    /// </summary>
+    /// <remarks>
+    /// Experimental: the key set is unstable and may change or disappear without notice.
+    /// </remarks>
+    internal void PublishContextKeys()
+    {
+        try
+        {
+            var allowed = !InternetServicesGate.IsBlocked(_readRawStatus());
+            (_contextKeys ?? ContextKeysService.Instance).Set(
+                INTERNET_SERVICES_ALLOWED_KEY,
+                allowed
+            );
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Publishing the internet context keys failed! {e}");
+        }
+    }
 
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
@@ -117,7 +166,60 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
     /// the deprecated <c>paratextRegistration.setParatextDataInternetSettings</c> command.
     /// </summary>
     /// <param name="newInternetSettings">Internet settings to persist.</param>
-    public bool SetInternetSettings(InternetAccess.InternetSettingsMemento newInternetSettings)
+    public bool SetInternetSettings(InternetAccess.InternetSettingsMemento newInternetSettings) =>
+        SetInternetSettings(newInternetSettings, GetInternetSettings(), ApplyInternetSettings);
+
+    /// <summary>
+    /// <see cref="SetInternetSettings(InternetAccess.InternetSettingsMemento)"/> with the saved
+    /// settings read from <paramref name="savedInternetSettings"/> (as the getter reports them, with
+    /// saved passwords masked) and written through <paramref name="save"/>, so tests need not write
+    /// a real <c>InternetSettings.xml</c>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">With <see cref="PlatformErrorCodes.InvalidArgument"/>
+    /// when the change moves a saved password to a new host without the password itself; nothing is
+    /// saved then</exception>
+    internal bool SetInternetSettings(
+        InternetAccess.InternetSettingsMemento newInternetSettings,
+        InternetAccess.InternetSettingsMemento savedInternetSettings,
+        Action<InternetAccess.InternetSettingsMemento> save
+    )
+    {
+        string? requiredPassword = InternetSettingsLogic.PasswordRequiredForChange(
+            currentProxyHost: savedInternetSettings.ProxyHost,
+            newProxyHost: InternetSettingsLogic.ShouldClearProxyHost(
+                newInternetSettings.PermittedInternetUse
+            )
+                ? null
+                : newInternetSettings.ProxyHost,
+            currentProxyPort: savedInternetSettings.ProxyPort,
+            newProxyPort: newInternetSettings.ProxyPort,
+            submittedProxyPassword: newInternetSettings.ProxyPassword,
+            hasSavedProxyPassword: savedInternetSettings.ProxyPassword != null,
+            currentDblServer: savedInternetSettings.OverrideDBLServer,
+            newDblServer: newInternetSettings.OverrideDBLServer,
+            currentDblApiServer: savedInternetSettings.OverrideDBLApiServer,
+            newDblApiServer: newInternetSettings.OverrideDBLApiServer,
+            submittedDblPassword: newInternetSettings.DBLPassword,
+            hasSavedDblPassword: savedInternetSettings.DBLPassword != null
+        );
+        if (requiredPassword != null)
+            PlatformErrorCodes.Throw(
+                PlatformErrorCodes.InvalidArgument,
+                $"Changing where a saved password is sent requires that password: supply "
+                    + $"{requiredPassword} itself rather than the unchanged placeholder."
+            );
+
+        save(newInternetSettings);
+
+        PublishContextKeys();
+        SendDataUpdateEvent(DATA_TYPE_INTERNET_SETTINGS, "updated internet settings");
+        return true;
+    }
+
+    /// <summary>Writes the settings through ParatextData's <see cref="InternetAccess"/></summary>
+    private static void ApplyInternetSettings(
+        InternetAccess.InternetSettingsMemento newInternetSettings
+    )
     {
         try
         {
@@ -180,8 +282,5 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
             Console.WriteLine($"Setting ParatextData InternetSettings failed! {e}");
             throw new Exception($"Setting ParatextData InternetSettings failed! {e.Message}");
         }
-
-        SendDataUpdateEvent(DATA_TYPE_INTERNET_SETTINGS, "updated internet settings");
-        return true;
     }
 }

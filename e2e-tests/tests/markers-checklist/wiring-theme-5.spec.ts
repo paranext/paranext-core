@@ -1,4 +1,13 @@
 /**
+ * PARKED — no Playwright config collects this file, and it has never run to completion. It is kept
+ * as the written scenarios for the Markers checklist (epic PT-2049, "Inventory & Checklists"). It
+ * attaches to a running app over CDP in Power mode and needs the `wgPIDGIN` project plus at least
+ * one other project to add as a comparative text; it writes evidence screenshots under
+ * `.context/features/markers-checklist/proofs/e2e-evidence`. To work on it, remove the
+ * markers-checklist glob from `testIgnore` in `e2e-tests/playwright-cdp.config.ts` (the ignore also
+ * applies to a file named on the command line). See `e2e-tests/tests/markers-checklist/README.md`.
+ */
+/**
  * E2E tests for the markers-checklist Theme 5/4/6 wiring (Tasks 4-14).
  *
  * Test list (Test 3 deleted as obsolete under auto-follow — see comment by the gap):
@@ -37,6 +46,7 @@ import path from 'path';
 import type { FrameLocator, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import {
+  sendCommandFromPage,
   sendOpenMarkersChecklistCommand,
   waitForAppReady,
   waitForOpenWebViewIdByType,
@@ -590,14 +600,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
       mainPage,
       'platformScriptureEditor.react',
     );
-    await mainPage.evaluate(async (webViewId) => {
-      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const win = window as unknown as {
-        papi: { commands: { sendCommand: (command: string, id: string) => Promise<unknown> } };
-      };
-      await win.papi.commands.sendCommand('platformScripture.openChecksSidePanel', webViewId);
-    }, editorWebViewId);
+    await sendCommandFromPage(mainPage, 'platformScripture.openChecksSidePanel', editorWebViewId);
 
     // The side panel mounts as a docked panel to the right; its iframe title is "Checks".
     const sidePanelFrame = mainPage.frameLocator('iframe[title*="Checks" i]');

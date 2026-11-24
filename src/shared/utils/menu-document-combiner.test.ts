@@ -646,6 +646,294 @@ test('hiddenInterfaceModes flag on a menu item validates and survives combinatio
   expect(hiddenItem).toMatchObject({ hiddenInterfaceModes: ['simple'] });
 });
 
+describe('when expression validation', () => {
+  const baseDocument = {
+    mainMenu: {
+      columns: { 'platform.col': { label: '%col%', order: 1, isExtensible: true } },
+      groups: { 'platform.group': { column: 'platform.col', order: 1, isExtensible: true } },
+      items: [],
+    },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    webViewMenus: {},
+  };
+
+  function makeContributionWithMainMenuItem(extraItemProps: Record<string, string>) {
+    return {
+      mainMenu: {
+        columns: {},
+        groups: {},
+        items: [
+          {
+            label: '%item%',
+            localizeNotes: '',
+            group: 'platform.group',
+            order: 1,
+            command: 'ext1.doThing',
+            ...extraItemProps,
+          },
+        ],
+      },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {},
+    };
+  }
+
+  function makeContributionWithWebViewItem(extraItemProps: Record<string, string>) {
+    return {
+      mainMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {
+        'ext1.webView': {
+          includeDefaults: false,
+          topMenu: {
+            columns: { 'ext1.col': { label: '%col%', order: 1 } },
+            groups: { 'ext1.group': { column: 'ext1.col', order: 1 } },
+            items: [
+              {
+                label: '%item%',
+                localizeNotes: '',
+                group: 'ext1.group',
+                order: 1,
+                command: 'ext1.doThing',
+                ...extraItemProps,
+              },
+            ],
+          },
+        },
+      },
+    };
+  }
+
+  it('accepts a valid when expression on a main menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithMainMenuItem({ when: 'ext1.someFlag && !platform.otherFlag' }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects a syntactically invalid expression', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithMainMenuItem({ when: 'ext1.someFlag &&' }),
+      ),
+    ).toThrow(/Invalid when expression/);
+  });
+
+  it('rejects template variables in main menu expressions', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithMainMenuItem({ when: 'ext1.webView.{webViewId}.flag' }),
+      ),
+    ).toThrow(/Unknown template variable \{webViewId\}/);
+  });
+
+  it('accepts known template variables in web view menu expressions', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewItem({
+          enabledWhen: 'ext1.webView.{webViewId}.isEditable',
+          checkedWhen: 'ext1.project.{projectId}.someToggle',
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects unknown template variables in web view menu expressions', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewItem({ when: 'ext1.webView.{webviewid}.flag' }),
+      ),
+    ).toThrow(/Unknown template variable \{webviewid\}/);
+  });
+
+  function makeContributionWithSurfaceItem(
+    surface: 'defaultWebViewTabMenu' | 'defaultWebViewContextMenu',
+    extraItemProps: Record<string, string>,
+  ) {
+    return {
+      mainMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {},
+      [surface]: {
+        groups: { 'ext1.group': { order: 1 } },
+        items: [
+          {
+            label: '%item%',
+            localizeNotes: '',
+            group: 'ext1.group',
+            order: 1,
+            command: 'ext1.doThing',
+            ...extraItemProps,
+          },
+        ],
+      },
+    };
+  }
+
+  it('accepts a when expression on a tab menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithSurfaceItem('defaultWebViewTabMenu', {
+          when: 'ext1.webView.{webViewId}.flag',
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('accepts enabledWhen on a tab menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithSurfaceItem('defaultWebViewTabMenu', { enabledWhen: 'ext1.flag' }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects enabledWhen on a submenu item of a context menu', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution('ext1', {
+        mainMenu: { columns: {}, groups: {}, items: [] },
+        defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+        defaultWebViewContextMenu: {
+          groups: {
+            'ext1.group': { order: 1 },
+            'ext1.subGroup': { menuItem: 'ext1.sub', order: 1 },
+          },
+          items: [
+            {
+              label: '%item%',
+              localizeNotes: '',
+              group: 'ext1.group',
+              order: 1,
+              id: 'ext1.sub',
+              enabledWhen: 'ext1.flag',
+            },
+          ],
+        },
+        webViewMenus: {},
+      }),
+    ).toThrow(/'%item%' in defaultWebViewContextMenu uses enabledWhen on a submenu/);
+  });
+
+  it('rejects checkedWhen on a context menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithSurfaceItem('defaultWebViewContextMenu', { checkedWhen: 'ext1.flag' }),
+      ),
+    ).toThrow(/'%item%' in defaultWebViewContextMenu uses checkedWhen/);
+  });
+
+  function makeContributionWithWebViewSurfaceItem(
+    surface: 'tabMenu' | 'contextMenu',
+    extraItemProps: Record<string, string>,
+  ) {
+    return {
+      mainMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {
+        'ext1.webView': {
+          includeDefaults: false,
+          [surface]: {
+            groups: { 'ext1.group': { order: 1 } },
+            items: [
+              {
+                label: '%item%',
+                localizeNotes: '',
+                group: 'ext1.group',
+                order: 1,
+                command: 'ext1.doThing',
+                ...extraItemProps,
+              },
+            ],
+          },
+        },
+      },
+    };
+  }
+
+  it('accepts enabledWhen on a web view tab menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewSurfaceItem('tabMenu', { enabledWhen: 'ext1.flag' }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects checkedWhen on a web view context menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewSurfaceItem('contextMenu', { checkedWhen: 'ext1.flag' }),
+      ),
+    ).toThrow(/'%item%' in webViewMenus\.ext1\.webView\.contextMenu uses checkedWhen/);
+  });
+
+  it('accepts enabledWhen on a tab menu item in the base document (validateOutput path)', () => {
+    const badBaseDocument = {
+      ...baseDocument,
+      defaultWebViewTabMenu: {
+        groups: { 'platform.tabGroup': { order: 1 } },
+        items: [
+          {
+            label: '%bad%',
+            localizeNotes: '',
+            group: 'platform.tabGroup',
+            order: 1,
+            command: 'platform.bad',
+            enabledWhen: 'platform.flag',
+          },
+        ],
+      },
+    };
+    expect(() => new MenuDocumentCombiner(badBaseDocument)).not.toThrow();
+  });
+
+  it('rejects an invalid expression in the base document (validateOutput path)', () => {
+    const badBaseDocument = {
+      ...baseDocument,
+      mainMenu: {
+        ...baseDocument.mainMenu,
+        items: [
+          {
+            label: '%bad%',
+            localizeNotes: '',
+            group: 'platform.group',
+            order: 1,
+            command: 'platform.bad',
+            when: 'platform.flag &&',
+          },
+        ],
+      },
+    };
+    expect(() => new MenuDocumentCombiner(badBaseDocument)).toThrow(/Invalid when expression/);
+  });
+});
+
 test('Web view menu defaults are combined', () => {
   const menuCombiner = new MenuDocumentCombiner({
     mainMenu: {

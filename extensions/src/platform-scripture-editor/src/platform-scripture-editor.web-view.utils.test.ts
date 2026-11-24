@@ -3,7 +3,7 @@
 // `document` at module-eval time (it re-exports the whole component library). The default `node`
 // environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom — same fix
 // already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -12,16 +12,26 @@ import type {
   EditorRef,
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
-import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
+import {
+  evaluateMenu,
+  isBlockMarker,
+  isLocalizeKey,
+  parseWhenExpression,
+} from 'platform-bible-utils';
 import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   deriveReadOnlyFlags,
+  discardRowEditsAndPendingSave,
   flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   getEditorFocusLocation,
+  getEditorWebViewContextKeyNames,
+  getEditorWebViewContextKeys,
+  hasNonCollapsedSelection,
   INSERT_CONTEXT_MENU_STRING_KEYS,
+  isFocusLeavingContainer,
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
@@ -811,6 +821,97 @@ describe('flushRowEditsThenSave', () => {
   });
 });
 
+describe('discardRowEditsAndPendingSave', () => {
+  /** A save debouncer whose pending state the row editor's flush can change, like the real one. */
+  function makeSave(initiallyPending: boolean) {
+    let pending = initiallyPending;
+    return {
+      schedule: () => {
+        pending = true;
+      },
+      isPending: () => pending,
+      cancel: vi.fn(() => {
+        pending = false;
+      }),
+    };
+  }
+
+  it('cancels a pending save and reports that edits were thrown away', () => {
+    const save = makeSave(true);
+
+    expect(discardRowEditsAndPendingSave(undefined, save)).toBe(true);
+    expect(save.cancel).toHaveBeenCalledOnce();
+    expect(save.isPending()).toBe(false);
+  });
+
+  // The row's pending keystrokes are what schedules the save, so it was not pending beforehand.
+  it("counts the row editor's pending edits, landing them before checking the save", () => {
+    const save = makeSave(false);
+    const rowEditor = { flushPendingEdits: vi.fn(() => save.schedule()) };
+
+    expect(discardRowEditsAndPendingSave(rowEditor, save)).toBe(true);
+    expect(save.cancel).toHaveBeenCalledOnce();
+  });
+
+  it('reports nothing thrown away when nothing was pending anywhere', () => {
+    const save = makeSave(false);
+    const rowEditor = { flushPendingEdits: vi.fn() };
+
+    expect(discardRowEditsAndPendingSave(rowEditor, save)).toBe(false);
+    expect(rowEditor.flushPendingEdits).toHaveBeenCalledOnce();
+    expect(save.cancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('isFocusLeavingContainer', () => {
+  const attachedNodes: Element[] = [];
+
+  afterEach(() => {
+    attachedNodes.splice(0).forEach((node) => node.remove());
+  });
+
+  function makeTree() {
+    const container = document.createElement('div');
+    const inside = document.createElement('div');
+    const alsoInside = document.createElement('span');
+    const outside = document.createElement('button');
+    container.append(inside, alsoInside);
+    document.body.append(container, outside);
+    attachedNodes.push(container, outside);
+    return { container, inside, alsoInside, outside };
+  }
+
+  it('is true when focus moves from inside the container to an element outside it', () => {
+    const { container, inside, outside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, inside, outside)).toBe(true);
+  });
+
+  it('is true when focus leaves the window altogether', () => {
+    const { container, inside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, inside, undefined)).toBe(true);
+  });
+
+  it('is false when focus moves between elements inside the container', () => {
+    const { container, inside, alsoInside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, inside, alsoInside)).toBe(false);
+  });
+
+  it('is false when the element losing focus is outside the container', () => {
+    const { container, inside, outside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, outside, inside)).toBe(false);
+  });
+
+  it('is false when the container is not rendered', () => {
+    const { inside, outside } = makeTree();
+
+    expect(isFocusLeavingContainer(undefined, inside, outside)).toBe(false);
+  });
+});
+
 describe('nextEditingNoteOps', () => {
   function noteOp(text: string): DeltaOpInsertNoteEmbed {
     return {
@@ -1091,6 +1192,7 @@ describe('createInsertContextMenuItems', () => {
     group: string;
     order: number;
     hiddenInterfaceModes?: string[];
+    when?: string;
   }[] = topMenuItems
     .filter((item: { group: string }) => insertGroupOrders.has(item.group))
     .sort(
@@ -1111,7 +1213,12 @@ describe('createInsertContextMenuItems', () => {
     insertMenuItems.map((item) => [item.label, `LOC:${item.label}`]),
   );
 
-  const ENABLED = { isReadOnly: false, canUserCreateComments: true, isSyncBlocked: false };
+  const ENABLED = {
+    isReadOnly: false,
+    canUserCreateComments: true,
+    isSyncBlocked: false,
+    isResource: false,
+  };
 
   it('offers exactly the Insert-menu items, localized, in the same order', () => {
     const items = createInsertContextMenuItems(strings, makeActions(), ENABLED);
@@ -1175,6 +1282,30 @@ describe('createInsertContextMenuItems', () => {
       isSyncBlocked: true,
     });
     expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
+  });
+
+  // Mirrors the top menu, where every insert item carries `when: !…isResource` and so is removed
+  // (not greyed out) for a resource.
+  it('omits every insert item for a resource, whatever the other state says', () => {
+    const resource = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isResource: true,
+    });
+    expect(resource).toEqual([]);
+    const readOnlyResource = createInsertContextMenuItems(strings, makeActions(), {
+      isReadOnly: true,
+      canUserCreateComments: false,
+      isSyncBlocked: true,
+      isResource: true,
+    });
+    expect(readOnlyResource).toEqual([]);
+  });
+
+  it('gates every Insert-column item in the top menu on the project not being a resource', () => {
+    expect(insertMenuItems.length).toBeGreaterThan(0);
+    insertMenuItems.forEach((item) => {
+      expect(item.when).toBe('!platform.project.{projectId}.isResource');
+    });
   });
 
   // Per-item, not aggregate: calling every item's onSelect and counting each action's TOTAL calls
@@ -1250,5 +1381,467 @@ describe('getEditorFocusLocation', () => {
 
   it('reports this editor when focus is unknown', () => {
     expect(getEditorFocusLocation(undefined, ownId, false)).toBe('thisEditor');
+  });
+});
+
+describe('getEditorWebViewContextKeys', () => {
+  it('names the five per-web-view keys from the web view id', () => {
+    const keys = getEditorWebViewContextKeys('wv1', {
+      isReadOnly: false,
+      isPreview: false,
+      isSyncBlocked: false,
+      footnotesPaneVisible: false,
+      hasSelection: false,
+    });
+    expect(Object.keys(keys).sort()).toEqual([
+      'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.hasSelection',
+      'platformScriptureEditor.webView.wv1.isPreview',
+      'platformScriptureEditor.webView.wv1.isReadOnly',
+      'platformScriptureEditor.webView.wv1.isSyncBlocked',
+    ]);
+  });
+
+  it('lists the same key names as it publishes, from the web view id alone', () => {
+    const names = getEditorWebViewContextKeyNames('wv1');
+    expect(names).toEqual(
+      Object.keys(
+        getEditorWebViewContextKeys('wv1', {
+          isReadOnly: true,
+          isPreview: true,
+          isSyncBlocked: true,
+          footnotesPaneVisible: true,
+          hasSelection: true,
+        }),
+      ),
+    );
+    expect([...names].sort()).toEqual([
+      'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.hasSelection',
+      'platformScriptureEditor.webView.wv1.isPreview',
+      'platformScriptureEditor.webView.wv1.isReadOnly',
+      'platformScriptureEditor.webView.wv1.isSyncBlocked',
+    ]);
+  });
+
+  it('mirrors isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible and hasSelection', () => {
+    expect(
+      getEditorWebViewContextKeys('wv1', {
+        isReadOnly: true,
+        isPreview: true,
+        isSyncBlocked: false,
+        footnotesPaneVisible: true,
+        hasSelection: true,
+      }),
+    ).toEqual({
+      'platformScriptureEditor.webView.wv1.isReadOnly': true,
+      'platformScriptureEditor.webView.wv1.isPreview': true,
+      'platformScriptureEditor.webView.wv1.isSyncBlocked': false,
+      'platformScriptureEditor.webView.wv1.footnotesPaneVisible': true,
+      'platformScriptureEditor.webView.wv1.hasSelection': true,
+    });
+  });
+});
+
+describe('hasNonCollapsedSelection', () => {
+  const start = { jsonPath: '$.content[1].content[0]', offset: 0 };
+
+  it('is true for a range whose end differs from its start', () => {
+    expect(hasNonCollapsedSelection({ start, end: { ...start, offset: 4 } })).toBe(true);
+  });
+
+  it('is false for a caret with no end', () => {
+    expect(hasNonCollapsedSelection({ start })).toBe(false);
+  });
+
+  it('is false when the end equals the start', () => {
+    expect(hasNonCollapsedSelection({ start, end: { ...start } })).toBe(false);
+  });
+
+  it('is false when the end has the start values with its keys in another order', () => {
+    expect(
+      hasNonCollapsedSelection({
+        start: { jsonPath: '$.content[1].content[0]', offset: 0 },
+        end: { offset: 0, jsonPath: '$.content[1].content[0]' },
+      }),
+    ).toBe(false);
+  });
+
+  it('is false when there is no selection', () => {
+    expect(hasNonCollapsedSelection(undefined)).toBe(false);
+  });
+});
+
+describe('menus.json dynamic conditions', () => {
+  const menusJson = JSON.parse(
+    readFileSync(join(__dirname, '../contributions/menus.json'), 'utf8'),
+  );
+  const { topMenu } = menusJson.webViewMenus['platformScriptureEditor.react'];
+  const TEMPLATE_VARS = { webViewId: 'wv', projectId: 'p1' };
+
+  const ALL_FACTS_ON: Record<string, boolean> = {
+    'platform.project.p1.isResource': false,
+    'platform.project.p1.isEditable': true,
+    'platformScripture.project.p1.canEditScripture': true,
+    'platformScripture.project.p1.canCreateComments': true,
+    'platformScriptureEditor.webView.wv.isReadOnly': false,
+    'platformScriptureEditor.webView.wv.isPreview': false,
+    'platformScriptureEditor.webView.wv.isSyncBlocked': false,
+    'platformScriptureEditor.webView.wv.footnotesPaneVisible': true,
+    'platformScriptureEditor.webView.wv.hasSelection': true,
+  };
+
+  const evaluate = (overrides: Record<string, boolean> = {}) => {
+    const facts = { ...ALL_FACTS_ON, ...overrides };
+    return evaluateMenu(topMenu, (key: string) => facts[key], TEMPLATE_VARS);
+  };
+
+  /**
+   * Commands served as one item per interface mode (with and without an icon). Every other command
+   * has exactly one item.
+   */
+  const COMMANDS_WITH_PER_MODE_VARIANTS = [
+    'platformScriptureEditor.undo',
+    'platformScriptureEditor.redo',
+  ];
+  /**
+   * Whether a command's item is disabled. For a command in {@link COMMANDS_WITH_PER_MODE_VARIANTS},
+   * every copy must agree.
+   */
+  const isDisabledFn = (menu: { items: { command?: string; disabled?: boolean }[] }) => {
+    return (command: string) => {
+      const matches = menu.items.filter((item) => item.command === command);
+      if (COMMANDS_WITH_PER_MODE_VARIANTS.includes(command)) {
+        expect(matches).toHaveLength(2);
+        expect(new Set(matches.map((item) => item.disabled === true)).size).toBe(1);
+      } else {
+        expect(matches).toHaveLength(1);
+      }
+      return matches[0].disabled === true;
+    };
+  };
+
+  const INSERT_NOTE_COMMANDS = [
+    'platformScriptureEditor.insertFootnoteAtSelection',
+    'platformScriptureEditor.insertCrossReferenceAtSelection',
+    'platformScriptureEditor.insertEndnoteAtSelection',
+  ];
+  const INSERT_COMMENT_COMMAND = 'platformScriptureEditor.insertCommentAtSelection';
+  const EDIT_COMMANDS = [
+    'platformScriptureEditor.undo',
+    'platformScriptureEditor.redo',
+    'platformScriptureEditor.cutSelection',
+    'platformScriptureEditor.pasteAtSelection',
+  ];
+  const COMMENTS_COMMANDS = [
+    'legacyCommentManager.openCommentList',
+    'legacyCommentManager.showCommentListPanel',
+  ];
+
+  it.each(COMMANDS_WITH_PER_MODE_VARIANTS)(
+    'declares the same label, group, command, when and enabledWhen on both per-mode items of %s',
+    (command) => {
+      const variants = topMenu.items.filter(
+        (item: { command?: string }) => item.command === command,
+      );
+      expect(variants).toHaveLength(2);
+      expect(variants[0].when).toEqual(expect.any(String));
+      expect(variants[0].enabledWhen).toEqual(expect.any(String));
+      expect(variants[1].label).toBe(variants[0].label);
+      expect(variants[1].group).toBe(variants[0].group);
+      expect(variants[1].command).toBe(variants[0].command);
+      expect(variants[1].when).toBe(variants[0].when);
+      expect(variants[1].enabledWhen).toBe(variants[0].enabledWhen);
+    },
+  );
+
+  it('evaluates the Insert items disabled for a read-only project and enabled for an editable one', () => {
+    const enabled = isDisabledFn(evaluate());
+    [...INSERT_NOTE_COMMANDS, INSERT_COMMENT_COMMAND].forEach((command) =>
+      expect(enabled(command)).toBe(false),
+    );
+
+    const readOnly = isDisabledFn(evaluate({ 'platform.project.p1.isEditable': false }));
+    INSERT_NOTE_COMMANDS.forEach((command) => expect(readOnly(command)).toBe(true));
+    // Comments are governed by comment permission, not the editable setting
+    expect(readOnly(INSERT_COMMENT_COMMAND)).toBe(false);
+  });
+
+  it('disables the note inserts and the editing Edit items in a tab whose frozen read-only state is set, even when the project is editable', () => {
+    const frozen = isDisabledFn(
+      evaluate({
+        'platform.project.p1.isEditable': true,
+        'platformScriptureEditor.webView.wv.isReadOnly': true,
+      }),
+    );
+    [...INSERT_NOTE_COMMANDS, ...EDIT_COMMANDS].forEach((command) =>
+      expect(frozen(command)).toBe(true),
+    );
+    // Comments are governed by comment permission, not by the tab's read-only state
+    expect(frozen(INSERT_COMMENT_COMMAND)).toBe(false);
+  });
+
+  it('disables the note inserts in a preview and while sync is blocked', () => {
+    const preview = isDisabledFn(
+      evaluate({ 'platformScriptureEditor.webView.wv.isPreview': true }),
+    );
+    INSERT_NOTE_COMMANDS.forEach((command) => expect(preview(command)).toBe(true));
+    expect(preview(INSERT_COMMENT_COMMAND)).toBe(false);
+
+    const blocked = isDisabledFn(
+      evaluate({ 'platformScriptureEditor.webView.wv.isSyncBlocked': true }),
+    );
+    [...INSERT_NOTE_COMMANDS, INSERT_COMMENT_COMMAND].forEach((command) =>
+      expect(blocked(command)).toBe(true),
+    );
+  });
+
+  it('disables Insert comment without comment permission', () => {
+    const noPermission = isDisabledFn(
+      evaluate({ 'platformScripture.project.p1.canCreateComments': false }),
+    );
+    expect(noPermission(INSERT_COMMENT_COMMAND)).toBe(true);
+  });
+
+  it('removes the Insert items, the Comments items and the editing Edit items for a resource', () => {
+    const commandsOf = (menu: { items: { command?: string }[] }) =>
+      menu.items.map((item) => item.command);
+    const REMOVED_FOR_RESOURCE = [
+      ...INSERT_NOTE_COMMANDS,
+      INSERT_COMMENT_COMMAND,
+      ...COMMENTS_COMMANDS,
+      ...EDIT_COMMANDS,
+    ];
+    const project = commandsOf(evaluate());
+    REMOVED_FOR_RESOURCE.forEach((command) => expect(project).toContain(command));
+
+    const resource = commandsOf(evaluate({ 'platform.project.p1.isResource': true }));
+    REMOVED_FOR_RESOURCE.forEach((command) => expect(resource).not.toContain(command));
+    // Copy and Find read without editing, so a resource keeps them.
+    expect(resource).toContain('platformScriptureEditor.copySelection');
+    expect(resource).toContain('platformScripture.openFind');
+  });
+
+  describe('the Edit section a resource shows instead of the Edit flyout', () => {
+    const EDIT_SUBMENU_ID = 'platformScriptureEditor.editSubmenu';
+    const EDIT_COLUMN = 'platformScriptureEditor.edit';
+    // A resource is never editable, so both facts hold for every real resource
+    const RESOURCE_FACTS = {
+      'platform.project.p1.isResource': true,
+      'platform.project.p1.isEditable': false,
+    };
+    type EvaluatedItem = {
+      id?: string;
+      command?: string;
+      group: string;
+      order: number;
+      label?: string;
+      iconNameBefore?: string;
+      disabled?: boolean;
+    };
+    type EvaluatedMenu = {
+      columns: Record<string, unknown>;
+      groups: Record<string, { column?: string; order: number }>;
+      items: EvaluatedItem[];
+    };
+
+    /** The served top menu in an interface mode: items hidden in that mode are removed first. */
+    const evaluateInMode = (
+      mode: 'simple' | 'power',
+      overrides: Record<string, boolean>,
+    ): EvaluatedMenu => {
+      const modeMenu = {
+        ...topMenu,
+        items: topMenu.items.filter(
+          (item: { hiddenInterfaceModes?: string[] }) => !item.hiddenInterfaceModes?.includes(mode),
+        ),
+      };
+      const facts = { ...ALL_FACTS_ON, ...overrides };
+      return evaluateMenu(modeMenu, (key: string) => facts[key], TEMPLATE_VARS);
+    };
+
+    /** The commands of the items sitting in groups of the Edit column, in display order. */
+    const editSectionCommands = (menu: EvaluatedMenu): (string | undefined)[] => {
+      const groupOrder: Record<string, number> = {};
+      Object.entries(menu.groups).forEach(([key, group]) => {
+        if (group.column === EDIT_COLUMN) groupOrder[key] = group.order;
+      });
+      return menu.items
+        .filter((item) => item.group in groupOrder)
+        .sort((a, b) => groupOrder[a.group] - groupOrder[b.group] || a.order - b.order)
+        .map((item) => item.command);
+    };
+    const hasEditSubmenu = (menu: EvaluatedMenu) =>
+      menu.items.some((item) => item.id === EDIT_SUBMENU_ID);
+    const countOf = (menu: EvaluatedMenu, command: string) =>
+      menu.items.filter((item) => item.command === command).length;
+
+    it('replaces the Edit flyout with an Edit section holding Copy and Find on a resource in Power', () => {
+      const menu = evaluateInMode('power', RESOURCE_FACTS);
+      expect(hasEditSubmenu(menu)).toBe(false);
+      expect(editSectionCommands(menu)).toEqual([
+        'platformScriptureEditor.copySelection',
+        'platformScripture.openFind',
+      ]);
+      expect(menu.columns).toHaveProperty([EDIT_COLUMN]);
+      // Each command is offered once: no copy of Copy or Find is left behind from the flyout
+      expect(countOf(menu, 'platformScriptureEditor.copySelection')).toBe(1);
+      expect(countOf(menu, 'platformScripture.openFind')).toBe(1);
+    });
+
+    it('shows only Copy in the Edit section on a resource in Simple', () => {
+      const menu = evaluateInMode('simple', RESOURCE_FACTS);
+      expect(hasEditSubmenu(menu)).toBe(false);
+      expect(editSectionCommands(menu)).toEqual(['platformScriptureEditor.copySelection']);
+      // Simple's Find stays under Tools and resources
+      expect(countOf(menu, 'platformScripture.openFind')).toBe(1);
+    });
+
+    it.each([
+      ['an editable project', {}],
+      ['a read-only project that is not a resource', { 'platform.project.p1.isEditable': false }],
+    ])('keeps the Edit flyout and has no Edit section on %s', (_name, overrides) => {
+      (['power', 'simple'] as const).forEach((mode) => {
+        const menu = evaluateInMode(mode, overrides);
+        expect(hasEditSubmenu(menu)).toBe(true);
+        expect(editSectionCommands(menu)).toEqual([]);
+        expect(countOf(menu, 'platformScriptureEditor.copySelection')).toBe(1);
+      });
+    });
+
+    it('labels the resource Copy "Copy selection", with an icon, disabled until text is selected', () => {
+      const resourceCopy = (hasSelection: boolean) => {
+        const menu = evaluateInMode('power', {
+          ...RESOURCE_FACTS,
+          'platformScriptureEditor.webView.wv.hasSelection': hasSelection,
+        });
+        const copies = menu.items.filter(
+          (item) => item.command === 'platformScriptureEditor.copySelection',
+        );
+        expect(copies).toHaveLength(1);
+        return copies[0];
+      };
+      expect(resourceCopy(true)).toMatchObject({
+        label: '%webView_platformScriptureEditor_copySelection%',
+        iconNameBefore: 'clipboard-copy',
+      });
+      expect(resourceCopy(true).disabled).toBeFalsy();
+      expect(resourceCopy(false).disabled).toBe(true);
+    });
+
+    it.each([
+      [
+        'a resource',
+        { 'platform.project.p1.isResource': true, 'platform.project.p1.isEditable': false },
+        '%webView_platformScriptureEditor_showBooks%',
+      ],
+      ['an editable project', {}, '%manageBooks_openMenuItem%'],
+      [
+        'a read-only project',
+        { 'platform.project.p1.isEditable': false },
+        '%manageBooks_openMenuItem%',
+      ],
+    ])('offers exactly one books item for %s, labelled %s', (_name, overrides, label) => {
+      const menu = evaluateInMode('power', overrides);
+      const books = menu.items.filter(
+        (item) => item.command === 'platformScripture.openManageBooks',
+      );
+      expect(books).toHaveLength(1);
+      expect(books[0]).toMatchObject({ label, iconNameBefore: 'book-copy' });
+    });
+
+    it('gives Undo and Redo an icon in Power only', () => {
+      const iconsIn = (mode: 'simple' | 'power') =>
+        evaluateInMode(mode, {}).items.filter(
+          (item) =>
+            item.command === 'platformScriptureEditor.undo' ||
+            item.command === 'platformScriptureEditor.redo',
+        );
+      expect(iconsIn('power').map((item) => item.iconNameBefore)).toEqual(['undo-2', 'redo-2']);
+      const simple = iconsIn('simple');
+      expect(simple).toHaveLength(2);
+      simple.forEach((item) => expect(item.iconNameBefore).toBeUndefined());
+    });
+
+    it('declares the Edit section group as experimental and no item as experimental', () => {
+      expect(topMenu.groups['platformScriptureEditor.resourceEditActions']).toMatchObject({
+        column: EDIT_COLUMN,
+        isExperimental: true,
+      });
+      topMenu.items.forEach((item: object) => expect(item).not.toHaveProperty('isExperimental'));
+    });
+  });
+
+  it('disables Undo, Redo, Cut and Paste exactly when Insert footnote is disabled', () => {
+    const FACTS_THAT_DISABLE = [
+      { 'platform.project.p1.isEditable': false },
+      { 'platformScripture.project.p1.canEditScripture': false },
+      { 'platformScriptureEditor.webView.wv.isReadOnly': true },
+      { 'platformScriptureEditor.webView.wv.isPreview': true },
+      { 'platformScriptureEditor.webView.wv.isSyncBlocked': true },
+    ];
+    const enabled = isDisabledFn(evaluate());
+    EDIT_COMMANDS.forEach((command) => expect(enabled(command)).toBe(false));
+    FACTS_THAT_DISABLE.forEach((facts) => {
+      const disabled = isDisabledFn(evaluate(facts));
+      EDIT_COMMANDS.forEach((command) => expect(disabled(command)).toBe(true));
+    });
+  });
+
+  it('leaves Copy enabled when the project cannot be edited', () => {
+    const readOnly = isDisabledFn(evaluate({ 'platform.project.p1.isEditable': false }));
+    expect(readOnly('platformScriptureEditor.copySelection')).toBe(false);
+  });
+
+  it('checks Show footnotes from the footnotes pane fact', () => {
+    const find = (facts: Record<string, boolean>) =>
+      evaluate(facts).items.find(
+        (item: { command?: string }) => item.command === 'platformScriptureEditor.toggleFootnotes',
+      );
+    expect(find({})?.checked).toBe(true);
+    expect(
+      find({ 'platformScriptureEditor.webView.wv.footnotesPaneVisible': false })?.checked,
+    ).toBe(false);
+  });
+
+  describe('Switch Scripture view check marks', () => {
+    const checkedState = (isPreview: boolean) => {
+      const { items } = evaluate({ 'platformScriptureEditor.webView.wv.isPreview': isPreview });
+      const find = (command: string) =>
+        items.find((item: { command?: string }) => item.command === command);
+      return {
+        standard: find('platformScriptureEditor.setViewStandard')?.checked,
+        preview: find('platformScriptureEditor.setViewPreview')?.checked,
+      };
+    };
+
+    it('checks Standard view, not Preview, when the tab shows Standard view', () => {
+      expect(checkedState(false)).toEqual({ standard: true, preview: false });
+    });
+
+    it('checks Preview, not Standard view, when the tab shows Preview', () => {
+      expect(checkedState(true)).toEqual({ standard: false, preview: true });
+    });
+  });
+
+  it('parses every when-expression in the document', () => {
+    const expressions: string[] = [];
+    const collect = (node: unknown) => {
+      if (Array.isArray(node)) node.forEach(collect);
+      else if (node && typeof node === 'object')
+        Object.entries(node).forEach(([key, value]) => {
+          if (
+            (key === 'when' || key === 'enabledWhen' || key === 'checkedWhen') &&
+            typeof value === 'string'
+          )
+            expressions.push(value);
+          else collect(value);
+        });
+    };
+    collect(menusJson);
+    expect(expressions.length).toBeGreaterThanOrEqual(7);
+    expressions.forEach((expression) =>
+      expect(() => parseWhenExpression(expression)).not.toThrow(),
+    );
   });
 });

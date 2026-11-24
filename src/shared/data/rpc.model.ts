@@ -14,6 +14,26 @@ import { deserialize, getErrorMessage, retryUntil, serialize } from 'platform-bi
 export const WEBSOCKET_PORT = 8876;
 
 /**
+ * WebSocket handshake request header in which a child main launched presents its client secret.
+ * Mirrored by `CLIENT_SECRET_HEADER` in `c-sharp/PapiClient.cs`.
+ */
+export const PAPI_CLIENT_SECRET_HEADER = 'x-papi-client-secret';
+
+/**
+ * WebSocket handshake reply header in which main proves itself to a child it launched. Mirrored by
+ * `SERVER_SECRET_HEADER` in `c-sharp/PapiClient.cs`.
+ */
+export const PAPI_SERVER_SECRET_HEADER = 'x-papi-server-secret';
+
+/**
+ * The two secrets main hands a child it launches: the client secret the child presents in
+ * {@link PAPI_CLIENT_SECRET_HEADER}, and the server secret main returns in
+ * {@link PAPI_SERVER_SECRET_HEADER}. The .NET data provider parses the same JSON shape
+ * (`LaunchSecrets.Parse` in `c-sharp/LaunchSecrets.cs`).
+ */
+export type LaunchSecrets = { clientSecret: string; serverSecret: string };
+
+/**
  * Largest message the WebSocket transport carries. A message over this is not a failed request: the
  * receiver closes the connection with 1009, taking down every request in flight on it and, for the
  * C# data provider, the process itself. Declared here rather than left to the `ws` default so a

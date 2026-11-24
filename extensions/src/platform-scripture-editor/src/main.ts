@@ -33,12 +33,14 @@ import modelTextPanelWebViewStyles from './model-text-panel.web-view.scss?inline
 import modelTextPanelWebView from './model-text-panel.web-view?inline';
 import resourceTextPanelWebViewStyles from './resource-text-panel.web-view.scss?inline';
 import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
-import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
-import scriptureTextGridWebViewStyles from './scripture-text-grid.web-view.scss?inline';
+import { ScriptureTextGridWebViewFactory } from './scripture-text-grid-web-view.factory';
 import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getEditorTabIconName,
+  getEditorTitleEditability,
+  isProjectPublished,
   buildScriptureEditorWebViewState,
   getTabTitleProjectName,
   openCommentListAndSelectThread,
@@ -47,8 +49,6 @@ import {
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-  buildScriptureTextGridWebView,
-  type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
   showsReadOnlyPreview,
   startDefaultProjectPicker,
@@ -174,12 +174,13 @@ async function openPlatformResourceViewer(
 /**
  * Paratext 9's `UpdateInsertMenuItems` (`TextForm.cs`) shows footnote, cross-reference, and end
  * note only when the project is not a resource project and not Study Bible additions, and enables
- * them only with book text and a view that allows note insertion. Platform.Bible keeps all three
- * Insert items always available instead and gates at submission — see
- * `adr-menus-always-available-gate-at-submission` in Architecture-Decisions.md; the submission-time
- * check itself is the web view's read-only/sync-blocked guard in `insertNoteAtCurrentSelection`,
- * the one callback all three insert kinds share. The comment editor opener reaches the web view the
- * same way but is handled there by its own `insertCommentAtCurrentSelection`.
+ * them only with book text and a view that allows note insertion. Platform.Bible gates the Insert
+ * items declaratively (`enabledWhen` in menus.json) and re-checks at submission — see
+ * `adr-menus-gate-declaratively-with-context-keys` in Architecture-Decisions.md; the
+ * submission-time check is the web view's read-only/sync-blocked guard in
+ * `insertNoteAtCurrentSelection`, the one callback all three insert kinds share. The comment editor
+ * opener reaches the web view the same way but is handled there by its own
+ * `insertCommentAtCurrentSelection`.
  *
  * @param method The controller method to invoke: one of the three textual-note inserters or the
  *   comment editor opener — all take no arguments and resolve once requested.
@@ -599,6 +600,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       savedWebViewStateUpdated,
     );
 
+    // Started here too so the resource check overlaps the permission check below.
+    const isResourcePromise = projectId
+      ? isProjectPublished(papi, projectId)
+      : Promise.resolve(false);
+
     // Fold the Scripture-edit role check into the title's read-only computation only — `isReadOnly`
     // itself must keep its narrower "opened as Resource Viewer" tab-identity meaning (see Section 2
     // of the design spec). A lookup failure or a project that doesn't advertise
@@ -627,10 +633,12 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       }
     }
 
+    const isResource = await isResourcePromise;
+
     const title = await formatEditorTitle(
       unformattedTitle,
       projectId,
-      isReadOnlyForTitle,
+      getEditorTitleEditability(isResource, isReadOnlyForTitle),
       async (projectIdFormat) => getTabTitleProjectName(papi, projectIdFormat),
       papi.localization.getLocalizedStrings,
     );
@@ -640,6 +648,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     return {
       ...savedWebView,
       title,
+      iconName: getEditorTabIconName(isResource, savedWebView.iconName),
       iconUrl: optionsIconUrl ?? savedWebView.iconUrl,
       tooltip: optionsTooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,
@@ -1051,18 +1060,6 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
  * (`ResourceTextPanelOptions`), which `reloadWebView` forwards to the provider.
  */
 const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
-
-const scriptureTextGridWebViewProvider: IWebViewProvider = {
-  async getWebView(
-    savedWebView: SavedWebViewDefinition,
-    openWebViewOptions: TextCollectionPanelOptions,
-  ): Promise<WebViewDefinition | undefined> {
-    return buildScriptureTextGridWebView(papi, savedWebView, openWebViewOptions, {
-      content: scriptureTextGridWebView,
-      styles: scriptureTextGridWebViewStyles,
-    });
-  },
-};
 
 /**
  * Creates a resource panel web view provider that injects the given resourceType into web view
@@ -1820,7 +1817,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const scriptureTextGridRegistration = (await isScriptureTextGridEnabledPromise)
     ? await papi.webViewProviders.registerWebViewProvider(
         SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-        scriptureTextGridWebViewProvider,
+        new ScriptureTextGridWebViewFactory(),
       )
     : undefined;
 

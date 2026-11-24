@@ -1,5 +1,5 @@
 /**
- * ⚠ DESTRUCTIVE — this spec writes to REAL project data, and has never run.
+ * ⚠ PARKED and DESTRUCTIVE — this spec writes to REAL project data, and has never run.
  *
  * It drives book-mutating actions against whatever projects the running app has, with no restore.
  * `playwright-cdp.config.ts` testIgnores this whole directory for that reason, and it is not a

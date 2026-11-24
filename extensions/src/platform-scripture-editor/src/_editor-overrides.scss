@@ -408,7 +408,7 @@ button {
 // The gutter width is a registered length so it computes once, on `.psc-gutter-markers`. The
 // gutter's own `--psc-gutter-width` is an unregistered `4em`, which would otherwise resolve in each
 // paragraph's own font size: on a `\mt1` (166%) the bar would overshoot the editor's edge and be
-// clipped, and on an `\s1` (0.8 of the base size) it would stop short inside the gutter.
+// clipped, and on a `\cd` (91%) it would stop short inside the gutter.
 // `--para-indent` stays per paragraph, since it is that paragraph's own indent compensation.
 @property --psc-para-marker-gutter-width {
   syntax: '<length>';
@@ -424,8 +424,8 @@ button {
   --psc-para-marker-selection-reach: calc(
     var(--psc-para-marker-gutter-width) + var(--para-indent, 0px)
   );
-  // Muted text in the row (the `\s1`-`\s3` headings and the empty-verse placeholder) drops below
-  // 4.5:1 on the fill in the light theme, so while selected it takes the fill's own foreground.
+  // Muted text in the row (the empty-verse placeholder) drops below 4.5:1 on the fill in the
+  // light theme, so while selected it takes the fill's own foreground.
   --muted-foreground: var(--accent-foreground);
 
   background-color: var(--accent);
@@ -438,6 +438,12 @@ button {
   box-shadow:
     calc(var(--psc-para-marker-selection-reach) - 4px) 0 0 0 var(--accent),
     var(--psc-para-marker-selection-reach) 0 0 0 var(--foreground);
+}
+
+// At rest the glyph is regular weight, so only a selected row's glyph is bold. Without this it
+// would inherit its paragraph's weight, and a `\s`/`\s1` heading's glyph would look selected.
+.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child {
+  font-weight: 400;
 }
 
 // 0,7,0, one class more specific than the base gutter glyph rule in _usj-nodes.scss.

@@ -1,4 +1,13 @@
 /**
+ * PARKED — no Playwright config collects this file, and it has never run to completion. It is kept
+ * as the written scenarios for the Markers checklist (epic PT-2049, "Inventory & Checklists"). It
+ * connects to the PAPI websocket of an app you started yourself, skips itself when nothing answers
+ * on port 8876, and its happy-path test needs a Paratext (USFM) project installed. It only reads.
+ * To work on it, remove the markers-checklist glob from `testIgnore` in
+ * `e2e-tests/playwright-cdp.config.ts` (the ignore also applies to a file named on the command
+ * line). See `e2e-tests/tests/markers-checklist/README.md`.
+ */
+/**
  * === NEW IN PT10 === Reason: Runtime regression test for the markers-checklist PAPI network object
  * (`platformScripture.checklistService`). Catches the integration failures that unit tests cannot:
  * PAPI registration, JSON-RPC routing, C#/JS type serialization, and parameter-count alignment at

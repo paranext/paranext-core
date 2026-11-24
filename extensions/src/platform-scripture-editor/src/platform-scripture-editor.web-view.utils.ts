@@ -18,6 +18,7 @@
 import type { FocusSubject } from '@papi/core';
 import { logger } from '@papi/frontend';
 import {
+  deepEqual,
   isBlockMarker,
   isLocalizeKey,
   LanguageStrings,
@@ -230,7 +231,7 @@ export function returnFocusToScriptureTextIfDocumentFocused(
 /**
  * Lands a footnotes-pane row editor's pending edits in the document, then flushes the debounced
  * save that reads the document — for the paths that must not lose the last few keystrokes (page
- * teardown, and an external replace about to overwrite the document).
+ * teardown, and the editor losing its claim on the chapter).
  *
  * The order matters: the row's latest keystrokes sit in the row editor's own live-apply debounce,
  * not yet in the document, so a save flushed first would write the document without them. Landing
@@ -248,6 +249,43 @@ export function flushRowEditsThenSave(
   rowEditor?.flushPendingEdits();
   if (!save.isPending()) return undefined;
   return save.flush();
+}
+
+/**
+ * Throws away the edits the editor has not started saving, for an incoming chapter that is about to
+ * replace the document while the editor has no claim on it: the incoming chapter wins, so these
+ * edits are lost rather than written over it. A footnotes-pane row editor's pending edits are
+ * landed in the document first, so they count as unsaved edits too.
+ *
+ * @param rowEditor The open row editor, or `undefined`/`null` when no row session is open
+ * @param save The web view's debounced save
+ * @returns Whether any unsaved edits were thrown away
+ */
+export function discardRowEditsAndPendingSave(
+  rowEditor: Pick<FootnoteEditorHandle, 'flushPendingEdits'> | null | undefined,
+  save: Pick<FlushableDebouncer<unknown[]>, 'isPending' | 'cancel'>,
+): boolean {
+  rowEditor?.flushPendingEdits();
+  if (!save.isPending()) return false;
+  save.cancel();
+  return true;
+}
+
+/**
+ * Whether a `focusout` event moves focus from inside `container` to somewhere outside it, including
+ * out of the window altogether (the event's `relatedTarget` is `null` then).
+ *
+ * @param container The element focus is leaving, or `null` when it is not rendered
+ * @param target The `focusout` event's target: the element losing focus
+ * @param relatedTarget The `focusout` event's `relatedTarget`: the element gaining focus, if any
+ */
+export function isFocusLeavingContainer(
+  container: Pick<Node, 'contains'> | null | undefined,
+  target: EventTarget | null | undefined,
+  relatedTarget: EventTarget | null | undefined,
+): boolean {
+  if (!container || !(target instanceof Node) || !container.contains(target)) return false;
+  return !(relatedTarget instanceof Node) || !container.contains(relatedTarget);
 }
 
 /**
@@ -620,9 +658,11 @@ export function deriveReadOnlyFlags({
  * insert — is directly unit-testable against injected fakes rather than only observable end to
  * end.
  *
- * Checks read-only BEFORE calling `commitSnapshot`: a read-only top-menu click (which reaches this
- * with no prior gate — the menu item itself has no enablement) must not write a forced, empty
- * version-history commit. The refusal is logged, not shown to the user.
+ * Checks read-only BEFORE calling `commitSnapshot`. The menu items are gated by `enabledWhen`
+ * (`adr-menus-gate-declaratively-with-context-keys`), but a request can still reach this while the
+ * editor is read-only — through the editor's keyboard shortcut, a direct command call, or a menu
+ * gate that has not caught up with the editor's state — and a refused insert must not write a
+ * forced, empty version-history commit. The refusal is logged, not shown to the user.
  *
  * @param kind Which textual note to insert.
  * @param hasEditor Whether the editor is currently mounted.
@@ -708,20 +748,28 @@ export interface InsertContextMenuState {
   isReadOnly: boolean;
   canUserCreateComments: boolean;
   isSyncBlocked: boolean;
+  /**
+   * Whether the project is a resource (`platform.isPublished`). A resource can never be edited or
+   * commented on, so it gets no insert items at all rather than disabled ones.
+   */
+  isResource: boolean;
 }
 
 /**
  * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu's
  * `platformScriptureEditor.insert` column (`contributions/menus.json`, every group in that column)
  * — same items, same order; pinned by the parity test in
- * `platform-scripture-editor.web-view.utils.test.ts`.
+ * `platform-scripture-editor.web-view.utils.test.ts`. A resource gets none of them, mirroring the
+ * `when` that removes the same items from the top menu; the editor then shows only its built-in
+ * clipboard entries.
  */
 export function createInsertContextMenuItems(
   localizedStrings: LanguageStrings,
   actions: InsertContextMenuActions,
   state: InsertContextMenuState,
 ): ContextMenuOptionConfig[] {
-  const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
+  const { isReadOnly, canUserCreateComments, isSyncBlocked, isResource } = state;
+  if (isResource) return [];
   return [
     {
       title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
@@ -788,6 +836,32 @@ export function isEditorContextMenuOpen(editorContainer: Element | null | undefi
   return isEditorContextMenuOpenFor(editorContainer);
 }
 
+/** The facts one editor web view publishes about itself; both key functions below map over this */
+const EDITOR_WEB_VIEW_CONTEXT_FACTS = [
+  'isReadOnly',
+  'isPreview',
+  'isSyncBlocked',
+  'footnotesPaneVisible',
+  'hasSelection',
+] as const;
+
+function getEditorWebViewContextKeyPrefix(webViewId: string): string {
+  return `platformScriptureEditor.webView.${webViewId}`;
+}
+
+/**
+ * Lists the names of the context keys one editor web view publishes, for removing them when it
+ * closes. Derived from the same fact list as {@link getEditorWebViewContextKeys}, so the two cannot
+ * disagree.
+ *
+ * @param webViewId The web view's id
+ * @returns The full context key names, one per published fact
+ */
+export function getEditorWebViewContextKeyNames(webViewId: string): string[] {
+  const prefix = getEditorWebViewContextKeyPrefix(webViewId);
+  return EDITOR_WEB_VIEW_CONTEXT_FACTS.map((fact) => `${prefix}.${fact}`);
+}
+
 /**
  * Where keyboard focus is, from this editor's point of view (see {@link EditorFocusLocation}).
  * Projects the subject to a web view id as core's `getWebViewIdFromFocusSubject` does (extensions
@@ -816,4 +890,33 @@ export function getEditorFocusLocation(
   if (subjectWebViewId !== ownWebViewId) return 'anotherWebView';
   if (focusSubject?.focusType === 'webView' && !doesEditorDocumentHaveFocus) return 'settling';
   return 'thisEditor';
+}
+
+/**
+ * Whether a selection is a range (start and end differ) rather than a caret.
+ *
+ * @param selection The editor's selection, `undefined` when it reports none
+ * @returns `false` for no selection, a missing end or an end equal to the start
+ */
+export function hasNonCollapsedSelection(selection: SelectionRange | undefined): boolean {
+  if (!selection?.end) return false;
+  return !deepEqual(selection.end, selection.start);
+}
+
+/**
+ * Names the context keys one editor web view publishes about itself, which its menu items'
+ * `enabledWhen` / `checkedWhen` expressions read.
+ *
+ * @param webViewId The web view's id
+ * @param state The facts to publish
+ * @returns Context key name -> value, one entry per published fact
+ */
+export function getEditorWebViewContextKeys(
+  webViewId: string,
+  state: Record<(typeof EDITOR_WEB_VIEW_CONTEXT_FACTS)[number], boolean>,
+): Record<string, boolean> {
+  const prefix = getEditorWebViewContextKeyPrefix(webViewId);
+  return Object.fromEntries(
+    EDITOR_WEB_VIEW_CONTEXT_FACTS.map((fact) => [`${prefix}.${fact}`, state[fact]]),
+  );
 }

@@ -504,13 +504,17 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
   });
 });
 
-// The two notices a refused save can raise: one saying the editor's chapter marker disagreed with
-// the chapter it belongs to and was put back, one saying the backend refused the save for a reason
-// the editor cannot name. Both are ordinary user-facing toasts, so both carry the `es` parity every
-// other notification key in this file has — the `%versionHistoryCommit_*%` keys are en-only because
-// they are commit messages rather than UI text, which is not a precedent these can borrow.
+// The notices about saves: one saying the editor's chapter marker disagreed with the chapter it
+// belongs to and was put back, two saying the user's latest typing was lost (to leaving or closing
+// the chapter, or to a change made outside the editor), and one saying the backend refused the
+// save for a reason the editor cannot name. All are ordinary user-facing toasts, so all carry the
+// `es` parity every other notification key in this file has — the `%versionHistoryCommit_*%` keys
+// are en-only because they are commit messages rather than UI text, which is not a precedent these
+// can borrow.
 const SAVE_NOTIFICATION_KEYS = [
   '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
+  '%webView_platformScriptureEditor_error_editsLost_format%',
+  '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%',
   '%webView_platformScriptureEditor_error_saveFailed_format%',
 ];
 
@@ -594,6 +598,19 @@ describe.each(['en', 'es'])('chapter marker correction notification in %s', (loc
 
   it.each(['{projectName}', '{book}', '{chapter}'])('keeps the %s slot', (placeholder) => {
     expect(localizedStrings[locale][chapterMarkerCorrectedKey]).toContain(placeholder);
+  });
+});
+
+// The notices that typing was lost name the chapter it was typed in, which is often not the one on
+// screen: the user has usually just moved to another chapter.
+describe.each([
+  ['en', '%webView_platformScriptureEditor_error_editsLost_format%'],
+  ['es', '%webView_platformScriptureEditor_error_editsLost_format%'],
+  ['en', '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'],
+  ['es', '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'],
+])('lost edits notification in %s: %s', (locale, key) => {
+  it.each(['{projectName}', '{book}', '{chapter}'])('keeps the %s slot', (placeholder) => {
+    expect(localizedStrings[locale][key]).toContain(placeholder);
   });
 });
 
