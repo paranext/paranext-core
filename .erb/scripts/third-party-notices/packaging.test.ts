@@ -230,7 +230,7 @@ describe('the notices gate every pull request has to pass', () => {
           'name@version, and a newly copyleft dependency would each merge green.',
       ),
       ...unless(
-        full.includes('matrix.os == env.OS_LINUX'),
+        full.includes("runner.os == 'Linux'"),
         'the full notices check is no longer confined to the Linux leg. It needs Ruby and the ' +
           'four-RID dotnet restore, which the Windows and macOS legs install neither of, and the ' +
           'NuGet section is RID-dependent - so exactly one leg has to be canonical or the three ' +
@@ -252,7 +252,7 @@ describe('the notices gate every pull request has to pass', () => {
           'installers carry.',
       ),
       ...unless(
-        perPlatform.includes('matrix.os != env.OS_LINUX'),
+        perPlatform.includes("runner.os != 'Linux'"),
         'the per-platform shipping-set check is no longer confined to the non-Linux legs. On ' +
           'Linux it would only repeat, more cheaply and far less completely, what the full check ' +
           'above has already established.',

@@ -125,14 +125,18 @@ A menu item can state when it is shown, enabled or checked with three optional p
   disabled item tells the user the feature exists. Use `when` instead when the item can never
   become enabled for that kind of target (the Scripture editor's Insert footnote, Undo and Comments
   items on a resource, `!platform.project.{projectId}.isResource`). On a resource the editor hides
-  the whole Edit ▸ flyout this way and shows an "Edit" section instead, holding Copy (and Find in
-  Power): items with the opposite `when`, in a group of the existing Edit column.
+  the whole Edit ▸ flyout this way and shows an "Edit" section instead, holding Copy selection
+  (enabled only while text is selected) and Find in Power: items with the opposite `when`, in a
+  group of the existing Edit column.
 - `checkedWhen` shows a check mark on a command item while the expression is true.
 
 **Hiding by interface mode.** `hiddenInterfaceModes` on an item still hides it in the named
 interface modes. `filterItemsForInterfaceMode` in
 `src/extension-host/services/menu-data.service-host.ts` applies it before any when-expression is
-evaluated, and it is the tool for mode-based hiding; when-expressions are for runtime facts.
+evaluated, and it is the tool for mode-based hiding; when-expressions are for runtime facts. Two
+variants of one item, one per mode, still need distinct orders in their group: the menu combiner
+rejects a duplicate group and order before anything is filtered (hence the Scripture editor's
+`1.5` and `2.5` orders).
 
 **Grammar.** Expressions combine context key references with `&&`, `||`, `!`, `==`, `!=` and
 parentheses; operands are single-quoted strings, numbers, `true`/`false` and keys. A key is at
@@ -165,15 +169,16 @@ state that does not. The one exception is tab menus and overlay
 context menus, which show no check marks: there only `when` and `enabledWhen` (on command items)
 apply. Menus re-evaluate only when a key they read changes.
 
-**Key vocabulary.** Prefix every key with its owner. The platform uses `platform.project.{projectId}.*`
-and `platform.*`; an extension uses `<extension>.project.{projectId}.*` for facts about a project
-and `<extension>.webView.{webViewId}.*` for facts about one tab. `{projectId}` is substituted in its
+**Key vocabulary.** Prefix every key with its owner. The platform uses
+`platform.project.{projectId}.*` and `platform.*`; an extension uses
+`<extension>.project.{projectId}.*` for facts about a project and
+`<extension>.webView.{webViewId}.*` for facts about one tab. `{projectId}` is substituted in its
 normalized upper-case form (`normalizeProjectId` from platform-bible-utils), the form C# publishes
-under (`ProjectMetadata.Id` is upper case), so producers must build keys from that form. Keys are plain facts
-(`isEditable`, `isSyncing`), never answers to "should this item show"; the expression combines them.
-The Scripture editor's per-tab keys (`isReadOnly`, `isPreview`, `isSyncBlocked`,
-`footnotesPaneVisible`) are examples: `isReadOnly` is the tab's read-only state, which is fixed when
-the tab opens, so an item that edits text reads it next to the live project key
+under (`ProjectMetadata.Id` is upper case), so producers must build keys from that form. Keys are
+plain facts (`isEditable`, `isSyncing`), never answers to "should this item show"; the expression
+combines them. The Scripture editor's per-tab keys (`isReadOnly`, `isPreview`, `isSyncBlocked`,
+`footnotesPaneVisible`, `hasSelection`) are examples: `isReadOnly` is the tab's read-only state,
+which is fixed when the tab opens, so an item that edits text reads it next to the live project key
 `platform.project.{projectId}.isEditable` and stays disabled in a tab that cannot edit (see PT-4786
 for the snapshot).
 Each key has exactly **one producer process**: a TypeScript process refuses (logs, does not throw)

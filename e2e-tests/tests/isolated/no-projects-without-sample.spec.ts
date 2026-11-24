@@ -31,7 +31,7 @@ test.use({
   electronLaunchOptions: {
     isolatedProjectRoot: true,
     // Spread after the launcher's pinned 'true', so the empty project root stays empty.
-    envOverrides: { DEV_NOISY: 'false', PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'false' },
+    envOverrides: { PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'false' },
   },
 });
 test.setTimeout(300_000);

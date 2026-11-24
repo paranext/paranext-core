@@ -54,7 +54,6 @@ import {
 
 const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
   isolatedProjectRoot: true,
-  envOverrides: { DEV_NOISY: 'false' },
 };
 
 /** How long a switch may take to settle before a poll gives up */

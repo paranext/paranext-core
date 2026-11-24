@@ -104,7 +104,7 @@ async function hostZoomOf(page: Page, webViewId: string): Promise<string> {
 test.describe('content zoom shares live between two already-open tabs of one project', () => {
   test.use({
     interfaceMode: 'power',
-    electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+    electronLaunchOptions: { isolatedProjectRoot: true },
     seedSettings: {
       'platform.webViewContentZoom': 1,
       [CONTENT_ZOOM_MEMORY_SETTING]: {},
@@ -167,7 +167,6 @@ test.describe('a live Settings-default change moves only follower panes', () => 
       'platform.webViewContentZoom': 1,
       [CONTENT_ZOOM_MEMORY_SETTING]: {},
     },
-    electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
   });
 
   let project: CommentTestProject;
@@ -238,7 +237,7 @@ test.describe('only zoomable panes zoom and offer zoom: Power mode', () => {
       'platform.webViewContentZoom': SEEDED_DEFAULT,
       [CONTENT_ZOOM_MEMORY_SETTING]: {},
     },
-    electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+    electronLaunchOptions: { isolatedProjectRoot: true },
   });
   test.setTimeout(300_000);
 
@@ -316,7 +315,6 @@ test.describe('only zoomable panes zoom and offer zoom: Simple mode', () => {
       [CONTENT_ZOOM_MEMORY_SETTING]: {},
       'platform.firstRunComplete': true,
     },
-    electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
   });
   test.setTimeout(300_000);
 

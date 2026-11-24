@@ -91,6 +91,205 @@ const EVIL_WEBVIEW = `
         // papi.logger.info(\`Evil: Good error on creating script outside its frame: \${e.message}\`);
       }
 
+      // The renderer bundle URL as the app window loaded it, which is the file name a trusted frame
+      // reports. Falls back to the page URL if no renderer script is found.
+      const rendererBundleUrl = (() => {
+        try {
+          const rendererScript = Array.from(window.top.document.scripts).find(
+            (script) => script.src && script.src.includes('renderer')
+          );
+          return rendererScript ? rendererScript.src : window.top.location.href;
+        } catch (e) {
+          return window.top.location.href;
+        }
+      })();
+
+      // Try to forge the caller identity the createElement guard reads from stack traces by
+      // replacing Error.prepareStackTrace with a hook that reports a trusted script file name.
+      // The hook is set through assignment and always put back afterward.
+      const originalPrepareStackTrace = window.top.Error.prepareStackTrace;
+      try {
+        const forgedFileName = rendererBundleUrl;
+        window.top.Error.prepareStackTrace = () => [
+          { getFileName: () => forgedFileName, toString: () => 'at forged (' + forgedFileName + ')' },
+        ];
+        const hijackedScript = window.top.document.createElement('script');
+        hijackedScript.textContent = "alert('<<BAD>> evil hijacked prepareStackTrace')";
+        papi.logger.error('<<BAD>> Evil could create a script by hijacking Error.prepareStackTrace!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on hijacking prepareStackTrace: \${e.message}\`);
+      } finally {
+        try {
+          window.top.Error.prepareStackTrace = originalPrepareStackTrace;
+        } catch (e) {
+          // Nothing else to restore
+        }
+      }
+
+      // Try to create a script by calling \`Document.prototype.createElement\` directly instead of
+      // through the document instance
+      try {
+        const prototypeScript = window.top.Document.prototype.createElement.call(
+          window.top.document,
+          'script'
+        );
+        prototypeScript.textContent = "alert('<<BAD>> evil used Document.prototype.createElement')";
+        papi.logger.error('<<BAD>> Evil could create a script through Document.prototype.createElement!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on Document.prototype.createElement: \${e.message}\`);
+      }
+
+      // Try to create a script through createElementNS, which is a separate entry point
+      try {
+        const svgScript = window.top.document.createElementNS('http://www.w3.org/2000/svg', 'script');
+        svgScript.textContent = "alert('<<BAD>> evil created an svg script through createElementNS')";
+        papi.logger.error('<<BAD>> Evil could create a script through createElementNS!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on createElementNS: \${e.message}\`);
+      }
+
+      // Try to imitate a renderer frame with a function whose name contains a newline and a
+      // trusted-looking stack line, so the stack text reads as if the renderer made the call
+      try {
+        const forgedFrameName =
+          'forged\\n    at renderer.createElement (' + rendererBundleUrl + ':1:1)\\n    at forgedInner';
+        const forgedFrames = {
+          [forgedFrameName]: () => window.top.document.createElement('script'),
+        };
+        const forgedFrameScript = forgedFrames[forgedFrameName]();
+        forgedFrameScript.textContent = "alert('<<BAD>> evil imitated a renderer frame')";
+        papi.logger.error('<<BAD>> Evil could create a script by imitating a renderer frame!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on imitating a renderer frame: \${e.message}\`);
+      }
+
+      // Try to poison Array.prototype.includes in the app window before creating a script, in case
+      // the guard relies on it to decide whether a tag is restricted. The original is always put back.
+      const originalArrayIncludes = window.top.Array.prototype.includes;
+      try {
+        window.top.Array.prototype.includes = () => false;
+        const poisonedScript = window.top.document.createElement('script');
+        poisonedScript.textContent = "alert('<<BAD>> evil poisoned Array.prototype.includes')";
+        papi.logger.error('<<BAD>> Evil could create a script by poisoning Array.prototype.includes!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on poisoning Array.prototype.includes: \${e.message}\`);
+      } finally {
+        try {
+          window.top.Array.prototype.includes = originalArrayIncludes;
+        } catch (e) {
+          // Nothing else to restore
+        }
+      }
+
+      // Try to poison Boolean in the app window before creating a script, in case the guard calls
+      // it to turn its match result into a decision. The original is always put back.
+      const originalBoolean = window.top.Boolean;
+      try {
+        window.top.Boolean = () => true;
+        const booleanScript = window.top.document.createElement('script');
+        booleanScript.textContent = "alert('<<BAD>> evil poisoned Boolean')";
+        papi.logger.error('<<BAD>> Evil could create a script by poisoning Boolean!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on poisoning Boolean: \${e.message}\`);
+      } finally {
+        try {
+          window.top.Boolean = originalBoolean;
+        } catch (e) {
+          // Nothing else to restore
+        }
+      }
+
+      // Try to poison String.prototype.toLowerCase in the app window before creating a script, in
+      // case the guard looks it up to normalize the tag name. The original is always put back.
+      const originalToLowerCase = window.top.String.prototype.toLowerCase;
+      try {
+        window.top.String.prototype.toLowerCase = () => 'div';
+        const lowerCaseScript = window.top.document.createElement('script');
+        lowerCaseScript.textContent = "alert('<<BAD>> evil poisoned String.prototype.toLowerCase')";
+        papi.logger.error('<<BAD>> Evil could create a script by poisoning String.prototype.toLowerCase!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        // papi.logger.info(\`Evil: Good error on poisoning toLowerCase: \${e.message}\`);
+      } finally {
+        try {
+          window.top.String.prototype.toLowerCase = originalToLowerCase;
+        } catch (e) {
+          // Nothing else to restore
+        }
+      }
+
+      // Probe (not an assertion): known gap tracked in PT-5086. A script created in this web view's
+      // own document and appended to the app window may run there. Record whether it did.
+      const probeScriptFlag = '__evilProbeScriptRan';
+      let probeScript;
+      try {
+        probeScript = document.createElement('script');
+        probeScript.textContent = "window.top." + probeScriptFlag + " = true;";
+        window.top.document.body.appendChild(probeScript);
+        const ran = window.top[probeScriptFlag] === true;
+        papi.logger.warn(
+          'Evil probe (PT-5086): own-document script appended to the app window ' +
+            (ran ? 'ran' : "didn't run")
+        );
+      } catch (e) {
+        papi.logger.warn(
+          "Evil probe (PT-5086): own-document script appended to the app window didn't run: " + e.message
+        );
+      } finally {
+        try {
+          if (probeScript) probeScript.remove();
+          delete window.top[probeScriptFlag];
+        } catch (e) {
+          // Nothing else to clean up
+        }
+      }
+
+      // Probe (not an assertion): known gap tracked in PT-5086. The app window's createRoot may
+      // render an iframe element into an existing container. Record whether an iframe appeared.
+      let probeContainer;
+      let probeRoot;
+      try {
+        probeContainer = window.top.document.createElement('div');
+        window.top.document.body.appendChild(probeContainer);
+        probeRoot = window.top.createRoot(probeContainer);
+        probeRoot.render(React.createElement('iframe', { src: 'about:blank' }));
+        setTimeout(() => {
+          try {
+            const appeared = probeContainer.querySelector('iframe') != null;
+            papi.logger.warn(
+              'Evil probe (PT-5086): iframe rendered through the app window createRoot ' +
+                (appeared ? 'appeared' : "didn't appear")
+            );
+          } catch (e) {
+            papi.logger.warn(
+              "Evil probe (PT-5086): iframe rendered through the app window createRoot didn't appear: " + e.message
+            );
+          } finally {
+            try {
+              probeRoot.unmount();
+              probeContainer.remove();
+            } catch (e) {
+              // Nothing else to clean up
+            }
+          }
+        }, 500);
+      } catch (e) {
+        papi.logger.warn(
+          "Evil probe (PT-5086): iframe rendered through the app window createRoot didn't appear: " + e.message
+        );
+        try {
+          if (probeContainer) probeContainer.remove();
+        } catch (e2) {
+          // Nothing else to clean up
+        }
+      }
+
       // Try to create an anchor outside the iframe that allows navigation
       // This would mean iframes could create a link to navigate to a different page.
       try {
@@ -226,27 +425,196 @@ const evilFileWebViewProvider = {
   },
 };
 
-async function tryImports() {
-  logger.info('Evil is importing! Mwahahaha');
+/**
+ * Substring of the errors the extension host's loader and lockdowns throw when they refuse an
+ * extension access. Must match `NOT_ALLOWED_IN_EXTENSIONS` in
+ * `src/extension-host/services/extension-sandbox.util.ts`; this file cannot import host code, so it
+ * keeps its own copy, and the probe tests fail if the two drift apart.
+ */
+const NOT_ALLOWED_IN_EXTENSIONS = 'not allowed in extensions';
 
+/**
+ * @typedef {object} SandboxProbeResult
+ * @property {string} name Which way out of the sandbox the probe tried
+ * @property {'refused' | 'escaped'} outcome Whether the sandbox stopped it
+ * @property {string} detail The refusal's message, or what the probe got instead
+ */
+
+function describeValue(value) {
+  if (typeof value === 'function') return `a function ${value.name || '(anonymous)'}`;
+  if (value && typeof value === 'object') return 'an object';
+  return String(value);
+}
+
+function errorMessage(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Refused only if `attempt` throws an error that says it is not allowed in extensions */
+function probeThrowsRefusal(name, attempt) {
   try {
-    // This will be blocked and will suggest the papi.storage api.
-    const fs = require('fs');
-    logger.error(`Evil: <<BAD>> Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`);
-  } catch {
-    // No need to log good stuff unless we're testing
-    // logger.info(`Evil: Good error on require fs: ${e.message}`);
+    return { name, outcome: 'escaped', detail: `returned ${describeValue(attempt())}` };
+  } catch (e) {
+    const message = errorMessage(e);
+    return {
+      name,
+      outcome: message.includes(NOT_ALLOWED_IN_EXTENSIONS) ? 'refused' : 'escaped',
+      detail: message,
+    };
   }
+}
 
+/** Refused only if `read` returns `undefined` */
+function probeIsUndefined(name, read) {
   try {
-    // This will be blocked and will suggest the papi.fetch api.
-    const https = require('https');
-    logger.error(`Evil: <<BAD>> Successfully imported https! ${JSON.stringify(https)}`);
-  } catch {
-    // No need to log good stuff unless we're testing
-    // logger.info(`Evil: Good error on require https: ${e.message}`);
+    const value = read();
+    if (value === undefined) return { name, outcome: 'refused', detail: 'is undefined' };
+    return { name, outcome: 'escaped', detail: `is ${describeValue(value)}` };
+  } catch (e) {
+    return { name, outcome: 'escaped', detail: `threw ${errorMessage(e)}` };
   }
+}
 
+/** Refused only if `read` returns something other than a function */
+function probeIsNotFunction(name, read) {
+  try {
+    const value = read();
+    if (typeof value !== 'function')
+      return { name, outcome: 'refused', detail: `is ${describeValue(value)}` };
+    return { name, outcome: 'escaped', detail: `is ${describeValue(value)}` };
+  } catch (e) {
+    return { name, outcome: 'escaped', detail: `threw ${errorMessage(e)}` };
+  }
+}
+
+/**
+ * Refused only if `attempt` rejects because there is no dynamic import handler or because the
+ * extension host says it is not allowed in extensions
+ */
+async function probeImportRefused(name, attempt) {
+  try {
+    return { name, outcome: 'escaped', detail: `resolved ${describeValue(await attempt())}` };
+  } catch (e) {
+    const message = errorMessage(e);
+    const isRefusal =
+      (e && e.code === 'ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING') ||
+      message.includes(NOT_ALLOWED_IN_EXTENSIONS);
+    return { name, outcome: isRefusal ? 'refused' : 'escaped', detail: message };
+  }
+}
+
+/** Gives the generator function-constructor probe a generator function to start from */
+function* generatorFunction() {
+  yield undefined;
+}
+
+/** Gives the async generator function-constructor probe an async generator function to start from */
+async function* asyncGeneratorFunction() {
+  yield undefined;
+}
+
+/**
+ * Tries each way Node code could reach the file system, native code or a string compiler from an
+ * extension, and reports whether the sandbox stopped it.
+ *
+ * @returns {Promise<SandboxProbeResult[]>} One result per probe
+ */
+async function runSandboxProbes() {
+  return [
+    // These will be blocked and will suggest the papi.storage api.
+    probeThrowsRefusal('require-fs', () => require('fs')),
+    probeThrowsRefusal('require-node-fs', () => require('node:fs')),
+    probeThrowsRefusal('require-https', () => require('https')),
+    typeof process.getBuiltinModule === 'function'
+      ? probeThrowsRefusal('process-getBuiltinModule', () => process.getBuiltinModule('fs'))
+      : { name: 'process-getBuiltinModule', outcome: 'refused', detail: 'is not a function' },
+    probeThrowsRefusal('process-binding', () => process.binding('fs')),
+    // `_linkedBinding` is Node's own name for this `process` member
+    // eslint-disable-next-line no-underscore-dangle
+    probeThrowsRefusal('process-linkedBinding', () => process._linkedBinding('fs')),
+    probeThrowsRefusal('process-dlopen', () => process.dlopen({}, '')),
+    // A file name that does not exist, so a host without the lockdown throws instead of reading a
+    // real `.env` file
+    probeThrowsRefusal('process-loadEnvFile', () =>
+      process.loadEnvFile('evil-sandbox-probe-does-not-exist.env'),
+    ),
+    // `_getActiveHandles` is Node's own name for this `process` member
+    // eslint-disable-next-line no-underscore-dangle
+    probeThrowsRefusal('process-getActiveHandles', () => process._getActiveHandles()),
+    // `_getActiveRequests` is Node's own name for this `process` member
+    // eslint-disable-next-line no-underscore-dangle
+    probeThrowsRefusal('process-getActiveRequests', () => process._getActiveRequests()),
+    // An argument `execve` rejects before it replaces the process, so a host without the lockdown
+    // throws instead of being replaced. Not present on Windows or Node before 22.15.
+    typeof process.execve === 'function'
+      ? probeThrowsRefusal('process-execve', () => process.execve(undefined))
+      : { name: 'process-execve', outcome: 'refused', detail: 'is not a function' },
+    probeIsUndefined('process-mainModule', () => process.mainModule),
+    // `kFs` is Node's own name for the `fs` module a file stream keeps; never opens a file
+    probeIsUndefined('process-stdin', () =>
+      Object.getOwnPropertySymbols(process.stdin).find((symbol) => symbol.description === 'kFs'),
+    ),
+    // The logger's file transport can point its output, and `readAllLogs`, at any file
+    probeIsUndefined('logger-file-transport', () => logger.transports),
+    // `_load` is Node's own name for its module loader's entry point
+    // eslint-disable-next-line no-underscore-dangle
+    probeIsNotFunction('module-loader', () => module.constructor._load),
+    probeIsUndefined('require-cache', () => require.cache),
+    await probeImportRefused('dynamic-import', () => import('fs')),
+    probeThrowsRefusal('function-constructor', () => (() => {}).constructor('return 1')),
+    probeThrowsRefusal('async-function-constructor', () =>
+      (async () => {}).constructor('return 1'),
+    ),
+    probeThrowsRefusal('generator-function-constructor', () =>
+      generatorFunction.constructor('yield 1'),
+    ),
+    probeThrowsRefusal('async-generator-function-constructor', () =>
+      asyncGeneratorFunction.constructor('yield 1'),
+    ),
+    // Only reads `eval` to see whether it is still there; never calls it
+    // eslint-disable-next-line no-eval
+    probeIsUndefined('global-eval', () => globalThis.eval),
+    probeIsUndefined('global-Function', () => globalThis.Function),
+  ];
+}
+
+/**
+ * Each phase's probe results, returned by the `evil.getSandboxProbeResults` command so end-to-end
+ * tests can check them in the running app. A phase whose probes failed to run holds one escaped
+ * result saying so.
+ *
+ * @type {Record<string, SandboxProbeResult[]>}
+ */
+const sandboxProbeResultsByPhase = {};
+
+/**
+ * Runs the sandbox probes and logs the results
+ *
+ * @param {string} phase When the probes ran, so a route the host reopens later shows up in the log
+ *   as escaped in a later phase only
+ */
+async function reportSandboxProbes(phase) {
+  try {
+    const results = await runSandboxProbes();
+    sandboxProbeResultsByPhase[phase] = results;
+    const refusedCount = results.filter((result) => result.outcome === 'refused').length;
+    logger.info(`Sandbox probes (${phase}): ${refusedCount}/${results.length} refused`);
+    results
+      .filter((result) => result.outcome === 'escaped')
+      .forEach((result) =>
+        logger.error(`<<BAD>> Sandbox probe escaped (${phase}): ${result.name} — ${result.detail}`),
+      );
+  } catch (e) {
+    sandboxProbeResultsByPhase[phase] = [
+      { name: 'probes-failed-to-run', outcome: 'escaped', detail: errorMessage(e) },
+    ];
+    logger.error(`<<BAD>> Sandbox probes failed to run (${phase}): ${errorMessage(e)}`);
+  }
+}
+
+reportSandboxProbes('load');
+
+async function tryNetworkAccess() {
   try {
     // This should always work because `fetch` is replaced with `papi.fetch`.
     await fetch('https://www.example.com');
@@ -277,17 +645,6 @@ async function tryImports() {
   }
 
   try {
-    // This will be blocked and will suggest the papi.storage api.
-    const fs = await import('fs');
-    logger.error(
-      `Evil: <<BAD>> Successfully dynamically imported fs! fs.readFileSync = ${fs.readFileSync}`,
-    );
-  } catch {
-    // No need to log good stuff unless we're testing
-    // logger.info(`Evil: Good error on dynamic import! ${e.message}`);
-  }
-
-  try {
     // This should always work.
     /* const genericFetch =  */ await (await papi.fetch('https://www.example.com')).text();
     // No need to log good stuff unless we're testing
@@ -299,13 +656,23 @@ async function tryImports() {
   }
 }
 
-tryImports();
-
 async function activate(context) {
   logger.info('Evil is activating...');
-  tryImports();
+  // Registered first, so end-to-end tests can read the probe results even if the web views below
+  // are slow to register
+  context.registrations.add(
+    await papi.commands.registerCommand(
+      'evil.getSandboxProbeResults',
+      async () => sandboxProbeResultsByPhase,
+    ),
+  );
+  reportSandboxProbes('activate');
+  tryNetworkAccess();
   // 3 secs is timed to be after the extension service has finished initializing.
-  setTimeout(tryImports, 3000);
+  setTimeout(() => {
+    reportSandboxProbes('after init');
+    tryNetworkAccess();
+  }, 3000);
 
   const evilWebViewProviderPromise = papi.webViewProviders.register(
     evilWebViewProvider.webViewType,
@@ -340,3 +707,4 @@ function deactivate() {
 
 exports.activate = activate;
 exports.deactivate = deactivate;
+exports.runSandboxProbes = runSandboxProbes;

@@ -82,7 +82,6 @@ test.describe('content zoom survives an app restart', () => {
 
       ctx = await launchElectronApp({
         isolatedProjectRoot: true,
-        envOverrides: { DEV_NOISY: 'false' },
         preserveUserDataDir: true,
       });
       profileDir = ctx.userDataDir;
@@ -127,7 +126,6 @@ test.describe('content zoom survives an app restart', () => {
 
       ctx = await launchElectronApp({
         isolatedProjectRoot: true,
-        envOverrides: { DEV_NOISY: 'false' },
         userDataDir: profileDir,
       });
       const mainPage2 = await ctx.electronApp.firstWindow({ timeout: 90_000 });
@@ -189,7 +187,6 @@ test.describe('content zoom survives an app restart', () => {
       // #region Phase 1 — zoom the comment list to a non-default level, then quit
 
       ctx = await launchElectronApp({
-        envOverrides: { DEV_NOISY: 'false' },
         preserveUserDataDir: true,
       });
       profileDir = ctx.userDataDir;
@@ -221,7 +218,6 @@ test.describe('content zoom survives an app restart', () => {
       // #region Phase 2 — relaunch into the same profile; the level comes back with no gesture
 
       ctx = await launchElectronApp({
-        envOverrides: { DEV_NOISY: 'false' },
         userDataDir: profileDir,
       });
       const mainPage2 = await ctx.electronApp.firstWindow({ timeout: 90_000 });

@@ -110,6 +110,9 @@ declare module 'papi-shared-types' {
      * A call while a restart is already in flight (from its start until the new extension host
      * announces its start) joins that restart and resolves with it, at once if the new process is
      * already forked, rather than stopping the host that is still starting.
+     *
+     * Only the app's windows, including any WebView in them, and the extension host may call it;
+     * other connections are refused with `MethodNotFound`.
      */
     'platform.restartExtensionHost': () => Promise<void>;
     /**
@@ -129,7 +132,11 @@ declare module 'papi-shared-types' {
     'platform.restart': () => Promise<void>;
     /** Get the operating system platform */
     'platform.getOSPlatform': () => Promise<string | undefined>;
-    /** Get the current log file content for debugging purposes */
+    /**
+     * Get the current log file content for debugging purposes. Only the app's windows, including
+     * any WebView in them, may call it; the extension host and other connections are refused with
+     * `MethodNotFound`.
+     */
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
@@ -383,7 +390,9 @@ declare module 'papi-shared-types' {
      * without Send/Receive, where no sync can clear it, so afterwards
      * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
      * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
-     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console. Only the
+     * app's windows, including any WebView in them, may call it; the extension host and other
+     * connections are refused with `MethodNotFound`.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice

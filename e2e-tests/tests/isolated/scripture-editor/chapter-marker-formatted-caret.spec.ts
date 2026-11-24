@@ -43,7 +43,7 @@ test.use({
   interfaceMode: 'simple',
   // Past first run, so Simple mode starts in the app rather than the setup wizard.
   seedSettings: { 'platform.firstRunComplete': true },
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 const WEBSOCKET_PORT = 8876;

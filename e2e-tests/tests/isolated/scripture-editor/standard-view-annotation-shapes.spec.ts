@@ -142,7 +142,7 @@ function indexInParagraph(verseText: VerseTextLocation): number {
 
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
   seedSettings: { 'platformScriptureEditor.markerSettleDelayMs': MARKER_SETTLE_DELAY_MS },
 });
 
