@@ -5846,8 +5846,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   rebuilding and committing. A race of a few seconds remains between a library merge and the re-check
   marking open PRs pending; a PR can merge in that window, the final check on `main` goes red, and
   it is fixed by hand with a rebuild PR. A PR whose check run is still running when a library change
-  lands has that run cancelled and re-run. A PR with no check run for its head commit is skipped
-  with a warning. Builds must be byte-identical on
+  lands has that run cancelled and re-run. The re-check marks a PR pending before anything that can
+  fail, and any later error (no check run for its head commit, a cancel that does not finish, a
+  refused re-run) marks it failed with "push a commit to run the check again", so an error never
+  leaves a success checked against the old base tip. A commit status belongs to a commit, not a PR,
+  so one head commit open as PRs into two bases shares one status, and the last check to finish sets
+  it for both; the re-check re-runs each PR's own run. Builds must be byte-identical on
   every OS, or the check fails for developers on another OS; the determinism workflow watches this.
   Transition: landing the new output rewrote every file in both `dist/` folders, so a branch open at
   that moment with `dist/` changes conflicts once; its author deletes `dist/`, runs

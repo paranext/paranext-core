@@ -2,15 +2,17 @@ name: Library dist check
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    # `edited` covers a change of base branch; other edits are skipped by the job's `if`.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
     branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
   push:
     branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
 
 # One run per pull request, and one per pushed commit, so a newer push to a pull request cancels an
-# older run but back-to-back pushes to a base branch each keep their own check.
+# older run but back-to-back pushes to a base branch each keep their own check. An edit that does not
+# change the base gets a group of its own, so a title edit never cancels a real check.
 concurrency:
-  group: library-dist-${{ github.event_name == 'push' && github.sha || github.event.pull_request.number }}
+  group: library-dist-${{ github.event_name == 'push' && github.sha || (github.event.action == 'edited' && !github.event.changes.base && format('edit-{0}', github.run_id)) || github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -21,6 +23,7 @@ jobs:
   check:
     # Builds the pull request's code, so it holds a read-only token. The status is posted by
     # library-dist-report.yml.
+    if: github.event.action != 'edited' || github.event.changes.base
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -30,6 +33,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_PR: ${{ github.event.pull_request.number }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BEFORE_SHA: ${{ github.event.before }}
         run: |
           # The target file lives outside the workspace because actions/checkout cleans untracked
@@ -42,9 +46,12 @@ jobs:
             echo "head_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
             echo "base_ref=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
             echo "diff_from=$BEFORE_SHA" >> "$GITHUB_OUTPUT"
-            printf '{"sha":"%s","description":"Checking"}' "$GITHUB_SHA" > "$TARGET_FILE"
+            printf '{"sha":"%s","attempt":%s,"description":"Checking"}' "$GITHUB_SHA" "$GITHUB_RUN_ATTEMPT" > "$TARGET_FILE"
           else
             PR="$EVENT_PR"
+            # Written before the lookup so a failed lookup still uploads a target and the report
+            # posts a failure, rather than nothing. The report skips it if the head has moved on.
+            printf '{"pr":%s,"sha":"%s","attempt":%s,"description":"Checking"}' "$PR" "$EVENT_HEAD_SHA" "$GITHUB_RUN_ATTEMPT" > "$TARGET_FILE"
             # Looked up at run time, so a re-run checks the pull request's current head and base.
             # One retry covers a transient API error.
             PR_FIELDS='"\(.head.sha) \(.base.ref)"'
@@ -54,7 +61,7 @@ jobs:
             echo "pr=$PR" >> "$GITHUB_OUTPUT"
             echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
             echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
-            printf '{"pr":%s,"sha":"%s","description":"Checking"}' "$PR" "$HEAD_SHA" > "$TARGET_FILE"
+            printf '{"pr":%s,"sha":"%s","attempt":%s,"description":"Checking"}' "$PR" "$HEAD_SHA" "$GITHUB_RUN_ATTEMPT" > "$TARGET_FILE"
           fi
 
       - name: Upload the target early

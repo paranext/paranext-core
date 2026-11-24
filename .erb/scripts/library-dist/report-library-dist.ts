@@ -32,8 +32,17 @@ async function githubRequest(
 }
 
 async function main(): Promise<void> {
-  const { TARGET_FILE, CONCLUSION, RUN_URL, REPOSITORY, GITHUB_TOKEN, EVENT, RUN_HEAD_SHA } =
-    process.env;
+  const {
+    TARGET_FILE,
+    CONCLUSION,
+    RUN_URL,
+    REPOSITORY,
+    GITHUB_TOKEN,
+    EVENT,
+    RUN_HEAD_SHA,
+    RUN_ID,
+    RUN_ATTEMPT,
+  } = process.env;
 
   let contents: string | undefined;
   try {
@@ -47,19 +56,46 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (!CONCLUSION || !RUN_URL || !REPOSITORY || !GITHUB_TOKEN || !EVENT || !RUN_HEAD_SHA) {
+  const runAttempt = Number(RUN_ATTEMPT);
+  if (
+    !CONCLUSION ||
+    !RUN_URL ||
+    !REPOSITORY ||
+    !GITHUB_TOKEN ||
+    !EVENT ||
+    !RUN_HEAD_SHA ||
+    !RUN_ID ||
+    !Number.isInteger(runAttempt)
+  ) {
     console.error(
-      'CONCLUSION, RUN_URL, REPOSITORY, GITHUB_TOKEN, EVENT and RUN_HEAD_SHA are required',
+      'CONCLUSION, RUN_URL, REPOSITORY, GITHUB_TOKEN, EVENT, RUN_HEAD_SHA, RUN_ID and RUN_ATTEMPT are required',
     );
     process.exit(1);
   }
 
-  if (!isTargetForRun(target, EVENT, RUN_HEAD_SHA)) {
-    console.log(`Target does not match the ${EVENT} run at ${RUN_HEAD_SHA}; not posting a status`);
+  if (!isTargetForRun(target, EVENT, RUN_HEAD_SHA, runAttempt)) {
+    console.log(
+      `Target does not match attempt ${runAttempt} of the ${EVENT} run at ${RUN_HEAD_SHA}; not posting a status`,
+    );
     return;
   }
 
   const apiRoot = `https://api.github.com/repos/${REPOSITORY}`;
+
+  // A report can run after a newer attempt of the same run has started (the recheck re-runs a
+  // finished check), and that attempt reports instead.
+  const runResponse = await githubRequest('GET', `${apiRoot}/actions/runs/${RUN_ID}`, GITHUB_TOKEN);
+  if (!runResponse.ok) {
+    console.error(`Fetching run ${RUN_ID} failed: HTTP ${runResponse.status}`);
+    process.exit(1);
+  }
+  const run: unknown = await runResponse.json();
+  const latestAttempt: unknown =
+    run && typeof run === 'object' ? Reflect.get(run, 'run_attempt') : undefined;
+  if (latestAttempt !== runAttempt) {
+    console.log(`Run ${RUN_ID} has a newer attempt than ${runAttempt}; skipping`);
+    return;
+  }
 
   if (target.pr !== undefined) {
     const response = await githubRequest('GET', `${apiRoot}/pulls/${target.pr}`, GITHUB_TOKEN);

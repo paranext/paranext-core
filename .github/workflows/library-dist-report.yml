@@ -14,7 +14,8 @@ permissions:
 jobs:
   report:
     # A cancelled run was superseded by a newer one for the same pull request, which reports instead.
-    if: github.event.workflow_run.conclusion != 'cancelled'
+    # A skipped run is a pull request edit that did not change the base, so there is nothing to report.
+    if: github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped'
     runs-on: ubuntu-22.04
     steps:
       # Runs only this repository's default-branch code; the artifact is untrusted data.
@@ -39,6 +40,8 @@ jobs:
           TARGET_FILE: result/target.json
           EVENT: ${{ github.event.workflow_run.event }}
           RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
           REPOSITORY: ${{ github.repository }}

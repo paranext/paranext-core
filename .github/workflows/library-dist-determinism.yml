@@ -6,7 +6,15 @@ name: Library dist determinism
 on:
   push:
     branches: ['main']
-    paths: ['lib/platform-bible-react/**', 'lib/platform-bible-utils/**', 'package-lock.json']
+    # Keep in step with isLibraryPath in .erb/scripts/library-dist/library-dist.util.ts.
+    paths:
+      [
+        'lib/platform-bible-react/**',
+        'lib/platform-bible-utils/**',
+        'package-lock.json',
+        'package.json',
+        'tsconfig.json',
+      ]
   workflow_dispatch:
 
 permissions:

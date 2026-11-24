@@ -32,6 +32,9 @@ jobs:
       # start the report workflow. If re-checked pull requests stay pending, request the re-run with a
       # GitHub App token (Actions: read and write) instead.
       - name: Re-run the check of each open library pull request
+        # Explicit bash turns on pipefail, so a failing git diff or gh call fails the step instead of
+        # feeding empty input to the classifier.
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           BEFORE_SHA: ${{ github.event.before }}
@@ -40,46 +43,69 @@ jobs:
             CHANGED=$(git diff --name-only "$BEFORE_SHA" HEAD | node .erb/scripts/library-dist/classify-library-change.ts)
             [ "$CHANGED" = true ] || { echo "No library changes; nothing to re-check"; exit 0; }
           fi
-          PULL_REQUESTS=$(gh pr list --base "$GITHUB_REF_NAME" --state open --limit 200 --json number,headRefOid,files \
-            | node .erb/scripts/library-dist/select-library-prs.ts)
+          PR_LIMIT=200
+          OPEN_PULL_REQUESTS=$(gh pr list --base "$GITHUB_REF_NAME" --state open --limit "$PR_LIMIT" \
+            --json number,headRefOid,files)
+          PULL_REQUESTS=$(printf '%s' "$OPEN_PULL_REQUESTS" | node .erb/scripts/library-dist/select-library-prs.ts)
+          # gh truncates silently at the limit, so a full page may have left pull requests unchecked.
+          TRUNCATED=0
+          if [ "$(printf '%s' "$OPEN_PULL_REQUESTS" | jq length)" -ge "$PR_LIMIT" ]; then
+            echo "::error::$PR_LIMIT or more open pull requests into $GITHUB_REF_NAME; some were not re-checked"
+            TRUNCATED=1
+          fi
 
-          # Re-runs the latest pull_request check run of one pull request head commit.
-          recheck() {
+          set_status() {
+            gh api "repos/$GITHUB_REPOSITORY/statuses/$1" -f state="$2" \
+              -f context="Library dist current" -f description="$3"
+          }
+
+          # Re-runs this pull request's latest check run at its head commit. Any error inside returns
+          # non-zero, and the caller then marks the pull request failed.
+          rerun_check() {
             local pr="$1" sha="$2" run run_id run_status waited=0
-            # Captured first so a failed lookup fails the step while an empty result (no run yet) skips.
+            # The same head commit can be open as pull requests into other bases, so pick the run that
+            # names this pull request. A fork pull request's run names none, so fall back to the
+            # newest run that names no pull request.
             run=$(gh api \
-              "repos/$GITHUB_REPOSITORY/actions/workflows/library-dist-check.yml/runs?event=pull_request&head_sha=$sha&per_page=1" \
-              --jq '(.workflow_runs[0] // empty) | "\(.id) \(.status)"') || return 1
+              "repos/$GITHUB_REPOSITORY/actions/workflows/library-dist-check.yml/runs?event=pull_request&head_sha=$sha&per_page=20" \
+              --jq "([.workflow_runs[] | select(any(.pull_requests[]; .number == $pr))][0] // [.workflow_runs[] | select(.pull_requests == [])][0] // empty) | \"\\(.id) \\(.status)\"") || return 1
             if [ -z "$run" ]; then
-              echo "::warning::No check run found for pull request #$pr at $sha; skipping"
-              return 0
+              echo "::warning::No check run found for pull request #$pr at $sha"
+              return 1
             fi
             read -r run_id run_status <<< "$run"
             if [ "$run_status" != completed ]; then
               gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" || return 1
               while [ "$run_status" != completed ]; do
                 if [ "$waited" -ge 120 ]; then
-                  echo "::warning::Check run $run_id for pull request #$pr did not finish cancelling; skipping"
-                  return 0
+                  echo "::warning::Check run $run_id for pull request #$pr did not finish cancelling"
+                  return 1
                 fi
                 sleep 10
                 waited=$((waited + 10))
                 run_status=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status) || return 1
               done
             fi
-            gh api "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=pending \
-              -f context="Library dist current" -f description="Re-checking after a library change on the base branch" \
-              || return 1
-            # A refused re-run (for example, a run older than GitHub's 30-day re-run limit) would leave the
-            # status pending with nothing to replace it, so replace it with a failure the author can act on.
-            if ! gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/rerun"; then
-              echo "::warning::Could not re-run check run $run_id for pull request #$pr; marked it failed"
-              gh api "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=failure \
-                -f context="Library dist current" -f description="Could not re-check; push a commit to run the check again" \
-                || return 1
+            # Again, because a run that finished while being cancelled has reported success against
+            # the old base tip since the first pending.
+            set_status "$sha" pending "$PENDING_DESCRIPTION" || return 1
+            # Refused, for example, for a run older than GitHub's 30-day re-run limit.
+            gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/rerun" || return 1
+          }
+
+          # Marks the pull request pending before anything that can fail, so an error never leaves
+          # it with a success checked against the old base tip: it ends pending or failed instead.
+          recheck() {
+            local pr="$1" sha="$2"
+            set_status "$sha" pending "$PENDING_DESCRIPTION" || return 1
+            if ! rerun_check "$pr" "$sha"; then
+              echo "::warning::Could not re-run the check for pull request #$pr; marking it failed"
+              set_status "$sha" failure "Could not re-check; push a commit to run the check again"
+              return 1
             fi
           }
 
+          PENDING_DESCRIPTION="Re-checking after a library change on the base branch"
           FAILED=0
           while read -r PR SHA; do
             [ -n "$PR" ] || continue
@@ -88,4 +114,5 @@ jobs:
               FAILED=1
             fi
           done <<< "$PULL_REQUESTS"
+          [ "$TRUNCATED" = 0 ] || FAILED=1
           exit "$FAILED"
