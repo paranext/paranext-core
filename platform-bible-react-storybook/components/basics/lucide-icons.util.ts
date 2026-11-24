@@ -7,6 +7,7 @@ import {
   CircleCheckBig,
   CircleQuestionMark,
   ClipboardCheck,
+  ClipboardCopy,
   Download,
   ExternalLink,
   Eye,
@@ -19,6 +20,7 @@ import {
   MessageSquarePlus,
   PanelBottom,
   Pencil,
+  Redo2,
   RefreshCw,
   Scan,
   Search,
@@ -26,6 +28,7 @@ import {
   Sparkles,
   SquareSigma,
   SquareX,
+  Undo2,
   Users,
   ZoomIn,
   ZoomOut,
@@ -67,7 +70,10 @@ const LUCIDE_ICON_COMPONENTS = {
   'message-square': MessageSquare,
   'circle-check-big': CircleCheckBig,
   'clipboard-check': ClipboardCheck,
+  'clipboard-copy': ClipboardCopy,
   sparkles: Sparkles,
+  'undo-2': Undo2,
+  'redo-2': Redo2,
 } as const satisfies Record<string, LucideIconComponent>;
 
 /** Name of an icon in the curated set */
