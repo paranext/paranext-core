@@ -83,3 +83,11 @@ export const MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS: InstallFailureMessageKeys<Mo
     failedOffline: '%webView_modelTextPanel_installFailedOffline%',
     installedButUnavailable: '%webView_modelTextPanel_installedButUnavailable%',
   };
+
+/**
+ * The class on the Model Text panel's root element. With it, chapter and verse numbers keep the
+ * look they have in the resource panels: `_usj-nodes.scss`'s gutter view restyles them for the
+ * Scripture editor only, so the text being translated stands apart from the text it is drafted
+ * from.
+ */
+export const MODEL_TEXT_ROOT_CLASS_NAME = 'model-text-root';

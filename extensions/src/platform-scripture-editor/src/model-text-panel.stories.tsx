@@ -25,6 +25,9 @@ import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
    in by relative path; this mirrors src/stories/platform/ten-layout-shared.tsx. */
 import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
 /* eslint-enable import/no-relative-packages */
+// Simple mode's own rules, so a character-marker-bar reservation that wrongly reached this panel
+// would show here as a blank band beside the text, as it would in the app.
+import './_simple-mode.scss';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 import { CopyrightNoticeBanner } from './copyright-notice/copyright-notice-banner.component';
@@ -59,12 +62,34 @@ const EDITOR_WRAPPER_STYLE = `
 const localizedStrings = getLocalizedStrings([...MODEL_TEXT_PANEL_STRING_KEYS]);
 const pickerStrings = getLocalizedStrings([...RESOURCE_PICKER_DIALOG_STRING_KEYS]);
 
+// Several paragraph types, so the paragraph-marker gutter has more than one marker to show.
 const sampleUsj = usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
 <usx version="3.1">
   <book code="GEN" style="id">World English Bible (WEB)</book>
+  <para style="mt1">Genesis</para>
   <chapter number="1" style="c" sid="GEN 1" />
+  <para style="s1">The Creation</para>
   <para style="p">
-    <verse number="1" style="v" sid="GEN 1:1" />In the beginning, God created the heavens and the earth.<verse eid="GEN 1:1" /></para>
+    <verse number="1" style="v" sid="GEN 1:1" />In the beginning, God created the heavens and the earth.<verse eid="GEN 1:1" />
+    <verse number="2" style="v" sid="GEN 1:2" />The earth was formless and empty. Darkness was on the surface of the deep and God’s Spirit was hovering over the surface of the waters.<verse eid="GEN 1:2" /></para>
+  <para style="q1">
+    <verse number="3" style="v" sid="GEN 1:3" />God said, “Let there be light,” and there was light.<verse eid="GEN 1:3" /></para>
+</usx>
+`);
+
+// The same paragraph types in a right-to-left script. The verse text is the Westminster Leningrad
+// Codex (public domain); the title and heading are added so every paragraph type has text.
+const sampleHebrewUsj = usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="GEN" style="id">Westminster Leningrad Codex</book>
+  <para style="mt1">בְּרֵאשִׁית</para>
+  <chapter number="1" style="c" sid="GEN 1" />
+  <para style="s1">בְּרִיאַת הָעוֹלָם</para>
+  <para style="p">
+    <verse number="1" style="v" sid="GEN 1:1" />בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ׃<verse eid="GEN 1:1" />
+    <verse number="2" style="v" sid="GEN 1:2" />וְהָאָ֗רֶץ הָיְתָ֥ה תֹ֙הוּ֙ וָבֹ֔הוּ וְחֹ֖שֶׁךְ עַל־פְּנֵ֣י תְה֑וֹם וְר֣וּחַ אֱלֹהִ֔ים מְרַחֶ֖פֶת עַל־פְּנֵ֥י הַמָּֽיִם׃<verse eid="GEN 1:2" /></para>
+  <para style="q1">
+    <verse number="3" style="v" sid="GEN 1:3" />וַיֹּ֥אמֶר אֱלֹהִ֖ים יְהִ֣י א֑וֹר וַֽיְהִי־אֽוֹר׃<verse eid="GEN 1:3" /></para>
 </usx>
 `);
 
@@ -111,6 +136,8 @@ type DecoratorConfig = {
    * Other texts still load, so picking one from the message shows its content.
    */
   missingBookProjectId?: string;
+  /** Shows a Hebrew right-to-left text, so the paragraph-marker gutter is on the right. */
+  isRightToLeft?: boolean;
   /** Resource list seed. */
   resources?: DblResourceData[];
   /** Whether the panel has a project. */
@@ -196,15 +223,17 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
 
   // Stable, as the web view's is: the panel refetches the chapter whenever this changes, so a new
   // function on every harness render would flicker the content each time the picker opens.
-  const { missingBookProjectId } = config;
+  const { missingBookProjectId, isRightToLeft } = config;
   const getResourceChapter = useCallback(
     async (resourceProjectId: string) => {
       // The data provider's wording for a missing book, which the panel recognizes
       if (resourceProjectId === missingBookProjectId)
         throw new Error(`Book number 1 not found in project ${resourceProjectId}.`);
-      return { usj: sampleUsj, textDirection: 'ltr' };
+      return isRightToLeft
+        ? { usj: sampleHebrewUsj, textDirection: 'rtl' }
+        : { usj: sampleUsj, textDirection: 'ltr' };
     },
-    [missingBookProjectId],
+    [missingBookProjectId, isRightToLeft],
   );
 
   const resolvePicker = useCallback((resource?: DblResourceData) => {
@@ -301,9 +330,17 @@ function createDecorator(config: DecoratorConfig) {
   };
 }
 
-/** A model text is configured and installed — the read-only editor shows it. */
+/**
+ * A model text is configured and installed — the read-only editor shows it, with each paragraph's
+ * marker in a gutter on the left and no space reserved on the right.
+ */
 export const Active: Story = {
   decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[0])] })],
+};
+
+/** A right-to-left model text: the paragraph-marker gutter is on the right. */
+export const ActiveRightToLeft: Story = {
+  decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[0])], isRightToLeft: true })],
 };
 
 /**

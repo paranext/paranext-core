@@ -257,10 +257,10 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // different upstream commits, and nothing structural keeps their rule sets in agreement —
     // with each suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation,
     // the ::after outline) can land in one copy and silently miss the other. The demo suite
-    // carries the same three pins, so a fix landing in one copy fails the other's suite until it
-    // is forwarded. The gutter indent-compensation block is covered structurally instead:
-    // usj-nodes-scss-coverage.test.ts derives it from each copy's base rules and compares the two
-    // copies' results, so no pin is needed for it here.
+    // carries a twin of each pin the copies share, so a fix landing in one copy fails the other's
+    // suite until it is forwarded. The gutter indent-compensation block is covered structurally
+    // instead: usj-nodes-scss-coverage.test.ts derives it from each copy's base rules and compares
+    // the two copies' results, so no pin is needed for it here.
     it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
       expect(scss).toMatch(
         /\.psc-gutter-markers \.para > \.marker:not\(\.verse\):not\(\.chapter\):first-child,\s*\.psc-gutter-markers \.book > \.marker:first-child \{[^}]*unicode-bidi: isolate;/,
@@ -271,6 +271,15 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       expect(scss.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(
         /\.psc-active-focus \.psc-active-text::before/,
       );
+    });
+    it('keeps the gutter chapter and verse number styles out of the Model Text panel', () => {
+      const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+      const gate = '.psc-gutter-markers:where(:not(.model-text-root *))';
+      expect(code).toContain(`${gate} .usfm_v,`);
+      expect(code).toContain(`${gate} span.verse {`);
+      expect(code).toContain(`${gate} .usfm_c {`);
+      expect(code).toContain(`${gate} .usfm_c::after {`);
+      expect(code).not.toMatch(/\.psc-gutter-markers (\.usfm_[cv]|span\.verse)\b/);
     });
     it('defines the project-font fallback chain for the footnotes pane too', () => {
       // The pane's read-only rows get project font rules but sit outside `.usfm`, so without this
