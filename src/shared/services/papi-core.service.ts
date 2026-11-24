@@ -52,6 +52,10 @@ export type {
   ManageExtensions,
 } from '@shared/models/manage-extensions-privilege.model';
 export type {
+  NetworkMethodHandlerOptions,
+  RequestCallerProcess,
+} from '@shared/models/network.model';
+export type {
   NetworkableObject,
   NetworkObject,
   NetworkObjectDetails,
@@ -125,6 +129,7 @@ export type {
   LocalizationData,
   LocalizationSelector,
   LocalizationSelectors,
+  LocalizedProjectTitleOptions,
 } from '@shared/services/localization.service-model';
 export type {
   SimultaneousProjectSettingsChanges,

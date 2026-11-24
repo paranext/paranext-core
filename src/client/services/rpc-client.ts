@@ -8,7 +8,11 @@ import {
   JSONRPCServerMiddlewareNext,
 } from 'json-rpc-2.0';
 import { logger } from '@shared/services/logger.service';
-import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
+import {
+  IRpcMethodRegistrar,
+  RpcClientDisconnectEvent,
+  RpcMethodRegistrationOptions,
+} from '@shared/models/rpc.interface';
 import {
   ANNOUNCE_PEER,
   ConnectionStatus,
@@ -30,6 +34,9 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
+import { getLocalConnectionIdentity } from '@client/services/launch-secrets';
+import { getRefusedRequestMessage, isCallAllowed } from '@shared/data/request-access.data';
+import type { RequestCallerProcess } from '@shared/models/network.model';
 import {
   AsyncVariable,
   getErrorMessage,
@@ -82,6 +89,8 @@ export class RpcClient implements IRpcMethodRegistrar {
   private requestId: number = 1;
   /** Refers to the current process that created this object (i.e., not main) */
   private readonly jsonRpcServer: JSONRPCServer;
+  /** The `allowedCallers` each method registered in this process was registered with */
+  private readonly allowedCallersByLocalMethodName = new Map<string, RequestCallerProcess[]>();
   /** Refers to main */
   private readonly jsonRpcClient: JSONRPCClient<void>;
   private readonly jsonRpcClientServer: JSONRPCServerAndClient;
@@ -94,8 +103,8 @@ export class RpcClient implements IRpcMethodRegistrar {
   //
   // TODO(PT-4495): Reconnect is only needed by the extension host. The renderer connects over a
   // MessagePort (see `web-socket.factory.ts`), which survives an OS suspend and does not go through
-  // `blockWebSocketsToPapiNetwork()`. For the extension host, reconnect still needs the
-  // `AsyncVariable` problems above resolved first.
+  // the PAPI-port block in `renderer-web-socket.service.ts`. For the extension host, reconnect
+  // still needs the `AsyncVariable` problems above resolved first.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
   private readonly connectionLostEmitter = new PlatformEventEmitter<void>();
@@ -254,11 +263,26 @@ export class RpcClient implements IRpcMethodRegistrar {
     requestType: SerializedRequestType,
     requestParams: RequestParams,
   ): Promise<JSONRPCResponse> {
-    const newRequest = createRequest(requestType, requestParams, this.createNextRequestId());
+    const requestId = this.createNextRequestId();
+    const newRequest = createRequest(requestType, requestParams, requestId);
     // Need to use null since it's part of the API
     // eslint-disable-next-line no-null/no-null
     let response: JSONRPCResponse | null = null;
     const isLocal = this.jsonRpcServer.hasMethod(requestType);
+    // A handler in this process runs without asking main, so apply main's rules here too
+    if (
+      isLocal &&
+      !isCallAllowed(
+        requestType,
+        getLocalConnectionIdentity(),
+        this.allowedCallersByLocalMethodName.get(requestType),
+      )
+    )
+      return createErrorResponse(
+        getRefusedRequestMessage(requestType),
+        JSONRPCErrorCode.MethodNotFound,
+        requestId,
+      );
     if (isLocal) response = await this.jsonRpcServer.receive(newRequest);
     else response = await this.jsonRpcClient.requestAdvanced(newRequest);
     if (response) return response;
@@ -277,6 +301,7 @@ export class RpcClient implements IRpcMethodRegistrar {
     methodName: string,
     method: InternalRequestHandler,
     methodDocs?: SingleMethodDocumentation,
+    options?: RpcMethodRegistrationOptions,
   ): Promise<boolean> {
     if (this.jsonRpcServer.hasMethod(methodName)) {
       logger.warn(`RPC method ${methodName} already registered`);
@@ -288,9 +313,15 @@ export class RpcClient implements IRpcMethodRegistrar {
         logger.warn(`RPC method ${methodName} already registered`);
         return false;
       }
-      const success = await this.jsonRpcClient.request(REGISTER_METHOD, [methodName, methodDocs]);
-      if (success)
+      const registerParams = options?.allowedCallers
+        ? [methodName, methodDocs, { allowedCallers: options.allowedCallers }]
+        : [methodName, methodDocs];
+      const success = await this.jsonRpcClient.request(REGISTER_METHOD, registerParams);
+      if (success) {
         this.jsonRpcServer.addMethod(methodName, (params: RequestParams) => method(...params));
+        if (options?.allowedCallers)
+          this.allowedCallersByLocalMethodName.set(methodName, [...options.allowedCallers]);
+      }
       return success;
     });
   }
@@ -307,8 +338,10 @@ export class RpcClient implements IRpcMethodRegistrar {
         return false;
       }
       const successful = await this.jsonRpcClient.request(UNREGISTER_METHOD, [methodName]);
-      if (successful) this.jsonRpcServer.removeMethod(methodName);
-      else logger.warn(`Remote failed to unregister RPC method ${methodName}`);
+      if (successful) {
+        this.jsonRpcServer.removeMethod(methodName);
+        this.allowedCallersByLocalMethodName.delete(methodName);
+      } else logger.warn(`Remote failed to unregister RPC method ${methodName}`);
       return successful;
     });
   }
@@ -420,8 +453,9 @@ export class RpcClient implements IRpcMethodRegistrar {
       // Only a connection that was actually established can be lost, which is what
       // `IRpcMethodRegistrar.onDidLoseConnection` promises. A socket that dies during the opening
       // handshake is a failed connection ATTEMPT: `connect()` reports that through its own return
-      // value, and how the app surfaces a startup that never reached the network is owned by
-      // PT-4494 / PT-4495, not by this event.
+      // value. The renderer surfaces a failed first connect through
+      // `initializeNetworkReportingFailure`, and the extension host does not yet (PT-4495); neither
+      // goes through this event.
       //
       // Gating on the status is also what makes the two shapes of a refused startup agree. A
       // refused socket fires `error` then `close`; `onError` settles the attempt through

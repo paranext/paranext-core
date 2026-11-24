@@ -34,7 +34,7 @@ import {
 } from '@renderer/services/web-view-content-zoom.service';
 import { registerWebViewRoot } from '@renderer/services/web-view-root.registry';
 import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
-import { isCreateElementAllowedByStack } from '@renderer/services/renderer-create-element-guard.util';
+import { installCreateElementGuard } from '@renderer/services/renderer-create-element-guard.util';
 import { localThemeService } from '@renderer/services/theme.service';
 import {
   deleteFullWebViewStateById,
@@ -133,6 +133,7 @@ import {
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
 } from '@renderer/components/docking/simple-layout.builder';
 import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
+import { replaceTopWindowWebSocket } from '@renderer/services/renderer-web-socket.service';
 import {
   getWindowIdsWithStoredState,
   removeStateOfWindows,
@@ -324,13 +325,13 @@ export const IFRAME_SANDBOX_ALLOW_POPUPS = 'allow-popups';
  * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
  * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
  * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
- * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
- * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
- * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
- * with too many privileges from executing as of July 2023. However, this means the sandboxing could
- * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
- * whole renderer due to this issue. We will probably want to stay vigilant on security in this
- * area.
+ * to define their HTML code. We guard `Document.prototype.createElement` and `createElementNS` to
+ * prevent child iframes from creating new iframes and also use a `MutationObserver` in
+ * `web-view.service.ts` to remove any iframes that do not comply with these sandbox requirements.
+ * This successfully prevents iframes with too many privileges from executing as of July 2023.
+ * However, this means the sandboxing could do nothing for a determined hacker if they ever find a
+ * way around all this. We must distrust the whole renderer due to this issue. We will probably want
+ * to stay vigilant on security in this area.
  */
 const ALLOWED_IFRAME_SRC_SANDBOX_VALUES = [
   IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
@@ -383,13 +384,13 @@ export const WEBVIEW_IFRAME_SRC_SANDBOX = ALLOWED_IFRAME_SRC_SANDBOX_VALUES.filt
  * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
  * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
  * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
- * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
- * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
- * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
- * with too many privileges from executing as of July 2023. However, this means the sandboxing could
- * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
- * whole renderer due to this issue. We will probably want to stay vigilant on security in this
- * area.
+ * to define their HTML code. We guard `Document.prototype.createElement` and `createElementNS` to
+ * prevent child iframes from creating new iframes and also use a `MutationObserver` in
+ * `web-view.service.ts` to remove any iframes that do not comply with these sandbox requirements.
+ * This successfully prevents iframes with too many privileges from executing as of July 2023.
+ * However, this means the sandboxing could do nothing for a determined hacker if they ever find a
+ * way around all this. We must distrust the whole renderer due to this issue. We will probably want
+ * to stay vigilant on security in this area.
  */
 export const ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES = [...ALLOWED_IFRAME_SRC_SANDBOX_VALUES];
 
@@ -422,7 +423,7 @@ export const WEBVIEW_IFRAME_SRCDOC_SANDBOX = ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUE
 const FORBIDDEN_HTML_TAGS = ['object', 'embed', 'frame', 'frameset'];
 /**
  * The HTML tags that are only allowed in the main renderer window if created by the renderer. Our
- * monkey-patch on `document.createElement` protects these.
+ * guard on `Document.prototype.createElement` and `createElementNS` protects these.
  *
  * Technically, all elements should really be created only by the renderer, but we must choose the
  * security-related ones to guard closely since this is an inefficient check.
@@ -430,7 +431,7 @@ const FORBIDDEN_HTML_TAGS = ['object', 'embed', 'frame', 'frameset'];
  * Note: this only applies to tags added to the document after initial load, so the document
  * metadata tags are not normally hit.
  *
- * WARNING: A stack trace has to be created each time any of these are created, so it is not very
+ * WARNING: A short stack capture runs each time any of these are created, so it is not very
  * efficient when one of these tags is created. Please avoid using these tags where possible.
  */
 const RESTRICTED_HTML_TAGS = [
@@ -1016,6 +1017,42 @@ async function loadLayout(
   layout?: LayoutInfo | LayoutBase,
   options?: { persist?: boolean },
 ): Promise<void> {
+  const outcome = await runLayoutLoad(layout, options);
+  if (outcome !== 'superseded') reportPendingInitialLayoutLoad();
+}
+
+/**
+ * How a layout load ended, when it did not throw. `applied`: it handed its layout to the dock.
+ * `stood-down`: it deliberately wrote nothing because web views arrived in the dock first, so the
+ * dock already holds its content (layout pushes stay held until the next load applies; see
+ * {@link saveLayout}). `superseded`: a newer load took over, so the dock is NOT settled — the newer
+ * load owns it.
+ */
+type LayoutLoadOutcome = 'applied' | 'stood-down' | 'superseded';
+
+/**
+ * Report of the initial layout load, waiting for a load that settles the dock. Set by
+ * {@link registerDockLayout}; cleared once reported, when the initial load fails before any newer
+ * load started, or when that dock layout is unregistered. A superseded initial load leaves it in
+ * place — whether it then returns or throws — so the load that superseded it (an interface-mode
+ * switch, through {@link loadLayout}) reports instead. If that superseding load fails, the report
+ * stays pending and the next load that settles the dock fires it. Until then no report is sent,
+ * which fails closed: no signal is better than a signal for a dock that was never populated.
+ */
+let pendingInitialLayoutLoadReport: (() => void) | undefined;
+
+/** Fires and clears {@link pendingInitialLayoutLoadReport} */
+function reportPendingInitialLayoutLoad(): void {
+  const report = pendingInitialLayoutLoadReport;
+  pendingInitialLayoutLoadReport = undefined;
+  report?.();
+}
+
+/** Body of {@link loadLayout}; see it for the parameters */
+async function runLayoutLoad(
+  layout?: LayoutInfo | LayoutBase,
+  options?: { persist?: boolean },
+): Promise<LayoutLoadOutcome> {
   layoutLoadGeneration += 1;
   const thisGeneration = layoutLoadGeneration;
   /** Whether a load started after this one, making everything this one has read stale */
@@ -1049,7 +1086,7 @@ async function loadLayout(
         // push with nothing scheduled to reconcile the dock. The caller owning this layout does not
         // make it current; only being the newest load does.
         logger.debug('Dropping an explicit layout load that a newer one superseded');
-        return;
+        return 'superseded';
       }
       dockLayoutVar.loadLayout(layoutAsInfo);
       layoutLoadGenerationInDock = thisGeneration;
@@ -1057,7 +1094,7 @@ async function loadLayout(
       // `loadLayout` doesn't run `onLayoutChange` on a programmatic load, so persist manually —
       // unless the caller explicitly opted out (see the `options.persist` doc above).
       if (options?.persist !== false) await saveLayout(layoutAsInfo);
-      return;
+      return 'applied';
     }
 
     // Pick the layout by interface mode (runs at startup and on every `platform.interfaceMode` change;
@@ -1072,7 +1109,7 @@ async function loadLayout(
       // `saveLayout` the wrong mode, which either drops the user's power-mode layout changes on the
       // floor or lets simple-mode changes clobber their saved power layout.
       logger.debug('Dropping a layout load that a newer one superseded while it read the mode');
-      return;
+      return 'superseded';
     }
     // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
     // subsequent `saveLayout`) sees the current mode without another settings round-trip.
@@ -1092,7 +1129,7 @@ async function loadLayout(
       logger.debug(
         'Dropping a layout load that a newer one superseded while it read the saved layout',
       );
-      return;
+      return 'superseded';
     }
     const { layout: persistedLayout, isPendingContent, isBakedDefault } = persistedResult;
     /**
@@ -1125,14 +1162,14 @@ async function loadLayout(
         logger.debug(
           'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
         );
-        return;
+        return 'stood-down';
       }
       // A window created to receive one specific web view, routed separately, starts with nothing
       // else — skip the default-layout supplement entirely, without even fetching its flags.
       dockLayoutVar.loadLayout(layoutToLoad);
       layoutLoadGenerationInDock = thisGeneration;
       emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
-      return;
+      return 'applied';
     }
     const enabledEntries = await getEnabledSupplementEntries();
     if (isSuperseded()) {
@@ -1140,14 +1177,14 @@ async function loadLayout(
       // request above can take seconds. The newer load has already loaded, or is about to load, the
       // layout that belongs there.
       logger.debug('Dropping a layout load that a newer one superseded before it reached the dock');
-      return;
+      return 'superseded';
     }
     // Same checkpoint for content that arrived instead of a newer load — see the guard's declaration
     if (didDockGainWebViewsDuringLoad()) {
       logger.debug(
         'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
       );
-      return;
+      return 'stood-down';
     }
     if (enabledEntries.length === 0) {
       // Nothing to merge (an empty supplement, or every entry's flag off) — load the base layout
@@ -1156,7 +1193,7 @@ async function loadLayout(
       layoutLoadGenerationInDock = thisGeneration;
       emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
       reportIfLoadedLayoutIsEmpty(layoutToLoad);
-      return;
+      return 'applied';
     }
     // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
     // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
@@ -1187,6 +1224,7 @@ async function loadLayout(
     // Emit close events for pre-existing web views the (supplemented) layout dropped
     emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, supplementedLayoutInfo);
     reportIfLoadedLayoutIsEmpty(supplementedLayoutInfo);
+    return 'applied';
   } finally {
     endTrackedLoad?.();
   }
@@ -1365,7 +1403,9 @@ function reportIfLoadedLayoutIsEmpty(layout: LayoutInfo): void {
  * layoutLoadGeneration`; see that field's doc comment) — the dock in that stretch holds the layout
  * of the mode the user just left, or rc-dock's empty default at startup, and persisting that would
  * overwrite the real saved entry. Nothing is lost by holding: the load on its way replaces the
- * dock's whole contents anyway.
+ * dock's whole contents anyway. A load that stood down (see `LayoutLoadOutcome`) leaves that hold
+ * in place, because it never advances `layoutLoadGenerationInDock`: pushes stay held until the next
+ * load applies.
  *
  * @param layout Layout to persist
  */
@@ -1488,9 +1528,27 @@ function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
     });
 }
 
-export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
+/**
+ * Register the dock layout this window's web view service operates on, and start the window's
+ * initial layout load.
+ *
+ * @param dockLayout The dock layout to register
+ * @param onInitialLayoutLoadFinished Called once the initial layout load has finished without
+ *   failing, while this dock layout is still registered. By then that load can no longer change the
+ *   dock: it has either handed its layout to the dock or stood down without writing because content
+ *   arrived in the dock while it read what to restore. When a newer load (an interface-mode switch)
+ *   superseded it, the callback waits for that newer load to settle the dock instead, even if the
+ *   superseded initial load then fails. Not called when the initial load fails before any newer
+ *   load started.
+ * @returns Unsubscriber that unregisters this dock layout
+ */
+export function registerDockLayout(
+  dockLayout: PapiDockLayout,
+  onInitialLayoutLoadFinished?: () => void,
+): Unsubscriber {
   // Save the current async var so we know if it changed before we unsubscribed
   const currentPapiDockLayoutVar = papiDockLayoutVar;
+  let isRegistered = true;
 
   setDockLayout(dockLayout);
 
@@ -1501,7 +1559,28 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // Fire-and-forget so `registerDockLayout` can stay sync. Guard the rejection, though: `loadLayout`
   // awaits settings reads (supplement flags), and an unhandled rejection here would leave the dock
   // unloaded (blank window).
-  loadLayout().catch((err) => logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`));
+  // `loadLayout` reports through `pendingInitialLayoutLoadReport` once a load settles the dock, so
+  // an initial load that a newer load superseded is reported by that newer load instead.
+  const report = () => {
+    if (isRegistered) onInitialLayoutLoadFinished?.();
+  };
+  pendingInitialLayoutLoadReport = onInitialLayoutLoadFinished ? report : undefined;
+  const initialLoad = loadLayout();
+  // `loadLayout` takes its generation before its first await, so this is the initial load's
+  const initialLoadGeneration = layoutLoadGeneration;
+  (async () => {
+    try {
+      await initialLoad;
+    } catch (err) {
+      logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`);
+      // A load that superseded this one owns the report: it fires it once it settles the dock
+      if (
+        initialLoadGeneration === layoutLoadGeneration &&
+        pendingInitialLayoutLoadReport === report
+      )
+        pendingInitialLayoutLoadReport = undefined;
+    }
+  })();
 
   const unsubscribeOnDidOpenWebViewForCache = onDidOpenWebView((event) =>
     cacheLastOpenedSimpleProject(event.webView),
@@ -1590,6 +1669,8 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
     if (papiDockLayoutVar !== currentPapiDockLayoutVar)
       throw new Error('Tried to unregister an old dock layout');
 
+    isRegistered = false;
+    if (pendingInitialLayoutLoadReport === report) pendingInitialLayoutLoadReport = undefined;
     unsubscribeOnDidOpenWebViewForCache();
     unsubscribeOnDidUpdateWebViewForCache();
 
@@ -3842,35 +3923,40 @@ export const initialize = () => {
     // WARNING: calling these requires us to generate a call stack, so all of these things should
     // be used as sparingly as possible since they are now less performant than usual
 
-    // Monkey-patch document.createElement so new script tags cannot be added by anything but our
-    // code (since we load renderer files in chunks)
-    const createElementOriginal = document.createElement.bind(document);
-    // If we name this function, we will need to change the regex testing the stack traces, and we
-    // may also have trouble with minifying production code. Leaving this function unnamed keeps
-    // things simpler
-    // eslint-disable-next-line func-names
-    document.createElement = function (...args: Parameters<Document['createElement']>) {
-      const [tagNameCaps] = args;
+    // Guard createElement and createElementNS so restricted tags (such as script tags) cannot be
+    // created by anything but our code (since we load renderer files in chunks) and the Usersnap
+    // widget. The guard also locks `window.Error` and `Error.prepareStackTrace`.
+    // `onRejected` runs in a realm a web view shares, so it uses these captured values rather than
+    // looking up `isPackaged` or `String.prototype.includes` when a call is rejected; otherwise a
+    // web view could change which error is thrown.
+    const isPackagedAtInstall = globalThis.isPackaged;
+    const stringIncludes = String.prototype.includes;
+    const reflectApply = Reflect.apply;
+    installCreateElementGuard({
+      realm: window,
+      restrictedTagNames: [...FORBIDDEN_HTML_TAGS, ...RESTRICTED_HTML_TAGS],
+      onAllowed: (tagName, stackText) => {
+        logger.debug(
+          `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackText}`,
+        );
+      },
+      onRejected: (tagName, stackText) => {
+        const message = `Rejected creating new ${tagName} tag on renderer document! Not allowed.\nStack: ${stackText}`;
+        // LogError puts an error in the console and throws an error. We don't want to scare
+        // anyone with the script and iframe tags evil adds to test this feature, so let's not
+        // log an error in development. But no exceptions when packaged
+        if (
+          isPackagedAtInstall ||
+          !reflectApply(stringIncludes, stackText, ['at evil.web-view.html'])
+        )
+          throw new LogError(message);
+        throw new Error(message);
+      },
+    });
 
-      const tagName = tagNameCaps.toLowerCase();
-      if (FORBIDDEN_HTML_TAGS.includes(tagName) || RESTRICTED_HTML_TAGS.includes(tagName)) {
-        const stackTrace = Error().stack ?? '';
-        if (isCreateElementAllowedByStack(stackTrace, globalThis.isPackaged)) {
-          logger.debug(
-            `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackTrace}`,
-          );
-        } else {
-          const message = `Rejected creating new ${tagName} tag on renderer document! Not allowed.\nStack: ${stackTrace}`;
-          // LogError puts an error in the console and throws an error. We don't want to scare
-          // anyone with the script and iframe tags evil adds to test this feature, so let's not
-          // log an error in development. But no exceptions when packaged
-          if (globalThis.isPackaged || !stackTrace.includes('at evil.web-view.html'))
-            throw new LogError(message);
-          throw new Error(message);
-        }
-      }
-      return createElementOriginal(...args);
-    };
+    // Web views can reach this window's native WebSocket through `window.top` or through the
+    // `constructor` of a socket they were handed, so route both through the PAPI-port check
+    replaceTopWindowWebSocket(window);
 
     // #endregion
 

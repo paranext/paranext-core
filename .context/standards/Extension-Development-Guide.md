@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.9
+version: 1.2.0
 status: active
 created: 2026-03-04
-last_updated: 2026-10-27
+last_updated: 2026-11-17
 ---
 
 # Extension Development Guide
@@ -132,6 +132,38 @@ rather than registering a copy per instance. For richer per-instance interaction
 controller** (see [WebViews](#webviews)), which already exists for that need: it is a network object
 per web view, so its methods are addressed to a specific instance without any global name per
 instance.
+
+### Restricting who may call a command
+
+By default any PAPI connection can call a command: every extension, every WebView, and any program
+or browser page that connects to the PAPI WebSocket without identifying itself. A command that
+changes something a stranger should not, such as installing an extension, can name the processes
+allowed to call it with `allowedCallers`:
+
+```typescript
+await papi.commands.registerCommand(
+  'myExtension.installSomething',
+  installSomething,
+  installSomethingDocs, // or undefined
+  { allowedCallers: ['renderer', 'extensionHost'] },
+);
+```
+
+The processes are `renderer` (the app's windows,
+including every WebView in them), `extensionHost` and `dotnetDataProvider`; main can always call.
+Main enforces the option on remote calls, and the platform applies it to calls from inside the
+registering process too. A caller not on the list gets `MethodNotFound` with
+`'<command>' is not available on this connection`.
+
+Know what it does not do:
+
+- It names processes, not extensions. `extensionHost` admits every extension, and `renderer`
+  admits every WebView, since a WebView can drive its window's PAPI connection.
+- It cannot widen a request type the platform restricts itself; the platform's rule wins.
+- Something that registers the name before your extension does can receive the calls instead of
+  your handler, though it cannot make your handler act.
+
+See "PAPI connection identity" in [Security-Guide.md](Security-Guide.md).
 
 ### Elevated privileges
 
@@ -357,7 +389,7 @@ Flush pending work (a debounced save, a draft) in a `pagehide` listener, and in 
 When opening a WebView via `papi.webViews.openWebView()`, you can specify how it displays using the `layout` option:
 
 - `'tab'` (default): Opens as a tab within the current dock panel.
-- `'panel'`: Opens beside the tab group of `targetTabId`'s tab, or, when no `targetTabId` is given (or it is not in this window), beside the tab group of the tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it (specify `direction` to control placement: `'left'`, `'right'`, `'bottom'`, `'top'`, etc.). When the target's tab group is docked, the tab is added, as its active tab, to the tab group directly on the requested side instead of a new group being created, if that group can take it: it sits beside the target's group (a group touching it only at a corner does not count), has at least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at least as wide (as tall for `'top'` and `'bottom'`) as a new group beside the target would be. Otherwise a new group opens beside the target's group. When the target's tab group is floating or maximized, the tab opens as a new group at the reading-end edge of the dock area (the right, or the left in a right-to-left UI), and a floating target that would cover that group is moved aside. A target in another application window is placed by these same rules in that window. `'left'` and `'right'` are mirrored in a right-to-left UI.
+- `'panel'`: Opens beside the tab group of `targetTabId`'s tab, or, when no `targetTabId` is given (or it is not in this window), beside the tab group of the tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it (specify `direction` to control placement: `'left'`, `'right'`, `'bottom'`, `'top'`, etc.). `'before-tab'` and `'after-tab'` add the tab, as the active tab, to the target's own tab group, just before or after the target, whether that group is docked, floating, or maximized; a group that cannot take the tab (one of Simple mode's fixed columns, or a group that holds another kind of tab) gets it beside the group instead, as `'left'` would for `'before-tab'`, or `'right'` for `'after-tab'`. Before and after follow the group's tab order, the order the `nextTab` and `previousTab` tab directions use, which is reading order, so `'after-tab'` and its `'right'` fallback both land on the reading-end side. For `'left'`, `'right'`, `'top'`, or `'bottom'`, when the target's tab group is docked, the tab is added, as its active tab, to the tab group directly on the requested side instead of a new group being created, if that group can take it: it sits beside the target's group (a group touching it only at a corner does not count), has at least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at least as wide (as tall for `'top'` and `'bottom'`) as a new group beside the target would be. Otherwise a new group opens beside the target's group. For those four, when the target's tab group is floating or maximized, the tab opens as a new group at the reading-end edge of the dock area (the right, or the left in a right-to-left UI), and a floating target that would cover that group is moved aside. A target in another application window is placed by these same rules in that window. `'left'` and `'right'` are mirrored in a right-to-left UI.
 - `'float'`: Opens as a floating window; can specify `floatSize` and `position`: `'cascade'` or `'center'`.
 - `'window'` **(experimental)**: Opens in its own application window. In Simple mode—which is single-window by design—this degrades to `'tab'`.
 - `'replace-tab'`: Replaces an existing tab (requires `targetTabId`).
@@ -412,6 +444,16 @@ over `iconUrl`; an unknown one falls back to `iconUrl`, then to the default logo
 listed in `LUCIDE_ICON_NAMES` (from `platform-bible-react/experimental`) and add a missing icon to
 `LUCIDE_ICON_COMPONENTS` in `lucide-icons.util.ts`. `iconName` is `@experimental`. See
 `adr-lucide-icons-by-name` in [Architecture-Decisions.md](Architecture-Decisions.md).
+
+### Per-Project Tab Titles
+
+Don't look up `platform.name` and format a project's tab title by hand. Contribute a localized
+format with a `{projectName}` placeholder, then build the title from it with
+`papi.localization.getLocalizedProjectTitle` in the provider's `getWebView` and, if the WebView
+retitles its tab (a project switch, an unsaved marker), with the `useLocalizedProjectTitle` hook in
+the WebView. Both use the same formatter, so the title keeps its shape when the WebView takes over,
+and both show the project id when the name can't be read. See
+`adr-project-titles-from-one-formatter` in [Architecture-Decisions.md](Architecture-Decisions.md).
 
 ### Content Zoom (experimental)
 
@@ -623,3 +665,6 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in a `pagehide` listener and in the unmount cleanup; a reload unmounts the root on `unload`, after the web view's own `pagehide` listeners; a panel close or tab move runs `pagehide` too, but the root can unmount after the iframe is gone, so `pagehide` is the flush point. |
 | 1.1.8   | 2026-10-16 | "Elevated privileges": the privilege table and the `requestRegistryTokens` privilege for Paratext Registry access tokens. |
 | 1.1.9   | 2026-10-27 | Add "Tab Icons" under WebViews: tabs name a lucide icon with `iconName` instead of shipping theme variants. |
+| 1.1.10  | 2026-11-16 | Add "Per-Project Tab Titles" under WebViews: build them with `getLocalizedProjectTitle` and `useLocalizedProjectTitle`. |
+| 1.1.11  | 2026-11-17 | `'panel'` layouts: `'before-tab'` and `'after-tab'` open in the target's own tab group. |
+| 1.2.0   | 2026-11-17 | Add "Restricting who may call a command": `allowedCallers` on command registration, and what it does not protect against. |

@@ -18,6 +18,7 @@
 import type { FocusSubject } from '@papi/core';
 import { logger } from '@papi/frontend';
 import {
+  deepEqual,
   isBlockMarker,
   isLocalizeKey,
   LanguageStrings,
@@ -804,6 +805,7 @@ const EDITOR_WEB_VIEW_CONTEXT_FACTS = [
   'isPreview',
   'isSyncBlocked',
   'footnotesPaneVisible',
+  'hasSelection',
 ] as const;
 
 function getEditorWebViewContextKeyPrefix(webViewId: string): string {
@@ -851,6 +853,17 @@ export function getEditorFocusLocation(
   if (subjectWebViewId !== ownWebViewId) return 'anotherWebView';
   if (focusSubject?.focusType === 'webView' && !doesEditorDocumentHaveFocus) return 'settling';
   return 'thisEditor';
+}
+
+/**
+ * Whether a selection is a range (start and end differ) rather than a caret.
+ *
+ * @param selection The editor's selection, `undefined` when it reports none
+ * @returns `false` for no selection, a missing end or an end equal to the start
+ */
+export function hasNonCollapsedSelection(selection: SelectionRange | undefined): boolean {
+  if (!selection?.end) return false;
+  return !deepEqual(selection.end, selection.start);
 }
 
 /**

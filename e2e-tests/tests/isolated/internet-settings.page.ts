@@ -1,4 +1,5 @@
 import { expect, type FrameLocator, type Locator, type Page } from '@playwright/test';
+import { closeDockTab } from '../../fixtures/content-zoom-helpers';
 import {
   isPopoverTriggerExpanded,
   sendPapiRequestOnce,
@@ -35,12 +36,24 @@ export async function readSavedInternetSettings(): Promise<SavedInternetSettings
  * Saves internet settings read by {@link readSavedInternetSettings} back. The proxy and DBL
  * passwords come back masked, and the provider keeps the stored password for a masked one, so the
  * round trip does not change them.
+ *
+ * Writes through the app window: main serves the setter only to the renderer and the extension
+ * host, so a raw socket from the test runner is refused.
  */
-export async function restoreSavedInternetSettings(settings: SavedInternetSettings): Promise<void> {
-  await sendPapiRequestOnce(`${INTERNET_SETTINGS_PROVIDER_METHOD}.setInternetSettings`, [
-    undefined,
-    settings,
-  ]);
+export async function restoreSavedInternetSettings(
+  mainPage: Page,
+  settings: SavedInternetSettings,
+): Promise<void> {
+  await mainPage.evaluate(async (nextSettings) => {
+    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as RendererPapi;
+    const provider = await win.papi.dataProviders.get(
+      'paratextRegistration.internetSettingsDataProvider',
+    );
+    if (!provider) throw new Error('Internet settings data provider is not registered');
+    await provider.setInternetSettings(undefined, nextSettings);
+  }, settings);
 }
 
 /**
@@ -166,6 +179,19 @@ export async function openInternetSettingsPanel(mainPage: Page): Promise<FrameLo
   return internetSettingsFrame(mainPage);
 }
 
+/**
+ * Closes the open settings panel through its dock tab and waits for its frame to go. The next open
+ * then loads the panel afresh: reopening an open one only refocuses it, which would keep its
+ * unsaved selection and the server section's lock as they were.
+ */
+export async function closeInternetSettings(mainPage: Page): Promise<void> {
+  const iframe = mainPage.locator('iframe[title*="Internet" i]');
+  const webViewId = await iframe.getAttribute('data-web-view-id');
+  if (!webViewId) throw new Error('The Internet settings frame has no data-web-view-id');
+  await closeDockTab(mainPage, webViewId);
+  await expect(iframe).toHaveCount(0);
+}
+
 /** A radio button in the internet-access option list, by its visible label. */
 export function internetUseRadio(frame: FrameLocator, label: string | RegExp): Locator {
   return frame.getByRole('radio', { name: label });
@@ -251,19 +277,15 @@ export function serverBadgeTooltip(mainPage: Page): Locator {
   return mainPage.locator('[data-slot="tooltip-content"]');
 }
 
-/** The persisted ParatextData internet settings, as far as these helpers need to know them. */
-type PersistedInternetSettings = { selectedServer: string } & Record<string, unknown>;
-
 /** The renderer exposes `papi` on `globalThis`, untyped in the Playwright context. */
 type RendererPapi = {
   papi: {
     dataProviders: {
       get: (providerName: string) => Promise<
         | {
-            getInternetSettings: (selector: undefined) => Promise<PersistedInternetSettings>;
             setInternetSettings: (
               selector: undefined,
-              settings: PersistedInternetSettings,
+              settings: Record<string, unknown>,
             ) => Promise<unknown>;
           }
         | undefined
@@ -289,16 +311,9 @@ type RendererPapi = {
  * @returns The server that was persisted beforehand, so a test can restore it once it is done.
  */
 export async function setPersistedServer(mainPage: Page, server: string): Promise<string> {
-  return mainPage.evaluate(async (nextServer) => {
-    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const win = window as unknown as RendererPapi;
-    const provider = await win.papi.dataProviders.get(
-      'paratextRegistration.internetSettingsDataProvider',
-    );
-    if (!provider) throw new Error('Internet settings data provider is not registered');
-    const current = await provider.getInternetSettings(undefined);
-    await provider.setInternetSettings(undefined, { ...current, selectedServer: nextServer });
-    return current.selectedServer;
-  }, server);
+  const current = await readSavedInternetSettings();
+  const { selectedServer } = current;
+  if (typeof selectedServer !== 'string') throw new Error('Saved internet settings have no server');
+  await restoreSavedInternetSettings(mainPage, { ...current, selectedServer: server });
+  return selectedServer;
 }

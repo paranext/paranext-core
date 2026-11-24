@@ -10,6 +10,10 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { SerializedRequestType } from '@shared/utils/util';
+import type {
+  NetworkMethodHandlerOptions,
+  RequestCallerProcess,
+} from '@shared/models/network.model';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { PlatformEvent } from 'platform-bible-utils';
 
@@ -107,11 +111,15 @@ export interface IRpcHandler {
  * has been registered with a JSONRPC server.
  */
 export interface IRpcMethodRegistrar extends IRpcHandler {
-  /** Register a method that will be called if an RPC request is made */
+  /**
+   * Register a method that will be called if an RPC request is made. `options.allowedCallers`
+   * limits which processes may call it; see `NetworkMethodHandlerOptions.allowedCallers`.
+   */
   registerMethod: (
     methodName: string,
     method: InternalRequestHandler,
     methodDocs?: SingleMethodDocumentation,
+    options?: RpcMethodRegistrationOptions,
   ) => Promise<boolean>;
   /** Unregister a method so it is no longer available to RPC requests */
   unregisterMethod: (methodName: string) => Promise<boolean>;
@@ -158,9 +166,9 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
    * close code, and a close the app asked for is not a loss.
    *
    * Nor does a connection that was never established. A socket that dies during the opening
-   * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
-   * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
-   * event is only for losing a connection that was up.
+   * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value.
+   * The renderer surfaces a failed first connect itself (`initializeNetworkReportingFailure`); the
+   * extension host does not yet (PT-4495). This event is only for losing a connection that was up.
    *
    * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
    * to react to the loss rather than to classify it.
@@ -173,7 +181,15 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
 export type RegisteredRpcMethodDetails = {
   handler: IRpcHandler;
   methodDocs?: SingleMethodDocumentation;
+  /** The processes the registrant allowed to call the method, if it restricted them */
+  allowedCallers?: readonly RequestCallerProcess[];
 };
+
+/**
+ * Options a process sends with a method registration. Travels as the third parameter of
+ * `network:registerMethod`.
+ */
+export type RpcMethodRegistrationOptions = Pick<NetworkMethodHandlerOptions, 'allowedCallers'>;
 
 /**
  * Minimal interface for event registries so that {@link RpcServer} can participate in event

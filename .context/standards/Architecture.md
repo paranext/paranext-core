@@ -59,14 +59,14 @@ its window and lives in that window's renderer.
 
 ### WebSocket Invariants
 
-Two rules govern the PAPI websocket. Both have been broken in practice, and neither failure was
-diagnosable from where it surfaced.
+These rules govern the PAPI websocket. The first two have been broken in practice, and neither
+failure was diagnosable from where it surfaced.
 
-**Bind to loopback only.** Connections to the PAPI websocket are unauthenticated, and every
-registered method is callable over them. The server must never accept traffic arriving on a
-non-loopback interface. Bind by the name `localhost` rather than a literal address: clients connect
-to `localhost` too, so both ends resolve through the same resolver and agree on the IP version,
-whichever the host prefers. IPv4-vs-IPv6 mismatches between the two ends have been hit in practice.
+**Bind to loopback only.** A client that presents no launch secret is served as `unidentified`, and
+every registered method outside the short restricted list is callable over its connection. The
+server must never accept traffic arriving on a non-loopback interface. Bind by the name `localhost`
+rather than a literal address: clients connect to `localhost` too, so both ends resolve through the
+same resolver and agree on the IP version, whichever the host prefers. IPv4-vs-IPv6 mismatches between the two ends have been hit in practice.
 
 **Never report ready before the endpoint accepts.** `IRpcHandler.connect` must not resolve `true`
 until the socket is actually accepting connections. `new WebSocketServer(...)` starts binding but
@@ -80,12 +80,21 @@ this requirement.
 
 **The renderer is not a WebSocket client.** Each window's connection to main is an Electron
 `MessagePort` obtained through the preload and served by `RpcWebSocketListener.acceptLocalClient`.
-Both rules above still apply to the `ws` server, which the extension host and .NET use; a change to
+The two rules above still apply to the `ws` server, which the extension host and .NET use; a change to
 that server does not reach the renderer, and a change to the renderer's transport does not reach
 them. Anything that counts clients on port 8876 should expect two, not three.
 
 See `adr-papi-websocket-hostname-bind` in [Architecture-Decisions.md](Architecture-Decisions.md)
 for the incident and the alternatives that were rejected.
+
+**Every connection has one identity, fixed when main accepts it** (`renderer`, `extensionHost`,
+`dotnetDataProvider` or `unidentified`), from per-launch secrets rather than anything the connection
+claims. **Restricted request types are checked by identity, in one place**: the frozen table in
+`src/shared/data/request-access.data.ts`, enforced by `RpcServer` and by `RpcClient.request` for a
+handler in its own process. A new sensitive request type goes in the table, not in a check at its
+handler. The mechanism is described in the Security Guide's
+[PAPI connection identity](Security-Guide.md#papi-connection-identity); the rationale is in
+`adr-papi-connection-identity-and-access-table`.
 
 ### Key Files
 

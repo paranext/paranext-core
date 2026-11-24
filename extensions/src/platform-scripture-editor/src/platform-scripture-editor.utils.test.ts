@@ -20,6 +20,9 @@ import {
   findEditorUsjNotes,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getEditorTitleEditability,
+  getEditorTabIconName,
+  isProjectPublished,
   getTabTitleProjectName,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
@@ -6105,7 +6108,7 @@ describe('formatEditorTitle', () => {
     const title = await formatEditorTitle(
       TITLE_FORMAT_KEY,
       'project-1',
-      false,
+      'editable',
       mockGetProjectName,
       mockGetLocalizedStrings,
     );
@@ -6116,11 +6119,42 @@ describe('formatEditorTitle', () => {
     const title = await formatEditorTitle(
       TITLE_FORMAT_KEY,
       'project-1',
-      true,
+      'readOnly',
       mockGetProjectName,
       mockGetLocalizedStrings,
     );
     expect(title).toBe('My Project (Read-only)');
+  });
+
+  it('fills {projectName} in the default title format', async () => {
+    const getLocalizedStrings = vi.fn().mockResolvedValue({
+      '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+      '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+      '%webView_platformScriptureEditor_title_format_2%': '{projectName} {editable}',
+    });
+    const title = await formatEditorTitle(
+      undefined,
+      'project-1',
+      'editable',
+      mockGetProjectName,
+      getLocalizedStrings,
+    );
+    expect(title).toBe('My Project (Editable)');
+  });
+
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '   '],
+    ['missing', undefined],
+  ])('shows the project id when the name is %s', async (_description, projectName) => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      'editable',
+      vi.fn().mockResolvedValue(projectName),
+      mockGetLocalizedStrings,
+    );
+    expect(title).toBe('project-1 (Editable)');
   });
 
   it.each([
@@ -6129,18 +6163,104 @@ describe('formatEditorTitle', () => {
     ['formatted', false, 'Project (Editable)'],
   ])('titles a saved %s view (Power: %s) as "%s"', async (viewType, isPowerMode, expected) => {
     const stub = vi.fn().mockResolvedValue({
-      '%webView_platformScriptureEditor_title_format%': '{projectId} {editable}',
+      '%webView_platformScriptureEditor_title_format_2%': '{projectName} {editable}',
       '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
       '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
     });
     const title = await formatEditorTitle(
       undefined,
       'p1',
-      showsReadOnlyPreview(viewType, isPowerMode),
+      showsReadOnlyPreview(viewType, isPowerMode) ? 'readOnly' : 'editable',
       async () => 'Project',
       stub,
     );
     expect(title).toBe(expected);
+  });
+
+  it('shows a resource title as the short name alone', async () => {
+    const title = await formatEditorTitle(
+      undefined,
+      'project-1',
+      'resource',
+      async () => 'engWEBUS',
+      vi.fn().mockResolvedValue({
+        '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+        '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+        '%webView_platformScriptureEditor_title_format_2%': '{projectName} {editable}',
+      }),
+    );
+    expect(title).toBe('engWEBUS');
+  });
+
+  it('leaves no leading space when a translation puts {editable} first', async () => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      'resource',
+      async () => 'engWEBUS',
+      vi.fn().mockResolvedValue({
+        '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+        '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+        [TITLE_FORMAT_KEY]: '{editable} {projectName}',
+      }),
+    );
+    expect(title).toBe('engWEBUS');
+  });
+
+  it('keeps the spacing inside a project name in a resource title', async () => {
+    const title = await formatEditorTitle(
+      undefined,
+      'project-1',
+      'resource',
+      async () => 'eng  WEB',
+      vi.fn().mockResolvedValue({
+        '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+        '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+        '%webView_platformScriptureEditor_title_format_2%': '{projectName} {editable}',
+      }),
+    );
+    expect(title).toBe('eng  WEB');
+  });
+
+  it('removes only the space beside {editable} when a translation puts it in the middle', async () => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      'resource',
+      async () => 'engWEBUS',
+      vi.fn().mockResolvedValue({
+        '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+        '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+        [TITLE_FORMAT_KEY]: '{projectName} {editable} extra',
+      }),
+    );
+    expect(title).toBe('engWEBUS extra');
+  });
+
+  it.each([
+    ['an editable resource', true, false, 'resource'],
+    ['a read-only project', false, true, 'readOnly'],
+    ['an editable project', false, false, 'editable'],
+    ['a read-only resource', true, true, 'resource'],
+  ])('maps %s to its title editability', (_label, isResource, isReadOnly, expected) => {
+    expect(getEditorTitleEditability(isResource, isReadOnly)).toBe(expected);
+  });
+});
+
+describe('getEditorTabIconName', () => {
+  it.each([undefined, 'book-open', 'file-text'])(
+    'shows the resource icon on a resource tab whatever was saved (%s)',
+    (savedIconName) => {
+      expect(getEditorTabIconName(true, savedIconName)).toBe('book-open');
+    },
+  );
+
+  it('keeps the saved icon name on a tab that is not a resource', () => {
+    expect(getEditorTabIconName(false, 'file-text')).toBe('file-text');
+  });
+
+  it('keeps an unset icon name unset on a tab that is not a resource', () => {
+    expect(getEditorTabIconName(false, undefined)).toBeUndefined();
   });
 });
 
@@ -6545,12 +6665,14 @@ describe('getTabTitleProjectName', () => {
   function papiWithSettings(settings: Record<string, unknown>) {
     const mockGetSetting = vi.fn(async (key: string) => settings[key]);
     const mockGet = vi.fn().mockResolvedValue({ getSetting: mockGetSetting });
+    const mockWarn = vi.fn();
     // Mocking just the part of the PAPI that we need for these tests
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const papi = {
       projectDataProviders: { get: mockGet },
+      logger: { warn: mockWarn },
     } as unknown as typeof PapiBackend;
-    return { papi, mockGet, mockGetSetting };
+    return { papi, mockGet, mockGetSetting, mockWarn };
   }
 
   it('shows the short name, not the full name', async () => {
@@ -6564,10 +6686,56 @@ describe('getTabTitleProjectName', () => {
     expect(await getTabTitleProjectName(papi, 'project-1')).toBe('WEB');
   });
 
-  it('falls back to the project id when the project has no short name', async () => {
-    const { papi } = papiWithSettings({});
+  it.each([
+    ['no short name', {}],
+    ['an empty short name', { 'platform.name': '' }],
+  ])('falls back to the project id when the project has %s', async (_description, settings) => {
+    const { papi } = papiWithSettings(settings);
 
     expect(await getTabTitleProjectName(papi, 'project-1')).toBe('project-1');
+  });
+
+  it('falls back to the project id and warns when the lookup fails', async () => {
+    const { papi, mockGet, mockWarn } = papiWithSettings({});
+    mockGet.mockRejectedValue(new Error('provider unavailable'));
+
+    expect(await getTabTitleProjectName(papi, 'project-1')).toBe('project-1');
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('provider unavailable'));
+  });
+});
+
+describe('isProjectPublished', () => {
+  function papiWithPublished(read: () => unknown) {
+    const mockWarn = vi.fn();
+    // Mocking just the part of the PAPI that we need for these tests
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const papi = {
+      projectDataProviders: {
+        get: vi.fn().mockResolvedValue({
+          getSetting: vi.fn(async (key: string) => (key === 'platform.isPublished' ? read() : 'x')),
+        }),
+      },
+      logger: { warn: mockWarn },
+    } as unknown as typeof PapiBackend;
+    return { papi, mockWarn };
+  }
+
+  it('is true when the project is published', async () => {
+    const { papi } = papiWithPublished(() => true);
+    expect(await isProjectPublished(papi, 'p1')).toBe(true);
+  });
+
+  it('is false and warns when reading the setting throws', async () => {
+    const { papi, mockWarn } = papiWithPublished(() => {
+      throw new Error('setting unavailable');
+    });
+    expect(await isProjectPublished(papi, 'p1')).toBe(false);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('setting unavailable'));
+  });
+
+  it('is false for a non-boolean value', async () => {
+    const { papi } = papiWithPublished(() => 'true');
+    expect(await isProjectPublished(papi, 'p1')).toBe(false);
   });
 });
 

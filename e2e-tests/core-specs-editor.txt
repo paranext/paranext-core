@@ -1,0 +1,6 @@
+# Isolated e2e specs the pull-request job adds when a change touches a path matched by
+# `editor_paths` in .github/workflows/test.yml (the Scripture editor and what it saves through):
+# they prove that opening a project and editing it writes nothing the user did not ask for.
+# One path per line, relative to the repository root. Read by .github/workflows/test.yml.
+e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-power-standard.spec.ts
+e2e-tests/tests/isolated/scripture-editor/no-unasked-edits-simple-paragraph-structure.spec.ts

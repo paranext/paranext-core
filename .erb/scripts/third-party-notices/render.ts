@@ -18,6 +18,7 @@ import type {
   BundledComponent,
   CopiedPlatformLibrary,
   ExternalExtension,
+  ExternalExtensionListing,
   NamedText,
   ProductBlock,
   Report,
@@ -580,6 +581,11 @@ function pushPreamble(
    * npm and NuGet dependencies.
    */
   hasAddedComponentSections: boolean,
+  /**
+   * Whether any extension zip built in another repository is itemized. Its packages are rows of the
+   * npm table too, so the clause saying what that table covers has to name the zips.
+   */
+  hasExternalExtensionListings: boolean,
 ): void {
   // Escaped for the reason `inlineText` gives: the name is policy-supplied prose, and a `<` in it
   // would otherwise be swallowed by the Markdown renderer. `repository` is NOT escaped - it sits in
@@ -591,8 +597,10 @@ function pushPreamble(
   //
   // The sentence AFTER it is not: the product and no-product arms each spell the npm-closure clause
   // out in full, because they differ at both ends (the opening names the product and its source
-  // repository, and the tail names the added sections). It is legal prose, so a correction has to be
-  // applied to every arm - and only the no-product arm is byte-compared by the golden fixture.
+  // repository, and the tail names the added sections). Each arm also branches on whether any
+  // extension zip is itemized, since the npm table then covers those zips too. It is legal prose, so
+  // a correction has to be applied to every arm. The golden fixtures byte-compare the no-product arm
+  // without itemized zips (`expected.md`) and the product arm with them (`expected-product.md`).
   out.push(
     `${subject} incorporates the third-party components listed below. Where a component ships a`,
     'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
@@ -602,8 +610,16 @@ function pushPreamble(
     ...(product
       ? [
           `closure of **${subject}**, built from paranext-core by \`${product.repository}\`: the npm`,
-          'packages webpack actually compiled into `dist/` (plus the stylesheet-only packages Tailwind',
-          'inlines before webpack runs, and anything `release/app` ships unbundled beside the bundle), the',
+          ...(hasExternalExtensionListings
+            ? [
+                'packages webpack actually compiled into `dist/` and into the extension zips listed',
+                'below (plus the stylesheet-only packages Tailwind inlines before webpack runs, and',
+                'anything `release/app` ships unbundled beside the bundle), the',
+              ]
+            : [
+                'packages webpack actually compiled into `dist/` (plus the stylesheet-only packages Tailwind',
+                'inlines before webpack runs, and anything `release/app` ships unbundled beside the bundle), the',
+              ]),
           ...(hasAddedComponentSections
             ? [
                 'NuGet closure of the bundled .NET data provider, Electron, and the components that',
@@ -612,9 +628,18 @@ function pushPreamble(
             : ['NuGet closure of the bundled .NET data provider, and Electron.']),
         ]
       : [
-          'closure of **this repository**: the npm packages webpack actually compiled into `dist/` (plus the',
-          'stylesheet-only packages Tailwind inlines before webpack runs, and anything `release/app` ships',
-          'unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.',
+          ...(hasExternalExtensionListings
+            ? [
+                'closure of **this repository**: the npm packages webpack actually compiled into `dist/` and into the',
+                'extension zips listed below (plus the stylesheet-only packages Tailwind inlines before webpack runs,',
+                'and anything `release/app` ships unbundled beside the bundle), the NuGet closure of the bundled .NET',
+                'data provider, and Electron.',
+              ]
+            : [
+                'closure of **this repository**: the npm packages webpack actually compiled into `dist/` (plus the',
+                'stylesheet-only packages Tailwind inlines before webpack runs, and anything `release/app` ships',
+                'unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.',
+              ]),
         ]),
     'Build and test tooling is excluded because it is not distributed.',
     '',
@@ -623,7 +648,14 @@ function pushPreamble(
       : 'Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,',
     'the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source',
     'tree, native libraries taken from the machine that built the installer, third-party programs',
-    'redistributed as separate executables, and extensions packed from other repositories. No scan of',
+    ...(hasExternalExtensionListings
+      ? [
+          'redistributed as separate executables, and extensions packed from other repositories (the zip',
+          'itself, and the bundled packages of a zip whose section says they are not listed). No scan of',
+        ]
+      : [
+          'redistributed as separate executables, and extensions packed from other repositories. No scan of',
+        ]),
     'either graph can reach any of them and none appears as a row below, so each is described in a',
     'section of its own, present only when that build actually carries it: a component that ships',
     'without a row is indistinguishable from one nobody considered.',
@@ -1037,23 +1069,58 @@ function addSeparateProgramTexts(
     });
 }
 
+/** `a`, `a and b`, `a, b and c`. */
+function joinNames(names: string[]): string {
+  if (names.length < 2) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
 /** Extensions packed from other repositories - see `external-extensions.ts`. */
 function pushExternalExtensionsSection(
   out: string[],
   externalExtensions: Record<string, ExternalExtension>,
+  listings: ExternalExtensionListing[],
 ): void {
-  const entries = Object.entries(externalExtensions).sort(([first], [second]) =>
-    compareStrings(first, second),
+  // An itemized entry appears inside its checkout's listing heading, so only the omissions get a
+  // heading of their own.
+  const entries = Object.entries(externalExtensions)
+    .filter(([, entry]) => !entry.itemized)
+    .sort(([first], [second]) => compareStrings(first, second));
+  const sortedListings = [...listings].sort((first, second) =>
+    compareStrings(first.checkoutName, second.checkoutName),
   );
-  if (!entries.length) return;
+  if (!entries.length && !sortedListings.length) return;
   out.push('## Extensions packed from other repositories', '');
   out.push(
     'The installer also carries these extensions, built in other repositories and packed as zips',
     'beside the ones built here. Each bundles every dependency outside the extension host’s',
-    'externals list, and no module manifest describes that bundle, so the packages inside it have no',
-    'rows above. That is an omission this document records rather than hides.',
+    'externals list. The bundled packages of the extensions itemized here have rows under "npm',
+    'production dependencies" below; any extension marked not itemized is an omission this document',
+    'records rather than hides.',
     '',
   );
+  sortedListings.forEach((listing) => {
+    // "include" rather than "are": the paranext-core packages a zip reaches only as prebuilt-lib
+    // leaves of a linked library are not collected for the checkout, so this list can be short of
+    // everything the zips carry even though each of those packages has a row of its own.
+    out.push(
+      `### ${joinNames(listing.extensions.map(inlineText))} (built in ${inlineText(listing.checkoutName)})`,
+      '',
+      `${listing.extensions.length === 1 ? 'Its' : 'Their'} bundled npm packages, listed under ` +
+        `"npm production dependencies" below, include ${listing.packages
+          .map((pkg) => `\`${pkg.name}@${pkg.version}\``)
+          .join(', ')}.`,
+      '',
+    );
+    // Every entry's reason is required, itemized or not, and it is where a caveat about what the
+    // itemization does not cover lives - so it is reproduced here rather than dropped with the
+    // entry's own heading. Verbatim, as the not-itemized reason below is: see
+    // `ExternalExtension.reason`.
+    listing.extensions.forEach((extension) => {
+      const reason = externalExtensions[extension]?.reason;
+      if (reason) out.push(`**${inlineText(extension)}:** ${reason}`, '');
+    });
+  });
   entries.forEach(([name, entry]) => {
     out.push(
       `### ${name}`,
@@ -1595,6 +1662,7 @@ export function render({
   copiedPlatformLibraries = {},
   separatePrograms = {},
   externalExtensions = {},
+  externalExtensionListings = [],
   product,
 }: Report): string {
   assertKnownEcosystems(verdicts);
@@ -1620,7 +1688,10 @@ export function render({
     corpusVersion,
     licenseeVersion,
     product,
-    Object.keys(separatePrograms).length > 0 || Object.keys(externalExtensions).length > 0,
+    Object.keys(separatePrograms).length > 0 ||
+      Object.keys(externalExtensions).length > 0 ||
+      externalExtensionListings.length > 0,
+    externalExtensionListings.length > 0,
   );
   pushOpenQuestions(out, openPolicyQuestions);
   pushElectronSection(out, shipsElectron);
@@ -1629,7 +1700,7 @@ export function render({
   pushSnapSection(out, snapStagePackages, snapStagePackageLicenses, snapCopyrightTexts);
   pushCopiedPlatformLibrarySection(out, copiedPlatformLibraries);
   pushSeparateProgramsSection(out, separatePrograms);
-  pushExternalExtensionsSection(out, externalExtensions);
+  pushExternalExtensionsSection(out, externalExtensions, externalExtensionListings);
   pushDotnetSection(out, dotnetDescribed, copiedPlatformLibraries);
   pushNpmSection(out, npmDescribed, npmAccount);
   assertNpmRowsAccountedFor(npmDescribed, npmAccount, canonical);

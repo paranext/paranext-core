@@ -211,7 +211,10 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
                 ($verseNum IS NULL OR VerseNum = $verseNum) AND
                 ($lemma IS NULL OR Lemma = $lemma) AND
                 ($itemId IS NULL OR EntryId = $itemId OR SenseId = $itemId) AND
-                ($wordNum IS NULL OR WordNum = $wordNum);`,
+                ($wordNum IS NULL OR WordNum = $wordNum)
+              -- Senses in import order, which is the dictionary's own order (sense numbers in
+              -- definitions count in this order), and each sense's occurrences in Bible order
+              ORDER BY SenseKey, BookNum, ChapterNum, VerseNum, WordNum;`,
           {
             // Using || instead of ?? so falsy values like empty string are not used
             $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
@@ -308,7 +311,11 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
           const entry: Entry = entryFromMap ?? createEmptyEntry(row);
           if (!entryFromMap) entriesByKey.set(row.EntryKey, entry);
 
-          // Add this sense to the entry if it's not already there
+          // Add this sense to the entry if it's not already there. The display numbers senses in
+          // the order `Object.values(entry.senses)` returns them, which is this insertion order
+          // only because sense IDs are not integer-like keys (MARBLE's have leading zeros, e.g.
+          // `000479001002000`). JavaScript lists integer-like keys such as `"12"` first, in numeric
+          // order, so sense IDs of that form would lose the dictionary order the query returns.
           if (!entry.senses[row.SenseId]) entry.senses[row.SenseId] = sense;
 
           // If this sense/occurrence row has an occurrence, add it

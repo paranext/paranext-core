@@ -207,6 +207,7 @@
       "%webView_platformScriptureEditor_charactersInventory%": "Inventory: Characters...",
       "%webView_platformScriptureEditor_configureChecks%": "Configure Checks...",
       "%webView_platformScriptureEditor_copy%": "Copy",
+      "%webView_platformScriptureEditor_copySelection%": "Copy selection",
       "%webView_platformScriptureEditor_copyrightInfo%": "Copyright Info",
       "%webView_platformScriptureEditor_cut%": "Cut",
       "%webView_platformScriptureEditor_edit%": "Edit",
@@ -263,6 +264,7 @@
       "%webView_platformScriptureEditor_settingUnreadable_withheld_banner%": "The text isn't shown because a project setting the editor needs to save it safely couldn't be read",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Share layout with team",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Bible texts",
+      "%webView_platformScriptureEditor_showBooks%": "Show books",
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
       "%webView_platformScriptureEditor_showCommentariesPanel%": "Commentaries",
       "%webView_platformScriptureEditor_showCommentsPanel%": "Comments",
@@ -291,6 +293,7 @@
       "%webView_platformScriptureEditor_title_editable_indicator%": "(Editable)",
       "%webView_platformScriptureEditor_title_editable_no_project%": "Scripture Editor",
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
+      "%webView_platformScriptureEditor_title_format_2%": "{projectName} {editable}",
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(Read-only)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
       "%webView_platformScriptureEditor_tools%": "Tools",
@@ -361,6 +364,7 @@
       "%webView_scriptureTextGrid_chapterContext_close%": "Close chapter view",
       "%webView_scriptureTextGrid_emptyState_prompt%": "No texts to display. Open {viewOptionsLabel} to choose which texts to show.",
       "%webView_scriptureTextGrid_retry%": "Try again",
+      "%webView_scriptureTextGrid_revealAnnouncement%": "Result shown in {resourceName}",
       "%webView_scriptureTextGrid_title_multiple%": "Text Collection",
       "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": "Shared by administrator",
       "%webView_scriptureTextGrid_viewOptions_chapter%": "Chapter",
@@ -590,6 +594,7 @@
       "%webView_platformScriptureEditor_charactersInventory%": "Inventario: Caracteres...",
       "%webView_platformScriptureEditor_configureChecks%": "Configurar verificaciones...",
       "%webView_platformScriptureEditor_copy%": "Copiar",
+      "%webView_platformScriptureEditor_copySelection%": "Copiar selección",
       "%webView_platformScriptureEditor_copyrightInfo%": "Información de copyright",
       "%webView_platformScriptureEditor_cut%": "Cortar",
       "%webView_platformScriptureEditor_edit%": "Editar",
@@ -646,6 +651,7 @@
       "%webView_platformScriptureEditor_settingUnreadable_withheld_banner%": "El texto no se muestra porque no se pudo leer una configuración del proyecto que el editor necesita para guardarlo de forma segura",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Compartir diseño con el equipo",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Textos bíblicos",
+      "%webView_platformScriptureEditor_showBooks%": "Mostrar libros",
       "%webView_platformScriptureEditor_showCheckResults%": "Mostrar resultados de verificación...",
       "%webView_platformScriptureEditor_showCommentariesPanel%": "Comentarios bíblicos",
       "%webView_platformScriptureEditor_showCommentsPanel%": "Comentarios de proyecto",
@@ -674,6 +680,7 @@
       "%webView_platformScriptureEditor_title_editable_indicator%": "(editable)",
       "%webView_platformScriptureEditor_title_editable_no_project%": "Editor de Escrituras",
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
+      "%webView_platformScriptureEditor_title_format_2%": "{projectName} {editable}",
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(solo lectura)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
       "%webView_platformScriptureEditor_tools%": "Herramientas",
@@ -744,6 +751,7 @@
       "%webView_scriptureTextGrid_chapterContext_close%": "Cerrar vista de capítulo",
       "%webView_scriptureTextGrid_emptyState_prompt%": "No hay textos para mostrar. Abra {viewOptionsLabel} para elegir qué textos mostrar.",
       "%webView_scriptureTextGrid_retry%": "Reintentar",
+      "%webView_scriptureTextGrid_revealAnnouncement%": "Resultado mostrado en {resourceName}",
       "%webView_scriptureTextGrid_title_multiple%": "Colección de textos",
       "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": "Compartido por el administrador",
       "%webView_scriptureTextGrid_viewOptions_chapter%": "Capítulo",
@@ -1424,6 +1432,16 @@
     },
     "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
       "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
+    },
+    "%webView_platformScriptureEditor_title_format%": {
+      "deprecationInfo": {
+        "date": "2026-09-23",
+        "message": "The project's name now fills a {projectName} placeholder, matching other per-project titles, rather than {projectId}. The new key is %webView_platformScriptureEditor_title_format_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_title_format_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_title_format%",
+      "notes": "Scripture editor tab title. {projectName} is the project's short name; {editable} becomes \"(Editable)\" or \"(Read-only)\" for a project, and is removed for a resource together with the space next to it. Keep {editable} separated from the rest of the title by spaces only, with no brackets, dashes or other punctuation around it, or a resource's title keeps that punctuation (for example \"NBV21 -\")."
     },
     "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": {
       "deprecationInfo": {

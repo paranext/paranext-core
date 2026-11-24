@@ -23,7 +23,12 @@ function asMock<T>(partial: unknown): T {
   return partial as T;
 }
 
-function setup(interfaceMode = 'power', canUserEditScripture = true, isEditable = true) {
+function setup(
+  interfaceMode = 'power',
+  canUserEditScripture = true,
+  isEditable = true,
+  projectName: unknown = 'Project',
+) {
   const openListeners: WebViewListener[] = [];
   const updateListeners: WebViewListener[] = [];
   const closeListeners: WebViewListener[] = [];
@@ -40,7 +45,7 @@ function setup(interfaceMode = 'power', canUserEditScripture = true, isEditable 
       ? { canUserEditScripture: canUserEditScriptureMock }
       : {
           getSetting: vi.fn(async (key: string) =>
-            key === 'platform.isEditable' ? isEditable : 'Project',
+            key === 'platform.isEditable' ? isEditable : projectName,
           ),
         },
   );
@@ -112,6 +117,18 @@ describe('ReadOnlyViewNotifier', () => {
         clickCommandLabel: 'Dismiss',
         webViewId: 'web-view-1',
       }),
+    );
+  });
+
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '  '],
+  ])('names the project by its id when its short name is %s', async (_label, projectName) => {
+    const { notifier, open, send } = setup('power', true, true, projectName);
+    await notifier.start();
+    await open(editorWebView('formatted'));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Preview of project-1 is read-only.' }),
     );
   });
 

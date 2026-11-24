@@ -11,6 +11,8 @@ import {
 
 const PANEL_TITLE_KEY = '%webView_legacyCommentManager_commentListPanel_title%';
 const COMMENTARIES_TAB_TITLE_KEY = '%webView_resourcePanel_commentaries_title%';
+const COMMENT_LIST_TITLE_WITH_PROJECT_KEY =
+  '%webView_legacyCommentManager_commentList_titleWithProject%';
 
 // The strings backing the Send/Receive edit-block surfaces in the comments panel: the slim
 // "editing paused" notice and the "your change was not saved" error toast. Both must stay defined in
@@ -83,6 +85,18 @@ describe('legacyCommentManager comment list panel tab title', () => {
     const es = localizedStrings.es[PANEL_TITLE_KEY];
     expect(es.charAt(0)).toMatch(/[A-ZÁÉÍÓÚÜÑ]/);
     expect(es.slice(1)).toBe(es.slice(1).toLowerCase());
+  });
+});
+
+describe('legacyCommentManager comment list tab title with a project', () => {
+  // `main.ts` fills these two placeholders, so a language that drops or misspells one shows the
+  // raw `{...}` text in the tab
+  ['en', 'es'].forEach((language) => {
+    it(`fills the base title and the project name in ${language}`, () => {
+      const title = localizedStrings[language][COMMENT_LIST_TITLE_WITH_PROJECT_KEY];
+      expect(title).toContain('{commentListTitle}');
+      expect(title).toContain('{projectName}');
+    });
   });
 });
 

@@ -12,13 +12,13 @@ public class InternetSettingsMementoConverter
     private const string PROXY_PORT = "proxyPort";
     private const string PROXY_HOST = "proxyHost";
     private const string PROXY_USERNAME = "proxyUsername";
-    private const string PROXY_PASSWORD = "proxyPassword";
+    internal const string PROXY_PASSWORD = "proxyPassword";
     private const string PROXY_MODE = "proxyMode";
     private const string OVERRIDE_DBL_SERVER = "overrideDBLServer";
     private const string OVERRIDE_DBL_API_SERVER = "overrideDBLApiServer";
     private const string OVERRIDE_GBC_SERVER = "overrideGbcServer";
     private const string DBL_EMAIL = "dblEmail";
-    private const string DBL_PASSWORD = "dblPassword";
+    internal const string DBL_PASSWORD = "dblPassword";
 
     public override InternetAccess.InternetSettingsMemento Read(
         ref Utf8JsonReader reader,

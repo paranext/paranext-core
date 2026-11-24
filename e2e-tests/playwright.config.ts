@@ -25,6 +25,11 @@ const config = defineConfig({
     ['./reporters/no-silent-skips.reporter.ts'],
     ['html', { outputFolder: 'playwright-report' }],
     ['list'],
+    // CI's isolated e2e jobs set this and read the report to warn about tests that passed only on
+    // their retry (`.github/workflows/e2e-isolated.yml`).
+    ...(process.env.E2E_JSON_REPORT
+      ? [['json', { outputFile: process.env.E2E_JSON_REPORT }] as const]
+      : []),
   ],
   timeout: 120_000, // 2 minutes per test (app initialization can be slow)
   expect: {
@@ -41,7 +46,8 @@ const config = defineConfig({
   // Convention: directories under `tests/` whose specs launch their own Electron should be
   // reachable from at least one project entry below. Most feature-specific e2e tests can be added
   // under `isolated`. If you add a new test directory of that kind, register it here AND wire it
-  // into either CI (`test:e2e:smoke`) or a local-only npm script (`test:e2e:<name>`).
+  // into CI (`test:e2e:smoke` in the build jobs, or the isolated-spec workflow, see "What CI runs"
+  // in `e2e-tests/CLAUDE.md`) or a local-only npm script (`test:e2e:<name>`).
   //
   // See the README in each directory for more information about the nature of the tests.
   //
