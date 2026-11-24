@@ -82,6 +82,7 @@ This is a Webpack project configured to build extensions included as part of Pla
   - `.github/assets/release-body.md` combined with a generated changelog becomes the body of [releases published using GitHub Actions](#publishing)
 - `dist/` is a generated folder containing the built extension files
 - `release/` is a generated folder containing zips of the built extension files
+- `.notices/` is a generated folder containing the module lists and build stamp that paranext-core's third-party notices generator reads
 
 > See the [Extension Anatomy wiki page](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy) for more information about the various files that comprise extensions and their relationships to each other.
 

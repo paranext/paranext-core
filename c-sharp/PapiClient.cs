@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
+using System.Net;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
+using System.Text;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.Services;
@@ -16,8 +19,33 @@ internal class PapiClient : IDisposable
 
     private static readonly Uri s_connectionUri = new("ws://localhost:8876");
 
-    private readonly ClientWebSocket _webSocket = new();
-    private readonly JsonRpc _jsonRpc;
+    /// <summary>
+    /// Handshake request header in which this process presents its client secret. Mirrors
+    /// <c>PAPI_CLIENT_SECRET_HEADER</c> in <c>src/shared/data/rpc.model.ts</c>.
+    /// </summary>
+    private const string CLIENT_SECRET_HEADER = "x-papi-client-secret";
+
+    /// <summary>
+    /// Handshake reply header in which main proves it launched this process. Mirrors
+    /// <c>PAPI_SERVER_SECRET_HEADER</c> in <c>src/shared/data/rpc.model.ts</c>.
+    /// </summary>
+    private const string SERVER_SECRET_HEADER = "x-papi-server-secret";
+
+    /// <summary>
+    /// How many more times to try a handshake main refused because this launch already has an open
+    /// connection. That happens when <c>dotnet watch</c> restarts this process before the previous
+    /// one's connection has closed.
+    /// </summary>
+    private const int CONFLICT_RETRIES = 10;
+
+    /// <summary>How long to wait before each retry counted by <see cref="CONFLICT_RETRIES"/></summary>
+    private static readonly TimeSpan s_conflictRetryDelay = TimeSpan.FromMilliseconds(500);
+
+    private readonly Uri _connectionUri;
+    private readonly TimeSpan _conflictRetryDelay;
+    private LaunchSecrets? _launchSecrets;
+    private ClientWebSocket _webSocket;
+    private JsonRpc _jsonRpc;
     protected readonly ConcurrentDictionary<string, Delegate> _localMethods = new();
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly CancellationToken _cancellationToken;
@@ -31,25 +59,27 @@ internal class PapiClient : IDisposable
 
     #region Constructors
 
-    public PapiClient()
+    /// <param name="launchSecrets">The secrets main handed this process, if main launched it.
+    /// Without them this process connects unidentified, and main refuses it the request types only
+    /// the data provider may register.</param>
+    public PapiClient(LaunchSecrets? launchSecrets = null)
+        : this(s_connectionUri, launchSecrets, s_conflictRetryDelay) { }
+
+    /// <param name="connectionUri">Address of main's PAPI WebSocket</param>
+    /// <param name="launchSecrets">See <see cref="PapiClient(LaunchSecrets?)"/></param>
+    /// <param name="conflictRetryDelay">How long to wait before trying again a handshake main
+    /// refused because this launch already has an open connection</param>
+    protected PapiClient(
+        Uri connectionUri,
+        LaunchSecrets? launchSecrets,
+        TimeSpan conflictRetryDelay
+    )
     {
         _cancellationToken = _cancellationTokenSource.Token;
-
-        var formatter = SerializationOptions.CreateJsonRpcMessageFormatter();
-        _jsonRpc = new PapiJsonRpc(new WebSocketMessageHandler(_webSocket, formatter))
-        {
-            AllowModificationWhileListening = true,
-            ExceptionOptions = ExceptionSettings.TrustedData,
-            /*
-             * This can be uncommented for detailed JSON-RPC tracing
-
-            TraceSource = new System.Diagnostics.TraceSource(
-                "JSONRPC",
-                System.Diagnostics.SourceLevels.Verbose
-            ),
-
-            */
-        };
+        _connectionUri = connectionUri;
+        _launchSecrets = launchSecrets;
+        _conflictRetryDelay = conflictRetryDelay;
+        (_webSocket, _jsonRpc) = CreateConnection();
     }
 
     #endregion
@@ -105,12 +135,52 @@ internal class PapiClient : IDisposable
     /// If false is returned, then there is no need to call <see cref="DisconnectAsync"/> before calling <see cref="Dispose"/>.
     /// </summary>
     /// <returns><see cref="Task"/> that will resolve to true if the connection initialized properly, false otherwise</returns>
+    /// <exception cref="WebSocketException">When the handshake fails, including when main refuses
+    /// the launch secret or this launch's previous connection stays open through every retry</exception>
+    /// <exception cref="InvalidOperationException">When main's reply does not carry the server
+    /// secret, so it cannot be the main that launched this process</exception>
     public virtual async Task<bool> ConnectAsync()
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        Console.WriteLine("PapiClient connecting");
-        await _webSocket.ConnectAsync(s_connectionUri, _cancellationToken);
+        Console.WriteLine(
+            _launchSecrets is null
+                ? "PapiClient connecting without launch secrets, so main will not identify it"
+                : "PapiClient connecting"
+        );
+        for (int retriesLeft = CONFLICT_RETRIES; ; retriesLeft--)
+        {
+            try
+            {
+                await _webSocket.ConnectAsync(_connectionUri, _cancellationToken);
+                break;
+            }
+            catch (WebSocketException)
+                when (retriesLeft > 0 && _webSocket.HttpStatusCode == HttpStatusCode.Conflict)
+            {
+                Console.WriteLine(
+                    "Main still has this launch's previous connection open; trying again"
+                );
+                await Task.Delay(_conflictRetryDelay, _cancellationToken);
+                // A ClientWebSocket cannot connect again after a failed attempt
+                _jsonRpc.Dispose();
+                _webSocket.Dispose();
+                (_webSocket, _jsonRpc) = CreateConnection();
+            }
+        }
+
+        if (_launchSecrets is not null)
+        {
+            if (!IsServerSecretValid(_webSocket.HttpResponseHeaders, _launchSecrets.ServerSecret))
+            {
+                _webSocket.Abort();
+                throw new InvalidOperationException(
+                    "The PAPI WebSocket server did not prove it is the main process that launched this data provider"
+                );
+            }
+            // Used once, at connect. Nothing reconnects, so nothing needs them again.
+            _launchSecrets = null;
+        }
         Console.WriteLine("PapiClient connected successfully");
 
         _jsonRpc.Disconnected += (object? _, JsonRpcDisconnectedEventArgs args) =>
@@ -310,10 +380,22 @@ internal class PapiClient : IDisposable
             return false;
         }
 
+        if (!await registerTask)
+        {
+            // Otherwise a request this process sends for the type would still run the handler
+            // locally. StreamJsonRpc cannot remove the method it added, but main never routes the
+            // type here.
+            _localMethods.TryRemove(requestType, out _);
+            Console.WriteLine(
+                $"Main did not accept the registration of request type \"{requestType}\" (for example, the name is already registered or restricted to another process)"
+            );
+            return false;
+        }
+
         if (requestTimeout.HasValue)
             SetRequestTimeoutMs(requestType, (int)requestTimeout.Value.TotalMilliseconds);
 
-        return await registerTask;
+        return true;
     }
 
     /// <summary>
@@ -343,6 +425,62 @@ internal class PapiClient : IDisposable
     #endregion
 
     #region Private methods
+
+    /// <summary>
+    /// Creates the socket and the JSON-RPC layer over it. Both are created again for each connection
+    /// attempt, since a socket that failed to connect cannot be used again.
+    /// </summary>
+    private (ClientWebSocket, JsonRpc) CreateConnection()
+    {
+        var webSocket = new ClientWebSocket();
+        webSocket.Options.CollectHttpResponseDetails = true;
+        if (_launchSecrets is not null)
+            webSocket.Options.SetRequestHeader(CLIENT_SECRET_HEADER, _launchSecrets.ClientSecret);
+
+        var formatter = SerializationOptions.CreateJsonRpcMessageFormatter();
+        var jsonRpc = new PapiJsonRpc(new WebSocketMessageHandler(webSocket, formatter))
+        {
+            AllowModificationWhileListening = true,
+            ExceptionOptions = ExceptionSettings.TrustedData,
+            /*
+             * This can be uncommented for detailed JSON-RPC tracing
+
+            TraceSource = new System.Diagnostics.TraceSource(
+                "JSONRPC",
+                System.Diagnostics.SourceLevels.Verbose
+            ),
+
+            */
+        };
+        return (webSocket, jsonRpc);
+    }
+
+    /// <summary>
+    /// Whether the handshake reply carried <paramref name="expected"/> in
+    /// <see cref="SERVER_SECRET_HEADER"/>. Compares digests in constant time.
+    /// </summary>
+    private static bool IsServerSecretValid(
+        IReadOnlyDictionary<string, IEnumerable<string>>? responseHeaders,
+        string expected
+    )
+    {
+        string[] presented =
+            responseHeaders
+                ?.Where(header =>
+                    string.Equals(
+                        header.Key,
+                        SERVER_SECRET_HEADER,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                .SelectMany(header => header.Value)
+                .ToArray() ?? [];
+        return presented.Length == 1
+            && CryptographicOperations.FixedTimeEquals(
+                SHA256.HashData(Encoding.UTF8.GetBytes(presented[0])),
+                SHA256.HashData(Encoding.UTF8.GetBytes(expected))
+            );
+    }
 
     /// <summary>
     /// Gets the request timeout, in milliseconds, for a specific request type.

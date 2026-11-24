@@ -40,7 +40,7 @@ import {
 // preview-read-only-power-mode.spec.ts).
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 const WEBSOCKET_PORT = 8876;

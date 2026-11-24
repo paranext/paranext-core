@@ -316,7 +316,7 @@ async function readHighlightedPieces(
 
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 test.describe('scripture editor settled positions', () => {

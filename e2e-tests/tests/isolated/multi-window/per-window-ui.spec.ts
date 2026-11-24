@@ -305,7 +305,7 @@ test.use({
   seedSettings: { 'platform.firstRunComplete': true },
   // Same launch shape as the sibling multi-window specs — see multi-window.spec.ts's test.use
   // comment for the full rationale.
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 test.describe('per-window UI isolation', () => {

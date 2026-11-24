@@ -2,7 +2,10 @@
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { logger } from '@shared/services/logger.service';
+import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import { RpcClient } from '@client/services/rpc-client';
+import { markLocalConnectionIdentified } from '@client/services/launch-secrets';
+import type { RequestCallerProcess } from '@shared/models/network.model';
 
 /**
  * Regression coverage for how a client reports a failed websocket connection to main.
@@ -33,6 +36,9 @@ const mocks = vi.hoisted(() => {
     readyState = 0;
 
     closeCalls = 0;
+
+    /** Every payload the client sent, in order */
+    sent: string[] = [];
 
     url: string;
 
@@ -73,6 +79,15 @@ const mocks = vi.hoisted(() => {
     accept() {
       this.readyState = 1;
       this.dispatch('open');
+    }
+
+    send(payload: string) {
+      this.sent.push(payload);
+    }
+
+    /** Delivers a message from main to the client */
+    receive(message: unknown) {
+      this.dispatch('message', { data: JSON.stringify(message) });
     }
 
     private dispatch(type: string, payload?: unknown) {
@@ -272,5 +287,146 @@ describe('RpcClient initial connection', () => {
       vi.useRealTimers();
       process.off('unhandledRejection', unhandled);
     }
+  });
+});
+
+describe('RpcClient registering a method', () => {
+  beforeEach(() => {
+    mocks.state.refuseConnection = false;
+    mocks.state.initialReadyState = 0;
+    mocks.sockets.length = 0;
+  });
+
+  /** Connects a client and returns it with its socket */
+  async function connectedClient() {
+    const client = new RpcClient();
+    await expect(client.connect(() => {})).resolves.toBe(true);
+    const socket = mocks.sockets[0];
+    if (!socket) throw new Error('No socket was created');
+    return { client, socket };
+  }
+
+  /** Waits for the client to ask main to register a method, then answers it */
+  async function answerRegistration(
+    socket: InstanceType<typeof mocks.FakeWebSocket>,
+    result: boolean,
+  ): Promise<unknown[]> {
+    let registration: { id: number; params: unknown[] } | undefined;
+    await vi.waitFor(() => {
+      registration = socket.sent
+        .map((payload) => JSON.parse(payload))
+        .find((message) => message.method === 'network:registerMethod');
+      expect(registration).toBeDefined();
+    });
+    if (!registration) throw new Error('No registration was sent');
+    socket.receive({ jsonrpc: '2.0', id: registration.id, result });
+    return registration.params;
+  }
+
+  it('sends allowedCallers as the third registerMethod argument', async () => {
+    const { client, socket } = await connectedClient();
+
+    const registered = client.registerMethod('command:a.b', () => 'b', undefined, {
+      allowedCallers: ['renderer'],
+    });
+    const params = await answerRegistration(socket, true);
+
+    await expect(registered).resolves.toBe(true);
+    expect(params[0]).toBe('command:a.b');
+    expect(params[2]).toEqual({ allowedCallers: ['renderer'] });
+  });
+
+  it('sends no third registerMethod argument without allowedCallers', async () => {
+    const { client, socket } = await connectedClient();
+
+    const registered = client.registerMethod('command:a.b', () => 'b');
+    const params = await answerRegistration(socket, true);
+
+    await expect(registered).resolves.toBe(true);
+    expect(params).toHaveLength(2);
+  });
+});
+
+describe('RpcClient enforcing access on in-process requests', () => {
+  beforeEach(() => {
+    mocks.state.refuseConnection = false;
+    mocks.state.initialReadyState = 0;
+    mocks.sockets.length = 0;
+  });
+
+  /** Connects a client and registers `handler` locally under `methodName` */
+  async function clientWithLocalMethod(
+    methodName: string,
+    handler: () => unknown,
+    allowedCallers?: RequestCallerProcess[],
+  ) {
+    const client = new RpcClient();
+    await expect(client.connect(() => {})).resolves.toBe(true);
+    const socket = mocks.sockets[0];
+    if (!socket) throw new Error('No socket was created');
+    const registered = client.registerMethod(
+      methodName,
+      handler,
+      undefined,
+      allowedCallers ? { allowedCallers } : undefined,
+    );
+    await vi.waitFor(() => {
+      const registration = socket.sent
+        .map((payload) => JSON.parse(payload))
+        .find((message) => message.method === 'network:registerMethod');
+      expect(registration).toBeDefined();
+      socket.receive({ jsonrpc: '2.0', id: registration.id, result: true });
+    });
+    await expect(registered).resolves.toBe(true);
+    return client;
+  }
+
+  it('refuses a local call the table denies this process', async () => {
+    const readLog = vi.fn(() => 'log');
+    const client = await clientWithLocalMethod('command:platform.getLogFileContent', readLog);
+
+    markLocalConnectionIdentified('renderer');
+    const allowed = await client.request('command:platform.getLogFileContent', []);
+    markLocalConnectionIdentified('extensionHost');
+    const refused = await client.request('command:platform.getLogFileContent', []);
+
+    expect(allowed).toMatchObject({ result: 'log' });
+    expect(refused).toMatchObject({
+      error: {
+        code: JSONRPCErrorCode.MethodNotFound,
+        message: `'command:platform.getLogFileContent' is not available on this connection`,
+      },
+    });
+    expect(readLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a local call the registrant option denies this process', async () => {
+    const handler = vi.fn(() => 'done');
+    const client = await clientWithLocalMethod('command:a.b', handler, ['renderer']);
+    markLocalConnectionIdentified('extensionHost');
+
+    const refused = await client.request('command:a.b', []);
+
+    expect(refused).toMatchObject({ error: { code: JSONRPCErrorCode.MethodNotFound } });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('runs a local call the rules allow', async () => {
+    const handler = vi.fn(() => 'done');
+    const client = await clientWithLocalMethod('command:a.b', handler, ['extensionHost']);
+    markLocalConnectionIdentified('extensionHost');
+
+    await expect(client.request('command:a.b', [])).resolves.toMatchObject({ result: 'done' });
+  });
+
+  it('treats an unidentified process as unidentified', async () => {
+    const handler = vi.fn(() => 'done');
+    const client = await clientWithLocalMethod('command:a.b', handler, ['extensionHost']);
+    markLocalConnectionIdentified('unidentified');
+
+    const refused = await client.request('command:a.b', []);
+
+    expect(refused).toMatchObject({ error: { code: JSONRPCErrorCode.MethodNotFound } });
+    expect(handler).not.toHaveBeenCalled();
   });
 });

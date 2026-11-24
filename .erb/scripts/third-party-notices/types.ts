@@ -309,6 +309,9 @@ export type Policy = {
   externalExtensionsNote?: string;
   /** Keyed by extension name - see `external-extensions.ts`. */
   externalExtensions?: Record<string, ExternalExtension>;
+  externalExtensionCheckoutsNote?: string;
+  /** Keyed by checkout name, which `ExternalExtension.sourceCheckout` records. */
+  externalExtensionCheckouts?: Record<string, ExternalExtensionCheckout>;
   productNote?: string;
   /** Overlay only: the downstream product this run describes. */
   product?: ProductBlock;
@@ -368,16 +371,49 @@ export type ExternalExtension = {
   /**
    * Whether its bundled dependencies have rows in this document.
    *
-   * TODO(PT-4604): only `false` is accepted today.
-   * https://paratextstudio.atlassian.net/browse/PT-4604
+   * `true`: the generator reads the extension's dependencies from the checkout `sourceCheckout`
+   * names, which is then required. `false`: the document states the omission, and `sourceCheckout`
+   * must be absent.
    */
   itemized: boolean;
+  /**
+   * The name of the `Policy.externalExtensionCheckouts` entry for the checkout of the repository
+   * that builds this extension.
+   */
+  sourceCheckout?: string;
   /**
    * A Markdown paragraph, reproduced verbatim in the document - it is NOT escaped, so it may carry
    * a link or other Markdown, and a literal `<`, `*`, `_` or backtick in it renders as Markdown
    * rather than as that character. Matches the `SeparateProgram.reason` precedent.
    */
   reason: string;
+};
+
+/**
+ * Where a source checkout is, and what it must yield before an itemized extension's rows are
+ * trusted.
+ */
+export type ExternalExtensionCheckout = {
+  /**
+   * The folder holding the extensions' source and installed `node_modules`, relative to the
+   * overlay's folder when one is selected, else the base policy file's folder.
+   */
+  path: string;
+  /** Package counts below which the run is refused, so a source that finds almost nothing fails. */
+  minimumPackages: { own: number; core: number; stylesheet: number };
+};
+
+/**
+ * The npm packages one itemized checkout's zips bundle, for the document to list under its
+ * extensions: the checkout's own packages and the paranext-core packages its bundles compile.
+ */
+export type ExternalExtensionListing = {
+  /** The checkout's `externalExtensionCheckouts` key. */
+  checkoutName: string;
+  /** The extensions the policy itemizes from this checkout, sorted. */
+  extensions: string[];
+  /** Sorted by name, then version; one entry per `name@version`. */
+  packages: { name: string; version: string }[];
 };
 
 /** One npm package the build establishes as shipping, and how it was reached. */
@@ -521,6 +557,8 @@ export type Report = {
   separatePrograms?: Record<string, SeparateProgram>;
   /** Extensions packed from other repositories - see `external-extensions.ts`. */
   externalExtensions?: Record<string, ExternalExtension>;
+  /** What the itemized external extensions bundle, one listing per checkout. */
+  externalExtensionListings?: ExternalExtensionListing[];
   /** Folder names of the extensions an installer packs - see `packedExtensionNames`. */
   packedExtensions?: string[];
   /**

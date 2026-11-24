@@ -47,7 +47,7 @@ import {
 // targets. DEV_NOISY=false keeps the normal Home layout (see preview-read-only-power-mode.spec.ts).
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 test.describe('scripture editor attribute display', () => {

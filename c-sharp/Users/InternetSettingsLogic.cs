@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using Paranext.DataProvider.JsonUtils;
 using Paratext.Data;
 using Paratext.Data.Users;
 
@@ -15,6 +16,18 @@ internal static class InternetSettingsLogic
 {
     /// <summary>Placeholder shown in place of a real secret so we never hand out real passwords.</summary>
     public const string PLACEHOLDER_PASSWORD = "********";
+
+    /// <summary>
+    /// Name of the proxy password field as PAPI callers send it, which
+    /// <see cref="PasswordRequiredForChange"/> reports
+    /// </summary>
+    public const string PROXY_PASSWORD = InternetSettingsMementoConverter.PROXY_PASSWORD;
+
+    /// <summary>
+    /// Name of the DBL password field as PAPI callers send it, which
+    /// <see cref="PasswordRequiredForChange"/> reports
+    /// </summary>
+    public const string DBL_PASSWORD = InternetSettingsMementoConverter.DBL_PASSWORD;
 
     /// <summary>Mask a secret for display: the placeholder when a value is present, otherwise null.</summary>
     public static string? MaskSecret(string? value) =>
@@ -32,6 +45,49 @@ internal static class InternetSettingsLogic
 
     /// <summary>Whether a submitted secret is an actual change (not the unchanged-placeholder).</summary>
     public static bool IsSecretChanged(string? submitted) => submitted != PLACEHOLDER_PASSWORD;
+
+    /// <summary>
+    /// Name of the password field (<see cref="PROXY_PASSWORD"/> or <see cref="DBL_PASSWORD"/>) the
+    /// caller must send for real, or null. Sending back the placeholder keeps the saved password, so
+    /// a change of where that password goes must include it: otherwise anyone who can call the
+    /// setter could send the saved password to a host of their choosing.
+    /// </summary>
+    /// <remarks>
+    /// Pass the hosts as they will be saved: a proxy host the mode clears is null. A null or empty
+    /// host counts as cleared, and clearing a host sends the password nowhere new, so it needs
+    /// nothing.
+    /// <c>SelectedServer</c> picks among known servers, and the user name, DBL email and GBC
+    /// override reach no saved password, so none of them is an input.
+    /// </remarks>
+    public static string? PasswordRequiredForChange(
+        string? currentProxyHost,
+        string? newProxyHost,
+        int currentProxyPort,
+        int newProxyPort,
+        string? submittedProxyPassword,
+        bool hasSavedProxyPassword,
+        string? currentDblServer,
+        string? newDblServer,
+        string? currentDblApiServer,
+        string? newDblApiServer,
+        string? submittedDblPassword,
+        bool hasSavedDblPassword
+    )
+    {
+        bool proxyTargetChanged =
+            !string.IsNullOrEmpty(newProxyHost)
+            && (newProxyHost != currentProxyHost || newProxyPort != currentProxyPort);
+        if (proxyTargetChanged && hasSavedProxyPassword && !IsSecretChanged(submittedProxyPassword))
+            return PROXY_PASSWORD;
+
+        bool dblTargetChanged =
+            (!string.IsNullOrEmpty(newDblServer) && newDblServer != currentDblServer)
+            || (!string.IsNullOrEmpty(newDblApiServer) && newDblApiServer != currentDblApiServer);
+        if (dblTargetChanged && hasSavedDblPassword && !IsSecretChanged(submittedDblPassword))
+            return DBL_PASSWORD;
+
+        return null;
+    }
 
     /// <summary>The proxy host is only meaningful for ProxyOnly; every other mode clears it.</summary>
     public static bool ShouldClearProxyHost(InternetUse requested) =>

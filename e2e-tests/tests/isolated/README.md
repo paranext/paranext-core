@@ -38,6 +38,16 @@ npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e
 e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 ```
 
+A new subset directory or loose spec needs an entry in `subset-sources.json` (`main` = the source
+the group is about, `incidental` = source it only drives). What else the map's unit test checks,
+and what to change when it fails, is in "The isolated e2e map" in
+[`e2e-tests/CLAUDE.md`](../../CLAUDE.md#the-isolated-e2e-map).
+
+A file named by a spec key or prefix key inside a subset (such as
+`scripture-editor/chapter-marker-repair.spec.ts` or `scripture-editor/no-unasked-edits-`) is
+recommended for that key only: listing the same file in the subset's own `main` has no effect, so
+leave it out there. When the subset is recommended too, the key is folded into it.
+
 ## Spec files directly under `tests/isolated/`
 
 These belong to no subset, but `all` includes them; to run one alone, give its path (see "How to

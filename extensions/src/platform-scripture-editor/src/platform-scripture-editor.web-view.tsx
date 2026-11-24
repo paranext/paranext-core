@@ -120,7 +120,10 @@ import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet
 import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
-import { substituteProjectNameInMenu } from './menu-label-substitution.util';
+import {
+  substituteProjectNameInMenu,
+  substituteResourceNameInColumnHeading,
+} from './menu-label-substitution.util';
 import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
@@ -220,6 +223,8 @@ import {
   deepEqualAcrossIframes,
   findEditorUsjNotes,
   formatEditorTitle,
+  getEditorTabIconName,
+  getEditorTitleEditability,
   generateParagraphMenuListItems,
   getSimpleModeRootClassNames,
   getViewTypeToSave,
@@ -267,6 +272,7 @@ import {
   deriveReadOnlyFlags,
   getEditorWebViewContextKeyNames,
   getEditorWebViewContextKeys,
+  hasNonCollapsedSelection,
   flushRowEditsThenSave,
   forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
@@ -556,6 +562,7 @@ function PlatformScriptureEditor({
   id: webViewId,
   projectId,
   title,
+  iconName,
   useWebViewState,
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
@@ -1204,19 +1211,32 @@ function PlatformScriptureEditor({
     [viewType, isPowerMode],
   );
 
+  // Whether the main editor's own selection is a range. Only a selection the editor reports changes
+  // it: an `undefined` report is a blur (opening a menu blurs the editor, whose selection stays and
+  // is what Copy copies), so it leaves the value alone. A chapter change or a Scripture view switch
+  // replaces the editor's content and drops its selection without reporting one, so each clears it,
+  // as does new text from outside replacing the open chapter (`setEditorUsj`).
+  const [hasSelection, setHasSelection] = useState(false);
+
+  useEffect(() => {
+    setHasSelection(false);
+  }, [scrRef.book, scrRef.chapterNum, viewType]);
+
   // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
   // them when this web view closes. Hidden case: a hidden tab keeps publishing and its menu keeps
   // re-evaluating on every key change (the hook subscribes regardless of visibility), so it is
-  // current whenever the tab is shown; nothing waits for activation.
+  // current whenever the tab is shown; nothing waits for activation. `hasSelection` is data-driven
+  // too, so a selection or chapter change in a hidden tab needs no catch-up.
   useEffect(() => {
     const keys = getEditorWebViewContextKeys(webViewId, {
       isReadOnly,
       isPreview,
       isSyncBlocked,
       footnotesPaneVisible,
+      hasSelection,
     });
     Object.entries(keys).forEach(([key, value]) => papi.contextKeys.set(key, value));
-  }, [webViewId, isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible]);
+  }, [webViewId, isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible, hasSelection]);
 
   useEffect(() => {
     return () => {
@@ -1773,13 +1793,16 @@ function PlatformScriptureEditor({
       if (
         unformattedTitle === NO_UPDATE_TITLE ||
         projectName === defaultProjectName ||
-        resolvedIsDurablyReadOnly === undefined
+        resolvedIsDurablyReadOnly === undefined ||
+        // `isResource` defaults to false while loading; formatting then would show a resource's
+        // read-only indicator until the setting arrives.
+        isIsPublishedLoading
       )
         return NO_UPDATE_TITLE;
       const updatedTitle = await formatEditorTitle(
         unformattedTitle,
         projectId,
-        resolvedIsDurablyReadOnly,
+        getEditorTitleEditability(isResource, resolvedIsDurablyReadOnly),
         async () => projectName,
         papi.localization.getLocalizedStrings,
       );
@@ -1788,7 +1811,15 @@ function PlatformScriptureEditor({
       if (updatedTitle === title) return NO_UPDATE_TITLE;
 
       return updatedTitle;
-    }, [resolvedIsDurablyReadOnly, title, projectId, projectName, unformattedTitle]),
+    }, [
+      resolvedIsDurablyReadOnly,
+      isResource,
+      isIsPublishedLoading,
+      title,
+      projectId,
+      projectName,
+      unformattedTitle,
+    ]),
     NO_UPDATE_TITLE,
   );
 
@@ -1800,6 +1831,15 @@ function PlatformScriptureEditor({
       title: newTitleIfUpdated,
     });
   }, [newTitleIfUpdated, updateWebViewDefinition]);
+
+  // Give a resource tab the book icon once `platform.isPublished` is read: the factory picks the
+  // icon when the tab opens, and its lookup can fail and leave a resource on the project icon.
+  // `getEditorTabIconName` only ever swaps in the book icon, so a project, a setting still loading
+  // (`isResource` is then its default, false) or one that cannot be read keeps the tab's own icon.
+  useEffect(() => {
+    const correctedIconName = getEditorTabIconName(isResource, iconName);
+    if (correctedIconName !== iconName) updateWebViewDefinition({ iconName: correctedIconName });
+  }, [isResource, iconName, updateWebViewDefinition]);
 
   const viewOptions = useMemo<ViewOptions>(
     () => getEditorViewOptions(viewType, isPowerMode, allowInvisibleCharacters),
@@ -1864,6 +1904,9 @@ function PlatformScriptureEditor({
     // An external apply never reaches `onUsjChange`, so a pending comment is checked here too.
     discardPendingCommentIfAnchorChanged.current(usj);
     editorRef.current?.setUsj(usj, options);
+    // Replacing the document drops the editor's selection without reporting it, so Copy has nothing
+    // to copy until the user selects again.
+    setHasSelection(false);
     // A hidden pane is left without a document; showing it fetches the editor's, which is this one
     // from here on (`getUsj()` returns what `setUsj` was just handed).
     if (footnotesPaneRenderedRef.current) replacePaneDocument(usj);
@@ -2311,6 +2354,18 @@ function PlatformScriptureEditor({
           );
           break;
         }
+        case 'changeFootnotesPaneLocation': {
+          // `FootnotesLayout` moves the pane; this opens it too, so the user sees where it went.
+          // Opening re-wraps the text the same way the visibility toggle does, so it keeps the
+          // text's scroll position the same way.
+          if (footnotesPaneVisibleRef.current) break;
+          keepScrollPositionAcross(
+            editorContainerRef.current?.querySelector<HTMLElement>('.editor-container') ??
+              undefined,
+            () => setFootnotesPaneVisible(true),
+          );
+          break;
+        }
         // These three arrive from top-menu commands that are enabled regardless of whether the
         // editor can take the insert, and the command has already resolved by the time the message
         // lands — so a rejection here has nobody to return to. See `logInsertRejection`.
@@ -2480,9 +2535,6 @@ function PlatformScriptureEditor({
           }
           break;
         }
-        case 'changeFootnotesPaneLocation': {
-          break;
-        } // handled in FootnoteLayout
         default:
           // Unknown method name
           logger.debug(
@@ -4887,6 +4939,7 @@ function PlatformScriptureEditor({
   const handleSelectionChange = useCallback(
     async (change: SelectionRange | undefined) => {
       currentSelectionRef.current = change;
+      if (change) setHasSelection(hasNonCollapsedSelection(change));
 
       // Convert to ScriptureRangeUsjVerseRefChapterLocation format
       let scriptureSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
@@ -5260,10 +5313,16 @@ function PlatformScriptureEditor({
   const evaluatedTopMenu = useEvaluatedMenu(webViewMenuRaw.topMenu, menuTemplateVars);
 
   // Menu labels are localized once for every editor, so the project name stays as the
-  // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here.
+  // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here. A
+  // resource also names its Project column heading after its short name.
   const projectMenuData = useMemo(
-    () => substituteProjectNameInMenu(evaluatedTopMenu, projectName),
-    [evaluatedTopMenu, projectName],
+    () =>
+      substituteResourceNameInColumnHeading(
+        substituteProjectNameInMenu(evaluatedTopMenu, projectName),
+        isResource,
+        projectName,
+      ),
+    [evaluatedTopMenu, projectName, isResource],
   );
 
   const [booksPresentPossiblyError] = useProjectSetting(

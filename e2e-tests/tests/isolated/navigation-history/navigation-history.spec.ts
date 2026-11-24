@@ -61,7 +61,7 @@ test.use({
   // (src/renderer/testing/test-layout.data.ts), which has no Home tab and opens test-extension web
   // views — any of which the toolbar could resolve as its navigation target instead of the editor
   // these tests open.
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
   // The toolbar lays the history buttons out beside the BCV trigger and the project picker; a
   // narrower window collapses that row. 1280x800 is what the other launch suites are written
   // against.

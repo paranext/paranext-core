@@ -16,6 +16,7 @@ import {
   teardownElectronApp,
   WindowSize,
 } from './helpers';
+import { electronTracePlan, stopElectronTrace } from './electron-trace';
 import { suppressOnboardingTour } from './onboarding-tour.page';
 
 export { expect } from '@playwright/test';
@@ -110,7 +111,11 @@ export const test = base.extend<IsolatedFixtures>({
   allowOnboardingTour: [false, { option: true }],
 
   // Test-scoped fixture: Playwright launches one Electron instance per test() block.
-  electronApp: async ({ electronLaunchOptions, interfaceMode, seedSettings }, use) => {
+  electronApp: async (
+    { electronLaunchOptions, interfaceMode, seedSettings, trace },
+    use,
+    testInfo: TestInfo,
+  ) => {
     // Seed settings BEFORE launch (the app reads dev-appdata settings at startup). Pin the
     // interface mode (see the IsolatedFixtures doc) AND the interface language to English so specs
     // that match English UI text — `waitForHomeTab`'s 'Home' tab (localized via %home_dialog_title%)
@@ -129,9 +134,38 @@ export const test = base.extend<IsolatedFixtures>({
       const setupStart = Date.now();
       const ctx = await launchElectronApp(electronLaunchOptions);
       console.log(`[setup +${Date.now() - setupStart}ms] Electron app launch complete`);
+      // Playwright's `trace` option does not reach an Electron app (see electronTracePlan), so the
+      // app's context is traced here. Tracing must never decide a test's outcome, so its failures
+      // are only logged.
+      const tracePlan = electronTracePlan(trace, testInfo.retry);
+      let tracing = false;
+      if (tracePlan.record) {
+        try {
+          await ctx.electronApp.context().tracing.start({
+            snapshots: tracePlan.snapshots,
+            screenshots: tracePlan.screenshots,
+          });
+          tracing = true;
+        } catch (error) {
+          console.warn(`Could not start the Electron trace: ${error}`);
+        }
+      }
       try {
         await use(ctx.electronApp);
       } finally {
+        if (tracing) {
+          await stopElectronTrace({
+            keep: !tracePlan.keepOnlyOnFailure || testInfo.status !== testInfo.expectedStatus,
+            // The context is read inside `stop`, so a failure there stays within
+            // stopElectronTrace and the teardown below still runs.
+            stop: (path) =>
+              ctx.electronApp.context().tracing.stop(path === undefined ? undefined : { path }),
+            tracePath: () => testInfo.outputPath('electron-trace.zip'),
+            attach: (path) =>
+              testInfo.attach('electron-trace', { path, contentType: 'application/zip' }),
+            warn: (message) => console.warn(message),
+          });
+        }
         const teardownStart = Date.now();
         console.log('[teardown +0ms] Test-scoped app teardown starting...');
         await teardownElectronApp(ctx);
