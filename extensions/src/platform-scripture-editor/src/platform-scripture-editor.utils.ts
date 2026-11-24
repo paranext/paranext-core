@@ -955,40 +955,102 @@ const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_
 const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
 /**
+ * How an editor tab's title describes the project: `'editable'` and `'readOnly'` fill `{editable}`
+ * with the matching indicator, and `'resource'` fills it with nothing, so a resource's tab reads as
+ * its short name alone.
+ */
+export type EditorTitleEditability = 'editable' | 'readOnly' | 'resource';
+
+/**
+ * Picks the title editability for a tab. A resource is always `'resource'`, whatever its read-only
+ * state: a resource is never editable, so an indicator would only repeat that.
+ */
+export function getEditorTitleEditability(
+  isResource: boolean,
+  isReadOnly: boolean,
+): EditorTitleEditability {
+  if (isResource) return 'resource';
+  if (isReadOnly) return 'readOnly';
+  return 'editable';
+}
+
+/**
+ * Picks the icon name an editor tab shows. A resource tab shows the book icon whatever was saved.
+ *
+ * Any other tab keeps its saved name. An editor tab's project never changes in place, so a saved
+ * `'book-open'` exists only on a resource tab; keeping the saved name preserves the resource icon
+ * when the published-state lookup fails while a layout is restored.
+ *
+ * @param isResource Whether the tab's project is a published resource
+ * @param savedIconName The icon name saved with the tab's layout, if any
+ */
+export function getEditorTabIconName(
+  isResource: boolean,
+  savedIconName: string | undefined,
+): string | undefined {
+  return isResource ? 'book-open' : savedIconName;
+}
+
+/**
+ * Removes the `{editable}` placeholder from a title format together with one adjacent run of
+ * whitespace: the run before it, or the run after it when nothing precedes it. Whitespace anywhere
+ * else in the format is left alone.
+ */
+function removeEditablePlaceholder(titleFormat: string): string {
+  const match = /(\s*)\{editable\}/.exec(titleFormat);
+  if (!match) return titleFormat;
+  const before = titleFormat.slice(0, match.index);
+  const after = titleFormat.slice(match.index + match[0].length);
+  return before === '' ? after.trimStart() : before + after;
+}
+
+/**
  * Builds the editor's tab title. A localize key title is localized, then `{projectName}` is
  * replaced with the project's short name (or its id when the name is unavailable) and `{editable}`
- * with the editable or read-only indicator. `{projectId}` is replaced with the short name too, for
- * titles written before `{projectName}` existed.
+ * with the editable or read-only indicator, or with nothing for a resource (the placeholder is
+ * removed from the format together with the whitespace beside it, and the title's ends are trimmed;
+ * spacing elsewhere, including inside the project name, is kept). `{projectId}` is replaced with
+ * the short name too, for titles written before `{projectName}` existed.
  *
+ * @param editability Which indicator `{editable}` shows. Without a project id, `'resource'` behaves
+ *   like `'readOnly'`.
  * @param getProjectName Gets the project's `platform.name` setting. When it resolves to something
  *   missing, blank, or not a string, the title shows the project id instead.
  */
 export async function formatEditorTitle(
   unformattedTitle: string | undefined,
   projectId: string | undefined,
-  isReadOnly: boolean,
+  editability: EditorTitleEditability,
   getProjectName: (projectId: string) => Promise<unknown>,
   getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LanguageStrings>,
 ): Promise<string> {
   let title = unformattedTitle;
   if (!title) {
     if (projectId) title = PROJECT_TITLE_FORMAT_STRING_KEY;
-    else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
+    else title = editability === 'editable' ? SCRIPTURE_EDITOR_KEY : RESOURCE_VIEWER_KEY;
   }
   if (isLocalizeKey(title)) {
     const localizedStrings = await getLocalizedStrings({
       localizeKeys: [EDITABLE_KEY, READONLY_KEY, title],
     });
     const localizedTitleFormatStr = localizedStrings[title];
-    const editable = isReadOnly ? localizedStrings[READONLY_KEY] : localizedStrings[EDITABLE_KEY];
+    const hasNoIndicator = editability === 'resource' && !!projectId;
+    let editable = localizedStrings[READONLY_KEY];
+    if (hasNoIndicator) editable = '';
+    else if (editability === 'editable') editable = localizedStrings[EDITABLE_KEY];
+
+    const titleFormatStr = hasNoIndicator
+      ? removeEditablePlaceholder(localizedTitleFormatStr)
+      : localizedTitleFormatStr;
 
     if (projectId) {
       const projectName = getProjectDisplayName(projectId, await getProjectName(projectId));
-      title = formatProjectTitle(localizedTitleFormatStr, projectId, projectName, {
+      title = formatProjectTitle(titleFormatStr, projectId, projectName, {
         projectId: projectName,
         editable,
       });
-    } else title = formatReplacementString(localizedTitleFormatStr, { projectId, editable });
+    } else title = formatReplacementString(titleFormatStr, { projectId, editable });
+    if (hasNoIndicator) title = title.trim();
   }
 
   return title;
@@ -2725,7 +2787,10 @@ export function createUnsupportedProjectIdsCache(
  * recoverable on the next switch, while staying put would leave a panel silently on the outgoing
  * project.
  */
-async function isProjectPublished(papi: typeof PapiBackend, projectId: string): Promise<boolean> {
+export async function isProjectPublished(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean> {
   try {
     const pdp = await papi.projectDataProviders.get('platform.base', projectId);
     return (await pdp.getSetting('platform.isPublished')) === true;
