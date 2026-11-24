@@ -353,18 +353,57 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: 'F12', windows: 'F12', linux: 'F12' },
     locations: ['src/main/main.ts'],
   },
-  // Paste and Paste as plain text are handled inside the editor library that ships as the
-  // `@eten-tech-foundation/platform-editor` package (its `ClipboardPlugin` reads the clipboard and
-  // dispatches the paste), so there is no handler file in this repo to link. `locations` names the
-  // components that mount that editor, because a path in another repo would not resolve: the web
-  // view, which renders the footnote editor for a note, and the footnote editor component that
-  // embeds the editor for a note's text. `platform-scripture-editor-footnotes.component.tsx` is not
-  // listed: it only forwards `renderEditingFootnote` to `FootnoteList`. No `command`: the chord is
-  // the editor's own, not a PAPI command a menu item runs.
+  // Copy, Cut, Paste and Paste as Plain Text are handled inside the editor library that ships as
+  // the `@eten-tech-foundation/platform-editor` package (its `ClipboardPlugin`, which every
+  // editor mounts, claims the chords and dispatches the copy, cut or paste), so there is no handler
+  // file in this repo to link. `locations` names the components that mount that editor, because a
+  // path in another repo would not resolve. Cut and the pastes act only in an editable text: the
+  // web view, which renders the footnote editor for a note, and the footnote editor component that
+  // embeds the editor for a note's text. Copy also works in the read-only texts that mount the
+  // editor. `platform-scripture-editor-footnotes.component.tsx` is not listed: it only forwards
+  // `renderEditingFootnote` to `FootnoteList`. No `command`: the chords are the editor's own, not
+  // PAPI commands a menu item runs. The editor matches the chords by the physical V/C/X key on a
+  // keyboard layout whose letters are not Latin.
+  //
+  // What a copy or paste keeps is catalogued in
+  // `.context/standards/Scripture-Data-Fidelity-Catalog.md`: CB-27 is Paste as Plain Text's
+  // conversion to prose (a copy whose prose is blank pastes nothing, and text the converter cannot
+  // turn into prose pastes as a normal paste would); CB-1, CB-3 and CB-5 are what a paste in
+  // Simple mode's text loses, and the backslash-or-slash refusal is tracked on PT-4911.
+  {
+    id: 'scripture-editor-copy',
+    purpose:
+      'Copy the selection. Where markers show as text (the Standard view, the footnote editors) the copy is USFM; elsewhere it is the text as shown, with a footnote’s words inline. In a text that limits copying, the copy is shortened to the limit',
+    category: 'Editing',
+    context:
+      'Scripture editor web view and the read-only scripture texts (handled by the @eten-tech-foundation/platform-editor package)',
+    keys: { macOS: '⌘C', windows: 'Ctrl+C', linux: 'Ctrl+C' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'extensions/src/platform-scripture-editor/src/resource-text-panel.component.tsx',
+      'extensions/src/platform-scripture-editor/src/model-text-panel.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell.component.tsx',
+      'extensions/src/platform-enhanced-resources/src/components/scripture-pane/scripture-pane.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-editor-cut',
+    purpose:
+      'Cut the selection: copy it as Copy does, then remove it. Does nothing in a read-only text',
+    category: 'Editing',
+    context:
+      'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
+    keys: { macOS: '⌘X', windows: 'Ctrl+X', linux: 'Ctrl+X' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
   {
     id: 'scripture-editor-paste',
     purpose:
-      'Paste the clipboard into the editor. In the Standard view and the footnote editors, USFM pastes as markers; in Simple mode’s text, see CB-3 and CB-5 in the Scripture Data Fidelity Catalog for what a paste keeps',
+      'Paste the clipboard into the editor. Where markers show as text (the Standard view, the footnote editors), USFM pastes as markers. In Simple mode’s text a paste can lose some formatting (character attributes, footnote details, figures), and, as of 2026-11, text holding a backslash or slash with no formatting is refused',
     category: 'Editing',
     context:
       'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
@@ -377,11 +416,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-editor-paste-plain-text',
     purpose:
-      'Paste the clipboard as plain text. In the Standard view and the footnote editors, USFM pastes as prose (a footnote’s words inline, no markers, no verse or chapter numbers; see CB-27), and text that cannot be turned into prose pastes as a normal paste would. In Simple mode’s text, the text pastes unconverted, and text holding a backslash or slash is refused (CB-5, PT-4911)',
+      'Paste the clipboard as plain text. Where markers show as text (the Standard view, the footnote editors), USFM pastes as prose: a footnote’s words inline, no markers, no verse or chapter numbers. In Simple mode’s text the text pastes unconverted, and, as of 2026-11, text holding a backslash or slash is refused',
     category: 'Editing',
     context:
       'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
-    // The editor's right-click menu has the same "Paste as Plain Text" item. macOS’s own ⌥⇧⌘V
+    // The editor's right-click menu has the same "Paste as Plain Text" item. macOS's own ⌥⇧⌘V
     // ("Paste and Match Style") is not handled by the editor, so it keeps the unconverted paste.
     keys: { macOS: '⇧⌘V', windows: 'Ctrl+Shift+V', linux: 'Ctrl+Shift+V' },
     locations: [
