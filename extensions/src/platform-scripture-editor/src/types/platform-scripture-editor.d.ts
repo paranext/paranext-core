@@ -612,7 +612,10 @@ declare module 'platform-scripture-editor' {
    * (and corners) unless it is the first element and the trailing sides unless it is the last. Each
    * element's top and bottom follow its own font size and baseline, so over a raised, smaller verse
    * number they sit inside the text's. An annotation that paints one element is drawn as the style
-   * reads.
+   * reads. A view's own rule that outranks the annotation's class keeps its value: outside Standard
+   * view a verse number keeps its own padding and margin. Where annotations of two registered types
+   * paint one element, the element keeps a side that either annotation starts or ends on, and shows
+   * the values of the type registered later.
    */
   export type AnnotationStyleProperties = {
     /**

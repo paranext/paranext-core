@@ -438,32 +438,34 @@ Outside Standard view a verse number's own view rules can outrank an annotation'
 draws the verse badge, the Simple gutter view sets `background: none` on `span.verse`, and the
 `.text-spacing … .verse` spacing rules beat the annotation class on a wholly held `span.verse`, so
 there an annotation's background does not show on a verse number and its padding and margin never
-reach one.
-An editable carrier (a marker glyph, a chapter glyph, a verse, an attribute run, an editable caller,
-an unmatched closer) held only in
-part is cut into sibling pieces of its own class and `data-*` attributes, and only the held pieces
-carry the annotation's classes: `\v<NBSP>4 ` held on its `4` renders as three
-`span.verse[data-number="4"]` pieces, `\v<NBSP>`, `4` and ` `. So a selector for a carrier can match
-several pieces — the carrier's own node is the first, which `querySelector` and Playwright's
-`.first()` find, and every later piece's element carries `data-piece-continuation` — and a box rule
-on a carrier class repeats on every piece unless it is scoped to the head piece with
-`:not([data-piece-continuation])`. A read-only decorator held in part keeps its root whole and draws
-sub-spans carrying the classes and `data-annotation-keys` over the held characters. Whitespace
-between two held bytes in one block is painted, on its own element; whitespace at the edges never
-is, and bytes the view does not display paint nothing. Measure, scroll to or hit-test an annotation
-with `EditorRef.getAnnotationRanges(type, id)` — one range over each painted element's contents, in
-document order — as `editor-dom.util.ts` does, rather than re-deriving the painting rules from
-classes. The first element an annotation paints, by document order, also carries
-`editor-typed-markStart-<type>` and its last `editor-typed-markEnd-<type>` (one element carries
-both); a box style draws one box over everything it paints by keeping the whole value on the base
-class and removing the inline-start and inline-end sides and corners from an element that is not
-the first or last, with `:not(.editor-typed-markStart-<type>)` and `:not(.editor-typed-markEnd-<type>)`
-override rules, as the annotation style data provider does with any registered `border`,
-`borderRadius`, `padding` and `margin` value. An annotation inside a collapsed note's content — its undisplayed `\cat` included — is
-not shown and never paints the caller, as in Paratext 9; it reappears when the note is expanded and
-still reports its removal. Rationale: `adr-editor-annotations-paint-by-element`,
-`adr-editor-annotations-paint-exactly`, `adr-editor-annotation-edge-classes` and
-`adr-editor-collapsed-note-hides-its-annotations` in
+reach one. An editable carrier (a marker glyph, a chapter glyph, a verse, an attribute run, an
+editable caller, an unmatched closer) held only in part is cut into sibling pieces of its own class
+and `data-*` attributes, and only the held pieces carry the annotation's classes: `\v<NBSP>4 ` held
+on its `4` renders as three `span.verse[data-number="4"]` pieces, `\v<NBSP>`, `4` and ` `. So a
+selector for a carrier can match several pieces — the carrier's own node is the first, which
+`querySelector` and Playwright's `.first()` find, and every later piece's element carries
+`data-piece-continuation` — and a box rule on a carrier class repeats on every piece unless it is
+scoped to the head piece with `:not([data-piece-continuation])`. A read-only decorator held in part
+keeps its root whole and draws sub-spans carrying the classes and `data-annotation-keys` over the
+held characters. Whitespace between two held bytes in one block is painted, on its own element;
+whitespace at the edges never is, and bytes the view does not display paint nothing. Measure, scroll
+to or hit-test an annotation with `EditorRef.getAnnotationRanges(type, id)` — one range over each
+painted element's contents, in document order — as `editor-dom.util.ts` does, rather than
+re-deriving the painting rules from classes. The first element an annotation paints, by document
+order, also carries `editor-typed-markStart-<type>` and its last `editor-typed-markEnd-<type>` (one
+element carries both); a box style draws one box over everything it paints by keeping the whole
+value on the base class and removing the inline-start and inline-end sides and corners from an
+element that is not the first or last. The annotation style data provider does this with any
+registered `border`, `borderRadius`, `padding` and `margin` value through override rules at the base
+class's own specificity, placed after every base rule:
+`.editor-typed-mark-<type>:where(:not(.editor-typed-markStart-<type>, …))` and the same for the end,
+whose `:not()` also lists that edge class of every other registered type setting the property, so an
+element at another annotation's edge keeps that side, and a view rule that outranks the base class
+(the formatted views' verse-number spacing) is never overridden. An annotation inside a collapsed
+note's content — its undisplayed `\cat` included — is not shown and never paints the caller, as in
+Paratext 9; it reappears when the note is expanded and still reports its removal. Rationale:
+`adr-editor-annotations-paint-by-element`, `adr-editor-annotations-paint-exactly`,
+`adr-editor-annotation-edge-classes` and `adr-editor-collapsed-note-hides-its-annotations` in
 [`Architecture-Decisions.md`](Architecture-Decisions.md).
 
 `onRemove`: each `<mark>` reports its own removal when it goes away — one call per `<mark>`, whatever

@@ -64,13 +64,15 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 
 // A match the editor paints as several elements (a verse number and the text after it, text on both
 // sides of a character style's edge) rounds only its outer corners: the leading corners of its
-// first element and the trailing corners of its last.
-.editor-typed-markStart-external-find-result-highlight {
+// first element and the trailing corners of its last. Each selector names the base class too, so it
+// outranks the corner overrides a registered annotation style puts on its own middle elements
+// (specificity (0,1,0)) and a match inside such an annotation keeps its corners.
+.editor-typed-mark-external-find-result-highlight.editor-typed-markStart-external-find-result-highlight {
   border-start-start-radius: 2px;
   border-end-start-radius: 2px;
 }
 
-.editor-typed-markEnd-external-find-result-highlight {
+.editor-typed-mark-external-find-result-highlight.editor-typed-markEnd-external-find-result-highlight {
   border-start-end-radius: 2px;
   border-end-end-radius: 2px;
 }

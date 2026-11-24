@@ -25,16 +25,21 @@
  *   selection over the same break then reports both of its ends without the editor erroring.
  * - A comment on a word after a `\w` span stays on that word when the span's attribute is re-spelled
  *   (`|lemma="grace"` settling to `|grace`), and the saved span carries the attribute.
+ * - A registered box style draws one box over every element an annotation across a verse number
+ *   paints, and an annotation of a second box-styled type inside it keeps both its sides on the
+ *   element in the outer one's middle.
  * - A caret clicked past a paragraph's trailing footnote stays there when a marker literal typed
  *   earlier in the same paragraph settles, and is reported at the footnote's closer.
  * - An annotation on a collapsed footnote's text, styled with a box that carries its own
  *   `!important`, draws nothing: the footnote is no wider than its caller alone.
+ * - In Formatted view, a verse number in the middle of a box-styled annotation keeps the view's own
+ *   spacing.
  *
  * Settle timing: a typed marker literal settles when the caret leaves it or after an idle delay,
  * whichever comes first. This test raises the idle delay
- * (`platformScriptureEditor.markerSettleDelayMs`) so the last step can take its geometry reads and
- * click between typing and the settle; every other step leaves its edit by clicking elsewhere, so
- * the delay does not change what they check.
+ * (`platformScriptureEditor.markerSettleDelayMs`) so the trailing-footnote step can take its
+ * geometry reads and click between typing and the settle; every other step leaves its edit by
+ * clicking elsewhere, so the delay does not change what they check.
  *
  * Saving: an annotation is not document content, so a correct one triggers no save — and a save is
  * what would expose a byte it fabricated. Steps that check the saved document therefore make a
@@ -85,10 +90,26 @@ import {
  */
 const ANNOTATION_TYPE = 'spelling';
 
+/** Box-styled annotation types the box steps register, an outer one and one painted inside it. */
+const BOX_TYPE = 'e2e-box';
+const INNER_BOX_TYPE = 'e2e-inner-box';
+/** The box-styled annotation type the Formatted view step registers. */
+const VERSE_BOX_TYPE = 'e2e-verse-box';
+
+/** Register an annotation style through the annotation style data provider, as an extension does. */
+async function registerAnnotationStyle(typeName: string, style: Record<string, string>) {
+  await sendPapiRequestOnce(
+    'object:platformScriptureEditor.annotationStyle-data.registerAnnotationStyle',
+    [typeName, style],
+    DEFAULT_WEBSOCKET_PORT,
+    30_000,
+  );
+}
+
 /**
  * John 2 in the sample WEB project. Paragraph by paragraph: v1–3 · v4 · v5 · v6–11 · v12 · v13–17 ·
- * v18 · v19 · v20–22 · v23–25. The steps use v1–2, v4, v11, v12, v18–19 and v22; v24 is where the
- * caret goes to leave an edit, and v23 carries the save probes.
+ * v18 · v19 · v20–22 · v23–25. The steps use v1–2, v4, v11, v12, v13–14, v18–19 and v22; v24 is
+ * where the caret goes to leave an edit, and v23 carries the save probes.
  */
 const CHAPTER_REFERENCE = 'John 2:1';
 /** Pins the fixture data before any location is computed from it. */
@@ -626,6 +647,80 @@ test.describe('scripture editor annotation shapes', () => {
       expect(paragraphContent(saved, paragraphIndex)[textIndex + 2]).toBe(textAfter);
     });
 
+    await test.step('a box style draws one box over every element, and an annotation of another type inside it keeps its own sides', async () => {
+      await registerAnnotationStyle(BOX_TYPE, {
+        padding: '0 5px',
+        border: '2px solid blue',
+        borderRadius: '6px',
+      });
+      await registerAnnotationStyle(INNER_BOX_TYPE, {
+        padding: '0 3px',
+        border: '1px solid green',
+      });
+      const verseThirteen = requireVerseText(chapterUsj, '13');
+      const verseFourteen = requireVerseText(chapterUsj, '14');
+      // The range must run from verse 13's own text straight into verse 14's, across nothing but
+      // the verse number.
+      expect(paragraphIndexOf(verseFourteen)).toBe(paragraphIndexOf(verseThirteen));
+      expect(indexInParagraph(verseFourteen)).toBe(indexInParagraph(verseThirteen) + 2);
+
+      // Outer: the last 4 characters of verse 13, the verse number, the first 6 of verse 14.
+      // Inner: the first 2 characters of verse 14, so the element they paint is the middle of the
+      // outer annotation and both edges of the inner one.
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterLocation(
+            johnVerse(2, 13),
+            verseThirteen.jsonPath,
+            verseThirteen.text.length - 4,
+          ),
+          end: chapterLocation(johnVerse(2, 14), verseFourteen.jsonPath, 6),
+        },
+        BOX_TYPE,
+        'one-box',
+      ]);
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterLocation(johnVerse(2, 14), verseFourteen.jsonPath, 0),
+          end: chapterLocation(johnVerse(2, 14), verseFourteen.jsonPath, 2),
+        },
+        INNER_BOX_TYPE,
+        'inside-box',
+      ]);
+      const paragraph = paragraphWith(verseThirteen.text.slice(0, 20));
+      const outer = paragraph.locator('.annotationId-one-box');
+      const inner = paragraph.locator('.annotationId-inside-box');
+      await expect(inner).toHaveCount(1, { timeout: 30_000 });
+      // Verse 13's text, the verse number's pieces, the inner annotation's element, the rest.
+      expect(await outer.count()).toBeGreaterThanOrEqual(4);
+
+      // Computed styles, so the cascade is what is checked, not the rules' text.
+      await expect(outer.first()).toHaveCSS('padding-inline-start', '5px', { timeout: 30_000 });
+      await expect(outer.first()).toHaveCSS('padding-inline-end', '0px');
+      await expect(outer.first()).toHaveCSS('border-inline-start-width', '2px');
+      await expect(outer.first()).toHaveCSS('border-inline-end-style', 'none');
+      await expect(outer.first()).toHaveCSS('border-start-start-radius', '6px');
+      await expect(outer.first()).toHaveCSS('border-start-end-radius', '0px');
+      await expect(outer.last()).toHaveCSS('padding-inline-start', '0px');
+      await expect(outer.last()).toHaveCSS('padding-inline-end', '5px');
+      await expect(outer.last()).toHaveCSS('border-inline-start-style', 'none');
+      await expect(outer.last()).toHaveCSS('border-end-end-radius', '6px');
+      await expect(outer.last()).toHaveCSS('border-end-start-radius', '0px');
+      // A middle element keeps only the top and bottom of the box.
+      await expect(outer.nth(1)).toHaveCSS('border-inline-start-style', 'none');
+      await expect(outer.nth(1)).toHaveCSS('border-inline-end-style', 'none');
+      await expect(outer.nth(1)).toHaveCSS('border-top-width', '2px');
+      // The inner annotation starts and ends on an element in the middle of the outer one, and
+      // keeps both its sides there; registered later, its values are the ones shown.
+      await expect(inner).toHaveClass(
+        new RegExp(`(^|\\s)editor-typed-mark-external-${BOX_TYPE}(\\s|$)`),
+      );
+      await expect(inner).toHaveCSS('padding-inline-start', '3px');
+      await expect(inner).toHaveCSS('padding-inline-end', '3px');
+      await expect(inner).toHaveCSS('border-inline-start-width', '1px');
+      await expect(inner).toHaveCSS('border-inline-end-width', '1px');
+    });
+
     await test.step('a caret past a trailing footnote stays there when an earlier literal in the paragraph settles', async () => {
       await navigateToolbarBcv(mainPage, TRAILING_NOTE_REFERENCE);
       await expect(editorInput).toContainText('about the sixth hour', { timeout: 60_000 });
@@ -729,12 +824,62 @@ test.describe('scripture editor annotation shapes', () => {
       const mark = noteElement.locator('mark.annotationId-in-collapsed-note');
       await expect(mark).toHaveCount(1, { timeout: 30_000 });
       // A hidden element still reports its computed style, so the registered rule having reached
-      // the page shows on the mark itself; only then does the unchanged width mean anything.
-      // No edge class is on a mark in collapsed content, so its inline padding is removed (with
-      // the priority) and only the block padding is left.
+      // the page shows on the mark itself. No edge class is on a mark in collapsed content, so its
+      // inline padding is removed (with the priority) and only the block padding is left.
       await expect(mark).toHaveCSS('padding', '6px 0px', { timeout: 30_000 });
-      expect((await noteElement.boundingBox())?.width).toBe(widthBefore);
+      // What keeps the box out is the vendored stylesheet hiding the mark; the width is the
+      // outcome a user sees, and holds while either the hiding or the removed sides do.
       await expect(mark).toHaveCSS('display', 'none');
+      expect((await noteElement.boundingBox())?.width).toBe(widthBefore);
+    });
+
+    await test.step('in Formatted view a verse number inside a box style keeps its own spacing', async () => {
+      await registerAnnotationStyle(VERSE_BOX_TYPE, { padding: '0 5px', margin: '0 4px' });
+      // A view change reloads the document, which drops every annotation, so this step comes last.
+      await sendToEditorController(editorId, 'setScriptureView', ['formatted']);
+      // Not `editorInput`: Formatted view's input has no `marker-editable` class.
+      const formattedInput = editorFrame.locator('.editor-input').first();
+      await expect(formattedInput).toHaveClass(/(^|\s)text-spacing(\s|$)/, { timeout: 60_000 });
+      const chapterFour = await getChapterUsj(johnVerse(4, 1));
+      // Two consecutive verses whose texts sit either side of one verse number in one paragraph.
+      const verseNumber = Array.from({ length: 20 }, (_, index) => index + 1).find((verse) => {
+        const before = findVerseText(chapterFour.content ?? [], `${verse}`);
+        const after = findVerseText(chapterFour.content ?? [], `${verse + 1}`);
+        return (
+          before &&
+          after &&
+          paragraphIndexOf(before) === paragraphIndexOf(after) &&
+          indexInParagraph(after) === indexInParagraph(before) + 2
+        );
+      });
+      if (verseNumber === undefined) throw new Error('John 4 has no two verses side by side');
+      const before = requireVerseText(chapterFour, `${verseNumber}`);
+      const after = requireVerseText(chapterFour, `${verseNumber + 1}`);
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterLocation(
+            johnVerse(4, verseNumber),
+            before.jsonPath,
+            before.text.length - 4,
+          ),
+          end: chapterLocation(johnVerse(4, verseNumber + 1), after.jsonPath, 4),
+        },
+        VERSE_BOX_TYPE,
+        'formatted-verse',
+      ]);
+      const painted = formattedInput.locator('.annotationId-formatted-verse');
+      // The registered rule reached the page: the first element has the box's leading side.
+      await expect(painted.first()).toHaveCSS('padding-inline-start', '5px', { timeout: 30_000 });
+      const verse = formattedInput.locator(
+        `span.verse[data-number="${verseNumber + 1}"].annotationId-formatted-verse`,
+      );
+      await expect(verse).toHaveCount(1);
+      // The view's own verse spacing (`.text-spacing .verse`) outranks the annotation's class, so
+      // the override that removes a middle element's sides does not reach it either.
+      await expect(verse).toHaveCSS('padding-inline-start', '1px');
+      await expect(verse).toHaveCSS('padding-inline-end', '1px');
+      await expect(verse).toHaveCSS('margin-inline-start', '2px');
+      await expect(verse).toHaveCSS('margin-inline-end', '2px');
     });
   });
 });

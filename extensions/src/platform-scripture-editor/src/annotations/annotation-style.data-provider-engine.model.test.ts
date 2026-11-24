@@ -9,8 +9,8 @@ async function stylesheetFor(properties: AnnotationStyleProperties): Promise<str
 }
 
 const BASE = '.editor-typed-mark-external-check';
-const NOT_START = `${BASE}:not(.editor-typed-markStart-external-check)`;
-const NOT_END = `${BASE}:not(.editor-typed-markEnd-external-check)`;
+const NOT_START = `${BASE}:where(:not(.editor-typed-markStart-external-check))`;
+const NOT_END = `${BASE}:where(:not(.editor-typed-markEnd-external-check))`;
 
 /** One CSS rule as the engine writes it. */
 function rule(selector: string, ...declarations: string[]): string {
@@ -168,17 +168,87 @@ describe('AnnotationStyleDataProviderEngine stylesheet', () => {
     await engine.registerAnnotationStyle('one', { padding: '1px' });
     await engine.registerAnnotationStyle('two', { color: 'red' });
     await engine.registerAnnotationStyle('thr/ee', { border: '1px solid red' });
-    const stylesheet = await engine.getAnnotationStylesheet();
-    expect(stylesheet).toContain(
-      '.editor-typed-mark-external-one:not(.editor-typed-markStart-external-one) {\n' +
-        '  padding-inline-start: 0;',
+    expect(await engine.getAnnotationStylesheet()).toBe(
+      [
+        rule('.editor-typed-mark-external-one', 'padding: 1px'),
+        rule('.editor-typed-mark-external-two', 'color: red'),
+        rule('.editor-typed-mark-external-thr-ee', 'border: 1px solid red'),
+        rule(
+          '.editor-typed-mark-external-one:where(:not(.editor-typed-markStart-external-one))',
+          'padding-inline-start: 0',
+        ),
+        rule(
+          '.editor-typed-mark-external-one:where(:not(.editor-typed-markEnd-external-one))',
+          'padding-inline-end: 0',
+        ),
+        rule(
+          '.editor-typed-mark-external-thr-ee:where(:not(.editor-typed-markStart-external-thr-ee))',
+          'border-inline-start: none',
+        ),
+        rule(
+          '.editor-typed-mark-external-thr-ee:where(:not(.editor-typed-markEnd-external-thr-ee))',
+          'border-inline-end: none',
+        ),
+      ].join('\n\n'),
     );
-    expect(stylesheet).toContain('.editor-typed-mark-external-two {\n  color: red;\n}');
-    expect(stylesheet).not.toContain('external-two:not');
-    expect(stylesheet).toContain(
-      '.editor-typed-mark-external-thr-ee:not(.editor-typed-markEnd-external-thr-ee) {\n' +
-        '  border-inline-end: none;',
+  });
+
+  it("exempts an element from a side's override where any type with that box property has that edge", async () => {
+    const engine = new AnnotationStyleDataProviderEngine();
+    await engine.registerAnnotationStyle('outer', { padding: '0 4px', border: '1px solid red' });
+    await engine.registerAnnotationStyle('inner', { padding: '0 2px' });
+    const outer = '.editor-typed-mark-external-outer';
+    const inner = '.editor-typed-mark-external-inner';
+    expect(await engine.getAnnotationStylesheet()).toBe(
+      [
+        rule(outer, 'padding: 0 4px', 'border: 1px solid red'),
+        rule(inner, 'padding: 0 2px'),
+        rule(
+          `${outer}:where(:not(.editor-typed-markStart-external-outer, .editor-typed-markStart-external-inner))`,
+          'padding-inline-start: 0',
+        ),
+        rule(
+          `${outer}:where(:not(.editor-typed-markStart-external-outer))`,
+          'border-inline-start: none',
+        ),
+        rule(
+          `${outer}:where(:not(.editor-typed-markEnd-external-outer, .editor-typed-markEnd-external-inner))`,
+          'padding-inline-end: 0',
+        ),
+        rule(
+          `${outer}:where(:not(.editor-typed-markEnd-external-outer))`,
+          'border-inline-end: none',
+        ),
+        rule(
+          `${inner}:where(:not(.editor-typed-markStart-external-outer, .editor-typed-markStart-external-inner))`,
+          'padding-inline-start: 0',
+        ),
+        rule(
+          `${inner}:where(:not(.editor-typed-markEnd-external-outer, .editor-typed-markEnd-external-inner))`,
+          'padding-inline-end: 0',
+        ),
+      ].join('\n\n'),
     );
-    expect(stylesheet).not.toContain('external-one {\n  border');
+  });
+
+  it('writes the rules again without a deleted type', async () => {
+    const engine = new AnnotationStyleDataProviderEngine();
+    const nonce = await engine.registerAnnotationStyle('outer', { padding: '1px' });
+    await engine.registerAnnotationStyle('inner', { padding: '2px' });
+    expect(await engine.getAnnotationStylesheet()).toContain('markStart-external-outer');
+    await engine.deleteAnnotationStyle(nonce);
+    expect(await engine.getAnnotationStylesheet()).toBe(
+      [
+        rule('.editor-typed-mark-external-inner', 'padding: 2px'),
+        rule(
+          '.editor-typed-mark-external-inner:where(:not(.editor-typed-markStart-external-inner))',
+          'padding-inline-start: 0',
+        ),
+        rule(
+          '.editor-typed-mark-external-inner:where(:not(.editor-typed-markEnd-external-inner))',
+          'padding-inline-end: 0',
+        ),
+      ].join('\n\n'),
+    );
   });
 });

@@ -3098,17 +3098,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** The editor puts `<theme.typedMarkStart>-<type>` (`editor-typed-markStart-…`) on the
   first element each annotation paints and `<theme.typedMarkEnd>-<type>` on its last, by document
   order, across marks, display-byte pieces and decorator sub-spans, per annotation, so two
-  overlapping annotations of one type each get their own. The annotation style data provider
-  splits the box properties of a registered style by subtraction, so a registered style draws one
-  box with no change to the API: every property goes on the base class exactly as the host wrote it,
-  and `padding`, `margin`, `border` and `borderRadius` also get two override rules,
-  `.editor-typed-mark-external-<type>:not(.editor-typed-markStart-external-<type>)` and the same
-  with `markEnd`, that zero the inline-start (or inline-end) padding and margin, set that side's
-  border to `none`, and zero that side's two corner radii. A host value carrying `!important` gets
-  an override carrying it too. No value is parsed, so every form splits: a `var()`, three or four
-  values, an elliptical radius, a priority. Logical properties put the start on the right in right-to-left text. Core's hard-coded Find
-  current-result style and Enhanced Resources' marble-word rules (`scripture-pane.component.tsx`)
-  round only their outer corners the same way, by hand.
+  overlapping annotations of one type each get their own. The annotation style data provider splits
+  the box properties of a registered style by subtraction, so a registered style draws one box with
+  no change to the API: every property goes on the base class exactly as the host wrote it, and
+  `padding`, `margin`, `border` and `borderRadius` also get override rules,
+  `.editor-typed-mark-external-<type>:where(:not(.editor-typed-markStart-external-<type>, …))` and
+  the same with `markEnd`, that zero the inline-start (or inline-end) padding and margin, set that
+  side's border to `none`, and zero that side's two corner radii. The `:not()` lists that edge class
+  of every registered type setting the same property, so an element that starts (or ends) any such
+  annotation keeps that side. The overrides have the base rule's specificity, (0,1,0), and come
+  after every base rule. A host value carrying `!important` gets an override carrying it too. No
+  value is parsed, so every form splits: a `var()`, three or four values, an elliptical radius, a
+  priority. Logical properties put the start on the right in right-to-left text. Core's hard-coded
+  Find current-result style and Enhanced Resources' marble-word rules
+  (`scripture-pane.component.tsx`) round only their outer corners the same way, by hand; Find's
+  corner rules name the base class with the edge class, so a registered override does not square the
+  corners of a match inside a registered annotation.
 - **Alternatives:** **Sibling selectors** (`.x + .x`, `.x:has(+ .x)`) — rejected: they work only
   between adjacent siblings, not into or out of a char span or a note, and an extension cannot write
   a selector through the style API. **`data-` attributes** — rejected: these are per-type style
@@ -3119,21 +3124,30 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   rejected: splitting inside the data provider keeps every extension's existing registration
   correct. **Parsing each value into block, start and end parts** — rejected: it cannot split what
   it cannot parse (a `var()` that may hold several values, three or four values, an elliptical
-  radius, a priority), which then drew one box per element.
+  radius, a priority), which then drew one box per element. **Overrides that outrank the base rule**
+  (a bare `:not()`, specificity (0,2,0)) — rejected: on an element two annotation types paint, one
+  type's override removed the sides the other type's base rule drew at its own edge, and beat rules
+  the base rule loses to, such as the formatted views' verse-number spacing. **Overrides at the base
+  rule's specificity that exempt only their own type's edge** — rejected: where two types overlap,
+  which sides survive would depend on the order the types were registered.
 - **Consequences:** An annotation painting one element gets both classes, so nothing is removed and
   it draws exactly as the style reads; a middle element loses both inline sides; an element no edge
-  class is put on keeps only the block sides. Every box value form splits. The cost is that the
-  override selectors have specificity (0,2,0) (the `:not()` counts its argument), so a host
-  stylesheet that sets a box property on the base class at lower specificity cannot reach the
-  removed sides, and an important host value is matched only by an important override. A line wrap inside an annotation leaves the line ends open, as one long
-  inline element does. An element a collapsed note hides (anything in its content but its caller,
-  decided from the tree so it holds in a hidden tab) never counts as first or last: a box running
-  into a collapsed footnote ends on the last element still shown, its caller included, and moves
-  into the note's content as it expands; and the vendored stylesheet draws no box on a `<mark>`
-  inside collapsed note content, whose text is hidden. A host
-  writing its own stylesheet (core's `_editor-overrides.scss`) uses the same three classes. Hover
-  stays per element: `:hover` on an annotation's class lights only the element under the pointer,
-  as before; lighting the whole annotation needs a host-set state class and is not done here.
+  class is put on keeps only the block sides. Every box value form splits. Because the overrides
+  have the base rule's specificity, they remove only sides a base rule could draw: a stylesheet rule
+  that outranks the base rule (`.text-spacing .verse`) keeps its own spacing, and an important host
+  value is matched only by an important override. An element at an edge of one registered annotation
+  keeps that side even where it is the middle of another, but it can show only one value per
+  property: the base rule of the type registered later. A host stylesheet that removes sides itself,
+  like Find's, needs more than (0,1,0) on its edge rules to keep them under a registered override. A
+  line wrap inside an annotation leaves the line ends open, as one long inline element does. An
+  element a collapsed note hides (anything in its content but its caller, decided from the tree so
+  it holds in a hidden tab) never counts as first or last: a box running into a collapsed footnote
+  ends on the last element still shown, its caller included, and moves into the note's content as it
+  expands; and the vendored stylesheet draws no box on a `<mark>` inside collapsed note content,
+  whose text is hidden. A host writing its own stylesheet (core's `_editor-overrides.scss`) uses the
+  same three classes. Hover stays per element: `:hover` on an annotation's class lights only the
+  element under the pointer, as before; lighting the whole annotation needs a host-set state class
+  and is not done here.
 - **Source:** PT-4370.
 
 ## adr-editor-annotation-exact-locations: An annotation holds exactly the bytes its range names, and removal reporting follows whatever holds it now
