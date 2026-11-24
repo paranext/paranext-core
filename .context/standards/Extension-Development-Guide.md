@@ -1,7 +1,7 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.11
+version: 1.2.0
 status: active
 created: 2026-03-04
 last_updated: 2026-11-17
@@ -132,6 +132,38 @@ rather than registering a copy per instance. For richer per-instance interaction
 controller** (see [WebViews](#webviews)), which already exists for that need: it is a network object
 per web view, so its methods are addressed to a specific instance without any global name per
 instance.
+
+### Restricting who may call a command
+
+By default any PAPI connection can call a command: every extension, every WebView, and any program
+or browser page that connects to the PAPI WebSocket without identifying itself. A command that
+changes something a stranger should not, such as installing an extension, can name the processes
+allowed to call it with `allowedCallers`:
+
+```typescript
+await papi.commands.registerCommand(
+  'myExtension.installSomething',
+  installSomething,
+  installSomethingDocs, // or undefined
+  { allowedCallers: ['renderer', 'extensionHost'] },
+);
+```
+
+The processes are `renderer` (the app's windows,
+including every WebView in them), `extensionHost` and `dotnetDataProvider`; main can always call.
+Main enforces the option on remote calls, and the platform applies it to calls from inside the
+registering process too. A caller not on the list gets `MethodNotFound` with
+`'<command>' is not available on this connection`.
+
+Know what it does not do:
+
+- It names processes, not extensions. `extensionHost` admits every extension, and `renderer`
+  admits every WebView, since a WebView can drive its window's PAPI connection.
+- It cannot widen a request type the platform restricts itself; the platform's rule wins.
+- Something that registers the name before your extension does can receive the calls instead of
+  your handler, though it cannot make your handler act.
+
+See "PAPI connection identity" in [Security-Guide.md](Security-Guide.md).
 
 ### Elevated privileges
 
@@ -635,3 +667,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.9   | 2026-10-27 | Add "Tab Icons" under WebViews: tabs name a lucide icon with `iconName` instead of shipping theme variants. |
 | 1.1.10  | 2026-11-16 | Add "Per-Project Tab Titles" under WebViews: build them with `getLocalizedProjectTitle` and `useLocalizedProjectTitle`. |
 | 1.1.11  | 2026-11-17 | `'panel'` layouts: `'before-tab'` and `'after-tab'` open in the target's own tab group. |
+| 1.2.0   | 2026-11-17 | Add "Restricting who may call a command": `allowedCallers` on command registration, and what it does not protect against. |

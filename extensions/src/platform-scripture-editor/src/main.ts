@@ -38,6 +38,9 @@ import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getEditorTabIconName,
+  getEditorTitleEditability,
+  isProjectPublished,
   buildScriptureEditorWebViewState,
   getTabTitleProjectName,
   openCommentListAndSelectThread,
@@ -597,6 +600,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       savedWebViewStateUpdated,
     );
 
+    // Started here too so the resource check overlaps the permission check below.
+    const isResourcePromise = projectId
+      ? isProjectPublished(papi, projectId)
+      : Promise.resolve(false);
+
     // Fold the Scripture-edit role check into the title's read-only computation only — `isReadOnly`
     // itself must keep its narrower "opened as Resource Viewer" tab-identity meaning (see Section 2
     // of the design spec). A lookup failure or a project that doesn't advertise
@@ -625,10 +633,12 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       }
     }
 
+    const isResource = await isResourcePromise;
+
     const title = await formatEditorTitle(
       unformattedTitle,
       projectId,
-      isReadOnlyForTitle,
+      getEditorTitleEditability(isResource, isReadOnlyForTitle),
       async (projectIdFormat) => getTabTitleProjectName(papi, projectIdFormat),
       papi.localization.getLocalizedStrings,
     );
@@ -638,6 +648,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     return {
       ...savedWebView,
       title,
+      iconName: getEditorTabIconName(isResource, savedWebView.iconName),
       iconUrl: optionsIconUrl ?? savedWebView.iconUrl,
       tooltip: optionsTooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,

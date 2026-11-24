@@ -312,6 +312,26 @@
       "src/renderer/components/platform-bible-toolbar.tsx"
     ]
   },
+  "papi-access.spec.ts": {
+    "main": [
+      "src/shared/data/request-access.data.ts",
+      "src/main/services/rpc-server.ts",
+      "src/main/services/rpc-websocket-listener.ts",
+      "src/main/services/launch-secrets.service.ts",
+      "src/client/services/launch-secrets.ts",
+      "src/client/services/rpc-client.ts",
+      "src/client/services/web-socket.factory.ts",
+      "src/extension-host/receive-launch-secrets.ts",
+      "src/extension-host/services/extension-host-web-socket.model.ts",
+      "c-sharp/LaunchSecrets.cs",
+      "c-sharp/PapiClient.cs"
+    ],
+    "incidental": [
+      "src/main/services/dotnet-data-provider.service.ts",
+      "src/main/services/extension-host.service.ts",
+      "c-sharp/Users/"
+    ]
+  },
   "overlay": {
     "main": [
       "src/renderer/components/overlays/",

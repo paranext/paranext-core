@@ -3,7 +3,7 @@
 // `document` at module-eval time (it re-exports the whole component library). The default `node`
 // environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom — same fix
 // already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -22,13 +22,16 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   deriveReadOnlyFlags,
+  discardRowEditsAndPendingSave,
   flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   getEditorFocusLocation,
   getEditorWebViewContextKeyNames,
   getEditorWebViewContextKeys,
+  hasNonCollapsedSelection,
   INSERT_CONTEXT_MENU_STRING_KEYS,
+  isFocusLeavingContainer,
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
@@ -818,6 +821,97 @@ describe('flushRowEditsThenSave', () => {
   });
 });
 
+describe('discardRowEditsAndPendingSave', () => {
+  /** A save debouncer whose pending state the row editor's flush can change, like the real one. */
+  function makeSave(initiallyPending: boolean) {
+    let pending = initiallyPending;
+    return {
+      schedule: () => {
+        pending = true;
+      },
+      isPending: () => pending,
+      cancel: vi.fn(() => {
+        pending = false;
+      }),
+    };
+  }
+
+  it('cancels a pending save and reports that edits were thrown away', () => {
+    const save = makeSave(true);
+
+    expect(discardRowEditsAndPendingSave(undefined, save)).toBe(true);
+    expect(save.cancel).toHaveBeenCalledOnce();
+    expect(save.isPending()).toBe(false);
+  });
+
+  // The row's pending keystrokes are what schedules the save, so it was not pending beforehand.
+  it("counts the row editor's pending edits, landing them before checking the save", () => {
+    const save = makeSave(false);
+    const rowEditor = { flushPendingEdits: vi.fn(() => save.schedule()) };
+
+    expect(discardRowEditsAndPendingSave(rowEditor, save)).toBe(true);
+    expect(save.cancel).toHaveBeenCalledOnce();
+  });
+
+  it('reports nothing thrown away when nothing was pending anywhere', () => {
+    const save = makeSave(false);
+    const rowEditor = { flushPendingEdits: vi.fn() };
+
+    expect(discardRowEditsAndPendingSave(rowEditor, save)).toBe(false);
+    expect(rowEditor.flushPendingEdits).toHaveBeenCalledOnce();
+    expect(save.cancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('isFocusLeavingContainer', () => {
+  const attachedNodes: Element[] = [];
+
+  afterEach(() => {
+    attachedNodes.splice(0).forEach((node) => node.remove());
+  });
+
+  function makeTree() {
+    const container = document.createElement('div');
+    const inside = document.createElement('div');
+    const alsoInside = document.createElement('span');
+    const outside = document.createElement('button');
+    container.append(inside, alsoInside);
+    document.body.append(container, outside);
+    attachedNodes.push(container, outside);
+    return { container, inside, alsoInside, outside };
+  }
+
+  it('is true when focus moves from inside the container to an element outside it', () => {
+    const { container, inside, outside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, inside, outside)).toBe(true);
+  });
+
+  it('is true when focus leaves the window altogether', () => {
+    const { container, inside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, inside, undefined)).toBe(true);
+  });
+
+  it('is false when focus moves between elements inside the container', () => {
+    const { container, inside, alsoInside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, inside, alsoInside)).toBe(false);
+  });
+
+  it('is false when the element losing focus is outside the container', () => {
+    const { container, inside, outside } = makeTree();
+
+    expect(isFocusLeavingContainer(container, outside, inside)).toBe(false);
+  });
+
+  it('is false when the container is not rendered', () => {
+    const { inside, outside } = makeTree();
+
+    expect(isFocusLeavingContainer(undefined, inside, outside)).toBe(false);
+  });
+});
+
 describe('nextEditingNoteOps', () => {
   function noteOp(text: string): DeltaOpInsertNoteEmbed {
     return {
@@ -1291,15 +1385,17 @@ describe('getEditorFocusLocation', () => {
 });
 
 describe('getEditorWebViewContextKeys', () => {
-  it('names the four per-web-view keys from the web view id', () => {
+  it('names the five per-web-view keys from the web view id', () => {
     const keys = getEditorWebViewContextKeys('wv1', {
       isReadOnly: false,
       isPreview: false,
       isSyncBlocked: false,
       footnotesPaneVisible: false,
+      hasSelection: false,
     });
     expect(Object.keys(keys).sort()).toEqual([
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.hasSelection',
       'platformScriptureEditor.webView.wv1.isPreview',
       'platformScriptureEditor.webView.wv1.isReadOnly',
       'platformScriptureEditor.webView.wv1.isSyncBlocked',
@@ -1315,31 +1411,64 @@ describe('getEditorWebViewContextKeys', () => {
           isPreview: true,
           isSyncBlocked: true,
           footnotesPaneVisible: true,
+          hasSelection: true,
         }),
       ),
     );
     expect([...names].sort()).toEqual([
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.hasSelection',
       'platformScriptureEditor.webView.wv1.isPreview',
       'platformScriptureEditor.webView.wv1.isReadOnly',
       'platformScriptureEditor.webView.wv1.isSyncBlocked',
     ]);
   });
 
-  it('mirrors isReadOnly, isPreview, isSyncBlocked and footnotesPaneVisible', () => {
+  it('mirrors isReadOnly, isPreview, isSyncBlocked, footnotesPaneVisible and hasSelection', () => {
     expect(
       getEditorWebViewContextKeys('wv1', {
         isReadOnly: true,
         isPreview: true,
         isSyncBlocked: false,
         footnotesPaneVisible: true,
+        hasSelection: true,
       }),
     ).toEqual({
       'platformScriptureEditor.webView.wv1.isReadOnly': true,
       'platformScriptureEditor.webView.wv1.isPreview': true,
       'platformScriptureEditor.webView.wv1.isSyncBlocked': false,
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible': true,
+      'platformScriptureEditor.webView.wv1.hasSelection': true,
     });
+  });
+});
+
+describe('hasNonCollapsedSelection', () => {
+  const start = { jsonPath: '$.content[1].content[0]', offset: 0 };
+
+  it('is true for a range whose end differs from its start', () => {
+    expect(hasNonCollapsedSelection({ start, end: { ...start, offset: 4 } })).toBe(true);
+  });
+
+  it('is false for a caret with no end', () => {
+    expect(hasNonCollapsedSelection({ start })).toBe(false);
+  });
+
+  it('is false when the end equals the start', () => {
+    expect(hasNonCollapsedSelection({ start, end: { ...start } })).toBe(false);
+  });
+
+  it('is false when the end has the start values with its keys in another order', () => {
+    expect(
+      hasNonCollapsedSelection({
+        start: { jsonPath: '$.content[1].content[0]', offset: 0 },
+        end: { offset: 0, jsonPath: '$.content[1].content[0]' },
+      }),
+    ).toBe(false);
+  });
+
+  it('is false when there is no selection', () => {
+    expect(hasNonCollapsedSelection(undefined)).toBe(false);
   });
 });
 
@@ -1359,6 +1488,7 @@ describe('menus.json dynamic conditions', () => {
     'platformScriptureEditor.webView.wv.isPreview': false,
     'platformScriptureEditor.webView.wv.isSyncBlocked': false,
     'platformScriptureEditor.webView.wv.footnotesPaneVisible': true,
+    'platformScriptureEditor.webView.wv.hasSelection': true,
   };
 
   const evaluate = (overrides: Record<string, boolean> = {}) => {
@@ -1366,10 +1496,27 @@ describe('menus.json dynamic conditions', () => {
     return evaluateMenu(topMenu, (key: string) => facts[key], TEMPLATE_VARS);
   };
 
+  /**
+   * Commands served as one item per interface mode (with and without an icon). Every other command
+   * has exactly one item.
+   */
+  const COMMANDS_WITH_PER_MODE_VARIANTS = [
+    'platformScriptureEditor.undo',
+    'platformScriptureEditor.redo',
+  ];
+  /**
+   * Whether a command's item is disabled. For a command in {@link COMMANDS_WITH_PER_MODE_VARIANTS},
+   * every copy must agree.
+   */
   const isDisabledFn = (menu: { items: { command?: string; disabled?: boolean }[] }) => {
     return (command: string) => {
       const matches = menu.items.filter((item) => item.command === command);
-      expect(matches).toHaveLength(1);
+      if (COMMANDS_WITH_PER_MODE_VARIANTS.includes(command)) {
+        expect(matches).toHaveLength(2);
+        expect(new Set(matches.map((item) => item.disabled === true)).size).toBe(1);
+      } else {
+        expect(matches).toHaveLength(1);
+      }
       return matches[0].disabled === true;
     };
   };
@@ -1390,6 +1537,23 @@ describe('menus.json dynamic conditions', () => {
     'legacyCommentManager.openCommentList',
     'legacyCommentManager.showCommentListPanel',
   ];
+
+  it.each(COMMANDS_WITH_PER_MODE_VARIANTS)(
+    'declares the same label, group, command, when and enabledWhen on both per-mode items of %s',
+    (command) => {
+      const variants = topMenu.items.filter(
+        (item: { command?: string }) => item.command === command,
+      );
+      expect(variants).toHaveLength(2);
+      expect(variants[0].when).toEqual(expect.any(String));
+      expect(variants[0].enabledWhen).toEqual(expect.any(String));
+      expect(variants[1].label).toBe(variants[0].label);
+      expect(variants[1].group).toBe(variants[0].group);
+      expect(variants[1].command).toBe(variants[0].command);
+      expect(variants[1].when).toBe(variants[0].when);
+      expect(variants[1].enabledWhen).toBe(variants[0].enabledWhen);
+    },
+  );
 
   it('evaluates the Insert items disabled for a read-only project and enabled for an editable one', () => {
     const enabled = isDisabledFn(evaluate());
@@ -1466,7 +1630,15 @@ describe('menus.json dynamic conditions', () => {
       'platform.project.p1.isResource': true,
       'platform.project.p1.isEditable': false,
     };
-    type EvaluatedItem = { id?: string; command?: string; group: string; order: number };
+    type EvaluatedItem = {
+      id?: string;
+      command?: string;
+      group: string;
+      order: number;
+      label?: string;
+      iconNameBefore?: string;
+      disabled?: boolean;
+    };
     type EvaluatedMenu = {
       columns: Record<string, unknown>;
       groups: Record<string, { column?: string; order: number }>;
@@ -1537,6 +1709,60 @@ describe('menus.json dynamic conditions', () => {
       });
     });
 
+    it('labels the resource Copy "Copy selection", with an icon, disabled until text is selected', () => {
+      const resourceCopy = (hasSelection: boolean) => {
+        const menu = evaluateInMode('power', {
+          ...RESOURCE_FACTS,
+          'platformScriptureEditor.webView.wv.hasSelection': hasSelection,
+        });
+        const copies = menu.items.filter(
+          (item) => item.command === 'platformScriptureEditor.copySelection',
+        );
+        expect(copies).toHaveLength(1);
+        return copies[0];
+      };
+      expect(resourceCopy(true)).toMatchObject({
+        label: '%webView_platformScriptureEditor_copySelection%',
+        iconNameBefore: 'clipboard-copy',
+      });
+      expect(resourceCopy(true).disabled).toBeFalsy();
+      expect(resourceCopy(false).disabled).toBe(true);
+    });
+
+    it.each([
+      [
+        'a resource',
+        { 'platform.project.p1.isResource': true, 'platform.project.p1.isEditable': false },
+        '%webView_platformScriptureEditor_showBooks%',
+      ],
+      ['an editable project', {}, '%manageBooks_openMenuItem%'],
+      [
+        'a read-only project',
+        { 'platform.project.p1.isEditable': false },
+        '%manageBooks_openMenuItem%',
+      ],
+    ])('offers exactly one books item for %s, labelled %s', (_name, overrides, label) => {
+      const menu = evaluateInMode('power', overrides);
+      const books = menu.items.filter(
+        (item) => item.command === 'platformScripture.openManageBooks',
+      );
+      expect(books).toHaveLength(1);
+      expect(books[0]).toMatchObject({ label, iconNameBefore: 'book-copy' });
+    });
+
+    it('gives Undo and Redo an icon in Power only', () => {
+      const iconsIn = (mode: 'simple' | 'power') =>
+        evaluateInMode(mode, {}).items.filter(
+          (item) =>
+            item.command === 'platformScriptureEditor.undo' ||
+            item.command === 'platformScriptureEditor.redo',
+        );
+      expect(iconsIn('power').map((item) => item.iconNameBefore)).toEqual(['undo-2', 'redo-2']);
+      const simple = iconsIn('simple');
+      expect(simple).toHaveLength(2);
+      simple.forEach((item) => expect(item.iconNameBefore).toBeUndefined());
+    });
+
     it('declares the Edit section group as experimental and no item as experimental', () => {
       expect(topMenu.groups['platformScriptureEditor.resourceEditActions']).toMatchObject({
         column: EDIT_COLUMN,
@@ -1576,6 +1802,26 @@ describe('menus.json dynamic conditions', () => {
     expect(
       find({ 'platformScriptureEditor.webView.wv.footnotesPaneVisible': false })?.checked,
     ).toBe(false);
+  });
+
+  describe('Switch Scripture view check marks', () => {
+    const checkedState = (isPreview: boolean) => {
+      const { items } = evaluate({ 'platformScriptureEditor.webView.wv.isPreview': isPreview });
+      const find = (command: string) =>
+        items.find((item: { command?: string }) => item.command === command);
+      return {
+        standard: find('platformScriptureEditor.setViewStandard')?.checked,
+        preview: find('platformScriptureEditor.setViewPreview')?.checked,
+      };
+    };
+
+    it('checks Standard view, not Preview, when the tab shows Standard view', () => {
+      expect(checkedState(false)).toEqual({ standard: true, preview: false });
+    });
+
+    it('checks Preview, not Standard view, when the tab shows Preview', () => {
+      expect(checkedState(true)).toEqual({ standard: false, preview: true });
+    });
   });
 
   it('parses every when-expression in the document', () => {

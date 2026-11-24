@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 /*
  * Each case runs in a fresh Node.js process. Node.js loads its `fetch` implementation (undici) on
  * first use, and this test runner's own process has already loaded it, so a check made here would
- * pass whether or not the helper loads undici before deleting `Function`.
+ * pass whether or not the lockdown loads undici before deleting `Function`.
  *
  * That process is Electron's binary run as Node.js, because the extension host is forked from
  * Electron and runs Electron's bundled Node.js, which need not match the Node.js running the tests.
@@ -16,9 +16,7 @@ import { describe, expect, it } from 'vitest';
 /** In Node.js, the `electron` package exports the path to Electron's binary */
 const electronBinary: unknown = createRequire(__filename)('electron');
 
-const HELPER_URL = pathToFileURL(
-  path.join(__dirname, 'remove-code-from-strings-globals.util.ts'),
-).href;
+const SANDBOX_UTIL_URL = pathToFileURL(path.join(__dirname, 'extension-sandbox.util.ts')).href;
 
 /** Globals undici provides. Each is used once, after the deletion, the way an extension would. */
 const USE_UNDICI_GLOBALS = `
@@ -44,7 +42,7 @@ const USE_UNDICI_GLOBALS = `
 
 function runInFreshProcess(script: string): unknown {
   if (typeof electronBinary !== 'string') throw new Error('electron did not export a binary path');
-  // tsx compiles the TypeScript helper as CommonJS, so its exports arrive under `default`.
+  // tsx compiles the TypeScript module as CommonJS, so its exports arrive under `default`.
   const result = spawnSync(
     electronBinary,
     ['--import', 'tsx', '--input-type=module', '-e', script],
@@ -58,25 +56,33 @@ function runInFreshProcess(script: string): unknown {
   return JSON.parse(lastLine);
 }
 
-describe('removeCodeFromStringsGlobals', () => {
-  it('removes eval and Function, and fetch and the other undici globals still work afterwards', () => {
+describe('blockCodeGenerationFromStrings in a fresh extension host process', () => {
+  it('removes eval and Function, locks the constructors, and the undici globals still work', () => {
     const result = runInFreshProcess(`
-      const { removeCodeFromStringsGlobals } = (await import(${JSON.stringify(HELPER_URL)})).default;
-      removeCodeFromStringsGlobals();
+      const { blockCodeGenerationFromStrings } = (await import(${JSON.stringify(SANDBOX_UTIL_URL)})).default;
+      blockCodeGenerationFromStrings();
       const removed = { eval: typeof globalThis.eval, Function: typeof globalThis.Function };
+      let constructorLocked;
+      try {
+        (() => {}).constructor('return 1');
+        constructorLocked = false;
+      } catch {
+        constructorLocked = true;
+      }
       ${USE_UNDICI_GLOBALS}
-      console.log(JSON.stringify({ removed, failures }));
+      console.log(JSON.stringify({ removed, constructorLocked, failures }));
     `);
 
     expect(result).toEqual({
       removed: { eval: 'undefined', Function: 'undefined' },
+      constructorLocked: true,
       failures: [],
     });
   });
 
-  // Pins why the helper loads undici first. If an Electron release's Node.js stops failing here,
-  // undici no longer reads `Function` as it loads, and the `Headers` construction in the helper can
-  // go.
+  // Pins why the lockdown loads undici first. If an Electron release's Node.js stops failing here,
+  // undici no longer reads `Function` as it loads, and the `Headers` construction in
+  // blockCodeGenerationFromStrings can go.
   it('control: deleting Function without loading undici first breaks the undici globals', () => {
     const result = runInFreshProcess(`
       delete globalThis.Function;
