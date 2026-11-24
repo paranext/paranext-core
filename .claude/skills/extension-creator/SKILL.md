@@ -204,7 +204,7 @@ Initial setup from paranext-extension-template"
 
 ## Updating Extensions from Template
 
-When `paranext-extension-template` receives updates:
+When `paranext-extension-template` receives updates, use the `update-from-templates` skill, starting before you run anything: it checks each folder's sync record before the run, and covers pulls that look applied backwards, core's deliberate differences from the templates, the lockfile, verification and the merge-commit PR. In outline:
 
 ```bash
 cd /path/to/paranext-core/extensions
@@ -215,8 +215,6 @@ If merge conflicts occur:
 1. Resolve conflicts
 2. Complete the commit
 3. Run the script again
-
-For the full procedure (pulls that look applied backwards, core's deliberate differences from the templates, the lockfile, verification and the merge-commit PR), use the `update-from-templates` skill.
 
 ## What the Script Does
 

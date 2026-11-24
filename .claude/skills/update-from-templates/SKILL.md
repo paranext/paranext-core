@@ -11,30 +11,31 @@ Two templates feed every extension repo:
 - `paranext-multi-extension-template`: repo-level scaffolding (root `package.json`, webpack config, `lib/` scripts, CI).
 - `paranext-extension-template`: one extension's scaffolding, as used in each `src/<extension>` folder.
 
-`npm run update-from-templates` brings their `main` into the repo so that git records the changes as coming from the templates. That record is what lets the next update apply cleanly, so **the PR must be merged with a merge commit, never squashed** (see `.context/standards/Git-Guide.md` § "Template Updates Exception").
+`npm run update-from-templates` brings their `main` into the repo so that git records the changes as coming from the templates. That record is what lets the next update apply cleanly, so **the PR must be merged with a merge commit whose body is empty, never squashed** (see `.context/standards/Git-Guide.md` § "Template Updates Exception"). The body matters as much as the merge method: a merge commit whose body lists the branch's commits carries their `git-subtree-dir` / `git-subtree-split` lines, and the next update then takes the whole repository as an extension's template base and can reset the extension to the template with no conflict to warn anyone. paranext/paratext-bible-extensions#122's merge commit (`3321e9c`) did this (PT-5115); step 6 says how to merge safely.
 
 ## What the script does
 
 1. Refuses to start with uncommitted changes.
 2. Repo level:
-   - **paranext-core:** `extensions/` is a squashed subtree of the multi-extension template: `git subtree pull --prefix extensions … --squash`.
+   - **paranext-core:** `extensions/` is a squashed subtree of the multi-extension template: `git subtree pull --prefix extensions … --squash`. The script exists only in `extensions/package.json`, so run it from `extensions/` (`cd extensions && npm run update-from-templates`).
    - **extension repos:** the repo root is the multi-extension template's history: `git merge paranext-multi-extension-template/main --allow-unrelated-histories`.
-3. Each extension folder: `git subtree pull --prefix <folder> paranext-extension-template main --squash`, one at a time. A folder that was never added as a subtree is skipped with a "never added" warning (expected for core's `c-sharp-provider-test` and `evil`; NOT expected for any template-based extension). Workspaces without a `manifest.json` (helper packages, for example scripture-forge-platform-extensions' `src/messages` and `src/sf-pdp`) are not extensions: the script skips them without a warning, so check their dependencies yourself (step 4).
+3. Each extension folder: `git subtree pull --prefix <folder> paranext-extension-template main --squash`, one at a time. A folder that was never added as a subtree is skipped with a "never added" warning (expected for core's `c-sharp-provider-test` and `evil`; NOT expected for any template-based extension). Workspaces without a `manifest.json` (helper packages, for example scripture-forge-platform-extensions' `src/messages` and `src/sf-pdp`) are not extensions: the script skips them without a warning, so check their dependencies yourself (the loop's step 4, "Lockfile").
 4. Resolves only conflicts in unused workspace `package-lock.json` files (deletes them). Any other conflict stops the script; resolve, commit, and run it again until everything reports up to date.
 5. A formatting and identity pass over the repo root and each template-based extension. Its messages (`Updated README.md …`, `Updated manifest.json …`, `Updated package.json …`, `Types file … not found, skipping rename operation`) are normal even when they change nothing: a clean `git status` is what counts. Commit anything it does change. In paranext-core the pass also stamps core's license over the template's MIT, on `extensions/` and on every extension (`stampExtensionsRootLicense` and `stampExtensionLicense` in `extensions/lib/git.util.ts`; message `Set license to …`), unless the extension sets `"licenseIsDeliberate": true` (see `LICENSING.md`).
 
-Some conflicts are expected on every update and are not a sign of trouble: the root `package-lock.json` (whenever the template's lockfile changed; take the current branch's side, see step 2), and each extension's `volta` block on a Node.js bump where the repo uses `volta.extends`.
+Some conflicts are expected on every update and are not a sign of trouble: the root `package-lock.json` (whenever the template's lockfile changed; take the current branch's side, see the loop's step 2), and each extension's `volta` block on a Node.js bump where the repo uses `volta.extends`.
 
 **Known script bugs:**
 
 - **The exit code means nothing** (until PT-5114 is fixed). It is 0 after an ordinary stop on conflicts, and non-zero after the crash below. Read its output and `git status`, never the exit code.
-- **It crashes when `package.json` itself conflicts** (until PT-5102 is fixed): the lockfile auto-resolver `JSON.parse`s the conflicted root `package.json` ("Expected double-quoted property name"). The merge is left in progress with the conflicts marked; resolve by hand as below.
-- **While the root `package.json` has conflict markers, Volta refuses to run any `node` or `npm` command inside the repo** ("Could not parse project manifest"), including the helper and any resolution script of your own. Run them with the working directory outside the repo, passing the repo's path.
+- **It crashes when `package.json` itself conflicts** (until PT-5102 is fixed; extension repos only, since in core a subtree pull can't conflict the root `package.json`): the lockfile auto-resolver `JSON.parse`s the conflicted root `package.json` ("Expected double-quoted property name"). The merge is left in progress with the conflicts marked; resolve by hand as below.
+- **While a `package.json` Volta reads has conflict markers (in core too), Volta refuses to run any `node` or `npm` command inside the repo** ("Could not parse project manifest"), including the helper and any resolution script of your own. Run them with the working directory outside the repo, passing the repo's path.
 
 The script also `git rm`s each extension's `package-lock.json` when the template side adds one; these are not tracked on `main`, so the net change to tracked files is nothing. Confirm with `git diff --name-status origin/main` if unsure.
 
 ## Setup
 
+- **Where to run this:** the skill exists only in paranext-core, so start the session in a paranext-core checkout. For an extension repo, give the session access to it (for example `claude --add-dir <repo>`).
 - **Fetch, then branch a fresh worktree from `origin/main`**, not a stale main checkout (count incoming commits against `origin/main`, never a local `main`). Name the branch after the work's ticket (for example `pt-1234-template-update`); if none was given, use the ticket in the incoming template commits' titles, or ask. Stop the branch tracking `main`, so a later push goes to its own branch:
 
   ```bash
@@ -43,24 +44,43 @@ The script also `git rm`s each extension's `package-lock.json` when the template
   # push later with: git push -u origin <branch>
   ```
 
-- **Which core it builds against:** an extension repo installs core from `../paranext-core`, so it is the folder named `paranext-core` beside the worktree that counts, whatever other core checkouts sit nearby. It can be on any branch: what counts is that its `lib/` matches core `main` (`git -C ../paranext-core diff origin/main -- lib` is empty) and that it is built. Check the build with `test -d ../paranext-core/lib/platform-bible-utils/dist && test -d ../paranext-core/lib/platform-bible-react/dist`; listing a `dist/` folder is denied by core's permission rules (see step 5).
+- **Which core it builds against:** an extension repo installs core from `../paranext-core`, so it is the folder named `paranext-core` beside the worktree that counts, whatever other core checkouts sit nearby. It can be on any branch: what counts is that its `lib/` matches core `main` (`git -C ../paranext-core diff origin/main -- lib` is empty). The libraries' built `dist/` is committed, so that check covers the build too.
 - **Install under the repo's current pin** so the script can run:
   - **Extension repos:** `volta run --node <volta.node from package.json> npm ci --ignore-scripts`. Their script needs only `tsx`.
   - **paranext-core:** core's normal install, `npm ci` without `--ignore-scripts` (or work in a core checkout that is already installed). Core's script imports `platform-bible-utils`, which needs the dev packages that core's `preinstall` stages; skipping scripts leaves them out, and the script fails before fetching anything.
 
-  The pin may change during the update (for example when the template moves Node.js); from then on use the new one. The script does not need a reinstall when the pin changes; step 5's fresh `npm ci` does that before verifying.
+  The pin may change during the update (for example when the template moves Node.js); from then on use the new one. The script does not need a reinstall when the pin changes: the loop's step 4 reinstalls under the new pin (and in extension repos, step 5's `npm ci` does again before verifying). In a core worktree whose folder isn't named `paranext-core`, that reinstall writes the folder's name into `package-lock.json`'s root `name` (core's root `package.json` deliberately has none); revert that hunk before committing.
 - **Check both template remotes exist:** `git remote` must list `paranext-multi-extension-template` and `paranext-extension-template`. The `postinstall` hook that adds them (`lib/add-remotes.ts`; in core, `extensions/lib/add-remotes.ts`) does not run under `--ignore-scripts`, so a fresh clone has neither. Add them with `npx tsx lib/add-remotes.ts` (in core, from `extensions/`), or by hand as `extensions/README.md`'s "Adding remotes manually" describes. A worktree of a clone that already has them shares them.
 - **Use the skill's helper from the core checkout that holds this skill** (its absolute path), not a path relative to the extension repo: `node <core>/.claude/skills/update-from-templates/scripts/conflict-sides.mjs`.
 
 ### 0. How far behind is the repo, and what is coming in?
 
-Before running anything, list the template commits the repo will receive:
+Before running anything, list the template commits the repo will receive from both templates:
 
 ```bash
 git -C <worktree> fetch paranext-multi-extension-template main
-git -C <worktree> log --oneline HEAD..paranext-multi-extension-template/main   # extension repos
-# paranext-core: compare with the last "Squashed 'extensions/' changes from …..<sha>" commit
+git -C <worktree> fetch paranext-extension-template main
+
+# Multi-extension template, extension repos (the root merges it):
+git -C <worktree> log --oneline HEAD..paranext-multi-extension-template/main
+# Multi-extension template, paranext-core (extensions/ is a subtree): from its last sync
+git -C <worktree> log -1 --format=%b --grep='^git-subtree-dir: extensions/*$' HEAD   # git-subtree-split: <sha>
+git -C <worktree> log --oneline <that sha>..paranext-multi-extension-template/main
+
+# Extension template, for each extension folder: from that folder's last sync
+git -C <worktree> log -1 --format=%b --grep='^git-subtree-dir: <folder>/*$' HEAD     # git-subtree-split: <sha>
+git -C <worktree> log --oneline <that sha>..paranext-extension-template/main
 ```
+
+The extension template is the one subtree-pulled into every extension folder, so a React or Tailwind bump in an extension's `package.json` arrives through it, not through the multi-extension template.
+
+**Then check every folder's newest sync record, before running the script.** `git subtree pull --squash` takes its merge base from the newest commit whose message carries `git-subtree-dir: <folder>` and `git-subtree-split:` lines. For core's `extensions/` and every extension folder:
+
+```bash
+git -C <worktree> log -1 --format='%h %p | %s' --grep='^git-subtree-dir: <folder>/*$' HEAD
+```
+
+Each must be a real squash commit: subject `Squashed '<folder>/' content from commit …` (no parent) or `Squashed '<folder>/' changes from … ..…` (one parent). **If any is something else, stop and ask the user; don't run the script.** Such a commit is typically a squash-merged PR, or a merge commit whose body listed the branch's commits (paranext-core's #1634, `4c021221dbe`, for `extensions/src/hello-rock3`; paranext/paratext-bible-extensions#122, `3321e9c`, for both its extensions). The pull would then use the whole repository as the template's content for that folder: it can merge with no conflicts at all while resetting the folder to the template (deleting its own files), so the direction checks in step 1 would never run. The fix is to re-anchor the folder first, as the post-merge check in step 6 describes; record the case on PT-5115.
 
 A repo several template changes behind can receive big upgrades (React 19, Tailwind 4, a new shadcn baseline) on top of the change that prompted the update. Those can need migrating the repo's own extension code (step 5's leftover-convention checks). If nothing coming in needs the repo's own code migrated (for example only version bumps), report what is coming in and carry on. Otherwise tell the user what is coming before going ahead, and agree whether follow-on fixes to the repo's own code belong on this branch.
 
@@ -88,19 +108,21 @@ Check these:
 
 - **Root merge (extension repos).** The repo-level step is a plain `git merge`, so list what it brings in: `git log --oneline HEAD..MERGE_HEAD` should be the template commits found in step 0, and `git merge-base HEAD MERGE_HEAD` the template commit the repo last merged.
 
-- **Merge base (deterministic; subtree pulls).** `git subtree pull --squash` takes its merge base from the newest commit whose message carries `git-subtree-dir: <prefix>` and `git-subtree-split:` trailers. While the pull's merge is in progress, `HEAD` is still the commit from before the pull, so check what that search finds from there:
+- **Merge base (deterministic; subtree pulls).** Step 0 checked every folder's newest sync record before the run; if a conflicted pull still looks backwards, check its folder again. While the pull's merge is in progress, `HEAD` is still the commit from before the pull, so the same command finds the base it used:
 
   ```bash
   git log -1 --format='%h %p | %s' --grep='^git-subtree-dir: <prefix>/*$' HEAD
   ```
 
-  It should be a real squash commit: subject `Squashed '<prefix>/' content from commit …` (no parent) or `Squashed '<prefix>/' changes from … ..…` (one parent). If it is anything else, typically a squash-merged PR whose message copied those trailers (paranext-core's #1634, `4c021221dbe`, is one for `extensions/src/hello-rock3`), expect a wrong merge base and a pull that looks backwards. That is a candidate cause, not yet confirmed: record the case on PT-5115 either way. A re-run searches from the same `HEAD`, so it finds the same commit and the same merge base: in that case don't expect a re-run to help, and stop as above.
+  If it is not a real squash commit (see step 0), the merge base is wrong. A re-run searches from the same `HEAD`, so it finds the same commit and the same merge base: don't expect a re-run to help, and stop as above.
 
 - **Each side's changes (judgment).** For every conflicted file, compare what the template changed since the merge base with what the repo changed:
 
   ```bash
   node <core>/.claude/skills/update-from-templates/scripts/conflict-sides.mjs <repo dir> <out file>
   ```
+
+  Put `<out file>` outside the repo (an absolute path beside the worktree): a relative path resolves against the working directory, and a report left inside the repo is an untracked file, which makes the script refuse its next run.
 
   A forward pull's template side ADDS the template's recent changes (for example a new Node.js version, a new dependency, a new script). If the template side instead removes things the template itself added, the pull is backwards. The helper says when a side deleted the file or the merge base has no copy of it, and stops with an error rather than write a partial report.
 
@@ -153,12 +175,16 @@ Every extension should either pin the same `volta.node` as the root or use `volt
 
 Under the repo's pinned Node.js, judge each command by its exit code (and, for chained scripts, check the log shows every step ran):
 
-- **paranext-core:** `npm run typecheck`, `npm run lint`, `npm test` (the root runs every workspace's tests, extensions included), `npm run build:extensions`. After a Playwright upgrade, `platform-bible-react`'s browser tests need `npx playwright install chromium-headless-shell` first.
+- **Set up a control first: before blaming the update for a failure, run the same check on `origin/main`.** A control can also show that something looking broken on the branch was already broken on `main` (platform-bible-sample-extensions' `verse-ref-view` had no Tailwind utilities before the update, because its SCSS used `@import './tailwind.css'`, which Sass leaves as a plain CSS import; `@use` is the fix). Use a second worktree beside the first (for example `<repo>-main-control`), installed under `main`'s Node.js pin. Some repos have tests that fail on `main` too, for example tests that time out only under the full suite (they pass alone) or date tests that fail outside a UTC-like time zone (run them with `TZ=UTC`); the control shows which.
+- **paranext-core:** `npm run typecheck`, `npm run lint`, `npm run format:check` (CI runs it), `npm test` (the root runs every workspace's tests, extensions included), `npm run build:extensions`. After a Playwright upgrade, `platform-bible-react`'s browser tests need `npx playwright install chromium-headless-shell` first.
 - **extension repos:** `npm ci`, `npm run lint`, `npm run format:check` (CI runs it), `npm run build`, `npm run build:production` (some template changes affect production builds only), and `npm test` where the repo has a test script (some have none; record that rather than a failure). Check whether the root `npm test` covers each extension: in paratext-assistant it does not, so also run `npm test` inside `src/checking-assistant`.
   - **Type-check:** webpack compiles with SWC, which does not type-check, and lint and build do not run `tsc`. Run the repo's `typecheck` script, or `npx tsc --noEmit -p <tsconfig>` for each extension's `tsconfig.json` (the root one is optional; it can report many unrelated errors), on the branch and on the control. Compare the `error TS` lines, not the exit code (under `volta run` on Windows `tsc` can exit 126 after printing errors): only errors new on the branch count.
-- **Conventions the build does not check** (skip this when only version bumps came in). A template upgrade can change conventions the repo's own code must follow, and lint and build can pass while the result is broken. After a Tailwind 3 → 4 upgrade, for example, classes use the `tw:` prefix, not `tw-`; leftover `tw-` classes and `@apply tw-…` lines silently generate no CSS. Search the repo's own extension code (`.tsx`, `.ts`, `.scss`, `.css`) for the old forms. Then check the new forms generate CSS without reading `dist/`: compile the extension's Tailwind entry stylesheet with its own PostCSS setup and `@tailwindcss/postcss` in a scratch folder, check every class you migrated gets a rule, and include a made-up class as a negative control. Where you can (no login needed), also look at the result in Platform.Bible: `npm start` in the extension repo starts `../paranext-core` with the extension loaded. To stop it, close the app and end the process tree `npm start` began (on Windows `taskkill //T //F //PID <pid>`), then check ports 8876 and 1212 are free. Don't run core's `npm stop` without asking: it kills every webpack, esbuild and Vite process on the machine, including other sessions'.
+- **Conventions the build does not check** (skip this when only version bumps came in). A template upgrade can change conventions the repo's own code must follow, and lint and build can pass while the result is broken. After a Tailwind 3 → 4 upgrade, for example, classes use the `tw:` prefix, not `tw-`; leftover `tw-` classes and `@apply tw-…` lines silently generate no CSS.
+  - **Search** the repo's own extension code (`.tsx`, `.ts`, `.scss`, `.css`) for the old forms.
+  - **Check the new forms generate CSS** without reading `dist/`: compile the extension's Tailwind entry stylesheet with its own PostCSS setup and `@tailwindcss/postcss` in a scratch folder, check every class you migrated gets a rule, and include a made-up class as a negative control.
+  - **Look at the result in Platform.Bible** where you can (no login needed): `npm start` in the extension repo starts `../paranext-core` with the extension loaded.
+  - **Stop the app** afterwards: close it and end the process tree `npm start` began (on Windows `taskkill //T //F //PID <pid>`), then check ports 8876 and 1212 are free. Don't run core's `npm stop` without asking: it kills every webpack, esbuild and Vite process on the machine, including other sessions'.
 - **Build output (`dist/`) is not readable from a session started in a paranext-core checkout:** core's `.claude/settings.json` denies `Read(**/dist/**)`, and that also covers an extension repo the session works in. To check what a build generated, ask the user to copy the files somewhere readable with a `!` command (in Git Bash, so write Windows paths with forward slashes), check the copies, and delete them afterwards.
-- **Before blaming the update for a failure, run the same check on `origin/main` as a control.** A control can also show that something looking broken on the branch was already broken on `main` (platform-bible-sample-extensions' `verse-ref-view` had no Tailwind utilities before the update, because its SCSS used `@import './tailwind.css'`, which Sass leaves as a plain CSS import; `@use` is the fix). Use a second worktree beside the first (for example `<repo>-main-control`), installed under `main`'s Node.js pin. Some repos have tests that fail on `main` too, for example tests that time out only under the full suite (they pass alone) or date tests that fail outside a UTC-like time zone (run them with `TZ=UTC`); the control shows which.
 - **Never remove a control worktree with `git worktree remove` alone:** on Windows it follows the `file:` links in `node_modules` into the core checkout and deletes its files. See step 7 for the safe order.
 - npm 11 may warn that some packages' install scripts are not in an `allowScripts` list (`@swc/core`, `esbuild`, …). Builds still work; note it in the PR if it appears.
 
@@ -174,7 +200,7 @@ Draft the PR body even when asked to stop before pushing; it is where the decisi
 
   ```markdown
   > [!IMPORTANT]
-  > **Merge with a merge commit, not squash.** The template merges and squashed subtree commits on this branch are the record `npm run update-from-templates` uses to find its merge base next time; a squash merge loses them, and the next update conflicts on everything again. Auto-merge (merge commit) is on, so an approval merges it.
+  > **Merge with a merge commit and an empty commit body, not squash.** The template merges and squashed subtree commits on this branch are the record `npm run update-from-templates` uses to find its merge base next time. A squash merge loses them, and a merge commit whose body lists this branch's commits copies their subtree lines, which makes the next update reset extensions to the template. Clear the body in GitHub's merge dialog (or `gh pr merge <n> --merge --body ""`). Auto-merge (merge commit, empty body) is on, so an approval merges it.
   ```
 
 - A `### Why review this` section naming the ticket and the work it belongs to.
@@ -184,11 +210,13 @@ Draft the PR body even when asked to stop before pushing; it is where the decisi
 - **Verification:** a branch-versus-control table, honest about pre-existing failures and the control that shows they are pre-existing.
 - Refer to template and core PRs with their full repo prefix (`paranext/paranext-multi-extension-template#91`, `paranext/paranext-core#1622`): a bare `#91` links to the extension repo's own #91.
 - Put package names in backticks (`` `@sillsdev/scripture` ``), including ones copied from template PR titles: GitHub can read a bare `@org/name` as a team mention.
-- End with `AI-assisted (Claude Code).` before the generated-with footer.
+- End with the AI-assistance line `CLAUDE.md`'s "Git & PR Conventions" asks for.
 
 **Reviewers:** none designated unless asked. GitHub still adds the repo's CODEOWNERS as reviewers; that is expected, so leave them.
 
-**Auto-merge:** turning it on means an approval merges the PR, so ask the user first, unless they already asked for it. Only where GitHub holds the PR for a review; never assume which repos those are, check. Visibility is `gh repo view <owner>/<repo> --json visibility`; the deciding test is `gh pr view <n> -R <owner>/<repo> --json reviewDecision,mergeStateStatus`: `reviewDecision` is `REVIEW_REQUIRED` only when the branch's rules require an approving review, and `mergeStateStatus` is then `BLOCKED`. `BLOCKED` on its own is not enough, since pending CI also blocks. Reading the protection rule itself needs admin rights on the repo (the API returns 404 or 403 without them), so rely on `reviewDecision`. Where `reviewDecision` is not `REVIEW_REQUIRED`, a mergeable PR merges the moment auto-merge is on. Where it is safe: `gh pr merge <n> --auto --merge --match-head-commit <full sha>`, then add the auto-merge note to the banner. Elsewhere, merge by hand with a merge commit after approval. The merge-state test needs the PR to exist, so on a stop-before-push run leave the auto-merge sentence out of the drafted banner and say the decision is still open.
+**Auto-merge:** turning it on means an approval merges the PR, so ask the user first, unless they already asked for it. Only where GitHub holds the PR for a review; never assume which repos those are, check. Visibility is `gh repo view <owner>/<repo> --json visibility`; the deciding test is `gh pr view <n> -R <owner>/<repo> --json reviewDecision,mergeStateStatus`: `reviewDecision` is `REVIEW_REQUIRED` only when the branch's rules require an approving review, and `mergeStateStatus` is then `BLOCKED`. `BLOCKED` on its own is not enough, since pending CI also blocks. Reading the protection rule itself needs admin rights on the repo (the API returns 404 or 403 without them), so rely on `reviewDecision`. Where `reviewDecision` is not `REVIEW_REQUIRED`, a mergeable PR merges the moment auto-merge is on. Where it is safe: `gh pr merge <n> --auto --merge --body "" --match-head-commit <full sha>`, then add the auto-merge note to the banner. Always pass `--body ""`: without it GitHub fills the merge commit's body with the branch's commit messages, subtree lines included, whatever the repo's default (that is how paranext/paratext-bible-extensions#122 went wrong). Read it back: `gh pr view <n> -R <owner>/<repo> --json autoMergeRequest` must show `"commitBody": ""`. Elsewhere, merge by hand after approval: `gh pr merge <n> --merge --body ""`, or a merge commit in GitHub's dialog with its body cleared. The merge-state test needs the PR to exist, so on a stop-before-push run leave the auto-merge sentence out of the drafted banner and say the decision is still open.
+
+**After it merges,** check the merge commit carries no subtree lines: `git log -1 --format=%B <merge commit> | grep -c git-subtree` must print `0`. If it doesn't, the next update will use that commit as its base: re-anchor each listed folder before then, with one marker commit per folder recording the template commit it really synced to (as paranext/paratext-bible-extensions#123 did), and record the case on PT-5115.
 
 ### 7. Clean up
 
@@ -200,4 +228,4 @@ After the PR is up. If you were asked to stop before pushing, leave the control 
 
 ## Record what you see
 
-For every run, and above all for every pull that looked backwards, record: repo, starting commit, template commits pulled, per-folder outcome (clean / forward conflicts / looked backwards), the merge-base check result, the conflicting files, what looked reversed, and whether a re-run fixed it. Put it in the PR description, and record every backwards case on PT-5115 so the cause can be found.
+For every run, and above all for every pull that looked backwards or a sync record step 0 stopped on, record: repo, starting commit, template commits pulled, per-folder outcome (clean / forward conflicts / looked backwards), the merge-base check result, the conflicting files, what looked reversed, and whether a re-run fixed it. Put it in the PR description, and record every backwards case on PT-5115 so the cause can be found.

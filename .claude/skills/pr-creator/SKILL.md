@@ -64,13 +64,13 @@ fi
 
 ### Detect Template Changes
 
-Template updates must NOT be squash-merged. Check before creating PR:
+Template updates must NOT be squash-merged, and their merge commit's body must be empty (see the `update-from-templates` skill). Check before creating PR:
 
 ```bash
 # Check git log for template merges
 if git log main..HEAD --oneline | grep -qiE 'template|allow-unrelated-histories'; then
   echo "WARNING: Template changes detected!"
-  echo "Use 'Create a merge commit' - NOT 'Squash and merge'"
+  echo "Use 'Create a merge commit' with the commit body cleared - NOT 'Squash and merge'"
 fi
 
 # Check for template-related files

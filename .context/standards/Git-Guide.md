@@ -37,7 +37,9 @@ Always use "Squash and merge" when merging a PR in GitHub or setting auto-merge.
 
 ### Template Updates Exception
 
-**Never squash and merge changes that create new extensions or pull updates from templates.** Template merges create git history that must be preserved for future template updates to work. Use a normal merge (merge commit) for these.
+**Never squash and merge changes that create new extensions or pull updates from templates.** Template merges create git history that must be preserved for future template updates to work. Use a normal merge (merge commit) for these, **with an empty commit body**: clear the body in GitHub's merge dialog, or pass `--body ""` to `gh pr merge` (with or without `--auto`). A body listing the branch's commits copies their `git-subtree-dir` / `git-subtree-split` lines into the merge commit, and the next template update then uses that commit as its base and can reset extensions to the template without a single conflict (PT-5115). After merging, `git log -1 --format=%B <merge commit> | grep -c git-subtree` must print `0`.
+
+The commits git writes during a template update (the template merges and the squashed subtree commits) keep git's own messages, with no attribution trailer added; commits you write yourself on the branch follow the usual conventions.
 
 If you accidentally squash-merge a template update:
 
@@ -61,15 +63,16 @@ paranext-core's `extensions/`, and repos built from `paranext-multi-extension-te
 npm run update-from-templates   # in paranext-core, run it inside extensions/
 ```
 
-It brings in the multi-extension template (a subtree pull for core's `extensions/`, a merge at the root of the other repos), then subtree-pulls `paranext-extension-template` into each extension folder. It stops at the first conflict: resolve, commit, and run it again until every pull reports up to date. Then reconcile `package-lock.json` (take the branch's own side of any lockfile conflict, `git checkout --ours -- package-lock.json`, then reinstall under the repo's pinned Node.js: `npm i --ignore-scripts` in an extension repo, plain `npm i` in paranext-core, whose install scripts apply its patches and build) and run the repo's checks.
+It brings in the multi-extension template (a subtree pull for core's `extensions/`, a merge at the root of the other repos), then subtree-pulls `paranext-extension-template` into each extension folder. It stops at the first conflict: resolve, commit, and run it again until every pull reports up to date. Then reconcile `package-lock.json` (in an extension repo, take the branch's own side of any lockfile conflict, `git checkout --ours -- package-lock.json`; then reinstall under the repo's pinned Node.js: `npm i --ignore-scripts` in an extension repo, plain `npm i` in paranext-core, whose install scripts apply its patches and build) and run the repo's checks.
 
 Things to know:
 
 - **Don't trust the script's exit code** (until PT-5114 is fixed). It exits 0 even when it stopped on conflicts; read its output and `git status`.
+- **Before running the script, check each folder's newest sync record.** `git log -1 --format='%h %p | %s' --grep='^git-subtree-dir: <folder>/*$' HEAD` must name a real `Squashed '<folder>/' …` commit for `extensions/` (in core) and every extension folder. If any names something else (a squash-merged PR, or a merge commit whose body listed the branch's commits), stop: the pull would use the whole repository as the template's content and can reset the folder with no conflict. Re-anchor the folder first and record the case on PT-5115.
 - **Check the direction before resolving.** If a pull's conflicts look applied backwards (the template's changes showing up as removals, or the repo's own edits undone), abort it and run the script again rather than resolving by hand. If the re-run looks backwards too, stop: don't resolve it, and record the case on PT-5115.
 - **Keep the repo's own identity and layout** (`name`, `version`, `license`, `lib/` paths, `volta.extends`) and take the template's version bumps and additions.
 
-The full procedure (the backwards-pull checks, core's deliberate differences from the templates, verification gotchas and the PR) is the `update-from-templates` skill: `.claude/skills/update-from-templates/SKILL.md`.
+The full procedure (the backwards-pull checks, core's deliberate differences from the templates, verification gotchas and the PR) is the [`update-from-templates` skill](../../.claude/skills/update-from-templates/SKILL.md).
 
 ### A repo with one extension
 
@@ -85,9 +88,11 @@ git checkout main
 git merge template/main --allow-unrelated-histories
 ```
 
+Then resolve any conflicts, finish the merge commit, and run `npm i` to update dependencies.
+
 ### Either way
 
-- The merge and squash commits created when updating from the templates are part of the tracking history. Don't edit them out, and merge the PR with a merge commit (see "Template Updates Exception").
+- The merge and squash commits created when updating from the templates are part of the tracking history. Don't edit them out, and merge the PR with a merge commit with an empty body (see "Template Updates Exception").
 - Removing these commits, or squash-merging the PR, causes duplicate conflicts in future template updates, or pulls that reset an extension to the template's state.
 
 For full details, see the [Merging Template Changes wiki](https://github.com/paranext/paranext-extension-template/wiki/Merging-Template-Changes-into-Your-Extension).
