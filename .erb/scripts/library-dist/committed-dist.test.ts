@@ -1,8 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-
-const LIBRARY_DIRS = ['lib/platform-bible-react', 'lib/platform-bible-utils'];
+import { LIBRARY_DIRS } from './library-dist.util';
 
 function trackedDistFiles(libraryDir: string): string[] {
   return execFileSync('git', ['ls-files', `${libraryDir}/dist`], { encoding: 'utf8' })
@@ -18,8 +17,11 @@ describe.each(LIBRARY_DIRS)('committed dist of %s', (libraryDir) => {
   });
 
   it('has no content-hashed chunk names', () => {
-    // Vite's default chunk name is `<name>-<8-character hash>.<ext>`
-    expect(files.filter((file) => /-[A-Za-z0-9_-]{8}\.c?js$/.test(file))).toEqual([]);
+    // Vite's default chunk name is `<name>-<8-character base64url hash>.<ext>`. Source file names are
+    // lowercase kebab-case, so a final segment with an uppercase letter, digit or underscore is a hash
+    // and a lowercase word such as `markdown-renderer.js` is not.
+    const hashedName = /-(?=[a-z-]*[A-Z0-9_])[A-Za-z0-9_-]{8}\.c?js$/;
+    expect(files.filter((file) => hashedName.test(file))).toEqual([]);
   });
 
   it('ends every built script with a sourceMappingURL comment naming its own map', () => {

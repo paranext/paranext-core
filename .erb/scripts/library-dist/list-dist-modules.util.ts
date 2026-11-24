@@ -1,7 +1,7 @@
 // Standard library only and erasable TypeScript only, so plain `node` can load this file.
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
-import { Script } from 'node:vm';
+import { compileFunction } from 'node:vm';
 
 /**
  * Lists the built scripts directly inside a library's `dist` folder, split by module format.
@@ -20,11 +20,11 @@ export function listDistModules(distDir: string): { commonJs: string[]; esModule
  */
 export function isCommonJsSource(source: string, filename: string): boolean {
   try {
-    const script = new Script(
-      `(function (exports, require, module, __filename, __dirname) {${source}\n})`,
-      { filename },
-    );
-    return script.runInThisContext !== undefined;
+    // Compiling is the whole check; the compiled function is never called.
+    compileFunction(source, ['exports', 'require', 'module', '__filename', '__dirname'], {
+      filename,
+    });
+    return true;
   } catch {
     return false;
   }

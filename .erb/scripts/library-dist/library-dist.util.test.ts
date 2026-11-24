@@ -5,6 +5,7 @@ import {
   hasLibraryChanges,
   isLibraryPath,
   isTargetForRun,
+  parseChangedPaths,
   parseTarget,
   PLACEHOLDER_DESCRIPTION,
   selectLibraryPullRequests,
@@ -143,5 +144,44 @@ describe('staleDistInstructions', () => {
     expect(text).toContain('lib/platform-bible-react/dist/index.js');
     expect(text).toContain('npm run build:pbu');
     expect(text).toContain('npm run build:pbr');
+  });
+});
+
+describe('parseChangedPaths', () => {
+  it('returns nothing for a clean tree', () => {
+    expect(parseChangedPaths('')).toEqual([]);
+  });
+
+  it('returns modified, deleted and untracked paths', () => {
+    const output = [
+      ' M lib/platform-bible-react/dist/index.js',
+      ' D lib/platform-bible-react/dist/resizable.js',
+      '?? lib/platform-bible-utils/dist/shared.js',
+      '',
+    ].join('\0');
+    expect(parseChangedPaths(output)).toEqual([
+      'lib/platform-bible-react/dist/index.js',
+      'lib/platform-bible-react/dist/resizable.js',
+      'lib/platform-bible-utils/dist/shared.js',
+    ]);
+  });
+
+  it('keeps a path with spaces and non-ASCII characters as written', () => {
+    expect(parseChangedPaths('?? lib/platform-bible-react/dist/my café.js\0')).toEqual([
+      'lib/platform-bible-react/dist/my café.js',
+    ]);
+  });
+
+  it('reports a rename once, by its new path', () => {
+    const output = [
+      'R  lib/platform-bible-react/dist/new.js',
+      'lib/platform-bible-react/dist/old.js',
+      ' M lib/platform-bible-react/dist/index.js',
+      '',
+    ].join('\0');
+    expect(parseChangedPaths(output)).toEqual([
+      'lib/platform-bible-react/dist/new.js',
+      'lib/platform-bible-react/dist/index.js',
+    ]);
   });
 });

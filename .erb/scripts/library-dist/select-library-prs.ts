@@ -8,6 +8,8 @@ const fs = require('fs');
 // Explicit `.ts`: bare `node` does not resolve extensionless TypeScript files.
 const { selectLibraryPullRequests } = require('./library-dist.util.ts');
 
+// Copy of `OpenPullRequest` in library-dist.util.ts: this file reaches the util through `require`,
+// so it cannot import a type. Keep the two in step.
 type OpenPullRequest = { number: number; headRefOid: string; files: { path: string }[] };
 
 const pullRequests: OpenPullRequest[] = JSON.parse(fs.readFileSync(0, 'utf8'));

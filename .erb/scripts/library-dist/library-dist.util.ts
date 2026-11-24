@@ -112,6 +112,27 @@ export function buildStatus(
   };
 }
 
+/**
+ * Paths changed according to `git status --porcelain -z` output. Each entry is two status
+ * characters, a space and the path, ended by a NUL; `-z` leaves paths unquoted. A rename or copy
+ * entry is followed by one more NUL-ended field holding the original path, which is skipped.
+ */
+export function parseChangedPaths(porcelainZ: string): string[] {
+  const fields = porcelainZ.split('\0');
+  const paths: string[] = [];
+  let index = 0;
+  while (index < fields.length) {
+    const entry = fields[index];
+    if (entry.length > 0) {
+      paths.push(entry.slice(3));
+      // Status characters are ASCII, so native String methods are correct here.
+      if (entry.startsWith('R') || entry.startsWith('C')) index += 1;
+    }
+    index += 1;
+  }
+  return paths;
+}
+
 export function staleDistInstructions(changedFiles: readonly string[]): string {
   return [
     'The committed dist/ of the libraries is out of date. These files differ from a fresh build:',

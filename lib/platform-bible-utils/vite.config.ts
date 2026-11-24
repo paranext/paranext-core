@@ -45,10 +45,13 @@ const config = defineConfig({
       ),
       // Chunk names carry no content hash, so a changed chunk keeps its file name instead of two
       // branches adding different files. CommonJS needs `.cjs` because the package is ESM.
+      // Internal exports between entries and chunks keep their real names: the short names Rollup
+      // would assign shift when one is added, rewriting every entry's import line.
       output: [
         {
           format: 'es',
           chunkFileNames: '[name].js',
+          minifyInternalExports: false,
           globals: { react: 'React', 'react-dom': 'ReactDOM' },
         },
         {

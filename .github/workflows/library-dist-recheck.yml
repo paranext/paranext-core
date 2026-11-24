@@ -28,6 +28,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: package.json
+      # Events caused by GITHUB_TOKEN do not create workflow runs, so a re-run requested with it may not
+      # start the report workflow. If re-checked pull requests stay pending, request the re-run with a
+      # GitHub App token (Actions: read and write) instead.
       - name: Re-run the check of each open library pull request
         env:
           GH_TOKEN: ${{ github.token }}
@@ -42,14 +45,16 @@ jobs:
 
           # Re-runs the latest pull_request check run of one pull request head commit.
           recheck() {
-            local pr="$1" sha="$2" run_id run_status waited=0
-            read -r run_id run_status < <(gh api \
+            local pr="$1" sha="$2" run run_id run_status waited=0
+            # Captured first so a failed lookup fails the step while an empty result (no run yet) skips.
+            run=$(gh api \
               "repos/$GITHUB_REPOSITORY/actions/workflows/library-dist-check.yml/runs?event=pull_request&head_sha=$sha&per_page=1" \
               --jq '(.workflow_runs[0] // empty) | "\(.id) \(.status)"') || return 1
-            if [ -z "$run_id" ]; then
+            if [ -z "$run" ]; then
               echo "::warning::No check run found for pull request #$pr at $sha; skipping"
               return 0
             fi
+            read -r run_id run_status <<< "$run"
             if [ "$run_status" != completed ]; then
               gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" || return 1
               while [ "$run_status" != completed ]; do
@@ -64,7 +69,15 @@ jobs:
             fi
             gh api "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=pending \
               -f context="Library dist current" -f description="Re-checking after a library change on the base branch" \
-              && gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/rerun"
+              || return 1
+            # A refused re-run (for example, a run older than GitHub's 30-day re-run limit) would leave the
+            # status pending with nothing to replace it, so replace it with a failure the author can act on.
+            if ! gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/rerun"; then
+              echo "::warning::Could not re-run check run $run_id for pull request #$pr; marked it failed"
+              gh api "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=failure \
+                -f context="Library dist current" -f description="Could not re-check; push a commit to run the check again" \
+                || return 1
+            fi
           }
 
           FAILED=0

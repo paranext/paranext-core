@@ -85,7 +85,15 @@ async function loadLibrary(libraryDir: string): Promise<string[]> {
 }
 
 async function main(): Promise<void> {
-  const failures: string[] = (await Promise.all(LIBRARY_DIRS.map(loadLibrary))).flat();
+  // One library at a time, for the same reason as the modules inside each one.
+  const noFailures: string[] = [];
+  const failures = await LIBRARY_DIRS.reduce(
+    async (previous: Promise<string[]>, libraryDir: string) => [
+      ...(await previous),
+      ...(await loadLibrary(libraryDir)),
+    ],
+    Promise.resolve(noFailures),
+  );
   if (failures.length > 0) {
     console.error(`${failures.length} module(s) failed to load:\n${failures.join('\n')}`);
     process.exit(1);

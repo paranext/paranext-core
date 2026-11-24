@@ -6,7 +6,11 @@
 const { execSync } = require('child_process');
 const path = require('path');
 // Explicit `.ts`: bare `node` does not resolve extensionless TypeScript files.
-const { LIBRARY_DIRS, staleDistInstructions } = require('./library-dist.util.ts');
+const {
+  LIBRARY_DIRS,
+  parseChangedPaths,
+  staleDistInstructions,
+} = require('./library-dist.util.ts');
 
 const REPO_ROOT: string = path.resolve(__dirname, '..', '..', '..');
 
@@ -18,15 +22,11 @@ BUILD_ORDER.forEach((libraryDir) => {
 });
 
 const status: string = execSync(
-  `git status --porcelain -- ${LIBRARY_DIRS.map((dir: string) => `${dir}/dist`).join(' ')}`,
+  `git status --porcelain -z -- ${LIBRARY_DIRS.map((dir: string) => `${dir}/dist`).join(' ')}`,
   { cwd: REPO_ROOT, encoding: 'utf8' },
 );
 
-// Porcelain lines are `XY <path>`: two status characters, a space, then the path.
-const changedFiles: string[] = status
-  .split('\n')
-  .filter((line: string) => line.length > 0)
-  .map((line: string) => line.slice(3));
+const changedFiles: string[] = parseChangedPaths(status);
 
 if (changedFiles.length > 0) {
   console.error(staleDistInstructions(changedFiles));
