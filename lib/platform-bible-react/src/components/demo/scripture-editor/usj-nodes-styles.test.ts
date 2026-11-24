@@ -367,6 +367,14 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
       expect(declarations).not.toMatch(/\.psc-active-focus \.psc-active-text::before/);
     });
     describe('gutter marker geometry', () => {
+      const markerSelectors = [
+        '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child',
+        '.psc-gutter-markers .book > .marker:first-child',
+      ];
+      const rtlMarkerSelectors = [
+        ".psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child",
+        ".psc-gutter-markers[dir='rtl'] .book > .marker:first-child",
+      ];
       // Each length is registered so it computes once, on `.psc-gutter-markers`; unregistered, a
       // large-font paragraph (`\mt1`) would get a wider gutter than a `\p`. A browser discards a
       // registration whose initial value is not computationally independent (`4em`), so the value
@@ -387,10 +395,7 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
         expect(root).toContain('--psc-gutter-marker-gap: 0.825em;');
       });
       it("ends each marker's visible text the marker gap before the text column", () => {
-        const marker = ruleBody([
-          '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child',
-          '.psc-gutter-markers .book > .marker:first-child',
-        ]);
+        const marker = ruleBody(markerSelectors);
         // `1ch` is the width of the marker's trailing no-break space only in a monospace font.
         expect(marker).toContain(
           'right: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap) - 1ch);',
@@ -399,28 +404,23 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
         // The paragraph's inherited text-indent would collapse or widen this shrink-to-fit box (a
         // hanging-indent `\q2`'s box would be 0px wide) and shift the glyph in RTL.
         expect(marker).toContain('text-indent: 0;');
+        // The box is exactly as wide as its text, so an alignment would move nothing; the comment on
+        // the RTL rule says none is set, and this keeps it true.
+        expect(marker).not.toContain('text-align');
       });
       it('anchors the marker by its text-facing edge in RTL', () => {
-        const rtl = ruleBody([
-          ".psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child",
-          ".psc-gutter-markers[dir='rtl'] .book > .marker:first-child",
-        ]);
+        const rtl = ruleBody(rtlMarkerSelectors);
         // Without `right: auto` the base rule's `right` still applies, and the marker is painted
         // over the paragraph's text.
         expect(rtl).toContain('right: auto;');
         expect(rtl).toContain(
           'left: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap));',
         );
+        expect(rtl).not.toContain('text-align');
       });
       it("makes the marker's gutter row clickable out to the gutter's edge", () => {
-        const marker = ruleBody([
-          '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child',
-          '.psc-gutter-markers .book > .marker:first-child',
-        ]);
-        const rtl = ruleBody([
-          ".psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child",
-          ".psc-gutter-markers[dir='rtl'] .book > .marker:first-child",
-        ]);
+        const marker = ruleBody(markerSelectors);
+        const rtl = ruleBody(rtlMarkerSelectors);
         // The box is only as wide as its text, so a `\p` would be a small target; the padding
         // grows it away from the text, and the editor clips it at the gutter's edge.
         expect(marker).toContain('padding-left: var(--psc-gutter-width);');

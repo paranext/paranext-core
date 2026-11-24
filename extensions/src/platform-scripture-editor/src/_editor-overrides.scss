@@ -408,7 +408,6 @@ button {
 // `--psc-gutter-width` is a registered length (_usj-nodes.scss), so it computes once, on
 // `.psc-gutter-markers`, and the reach is the same on a `\mt1` (166%) or a `\cd` (91%) as on a `\p`.
 // `--para-indent` stays per paragraph, since it is that paragraph's own indent compensation.
-
 .psc-gutter-markers .para.psc-para-marker-selected {
   --psc-para-marker-selection-reach: calc(var(--psc-gutter-width) + var(--para-indent, 0px));
   // Muted text in the row (the empty-verse placeholder) drops below 4.5:1 on the fill in the

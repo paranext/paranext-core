@@ -2610,9 +2610,10 @@ $armed-marker-padding: 3px;
 /* Gutter marker of a paragraph armed for the two-step merge: the same destructive colour, tint and
    blink as an armed verse marker. Only the marker goes, so the paragraph's text is left untinted.
    The tint is a box drawn behind the marker's text from the bounds StructureKeyboardPlugin measures
-   and publishes, which leave out the text's trailing no-break space; without them it covers the
-   marker's whole box, space included. Either way it gets the armed verse
-   marker's padding. Unlike that blink, this one needs no `verse-delete-armed` gate: the editor puts
+   and publishes, which leave out the text's trailing no-break space. Without them it covers the
+   marker's whole box, which takes in the gutter-side click padding and so the whole gutter row;
+   only an environment with no layout (jsdom) leaves them unpublished. Either way it gets the armed
+   verse marker's padding. Unlike that blink, this one needs no `verse-delete-armed` gate: the editor puts
    `para-merge-armed` on the marker only while the merge is armed. The selector out-ranks the gutter
    marker's own rule. */
 .psc-gutter-markers .para > .marker.para-merge-armed:not(.verse):not(.chapter):first-child {

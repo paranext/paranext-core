@@ -2604,7 +2604,8 @@
 
 /* Gutter marker of a paragraph armed for the two-step merge: the same destructive colour, tint and
    blink as an armed verse marker, drawn behind the marker's text alone from the bounds
-   StructureKeyboardPlugin publishes (the whole marker box without them). `para-merge-armed` is on
+   StructureKeyboardPlugin publishes (without them, the whole marker box: with its gutter-side click
+   padding, the whole gutter row; only an environment with no layout leaves them unpublished). `para-merge-armed` is on
    the marker only while the merge is armed, so the blink needs no `verse-delete-armed` gate. */
 .psc-gutter-markers .para > .marker.para-merge-armed:not(.verse):not(.chapter):first-child {
   color: var(--destructive);
