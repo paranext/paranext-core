@@ -117,6 +117,13 @@ const configBase: webpack.Configuration = {
                 tsx: true,
                 decorators: true,
               },
+              // Target a modern ES version so SWC emits native `class extends <builtin>` instead of
+              // downleveling it through the `_wrapNativeSuper` helper, which references the global
+              // `Function` constructor. Platform.Bible deletes `globalThis.Function` (and `eval`)
+              // before activating extensions, so that helper throws "Function is not defined" at
+              // load time (e.g. for `class MissingApiKeyError extends Error`). Both runtimes — the
+              // Node extension host and the Chromium WebView — fully support ES2022.
+              target: 'es2022',
             },
           },
         },

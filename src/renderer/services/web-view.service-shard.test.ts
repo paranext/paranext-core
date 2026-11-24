@@ -156,6 +156,15 @@ vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
   setContentZoomActiveArea: setContentZoomActiveAreaMock,
 }));
 
+// The real guard locks this jsdom window's `Error` and `Document.prototype` and refuses a second
+// install; see "The renderer's `createElement` guard" in Security-Guide.md
+vi.mock('@renderer/services/renderer-create-element-guard.util', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@renderer/services/renderer-create-element-guard.util')
+  >()),
+  installCreateElementGuard: vi.fn(() => ({ rendererBundleFileName: '' })),
+}));
+
 // The host only needs the `TAB_TYPE_SETTINGS_TAB` string constant from this component file, but
 // the real file transitively imports the entire `papi-frontend.service` service graph (dozens of
 // unrelated services). Stub it directly rather than mocking that whole graph.
@@ -4096,6 +4105,99 @@ describe('React web view bootstrap teardown', () => {
 
     expect(root.unmount).toHaveBeenCalledTimes(1);
     expect(unsubscribeUpdateWebView).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createElement guard wiring', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  test('installs the guard once on this window for every forbidden and restricted tag, and rejects by throwing', async () => {
+    const { installCreateElementGuard } = await import(
+      '@renderer/services/renderer-create-element-guard.util'
+    );
+    const installMock = vi.mocked(installCreateElementGuard);
+    installMock.mockClear();
+    await primeWebViewOpenPath();
+
+    expect(installMock).toHaveBeenCalledTimes(1);
+    const options = installMock.mock.calls[0][0];
+    expect(options.realm).toBe(window);
+    expect([...options.restrictedTagNames].sort()).toEqual(
+      [
+        'a',
+        'area',
+        'base',
+        'body',
+        'dialog',
+        'embed',
+        'form',
+        'frame',
+        'frameset',
+        'head',
+        'iframe',
+        'link',
+        'meta',
+        'object',
+        'portal',
+        'script',
+        'title',
+      ].sort(),
+    );
+    expect(() => options.onRejected('script', 'Error\n    at somewhere')).toThrow(
+      'Rejected creating new script tag on renderer document! Not allowed.',
+    );
+  });
+
+  // `LogError` logs through `logger.error` as it is constructed; a plain `Error` does not
+  test.each([
+    { isPackaged: false, caller: 'somewhere', logsError: true },
+    { isPackaged: false, caller: 'evil.web-view.html', logsError: false },
+    { isPackaged: true, caller: 'evil.web-view.html', logsError: true },
+  ])(
+    'a rejection with isPackaged $isPackaged from $caller logs an error: $logsError',
+    async ({ isPackaged, caller, logsError }) => {
+      const { installCreateElementGuard } = await import(
+        '@renderer/services/renderer-create-element-guard.util'
+      );
+      const { logger } = await import('@shared/services/logger.service');
+      const installMock = vi.mocked(installCreateElementGuard);
+      installMock.mockClear();
+      const previousIsPackaged = globalThis.isPackaged;
+      globalThis.isPackaged = isPackaged;
+      try {
+        await primeWebViewOpenPath();
+      } finally {
+        globalThis.isPackaged = previousIsPackaged;
+      }
+      const { onRejected } = installMock.mock.calls[0][0];
+      vi.mocked(logger.error).mockClear();
+
+      expect(() => onRejected('script', `Error\n    at ${caller}:1:1`)).toThrow(
+        'Rejected creating new script tag on renderer document! Not allowed.',
+      );
+      expect(logger.error).toHaveBeenCalledTimes(logsError ? 1 : 0);
+    },
+  );
+
+  test('logs an allowed tag with its calling trail at debug level', async () => {
+    const { installCreateElementGuard } = await import(
+      '@renderer/services/renderer-create-element-guard.util'
+    );
+    const { logger } = await import('@shared/services/logger.service');
+    const installMock = vi.mocked(installCreateElementGuard);
+    installMock.mockClear();
+    await primeWebViewOpenPath();
+    vi.mocked(logger.debug).mockClear();
+
+    installMock.mock.calls[0][0].onAllowed('iframe', 'Error\n    at trusted:1:1');
+
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^Allowed iframe on renderer document\..*\nStack: Error\n {4}at trusted:1:1$/s,
+      ),
+    );
   });
 });
 

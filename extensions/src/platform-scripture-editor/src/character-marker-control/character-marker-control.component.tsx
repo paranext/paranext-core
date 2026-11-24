@@ -141,7 +141,8 @@ export function CharacterMarkerControl({
     if (isOpen) searchRef.current?.focus();
   }, [isOpen]);
 
-  // `blockMarker === 'c'` legitimately yields no character markers, and the value can go stale.
+  // A `blockMarker` of `c` or `id` legitimately yields no character markers, and the value can go
+  // stale.
   // Disable rather than unmount: a control that vanishes as the caret crosses a chapter number is
   // worse than one that greys out.
   const hasNoMarkers = markerMenuItems.length === 0;

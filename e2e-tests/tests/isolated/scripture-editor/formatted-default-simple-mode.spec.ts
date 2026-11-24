@@ -45,7 +45,6 @@ test.use({
   seedSettings: { 'platform.firstRunComplete': true },
   electronLaunchOptions: {
     isolatedProjectRoot: true,
-    envOverrides: { DEV_NOISY: 'false' },
     prepareProjectRoot: installSampleProjectWithFont({
       fontName: PROJECT_FONT_NAME,
       fontSize: PROJECT_FONT_SIZE_PT,

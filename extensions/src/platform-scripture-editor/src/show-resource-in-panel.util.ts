@@ -305,10 +305,6 @@ const showFailedErrors = new WeakSet<Error>();
 /**
  * An error for a show that failed, or was abandoned, after the user was told so.
  *
- * Not a subclass of `Error`: the extension build compiles `extends Error` to a helper that calls
- * `Function.toString`, and the extension host deletes `Function`, so the module would throw on
- * load.
- *
  * @param message What went wrong, for the log
  * @returns The error, recognized by {@link isShowFailedError}
  */

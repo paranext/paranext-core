@@ -1,7 +1,11 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useStylesheet } from 'platform-bible-react';
 import { Children, useRef, type ReactNode } from 'react';
-import { ALIGNED_GRID_CLASS, ALIGNED_GRID_STYLESHEET } from './aligned-grid.styles';
+import {
+  ALIGNED_GRID_CLASS,
+  ALIGNED_GRID_STYLESHEET,
+  SCROLL_PORT_FOCUS_RING_CLASSES,
+} from './aligned-grid.styles';
 import { findVerseBlockForVerse } from './reference-scroll.utils';
 import { useReferenceScroll } from './use-reference-scroll.hook';
 
@@ -63,8 +67,8 @@ export function AlignedGrid({ children, scrRef, isViewVisible, ariaLabel }: Alig
       // column's reorder grip and zoom kebab — sit in the sticky header, which never moves. Without
       // a tab stop here, content below the fold is reachable by pointer only. The rule reads a
       // tabIndex on a non-interactive role as a mistake; a focusable scroll container is the
-      // exception (WCAG 2.1.1), and the chapter view gets this for free from its per-column
-      // scrollers.
+      // exception (WCAG 2.1.1). The chapter view makes each column's scroller a tab stop
+      // for the same reason.
       // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
       data-testid="scripture-text-grid-aligned"
@@ -76,7 +80,7 @@ export function AlignedGrid({ children, scrRef, isViewVisible, ariaLabel }: Alig
       }}
       // The tab stop above is the only focusable thing here with no control of its own to show
       // focus on, so it needs a visible ring like the verse listitem has.
-      className={`${ALIGNED_GRID_CLASS} tw:min-h-0 tw:flex-1 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring`}
+      className={`${ALIGNED_GRID_CLASS} tw:min-h-0 tw:flex-1 ${SCROLL_PORT_FOCUS_RING_CLASSES}`}
     >
       {children}
     </div>

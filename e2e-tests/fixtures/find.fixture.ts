@@ -2,11 +2,10 @@
  * Fixture helpers for Find/Replace E2E tests.
  *
  * Re-exports a custom `test` built on top of app.fixture (worker-scoped Electron instance). The
- * custom `electronApp` fixture launches with `DEV_NOISY=false` so test extensions like helloRock3
- * do not open their webviews on startup. This keeps the initial webview list clean — without it,
- * helloRock3 opens 3 iframes before the scripture editor, breaking `nth(0)` selectors. Also
- * provides PAPI helpers used in `test.beforeAll` to auto-discover and open a scripture project so
- * the editor hamburger menu is available before tests run.
+ * custom `electronApp` fixture uses the launcher's quiet default, so test extensions like
+ * helloRock3 do not add web views at startup. Also provides PAPI helpers used in `test.beforeAll`
+ * to auto-discover and open a scripture project so the editor hamburger menu is available before
+ * tests run.
  *
  * The tests use a worker-scoped Electron instance (one launch per worker) rather than a test-scoped
  * one, which avoids the cost of 20+ separate Electron launches.
@@ -81,10 +80,7 @@ function setupWEBCopyProject(projectsDir: string): void {
   console.log('[find tests] Created testWEB project from WEB assets with new ID and Editable=T');
 }
 
-// Extend app.fixture but override electronApp to launch with DEV_NOISY=false.
-// With DEV_NOISY=true, helloRock3 opens 3 webviews on startup,
-// causing `iframe.web-view nth(0)` to point to a helloRock3 iframe instead of the
-// scripture editor.
+// Extend app.fixture, overriding electronApp to launch against a temp project root.
 export const test = appTest.extend<
   {},
   {
@@ -119,8 +115,6 @@ export const test = appTest.extend<
       // prevents pollution from a previous run's replace operations.
       const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'find-e2e-projects-'));
       setupWEBCopyProject(projectsDir);
-      // DEV_NOISY=false so test extensions (helloRock3, etc.) don't open webviews and shift the
-      // `iframe.web-view nth(0)` selectors; envOverrides is spread last so both win over the defaults.
       // Pin every setting this suite's selectors depend on. `preConfigureSettings` MERGES into the
       // shared dev-appdata settings file and preserves keys it does not set, so anything left
       // unpinned is inherited from whatever the checkout happens to hold, which makes this
@@ -154,7 +148,7 @@ export const test = appTest.extend<
       // stay in the developer's settings file and the temp project dir would leak.
       try {
         const ctx = await launchElectronApp({
-          envOverrides: { DEV_NOISY: 'false', PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: projectsDir },
+          envOverrides: { PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: projectsDir },
         });
         try {
           // Size the window before any test runs. app.fixture (unlike isolated.fixture) never

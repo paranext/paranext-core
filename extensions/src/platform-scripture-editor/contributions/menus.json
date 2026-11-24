@@ -89,9 +89,14 @@
             "column": "platformScriptureEditor.simpleTools",
             "order": 1
           },
+          "platformScriptureEditor.editHistory": {
+            "menuItem": "platformScriptureEditor.editSubmenu",
+            "order": 1,
+            "isExperimental": true
+          },
           "platformScriptureEditor.editActions": {
             "menuItem": "platformScriptureEditor.editSubmenu",
-            "order": 1
+            "order": 2
           },
           "platformScriptureEditor.resourceEditActions": {
             "column": "platformScriptureEditor.edit",
@@ -100,7 +105,7 @@
           },
           "platformScriptureEditor.editFind": {
             "menuItem": "platformScriptureEditor.editSubmenu",
-            "order": 2,
+            "order": 3,
             "isExperimental": true
           },
           "platformScriptureEditor.viewModes": {
@@ -113,11 +118,22 @@
           {
             "label": "%manageBooks_openMenuItem%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; sits between Sync and Project settings in the Project section)",
+            "localizeNotes": "Scripture editor top menu > Project > Manage books (opens Manage Books targeting the editor's active project; sits between Sync and Project settings in the Project section)",
             "iconNameBefore": "book-copy",
             "group": "platform.projectTop",
             "order": 2,
-            "command": "platformScripture.openManageBooks"
+            "command": "platformScripture.openManageBooks",
+            "when": "!platform.project.{projectId}.isResource"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_showBooks%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > resource short name (e.g. NBV21) > Show books (resources only; opens Manage Books for the resource so its books can be viewed). Other projects have Manage books in the same place, under the Project heading",
+            "iconNameBefore": "book-copy",
+            "group": "platform.projectTop",
+            "order": 2.5,
+            "command": "platformScripture.openManageBooks",
+            "when": "platform.project.{projectId}.isResource"
           },
           {
             "id": "platformScriptureEditor.editSubmenu",
@@ -130,18 +146,42 @@
           },
           {
             "label": "%webView_platformScriptureEditor_undo%",
-            "localizeNotes": "Scripture editor top menu > Edit > Undo",
-            "group": "platformScriptureEditor.editActions",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu > Edit > Undo, in the group above Cut, Copy and Paste (shown with an icon in Power)",
+            "iconNameBefore": "undo-2",
+            "group": "platformScriptureEditor.editHistory",
             "order": 1,
             "command": "platformScriptureEditor.undo",
             "when": "!platform.project.{projectId}.isResource",
             "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
+            "label": "%webView_platformScriptureEditor_undo%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu > Edit > Undo, in the group above Cut, Copy and Paste (no icon in Simple)",
+            "group": "platformScriptureEditor.editHistory",
+            "order": 1.5,
+            "command": "platformScriptureEditor.undo",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
+          },
+          {
             "label": "%webView_platformScriptureEditor_redo%",
-            "localizeNotes": "Scripture editor top menu > Edit > Redo",
-            "group": "platformScriptureEditor.editActions",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu > Edit > Redo, in the group above Cut, Copy and Paste (shown with an icon in Power)",
+            "iconNameBefore": "redo-2",
+            "group": "platformScriptureEditor.editHistory",
             "order": 2,
+            "command": "platformScriptureEditor.redo",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_redo%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu > Edit > Redo, in the group above Cut, Copy and Paste (no icon in Simple)",
+            "group": "platformScriptureEditor.editHistory",
+            "order": 2.5,
             "command": "platformScriptureEditor.redo",
             "when": "!platform.project.{projectId}.isResource",
             "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isReadOnly && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
@@ -183,12 +223,14 @@
             "when": "!platform.project.{projectId}.isResource"
           },
           {
-            "label": "%webView_platformScriptureEditor_copy%",
-            "localizeNotes": "Scripture editor top menu > Edit (section, resources only) > Copy (the selected text). Other projects have Copy in the Edit ▸ flyout",
+            "label": "%webView_platformScriptureEditor_copySelection%",
+            "localizeNotes": "Scripture editor top menu > Edit (section, resources only) > Copy selection (copies the selected text; disabled while nothing is selected). Other projects have Copy in the Edit ▸ flyout",
+            "iconNameBefore": "clipboard-copy",
             "group": "platformScriptureEditor.resourceEditActions",
             "order": 1,
             "command": "platformScriptureEditor.copySelection",
-            "when": "platform.project.{projectId}.isResource"
+            "when": "platform.project.{projectId}.isResource",
+            "enabledWhen": "platformScriptureEditor.webView.{webViewId}.hasSelection"
           },
           {
             "label": "%webView_platformScriptureEditor_openFind%",
@@ -215,6 +257,7 @@
             "localizeNotes": "Scripture editor top menu (Power) > View > Switch Scripture view > Standard view — shows the editable view with visible paragraph markers",
             "group": "platformScriptureEditor.viewModes",
             "order": 1,
+            "checkedWhen": "!platformScriptureEditor.webView.{webViewId}.isPreview",
             "command": "platformScriptureEditor.setViewStandard"
           },
           {
@@ -223,6 +266,7 @@
             "localizeNotes": "Scripture editor top menu (Power) > View > Switch Scripture view > Preview — shows the read-only formatted view of the text, the way it reads when published",
             "group": "platformScriptureEditor.viewModes",
             "order": 2,
+            "checkedWhen": "platformScriptureEditor.webView.{webViewId}.isPreview",
             "command": "platformScriptureEditor.setViewPreview"
           },
           {

@@ -36,6 +36,13 @@ jobs:
             paranext-core/package-lock.json
           node-version-file: extension-repo/package.json
 
+      # Our editor `file:` dependency points into core's gitignored `dev-packages/staging/`, which
+      # only core's `preinstall` creates — and the core install below runs `--ignore-scripts`. npm
+      # links a missing `file:` target silently, so skipping this leaves a broken symlink.
+      - name: Stage paranext-core's dev packages
+        working-directory: paranext-core
+        run: npm run stage-dev-packages
+
       - name: Install extension dependencies
         working-directory: extension-repo
         run: npm ci
@@ -43,6 +50,13 @@ jobs:
       - name: Install core dependencies
         working-directory: paranext-core
         run: npm ci --ignore-scripts
+
+      # The staged packages come from the branch dev-packages.json pins, which moves independently
+      # of core's commits, so the tree just installed can describe a different editor than core's
+      # lockfile does. Core's postinstall makes this check; `--ignore-scripts` above skips it.
+      - name: Verify core's staged dev packages match its lockfile
+        working-directory: paranext-core
+        run: npm run verify:dev-packages
 
       - name: Run format checking
         working-directory: extension-repo

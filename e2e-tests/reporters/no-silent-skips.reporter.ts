@@ -57,17 +57,37 @@ export function isMaxFailuresStopMessage(message: string | undefined): boolean {
   return message !== undefined && /maximum allowed failures/.test(message);
 }
 
+/**
+ * Whether the run stopped before reaching every test: `--max-failures` tripped (seen only through
+ * {@link isMaxFailuresStopMessage}, since that run reports `'failed'`), the user interrupted it, or
+ * `--global-timeout` ran out (`'timedout'`; CI's isolated e2e jobs set one so that their reports
+ * are still written and uploaded). In each case `Dispatcher` leaves the tests it never reached with
+ * no results at all.
+ */
+export function runStoppedEarly(
+  runStatus: FullResult['status'],
+  sawMaxFailuresStop: boolean,
+): boolean {
+  return sawMaxFailuresStop || runStatus === 'interrupted' || runStatus === 'timedout';
+}
+
 /** {@link findLostTests}'s result, keeping genuine losses apart from an expected early stop. */
 export interface LostTestsSplit<T> {
   /** Tests silently dropped with nothing to explain it — the reporter should fail the run. */
   lost: T[];
   /** Tests with no results because the run itself stopped before reaching them. */
   notRunBecauseStoppedEarly: T[];
+  /**
+   * In a `--global-timeout` run only: tests with a completed `'skipped'` result. One of them is the
+   * test the timeout cut off; any other was lost earlier in the run (a dead worker, a failed
+   * `beforeAll`). The reporter cannot tell which is which, so it lists them for a reader to check.
+   */
+  cutOffOrLostBeforeTimeout: T[];
 }
 
 /**
  * The tests a run lost, given every test it declared, how the run as a whole finished, and whether
- * it stopped early (`--max-failures` tripped, or the user interrupted it).
+ * it stopped early (see {@link runStoppedEarly}).
  *
  * Empty when nothing executed at all AND the run itself reports `'passed'`: that combination is
  * what `--list` looks like — Playwright still loads reporters named in config for `--list`
@@ -90,6 +110,11 @@ export interface LostTestsSplit<T> {
  * failure, an unexpected worker exit) still runs `_failTestWithErrors` and leaves a completed
  * `'skipped'` result behind, which is what makes the split precise: a no-results test during a
  * stopped-early run is exactly what stopping early looks like, not a silent loss.
+ *
+ * A `--global-timeout` stop (`'timedout'`) blurs that split: the test still running when the time
+ * ran out is given a completed `'skipped'` result too, the same shape as a test lost earlier. Such
+ * tests go to `cutOffOrLostBeforeTimeout` instead of `lost`, since counting them as lost would fail
+ * the run for the timeout itself; the run's own `'timedout'` status fails it either way.
  */
 export function findLostTests<T extends TestOutcomeLike>(
   tests: T[],
@@ -97,15 +122,18 @@ export function findLostTests<T extends TestOutcomeLike>(
   stoppedEarly = false,
 ): LostTestsSplit<T> {
   if (runStatus === 'passed' && !tests.some((test) => test.results.length > 0))
-    return { lost: [], notRunBecauseStoppedEarly: [] };
+    return { lost: [], notRunBecauseStoppedEarly: [], cutOffOrLostBeforeTimeout: [] };
 
   const allLost = tests.filter(wasLost);
-  if (!stoppedEarly) return { lost: allLost, notRunBecauseStoppedEarly: [] };
+  if (!stoppedEarly)
+    return { lost: allLost, notRunBecauseStoppedEarly: [], cutOffOrLostBeforeTimeout: [] };
 
-  return {
-    lost: allLost.filter((test) => test.results.length > 0),
-    notRunBecauseStoppedEarly: allLost.filter((test) => test.results.length === 0),
-  };
+  const withResults = allLost.filter((test) => test.results.length > 0);
+  const notRunBecauseStoppedEarly = allLost.filter((test) => test.results.length === 0);
+  if (runStatus === 'timedout')
+    return { lost: [], notRunBecauseStoppedEarly, cutOffOrLostBeforeTimeout: withResults };
+
+  return { lost: withResults, notRunBecauseStoppedEarly, cutOffOrLostBeforeTimeout: [] };
 }
 
 /**
@@ -129,11 +157,11 @@ export function findLostTests<T extends TestOutcomeLike>(
  * never ran still expects to pass. That difference is the whole check.
  *
  * A second discriminator, `stoppedEarly` (see {@link findLostTests}), keeps a deliberate early stop
- * — `--max-failures` tripping, or the run being interrupted — from reading the same as the "1
- * failed, 22 did not run" rot above. Both leave tests with no results, but an early stop is already
- * visible through the failure(s) that caused it or through the run's own `interrupted` status, so
- * reporting its never-reached tests as "lost" would be crying wolf over exactly the behavior
- * `--max-failures` was configured to produce.
+ * — `--max-failures` tripping, the run being interrupted, or `--global-timeout` running out — from
+ * reading the same as the "1 failed, 22 did not run" rot above. Both leave tests with no results,
+ * but an early stop is already visible through the failure(s) that caused it or through the run's
+ * own `interrupted` or `timedout` status, so reporting its never-reached tests as "lost" would be
+ * crying wolf over exactly the behavior `--max-failures` was configured to produce.
  *
  * Register this reporter FIRST. The multiplexer runs reporters in array order and applies a
  * reporter's status override only after its `onEnd` returns, so a reporter listed after `html` or
@@ -180,8 +208,8 @@ class NoSilentSkipsReporter implements Reporter {
     if (!this.rootSuite) return undefined;
 
     const allTests = this.rootSuite.allTests();
-    const stoppedEarly = this.sawMaxFailuresStop || result.status === 'interrupted';
-    const { lost, notRunBecauseStoppedEarly } = findLostTests(
+    const stoppedEarly = runStoppedEarly(result.status, this.sawMaxFailuresStop);
+    const { lost, notRunBecauseStoppedEarly, cutOffOrLostBeforeTimeout } = findLostTests(
       allTests,
       result.status,
       stoppedEarly,
@@ -189,10 +217,22 @@ class NoSilentSkipsReporter implements Reporter {
 
     if (notRunBecauseStoppedEarly.length > 0) {
       // Informational only: an early stop is already visible through the failure(s) that caused
-      // it (or through `result.status === 'interrupted'`), so this does not also fail the run.
+      // it (or through the run's own `interrupted` or `timedout` status), so this does not also
+      // fail the run.
       console.log(
         `\n${notRunBecauseStoppedEarly.length} test(s) did not run because the run stopped ` +
           `early:\n${notRunBecauseStoppedEarly.map(describeTest).join('\n')}\n`,
+      );
+    }
+
+    if (cutOffOrLostBeforeTimeout.length > 0) {
+      // The run's `timedout` status already fails it, so this list only tells the two cases apart
+      // for a reader.
+      console.error(
+        `\n${cutOffOrLostBeforeTimeout.length} test(s) did not finish before the run's time ` +
+          `limit:\n${cutOffOrLostBeforeTimeout.map(describeTest).join('\n')}\n\n` +
+          `One of them is the test the time limit cut off. Any other was lost earlier in the run — ` +
+          `its worker died or a beforeAll threw — so look at the first failing test in its file.\n`,
       );
     }
 

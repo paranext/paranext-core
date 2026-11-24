@@ -47,7 +47,7 @@ import {
 } from '../../../fixtures/scripture-editor-helpers';
 
 test.use({
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 const JONAH_1 = { book: 'JON', chapterNum: 1, verseNum: 1 };
@@ -58,8 +58,8 @@ const HEADER_LINES = [`\\h ${JONAH_1.book}`, `\\toc2 ${JONAH_1.book}`];
 /** A project name with the punctuation and letters a save could escape or mangle. */
 const SPECIAL_CHARACTER_ID_TEXT = 'A_project_name_!/"§$%&/()=?_öäüß';
 
-/** Jonah 1 has 17 verses, so its scaffold is `\c 1` then `\v 1` to `\v 17`. */
-const CHAPTER_1_SCAFFOLD_USFM = `\\c 1\r\n${Array.from(
+/** Jonah 1 has 17 verses, so its scaffold is `\c 1`, `\p`, then `\v 1` to `\v 17`. */
+const CHAPTER_1_SCAFFOLD_USFM = `\\c 1\r\n\\p\r\n${Array.from(
   { length: 17 },
   (_, index) => `\\v ${index + 1}\r\n`,
 ).join('')}`;

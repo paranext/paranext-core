@@ -144,10 +144,8 @@ export function noUnaskedEditsTestOptions(
     interfaceMode: view.interfaceMode,
     // Past first run, so Simple mode starts in the app rather than the setup wizard.
     seedSettings: view.interfaceMode === 'simple' ? { 'platform.firstRunComplete': true } : {},
-    // DEV_NOISY=false keeps the normal layouts.
     electronLaunchOptions: {
       isolatedProjectRoot: true,
-      envOverrides: { DEV_NOISY: 'false' },
       ...(seedProjectRoot ? { prepareProjectRoot: seedProjectRoot } : {}),
     },
   };

@@ -1,10 +1,12 @@
-import type { DragEvent, KeyboardEvent } from 'react';
+import { type DragEvent, type KeyboardEvent, useRef } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { DROP_TARGET_RING_CLASSES, REVEALED_COLUMN_OUTLINE_CLASSES } from './aligned-grid.styles';
 import type { GridResource } from './grid-resources.utils';
 import { ResourceCell } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { resourceZoomAreaOf } from './resource-zoom-area.utils';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import { useRevealOutlineInsets } from './use-reveal-outline-insets.hook';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
 /**
@@ -45,6 +47,8 @@ export type ResourceColumnProps = {
    */
   className: string;
   reorder?: ResourceColumnReorder;
+  /** Whether this column is the one a reveal brought into view, which shows the outline. */
+  isRevealed?: boolean;
   zoom?: ResourceZoomController;
   zoomMenuLabels?: ZoomMenuLabels;
 };
@@ -63,18 +67,36 @@ export function ResourceColumn({
   cellViewMode,
   className,
   reorder,
+  isRevealed,
   zoom,
   zoomMenuLabels,
 }: ResourceColumnProps) {
-  const dropTargetRing = reorder?.isDropTarget ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : '';
+  const dropTargetRing = reorder?.isDropTarget ? ` ${DROP_TARGET_RING_CLASSES}` : '';
+  // The drop-target ring wins when both apply.
+  const revealRing =
+    isRevealed && !reorder?.isDropTarget ? ` ${REVEALED_COLUMN_OUTLINE_CLASSES}` : '';
   const zoomArea = resourceZoomAreaOf(resource.resourceId);
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const columnRef = useRef<HTMLDivElement>(null);
+  // In the chapter view the cell scrolls itself, so the outline is kept off its scrollbar. In the
+  // aligned view the grid root scrolls every column at once, and the outline frames the whole column.
+  const revealOutlineStyle = useRevealOutlineInsets(
+    columnRef,
+    !!revealRing && cellViewMode === 'chapter',
+  );
 
   return (
     <div
+      ref={columnRef}
       role="region"
       aria-label={resource.label}
       data-project-id={resource.projectId}
       data-resource-id={resource.resourceId}
+      // Spelled out because JSX cannot take a computed attribute name without spreading; this is the
+      // value of TEXT_COLLECTION_CELL_ATTRIBUTE, which the reveal lookup searches for.
+      data-text-collection-cell=""
+      data-revealed={isRevealed ? 'true' : undefined}
       // The header band and padding are unscaled, so a click or the wheel there has no marked
       // text to resolve its zoom area from; the scope names this resource's area for them.
       data-platform-content-zoom-scope={zoomArea}
@@ -84,7 +106,8 @@ export function ResourceColumn({
       // No onDragLeave — it fires on child elements; the parent clears on drop/dragEnd instead.
       onDragOver={reorder?.onDragOver}
       onDrop={reorder?.onDrop}
-      className={`${className}${dropTargetRing}`}
+      className={`${className}${dropTargetRing}${revealRing}`}
+      style={revealOutlineStyle}
     >
       <ResourceCell
         resourceRef={resource}

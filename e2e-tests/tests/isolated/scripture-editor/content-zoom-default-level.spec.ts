@@ -25,7 +25,7 @@ import {
 
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
   // The fixture's documented seeding channel — specs must never call preConfigureSettings
   // themselves (see the IsolatedFixtures doc).
   // An emptied zoom memory, because a level the developer's own app remembered for the sample

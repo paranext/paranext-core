@@ -5,13 +5,6 @@ run-name: Publish release v${{ github.event.inputs.version }} on ${{ github.head
 # run on record, so a slow service still passes, but a stall fails with its diagnostics. The job's
 # 180-minute cap only catches what the step caps miss; a job timeout cancels, skipping diagnostics.
 
-# Make sure these match with the matrix.os values below
-env:
-  OS_WINDOWS: windows-latest
-  OS_MACOS: macos-15
-  # The Ubuntu version must align with the "core" version in electron-builder.json5
-  OS_LINUX: ubuntu-22.04
-
 on:
   workflow_dispatch:
     inputs:
@@ -47,39 +40,38 @@ jobs:
 
     strategy:
       matrix:
-        # Make sure these match with the env values above
-        os: [windows-latest, macos-15, ubuntu-22.04]
+        # Steps pick their OS with `runner.os`, so changing a runner label here is the whole change.
+        os:
+          - windows-latest
+          # Move with the `||` defaults in test.yml and package-main.yml. Pinned because newer macOS
+          # images are often slow to get a runner.
+          - macos-15
+          # The Ubuntu version must align with the "core" version in electron-builder.json5
+          - ubuntu-22.04
 
     steps:
       - name: Output Workflow Dispatch Inputs
         run: echo "${{ toJSON(github.event.inputs) }}"
 
       - name: Install MacPorts
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
-        uses: paranext/setup-macports@v0.2.0
-
-      - name: Update MacPorts ports tree
-        if: ${{ matrix.os == env.OS_MACOS }}
-        timeout-minutes: 90
-        # Not using `-v` for verbose because it is very slow and does not add much value
-        run: |
-          sudo port sync
+        uses: paranext/setup-macports@v0.3.0
 
       - name: Install loader tools on macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         run: |
           sudo port -v install ld64
 
       - name: Install icu4c on macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         run: |
           sudo port -v install icu @78.3_1 +universal
 
       - name: Fixup loader paths for icu4c
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         # LIB_DEPENDENCIES are of the form "<ICU lib short name> <dependency as ICU lib short name>"
         # For example, libicuuc (shortened to "uc") depends on libicudata (shortened to "data")
         # Dependencies can be seen by running "dyld_info -dependents /path/to/something.dylib"
@@ -100,7 +92,7 @@ jobs:
           done <<< "$LIB_DEPENDENCIES"
 
       - name: Install snap tools on Linux
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ runner.os == 'Linux' }}
         timeout-minutes: 90
         run: |
           # apt is safe to kill mid-download; snap is not (snapd keeps the change running), so only
@@ -213,7 +205,7 @@ jobs:
         run: npm run verify:third-party-notices:shipping-set
 
       - name: Prepare release - Windows
-        if: ${{ matrix.os == env.OS_WINDOWS }}
+        if: ${{ runner.os == 'Windows' }}
         timeout-minutes: 90
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -223,7 +215,7 @@ jobs:
           move release\\build\\*Setup*.exe release\\staged
 
       - name: Code signing - Windows
-        if: ${{ matrix.os == env.OS_WINDOWS }}
+        if: ${{ runner.os == 'Windows' }}
         timeout-minutes: 90
         # See https://github.com/cognitedata/code-sign-action/blob/main/README.md for descriptions
         env:
@@ -238,7 +230,7 @@ jobs:
           path-to-binary: 'release\\staged'
 
       - name: Prepare release - macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
+        if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 90
         env:
           # The APPLE_* values are used for auto updates signing
@@ -263,7 +255,7 @@ jobs:
       # below, and that step excludes Linux. Internal Linux builds come from `package-main.yml`,
       # which uploads a per-platform artifact on every push.
       - name: Prepare release - Linux
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ runner.os == 'Linux' }}
         timeout-minutes: 90
         env:
           # no hardlinks so dependencies are copied
@@ -281,7 +273,7 @@ jobs:
       # "mksquashfs call failed:" that reaches the console, and if the kernel ever kills
       # the build for memory it names the process it chose only in dmesg.
       - name: Capture Linux failure diagnostics
-        if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        if: ${{ failure() && runner.os == 'Linux' }}
         run: |
           echo "=== kernel OOM activity ==="
           sudo dmesg --ctime 2>/dev/null | grep -iE "out of memory|oom-kill|killed process" || echo "(no OOM entries in dmesg)"
@@ -293,7 +285,7 @@ jobs:
           ps -eo pid,etime,rss,args --sort=-rss | head -25
 
       - name: Upload snapcraft logs (Linux)
-        if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        if: ${{ failure() && runner.os == 'Linux' }}
         timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
@@ -310,7 +302,7 @@ jobs:
       # One leg only: with no per-platform asset to contribute, running on all three would race three
       # jobs to create the same release.
       - name: Publish draft release
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ runner.os == 'Linux' }}
         timeout-minutes: 90
         uses: ncipollo/release-action@v1
         with:
@@ -335,7 +327,7 @@ jobs:
 
       - name: Upload release assets to S3
         id: upload_s3
-        if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
+        if: ${{ inputs.uploadReleaseAssets && runner.os != 'Linux' }}
         timeout-minutes: 90
         uses: shallwefootball/upload-s3-action@v1.3.3
         with:
@@ -347,12 +339,12 @@ jobs:
           destination_dir: ${{ vars.AWS_S3_RELEASE_DIRECTORY }}/${{ inputs.version}}/${{ runner.os }}
 
       - name: Print S3 upload result
-        if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
+        if: ${{ inputs.uploadReleaseAssets && runner.os != 'Linux' }}
         run: |
           echo "S3 upload object_key: ${{ steps.upload_s3.outputs.object_key }}; object_locations: ${{ steps.upload_s3.outputs.object_locations }}"
 
       - name: Checkout bump ref
-        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
+        if: ${{ runner.os == 'Linux' && inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
         timeout-minutes: 90
         uses: actions/checkout@v4
         with:
@@ -363,7 +355,7 @@ jobs:
       # requires gitleaks on PATH and blocks the commit without it (see README "Install gitleaks"),
       # and gitleaks is not part of the runner image.
       - name: Install gitleaks for the pre-commit hook
-        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
+        if: ${{ runner.os == 'Linux' && inputs.newVersionAfterPublishing != '' }}
         timeout-minutes: 90
         env:
           GITLEAKS_VERSION: 8.30.1
@@ -375,7 +367,7 @@ jobs:
           "$HOME/.local/bin/gitleaks" version
 
       - name: Bump repo versions
-        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
+        if: ${{ runner.os == 'Linux' && inputs.newVersionAfterPublishing != '' }}
         timeout-minutes: 90
         uses: ./.github/actions/bump-versions-action
         with:

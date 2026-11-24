@@ -512,8 +512,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Navigation',
     context:
       'Scripture editor, model text, Bible text, commentary, and Text Collection web views. ' +
-      'In Text Collection it searches the resource holding the caret; in the reference panels, the ' +
-      'displayed resource. Does nothing (logged) until a scripture is resolved.',
+      'In Text Collection it searches the resource last clicked, focused, or revealed by Find, ' +
+      'else the first installed resource shown; in the reference panels, the displayed resource. Does ' +
+      'nothing (logged) until a scripture is resolved.',
     // macOS intentionally uses ⌃F (not the usual ⌘F). One shared hook holds the handler; the next
     // entries are the web views that mount it, and the last is the command they invoke.
     keys: { macOS: '⌃F', windows: 'Ctrl+F', linux: 'Ctrl+F' },
@@ -777,6 +778,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: 'F7', windows: 'F7', linux: 'F7' },
     locations: [
       'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
+    ],
+  },
+  {
+    id: 'dictionary-open-definition-link',
+    purpose: 'Open the entry or go to the Bible reference that a link in a definition points to',
+    category: 'Navigation',
+    context: 'Dictionary web view (a link inside a sense definition focused)',
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
+    locations: [
+      'extensions/src/platform-lexical-tools/src/components/dictionary/definition-text.component.tsx',
     ],
   },
   // Shortcuts defined inside the shared platform-bible-react component library.

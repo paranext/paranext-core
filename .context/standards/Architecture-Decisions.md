@@ -2125,6 +2125,114 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
+
+## adr-create-element-guard-trusts-call-sites: The renderer's `createElement` guard identifies the caller by V8 call-site file name, built only from references captured before any web view runs
+
+- **Date:** 2026-11-16
+- **Status:** Accepted
+- **Context:** Web views run in same-origin iframes (`allow-same-origin`) and can reach the renderer
+  as `parent` / `window.top`, where the CSP's `script-src-elem 'unsafe-inline'` lets an injected
+  script run with full renderer privileges. The renderer therefore guards the creation of restricted
+  tags (`FORBIDDEN_HTML_TAGS`, `RESTRICTED_HTML_TAGS` in `web-view.service-shard.ts`). The old
+  guard read the TEXT of `Error().stack` and regex-matched it, so a function name containing a
+  newline, a `//# sourceURL=` label on `eval` code, or a hijacked `Error.prepareStackTrace` could
+  make an attacker's call look like a renderer frame; a poisoned `Array.prototype.includes` skipped
+  the tag lookup altogether, and the patch on the `document` instance was bypassed by
+  `Document.prototype.createElement.call` and by `createElementNS`.
+- **Decision:** `installCreateElementGuard` (in `renderer-create-element-guard.util.ts`, called from
+  `initialize` in `web-view.service-shard.ts`) patches `Document.prototype.createElement` and
+  `createElementNS` (non-writable, non-configurable) and decides from the real script URL of the
+  caller's V8 call site, via `isCreateElementCallerAllowed`: the renderer bundle (measured at install
+  from the installer's own call site) or a Usersnap widget chunk (`https` only, exact path shape).
+  `getFileName()` returns `null` for `eval` / `new Function` frames, so those are rejected.
+  - **Trust only what was captured before any web view ran.** A same-origin frame can rewrite any
+    shared global or prototype, and in production the guard module shares its realm with the window
+    it guards, so nothing on the call-time path may be looked up when a call is judged. The
+    installer captures `Error`, `captureStackTrace`, `Object` and its static methods, `String` and
+    its `toLowerCase` / `indexOf` / `slice`, `Reflect.apply` / `Reflect.deleteProperty` /
+    `Reflect.get`, the original `createElement` / `createElementNS` and the `CallSite` methods;
+    `isCreateElementCallerAllowed` uses `RegExp.prototype.exec` and `Reflect.apply` captured when
+    its module loads. Everything else on the path is an operator (`!!`, not `Boolean(...)`) or an
+    own property of a value the guard created or V8 handed it — no free globals, `.call` / `.apply`,
+    iterators or spread. The tag list is a null-prototype record. A non-string tag argument is
+    coerced once and the original receives the coerced string; a string primitive is passed through
+    unchanged. If `onRejected` returns instead of throwing, the guard throws its own error.
+  - **Own the stack-trace machinery.** The installer makes `Error.prepareStackTrace` a
+    non-configurable accessor whose getter returns the guard's formatter only during a guard
+    capture, and also locks `window.Error` (non-writable, non-configurable): under an embedder
+    prepare-stack-trace callback (Node's reads `globalThis.Error.prepareStackTrace`), swapping
+    `window.Error` let a frame call the guard's formatter with a harvested renderer-bundle call
+    site. V8 picks the `prepareStackTrace` realm from the holder passed to `captureStackTrace`, so
+    the holder is built with the window's captured `Object`. `Error.stackTraceLimit` is honored only
+    as a data property, so it is set to the capture depth (10 frames, V8's default: the decision
+    reads only the first, the rest are logged) and restored rather than locked; if an attacker
+    breaks it, the capture yields no frames and the call is rejected (fail closed).
+  - **The guard stays until same-origin web views go.** As of 2026-11-16, PT-2912 and PT-2896 are in
+    Triage; until a web view can no longer be same-origin with the renderer, this is the only guard
+    on restricted-tag `createElement` calls. What it buys today is narrow: it stops the direct route
+    of a web view calling `parent.document.createElement` (or the prototype method, or
+    `createElementNS`) for a restricted tag, which raises the bar against casual or accidental misuse
+    but not against a deliberate attacker (see probe (a) under Consequences). Its price is the
+    renderer-wide locks on `window.Error`, `Error.prepareStackTrace` and the `Document.prototype`
+    methods. No cheap fix closes the gap: dropping `'unsafe-inline'` breaks every `srcdoc` web view,
+    which inherits the renderer CSP; a nonce is readable by a same-origin web view; a `<meta>` CSP
+    cannot add hashes after load; and guarding insertion means patching React's hottest DOM paths and
+    still leaves gaps. The real fix is web views on their own origin (PT-2896 / PT-2912).
+- **Alternatives:** (1) A capability (a token the renderer's own code holds) instead of file names:
+  not workable, because Usersnap's remote chunks (loaded by `loadSpace` in `usersnap.service.ts`) and
+  webpack's chunk loader both call the global `document.createElement` themselves and cannot be
+  made to present one. (2) Keep matching stack text with tighter regexes: the text is attacker
+  influenced by construction. (3) Chase HTML-text insertion, element copying and cross-realm
+  creation in this change: rejected as not cheap side doors; see Consequences.
+- **Consequences:** The guard's claim is only "the caller cannot be faked", not "a web view cannot
+  add scripts, frames, forms or links to the app window". Known unguarded paths, tracked in
+  PT-5086: any renderer-bundle code reachable from a web view that calls a function the web view
+  supplies, or creates elements from data it supplies, is a trusted caller — for example
+  `parent.React.Children.map(['script'], parent.document.createElement.bind(parent.document))`,
+  `createRoot` on the app window, webpack's chunk-loading global if one is reachable, and possibly
+  the bundle file itself loaded into the web view's realm (the web view CSP allows
+  `script-src-elem 'self'`); none of these was verified live. Also unguarded: element copying
+  (`cloneNode`, `importNode`, `adoptNode`); customized built-in elements (a class extending
+  `parent.HTMLScriptElement`, defined with `{ extends: 'script' }` on `parent.customElements` and
+  constructed with `new`, is created in the app document without calling `createElement`; confirmed
+  in jsdom, not in Chromium); HTML-text insertion (`innerHTML`, `insertAdjacentHTML`,
+  `document.write`, `DOMParser`, `<template>`, and similar); and creating in the web view's own
+  document, or via its own `Document.prototype`, and adopting into the app window. Constraints for
+  maintainers: nothing in the renderer may reassign `window.Error` after startup; the installer
+  throws if `Error` or `Error.prepareStackTrace` is already locked, and refuses a second install, so
+  renderer unit tests that call `initialize()` repeatedly mock `installCreateElementGuard` (its real
+  behaviour is tested in `renderer-create-element-guard.install.test.ts` against separate jsdom
+  realms, and with the module evaluated inside the guarded realm as production runs it, attacked by
+  poisoning that realm's builtins). Either trusted caller may create any restricted tag; per-tag
+  rules were not asked for. Because the guard fails closed, a web view can stop the renderer itself
+  from creating any restricted tag for the rest of the session, by making `parent.Error`'s
+  `stackTraceLimit` read-only or an accessor: the guard's capture then finds no caller, so chunk
+  loading, new web view iframes and anchors are rejected too. That denial of service is accepted;
+  a hostile web view has other ways to break the window.
+  **Revisit** when PT-2912 / PT-2896 land: if web views stop being same-origin, delete the guard.
+  - **Live check (2026-11-16, dev build):** the `evil` web view's forgery attempts logged no
+    `<<BAD>>`. A webpack hot update created its script through
+    `__webpack_require__.l` in `renderer.dev.js` and was allowed, which confirms that the guard
+    measured the bundle that holds the chunk loader. In the production build, the guard and the
+    chunk loader are also both in `renderer.js`. A `script` created from DevTools-evaluated code
+    was rejected. Toolbar SVG icons rendered. The Usersnap path was not exercised, because this
+    build has no Usersnap keys. PT-5086 probes: (a) a script that the web view created in its own
+    document and appended to the app window RAN in the app window. So in practice the guard does not
+    stop script injection today: removing `'unsafe-inline'` from the renderer CSP (PT-2801) or
+    landing PT-2896 is the real fix; see PT-5086. (b) an iframe rendered through
+    the app window's `createRoot` was allowed by this guard (React in the renderer bundle is a
+    trusted caller), but the separate no-sandbox iframe check removed it, so it did not appear.
+  - **Packaged check (2026-11-18, unpacked Linux build with `app.asar`, `DEV_NOISY=true`):** the
+    guard installed and measured `app.asar/dist/renderer/renderer.js`; trusted iframes were allowed
+    with their full trail logged; with the `evil` tab active, its `script`, `iframe` and `a`
+    attempts were rejected from `evil.web-view.html` and no renderer `<<BAD>>` was logged. Probes
+    (a) and (b) behaved as in the dev build.
+  - **Usersnap check (2026-11-18, dev build with the Paratext 10 Studio Usersnap keys added
+    locally):** both feedback forms opened and took input; the widget's `form` and `a` were allowed
+    from `https://resources.usersnap.com/widget-assets/js/chunks/<digits>/<hash>.js` (no query
+    string), with no rejection and no `TypeError` from the `window.Error` lock.
+- **Source:** PT-4767 (epic PT-2091).
+
 ## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
 
 - **Date:** 2026-09-21
@@ -2861,6 +2969,119 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-e2e-core-set-per-pull-request: Pull requests run a small report-only set of isolated e2e specs; the full isolated suite runs nightly and fails on a flaky test
+
+- **Date:** 2026-11-17
+- **Status:** Accepted
+- **Context:** The isolated e2e suite (`e2e-tests/tests/isolated/`) took about an hour on a
+  developer machine and ran in no CI job, so a break in a feature's end-to-end behavior was noticed
+  only when someone ran it by hand. Each spec starts its own copy of the app, so adding specs to
+  every pull request multiplies the cost, and a timing race in the app could turn unrelated
+  pull requests red.
+- **Decision:** Three parts, wired through `.github/workflows/test.yml`, `e2e-isolated.yml` and
+  `e2e-nightly.yml`. (1) Every pull request runs the `e2e-core` job: the isolated specs listed in
+  `e2e-tests/core-specs.txt`. It is report-only: a spec failure shows as a warning on the run, not
+  a red check. (2) A second list, `e2e-tests/core-specs-editor.txt`, runs as well when the pull
+  request changes a path matched by `editor_paths` in `test.yml`, a curated list of the Scripture
+  editor, what it saves through (its USFM↔USX↔USJ conversion path) and the editor list's own specs,
+  described in full beside it; if the changed-files lookup fails, both lists run. (3) A nightly run
+  (`e2e-nightly.yml`, also startable by hand) runs every isolated spec over eight runners and fails
+  the run on a test that passes only on its retry (`--fail-on-flaky-tests`). Every run allows one
+  retry per test and keeps the traces of each failed attempt (`--trace=retain-on-failure`): a DOM
+  trace of the app for specs on `isolated.fixture`, which records the Electron app's context
+  itself because Playwright's own tracing does not reach an app started with `_electron.launch()`.
+  The specs stop on their own (`--global-timeout`, from the time the setup left) before the job's
+  limit, because a job that reaches its limit is cancelled and skips the reporting and upload
+  steps. The per-pull-request job names a test that needed its retry in a warning. Adding or
+  removing a core spec means editing the list, and `e2e-tests/core-specs.test.ts` keeps the lists,
+  the workflow, the specs and every `editor_paths` entry in agreement with the repository.
+- **Alternatives:** Run the whole isolated suite on every pull request — rejected: about an hour
+  locally and longer on a runner, too slow for a per-pull-request check. Make the core job blocking
+  from day one — rejected: an app race would mark unrelated pull requests red while the job is still
+  proving itself. Fail the per-pull-request job on a test that passes only on its retry — rejected
+  as too strict there; it warns instead, and the nightly run, which blocks nothing, is the one that
+  fails.
+- **Consequences:** Pull requests get early, non-blocking signal on the specs that matter most;
+  the rest of the suite is covered a day late. The `editor_paths` list is curated by hand and
+  over-matches on purpose (over-running a report-only job is the safe direction), so it needs
+  upkeep as the editor's dependencies move. Revisit once the job has proven stable: TODO(PT-5088)
+  makes it a required check.
+- **Source:** PT-5015.
+
+## adr-e2e-recommendations-source-map: `/review-paratext` recommends isolated e2e specs from a hand-kept map of source prefixes, not from the specs themselves
+
+- **Date:** 2026-11-19
+- **Status:** Accepted
+- **Context:** The isolated e2e suite takes about an hour, so an author needs to know which part to
+  run for a branch, and whether the branch needs a new spec. Nothing in the repository said which
+  source a spec exists to test: a spec's imports and selectors name what it drives, not what it
+  verifies, and an ordinary editor change reached 10 of 35 groups when every touched file counted.
+- **Decision:** `e2e-tests/tests/isolated/subset-sources.json` maps each key (a subset directory, a
+  loose spec, a spec key: one spec inside a subset that names sources of its own, or a prefix key:
+  a path prefix inside a subset, such as `scripture-editor/no-unasked-edits-`, that names the
+  sources of every spec starting with it, new ones included, and must match at least one spec file)
+  to repository path prefixes, and `e2e-tests/e2e-recommendations.ts` matches a branch's changed
+  files against it for `/review-paratext` Step 3.5. The rules:
+  - **`main` versus `incidental`.** `main` is source the group exists to test and produces a
+    recommendation; `incidental` is source the group only drives on its way and produces an
+    "also exercised" line, never a question.
+  - **A spec key or prefix key wins over its subset** for a file that reaches both, so a change to
+    one data provider file runs the specs that judge it (the `no-unasked-edits-` family), not the
+    whole editor subset. When the subset is recommended anyway, the key is folded into it. A family
+    of specs that shares its sources gets one prefix key rather than one spec key per spec, so a
+    new spec in the family is covered without a map edit. Spec keys of one subset that matched the
+    same files still collapse into one path-filter command, only when that command runs exactly
+    those specs.
+  - **What counts as runtime code.** `NON_RUNTIME` in `e2e-recommendations.ts` lists the shapes of
+    files no key could list (tests and their helpers, stories, docs, dotfiles, package and .NET
+    project metadata except the data provider's own project file, which pins ParatextData, image
+    and icon assets, formatter, linter, spelling and TypeScript configuration). A
+    unit test runs it over every tracked file under the source roots and fails on a file that is
+    plainly not app code but still classified as runtime; `LOADED_EXTENSIONS` in that test names the
+    file types the app does load. A file no key lists and `NON_RUNTIME` does not match is
+    "uncovered" (only files under `src/`, `extensions/src/` and `c-sharp/` are reported), one of
+    the conditions that can trigger the "does this need a new e2e test?" question (the others are
+    in the Add part of `/review-paratext`'s end-to-end tests step).
+  - **Lookups are deterministic; the app-behaviour judgment is the model's.** The script answers
+    what a path lookup can: the map's recommendations and also-exercised keys, uncovered files,
+    entry points, whether an e2e spec changed, stale prefixes and whether CI runs the editor list.
+    Whether the branch changes what the app does, which gates the "needs a new e2e test?" question,
+    is judged by the reviewing model from the diff. The judgment is not unit-tested and can vary
+    between runs; the step is advisory, so that is accepted.
+  - **Dependency changes get a pointer, not a judgment.** When a dependency changes (a package
+    file, the lock file, `dev-packages.json`, a .NET package reference, `global.json` or a patch
+    under `patches/`, recognised by file name in the changed-file list), the step only mentions
+    that the full isolated run (`npm run test:e2e:isolated all`) exists, takes about an hour and
+    runs nightly on `main`, because the nightly full run catches what a dependency bump breaks.
+  - **An unreadable `editor_paths` is `'unknown'`, not false.** If the path list in `test.yml`
+    cannot be parsed, `editorListRuns` is `'unknown'` and the report is still printed; answering
+    false would claim the editor spec list does not run when nothing was checked.
+  - **The tool is run with `npx tsx`, not `--no-install`.** A worktree without `node_modules` would
+    download `tsx` and still give a correct report, because the tool uses only Node built-ins.
+  - **Key completeness blocks; prefix existence only warns.** A subset or spec with no key fails
+    the unit test, because it would silently never be recommended. A prefix that names no tracked
+    file is reported as `stalePrefixes` and shown to the author as a warning, not a test failure. The
+    rule: block where silent staleness disables a safety gate (`editor_paths` in `test.yml`, whose
+    every entry must match a file, see `adr-e2e-core-set-per-pull-request`); advise where it only
+    weakens a suggestion a human reads. Existence is checked against git's file list, exactly as
+    cased, not the file system, which ignores case on Windows and macOS.
+- **Alternatives:** Derive the mapping from the specs (their imports, selectors and commands) —
+  rejected: it finds what a spec drives, not what it tests, and recommends close to the full suite.
+  A single prefix list per group with no main/incidental split — rejected for the same reason.
+  Path rules for "an app change" were rejected: every narrower rule had counterexamples, and a
+  coarse one still needed per-format exceptions. Rejected: parsing the dependency formats, counting
+  lock-file lines and reading capped lock-file diffs. Each misread some cases, for little gain over
+  the nightly run. Fail the unit test on a stale prefix — rejected: it would block pull requests
+  that move a source file for a reason unrelated to e2e, to protect a suggestion. Run the
+  recommended specs automatically — rejected: the step is a reminder and never starts a run or
+  blocks the review.
+- **Consequences:** A new group, or a new kind of non-app file, needs an edit to the map, to
+  `NON_RUNTIME` or to `LOADED_EXTENSIONS`, and the unit test says which. A map entry can be wrong
+  while every check passes (they prove an entry exists and names real paths, not that it is right),
+  so reviewers of an area check its entries. Revisit if the review shows the "add a test?" question
+  is noisy, or if specs gain declared sources that make a derived map possible.
+- **Source:** PT-5060.
+
 ## adr-editor-annotation-exact-locations: An annotation holds exactly the bytes its range names, and removal reporting follows whatever holds it now
 
 - **Date:** 2026-09-29
@@ -3494,6 +3715,95 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (accelerators behind the overlay) is PT-4851 and needs main to notice a window's port dying on
   its own. The `TODO(PT-4435)` reconnect markers are re-homed on PT-4495.
 
+## adr-extensions-load-through-sandbox-loader: Extension files load through the host's own vm wrapper, and the remaining module and code-generation routes are locked at activation
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:** PT-1566. The extension host restricted extension imports only by replacing
+  `Module.prototype.require` with a shim, and loaded each extension's entry file with Node's own
+  `require(dir)`, so extension code ran as an ordinary CommonJS module. That left routes to
+  blocked Node modules the shim never saw: dynamic `import('fs')` (served by the ESM loader, not
+  `require`), Node's loader through `module.constructor._load` and `require.cache`,
+  `process.mainModule`, and the `process` helpers `getBuiltinModule`, `binding`, `_linkedBinding`
+  and `dlopen`. Code could also be built from strings through the `constructor` of any function
+  literal (plain, async, generator, async generator) even though `eval` and `Function` were
+  deleted from the global object. Running this branch's `evil` extension (16 sandbox probes at the
+  time) against the extension host as it was before the change refused only 4 of the 16 probes.
+- **Decision:** (1) **Loader over hooks.** `loadExtensionModule`
+  (`src/extension-host/services/extension-sandbox.util.ts`) reads the entry file and compiles it
+  with `vm.compileFunction` without an `importModuleDynamically` callback, handing it a plain
+  `module`/`exports` and a bare `require` that calls `requireForExtension` (`extension.service.ts`).
+  Extension code never touches Node's CommonJS loader, module cache or dynamic-import machinery, and
+  `import()` rejects. (2) **String-built code is blocked by locking prototypes at activation**
+  (`blockCodeGenerationFromStrings`): `eval` and `Function` are deleted and the four function
+  prototypes' `constructor` is made a non-writable, non-configurable function that throws. Each kind
+  gets its own throwing function carrying the original's `name` and `prototype`, so
+  `.constructor.name`, `instanceof` and `util.inspect` still tell function kinds apart; only a
+  reference to an original constructor taken before the lockdown stops matching `fn.constructor`.
+  (3) **`process` helpers are replaced with throwing stubs at activation**
+  (`blockProcessModuleAccess`: `getBuiltinModule`, `binding`, `_linkedBinding`, `dlopen`,
+  `loadEnvFile`, `_getActiveHandles`, `_getActiveRequests`, `execve`), `process.mainModule` is set
+  to `undefined`, and `process.stdin` (a file stream carrying `fs`, because the host's standard
+  input is the null device: `/dev/null`, `NUL` on Windows) is replaced with an empty stream.
+  **`papi.logger` is narrowed** to a frozen object of the seven logging methods
+  (`createExtensionLogger`), because electron-log's `transports.file` can point the log file and
+  `readAllLogs` at any path and freezing the logger is shallow; the methods are bound, not wrapped,
+  so the caller shown on each log line is still the extension's. (4) **The
+  `Module.prototype.require` shim is removed.** Entry files no longer go through it, and as a
+  backstop it stopped little: a leaked real `require` carries `.main` and `.cache`, which reach
+  Node's loader around it. It also refused the host's own `require` calls made after activation
+  started. Refusals from the loader and the lockdowns contain `not allowed in extensions`. The
+  `evil` extension's probes and `extension-sandbox.probes.test.ts` (which runs them in a child Node
+  process with and without the lockdowns) are the regression guard. The host gets its loader only
+  from `lockDownAndCreateExtensionLoader`, which applies both lockdowns first, so no extension can
+  load before them; the probe test loads `evil` through that function. The running host's wiring is
+  checked end to end rather than by reading `extension.service.ts` as text (rejected as brittle):
+  `evil` returns each phase's results from the `evil.getSandboxProbeResults` command, which the
+  smoke E2E test `extension-sandbox.spec.ts` reads from the dev app and CI's `check packaged
+  extension sandbox` step reads from the packaged build on every platform (non-blocking on macOS,
+  like the E2E step). The spec loads `evil` by launching with `test.use({ devNoisy: true })`: CI
+  runs the smoke suite with `DEV_NOISY=false`, so without that line `evil` never loads there.
+- **Alternatives:** (A) An ESM loader hook (`module.register`) plus caller detection to refuse
+  dynamic imports from extension files — rejected: it closes only `import()`, leaves the loader
+  and cache reachable, and identifying the caller from a resolve hook is fragile. (B) Starting the
+  extension host with `--disallow-code-generation-from-strings` — rejected: it is process-wide
+  from the first line, so it also applies to the host and its bundled libraries, and setting it
+  later with `v8.setFlagsFromString` has no effect (checked in plain Node 22). (C) Process-level
+  isolation (Node's `--permission` model, or a process per extension) — deferred as out of scope:
+  it is the only route to a hard boundary but changes how extensions are hosted.
+- **Consequences:** This is an in-process sandbox. It closes the module-loading and
+  string-compilation routes listed above; it is not a hard security boundary, because every
+  extension shares one JavaScript realm and one `process` with the host. Known to remain open as of
+  2026-11-09: a `net.Socket` built from `process.stdout.constructor` or
+  `process.stderr.constructor`; the rest of the `process` surface (`kill`, `send`,
+  `report.writeReport`, `chdir`, `env`); and, in dev builds, grabbing host functions from stack
+  frames through `Error.prepareStackTrace` and `CallSite.getFunction()`. Also open (added
+  2026-11-18): after the host calls `fetch` once, Node's built-in HTTP client (undici) on
+  `globalThis[Symbol.for('undici.globalDispatcher.1')]` makes requests that skip `papi.fetch`;
+  harmless while `papi.fetch` passes requests through unchanged. The published type of `papi.logger`
+  in `@papi/backend` narrows from electron-log's `MainLogger` to its seven logging methods; no known
+  extension used anything else. A follow-up audit of the `process` surface is recommended (not filed
+  as of 2026-11-09). Extensions that relied on string-built code or on Node's `module` beyond
+  `exports` break; neither was supported. The extension module cache is no longer involved: a
+  reloaded extension re-reads its file, and nothing deletes `require.cache` entries. Only
+  CommonJS-shaped entry files load (an ES module entry with `import`/`export` syntax fails to
+  compile); `exports.default` still works. The entry file is resolved literally from the manifest's
+  `main` (with `.ts` changed to `.js`), not by Node's `require(dir)` through the directory's
+  `package.json` `main` or `index.js`: every core extension agrees as of 2026-11-09, but a
+  third-party extension whose `package.json` `main` differs from its manifest `main`, or whose
+  manifest `main` has no file extension or names a directory, now fails to load, with an error
+  saying that `main` must name the built `.js` file exactly. Scripts compiled with
+  `vm.compileFunction` do not get Node's source-map rewriting, so the dev extension host installs
+  its own `Error.prepareStackTrace` (`installSourceMappedStackTraces`). `loadExtensionModule`
+  records each extension file's inline source map every time it loads the file, so a rebuilt
+  extension is mapped through its new map; host frames are mapped through the source maps Node
+  recorded when tsx transpiled them. `source-map-support` was rejected because it caches maps by
+  path for the life of the process, so extensions rebuilt in dev were mapped through their old map.
+  Packaged builds install none of this, since extensions ship without source maps there. Packaged
+  builds are checked automatically in CI on Linux, Windows and macOS (see above). Revisit if process
+  isolation is taken up. Supersedes in part the mechanism described in `adr-licensing-boundary`
+  ("shimming `Module.prototype.require`"); the licensing decision there is unchanged.
+
 ## adr-find-block-boundary-whitespace: Find tolerates a whitespace gap only at block boundaries, never mid-paragraph
 
 - **Date:** 2026-09-09
@@ -3952,6 +4262,68 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `UsjSearchOptions.wordEdges` (`lib/platform-bible-utils/src/scripture/usj-reader-writer.model.ts`).
 - **Source:** PT-4969 (parent PT-4910). PT-3199 for searching with markers.
 
+## adr-find-reveals-text-collection-cell: Find activates the Text Collection and asks it to reveal the matching resource's cell
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** [adr-find-searchable-tabs](#adr-find-searchable-tabs) left the Text Collection out
+  of Find's searchable tabs because "go to result" had no defined behavior there: each cell is its
+  own editor, so activating the grid's tab would not show which cell held the match. Meanwhile the
+  grid already handed its focused resource to Ctrl+F, so Find received a project it had no open tab
+  for, took the reassignment effect's cross-project fallback, and searched an unrelated project.
+- **Decision:** The grid registers a web view controller
+  (`WebViewControllers['platformScriptureEditor.scriptureTextGrid']`) with one method,
+  `revealResource(projectId)`, which brings that resource's cell into view and outlines it; the
+  match itself is not selected. Verse view focuses the row. Chapter view focuses the column's own
+  scroll area (an explicit tab stop, like the aligned view's shared scroll area), and aligned view
+  focuses that shared area, so Arrow and Page Down scroll the text at once; the column itself is
+  never focused, because a focused column root is not a scroller and breaks keyboard scrolling.
+  Aligned view also announces the resource to screen readers, since its shared area is not named
+  for any one resource; a chapter column's scroll area sits inside the column's region, which is.
+  The outline lasts until the user next interacts with the grid or its tab is hidden. A verse row's
+  outline is a 2px ring, the row's focus indicator, since the row holds focus. A column's is a
+  thicker outline set in from the edge of what it frames: focus is on its scroll area or the shared
+  root instead, and the outline outlives focus moving to Find, so it must not read as a second focus
+  ring. An aligned column's outline frames the whole column; a chapter column's frames the text
+  area below the header, inside the scrollbar, since an outline set in from the column's edge would
+  run down the middle of the scrollbar. CSS cannot know the scrollbar's width or side, so the column
+  measures its scroll area's client box (`useRevealOutlineInsets`). Find adds
+  the grid to `FIND_SEARCHABLE_WEB_VIEW_TYPES` and to `DECLARING_WEB_VIEW_TYPES`, so it lists the
+  resources the grid declares. "Go to result" targets one tab, in this order: an editor showing
+  the project (driven through its controller), then any reference panel showing it, then the Text
+  Collection. Any reference panel includes Model text, which is never activated, so a resource
+  shown in Model text activates nothing. For the grid, Find writes the result's verse to the scroll
+  group, activates the grid's tab, and calls `revealResource`. The grid receives the message
+  through a module-scope listener and holds the request until its tab is shown and its resources
+  have loaded. A request that waits hidden for more than 5 s (`REVEAL_REQUEST_MAX_AGE_MS`), or whose
+  tab is hidden again before the resources load, is dropped, so a tab the user shows later by hand
+  does not jump.
+- **Alternatives:** **Activate the tab only** — rejected: in a view with many resources nothing
+  tells the user which cell holds the result. **Select and highlight the match in the cell**, as
+  in an editor — deferred: it needs a range converted for the cell's editor and per-cell
+  annotations, for little gain over an outlined cell at the right verse. **A command instead of a
+  controller** — rejected: a controller is how Find already reaches the editor, and it keeps the
+  message nonce inside the web view provider. **A listener registered in a React effect** —
+  rejected: the renderer buffers messages for a tab that has never been shown and flushes them when
+  its iframe loads, which can happen before any effect runs, so the request would be lost. **A
+  renderer-side ready handshake** (flush a web view's buffered messages only once it says its
+  listener exists) — not done here: it changes delivery for every web view, so it is platform work;
+  the rule for consumers is in `.claude/rules/cross-view-sync-hidden-views.md`.
+- **Consequences:** In Simple mode the grid shares Find's Column 3 stack, so "go to result" on a
+  grid-only resource hides Find, as it does for Bible texts; single-click preview never activates
+  the grid. The grid's container project is dropped from Find's picker like a reference panel's,
+  since the grid does not display it. Rows follow the container project's versification (PT-4897),
+  so a revealed cell can show the wrong verse for a resource whose versification differs.
+- **Key symbols:** `SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE`, `DECLARING_WEB_VIEW_TYPES`,
+  `FIND_SEARCHABLE_WEB_VIEW_TYPES`
+  (`extensions/src/platform-scripture/src/resource-panel-web-view-types.const.ts`);
+  `targetTextCollectionWebViewId`, `handleOpenAtResult`
+  (`extensions/src/platform-scripture/src/find.web-view.tsx`); `TextCollectionWebViewController`
+  (`extensions/src/platform-scripture-editor/src/types/platform-scripture-editor.d.ts`);
+  `installRevealRequestListener`, `useRevealRequest`
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/reveal-request-store.ts`).
+- **Source:** PT-4507.
+
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 
 - **Date:** 2026-09-03
@@ -3994,6 +4366,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   iframe, since PAPI exposes no visibility query for another web view.
   **Revisit** if per-cell reveal is designed for the Text Collection, which would bring it into the
   searchable set.
+- **Amended 2026-11-12:** the Text Collection deferral is resolved by
+  `adr-find-reveals-text-collection-cell`.
 
 ## adr-find-tolerance-as-engine-options: Find expresses whitespace and diacritic tolerance as engine options, never by rewriting the query
 
@@ -4890,6 +5264,54 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
 
+## adr-implied-paragraph-reports-p-and-bar-follows-top-level-block: Verses outside any paragraph marker report `p`, and the character-marker bar follows the caret's top-level block
+
+- **Date:** 2026-11-12
+- **Status:** Accepted
+- **Context:** Verses that sit outside any paragraph marker load as an `ImpliedParaNode`, which
+  renders as a bare `<p>` with no USFM class. Two things broke for a caret there in Simple mode.
+  The editor's `StateChangePlugin` (scripture-editors,
+  `libs/shared-react/src/plugins/usj/StateChangePlugin.tsx`) emitted no state change for an implied
+  paragraph, so the host kept the previous block's `blockMarker` — typically `id` — and scoped the
+  character-marker menu to `\id`'s children (`ior`). And the bar resolved the caret's block with
+  `EDITOR_PARA_SELECTOR` (`.para[class*="usfm_"]`, `editor-dom.util.ts`), which neither the bare
+  `<p>` nor the `\id` line (`p.book.usfm_id`) matches, so the bar held its last position.
+- **Decision:** (1) An implied paragraph reports `p` as its block marker: `StateChangePlugin`
+  accepts `$isSomeParaNode` (paragraph or implied paragraph) at both its verse-block resolution and
+  its reporting guard, and `ImpliedParaNode.getMarker()` already returns `PARA_MARKER_DEFAULT`
+  (scripture-editors `docs/markers-inventories/implemented-markers-inventory.md` documents that).
+  (2) The character-marker bar anchors to the caret's **top-level block** — the child of
+  `.editor-input` that holds it (`findTopLevelEditorBlock`), the DOM twin of Lexical's
+  `getTopLevelElement()` and the block `ActiveTextPlugin` outlines — while the paragraph-marker
+  tooltip keeps `EDITOR_PARA_SELECTOR`, because it names a marked paragraph. Before the first caret,
+  the bar anchors to the first block that holds text (`findFirstTextBlock`): it skips the `\id`
+  line (class `book`) and chapter lines (class `chapter`) and takes the next block whether or not it
+  has a paragraph marker, so a chapter that opens with unmarked verses starts the bar beside them
+  rather than beside a later `\p` that may be off-screen.
+- **Alternatives:** Report `undefined` for an implied paragraph — rejected: the character-marker
+  menu returns no items without a parent marker, which disables the button in exactly the place the
+  user is typing. Add an `isImpliedPara` field to `StateChangeSnapshot` — rejected: public API growth
+  for one consumer, when `p` is already what the node says it is. Give the implied paragraph an
+  `implied-para` class in the editor and widen the selector — rejected: a new cross-repo class
+  contract, and it would still miss the `\id` and chapter lines; the top-level-block rule rests on
+  Lexical's own invariant that root children render as the contenteditable's children. Read the
+  `psc-active-text` class `ActiveTextPlugin` puts on the active block — rejected: it exists only in
+  views with `hasActiveTextFocusBox`, and the plugin removes it on blur, which is exactly when the
+  character-marker menu takes focus and the bar must hold.
+- **Consequences:** In Power mode the paragraph-style trigger reads `p` for text that has no `\p`
+  (Simple mode is structure-protected, so the cost is Power-only); retagging an implied paragraph
+  from that menu was already reachable, because the stale `id` left it enabled. The bar follows the
+  caret onto the `\id` and chapter lines too, and its button is disabled on both: `c` has no
+  character markers, and `generateCharacterMarkerMenuListItems` offers none for `id` even though
+  `usfmMarkers` lists `ior` among `\id`'s children (they name what may follow `\id`, and `ior`
+  belongs inside `\io`). Hiding the bar on those lines was rejected: it would flicker as the caret
+  moves past them. `findTopLevelEditorBlock`
+  assumes root-level nodes render as direct children of the contenteditable. The read-only block
+  verse layout already wraps paragraphs in a verse-block element, where it would resolve to the
+  wrapper; as of 2026-11-12 the bar is not mounted in that layout. Revisit before mounting the bar
+  anywhere the editor wraps its blocks.
+- **Source:** PT-4763.
+
 ## adr-interface-mode-decides-the-window-set: The interface mode decides how many windows exist, and the persisted entry list is that set
 
 - **Date:** 2026-09-02
@@ -5295,7 +5717,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-leaked-emudhra-certificates-blocked-in-app: The app blocks the leaked eMudhra intermediate certificates itself until Electron is upgraded
 
 - **Date:** 2026-10-27
-- **Status:** Accepted (temporary; superseded once PT-3111 upgrades Electron)
+- **Status:** Superseded: Electron 45 (PT-3111) blocks these certificates itself; the modules were
+  removed, and the rules below no longer apply. Kept rather than retired, as prior art if a future
+  leak hits an Electron release that has no fix.
 - **Context:** In October 2026 the private keys of eight eMudhra intermediate certificates (16
   certificates, including Sectigo `AAA Certificate Services` cross-signs) became recoverable by
   anyone (https://emudhra.we-have-a-problem.com/). Operating systems and browsers blocked them, but
@@ -5321,8 +5745,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   unpatched system still accepts the leaked certificates there (PT-4913); processes extensions
   start with `createProcess.fork` and worker threads are not covered (none makes network requests
   today). Distrusting whole roots also refuses legitimate sites that chain to them; none of the
-  sites the app uses does. Remove both modules, and retire this entry, when PT-3111 upgrades
-  Electron to a release that blocks the certificates itself.
+  sites the app uses does. Remove both modules when PT-3111 upgrades Electron to a release that
+  blocks the certificates itself.
 - **Source:** PR #2938
 
 ## adr-library-string-keys-ship-in-shell-assets: `platform-bible-react` string-key values ship in the platform shell's locale assets by default
@@ -5464,6 +5888,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   LICENSING.md, "What a third-party extension links against".
 - **Source:** the AGPL relicense (`LICENSING.md`, per-directory `LICENSE` files); rule settled during
   the relicense code review; PAPI question raised in the review of #2654.
+- **Amended 2026-11-09 (PT-1566):** superseded in part by
+  `adr-extensions-load-through-sandbox-loader`. The host now supplies the `@papi/*` modules
+  through the `require` it hands each extension file when it loads it (`requireForExtension`);
+  the `Module.prototype.require` shim is removed. The licensing decision and the Extension
+  Interface it relies on are unchanged.
 
 ## adr-lightweight-decision-log: Keep a lightweight, gate-free architecture-decisions log
 
@@ -5820,6 +6249,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   jsdom cannot judge. Neither can assert the ring itself — the Storybook harness does not paint the
   trigger's ring at all, so an assertion on it would pass whatever the code did. That the attribute
   removes a ring the user can see is confirmed by hand in the running app.
+- **Amended 2026-11-14 (PT-3111, Electron 45):** the app now ships Chromium 156, so the runtime reason
+  for rejecting alternative (b) no longer holds (the option already worked in Chromium 145). The CSS
+  approach stays: it works and does not depend on the runtime. Moving to
+  `focus({ focusVisible: false })` would be a separate change, with its own check that the
+  scripture editor's own `:focus-visible` outline stays hidden.
 - **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
   found not to work in the shipped runtime.
 
@@ -6658,6 +7092,32 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (checked-in canonical texts; a regex import scan; a copyleft denylist), none of which reached
   `main`.
 
+## adr-notices-manifest-plugin-copied-into-templates: The extension templates carry copies of the module-manifest plugin and its build-id script, not an npm package
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:** Itemizing an extension zip built in another repository
+  (`adr-notices-overlay-for-downstream-products`, amended 2026-11-09) needs that repository's
+  webpack build to write the same stamped module manifests this repository's build writes. Two
+  files produce them here: `.erb/configs/emit-shipped-modules-plugin.ts`, the webpack plugin that
+  writes each bundle's manifest, and `.erb/scripts/notices-build-id.ts`, which mints the build id
+  every manifest of one build is stamped with. Extension repositories start from
+  `paranext-extension-template` or `paranext-multi-extension-template`, so the templates are where
+  those files have to reach.
+- **Decision:** Copy both files into the two extension templates rather than publish them as an
+  npm package. Each template copy's header names the paranext-core file it must be kept in step
+  with. The copies keep the same code, apart from their import paths and how the build-id script
+  finds the manifest folder (through the template's `webpack.util.ts`, `noticesManifestFolder`),
+  but carry their own comments, which describe the template's build; the design rationale stays in
+  the paranext-core files. In the templates the copies sit in `#region shared with` regions, so
+  the two templates stay in step with each other the way their other shared code does.
+- **Alternatives:** Publishing the plugin and the build-id script as an npm package - rejected: two
+  small files did not justify a package's publishing and versioning setup.
+- **Consequences:** A change to the manifest format or to the build-id stamp has to be made in
+  paranext-core and in both templates, and an extension repository picks it up through its next
+  template merge. Nothing in paranext-core checks that the copies agree with its files; the headers
+  are what point a maintainer at them. **Revisit** if the files grow, or if a third consumer appears.
+
 ## adr-notices-overlay-for-downstream-products: A downstream product runs this generator with its own policy overlay
 
 - **Date:** 2026-09-09
@@ -6724,6 +7184,29 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
+- **Amended 2026-11-09 (PT-4604):** an overlay can now itemize an external extension that is built
+  alongside the product, by recording `"itemized": true` with a `sourceCheckout` that names an
+  `externalExtensionCheckouts` entry; that entry records the checkout's `path` and its minimum
+  package counts. The table is keyed by name, as `separatePrograms` and `externalExtensions` are,
+  and the name is what the document's heading and the run's messages call the checkout. Keying it
+  by path instead would require every entry and the table to spell a folder the same way, or the
+  generator to reconcile two spellings. A checkout's `path` resolves against the overlay's folder
+  whenever an overlay is selected, and against the base policy file's folder otherwise, because the
+  checkout sits beside the downstream build whose overlay records it. That differs from a separate
+  program's evidence paths, which resolve against the repository root because the evidence is a
+  file in this tree. The generator reads the checkout's webpack module manifests and applies the
+  same safety checks as for this repository's own build: production manifests only, the packages
+  compiled from this repository found in its own shipping set, the minimums, an import
+  cross-check, and a refusal of any license pointer to a `.LICENSE.txt` file that does not ship.
+  The stylesheet scan and the import cross-check read the extensions' source in either template's
+  layout: each workspace's `src` folder when the checkout declares `workspaces`, or its own `src/`
+  when it declares none. A required manifest with an empty module list is refused as it is here,
+  except an `extension-web-view` list in a checkout with no `*.web-view.tsx` file, whose web-view
+  build has nothing to compile. `"itemized": false` remains for zips built elsewhere. Rejected: packing the package list inside
+  each zip and reading it from there. A zip carries package names but no license files, so every
+  row would lack its notice, and without the extension's source the stylesheet scan and import
+  cross-check that confirm the list is complete cannot run. How the extension templates come to
+  write those manifests is `adr-notices-manifest-plugin-copied-into-templates`.
 
 ## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
 
@@ -7262,6 +7745,60 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   trip to the extension host. A hidden panel needs no catch-up: the switch reloads it like a visible
   one, and picking the selection is data, not layout.
 
+## adr-papi-connection-identity-and-access-table: Main identifies each PAPI connection by a per-launch secret and restricts a short list of request types by identity
+
+- **Date:** 2026-11-13
+- **Status:** Accepted
+- **Context:** The PAPI WebSocket on `localhost:8876` checked nothing at connect, so any local
+  process and any page open in the user's browser could call every request type and register any
+  unclaimed one, including a sensitive one before its real handler started. A sweep found a
+  browser page could change the proxy and DBL server addresses while the saved passwords stayed in
+  use, delete or switch the registration, decrypt anything protected with `papi.dataProtection`,
+  and read the whole main log. The only guard was an `Origin`-header check on
+  `requestRegistryTokens:getAccessToken`, which trusted a header the caller supplies.
+- **Decision:** Main issues two secrets (`crypto.randomBytes(32)`, base64url) to each child each
+  time it launches it: over fork IPC to the extension host, before any extension loads; on standard
+  input to packaged .NET; in an environment variable set only in the spawn options to .NET in
+  development, where `dotnet watch` passes it to each restart. The child presents the client secret
+  in the `x-papi-client-secret` handshake header and closes unless main's reply carries the server
+  secret in `x-papi-server-secret`; it uses them once and drops them. Main keeps only a SHA-256
+  digest of each client secret and tags every connection `main`, `renderer` (port broker),
+  `extensionHost`, `dotnetDataProvider` or `unidentified`; a wrong secret is refused with 401, a
+  second connection of an open launch with 409, and an earlier launch's connection is closed when
+  the next launch connects. A frozen table in `src/shared/data/request-access.data.ts` names, for a
+  short list of request types, who may call (main always may) and the one identity that may
+  register. Registrants can restrict their own handlers with `allowedCallers` on
+  `NetworkMethodHandlerOptions`, ignored for a request type the table restricts. `RpcServer` enforces both on every
+  remote call (before the event branch, per request in a batch) and registration;
+  `RpcClient.request` enforces them on the in-process shortcut, and .NET's `PapiClient` calls its own
+  handlers directly. The `Origin` check is removed.
+- **Alternatives:** Deny by default: closes the browser-page hole, but every external client would
+  need a credential route, and it reverses the position that browser clients (the OpenRPC
+  playground, browser-based testing) are legitimate. Read-only unless identified: needs every
+  request type classified. Presenting the secret in a grown `network:announcePeer`: the connection
+  would exist unidentified until it arrived, so a registration could come first. Hard-coding
+  extension commands in core's table: core would have to know other repos' command names;
+  extensions declare `allowedCallers` instead. A shared secret between a WebViewController and its
+  WebView: same-origin WebViews can read each other and share one connection. Encrypting the socket
+  (`wss`): loopback traffic never leaves the machine, the server secret already proves main to its
+  children, `wss` identifies no client, and it would need a per-launch certificate, pinning in `ws`
+  and C#, and a user-installed trusted certificate for browsers, which breaks the playground. A C#
+  copy of the table: no third-party code runs in .NET, and a second copy would drift.
+- **Consequences:** The guarantee for a restricted request type is "only the extension host
+  process", not "only the extensions that hold the privilege": every extension shares the host's
+  realm and connection, so a malicious installed extension can still send anything on it (PT-5072
+  decides how to separate extensions). A WebView can drive its window's connection, so rows that
+  allow `renderer` allow a WebView. Unidentified clients keep everything not on the list, including
+  writes to project data and settings. A child started without main (`npm run start:data`, VS Code's
+  "Debug .NET Core", `npm run start:extension-host`, "Debug Extension Host") has no secret, connects
+  unidentified, and loses the restricted features; if that ever matters while debugging, the route
+  to add is dev-only: in unpackaged builds main writes both children's secrets to a user-only file,
+  and a standalone child reads it when it was handed nothing. No child reconnects today; reconnect
+  work (PT-4495) will need a way to obtain a fresh secret. The secret-delivery channel is the one a
+  dynamic port (PT-4109) can reuse. Event ownership is unchanged (PT-5073). A new sensitive request
+  type goes in the table, with a test that its string matches the constant its handler registers.
+- **Source:** PT-2893; the Marketplace's use of `allowedCallers` is PT-5074.
+
 ## adr-papi-port-blocked-at-the-session: Renderer windows are kept off the PAPI port by the main process's session, not by the renderer alone
 
 - **Date:** 2026-11-12
@@ -7693,6 +8230,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
+- **Amended 2026-11-13:** the Text Collection's resource tracker is now
+  `useActiveResourceProjectId`. Besides focus, it follows a pointer press and the resource Find
+  last revealed: in the aligned view, focus lands on the shared scroll area, outside every cell, so
+  focus alone would leave Ctrl+F with no resource or a stale one. Before any of those, as in a
+  freshly opened Text Collection, Ctrl+F searches the first installed resource displayed (usually
+  the top row or the first column) rather than doing nothing; Find's picker switches to another. It
+  is a no-op only while no displayed resource is installed. See `adr-find-reveals-text-collection-cell`.
 
 ## adr-per-web-view-state-lives-in-the-definition: Per-web-view state lives in the web view definition; user defaults and cross-instance memory live in settings
 
@@ -9099,6 +9643,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   follow-up above, previously tracked as PT-4750, is retargeted to PT-4884 (throw codes instead of
   returning them); revisit it together with the WebSocket-authentication and consent-prompt
   conditions above.
+- **Amended 2026-11-13:** Main now identifies each connection by a per-launch secret, and only the
+  extension host process may call `requestRegistryTokens:` request types and only the data
+  provider main launched may register them (`adr-papi-connection-identity-and-access-table`). The
+  `Origin`-header stopgap described above is removed. A web page or WebView can no longer send the
+  request type, because it is not the extension host's connection. The public PAPI surface gives
+  extensions no way to send this request type, so an honest extension reaches it only through the
+  privilege getter, which checks the allowlist; a malicious extension sharing the host's connection
+  can still send it directly. This meets the WebSocket-authentication revisit
+  condition the 2026-11-03 amendment refers to; the consent-prompt and PT-4884 conditions remain.
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
 
@@ -10726,6 +11279,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   content tag from the snap store's perspective, so store-granted auto-connection for it should be
   confirmed on a published build rather than inferred from sideload testing, which bypasses store
   assertions.
+- **Amended 2026-11-14 (PT-3111, Electron 45):** electron-builder is now pinned to 26.18.1, which
+  pins `app-builder-lib` 26.18.1, so this patch is
+  `app-builder-lib+26.18.1+002+rename-gnome-platform-plug.patch` and paratext-10-studio's is
+  `app-builder-lib+26.18.1+001+mercurial-snap-parts.patch`. The sequencing still keeps them apart,
+  but "no companion studio change" no longer holds: a patch-package file name carries the package
+  version, so every `app-builder-lib` version change also needs paratext-10-studio to rename its
+  patch, and to update the `notices/policy.json` evidence entry and `LICENSING.md` that name it.
 - **Source:** PT-4496. PR #2747 review raised the upgrade path, which the original cold-install
   diagnosis had not considered; its re-review then established the sequenced-patch mechanism above,
   correcting an earlier belief that patch-package allows only one patch per package+version and that

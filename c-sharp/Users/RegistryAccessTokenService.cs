@@ -12,11 +12,10 @@ namespace Paranext.DataProvider.Users;
 /// privilege. The registration code never leaves this process.
 /// </summary>
 /// <remarks>
-/// The request type is outside the <c>command:</c> category, so extension code can't send it
-/// through PAPI; the extension host checks the caller's manifest before forwarding a request here.
-/// Main refuses it to browser pages and web views with an insecure temporary stopgap, but other
-/// local clients can still reach it until PT-2893 lands; see "Paratext Registry access tokens" in
-/// <c>.context/standards/Security-Guide.md</c>.
+/// Main lets only the extension host process send the request type and only this process register
+/// it, by identifying each connection from the secret main issued it at launch. The extension host
+/// checks the requesting extension's manifest for the privilege before forwarding a request here.
+/// See "Paratext Registry access tokens" in <c>.context/standards/Security-Guide.md</c>.
 /// </remarks>
 internal sealed class RegistryAccessTokenService(
     PapiClient papiClient,
@@ -73,12 +72,18 @@ internal sealed class RegistryAccessTokenService(
 
     public async Task InitializeAsync()
     {
-        await PapiClient.RegisterRequestHandlerAsync(
+        bool isRegistered = await PapiClient.RegisterRequestHandlerAsync(
             REQUEST_TYPE,
             new Func<string, string, string[]?, Task<RegistryAccessTokenResult>>(
                 GetAccessTokenAsync
             )
         );
+        // Keeps running: the rest of the data provider still works without this service
+        if (!isRegistered)
+            Console.Error.WriteLine(
+                $"The Registry access token service is unavailable: main did not accept the "
+                    + $"registration of {REQUEST_TYPE}; PapiClient logs why."
+            );
     }
 
     /// <summary>
@@ -192,9 +197,9 @@ internal sealed class RegistryAccessTokenService(
             PruneCache();
             if (_cache.TryGetValue(key, out CachedToken? cached))
             {
-                // Once per extension name per token, without a line per call. The name is a request
-                // argument this service does not authenticate, so the log records each name that
-                // requests claim, not a verified holder.
+                // Once per extension name per token, without a line per call. The name is what the
+                // extension host sent; an extension that bypasses the privilege API can claim any
+                // name, so this logs a claim.
                 if (cached.AddRecipient(extensionName))
                     LogHandout(reused: true, extensionName, resource, scopes, cached.ExpiresAt);
                 return RegistryAccessTokenResult.Success(cached.AccessToken, cached.ExpiresAt);

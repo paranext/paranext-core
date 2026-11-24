@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { polyfillRangeBoundingClientRect } from '../jsdom-range-rect.test-utils';
 import { computeBarTop, resolveActiveLineRect } from './character-marker-bar.utils';
 
 // Mock rect/element factories — mirrors paragraph-marker-tooltip.utils.test.ts. Only
@@ -65,27 +66,8 @@ describe('computeBarTop', () => {
 });
 
 describe('resolveActiveLineRect', () => {
-  // jsdom (26.x) does not implement Range.prototype.getBoundingClientRect at all — it's
-  // undefined, not a zero-filled DOMRect. Per the CSSOM View spec, a real browser returns an
-  // all-zero DOMRect for a Range with no client rects (exactly the degenerate case this module
-  // falls back for), so this polyfills only that spec-compliant zero shape — not a faked non-zero
-  // rect — to let jsdom exercise the same path a real browser would.
-  /* eslint-disable no-type-assertion/no-type-assertion */
-  if (!Range.prototype.getBoundingClientRect) {
-    Range.prototype.getBoundingClientRect = () =>
-      ({
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        width: 0,
-        height: 0,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      }) as DOMRect;
-  }
-  /* eslint-enable no-type-assertion/no-type-assertion */
+  // The all-zero Range rect is exactly the degenerate case this module falls back for.
+  polyfillRangeBoundingClientRect();
 
   const buildEditor = () => {
     const editorRoot = document.createElement('div');
@@ -109,6 +91,13 @@ describe('resolveActiveLineRect', () => {
     return selection;
   };
 
+  /** The element's first child — the text node every fixture here puts the caret in. */
+  const firstChildOf = (element: Element): Node => {
+    const { firstChild } = element;
+    if (!firstChild) throw new Error('expected a text node');
+    return firstChild;
+  };
+
   it('returns undefined when there is no selection', () => {
     const { editorRoot } = buildEditor();
     expect(resolveActiveLineRect(undefined, editorRoot)).toBeUndefined();
@@ -119,10 +108,7 @@ describe('resolveActiveLineRect', () => {
     const outside = document.createElement('p');
     outside.textContent = 'in a sibling panel';
     document.body.appendChild(outside);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = outside.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(outside);
     expect(resolveActiveLineRect(selectionAt(textNode, 3), editorRoot)).toBeUndefined();
   });
 
@@ -142,10 +128,7 @@ describe('resolveActiveLineRect', () => {
     const paraRect = makeRect(42, 200);
     para.getBoundingClientRect = () => paraRect;
     vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue(caretRect);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = para.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(para);
 
     // Identity, not field equality: `toBe` cannot pass by coincidence of matching numbers.
     expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)?.rect).toBe(caretRect);
@@ -161,13 +144,10 @@ describe('resolveActiveLineRect', () => {
     body.className = 'para usfm_p';
     body.textContent = 'I shall not want';
     editorRoot.appendChild(body);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = body.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(body);
 
     // Identity: it must be the very element the caret is in, not merely one that looks like it.
-    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(body);
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.block).toBe(body);
   });
 
   it('falls back to the containing paragraph rect when the caret rect is degenerate', () => {
@@ -176,22 +156,76 @@ describe('resolveActiveLineRect', () => {
     const { editorRoot, para } = buildEditor();
     const paraRect = makeRect(42, 60);
     para.getBoundingClientRect = () => paraRect;
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = para.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
+    const textNode = firstChildOf(para);
     expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)?.rect).toBe(paraRect);
   });
 
-  it('returns undefined when the caret is inside the editor but in no paragraph', () => {
+  it('returns undefined when the caret is on the editor root between blocks', () => {
     const { editorRoot } = buildEditor();
-    const bare = document.createElement('div');
-    bare.textContent = 'chrome inside the editor root';
-    editorRoot.appendChild(bare);
-    // DOM's firstChild is typed as ChildNode | null, not undefined.
-    // eslint-disable-next-line no-null/no-null
-    const textNode = bare.firstChild ?? null;
-    if (!textNode) throw new Error('expected a text node');
-    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)).toBeUndefined();
+    expect(resolveActiveLineRect(selectionAt(editorRoot, 0), editorRoot)).toBeUndefined();
+  });
+
+  it('resolves an implied paragraph — a classless top-level block — as the active line', () => {
+    // Verses outside any paragraph marker render as a bare `<p>` with no USFM class.
+    const { editorRoot } = buildEditor();
+    const impliedPara = document.createElement('p');
+    impliedPara.textContent = 'this has text';
+    editorRoot.appendChild(impliedPara);
+    const textNode = firstChildOf(impliedPara);
+
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.block).toBe(impliedPara);
+  });
+
+  it('resolves an empty block when the caret sits on the block element itself', () => {
+    // An empty paragraph has no text node to hold the caret, so the selection anchors on the
+    // paragraph element. Lexical renders the empty paragraph with a lone `<br>`.
+    const { editorRoot } = buildEditor();
+    const emptyPara = document.createElement('p');
+    emptyPara.appendChild(document.createElement('br'));
+    editorRoot.appendChild(emptyPara);
+    const emptyParaRect = makeRect(300, 318);
+    emptyPara.getBoundingClientRect = () => emptyParaRect;
+
+    const activeLine = resolveActiveLineRect(selectionAt(emptyPara, 0), editorRoot);
+
+    expect(activeLine?.block).toBe(emptyPara);
+    // The caret's own rect is degenerate here, so the line falls back to the block's rect.
+    expect(activeLine?.rect).toBe(emptyParaRect);
+  });
+
+  it('resolves the \\id line as the active line', () => {
+    const { editorRoot } = buildEditor();
+    const bookLine = document.createElement('p');
+    bookLine.className = 'book usfm_id';
+    bookLine.textContent = 'JDT';
+    editorRoot.prepend(bookLine);
+    const textNode = firstChildOf(bookLine);
+
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.block).toBe(bookLine);
+  });
+
+  it('resolves a chapter line as the active line', () => {
+    // The bar moves beside the chapter line rather than holding its last position; the menu there
+    // offers no markers, so the button shows disabled.
+    const { editorRoot } = buildEditor();
+    const chapterLine = document.createElement('p');
+    chapterLine.className = 'chapter usfm_c';
+    chapterLine.textContent = '1';
+    editorRoot.prepend(chapterLine);
+    const textNode = firstChildOf(chapterLine);
+
+    expect(resolveActiveLineRect(selectionAt(textNode, 0), editorRoot)?.block).toBe(chapterLine);
+  });
+
+  it('resolves the top-level block, not an inner element, for a caret inside a character marker', () => {
+    const { editorRoot, para } = buildEditor();
+    para.textContent = 'a ';
+    const characterMarker = document.createElement('span');
+    characterMarker.className = 'char usfm_nd';
+    characterMarker.textContent = 'Lord';
+    para.appendChild(characterMarker);
+    const textNode = firstChildOf(characterMarker);
+
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.block).toBe(para);
   });
 });

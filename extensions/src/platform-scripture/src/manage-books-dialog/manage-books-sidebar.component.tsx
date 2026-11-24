@@ -14,7 +14,7 @@
  * functionality is not yet available in Platform.Bible.
  */
 import { Fragment } from 'react';
-import { BarChart3, BookA, BookOpenCheck, BookPlus, Copy, FolderInput, Trash2 } from 'lucide-react';
+import { BarChart3, BookA, BookCopy, BookPlus, Copy, FolderInput, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger, Label, cn } from 'platform-bible-react';
 import {
   ProjectSelectorOpenTab,
@@ -49,13 +49,13 @@ type SectionDef = {
   /** When true, render the row in disabled/muted state with a "not yet available" tooltip. */
   disabled?: boolean;
   /** Lucide icon to render to the left of the label. */
-  Icon: typeof BookOpenCheck;
+  Icon: typeof BookCopy;
 };
 
 const SECTIONS: readonly SectionDef[] = [
   // 'show' and the four mutating sections render as ONE contiguous group (UX
   // follow-up 2026-06-12); only the reference group below keeps its gap.
-  { id: 'show', Icon: BookOpenCheck },
+  { id: 'show', Icon: BookCopy },
   { id: 'create', Icon: BookPlus },
   { id: 'copy', Icon: Copy },
   { id: 'import', Icon: FolderInput },
