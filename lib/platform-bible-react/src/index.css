@@ -24,6 +24,13 @@
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/ibm-plex-sans';
 
+/*
+ * CUSTOM: keep the locally generated, gitignored `docs/` folder out of Tailwind's class scan. Tailwind
+ * does not always honor `.gitignore` (in a git worktree, for example), so classes found in a local
+ * `docs/` build would otherwise leak into the committed `dist/` and fail the Library dist check.
+ */
+@source not '../docs';
+
 /* CUSTOM: need some config from tailwind.config.ts which can't be inlined in this file */
 @config '../tailwind.config.ts';
 
