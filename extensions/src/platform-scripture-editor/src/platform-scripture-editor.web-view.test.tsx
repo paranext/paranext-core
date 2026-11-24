@@ -1302,6 +1302,22 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
     ]);
   });
 
+  it('notifies once when the editor closes without the page going away while an edit still waits behind a running save', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    // Not flushed: this edit is still waiting for the save debounce when the editor closes.
+    editor.type('In the beginning God created');
+    // Positive control: only the first save has been sent.
+    expect(editor.saves).toHaveLength(1);
+
+    editor.unmount();
+
+    expect(editor.saves).toHaveLength(1);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
   it('sends waiting edits as soon as focus leaves the editor for another control in its web view', async () => {
     const editor = await setUp();
     const editorElement = screen.getByTestId('editorial');

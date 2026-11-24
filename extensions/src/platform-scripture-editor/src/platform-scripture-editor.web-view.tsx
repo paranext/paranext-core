@@ -4856,12 +4856,14 @@ function PlatformScriptureEditor({
   }, [saveUsjToPdpDebounced, scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
   // Reports edits still held when the editor goes away without `pagehide` having reported them.
-  // Declared after the flush above, whose cleanup runs first, so a flush held back is counted.
+  // Flushes first, so a save the flush holds back is counted whichever cleanup React runs first;
+  // after the chapter-switch cleanup's flush, this one has nothing left to send.
   useEffect(() => {
     return () => {
+      saveUsjToPdpDebounced.flush();
       lostEdits.report('editorClosed');
     };
-  }, [lostEdits]);
+  }, [saveUsjToPdpDebounced, lostEdits]);
 
   // (2) Focus loss / page teardown: best-effort flush on window blur, on focus leaving the editor
   // for something else in this web view, and on pagehide/beforeunload. Each of these ends the

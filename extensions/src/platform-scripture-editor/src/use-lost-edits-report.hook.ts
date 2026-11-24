@@ -45,7 +45,7 @@ export type LostEditsReport = {
   describeChapter: (chapter: {
     book: string;
     chapterNum: number;
-    versificationStr: string;
+    versificationStr?: string;
   }) => EditsLostInChapter;
   /**
    * Records that the editor holds edits in `chapter` that it has not sent, and that only a later
