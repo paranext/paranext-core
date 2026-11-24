@@ -29,7 +29,7 @@
  */
 import fs from 'fs';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { waitForAppReady } from '../../../fixtures/helpers';
+import { readClipboardText, waitForAppReady, writeClipboardText } from '../../../fixtures/helpers';
 import {
   COPY_KEY,
   CUT_KEY,
@@ -159,20 +159,17 @@ test.describe('the clipboard in Simple mode’s paragraph-structure view', () =>
       const normalizedBefore = readNormalizedBook();
       expect(countOf(normalizedBefore, PASTE_SITE)).toBe(1);
 
-      await electronApp.evaluate(
-        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-        CLIPBOARD_SENTINEL,
-      );
+      await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
       await selectInEditor(editorInput, COPY_FROM, COPY_TO);
       await editorInput.press(COPY_KEY);
       // The copy reaches the OS clipboard asynchronously; the sentinel makes the poll measure it.
       await expect
-        .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+        .poll(() => readClipboardText(electronApp), {
           message: 'the copy never reached the OS clipboard',
           timeout: 15_000,
         })
         .not.toBe(CLIPBOARD_SENTINEL);
-      const copiedText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
+      const copiedText = await readClipboardText(electronApp);
       test
         .info()
         .annotations.push({ type: 'copied text', description: JSON.stringify(copiedText) });
@@ -219,7 +216,7 @@ test.describe('the clipboard in Simple mode’s paragraph-structure view', () =>
       expect(countOf(normalizedBefore, URL_SITE)).toBe(1);
 
       await clearRecordedToasts(mainPage);
-      await electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), PASTED_URL);
+      await writeClipboardText(electronApp, PASTED_URL);
       await selectInEditor(editorInput, URL_PASTE_POINT);
       await editorInput.press(PASTE_KEY);
       const afterPaste = await waitForSaveToSettle(mainPage, bookPath, before);
@@ -266,14 +263,11 @@ test.describe('the clipboard in Simple mode’s paragraph-structure view', () =>
       const before = fs.readFileSync(bookPath);
       expect(countOf(readNormalizedBook(), CUT_TEXT_GONE)).toBe(0);
 
-      await electronApp.evaluate(
-        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-        CLIPBOARD_SENTINEL,
-      );
+      await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
       await selectInEditor(editorInput, CUT_FROM, CUT_TO);
       await editorInput.press(CUT_KEY);
       await expect
-        .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+        .poll(() => readClipboardText(electronApp), {
           message: 'the cut never reached the OS clipboard',
           timeout: 15_000,
         })

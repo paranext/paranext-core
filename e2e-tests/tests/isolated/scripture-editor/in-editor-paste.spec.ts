@@ -43,10 +43,12 @@ import fs from 'fs';
 import type { ConsoleMessage, Locator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  readClipboardText,
   readClipboardTextAndHtml,
   sendPapiRequestOnce,
   waitForAppReady,
   writeClipboard,
+  writeClipboardText,
 } from '../../../fixtures/helpers';
 import {
   COPY_KEY,
@@ -267,15 +269,12 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
         'the copied range should read as COPIED_USFM in the book',
       ).toBe(1);
 
-      await electronApp.evaluate(
-        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-        CLIPBOARD_SENTINEL,
-      );
+      await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
       await selectInEditor(editorInput, NOTE_COPY_FROM, NOTE_COPY_TO);
       await editorInput.press(COPY_KEY);
       // The copy reaches the OS clipboard asynchronously; the sentinel makes the poll measure it.
       await expect
-        .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+        .poll(() => readClipboardText(electronApp), {
           message: 'the copy never reached the OS clipboard',
           timeout: 15_000,
         })
@@ -340,14 +339,11 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
       const categoriesBefore = countOf(readNormalizedBook(), CATEGORY_MARKUP);
       const copiesBefore = countOf(readNormalizedBook(), CATEGORY_COPIED_TEXT);
 
-      await electronApp.evaluate(
-        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-        CLIPBOARD_SENTINEL,
-      );
+      await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
       await selectInEditor(editorInput, CATEGORY_COPY_FROM, CATEGORY_COPY_TO);
       await editorInput.press(COPY_KEY);
       await expect
-        .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+        .poll(() => readClipboardText(electronApp), {
           message: 'the copy never reached the OS clipboard',
           timeout: 15_000,
         })
@@ -414,20 +410,17 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
       // The row editor places its caret over a timeout and an animation frame after it loads, which
       // can replace a selection made before then, so the copy is retried until it holds the range.
       await expect(async () => {
-        await electronApp.evaluate(
-          ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-          CLIPBOARD_SENTINEL,
-        );
+        await writeClipboardText(electronApp, CLIPBOARD_SENTINEL);
         await selectInEditor(rowEditor, PANE_COPY_FROM, PANE_COPY_TO);
         await rowEditor.press(COPY_KEY);
         await expect
-          .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+          .poll(() => readClipboardText(electronApp), {
             message: 'the row editor’s copy never reached the OS clipboard',
             timeout: 2_000,
           })
           .toContain(PANE_COPIED_MARKER_TEXT);
       }).toPass({ timeout: 20_000 });
-      const copiedText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
+      const copiedText = await readClipboardText(electronApp);
       test
         .info()
         .annotations.push({ type: 'row editor copy', description: JSON.stringify(copiedText) });
@@ -483,10 +476,7 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
           LOAD_PASTE_TOKEN,
         );
 
-      await electronApp.evaluate(
-        ({ clipboard }, token) => clipboard.writeText(`${token} `),
-        LOAD_PASTE_TOKEN,
-      );
+      await writeClipboardText(electronApp, `${LOAD_PASTE_TOKEN} `);
       await selectInEditor(editorInput, LOAD_PASTE_POINT);
 
       /**
