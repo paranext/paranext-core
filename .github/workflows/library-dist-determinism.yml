@@ -1,0 +1,67 @@
+name: Library dist determinism
+
+# Runs in the background after library changes reach main, so a dependency or config change that
+# makes builds differ between operating systems shows up as a red run on main without blocking PRs.
+# workflow_dispatch allows running it on any branch by hand.
+on:
+  push:
+    branches: ['main']
+    # Keep in step with isLibraryPath in .erb/scripts/library-dist/library-dist.util.ts.
+    paths:
+      [
+        'lib/platform-bible-react/**',
+        'lib/platform-bible-utils/**',
+        'package-lock.json',
+        'package.json',
+        'tsconfig.json',
+      ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+      - run: npm ci
+      - name: Build the libraries
+        shell: bash
+        run: |
+          (cd lib/platform-bible-utils && npm run build:basic)
+          (cd lib/platform-bible-react && npm run build:basic)
+          rm -f lib/platform-bible-utils/dist/*.map lib/platform-bible-react/dist/*.map
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: |
+            lib/platform-bible-utils/dist
+            lib/platform-bible-react/dist
+
+  compare:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: built
+      - name: Compare the three builds
+        run: |
+          diff -r built/dist-ubuntu-22.04 built/dist-windows-latest
+          diff -r built/dist-ubuntu-22.04 built/dist-macos-15

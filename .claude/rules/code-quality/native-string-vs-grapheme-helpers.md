@@ -91,5 +91,6 @@ throws anyway, from somewhere else.
 `platform-bible-utils` and `platform-bible-react` are consumed through their committed `dist/`, and
 the root `npm run build` does not rebuild them. A source change in either package that is not
 accompanied by `npm run build:pbu` / `npm run build:pbr` and a committed `dist/` **does not ship**,
-and CI cannot see the skew. `platform-bible-react`'s bundle embeds `platform-bible-utils`' `dist`,
-so rebuilding the latter requires rebuilding the former too.
+and the `Library dist current` check fails a PR whose `dist/` is stale. `platform-bible-react` imports
+`platform-bible-utils` (it does not bundle it), but its build and type bundle read the utilities
+library's built `dist/`, so rebuild `platform-bible-utils` before `platform-bible-react`.
