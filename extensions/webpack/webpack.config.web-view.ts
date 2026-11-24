@@ -7,10 +7,6 @@
 //
 // The shared config below keeps web-view license comments inline. The other bundles under
 // `release/app/dist` are files rather than strings, so their `.LICENSE.txt` files ship beside them.
-//
-// TODO(PT-4477): each extension's own build (`extensions/src/<name>/webpack/`) gets that setting
-// only when `npm run update-from-templates` pulls it in from the templates; until then, packaging
-// one extension on its own still leaves a pointer to a license file the zip does not carry.
 import path from 'path';
 
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.config.web-view.ts

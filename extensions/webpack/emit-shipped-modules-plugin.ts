@@ -1,3 +1,7 @@
+// paranext-core: unused here, kept so template updates merge cleanly. Core's extension builds
+// register `.erb/configs/emit-shipped-modules-plugin.ts` instead, so the text below describes the
+// template's build (no `cache`, `prebuild` scripts), not core's.
+
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/emit-shipped-modules-plugin.ts
 
 // The code matches paranext-core's `.erb/configs/emit-shipped-modules-plugin.ts` apart from the
