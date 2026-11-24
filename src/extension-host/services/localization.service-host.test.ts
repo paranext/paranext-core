@@ -104,15 +104,19 @@ vi.mock('@node/services/node-file-system.service', () => ({
   },
 }));
 
-vi.mock('@shared/services/logger.service', () => ({
-  __esModule: true,
-  default: {
+vi.mock('@shared/services/logger.service', () => {
+  // Every logging method, since `papi.logger` binds each of them when papi loads
+  const createMockLogger = () => ({
+    error: vi.fn(() => {}),
     warn: vi.fn(() => {}),
-  },
-  logger: {
-    warn: vi.fn(() => {}),
-  },
-}));
+    info: vi.fn(() => {}),
+    verbose: vi.fn(() => {}),
+    debug: vi.fn(() => {}),
+    silly: vi.fn(() => {}),
+    log: vi.fn(() => {}),
+  });
+  return { __esModule: true, default: createMockLogger(), logger: createMockLogger() };
+});
 
 vi.mock('@extension-host/services/contribution.service', async () => ({
   ...(await vi.importActual('@extension-host/services/contribution.service')),

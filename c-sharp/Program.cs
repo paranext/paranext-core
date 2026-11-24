@@ -59,7 +59,8 @@ public static class Program
         PlatformParatextInfo.Install(platformParatextInfo);
         Console.WriteLine($"ParatextData app-data folder: {ParatextInfo.AppDataFolder}");
 
-        using PapiClient papi = new();
+        // Read before anything else could start a process that would inherit them
+        using PapiClient papi = new(LaunchSecrets.ReadForThisProcess());
         try
         {
             if (!await papi.ConnectAsync())

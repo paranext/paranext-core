@@ -21,7 +21,9 @@ import {
   createNoteAnchorSource,
   createPendingCommentAnchorSource,
   createPendingCommentCenterAnchorSource,
+  findFirstTextBlock,
   findScrollContainer,
+  findTopLevelEditorBlock,
   getEditorScrollTop,
   getEditorSelectionRange,
   getVerseElement,
@@ -969,6 +971,98 @@ describe('paraAtPoint', () => {
 
     expect(paraAtPoint(10, 20)).not.toBe(staleTarget);
     expect(paraAtPoint(10, 20)).toBeUndefined();
+  });
+});
+
+/**
+ * Builds an editor root holding one top-level block per entry, each a `<p>` with that class name
+ * (`''` for verses outside any paragraph marker, which render as a bare `<p>`).
+ */
+const buildEditorBlocks = (...classNames: string[]) => {
+  const editorRoot = document.createElement('div');
+  editorRoot.className = 'editor-input usfm';
+  const blocks = classNames.map((className) => {
+    const block = document.createElement('p');
+    if (className) block.className = className;
+    block.textContent = 'text';
+    return block;
+  });
+  editorRoot.append(...blocks);
+  document.body.appendChild(editorRoot);
+  return { editorRoot, blocks };
+};
+
+describe('findTopLevelEditorBlock', () => {
+  it('returns a top-level block given the block itself', () => {
+    const {
+      editorRoot,
+      blocks: [block],
+    } = buildEditorBlocks('para usfm_p');
+
+    expect(findTopLevelEditorBlock(block, editorRoot)).toBe(block);
+  });
+
+  it('returns the top-level block for a text node nested inside a character marker', () => {
+    const {
+      editorRoot,
+      blocks: [block],
+    } = buildEditorBlocks('');
+    const characterMarker = document.createElement('span');
+    characterMarker.className = 'char usfm_nd';
+    const text = document.createTextNode('Lord');
+    characterMarker.appendChild(text);
+    block.appendChild(characterMarker);
+
+    expect(findTopLevelEditorBlock(text, editorRoot)).toBe(block);
+  });
+
+  it('returns undefined for the editor root itself', () => {
+    const { editorRoot } = buildEditorBlocks('para usfm_p');
+
+    expect(findTopLevelEditorBlock(editorRoot, editorRoot)).toBeUndefined();
+  });
+
+  it('returns undefined for a node outside the editor', () => {
+    const { editorRoot } = buildEditorBlocks('para usfm_p');
+    const outside = document.createElement('p');
+    document.body.appendChild(outside);
+
+    expect(findTopLevelEditorBlock(outside, editorRoot)).toBeUndefined();
+  });
+});
+
+describe('findFirstTextBlock', () => {
+  it('skips the \\id line and the chapter line', () => {
+    const {
+      editorRoot,
+      blocks: [, , header],
+    } = buildEditorBlocks('book usfm_id', 'chapter usfm_c', 'para usfm_h');
+
+    expect(findFirstTextBlock(editorRoot)).toBe(header);
+  });
+
+  it('returns unmarked verses that come before a marked paragraph', () => {
+    const {
+      editorRoot,
+      blocks: [, impliedPara],
+    } = buildEditorBlocks('chapter usfm_c', '', 'para usfm_p');
+
+    expect(findFirstTextBlock(editorRoot)).toBe(impliedPara);
+  });
+
+  it('falls back to the first block when there are only \\id and chapter lines', () => {
+    const {
+      editorRoot,
+      blocks: [bookLine],
+    } = buildEditorBlocks('book usfm_id', 'chapter usfm_c');
+
+    expect(findFirstTextBlock(editorRoot)).toBe(bookLine);
+  });
+
+  it('returns undefined for an empty editor', () => {
+    const { editorRoot } = buildEditorBlocks();
+
+    expect(findFirstTextBlock(editorRoot)).toBeUndefined();
   });
 });
 

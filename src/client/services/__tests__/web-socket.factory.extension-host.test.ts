@@ -1,0 +1,155 @@
+// @vitest-environment node
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { IncomingMessage } from 'http';
+import { WebSocketServer } from 'ws';
+import type { IWebSocket } from '@client/services/web-socket.interface';
+import { PAPI_CLIENT_SECRET_HEADER, PAPI_SERVER_SECRET_HEADER } from '@shared/data/rpc.model';
+
+vi.mock('@shared/utils/internal-util', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/utils/internal-util')>()),
+  isRenderer: () => false,
+}));
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+const CREDENTIALS = { clientSecret: 'fake-client-secret', serverSecret: 'fake-server-secret' };
+
+/** A real `ws` server that records each handshake and replies with `replyServerSecret` if given */
+async function startServer(replyServerSecret?: string) {
+  const handshakes: IncomingMessage[] = [];
+  const server = new WebSocketServer({ host: 'localhost', port: 0 });
+  server.on('headers', (headers, request) => {
+    handshakes.push(request);
+    if (replyServerSecret) headers.push(`${PAPI_SERVER_SECRET_HEADER}: ${replyServerSecret}`);
+  });
+  await new Promise<void>((resolve) => {
+    server.once('listening', () => resolve());
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('The server did not bind a port');
+  const { port } = address;
+  return { server, handshakes, url: `ws://localhost:${port}` };
+}
+
+/** Resolves `'open'` if the socket opened, or `'closed'` if it closed without ever opening */
+function outcomeOf(socket: IWebSocket): Promise<'open' | 'closed'> {
+  return new Promise((resolve) => {
+    socket.addEventListener('open', () => resolve('open'));
+    socket.addEventListener('close', () => resolve('closed'));
+    socket.addEventListener('error', () => {});
+  });
+}
+
+async function loadFreshModules() {
+  vi.resetModules();
+  const secrets = await import('@client/services/launch-secrets');
+  const { createWebSocket } = await import('@client/services/web-socket.factory');
+  return { ...secrets, createWebSocket };
+}
+
+describe('createWebSocket in the extension host', () => {
+  const servers: WebSocketServer[] = [];
+  const sockets: IWebSocket[] = [];
+
+  afterEach(async () => {
+    sockets.splice(0).forEach((socket) => socket.close());
+    await Promise.all(
+      servers.splice(0).map(
+        (server) =>
+          new Promise((resolve) => {
+            server.close(resolve);
+          }),
+      ),
+    );
+  });
+
+  async function connect(replyServerSecret: string | undefined, hasCredentials: boolean) {
+    const { server, handshakes, url } = await startServer(replyServerSecret);
+    servers.push(server);
+    const modules = await loadFreshModules();
+    if (hasCredentials) modules.setLaunchSecrets(CREDENTIALS);
+    const socket = await modules.createWebSocket(url);
+    sockets.push(socket);
+    const outcome = await outcomeOf(socket);
+    return { outcome, handshakes, identity: modules.getLocalConnectionIdentity() };
+  }
+
+  it('sends the client secret header and is identified once main proves itself', async () => {
+    const { outcome, handshakes, identity } = await connect(CREDENTIALS.serverSecret, true);
+
+    expect(handshakes[0]?.headers[PAPI_CLIENT_SECRET_HEADER]).toBe(CREDENTIALS.clientSecret);
+    expect(outcome).toBe('open');
+    expect(identity).toBe('extensionHost');
+  });
+
+  it('fails the connect when the reply lacks the server secret', async () => {
+    const { outcome, identity } = await connect(undefined, true);
+
+    expect(outcome).toBe('closed');
+    expect(identity).toBe('unidentified');
+  });
+
+  it('fails the connect when the reply has the wrong server secret', async () => {
+    const { outcome, identity } = await connect('some-other-secret', true);
+
+    expect(outcome).toBe('closed');
+    expect(identity).toBe('unidentified');
+  });
+
+  it('connects with no header when there are no secrets', async () => {
+    const { outcome, handshakes, identity } = await connect(undefined, false);
+
+    expect(handshakes[0]?.headers[PAPI_CLIENT_SECRET_HEADER]).toBeUndefined();
+    expect(outcome).toBe('open');
+    expect(identity).toBe('unidentified');
+  });
+
+  it('waits for secrets that are on their way before connecting', async () => {
+    const { server, handshakes, url } = await startServer(CREDENTIALS.serverSecret);
+    servers.push(server);
+    const modules = await loadFreshModules();
+    let markArrived: () => void = () => {};
+    modules.setLaunchSecretsArrival(
+      new Promise<void>((resolve) => {
+        markArrived = resolve;
+      }),
+    );
+
+    // An early caller asks for the connection before the secrets arrive
+    const socketPromise = modules.createWebSocket(url);
+    // Let the factory get as far as it can, past the socket module's import, before they arrive
+    await import('@extension-host/services/extension-host-web-socket.model');
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    modules.setLaunchSecrets(CREDENTIALS);
+    markArrived();
+    const socket = await socketPromise;
+    sockets.push(socket);
+
+    expect(await outcomeOf(socket)).toBe('open');
+    expect(handshakes[0]?.headers[PAPI_CLIENT_SECRET_HEADER]).toBe(CREDENTIALS.clientSecret);
+    expect(modules.getLocalConnectionIdentity()).toBe('extensionHost');
+  });
+
+  it('presents the secrets only once', async () => {
+    const { server, handshakes, url } = await startServer(CREDENTIALS.serverSecret);
+    servers.push(server);
+    const modules = await loadFreshModules();
+    modules.setLaunchSecrets(CREDENTIALS);
+    // One at a time, so the handshakes reach the server in this order
+    const first = await modules.createWebSocket(url);
+    sockets.push(first);
+    await outcomeOf(first);
+    const second = await modules.createWebSocket(url);
+    sockets.push(second);
+    await outcomeOf(second);
+
+    expect(handshakes.map((request) => request.headers[PAPI_CLIENT_SECRET_HEADER])).toEqual([
+      CREDENTIALS.clientSecret,
+      undefined,
+    ]);
+  });
+});

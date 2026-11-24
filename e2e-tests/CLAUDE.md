@@ -27,13 +27,13 @@ collected ones through `playwright-cdp.config.ts`, which has no globalSetup.
 ### Local-only directories
 
 These three directories under `tests/` are not part of any standard run, and no CI job collects
-them (CI runs only `test:e2e:smoke`). "Parked" means no config collects the file: it is kept as the
+them (see "What CI runs" below). "Parked" means no config collects the file: it is kept as the
 written scenarios for work still to be done, and its header says so. Each directory's README is the
 detailed source — every file, its status, what it needs and how to bring it back into use.
 
 | Directory | Status | Owner | What you must know before running anything |
 |---|---|---|---|
-| `tests/enhanced-resources/` | The local-only specs are run by hand; the rest are parked (`PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`) | Epic PT-2021 "Enhanced Resources"; `scripture-text-grid.spec.ts` comes back with PT-4779 | The local-only specs need real Marble resources (paid, not in CI) and an app in Power mode. The parked `text-collection-schema.spec.ts` overwrites a project setting and your Text Collection overlay, and restores neither — point it only at a throwaway project. |
+| `tests/enhanced-resources/` | The local-only specs are run by hand; the rest are parked (`PARKED_ENHANCED_RESOURCES_SPECS` in `e2e-tests/parked-enhanced-resources.ts`) | Epic PT-2021 "Enhanced Resources" | The local-only specs need real Marble resources (paid, not in CI) and an app in Power mode. The parked `text-collection-schema.spec.ts` overwrites a project setting and your Text Collection overlay, and restores neither — point it only at a throwaway project. |
 | `tests/manage-books/` | All parked | Epic PT-1779 "Manage Books in a Project" | **DESTRUCTIVE.** Three of its specs, and the second `describe` of `manage-books-commands.spec.ts`, delete, create or copy books in the real projects the app holds, with no restore. Only that file's first `describe` writes nothing. |
 | `tests/markers-checklist/` | All parked; never run to completion | Epic PT-2049 "Inventory & Checklists" | The four UI specs need an app in Power mode and the `wgPIDGIN` project; `markers-checklist-commands.spec.ts` needs an app you started yourself (PAPI websocket on port 8876) and any Paratext (USFM) project. |
 
@@ -52,6 +52,36 @@ strategy). If you do, register a named project in `playwright.config.ts` whose s
 own Electron, as the `isolated` and `smoke` projects do, and add a `test:e2e:<name>` npm script if
 the suite is meant to be run routinely.
 
+### The isolated e2e map
+
+A new subset directory or loose spec under `tests/isolated/` needs an entry in
+`tests/isolated/subset-sources.json`: `main` lists the source prefixes the group is about,
+`incidental` the source it only drives. `e2e-recommendations.test.ts` fails when an entry is
+missing, and when a tracked file under `src/`, `extensions/src/` or `c-sharp/` that the app never
+loads (a dotfile, a license, a story, a file type the app does not read) is still classified as
+runtime code. If the file is app code of a new type, add its extension to `LOADED_EXTENSIONS` in
+`e2e-recommendations.test.ts` (one file of a type the app does not load that still changes what it
+does goes in `APP_CODE_EXCEPTIONS` beside it); otherwise add its shape to `NON_RUNTIME` in
+`e2e-recommendations.ts`.
+
+The test also fails when a runtime file that matches an `editor_paths` entry in `test.yml`
+reaches no key through `main`: add it to the right key.
+
+A prefix that names a file that no longer exists does not fail the test:
+`e2e-recommendations.ts` reports it as `stalePrefixes`, and `/review-paratext` shows it to the
+author as a warning, so moving or deleting a source file a prefix names means updating the
+prefix.
+
+`/review-paratext` uses the map to recommend which subsets to run. A new
+`scripture-editor/no-unasked-edits-*.spec.ts` needs no key of its own: the prefix key
+`scripture-editor/no-unasked-edits-` covers it.
+
+`/review-paratext` stops asking whether a branch needs a new e2e test once the report's
+`specsChanged` is true: the branch changes an e2e spec or its support code (any file under
+`tests/` or `fixtures/`, any `.ts` under `reporters/`, the global setup or teardown, a Playwright
+config, `scoped-cleanup.ts`, `parked-enhanced-resources.ts`, `run-isolated.mjs` or `run-e2e-wsl.sh`,
+except unit tests, Markdown files and `tests/isolated/subset-sources.json`).
+
 ## What NOT to do
 
 - Do not leave a spec that no config runs. Either get it running, or park it: an ignore entry in
@@ -64,9 +94,9 @@ the suite is meant to be run routinely.
   See the README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding
   a well-named spec file to `isolated/` instead.
-- Do not give every check in `isolated/` its own `test()`: each `test()` on `isolated.fixture` starts its own app. Checks that
-  can share one launch state are `test.step()`s of one `test()`; see the docblock at the top of
-  `fixtures/isolated.fixture.ts`.
+- Do not give every check in `isolated/` its own `test()`: each `test()` on `isolated.fixture`
+  starts its own app. Checks that can share one launch state are `test.step()`s of one `test()`;
+  see the docblock at the top of `fixtures/isolated.fixture.ts`.
 
 ## State that leaks between runs
 
@@ -132,13 +162,39 @@ one of these.
   data provider answered. `waitForAppReady` does not cover this. The raw keys are WIDER than the
   strings they stand for, so geometry assertions report overflow that is not real.
 - **Fail-then-pass is reported as "flaky", and flaky is a defect.** `retries` is 1 locally and 2 in
-  CI. Never re-run to get green: an order-dependent test is telling you it depends on state it does
+  CI's smoke run; the `e2e-core` and nightly jobs allow one retry and name each test that needed
+  it in a warning, and the nightly run fails on such a test. Never re-run to get green: an order-dependent test is telling you it depends on state it does
   not control.
 - **`PAPI websocket server failed to bind: listen EADDRINUSE …` or `Settings service undefined`** —
   a previous app instance still holds port 8876, so the new app's server can't bind and its
   renderer connects to the leftover one instead. Check the app's own log (`logs/main.log` under its
   temp profile) for what it saw, and `netstat -ano | findstr :8876` (Windows) or `ss -ltnp` (Linux)
   for who holds the port; see `tests/isolated/README.md` for the Windows recovery commands.
+
+## What CI runs
+
+- **Every pull request:** the smoke suite (in the build jobs of `.github/workflows/test.yml`), and
+  the `e2e-core` job: the isolated specs listed in `e2e-tests/core-specs.txt`, plus those in
+  `e2e-tests/core-specs-editor.txt` when the pull request touches a path matched by `editor_paths`
+  in `test.yml` (the Scripture editor, what it saves through, and the editor list's own specs; the
+  full list is described beside `editor_paths`). If the changed-files lookup fails, both lists run.
+  To add or remove a spec, edit the list.
+- **Every night** (`.github/workflows/e2e-nightly.yml`, also startable by hand): every isolated
+  spec, split over eight runners. GitHub runs the schedule only on `main`. A red nightly run is the
+  team's to pick up, like a red build on `main`; nobody is assigned to it. A run started by hand on
+  a feature branch belongs to that branch's owner. GitHub e-mails a failed scheduled run only to
+  whoever last changed its schedule line, so check the Actions tab.
+- Both run on Linux with **one retry**. A test that passed only on its retry is named in a warning
+  on the run ("E2E test passed only on its retry"): treat it as a defect, like any flaky test. On
+  the nightly run it also fails the run (`--fail-on-flaky-tests`), since nobody opens a green nightly
+  run and it blocks no pull request. Each failed attempt keeps, in the run's `playwright-results-…`
+  artifact, a failure screenshot (`failure.png`), Playwright's `trace.zip` (the test's steps and
+  output, no DOM) and, for specs on `fixtures/isolated.fixture.ts`, `electron-trace.zip`: a DOM
+  trace of the app, lost if the app had already died or the run ran out of time during that test.
+  The specs stop on their own before the job's time limit, so the reports still upload; a warning
+  says when they ran out of time. `e2e-core` reports without blocking: a spec failure shows as a
+  warning on the run, not as a red check (a setup failure or a job timeout may still show the
+  job's check as failed).
 
 ## Window size and DevTools
 

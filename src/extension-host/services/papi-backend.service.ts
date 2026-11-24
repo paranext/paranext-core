@@ -6,6 +6,7 @@
 
 import * as commandService from '@shared/services/command.service';
 import { logger as papiLogger } from '@shared/services/logger.service';
+import { createExtensionLogger } from '@extension-host/services/extension-logger.util';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
 import { webViewService } from '@shared/services/web-view.service';
@@ -107,8 +108,9 @@ const papi = {
   networkObjects: backendNetworkObjectService as BackendNetworkObjectService,
   /** JSDOC DESTINATION networkObjectStatusService */
   networkObjectStatus: networkObjectStatusService as NetworkObjectStatusServiceType,
+  // Only the logging methods: the logger's settings could point its log file at any path
   /** JSDOC DESTINATION logger */
-  logger: papiLogger,
+  logger: createExtensionLogger(papiLogger),
   /** JSDOC DESTINATION internetService */
   internet: internetService as InternetService,
   /** JSDOC DESTINATION dataProviderService */

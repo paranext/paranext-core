@@ -36,12 +36,24 @@ export async function readSavedInternetSettings(): Promise<SavedInternetSettings
  * Saves internet settings read by {@link readSavedInternetSettings} back. The proxy and DBL
  * passwords come back masked, and the provider keeps the stored password for a masked one, so the
  * round trip does not change them.
+ *
+ * Writes through the app window: main serves the setter only to the renderer and the extension
+ * host, so a raw socket from the test runner is refused.
  */
-export async function restoreSavedInternetSettings(settings: SavedInternetSettings): Promise<void> {
-  await sendPapiRequestOnce(`${INTERNET_SETTINGS_PROVIDER_METHOD}.setInternetSettings`, [
-    undefined,
-    settings,
-  ]);
+export async function restoreSavedInternetSettings(
+  mainPage: Page,
+  settings: SavedInternetSettings,
+): Promise<void> {
+  await mainPage.evaluate(async (nextSettings) => {
+    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as RendererPapi;
+    const provider = await win.papi.dataProviders.get(
+      'paratextRegistration.internetSettingsDataProvider',
+    );
+    if (!provider) throw new Error('Internet settings data provider is not registered');
+    await provider.setInternetSettings(undefined, nextSettings);
+  }, settings);
 }
 
 /**
@@ -265,19 +277,15 @@ export function serverBadgeTooltip(mainPage: Page): Locator {
   return mainPage.locator('[data-slot="tooltip-content"]');
 }
 
-/** The persisted ParatextData internet settings, as far as these helpers need to know them. */
-type PersistedInternetSettings = { selectedServer: string } & Record<string, unknown>;
-
 /** The renderer exposes `papi` on `globalThis`, untyped in the Playwright context. */
 type RendererPapi = {
   papi: {
     dataProviders: {
       get: (providerName: string) => Promise<
         | {
-            getInternetSettings: (selector: undefined) => Promise<PersistedInternetSettings>;
             setInternetSettings: (
               selector: undefined,
-              settings: PersistedInternetSettings,
+              settings: Record<string, unknown>,
             ) => Promise<unknown>;
           }
         | undefined
@@ -303,16 +311,9 @@ type RendererPapi = {
  * @returns The server that was persisted beforehand, so a test can restore it once it is done.
  */
 export async function setPersistedServer(mainPage: Page, server: string): Promise<string> {
-  return mainPage.evaluate(async (nextServer) => {
-    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const win = window as unknown as RendererPapi;
-    const provider = await win.papi.dataProviders.get(
-      'paratextRegistration.internetSettingsDataProvider',
-    );
-    if (!provider) throw new Error('Internet settings data provider is not registered');
-    const current = await provider.getInternetSettings(undefined);
-    await provider.setInternetSettings(undefined, { ...current, selectedServer: nextServer });
-    return current.selectedServer;
-  }, server);
+  const current = await readSavedInternetSettings();
+  const { selectedServer } = current;
+  if (typeof selectedServer !== 'string') throw new Error('Saved internet settings have no server');
+  await restoreSavedInternetSettings(mainPage, { ...current, selectedServer: server });
+  return selectedServer;
 }

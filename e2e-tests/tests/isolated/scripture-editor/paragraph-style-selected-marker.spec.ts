@@ -28,7 +28,7 @@ import {
 test.use({
   interfaceMode: 'simple',
   seedSettings: { 'platform.firstRunComplete': true },
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 /** Psalm 1:1 opens with a `\q1` line followed by two `\q2` lines. */

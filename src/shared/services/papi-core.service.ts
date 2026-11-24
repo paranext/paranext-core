@@ -54,6 +54,10 @@ export type {
   ManageExtensions,
 } from '@shared/models/manage-extensions-privilege.model';
 export type {
+  NetworkMethodHandlerOptions,
+  RequestCallerProcess,
+} from '@shared/models/network.model';
+export type {
   NetworkableObject,
   NetworkObject,
   NetworkObjectDetails,

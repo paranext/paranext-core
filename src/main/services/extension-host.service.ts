@@ -5,6 +5,7 @@ import {
   CommandLineArgs,
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
+import { isLockedFileError } from '@node/utils/locked-file.util';
 import { logger } from '@shared/services/logger.service';
 import {
   AsyncVariable,
@@ -23,8 +24,11 @@ import { watch as chokidarWatch, FSWatcher } from 'chokidar';
 import {
   extensionHostStartedMessage,
   gracefulShutdownMessage,
+  LAUNCH_SECRETS_MESSAGE_TYPE,
+  LaunchSecretsMessage,
 } from '@node/models/interprocess-messages.model';
 import { isAppShuttingDown } from '@main/services/shutdown-latch.service';
+import { issueLaunchSecrets, revokeLaunchSecrets } from '@main/services/launch-secrets.service';
 import { classifyExtensionHostExit } from '@main/services/extension-host-exit.util';
 import {
   EXTENSION_HOST_RESTART_READY_TIMEOUT_MS,
@@ -268,6 +272,7 @@ function connectToExtensionHostProcess() {
     extensionHost?.stderr?.removeListener('data', logProcessError);
     extensionHost?.stdout?.removeListener('data', logProcessInfo);
     extensionHost = undefined;
+    revokeLaunchSecrets('extensionHost');
     resolveProcessLifetimeVariable();
 
     // The cleanup above is safe for a stale child too: no newer child can exist yet, because
@@ -372,10 +377,27 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
           NODE_PATH: path.join(globalThis.resourcesPath, 'release', 'app', 'node_modules'),
         };
 
-    extensionHost = fork(extensionHostEntryPath, extensionHostArgs, {
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      env: extensionHostEnv,
-      execArgv: extensionHostExecArgv,
+    // Issued before forking and sent over IPC right after, so they appear neither in the child's
+    // arguments nor in its environment. A fork that throws leaves no process to use them.
+    const launchSecrets = issueLaunchSecrets('extensionHost');
+    try {
+      extensionHost = fork(extensionHostEntryPath, extensionHostArgs, {
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+        env: extensionHostEnv,
+        execArgv: extensionHostExecArgv,
+      });
+    } catch (error) {
+      revokeLaunchSecrets('extensionHost');
+      throw error;
+    }
+    const launchSecretsMessage: LaunchSecretsMessage = {
+      type: LAUNCH_SECRETS_MESSAGE_TYPE,
+      ...launchSecrets,
+    };
+    extensionHost.send(launchSecretsMessage, (error) => {
+      // Log only: the child exits by itself if the secrets never arrive
+      if (error)
+        logger.error(`Could not send the extension host its launch secrets: ${error.message}`);
     });
   }
 
@@ -440,13 +462,23 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
   extensionHostWatcher = chokidarWatch(nodemonWatchPaths, {
     ignoreInitial: true,
     awaitWriteFinish: true,
-  }).on('all', async (eventType) => {
-    logger.info(
-      `Chokidar watch detected change type ${eventType}. Debouncing restarting extension host`,
-    );
-    await restartExtensionHostInternalDevDebounced();
-    logger.info(`Chokidar watch finished restarting extension host`);
-  });
+  })
+    .on('all', async (eventType) => {
+      logger.info(
+        `Chokidar watch detected change type ${eventType}. Debouncing restarting extension host`,
+      );
+      await restartExtensionHostInternalDevDebounced();
+      logger.info(`Chokidar watch finished restarting extension host`);
+    })
+    // Without a listener, a watcher error (such as EBUSY on Windows while another process holds a
+    // file as it is written) becomes an unhandled rejection in the main process
+    .on('error', (error) => {
+      if (isLockedFileError(error))
+        logger.warn(
+          `Extension host path ${error.path} was held by another process as it was added, so changes made to it in place (or inside it, if it is a folder) will not restart the extension host until the app restarts`,
+        );
+      else logger.warn(`Chokidar watch of extension host files failed: ${error}`);
+    });
 }
 
 /** Service that runs the extension-host process from the main file */
