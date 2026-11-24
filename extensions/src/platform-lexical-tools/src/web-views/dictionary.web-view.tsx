@@ -1,13 +1,36 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import papi, { logger } from '@papi/frontend';
 import { WebViewProps } from '@papi/core';
-import { Entry, LexicalReferenceSelector } from 'platform-lexical-tools';
+import { Entry, LexicalEntriesById, LexicalReferenceSelector } from 'platform-lexical-tools';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { Dictionary } from './dictionary.component';
 import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../utils/dictionary-ui.utils';
 import { DICTIONARY_TITLE_KEY, DictionaryScope } from '../utils/dictionary.utils';
+
+/**
+ * Reads entries through the lexical reference service.
+ *
+ * @param selector - Which entries to read.
+ * @param description - What is being read, for the log if it fails.
+ * @returns The entries, or `undefined` if they could not be read (the reason is logged).
+ */
+async function getEntriesBySelector(
+  selector: LexicalReferenceSelector,
+  description: string,
+): Promise<LexicalEntriesById | undefined> {
+  try {
+    const dp = await papi.dataProviders.get('platformLexicalTools.lexicalReferenceService');
+    if (!dp) throw new Error('Could not get lexical reference service data provider');
+    const entriesById = await dp.getEntriesById(selector);
+    if (!entriesById || isPlatformError(entriesById)) return undefined;
+    return entriesById;
+  } catch (e) {
+    logger.error(`Error getting ${description}: ${getErrorMessage(e)}`);
+    return undefined;
+  }
+}
 
 /**
  * Thin data-loader for the dictionary. It wires PAPI to the props of `Dictionary`, which owns the
@@ -22,6 +45,31 @@ globalThis.webViewComponent = function DictionaryWebView({
     useMemo(() => DICTIONARY_LOCALIZED_STRING_KEYS, []),
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+  // Like Paratext 9's MarbleHideIrrelevantMeanings, hiding less-relevant senses is the reader's
+  // preference for every entry and every Dictionary tab, so it is a setting
+  const [areLessRelevantSensesHiddenPossiblyError, setAreLessRelevantSensesHiddenSetting] =
+    useSetting('platformLexicalTools.hideLessRelevantSenses', false);
+  const areLessRelevantSensesHidden = useMemo(() => {
+    if (isPlatformError(areLessRelevantSensesHiddenPossiblyError)) {
+      logger.warn(
+        'Failed to load setting platformLexicalTools.hideLessRelevantSenses; treating as false',
+        areLessRelevantSensesHiddenPossiblyError,
+      );
+      return false;
+    }
+    return areLessRelevantSensesHiddenPossiblyError;
+  }, [areLessRelevantSensesHiddenPossiblyError]);
+  const setAreLessRelevantSensesHidden = useCallback(
+    (areHidden: boolean) => {
+      // The write's result is not needed; the setting's new value comes back through `useSetting`
+      Promise.resolve(setAreLessRelevantSensesHiddenSetting?.(areHidden)).catch((e) => {
+        logger.warn(
+          `Failed to save setting platformLexicalTools.hideLessRelevantSenses: ${getErrorMessage(e)}`,
+        );
+      });
+    },
+    [setAreLessRelevantSensesHiddenSetting],
+  );
 
   // `main.ts` resolves the tooltip once, when the tab opens/reloads; this effect keeps it current
   // afterward too, since a locale change doesn't reload the tab. Set unconditionally (no Power/Simple
@@ -67,20 +115,21 @@ globalThis.webViewComponent = function DictionaryWebView({
   // Fetch the full (unfiltered) data for the displayed entry. The selector filters by
   // lexicalReferenceTextId so there will only be one matching entry array.
   const getFullEntry = useCallback(async (entry: Entry) => {
-    const selector: LexicalReferenceSelector = {
-      itemId: entry.id,
-      lexicalReferenceTextId: entry.lexicalReferenceTextId,
-    };
-    try {
-      const dp = await papi.dataProviders.get('platformLexicalTools.lexicalReferenceService');
-      if (!dp) throw new Error('Could not get lexical reference service data provider');
-      const fullEntriesById = await dp.getEntriesById(selector);
-      if (!fullEntriesById || isPlatformError(fullEntriesById)) return undefined;
-      return fullEntriesById[entry.id]?.[0];
-    } catch (e) {
-      logger.error(`Error getting full entry by ID: ${getErrorMessage(e)}`);
-      return undefined;
-    }
+    const fullEntriesById = await getEntriesBySelector(
+      { itemId: entry.id, lexicalReferenceTextId: entry.lexicalReferenceTextId },
+      'full entry by ID',
+    );
+    return fullEntriesById?.[entry.id]?.[0];
+  }, []);
+
+  // Fetch the entry an in-definition link points to. Lemmas are unique within a lexical reference
+  // text, so there is at most one match.
+  const getEntryByLemma = useCallback(async (dictionaryId: string, lemma: string) => {
+    const entriesById = await getEntriesBySelector(
+      { lemma, lexicalReferenceTextId: dictionaryId },
+      'entry by lemma',
+    );
+    return entriesById && Object.values(entriesById).flat()[0];
   }, []);
 
   return (
@@ -90,6 +139,9 @@ globalThis.webViewComponent = function DictionaryWebView({
       onSelectOccurrence={onSelectOccurrence}
       getEntries={getEntries}
       getFullEntry={getFullEntry}
+      getEntryByLemma={getEntryByLemma}
+      areLessRelevantSensesHidden={areLessRelevantSensesHidden}
+      onAreLessRelevantSensesHiddenChange={setAreLessRelevantSensesHidden}
     />
   );
 };

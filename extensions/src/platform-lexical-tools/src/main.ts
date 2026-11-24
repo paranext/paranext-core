@@ -219,6 +219,12 @@ export async function activate(context: ExecutionActivationContext) {
       lexicalReferenceProjectDataProviderEngineFactory,
     );
 
+  // The Dictionary's "Hide less-relevant senses" preference, read by its web view with `useSetting`
+  const hideLessRelevantSensesValidatorPromise = papi.settings.registerValidator(
+    'platformLexicalTools.hideLessRelevantSenses',
+    async (newValue) => typeof newValue === 'boolean',
+  );
+
   const lexicalReferenceService = await lexicalReferenceServicePromise;
   try {
     await lexicalReferenceTextManager.registerLexicalReferenceText(
@@ -236,6 +242,7 @@ export async function activate(context: ExecutionActivationContext) {
     lexicalReferenceTextManager,
     lexicalReferenceService,
     await lexicalReferencePdpefPromise,
+    await hideLessRelevantSensesValidatorPromise,
   );
 }
 

@@ -21,8 +21,13 @@ const STRICT_ORG = 'paranext';
 /** Name of the repository under `<org>` where the lexical DB lives. */
 const DEPENDENCIES_REPO = 'dependencies';
 
-/** Branch within {@link DEPENDENCIES_REPO} the DB is fetched from. */
-const DEPENDENCIES_BRANCH = 'main';
+/**
+ * Branch within {@link DEPENDENCIES_REPO} the DB is fetched from. For now it is the branch of
+ * paranext/dependencies#15, which holds the rebuilt (lexical senses only) database. That pull
+ * request cannot merge until 0.6.1 is released, because 0.6.1's builds download from `main`. Set
+ * this back to `'main'` just before it merges, since merging deletes the branch.
+ */
+const DEPENDENCIES_BRANCH = 'pt-5085-rebuild-lexical-db';
 
 /** Subdirectory within {@link DEPENDENCIES_REPO} that holds the DB and checksum files. */
 const DEPENDENCIES_SUBDIR = 'lexical-db';

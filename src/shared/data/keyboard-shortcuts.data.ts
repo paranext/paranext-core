@@ -780,6 +780,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
     ],
   },
+  {
+    id: 'dictionary-open-definition-link',
+    purpose: 'Open the entry or go to the Bible reference that a link in a definition points to',
+    category: 'Navigation',
+    context: 'Dictionary web view (a link inside a sense definition focused)',
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
+    locations: [
+      'extensions/src/platform-lexical-tools/src/components/dictionary/definition-text.component.tsx',
+    ],
+  },
   // Shortcuts defined inside the shared platform-bible-react component library.
   {
     id: 'editor-undo',
