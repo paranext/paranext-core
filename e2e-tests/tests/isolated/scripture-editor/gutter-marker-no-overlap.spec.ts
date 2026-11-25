@@ -2,16 +2,18 @@
  * In Simple's gutter view the paragraph marker glyph must never overlap the paragraph's text,
  * whatever the column width.
  *
- * Each `.para` glyph is absolutely positioned at `left: calc(-(gutter width) + 0.5em -
- * var(--para-indent))`, so it only clears the text when `--para-indent` equals the paragraph's own
+ * Each `.para` glyph is absolutely positioned at `right: calc(100% + var(--para-indent) + marker
+ * gap - 1ch)`, so it only clears the text when `--para-indent` equals the paragraph's own
  * text-spacing margin; hanging-indent paragraphs additionally start their first line at a negative
  * `text-indent`, which `--verse-text-start` mirrors for the focus box. Both indents are `vw`-based
- * while the gutter is `em`-based, so the gap between glyph and text shrinks as the column narrows —
+ * while the gap is `em`-based, so a mismatch between them moves the glyph as the column narrows —
  * which is why this sweeps the column from its opened width down to the Simple column floor rather
  * than measuring once. The stylesheet-level guard for the same mechanism is
  * `usj-nodes-scss-coverage.test.ts` in the extension; this spec is the rendered half, and is what
- * catches a regression that comes from anywhere other than those two custom properties (a gutter
- * width change, a padding change in `_simple-mode.scss`, an engine DOM change).
+ * catches a regression that comes from anywhere other than those two custom properties (a marker
+ * gap change, a padding change in `_simple-mode.scss`, an engine DOM change). It does not catch a
+ * marker clipped at the editor's edge by a narrower gutter: the glyph is anchored to the text
+ * column, so its measured width and gap stay the same.
  *
  * The sample WEB project lacks most of these markers, so the spec rewrites Obadiah 1 through PAPI
  * before opening it. Together they cover margins of 10–20vw and hanging indents from −7.5vw to
@@ -199,11 +201,18 @@ test.describe('gutter marker glyphs versus paragraph text', () => {
                 ? Math.max(textRect.right, verseRect?.right ?? -Infinity)
                 : Math.min(textRect.left, verseRect?.left ?? Infinity);
               const glyphRect = glyph.getBoundingClientRect();
+              const glyphStyle = getComputedStyle(glyph);
               const style = getComputedStyle(para);
               results.push({
                 marker,
                 glyphText: glyph.textContent?.trim() ?? '',
-                glyphWidthPx: glyphRect.width,
+                // Without the gutter-side padding, which widens the click target whether or not
+                // there is text to show. The rect is in on-screen pixels, content zoom included,
+                // while computed padding is not, so the padding is scaled to match.
+                glyphWidthPx:
+                  glyphRect.width -
+                  (parseFloat(glyphStyle.paddingLeft) + parseFloat(glyphStyle.paddingRight)) *
+                    glyph.currentCSSZoom,
                 gapPx: isRtl ? glyphRect.left - lineStart : lineStart - glyphRect.right,
                 paraIndent: style.getPropertyValue('--para-indent').trim(),
                 verseTextStart: style.getPropertyValue('--verse-text-start').trim(),

@@ -342,10 +342,15 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     // upstream commits, and nothing structural keeps their rule sets in agreement — with each
     // suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation, the
     // ::after outline) can land in one copy and silently miss the other. The shipping suite
-    // carries the same three pins, so a fix landing in one copy fails the other's suite until it
+    // carries the same pins, so a fix landing in one copy fails the other's suite until it
     // is forwarded. The gutter indent-compensation block is covered structurally instead: the
     // extension's usj-nodes-scss-coverage.test.ts derives it from each copy's base rules and
     // compares the two copies' results, so no pin is needed for it here.
+    /** The declarations of the rule whose whole selector list is `selectors`. */
+    const ruleBody = (selectors: string[]) =>
+      new RegExp(`(?:^|\\}|;)\\s*${selectors.map(escape).join(',\\s*')}\\s*\\{([^}]*)\\}`).exec(
+        declarations,
+      )?.[1] ?? '';
     it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
       expect(css).toMatch(
         rule(
@@ -360,6 +365,80 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     it('renders the active-text outline via ::after, never ::before (book-code collision)', () => {
       expect(css).toMatch(/\.psc-active-focus \.psc-active-text::after\s*\{/);
       expect(declarations).not.toMatch(/\.psc-active-focus \.psc-active-text::before/);
+    });
+    describe('gutter marker geometry', () => {
+      const markerSelectors = [
+        '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child',
+        '.psc-gutter-markers .book > .marker:first-child',
+      ];
+      const rtlMarkerSelectors = [
+        ".psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child",
+        ".psc-gutter-markers[dir='rtl'] .book > .marker:first-child",
+      ];
+      // Each length is registered so it computes once, on `.psc-gutter-markers`; unregistered, a
+      // large-font paragraph (`\mt1`) would get a wider gutter than a `\p`. A browser discards a
+      // registration whose initial value is not computationally independent (`4em`), so the value
+      // is pinned as well.
+      it.each(['--psc-gutter-width', '--psc-gutter-marker-gap'])(
+        'registers %s as a length',
+        (name) => {
+          expect(declarations).toMatch(
+            new RegExp(
+              `@property ${escape(name)}\\s*\\{[^}]*syntax:\\s*'<length>'[^}]*inherits:\\s*true[^}]*initial-value:\\s*0px`,
+            ),
+          );
+        },
+      );
+      it("sizes the gutter and the marker gap in the editor's own font size", () => {
+        const root = ruleBody(['.psc-gutter-markers']);
+        expect(root).toContain('--psc-gutter-width: 4em;');
+        expect(root).toContain('--psc-gutter-marker-gap: 0.825em;');
+      });
+      it("ends each marker's visible text the marker gap before the text column", () => {
+        const marker = ruleBody(markerSelectors);
+        // `1ch` is the width of the marker's trailing no-break space only in a monospace font.
+        expect(marker).toContain(
+          'right: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap) - 1ch);',
+        );
+        expect(marker).toContain('font-family: monospace;');
+        // The paragraph's inherited text-indent would collapse or widen this shrink-to-fit box (a
+        // hanging-indent `\q2`'s box would be 0px wide) and shift the glyph in RTL.
+        expect(marker).toContain('text-indent: 0;');
+        // The box is exactly as wide as its text, so an alignment would move nothing; the comment on
+        // the RTL rule says none is set, and this keeps it true.
+        expect(marker).not.toContain('text-align');
+      });
+      it('anchors the marker by its text-facing edge in RTL', () => {
+        const rtl = ruleBody(rtlMarkerSelectors);
+        // Without `right: auto` the base rule's `right` still applies, and the marker is painted
+        // over the paragraph's text.
+        expect(rtl).toContain('right: auto;');
+        expect(rtl).toContain(
+          'left: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap));',
+        );
+        expect(rtl).not.toContain('text-align');
+      });
+      it("makes the marker's gutter row clickable out to the gutter's edge", () => {
+        const marker = ruleBody(markerSelectors);
+        const rtl = ruleBody(rtlMarkerSelectors);
+        // The box is only as wide as its text, so a `\p` would be a small target; the padding
+        // grows it away from the text, and the editor clips it at the gutter's edge.
+        expect(marker).toContain('padding-left: var(--psc-gutter-width);');
+        // In RTL the gutter is on the other side, and the LTR padding would push the glyph out.
+        expect(rtl).toContain('padding-left: 0;');
+        expect(rtl).toContain('padding-right: var(--psc-gutter-width);');
+      });
+      it("clips the gutter's overflow at the editor's edges without making a scroll container", () => {
+        // The click-target padding reaches past the gutter's outer edge, off the right edge in RTL,
+        // where a scrolling ancestor would scroll the text sideways. `hidden` would make the editor
+        // itself a scroll container.
+        expect(ruleBody(['.usfm.psc-gutter-markers'])).toContain('overflow-x: clip;');
+      });
+      it('draws the active text box 3px past the end of the text column', () => {
+        expect(ruleBody(['.psc-active-focus .psc-active-text::after'])).toContain(
+          'inset-inline-end: -3px;',
+        );
+      });
     });
     describe('empty-verse caret', () => {
       // The caret rules only show in layout, so what is pinned is that each load-bearing
@@ -421,13 +500,6 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
           exactRule(['.verse + [data-caret-host]::after'], "content: '\\2060';"),
         );
       });
-    });
-    it('does not override text-align in the RTL gutter rule (Chrome/Firefox bidi paint quirk)', () => {
-      const rtlGutter = declarations.match(
-        /\.psc-gutter-markers\[dir='rtl'\] \.para[^{]*\{([^}]*)\}/,
-      );
-      expect(rtlGutter).not.toBeNull();
-      expect(rtlGutter?.[1]).not.toContain('text-align');
     });
   });
 });

@@ -1,9 +1,11 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import postcss from 'postcss';
+import { compile } from 'sass';
 import { describe, expect, it } from 'vitest';
 
 const EDITOR_OVERRIDES_SCSS_PATH = join(__dirname, '_editor-overrides.scss');
+const USJ_NODES_SCSS_PATH = join(__dirname, '_usj-nodes.scss');
 const DEMO_EDITOR_OVERRIDES_CSS_PATH = join(
   __dirname,
   '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/editor-overrides.css',
@@ -87,15 +89,15 @@ describe('selected paragraph marker row', () => {
   it('measures the reach in a gutter width registered as a length, not in the paragraph’s own font size', () => {
     // An unregistered `4em` resolves where it is used, so a `\mt1` (166%) would push the bar past
     // the editor's edge, where it is clipped, and a `\cd` (91%) would stop it inside the gutter.
-    expect(declarations).toMatch(
-      /@property --psc-para-marker-gutter-width\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true[^}]*initial-value:/,
-    );
-    expect(block('.psc-gutter-markers')).toContain(
-      '--psc-para-marker-gutter-width: var(--psc-gutter-width',
-    );
+    // usj-nodes-styles.test.ts pins the registration and the gutter's value in both copies; this
+    // pins only that the gutter the reach reads is registered and set, outside a comment.
+    const usjNodes = readFileSync(USJ_NODES_SCSS_PATH, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    expect(usjNodes).toMatch(/@property --psc-gutter-width\s*\{/);
+    expect(usjNodes).toMatch(/(?:^|\})\s*\.psc-gutter-markers\s*\{[^}]*--psc-gutter-width:/);
     const reach = block(SELECTED_ROW)?.match(/--psc-para-marker-selection-reach:([^;]*);/)?.[1];
-    expect(reach).toContain('var(--psc-para-marker-gutter-width)');
-    expect(reach).not.toContain('var(--psc-gutter-width)');
+    expect(reach).toContain('var(--psc-gutter-width)');
   });
 
   it('fills the row and reaches the fill and bar toward the left in LTR', () => {
@@ -135,5 +137,43 @@ describe('selected paragraph marker row', () => {
     // Positive control first: the selector this sweep looks for is present at all.
     expect(declarations).toContain('.psc-para-marker-selected');
     expect(declarations).not.toMatch(/\.psc-para-marker-selected[^{,]*::?(?:before|after)/);
+  });
+});
+
+describe('armed merge tint at content zoom', () => {
+  const ARMED_TINT =
+    '.psc-gutter-markers .para > .marker.para-merge-armed:not(.verse):not(.chapter):first-child::before';
+  const ZOOM = 'var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))';
+
+  /** Each compiled rule's own declarations, as `prop: value` strings, keyed by its selector. */
+  function compiledDeclarations(stylesheetPath: string): Map<string, string[]> {
+    const rules = new Map<string, string[]>();
+    postcss.parse(compile(stylesheetPath).css).walkRules((rule) => {
+      const declarations = rule.nodes.flatMap((node) =>
+        node.type === 'decl' ? [`${node.prop}: ${node.value}`] : [],
+      );
+      rules.set(rule.selector, [...(rules.get(rule.selector) ?? []), ...declarations]);
+    });
+    return rules;
+  }
+
+  it('divides only the bounds the editor publishes by the zoom, so the tint stays on the text', () => {
+    // The editor publishes the bounds in on-screen pixels, already zoomed; the tint is inside the
+    // zoom area, which multiplies them again. The 3px padding is in the text's own scale.
+    const padding = /\$armed-marker-padding:\s*([^;]+);/.exec(
+      readFileSync(USJ_NODES_SCSS_PATH, 'utf8'),
+    )?.[1];
+    const base = compiledDeclarations(USJ_NODES_SCSS_PATH).get(ARMED_TINT);
+    const override = compiledDeclarations(EDITOR_OVERRIDES_SCSS_PATH).get(`.usfm${ARMED_TINT}`);
+
+    expect(padding).toBe('3px');
+    // The rule this overrides still exists under the selector one class less specific.
+    expect(base).toContain('left: calc(var(--para-merge-armed-text-left, 0px) - 3px)');
+    expect(override).toEqual([
+      `left: calc(var(--para-merge-armed-text-left, 0px) / ${ZOOM} - ${padding})`,
+      // Unpublished, the width is the marker's whole box; the fallback is scaled up by the zoom so
+      // the division leaves it at 100%.
+      `width: calc(var(--para-merge-armed-text-width, calc(100% * ${ZOOM})) / ${ZOOM} + 6px)`,
+    ]);
   });
 });

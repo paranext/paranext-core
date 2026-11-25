@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 // `usj-nodes-styles.test.ts` keeps its per-copy pins.
 //
 // In the gutter view (`.psc-gutter-markers`), each paragraph's marker glyph is absolutely
-// positioned at `left: calc(-(gutter width) + 0.5em - var(--para-indent))`, so `--para-indent` must
+// positioned at `right: calc(100% + var(--para-indent) + marker gap - 1ch)`, so `--para-indent` must
 // equal the paragraph's own text-spacing margin or the glyph lands inside the text. The active
 // focus box also reads `--verse-text-start`, a hanging-indent paragraph's negative `text-indent`,
 // as a fallback start. Both expectations are derived from the base text-spacing rules in the same

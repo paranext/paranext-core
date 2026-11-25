@@ -132,9 +132,8 @@ export function computeCaretAnchorRect(
 /**
  * Narrows `rect`, the armed gutter marker's box, to the marker's text, so the hint points at the
  * tinted glyph rather than the middle of the box. The editor publishes where the text sits within
- * the box as `--para-merge-armed-text-left` and `--para-merge-armed-text-width` on the marker (the
- * paragraph's first-line indent carries the text outside the box); without them, `rect` is returned
- * unchanged.
+ * the box as `--para-merge-armed-text-left` and `--para-merge-armed-text-width` on the marker,
+ * leaving out the text's trailing no-break space; without them, `rect` is returned unchanged.
  */
 export function narrowToArmedMarkerText(rect: AnchorRect, marker: HTMLElement): AnchorRect {
   const textLeft = parseFloat(marker.style.getPropertyValue('--para-merge-armed-text-left'));
