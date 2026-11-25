@@ -123,6 +123,13 @@ export const editableView: EditorOptions['view'] = {
   isFormattedFont: true,
 };
 
+/** The hidden marker mode of Simple mode's view and Power mode's Formatted view. */
+export const hiddenView: EditorOptions['view'] = {
+  markerMode: 'hidden',
+  hasSpacing: true,
+  isFormattedFont: true,
+};
+
 /** The non-editable marker mode the scripture editor uses outside Standard view. */
 export const visibleView: EditorOptions['view'] = {
   markerMode: 'visible',

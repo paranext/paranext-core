@@ -8,7 +8,7 @@
  * (a) With the editor's own right-click menu open and NOTHING highlighted, Enter must be swallowed
  * rather than reaching Lexical's default paragraph split — and, more broadly, the menu must claim
  * EVERY key while it is open, not just Enter, since this extension's own keyboard handlers assume
- * whatever the menu doesn't want falls through to them. `handleStandardViewTriggers`
+ * whatever the menu doesn't want falls through to them. `handleCaptureKeyTriggers`
  * (`platform-scripture-editor.web-view.tsx`) hands Enter DOWN to the menu whenever
  * `isEditorContextMenuOpen()` is true, on the assumption that the menu's own capture-phase listener
  * claims it either way — that assumption is untestable from this repo's own unit tests, which mock
