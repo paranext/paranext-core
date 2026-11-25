@@ -19,7 +19,7 @@ Two templates feed every extension repo:
 2. Repo level:
    - **paranext-core:** `extensions/` is a squashed subtree of the multi-extension template: `git subtree pull --prefix extensions … --squash`. The script exists only in `extensions/package.json`, so run it from `extensions/` (`cd extensions && npm run update-from-templates`).
    - **extension repos:** the repo root is the multi-extension template's history: `git merge paranext-multi-extension-template/main --allow-unrelated-histories`.
-3. Each extension folder: `git subtree pull --prefix <folder> paranext-extension-template main --squash`, one at a time. A folder that was never added as a subtree is skipped with a "never added" warning (expected for core's `c-sharp-provider-test` and `evil`; NOT expected for any template-based extension). Workspaces without a `manifest.json` (helper packages, for example scripture-forge-platform-extensions' `src/messages` and `src/sf-pdp`) are not extensions: the script skips them without a warning, so check their dependencies yourself (the loop's step 4, "Lockfile").
+3. Each extension folder: `git subtree pull --prefix <folder> paranext-extension-template main --squash`, one at a time. A folder that was never added as a subtree is skipped with a "never added" warning (expected for core's `c-sharp-provider-test` and `evil`; NOT expected for any template-based extension). A template-based extension that reports it was usually renamed, or its subtree commits were lost, and it gets no template changes until it is re-linked: stop and ask the user, then re-link it as paranext-multi-extension-template's README, "Re-linking an extension to the template", describes (repos that have taken that README in a template update have the section, and a warning that names the folder path to use). Workspaces without a `manifest.json` (helper packages, for example scripture-forge-platform-extensions' `src/messages` and `src/sf-pdp`) are not extensions: the script skips them without a warning, so check their dependencies yourself (the loop's step 4, "Lockfile").
 4. Resolves only conflicts in unused workspace `package-lock.json` files (deletes them). Any other conflict stops the script; resolve, commit, and run it again until everything reports up to date.
 5. A formatting and identity pass over the repo root and each template-based extension. Its messages (`Updated README.md …`, `Updated manifest.json …`, `Updated package.json …`, `Types file … not found, skipping rename operation`) are normal even when they change nothing: a clean `git status` is what counts. Commit anything it does change. In paranext-core the pass also stamps core's license over the template's MIT, on `extensions/` and on every extension (`stampExtensionsRootLicense` and `stampExtensionLicense` in `extensions/lib/git.util.ts`; message `Set license to …`), unless the extension sets `"licenseIsDeliberate": true` (see `LICENSING.md`).
 
@@ -147,7 +147,7 @@ Commit with `git commit --no-edit`, then run the script again. Keep git's own me
 
 ### 3. Until it is up to date
 
-Repeat until every pull reports `Already up to date` / `Subtree is already at commit …` and `git status` is clean. Only the expected folders may report "never added".
+Repeat until every pull reports `Already up to date` / `Subtree is already at commit …` and `git status` is clean. Only the expected folders may report "never added"; for any other, see item 3 of "What the script does".
 
 ### 4. Lockfile
 
