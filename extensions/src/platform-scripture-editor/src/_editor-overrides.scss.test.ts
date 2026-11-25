@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import postcss from 'postcss';
+import { compile } from 'sass';
 import { describe, expect, it } from 'vitest';
 
 const EDITOR_OVERRIDES_SCSS_PATH = join(__dirname, '_editor-overrides.scss');
@@ -136,5 +137,43 @@ describe('selected paragraph marker row', () => {
     // Positive control first: the selector this sweep looks for is present at all.
     expect(declarations).toContain('.psc-para-marker-selected');
     expect(declarations).not.toMatch(/\.psc-para-marker-selected[^{,]*::?(?:before|after)/);
+  });
+});
+
+describe('armed merge tint at content zoom', () => {
+  const ARMED_TINT =
+    '.psc-gutter-markers .para > .marker.para-merge-armed:not(.verse):not(.chapter):first-child::before';
+  const ZOOM = 'var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))';
+
+  /** Each compiled rule's own declarations, as `prop: value` strings, keyed by its selector. */
+  function compiledDeclarations(stylesheetPath: string): Map<string, string[]> {
+    const rules = new Map<string, string[]>();
+    postcss.parse(compile(stylesheetPath).css).walkRules((rule) => {
+      const declarations = rule.nodes.flatMap((node) =>
+        node.type === 'decl' ? [`${node.prop}: ${node.value}`] : [],
+      );
+      rules.set(rule.selector, [...(rules.get(rule.selector) ?? []), ...declarations]);
+    });
+    return rules;
+  }
+
+  it('divides only the bounds the editor publishes by the zoom, so the tint stays on the text', () => {
+    // The editor publishes the bounds in on-screen pixels, already zoomed; the tint is inside the
+    // zoom area, which multiplies them again. The 3px padding is in the text's own scale.
+    const padding = /\$armed-marker-padding:\s*([^;]+);/.exec(
+      readFileSync(USJ_NODES_SCSS_PATH, 'utf8'),
+    )?.[1];
+    const base = compiledDeclarations(USJ_NODES_SCSS_PATH).get(ARMED_TINT);
+    const override = compiledDeclarations(EDITOR_OVERRIDES_SCSS_PATH).get(`.usfm${ARMED_TINT}`);
+
+    expect(padding).toBe('3px');
+    // The rule this overrides still exists under the selector one class less specific.
+    expect(base).toContain('left: calc(var(--para-merge-armed-text-left, 0px) - 3px)');
+    expect(override).toEqual([
+      `left: calc(var(--para-merge-armed-text-left, 0px) / ${ZOOM} - ${padding})`,
+      // Unpublished, the width is the marker's whole box; the fallback is scaled up by the zoom so
+      // the division leaves it at 100%.
+      `width: calc(var(--para-merge-armed-text-width, calc(100% * ${ZOOM})) / ${ZOOM} + 6px)`,
+    ]);
   });
 });

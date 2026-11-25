@@ -428,6 +428,12 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
         expect(rtl).toContain('padding-left: 0;');
         expect(rtl).toContain('padding-right: var(--psc-gutter-width);');
       });
+      it("clips the gutter's overflow at the editor's edges without making a scroll container", () => {
+        // The click-target padding reaches past the gutter's outer edge, off the right edge in RTL,
+        // where a scrolling ancestor would scroll the text sideways. `hidden` would make the editor
+        // itself a scroll container.
+        expect(ruleBody(['.usfm.psc-gutter-markers'])).toContain('overflow-x: clip;');
+      });
       it('draws the active text box 3px past the end of the text column', () => {
         expect(ruleBody(['.psc-active-focus .psc-active-text::after'])).toContain(
           'inset-inline-end: -3px;',

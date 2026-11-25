@@ -438,6 +438,32 @@ button {
   font-weight: 700;
 }
 
+// The tint on a gutter marker armed for the two-step merge is placed from the text bounds the editor
+// publishes, `--para-merge-armed-text-left` and `--para-merge-armed-text-width`. The editor measures
+// them with `getBoundingClientRect`, in on-screen pixels with the content zoom already applied, but
+// the tint that reads them is inside the zoom area, where CSS `zoom` multiplies them again: at any
+// level but 100 % it would land beside the marker's text and be too wide. Dividing the published
+// values by the area's factor cancels the second zoom. The 3px around the text
+// (`$armed-marker-padding` in `_usj-nodes.scss`) is a length in the text's own scale, so it is not
+// divided. Without published bounds (no layout), the width falls back to the marker's whole box: the
+// fallback is `100%` times the factor, so the division leaves it whole. One class more specific than
+// the rule in `_usj-nodes.scss`, so the order the two are compiled in does not matter.
+.usfm.psc-gutter-markers
+  .para
+  > .marker.para-merge-armed:not(.verse):not(.chapter):first-child::before {
+  left: calc(
+    var(--para-merge-armed-text-left, 0px) /
+      var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1)) - 3px
+  );
+  width: calc(
+    var(
+        --para-merge-armed-text-width,
+        calc(100% * var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1)))
+      ) /
+      var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1)) + 6px
+  );
+}
+
 // Forced colors (e.g. Windows high contrast) drop box-shadow and replace the --accent fill with the
 // system background, which would leave only the bold glyph to mark the selection. An outline in the
 // system Highlight colour survives there and, drawn around the whole paragraph box, needs no

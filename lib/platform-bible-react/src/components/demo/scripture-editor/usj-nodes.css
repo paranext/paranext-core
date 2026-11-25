@@ -2785,8 +2785,8 @@ span.read img {
   --scripture-accent-marker: rgba(196, 149, 106, 0.45);
   /* Gutter width, and the gap between each paragraph marker's visible text and the paragraph's
      text, the same for every marker whatever the paragraph's font size. A marker whose text is
-     wider than `--psc-gutter-width` minus the gap runs past the editor's edge, where
-     `.editor-container` clips it. */
+     wider than `--psc-gutter-width` minus the gap reaches the gutter's outer edge, where
+     the editor clips it (`.usfm.psc-gutter-markers`). */
   --psc-gutter-width: 4em;
   --psc-gutter-marker-gap: 0.825em;
   /* An empty verse's ellipsis placeholder is a box of this fixed width, so a hidden one can be
@@ -2892,9 +2892,16 @@ span.read img {
 }
 
 /* The .editor-input inline-start padding creates the gutter space; each .para > .marker
-   span is pulled into it with absolute positioning. */
+   span is pulled into it with absolute positioning. The editor clips horizontally at its padding
+   edge, which on the gutter side is the gutter's outer edge: each marker's click-target padding,
+   and a marker too wide for the gutter, would otherwise reach past the editor. That overflow is
+   off the left edge in LTR, where no browser scrolls to it, but off the right edge in RTL, where
+   a scrolling container would scroll the text sideways. `clip`, unlike `hidden`, makes no scroll
+   container and leaves vertical overflow alone. The active text box's overhang on the other side
+   stays inside the inline-end padding. */
 .usfm.psc-gutter-markers {
   padding-inline-start: var(--psc-gutter-width);
+  overflow-x: clip;
 }
 
 /* position: relative gives absolutely-positioned gutter markers the right
@@ -2938,7 +2945,8 @@ span.read img {
      box is as wide as the marker, so a longer one grows away from the text. */
   right: calc(100% + var(--para-indent) + var(--psc-gutter-marker-gap) - 1ch);
   /* Padding on the gutter side makes the rest of the marker's gutter row part of its click target
-     without moving the glyph; the editor clips the box at the gutter's edge. */
+     without moving the glyph. The box reaches past the gutter's outer edge, where the editor
+     clips it (`.usfm.psc-gutter-markers`). */
   padding-left: var(--psc-gutter-width);
   top: 0;
   direction: ltr;

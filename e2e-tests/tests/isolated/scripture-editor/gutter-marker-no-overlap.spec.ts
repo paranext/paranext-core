@@ -207,11 +207,12 @@ test.describe('gutter marker glyphs versus paragraph text', () => {
                 marker,
                 glyphText: glyph.textContent?.trim() ?? '',
                 // Without the gutter-side padding, which widens the click target whether or not
-                // there is text to show.
+                // there is text to show. The rect is in on-screen pixels, content zoom included,
+                // while computed padding is not, so the padding is scaled to match.
                 glyphWidthPx:
                   glyphRect.width -
-                  parseFloat(glyphStyle.paddingLeft) -
-                  parseFloat(glyphStyle.paddingRight),
+                  (parseFloat(glyphStyle.paddingLeft) + parseFloat(glyphStyle.paddingRight)) *
+                    glyph.currentCSSZoom,
                 gapPx: isRtl ? glyphRect.left - lineStart : lineStart - glyphRect.right,
                 paraIndent: style.getPropertyValue('--para-indent').trim(),
                 verseTextStart: style.getPropertyValue('--verse-text-start').trim(),
