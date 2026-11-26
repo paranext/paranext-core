@@ -1,10 +1,10 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.7.8
+version: 1.7.9
 status: active
 created: 2026-03-04
-last_updated: 2026-10-19
+last_updated: 2026-11-06
 toc: true
 ---
 
@@ -518,11 +518,10 @@ Common reusable keys (verify in `assets/localization/en.json` before using — t
 **NEVER modify existing key/value pairs.** If a string needs replacement, add a new key; the old key and its values stay:
 
 1. Add the NEW key with the new value in every language the old key has a value in
-2. Put `fallbackKey` on the NEW key, pointing at the OLD key
+2. Put `fallbackKey` on the NEW key, pointing at the OLD key, only if the meanings are close enough that the old translation is acceptable for the new text; otherwise give the new key no `fallbackKey`
 3. Switch every consumer to the new key
 4. Verify the old key has no remaining consumer in implementation code (only the strings file and the metadata mention it)
-5. Re-point any `fallbackKey` that targets the old key at the new key
-6. Add `deprecationInfo` to the OLD key's metadata, recording that it was superseded and naming the new key
+5. Add `deprecationInfo` to the OLD key's metadata, recording that it was superseded and naming the new key. The old key gets no `fallbackKey`
 
 ```json
 {
@@ -540,7 +539,7 @@ Common reusable keys (verify in `assets/localization/en.json` before using — t
 
 The example shows English only for brevity; every language the old key has a value in gets the new key too.
 
-The `fallbackKey` belongs on the new key because the lookup reads a key's `fallbackKey` only in a language where the key itself has no value; the old key has a value in every language the new key has, so a `fallbackKey` on the OLD key never fires. See [If a String Needs Replacement](./Localization-Guide.md#if-a-string-needs-replacement) in the Localization Guide for the full recipe and why it works.
+`fallbackKey` points from new to old, never from old to new. A `fallbackKey` on an old key can fire only where the old key has no value: in a language this repo ships, only if its values were deleted, which the immutability rule forbids; in a third-party localization that has the new key but not the old one, where it silently hands the new meaning to anyone still requesting the old key for its old meaning. Retire a key by keeping its values and adding `deprecationInfo`, never by redirecting it. See [If a String Needs Replacement](./Localization-Guide.md#if-a-string-needs-replacement) in the Localization Guide for the full recipe.
 
 ---
 
@@ -871,3 +870,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.7.6 | 2026-09-23 | List the card, list and table reference implementations of text-level zoom markers (Find, the inventories, Checks, the Markers Checklist, the Lexical Tools dictionary) and note that these types are declared zoomable in core. |
 | 1.7.7 | 2026-09-24 | "Content Zoom Opt-In": name areas the user cannot tell apart with `ContentZoomRoot`'s `label`, and tie unscaled rows, columns and cards to one area with `data-platform-content-zoom-scope` (both experimental); the Text Collection grid is the reference, one `resource-<id>` area per resource, with its right-click and "⋮" zoom menus running the platform's zoom commands. |
 | 1.7.8 | 2026-10-19 | "Existing Strings Are Immutable": the one replacement recipe — a new key with `fallbackKey` pointing at the old key, every consumer switched and the old key verified unused, inbound `fallbackKey`s re-pointed, `deprecationInfo` on the old key, old key and values untouched — matching the Localization Guide. |
+| 1.7.9 | 2026-11-06 | "Existing Strings Are Immutable": the new key gets `fallbackKey` → the old key only when the old translation is acceptable for the new text; never an old→new `fallbackKey` (why it is harmful); dropped the step that re-pointed inbound `fallbackKey`s at the new key. |

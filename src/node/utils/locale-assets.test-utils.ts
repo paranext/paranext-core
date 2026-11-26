@@ -99,10 +99,9 @@ export function readShippedLocalizationMetadata(): Record<
  * `src/extension-host/services/localization.service-host.ts` follows exactly one `fallbackKey` hop:
  * it looks the target up in the language data and stops, never consulting the target's own
  * metadata. So a redirect pointing at a missing key, or at another redirect, resolves to nothing
- * and the user sees the raw `%key%`. Chains and dangling targets both exist in `metadata.json`
- * today (`%submit%` → `%yes%` → `%confirm%`, where none of the three holds a value; and the
- * `%Paratext.*%` legacy-import targets, which exist nowhere in the repo), so counting a redirect by
- * its mere presence would let a missing English string pass as shipped.
+ * and the user sees the raw `%key%`. Dangling targets exist in `metadata.json` (the `%Paratext.*%`
+ * legacy-import targets, which exist nowhere in the repo), so counting a redirect by its mere
+ * presence would let a missing English string pass as shipped.
  *
  * @param englishKeys Keys that hold an English value directly — `en.json` plus the `en` block of
  *   each production-loaded extension contribution.

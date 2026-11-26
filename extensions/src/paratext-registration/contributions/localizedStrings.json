@@ -65,9 +65,6 @@
         "date": "2026-10-22"
       }
     },
-    "%paratextRegistration_description_internetUse_option_DisableSomeServices_details%": {
-      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%"
-    },
     "%paratextRegistration_description_internetUse_option_Enabled_details%": {
       "deprecationInfo": {
         "date": "2026-10-13",

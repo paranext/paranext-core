@@ -1,14 +1,5 @@
 {
   "metadata": {
-    "%comment_filter_read_unread%": {
-      "fallbackKey": "%comment_filter_preset_unread%"
-    },
-    "%comment_filter_resolved_resolved%": {
-      "fallbackKey": "%comment_filter_preset_resolved%"
-    },
-    "%comment_filter_resolved_unresolved%": {
-      "fallbackKey": "%comment_filter_preset_unresolved%"
-    },
     "%comment_filter_scope_current_book%": {
       "fallbackKey": "%webView_inventory_scope_currentBook%"
     },
@@ -17,9 +8,6 @@
     },
     "%comment_filter_scope_current_verse%": {
       "fallbackKey": "%webView_inventory_scope_verse%"
-    },
-    "%comment_filter_type_conflicts%": {
-      "fallbackKey": "%comment_filter_preset_conflict%"
     },
     "%no_comments_match_filter%": {
       "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_7%"
