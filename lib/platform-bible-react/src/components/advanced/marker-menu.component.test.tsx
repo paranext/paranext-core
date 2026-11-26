@@ -329,8 +329,8 @@ describe('MarkerMenu — selection state', () => {
     expect(row.querySelector('[data-slot="marker-selection-state"]')).not.toBeNull();
   });
 
-  it('never sets data-checked, so the trailing check stays hidden', () => {
-    // CommandItem renders its own trailing check keyed on data-checked. The leading glyph carries
+  it('never sets data-checked, so the built-in check stays hidden', () => {
+    // CommandItem renders its own leading check keyed on data-checked. This menu's glyph carries
     // all three states, so setting it would double the checkmark.
     render(
       <MarkerMenu

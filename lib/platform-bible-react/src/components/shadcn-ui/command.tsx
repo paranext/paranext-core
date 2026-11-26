@@ -235,12 +235,34 @@ function CommandSeparator({
   );
 }
 
-/** @inheritdoc Command */
+// CUSTOM: Added TSDoc describing the leading check and its `data-checked` contract (see the
+// IconCheck change below), since consumers must set the attribute on every row of a checkable list
+/**
+ * An item in a {@link Command} list. It renders a check mark on its leading side, controlled by the
+ * `data-checked` attribute:
+ *
+ * - In a list where rows can be checked, pass `data-checked={isSelected}` on **every** row, so
+ *   unchecked rows (`false`) keep the check's space and all labels line up.
+ * - On rows that are never checkable (command palettes, grids), omit `data-checked`: no check is
+ *   rendered.
+ *
+ * `data-checked` also sets `aria-checked`, so screen readers announce each row as checked or not
+ * checked. Pass your own `aria-checked` to override it (for example `'mixed'`). Do not draw a check
+ * of your own alongside it.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/command}
+ * @see cmdk Documentation: {@link https://cmdk.paco.me/}
+ */
+// CUSTOM: Added `data-checked` to the props type so CommandItem can read it and render its check
+// only on items that pass it (see the IconCheck change below)
 function CommandItem({
   className,
   children,
+  'data-checked': dataChecked,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Item>) {
+}: React.ComponentProps<typeof CommandPrimitive.Item> & {
+  'data-checked'?: boolean | 'true' | 'false';
+}) {
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
@@ -249,10 +271,30 @@ function CommandItem({
         'pr-twp tw:group/command-item tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:in-data-[slot=dialog-content]:rounded-lg! tw:data-[disabled=true]:pointer-events-none tw:data-[disabled=true]:opacity-50 tw:data-selected:bg-muted tw:data-selected:text-foreground tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4 tw:data-selected:*:[svg]:text-foreground',
         className,
       )}
+      // CUSTOM: Re-attach data-checked, which is destructured out of props above, so the item keeps
+      // the attribute
+      data-checked={dataChecked}
+      // CUSTOM: Announce the check state to assistive technology, since the check itself is
+      // aria-hidden. Placed before the spread so a caller's own aria-checked wins.
+      aria-checked={dataChecked}
       {...props}
     >
+      {/* CUSTOM: Moved the check from after the children (tw:ms-auto, at the trailing edge) to
+          before them, so every checkable list puts its check mark on the leading side like the
+          Radix menus and Select do. It renders only on items that pass `data-checked` (true or
+          false), so a checkable list passes `data-checked={isSelected}` on every row to keep
+          labels aligned, while items that are never checkable (command palettes, grids) render
+          no check at all and keep their own first child. An unchecked item's check stays in
+          place at opacity 0. Removed tw:group-has-data-[slot=command-shortcut]:hidden, needed
+          only while the check and a shortcut competed for the trailing edge. Added aria-hidden
+          because the check is decorative. */}
+      {dataChecked !== undefined && (
+        <IconCheck
+          aria-hidden
+          className={cn(dataChecked !== true && dataChecked !== 'true' && 'tw:opacity-0')}
+        />
+      )}
       {children}
-      <IconCheck className="tw:ms-auto tw:opacity-0 tw:group-has-data-[slot=command-shortcut]/command-item:hidden tw:group-data-[checked=true]/command-item:opacity-100" />
     </CommandPrimitive.Item>
   );
 }

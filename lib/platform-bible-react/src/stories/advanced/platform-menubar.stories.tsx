@@ -420,6 +420,25 @@ export const DynamicItemStates: Story = {
           command: 'story.withIcon',
           iconNameBefore: 'settings',
         },
+        {
+          label: 'Plain item with an icon and a shortcut',
+          localizeNotes: '',
+          group: 'story.dynamicGroup',
+          order: 6,
+          command: 'story.withIconAndShortcut',
+          iconNameBefore: 'search',
+          shortcut: 'Ctrl+F',
+        },
+        {
+          label: 'Checked toggle with an icon and a shortcut',
+          localizeNotes: '',
+          group: 'story.dynamicGroup',
+          order: 7,
+          command: 'story.checkedWithIconAndShortcut',
+          iconNameBefore: 'eye',
+          shortcut: 'Ctrl+Shift+F',
+          checked: true,
+        },
       ],
     };
 
