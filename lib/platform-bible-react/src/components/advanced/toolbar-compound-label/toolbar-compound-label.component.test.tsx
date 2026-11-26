@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { DisabledActionTooltip } from '@/components/basics/disabled-action-tooltip.component';
 import { ToolbarCompoundLabel } from './toolbar-compound-label.component';
 
 // jsdom doesn't ship ResizeObserver. Radix's Popper positioning (used by the Tooltip content here)
@@ -218,6 +219,24 @@ describe('ToolbarCompoundLabel', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
   });
 
+  test('reveals the full text when a focusable container around the label takes keyboard focus', async () => {
+    // Hover ignores a focusable container, but keyboard focus on one still asks to read the label.
+    render(
+      <div role="row" data-testid="container" tabIndex={0}>
+        <ToolbarCompoundLabel
+          primary="GEN"
+          secondary="1:1"
+          showSecondary={false}
+          fullText="Genesis 1:1"
+        />
+      </div>,
+    );
+
+    screen.getByTestId('container').focus();
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+  });
+
   test('hides the revealed text again when focus leaves', async () => {
     render(
       <button type="button">
@@ -343,10 +362,10 @@ describe('ToolbarCompoundLabel', () => {
     });
   });
 
-  test('routes a Radix-decided close back through its own state, so the tooltip is dismissable', async () => {
-    // A controlled `<Tooltip open>` with no `onOpenChange` cannot be closed by Radix at all: its
-    // Escape handler runs, calls the setter Radix owns, and nothing happens — while its dismissable
-    // layer has already called preventDefault on that keypress, eating it from whatever is below.
+  test('closes on Escape', async () => {
+    // The tooltip ignores Radix's own close requests, so Escape is handled on the content. Its
+    // dismissable layer default-prevents that keypress either way, eating it from whatever is
+    // below, so the tooltip must at least close in return.
     render(
       <button type="button">
         <ToolbarCompoundLabel
@@ -365,6 +384,180 @@ describe('ToolbarCompoundLabel', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('hover covers the whole control the label sits in', () => {
+    /** Lets zero-delay timers and the effects they trigger run. */
+    async function waitForTimers() {
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+    }
+
+    function renderInButton() {
+      render(
+        <button type="button">
+          <ToolbarCompoundLabel
+            primary="GEN"
+            secondary="1:1"
+            showSecondary={false}
+            fullText="Genesis 1:1"
+          />
+          <span>chevron</span>
+        </button>,
+      );
+    }
+
+    test('stays open once Radix has seen the pointer move over the label', async () => {
+      // Radix runs its own open on a zero-delay timer that still reads the tooltip as closed, so it
+      // broadcasts its "another tooltip opened" event and this tooltip, already open, closes
+      // itself. In the app that is a tooltip that blinks on every entry. A browser delivers the
+      // entry and the first move in one task, before React re-renders; `userEvent.hover` renders
+      // between them and hides the race, so both are dispatched inside one `act` here. jsdom ships
+      // no `PointerEvent` constructor, and React and Radix read only the type and target.
+      renderInButton();
+      const primary = screen.getByText('GEN');
+
+      act(() => {
+        primary.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+        primary.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }));
+      });
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await waitForTimers();
+
+      expect(screen.queryByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+    });
+
+    test('opens when the pointer enters the control away from the text', async () => {
+      renderInButton();
+
+      await userEvent.hover(screen.getByText('chevron'));
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+    });
+
+    test('stays open while the pointer moves from the text to the rest of the control', async () => {
+      renderInButton();
+
+      await userEvent.hover(screen.getByText('GEN'));
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await userEvent.hover(screen.getByText('chevron'));
+      await waitForTimers();
+
+      expect(screen.queryByRole('tooltip')).toBeInTheDocument();
+    });
+
+    test('stays open when a tooltip around the control opens on the same hover', async () => {
+      // An uncontrolled tooltip wrapping the trigger (as `DisabledActionTooltip` wraps the paragraph
+      // style trigger) runs Radix's own hover handling on the bubbling pointer events, and its
+      // zero-delay open broadcasts Radix's "another tooltip opened" event, which asks every other
+      // open tooltip to close. The entry and the first move arrive in one task in a browser, so
+      // both are dispatched inside one `act`.
+      render(
+        <DisabledActionTooltip disabled={false} tooltipText="Structure is protected">
+          <button type="button">
+            <ToolbarCompoundLabel
+              primary="GEN"
+              secondary="1:1"
+              showSecondary={false}
+              fullText="Genesis 1:1"
+            />
+          </button>
+        </DisabledActionTooltip>,
+      );
+      const primary = screen.getByText('GEN');
+
+      act(() => {
+        primary.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+        primary.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }));
+      });
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await waitForTimers();
+
+      expect(screen.queryByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+    });
+
+    test('closes when the control is pressed away from the text', async () => {
+      renderInButton();
+
+      await userEvent.hover(screen.getByText('chevron'));
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await userEvent.click(screen.getByText('chevron'));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      });
+    });
+
+    test('closes on a press outside the control', async () => {
+      render(
+        <>
+          <button type="button">
+            <ToolbarCompoundLabel
+              primary="GEN"
+              secondary="1:1"
+              showSecondary={false}
+              fullText="Genesis 1:1"
+            />
+          </button>
+          <p>elsewhere</p>
+        </>,
+      );
+
+      await userEvent.hover(screen.getByText('GEN'));
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      // The press alone, with no pointer leaving the control, so only the outside-press handling
+      // can close it.
+      act(() => {
+        screen
+          .getByText('elsewhere')
+          .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      });
+    });
+
+    test.each([0, -1])(
+      'does not take a container with tabIndex=%i as the control',
+      async (tabIndex) => {
+        // A focusable card or list row is not a control: hover over the rest of it must not open
+        // the tooltip, while the label itself still opens it when it is incomplete.
+        render(
+          <div tabIndex={tabIndex}>
+            <ToolbarCompoundLabel
+              primary="GEN"
+              secondary="1:1"
+              showSecondary={false}
+              fullText="Genesis 1:1"
+            />
+            <span>elsewhere in the container</span>
+          </div>,
+        );
+
+        await userEvent.hover(screen.getByText('elsewhere in the container'));
+        await waitForTimers();
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+        await userEvent.hover(screen.getByText('GEN'));
+
+        expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+      },
+    );
+
+    test('closes when the pointer leaves the control', async () => {
+      renderInButton();
+
+      await userEvent.hover(screen.getByText('chevron'));
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await userEvent.unhover(screen.getByRole('button'));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      });
     });
   });
 });
