@@ -11,6 +11,8 @@
    (`--psc-empty-verse-ellipsis-width`) is the verse number size (`--psc-verse-number-size`, 13/16
    of the base size, so 13px at the default) rather than 18px, closer to this copy's previous
    ellipsis, which had no padding around the glyph.
+   The `.marker-editable .unknown-block` `text-indent: 0` comes from scripture-editors#57,
+   unmerged when copied.
    The Simple-mode verse and ellipsis sizes are base-relative here
    (`--psc-base-font-size`, in the gutter section) and intentionally not in the demo copy, where
    no project stylesheet is injected.
@@ -2490,6 +2492,10 @@
   /* An EMPTY opaque block (e.g. a bare \fig) must stay visible/selectable: without content the
      box collapses to 0 height. One line-height of room keeps the dashed frame renderable. */
   min-height: 1.5em;
+  /* `text-indent` is inherited and a block box applies it to its own first line, so without this
+     a `\q` paragraph's hanging indent pushes the opening glyph out past the box's left edge, and
+     an indented paragraph leaves a gap before it. */
+  text-indent: 0;
   border: 1px dashed rgba(140, 140, 140, 0.5);
   background-color: rgba(140, 140, 140, 0.08);
   color: rgba(140, 140, 140, 0.85);

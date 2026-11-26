@@ -30,7 +30,7 @@ import {
   LeadingIconSlot,
   MenuGroupNode,
 } from './menu.util';
-import MenuItemIcon from './menu-icon.component';
+import MenuItemIcon, { MenuCheckSlot } from './menu-icon.component';
 
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
@@ -78,14 +78,14 @@ const getMenubarContent = (
         const isCheckboxItem = item.checked !== undefined;
         const itemContent = (
           <>
-            {/* A checkbox item's check indicator is drawn over this slot, so it has no icon of its own */}
             <MenuItemIcon
-              iconName={isCheckboxItem ? undefined : item.iconNameBefore}
-              icon={isCheckboxItem ? undefined : item.iconPathBefore}
+              iconName={item.iconNameBefore}
+              icon={item.iconPathBefore}
               menuLabel={item.label}
               leading
               leadingSlot={leadingSlot}
             />
+            {isCheckboxItem && <MenuCheckSlot checked={!!item.checked} />}
             {item.label}
             <MenuItemIcon
               iconName={item.iconNameAfter}
@@ -108,8 +108,9 @@ const getMenubarContent = (
         menuEntry = isCheckboxItem ? (
           <MenubarCheckboxItem
             key={`menubar-item-${item.label}-${item.command}`}
-            // Start padding matches MenubarItem; the check indicator sits in the leading slot
-            className="tw:ps-1.5"
+            // Start padding matches MenubarItem. The built-in indicator is hidden because
+            // MenuCheckSlot draws the check after the icon slot instead
+            className="tw:ps-1.5 tw:[&>[data-slot=menubar-checkbox-item-indicator]]:hidden"
             checked={item.checked}
             disabled={item.disabled}
             onSelect={handleSelect}

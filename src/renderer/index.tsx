@@ -68,6 +68,7 @@ import {
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { createRoot } from 'react-dom/client';
+import { ShortcutKeysLocalizationRoot } from '@renderer/components/shortcut-keys-localization-root.component';
 
 // This runs only after the ENTIRE static import graph above has been downloaded, parsed, and
 // evaluated, so it marks the end of bundle evaluation - the window-created -> bundle-eval-end gap
@@ -228,7 +229,9 @@ if (!container) {
 const root = createRoot(container);
 root.render(
   <RendererErrorBoundary>
-    <App />
+    <ShortcutKeysLocalizationRoot>
+      <App />
+    </ShortcutKeysLocalizationRoot>
   </RendererErrorBoundary>,
 );
 markStartup('root-render');

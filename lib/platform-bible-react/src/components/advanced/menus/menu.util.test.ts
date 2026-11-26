@@ -246,9 +246,15 @@ describe('getLeadingIconSlot', () => {
     ).toBe('icon');
   });
 
-  it('reserves the icon slot when any item is a checkbox item', () => {
-    expect(getLeadingIconSlot([{}, { checked: false }])).toBe('icon');
-    expect(getLeadingIconSlot([{}, { checked: true }])).toBe('icon');
+  it('does not reserve the icon slot for a checkbox item, whose check sits after that slot', () => {
+    // Typed as the menu items callers pass, which carry `checked`
+    const checkboxItems: { iconNameBefore?: string; checked?: boolean }[] = [
+      {},
+      { checked: false },
+      { checked: true },
+    ];
+    expect(getLeadingIconSlot(checkboxItems)).toBe('none');
+    expect(getLeadingIconSlot([{ iconNameBefore: 'search' }, ...checkboxItems])).toBe('icon');
   });
 
   it('ignores trailing icons', () => {

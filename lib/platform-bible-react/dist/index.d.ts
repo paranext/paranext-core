@@ -3588,8 +3588,25 @@ export declare function CommandList({ className, ...props }: React$1.ComponentPr
 export declare function CommandEmpty({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Empty>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Command */
 export declare function CommandGroup({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Command */
-export declare function CommandItem({ className, children, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Item>): import("react/jsx-runtime").JSX.Element;
+/**
+ * An item in a {@link Command} list. It renders a check mark on its leading side, controlled by the
+ * `data-checked` attribute:
+ *
+ * - In a list where rows can be checked, pass `data-checked={isSelected}` on **every** row, so
+ *   unchecked rows (`false`) keep the check's space and all labels line up.
+ * - On rows that are never checkable (command palettes, grids), omit `data-checked`: no check is
+ *   rendered.
+ *
+ * `data-checked` also sets `aria-checked`, so screen readers announce each row as checked or not
+ * checked. Pass your own `aria-checked` to override it (for example `'mixed'`). Do not draw a check
+ * of your own alongside it.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/command}
+ * @see cmdk Documentation: {@link https://cmdk.paco.me/}
+ */
+export declare function CommandItem({ className, children, "data-checked": dataChecked, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Item> & {
+	"data-checked"?: boolean | "true" | "false";
+}): import("react/jsx-runtime").JSX.Element;
 /**
  * Context Menu component displays a menu to the user — such as a set of actions or functions,
  * triggered by a right-click or long-press.
