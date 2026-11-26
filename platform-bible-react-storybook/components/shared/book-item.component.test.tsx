@@ -164,3 +164,22 @@ describe('BookItem dimmed state', () => {
     expect(screen.getByRole('option', { name: 'Revelation (REV)' })).toBeInTheDocument();
   });
 });
+
+describe('BookItem check', () => {
+  const row = () => screen.getByRole('option', { name: 'Revelation (REV)' });
+
+  test('marks a selected row as checked when it shows checks', () => {
+    renderBookItem({ showCheck: true, isSelected: true });
+    expect(row()).toHaveAttribute('data-checked', 'true');
+  });
+
+  test('keeps the check space on an unselected row, even when isSelected is left out', () => {
+    renderBookItem({ showCheck: true });
+    expect(row()).toHaveAttribute('data-checked', 'false');
+  });
+
+  test('reserves no check space when it does not show checks', () => {
+    renderBookItem({ isSelected: true });
+    expect(row()).not.toHaveAttribute('data-checked');
+  });
+});

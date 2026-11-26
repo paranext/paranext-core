@@ -719,9 +719,9 @@ describe('renderProjectIndicator', () => {
   };
 
   /**
-   * Index of the child holding the row's label, counting from the leading fixed-width check column.
-   * 1 means the label sits directly after the check column (no indicator column); 2 means an
-   * indicator column is laid out between them.
+   * Index of the child holding the row's label, counting from the row's leading check
+   * (CommandItem's built-in check). 1 means the label sits directly after the check (no indicator
+   * column); 2 means an indicator column is laid out between them.
    */
   const labelChildIndex = (row: HTMLElement, shortName: string): number =>
     [...row.children].findIndex((child) => child.textContent?.includes(shortName));
@@ -744,6 +744,25 @@ describe('renderProjectIndicator', () => {
     await user.click(screen.getByRole('combobox', { name: /^Project/ }));
     expect(screen.getByTestId('indicator-Standard')).toBeInTheDocument();
     expect(screen.getByTestId('indicator-ScriptureResource')).toBeInTheDocument();
+  });
+
+  it('checks the selected project and announces every row as checked or not', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+    expect(rowFor('P1')).toHaveAttribute('data-checked', 'true');
+    expect(rowFor('P1')).toHaveAttribute('aria-checked', 'true');
+    expect(rowFor('R1')).toHaveAttribute('data-checked', 'false');
+    expect(rowFor('R1')).toHaveAttribute('aria-checked', 'false');
   });
 
   it('reserves the indicator column on every row, even where the renderer returns nothing', async () => {

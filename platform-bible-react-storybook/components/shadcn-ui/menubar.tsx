@@ -209,7 +209,12 @@ function MenubarCheckboxItem({
       checked={checked}
       {...props}
     >
-      <span className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center tw:[&_svg:not([class*=size-])]:size-4">
+      <span
+        className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center tw:[&_svg:not([class*=size-])]:size-4"
+        // CUSTOM: Added data-slot (as DropdownMenuCheckboxItem's indicator has) so a consumer that
+        // draws its own check, like PlatformMenubar, can hide this indicator with a selector
+        data-slot="menubar-checkbox-item-indicator"
+      >
         <MenubarPrimitive.ItemIndicator>
           <IconCheck />
         </MenubarPrimitive.ItemIndicator>

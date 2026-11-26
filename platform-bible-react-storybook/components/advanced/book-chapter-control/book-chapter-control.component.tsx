@@ -1684,9 +1684,7 @@ export function BookChapterControl({
                           // Full `bg-muted`, matching the book rows and grid cells it shares the
                           // popover with — the `/50` wash is this design system's treatment for
                           // large surfaces (table rows, cards), not for list items.
-                          // Hiding CommandItem's trailing check icon keeps this row's book-id
-                          // column aligned with the book rows below, which hide it too.
-                          className="tw:font-semibold tw:text-primary tw:hover:bg-muted tw:[&>svg:last-child]:hidden"
+                          className="tw:font-semibold tw:text-primary tw:hover:bg-muted"
                         >
                           <span className="tw:min-w-0 tw:flex-1">
                             {formatScrRef(

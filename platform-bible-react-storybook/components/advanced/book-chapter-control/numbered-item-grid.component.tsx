@@ -78,9 +78,8 @@ export function NumberedItemGrid({
               aria-disabled={disabled || undefined}
               className={cn(
                 'tw:h-8 tw:w-8 tw:cursor-pointer tw:justify-center tw:rounded-md tw:text-center tw:text-sm',
-                // Hide CommandItem's own trailing check icon (a multiselect affordance this grid
-                // doesn't use) and give cells pointer feedback distinct from the keyboard focus ring.
-                'tw:[&>svg]:hidden tw:hover:bg-muted',
+                // Give cells pointer feedback distinct from the keyboard focus ring.
+                'tw:hover:bg-muted',
                 !suppressKeyboardHighlight && LIST_ITEM_KEYBOARD_FOCUS_RING,
                 // cmdk highlights the focused cell with its own data-selected background/text; this
                 // grid shows keyboard focus with the ring above instead, so neutralize that here.
